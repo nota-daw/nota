@@ -2,8 +2,9 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.37.0**. This document describes what is implemented in the code, not what is
-planned. Sources: `CHANGELOG.md`, `README.md`, `ARCHITECTURE.md`.
+**0.37.0** (plus changes in development on `main`). This document describes what is
+implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
+`ARCHITECTURE.md`.
 
 Contents
 - [Platforms and distribution](#platforms-and-distribution)
@@ -59,7 +60,8 @@ JUCE module; the engine core is JUCE-free.
 
 ---
 
-## Views
+Three top-level views, switched from the toolbar (**Arrangement · Session · Modular**);
+the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Arrangement View** — a linear timeline: place, move, trim and duplicate clips; grid
   and snap to bars/beats; scroll and zoom; recording into the arrangement (audio and
@@ -68,6 +70,17 @@ JUCE module; the engine core is JUCE-free.
 - **Session View** — a clip grid (tracks × scenes): launch and stop a clip, launch a whole
   scene, launch quantization, recording into a clip slot (MIDI or audio), loop clips with
   a configurable length, and moving material between Session and Arrangement.
+- **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
+  effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
+  canvas (node positions are saved with the project), plus a **Global view** that shows
+  tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —
+  drag a modulator's CV output onto any device, instrument or MIDI-FX parameter to link
+  them with a patch cable; click an edge to edit depth and mode, select and delete edges.
+  Modulators: **LFO** (with phase), an **envelope follower**, **MIDI→CV**
+  (velocity/gate/note), **ADSR** (gated by notes), **Macro** (a manual control → CV) and
+  **Math** (two CV inputs → one output); any parameter can also be a CV source
+  (param → param). A **CV Scope** oscilloscope reads any modulator signal, and CV ports are
+  drawn only where they actually work.
 
 ---
 
@@ -106,6 +119,11 @@ JUCE module; the engine core is JUCE-free.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
+- **Gamepad input (macOS)** — a connected controller (Xbox / DualShock / DualSense /
+  Switch Pro / 8BitDo) acts as a small keyboard: the face buttons and bumpers/triggers play
+  notes, the D-pad shifts octave and velocity. Notes travel the same path as typed ones
+  (live play, recording, roll highlighting); unplugging releases held notes. Enable and
+  monitor controllers in Preferences → Gamepads (hot-plug aware).
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
 - **Audio→MIDI** (right-click an audio clip → Convert):
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
@@ -337,7 +355,8 @@ and user presets, automation, persistence and cloning.
   frame).
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
   after the first launch on a new version.
-- **About** — the app version, listed separately from the engine version.
+- **About** — the app and engine versions, the copyright notice, and a pointer to the
+  third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Preferences** — a consistent design (the house checkboxes, sunken fields).
 - **Edit Tags** — the browser's tag editor.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
@@ -354,6 +373,8 @@ and user presets, automation, persistence and cloning.
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
   (Windows).
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes).
+- **Gamepads** (macOS): enable gamepad note input; the controller list updates on hot-plug,
+  with a live activity indicator beside each pad.
 - **Plugins**: scan paths, Rescan.
 - **Library**: library folders.
 - **Appearance**: **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
@@ -413,4 +434,9 @@ Coverage:
 - **Building**: `scripts/build.sh` (macOS), `scripts/build-win.ps1` (Windows),
   `scripts/build-linux.sh` (Linux); packaging via `bundle-mac.sh`, `package-dmg.sh`,
   `package-win.ps1`, `package-linux.sh`.
+- **Release CI**: a GitHub Actions workflow builds and packages every target (x64 + arm64
+  across macOS, Windows and Linux) on a `vX.Y.Z` release tag, and drafts the GitHub release
+  with the matching `CHANGELOG.md` section as its body.
 - **Tests**: an engine smoke test after every build.
+- **Third-party notices**: bundled/linked dependencies and their copyrights are recorded in
+  [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md).

@@ -29,7 +29,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # full history so we can test ancestry against main
 
@@ -70,17 +70,17 @@ jobs:
     needs: guard
     runs-on: macos-14   # Apple Silicon; the script cross-builds the x86_64 slice
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive   # JUCE
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: Install build tools
         run: brew install cmake ninja
       - name: Package universal .dmg
         run: bash scripts/package-dmg.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: macos
           path: dist/Nota-*-universal.dmg
@@ -96,10 +96,10 @@ jobs:
     needs: guard
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive   # JUCE
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: Install Inno Setup
@@ -108,7 +108,7 @@ jobs:
         run: pwsh scripts/package-win.ps1 x64
       - name: Package arm64 installer
         run: pwsh scripts/package-win.ps1 arm64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: windows
           path: dist/Nota-Setup-*.exe
@@ -131,10 +131,10 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive   # JUCE
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: Install build + packaging deps
@@ -146,7 +146,7 @@ jobs:
             libxcursor-dev libfreetype6-dev libfontconfig1-dev
       - name: Package AppImage
         run: bash scripts/package-linux.sh ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: linux-${{ matrix.arch }}
           path: dist/Nota-*.AppImage
@@ -160,7 +160,7 @@ jobs:
     needs: [guard, macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract CHANGELOG section for this version
         run: |
@@ -178,7 +178,7 @@ jobs:
           echo "----- release notes -----"; cat RELEASE_NOTES.md
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
           merge-multiple: true

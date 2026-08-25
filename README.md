@@ -26,6 +26,36 @@ The native engine is built separately by CMake, and the app's project copies the
 right artifact (`libnota_engine.dylib` / `nota_engine.dll` / `libnota_engine.so` +
 `nota-scanworker`) next to the managed binary for P/Invoke.
 
+## Features
+
+A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised list.
+
+- **Three views** — a linear **Arrangement** timeline, a clip-launching **Session** grid
+  (material moves freely between them), and a **Modular** signal-graph editor with **CV
+  modulation** (LFO / envelope follower / MIDI→CV / ADSR / Macro / Math, patched with
+  cables onto any parameter).
+- **Tracks & mixer** — audio / MIDI / return / master / nestable **group** tracks; sends
+  and returns; MIDI routing between tracks; peak/RMS + true-peak metering; per-track device
+  chains.
+- **MIDI editing** — piano roll (draw/move/stretch, quantize, velocity, live edits as one
+  undo step); input from a MIDI keyboard, the computer keyboard, or a **gamepad** (macOS);
+  **audio→MIDI** (melody / harmony / drums / slice).
+- **Audio** — recording (inputs and internal buses), WAV/AIFF/FLAC/MP3 import, clip
+  editing with fades and gain, and **warp / time-stretch** (Complex / Complex Pro).
+- **~35 built-in devices** — synths (subtractive, wavetable, FM, granular, physical,
+  drum-machine and more), a full effects suite (EQ, dynamics, reverb/delay, saturation,
+  limiting, utility), MIDI effects (arp, scale, chord, …), and Instrument / Drum / Audio
+  Effect **racks** with macros.
+- **Plugin hosting** — VST3 everywhere, AU on macOS: native GUIs, state save/restore, PDC,
+  transport sync; parameters are automatable and MIDI-learnable.
+- **Automation & MIDI Learn** — draw/record automation on any parameter; map hardware
+  controllers to almost anything.
+- **Export** — master and stems to WAV (pcm16/pcm24/float32), true-peak normalize, dither,
+  bit-identical chunked rendering.
+- **AI control (MCP)** — an optional loopback MCP server lets Claude drive the open project
+  (off by default).
+- **Cross-platform** — macOS, Windows and Linux, for both x64 and arm64.
+
 ## Prerequisites
 
 Common to every platform:

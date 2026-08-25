@@ -17,7 +17,7 @@ public sealed class AboutWindow : NotaWindow
         var build = App.Services.GetRequiredService<EngineBuildInfo>();
         Title = "About Nota";
         Width = 380;
-        Height = 276;   // + title-bar band
+        Height = 348;   // + title-bar band
         CanResize = false;
         Background = Brush("Brush.BgApp");
 
@@ -46,6 +46,25 @@ public sealed class AboutWindow : NotaWindow
         {
             Classes = { "Caption" },
             Text = "Desktop DAW · AGPLv3",
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Classes = { "Caption" },
+            Margin = new Thickness(0, 8, 0, 0),
+            Text = "© 2026 Egor Khindikaynen (Ambertape)",
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Classes = { "Caption" },
+            Text = "Free software under the GNU AGPLv3.",
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Classes = { "Caption" },
+            TextWrapping = TextWrapping.Wrap,
+            Text = "Includes third-party software (JUCE, Avalonia, miniaudio, RtMidi, "
+                 + "dr_libs, Signalsmith, HIIR). See LICENSES/THIRD-PARTY-NOTICES.md "
+                 + "for copyright and attribution notices.",
         });
         SetBody(panel);
     }

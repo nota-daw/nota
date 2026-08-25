@@ -25,6 +25,7 @@ confined to the plugin-hosting module.
 |---|---|
 | [`AGPL-3.0-only.txt`](AGPL-3.0-only.txt) | Full GNU AGPLv3 text (verbatim from the FSF) |
 | [`third-party.md`](third-party.md) | Register of every dependency and its license |
+| [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Copyright & attribution notices for bundled/linked third-party software |
 
 The repository root also carries a copy of the AGPLv3 as `LICENSE`, so hosting platforms
 detect the license correctly.

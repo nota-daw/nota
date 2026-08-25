@@ -21,12 +21,20 @@ $Version   = (Get-Content VERSION -Raw).Trim()
 $Rid       = "win-$Arch"
 $CmakeArch = if ($Arch -eq 'arm64') { 'ARM64' } else { 'x64' }
 $Native    = "src/native/nota.engine/build-$Arch"
-$NativeOut = Join-Path (Get-Location) "$Native/Release"    # VS is multi-config
 $PubDir    = Join-Path (Get-Location) "dist/publish-$Arch"
 
 Write-Host "==> Building native engine ($Arch / WASAPI)…"
 cmake -G "Visual Studio 17 2022" -A $CmakeArch -S src/native/nota.engine -B $Native
 cmake --build $Native --config Release
+
+# Locate the freshly built engine DLL. The VS (multi-config) generator usually writes
+# to build-<arch>/Release, but the exact layout varies across CMake/VS versions and CI
+# images — so resolve it from the actual output instead of hardcoding the path.
+$dll = Get-ChildItem -Path $Native -Recurse -Filter nota_engine.dll -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $dll) { throw "nota_engine.dll not found under $Native after the native build." }
+$NativeOut = $dll.Directory.FullName
+Write-Host "    native artifacts: $NativeOut"
 
 Write-Host "==> Publishing managed app ($Rid, self-contained)…"
 if (Test-Path $PubDir) { Remove-Item -Recurse -Force $PubDir }
@@ -35,8 +43,9 @@ dotnet publish src/managed/Nota.App -c Release -r $Rid --self-contained true `
 
 # The csproj copies the native artifacts into the publish output for a win RID;
 # copy them explicitly too as a safety net.
-Copy-Item "$NativeOut/nota_engine.dll" $PubDir -Force
-if (Test-Path "$NativeOut/nota-scanworker.exe") { Copy-Item "$NativeOut/nota-scanworker.exe" $PubDir -Force }
+Copy-Item (Join-Path $NativeOut 'nota_engine.dll') $PubDir -Force
+$scanWorker = Join-Path $NativeOut 'nota-scanworker.exe'
+if (Test-Path $scanWorker) { Copy-Item $scanWorker $PubDir -Force }
 
 Write-Host "==> Building installer with Inno Setup…"
 function Find-ISCC {
