@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The 200px clip props rail beside the piano roll (mockup 1e): clip name,
 // Start/Length in bars.beats.16ths (mono), a Loop chip, a grid picker with a

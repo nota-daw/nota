@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota AutoGain (device kind 18) loudness history — the signature viz. It samples the
 // device's instantaneous meters each UI tick and scrolls them right→left: input loudness

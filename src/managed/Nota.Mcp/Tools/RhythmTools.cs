@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // MCP tools — Nota Rhythm (drum machine, instrument kind 12). Eight fixed voices (Kick, Snare,
 // Clap, Rim, Closed Hat, Open Hat, Tom, Perc), each with an internal 16-step sequencer across four

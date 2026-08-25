@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Volt — the built-in virtual-analog synth (kind 6), a dual-path subtractive
 // voice modelled on classic two-oscillator analogs. Signal

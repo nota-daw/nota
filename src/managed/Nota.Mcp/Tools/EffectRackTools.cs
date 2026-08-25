@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // MCP tools — the Audio Effect Rack: a rack device sitting in a track's insert chain (add it with
 // add_device kind 5). It runs parallel effect chains; mode = 0 Parallel (summed) | 1 Series |

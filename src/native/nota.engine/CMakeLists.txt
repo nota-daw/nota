@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 cmake_minimum_required(VERSION 3.24)
 
 # OBJC/OBJCXX only exist on Apple; enable them conditionally so the Windows
@@ -8,15 +8,6 @@ if(APPLE)
     enable_language(OBJC)
     enable_language(OBJCXX)
 endif()
-
-# --- Edition (AR-10) ---------------------------------------------------------
-# free -> AGPLv3 open build; pro -> commercial closed build.
-set(NOTA_EDITION "free" CACHE STRING "Build edition: free or pro")
-set_property(CACHE NOTA_EDITION PROPERTY STRINGS free pro)
-if(NOT NOTA_EDITION STREQUAL "free" AND NOT NOTA_EDITION STREQUAL "pro")
-    message(FATAL_ERROR "NOTA_EDITION must be 'free' or 'pro' (got '${NOTA_EDITION}')")
-endif()
-message(STATUS "Nota edition: ${NOTA_EDITION}")
 
 # --- macOS target (min macOS 13, universal arm64 + x86_64) -------------------
 # 13.0 must match Info.plist LSMinimumSystemVersion and the launcher's
@@ -105,10 +96,6 @@ target_include_directories(nota_engine
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor           # Signalsmith Stretch, miniaudio, RtMidi
 )
 
-target_compile_definitions(nota_engine PRIVATE
-    NOTA_EDITION_NAME="${NOTA_EDITION}"
-)
-
 # Output a stable name: libnota_engine.dylib / nota_engine.dll (consumed by P/Invoke).
 set_target_properties(nota_engine PROPERTIES
     OUTPUT_NAME "nota_engine"
@@ -143,8 +130,7 @@ endif()
 
 # --- Plugin hosting (M3) via JUCE -------------------------------------------
 # JUCE lives ONLY in the pluginhost module; the core engine above stays
-# JUCE-free (ARCHITECTURE.md § Plugin hosting). Free -> JUCE AGPLv3; Pro -> JUCE
-# Commercial (licence flags TBD per NOTA_EDITION — see open questions).
+# JUCE-free (ARCHITECTURE.md § Plugin hosting). JUCE is used here under the AGPLv3.
 add_subdirectory(vendor/JUCE)
 
 # One source, two languages: ObjC++ on macOS (AU hosting + NSEvent key monitor,

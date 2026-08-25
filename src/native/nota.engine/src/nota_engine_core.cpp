@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // C ABI — the managed/native boundary (AR-7): engine-global slice.
 // Lifecycle, transport, master mixer, realtime control (notes/recording/poll),
@@ -12,16 +12,11 @@
 #include <new>
 #include <string>
 
-// Edition is injected by the build (AR-10). Defaults to "free".
-#ifndef NOTA_EDITION_NAME
-#  define NOTA_EDITION_NAME "free"
-#endif
 #define NOTA_VERSION_STRING "0.1.0"
 
 extern "C" {
 
 const char* nota_engine_version(void) { return NOTA_VERSION_STRING; }
-const char* nota_engine_edition(void) { return NOTA_EDITION_NAME; }
 
 NotaEngine* nota_engine_create(void) {
     return reinterpret_cast<NotaEngine*>(new (std::nothrow) Engine());

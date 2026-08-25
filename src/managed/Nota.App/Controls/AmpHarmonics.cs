@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Amplifier harmonic spectrum (mockup 2m): a unit sine is pushed through the same waveshaper
 // the DSP runs (bias + tanh cascade), and a DFT gives the 2nd…7th harmonic levels relative to

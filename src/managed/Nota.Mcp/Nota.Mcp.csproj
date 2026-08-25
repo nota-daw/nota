@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- MCP server: exposes the engine (IAudioEngine) as Model Context Protocol tools over a
      loopback HTTP transport, so an AI (Claude Desktop / Claude Code) can drive the live app.
      Kept free of Avalonia — the UI-thread marshal + arrangement refresh are injected as

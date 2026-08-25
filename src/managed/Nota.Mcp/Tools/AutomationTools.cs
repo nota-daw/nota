@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // MCP tools — parameter automation lanes. A point's Value is in the target's native units
 // (Volume: 0..1 linear, Pan: -1..1, DeviceParam: the param's own range, PluginParam: 0..1);

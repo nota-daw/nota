@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only
 using Nota.Application;
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // M6-2: stereo peak/RMS level meter. Fed a NotaMeter each UI tick (~30 Hz);
 // the bar rises instantly and falls with a fixed decay, with a slower peak-hold

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Local Linux build of Nota: native engine (miniaudio PulseAudio/ALSA + RtMidi/ALSA
 # + VST3) + managed + smoke test. Mirrors scripts/build-win.ps1.
@@ -12,7 +12,7 @@
 # (miniaudio runtime-links PulseAudio/ALSA via dlopen, so libpulse/libasound are
 # not needed at link time — only libasound2-dev for RtMidi.)
 #
-# Usage: scripts/build-linux.sh [free|pro]   (default free)
+# Usage: scripts/build-linux.sh
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -30,18 +30,17 @@ MSG
   exit 1
 fi
 
-EDITION="${1:-free}"
 NATIVE="src/native/nota.engine/build"
 
-echo "==> Building native engine (edition=${EDITION}, PulseAudio/ALSA + RtMidi/ALSA)"
+echo "==> Building native engine (PulseAudio/ALSA + RtMidi/ALSA)"
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE}" \
-  -DCMAKE_BUILD_TYPE=Release "-DNOTA_EDITION=${EDITION}"
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build "${NATIVE}"
 
-echo "==> Building managed (.NET, edition=${EDITION})"
-dotnet build Nota.sln -c Release "-p:NotaEdition=${EDITION}" --nologo
+echo "==> Building managed (.NET)"
+dotnet build Nota.sln -c Release --nologo
 
 echo "==> Smoke test"
-dotnet run --project tests/Nota.SmokeTest -c Release "-p:NotaEdition=${EDITION}" --nologo
+dotnet run --project tests/Nota.SmokeTest -c Release --nologo
 
 echo "==> Done. Run the app with: dotnet run --project src/managed/Nota.App"

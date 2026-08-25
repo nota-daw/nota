@@ -1,5 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
-<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
 
 # Architecture
 
@@ -65,7 +65,6 @@ engine internals.
 | **AR-7** | The managed/native boundary is a **pure C ABI**: `extern "C"`, opaque handles as pointers, UTF-8 strings, plain structs, integer result codes. No C++ types and no exceptions cross the line. |
 | **AR-8** | MIDI is resolved to **sample-accurate events per block**. Clips are immutable once scheduled. |
 | **AR-9** | `Transport` is the **single source of musical time**. Nothing else derives tempo or position independently. |
-| **AR-10** | The **edition** (`free` / `pro`) is injected by the build — `-DNOTA_EDITION` for native, `-p:NotaEdition` for managed — never detected at runtime. |
 
 ## The C ABI boundary
 

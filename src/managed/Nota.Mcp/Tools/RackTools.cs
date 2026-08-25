@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // MCP tools — the Instrument Rack and Drum Rack (an instrument track whose "instrument" is a set
 // of parallel chains). Each chain has its own instrument + device chain + mix (gain/pan/mute/solo)

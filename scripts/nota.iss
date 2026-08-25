@@ -1,4 +1,4 @@
-; SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+; SPDX-License-Identifier: AGPL-3.0-only
 ; Inno Setup script for the Nota Windows installer. Driven by scripts/package-win.ps1,
 ; which passes /DAppVersion=<semver> and /DPubDir=<self-contained publish dir>.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Build a distributable macOS **universal** (arm64 + x86_64) Nota.app and wrap it
 # in a compressed .dmg with a drag-to-Applications layout.
@@ -15,7 +15,7 @@
 # and make the bundle's main executable a tiny universal C stub that execs the
 # apphost matching the CPU we're natively running on.
 #
-# Usage:  scripts/package-dmg.sh [free|pro]        (default free)
+# Usage:  scripts/package-dmg.sh
 # Output: dist/Nota-<version>-universal.dmg
 #         Override output dir with NOTA_DMG_DIR=/some/dir
 
@@ -23,7 +23,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:$PATH"
 
-EDITION="${1:-free}"
 APP_NAME="Nota"
 BUNDLE_ID="com.nota.daw"
 VERSION="$(tr -d '[:space:]' < VERSION)"                       # single source of truth
@@ -38,14 +37,14 @@ X64="${WORK}/x64"
 APP="${WORK}/${APP_NAME}.app"
 CONTENTS="${APP}/Contents"
 
-echo "==> Nota ${VERSION} (${EDITION}) — universal .dmg"
+echo "==> Nota ${VERSION} — universal .dmg"
 rm -rf "${WORK}"
 mkdir -p "${OUT_DIR}"
 
 # 1) Native engine (fat) ------------------------------------------------------
 echo "==> Building native engine (universal arm64+x86_64)…"
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE_BUILD}" \
-  -DCMAKE_BUILD_TYPE=Release -DNOTA_EDITION="${EDITION}" >/dev/null
+  -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "${NATIVE_BUILD}" >/dev/null
 lipo -info "${NATIVE_BUILD}/libnota_engine.dylib"
 
@@ -54,7 +53,7 @@ publish() {
   local rid="$1" out="$2"
   echo "==> Publishing managed (${rid}, self-contained)…"
   dotnet publish src/managed/Nota.App -c Release -r "${rid}" --self-contained true \
-    -p:NotaEdition="${EDITION}" -o "${out}" >/dev/null
+    -o "${out}" >/dev/null
 }
 publish osx-arm64 "${ARM}"
 publish osx-x64   "${X64}"

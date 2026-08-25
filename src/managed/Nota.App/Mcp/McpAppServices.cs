@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // App-side glue for the MCP server (Nota.Mcp is Avalonia-free). AvaloniaEngineDispatch marshals
 // tool calls onto the UI thread that owns the engine; ArrangementRefresh lets MCP edits redraw the

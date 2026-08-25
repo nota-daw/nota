@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using Avalonia;
 using Avalonia.Controls;
@@ -35,7 +35,7 @@ public sealed class AboutWindow : NotaWindow
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = $"Version {AppInfo.Version} · {build.Edition} edition",
+            Text = $"Version {AppInfo.Version}",
         });
         panel.Children.Add(new TextBlock
         {
@@ -45,7 +45,7 @@ public sealed class AboutWindow : NotaWindow
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = "Desktop DAW · dual-license (AGPLv3 / commercial)",
+            Text = "Desktop DAW · AGPLv3",
         });
         SetBody(panel);
     }

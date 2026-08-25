@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Amplifier tone-stack EQ response (mockup 2m): the combined magnitude of the Bass low-shelf,
 // Middle peak, Treble + Presence high-shelves — the same RBJ biquads the DSP runs — over a

@@ -1,5 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
-<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
 
 # Contributing to Nota
 
@@ -13,19 +13,13 @@ lock, logging from the wrong thread) will produce audible dropouts here.
 
 ## Licensing your contribution
 
-Nota is **dual-licensed**: `AGPL-3.0-only OR LicenseRef-Nota-Commercial`
-(see [`LICENSES/`](LICENSES/)).
-
-This has a consequence you should understand before you open a pull request. Because the
-project ships a commercial edition from the same source, the maintainer must be able to
-license your contribution under *both* licenses. So:
+Nota is licensed under `AGPL-3.0-only` (see [`LICENSES/`](LICENSES/)).
 
 > By submitting a contribution, you agree that your work is licensed under
-> **AGPL-3.0-only OR LicenseRef-Nota-Commercial**, and you grant the maintainer the right
-> to distribute it under either — including in the commercial Pro edition.
+> **AGPL-3.0-only**.
 
 If you are not comfortable with that, please open an issue to discuss instead of sending
-code. A signed CLA may be requested for substantial contributions.
+code.
 
 **If you are employed as a programmer**, check your employment agreement before
 contributing. Many contracts assign copyright in your code to your employer, in which
@@ -34,17 +28,15 @@ case they — not you — must grant the license above.
 Every new source file needs the standard two-line header:
 
 ```c
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 ```
 
 ## Adding a dependency
 
-Don't add one without checking it first. Every dependency must be usable under **both**
-licenses — permissive or public domain for the commercial edition, AGPL-compatible for
-the open one.
+Don't add one without checking it first. Every dependency must be AGPL-compatible.
 
-1. Confirm the license qualifies for both columns.
+1. Confirm the license qualifies.
 2. Add a row to [`LICENSES/third-party.md`](LICENSES/third-party.md).
 3. Say so in the pull request.
 

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Non-Apple implementation of MidiConfig.h for Windows + Linux, mirroring the macOS
 // MidiConfig.mm but backed by RtMidi (WinMM on Windows; ALSA sequencer on Linux).

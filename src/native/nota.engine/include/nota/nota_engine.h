@@ -1,6 +1,6 @@
 /*
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
- * Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
  *
  * nota.engine — public C ABI.
  *
@@ -129,9 +129,6 @@ typedef struct NotaMeter {
 
 /* Library version string, e.g. "0.1.0" (M0). Never NULL. */
 NOTA_API const char* nota_engine_version(void);
-
-/* Which edition this binary was built as: "free" or "pro" (see AR-10). */
-NOTA_API const char* nota_engine_edition(void);
 
 /* Create / destroy the engine. create() returns NULL on failure. */
 NOTA_API NotaEngine* nota_engine_create(void);

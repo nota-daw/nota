@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // M4.1-A: root view model. Owns the engine lifetime + the playhead clock and
 // exposes child VMs. As later sub-steps land, more of the window (arrangement,
@@ -20,8 +20,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private int _lastXrunCount;
 
     public IAudioEngine Engine { get; }
-    /// <summary>Build edition shown in the title-bar badge (e.g. "FREE" / "PRO").</summary>
-    public string EditionLabel => _build.Edition.ToUpperInvariant();
     public TransportViewModel Transport { get; }
     public BrowserViewModel Browser { get; }
     public ISettingsService Settings { get; }
@@ -67,7 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Engine.Start();
         Engine.SetBpm(120);
         Engine.SetTimeSignature(4, 4);
-        // EngineInfo = $"v{_build.Version} · {_build.Edition} · {Engine.SampleRate:0} Hz";
+        // EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0} Hz";
         EngineInfo = $"{Engine.SampleRate:0} Hz";
         _log.Info($"Engine started · {Engine.SampleRate:0} Hz");
 
@@ -140,7 +138,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SuspendEnginePolling = false;
         }
 
-        EngineInfo = $"v{_build.Version} · {_build.Edition} · {Engine.SampleRate:0} Hz";
+        EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0} Hz";
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0} Hz · {buf} frames");
         bool fallback = Engine.AudioExclusiveFallback;

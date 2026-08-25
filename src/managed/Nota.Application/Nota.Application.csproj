@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Application layer: use-cases and ports (interfaces). Depends only on Domain. -->
 <Project Sdk="Microsoft.NET.Sdk">
 

@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Offline audio analysis for the "Convert Drums / Slice to New MIDI Track" commands.
-// Pure, dependency-free DSP (the dual license forbids GPL libraries): a time-domain
+// Pure, dependency-free DSP: a time-domain
 // energy-flux onset detector plus a coarse kick/snare/hat classifier. MVP quality —
 // tuned for percussive / breakbeat material.
 

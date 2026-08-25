@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Built-in Nota Beat Repeat (device kind 11) — a tempo-synced glitch/stutter effect in
 // the spirit of classic beat-repeat units. Every Interval (bar-synced, + Offset) it rolls

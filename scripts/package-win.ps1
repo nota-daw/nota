@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Package Nota for Windows: build the native engine, publish the self-contained
 # app, then build an Inno Setup installer (scripts/nota.iss). Uses the Visual
@@ -7,11 +7,10 @@
 # the ARM64 target also needs the "MSVC v143 - ARM64 build tools" VS component.
 # Requires Inno Setup 6.3+ (iscc / ISCC.exe) for the installer.
 #
-# Usage: pwsh scripts/package-win.ps1 [free|pro] [x64|arm64]   (defaults: free x64)
+# Usage: pwsh scripts/package-win.ps1 [x64|arm64]   (default: x64)
 # Output: dist/Nota-Setup-<version>-<arch>.exe
 
 param(
-    [string]$Edition = 'free',
     [ValidateSet('x64', 'arm64')][string]$Arch = 'x64'
 )
 
@@ -26,15 +25,13 @@ $NativeOut = Join-Path (Get-Location) "$Native/Release"    # VS is multi-config
 $PubDir    = Join-Path (Get-Location) "dist/publish-$Arch"
 
 Write-Host "==> Building native engine ($Arch / WASAPI)…"
-# Args carrying a variable are quoted so PowerShell always expands them and passes
-# a single token (bare `-DNOTA_EDITION=$Edition` can reach CMake unexpanded).
-cmake -G "Visual Studio 17 2022" -A $CmakeArch -S src/native/nota.engine -B $Native "-DNOTA_EDITION=$Edition"
+cmake -G "Visual Studio 17 2022" -A $CmakeArch -S src/native/nota.engine -B $Native
 cmake --build $Native --config Release
 
 Write-Host "==> Publishing managed app ($Rid, self-contained)…"
 if (Test-Path $PubDir) { Remove-Item -Recurse -Force $PubDir }
 dotnet publish src/managed/Nota.App -c Release -r $Rid --self-contained true `
-  "-p:NotaEdition=$Edition" "-p:NotaNativeDir=$NativeOut" -o $PubDir
+  "-p:NotaNativeDir=$NativeOut" -o $PubDir
 
 # The csproj copies the native artifacts into the publish output for a win RID;
 # copy them explicitly too as a safety net.

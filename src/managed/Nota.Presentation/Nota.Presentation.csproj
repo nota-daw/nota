@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Presentation layer: ViewModels (CommunityToolkit.Mvvm). Depends on Application + Domain.
      Must not reference Infrastructure or Avalonia views. -->
 <Project Sdk="Microsoft.NET.Sdk">

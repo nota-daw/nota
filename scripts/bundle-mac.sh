@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Assemble a macOS .app bundle for Nota with a proper Info.plist (so the OS treats
 # it as a real app — needed for the microphone TCC permission prompt / M4-3).
 #
-# Usage: scripts/bundle-mac.sh [free|pro]
+# Usage: scripts/bundle-mac.sh
 # Output: /Applications/Nota.app  (ad-hoc signed, self-contained arm64)
 #         Override the destination with NOTA_APP_DIR=/some/dir
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-EDITION="${1:-free}"
 RID="osx-arm64"
 APP_NAME="Nota"
 BUNDLE_ID="com.nota.daw"
@@ -27,14 +26,14 @@ CONTENTS="${APP}/Contents"
 
 echo "==> Building native engine (universal)…"
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE_BUILD}" \
-  -DCMAKE_BUILD_TYPE=Release -DNOTA_EDITION="${EDITION}" >/dev/null
+  -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "${NATIVE_BUILD}" >/dev/null
 
 echo "==> Publishing managed app (${RID}, self-contained)…"
 PUBDIR="$(pwd)/dist/publish"
 rm -rf "${PUBDIR}"
 dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  -p:NotaEdition="${EDITION}" -o "${PUBDIR}" >/dev/null
+  -o "${PUBDIR}" >/dev/null
 
 echo "==> Assembling ${APP}…"
 mkdir -p "${APP_DIR}"

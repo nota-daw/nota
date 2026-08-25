@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Hosts the MCP tools over a loopback HTTP (Streamable HTTP / SSE) transport inside the running
 // Nota process, so an MCP client (Claude Desktop / Claude Code) drives the live session. Bound to

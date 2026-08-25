@@ -1,8 +1,7 @@
 # Building Nota (dev)
 
 See [`README.md`](README.md) for the short version and the packaging commands. This file
-covers the details — per-platform prerequisites, manual step-by-step builds, and the
-edition flags.
+covers the details — per-platform prerequisites and manual step-by-step builds.
 
 ## Requirements (macOS)
 
@@ -15,8 +14,7 @@ edition flags.
 ## Quick start
 
 ```bash
-scripts/build.sh          # free edition
-scripts/build.sh pro      # pro edition
+scripts/build.sh
 ```
 
 The script builds the native engine (universal arm64 + x86_64), builds the managed side,
@@ -47,22 +45,12 @@ tests/Nota.SmokeTest/          # end-to-end check: C# -> C ABI -> engine -> audi
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how these fit together and the rules that
 govern the boundary between them.
 
-## Editions (dual-license, AR-10)
-
-- Native: `-DNOTA_EDITION=free|pro` (CMake).
-- Managed: `-p:NotaEdition=free|pro` → defines the `PRO` constant
-  (`Directory.Build.props`).
-- `nota_engine_edition()` returns the edition string, used as an end-to-end check.
-
-Note that the **pro** edition cannot be distributed until a JUCE commercial license is
-purchased — see [`LICENSES/README.md`](LICENSES/README.md).
-
 ## Building the parts by hand
 
 ```bash
 # native
 cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build \
-  -DCMAKE_BUILD_TYPE=Release -DNOTA_EDITION=free
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build src/native/nota.engine/build
 
 # managed
@@ -95,9 +83,9 @@ translation units are not OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
 Run from a **"Developer PowerShell for VS 2022"** so `cl` and `ninja` are on PATH:
 
 ```powershell
-pwsh scripts/build-win.ps1                 # native (x64/WASAPI) + managed + smoke
-pwsh scripts/package-win.ps1 free x64      # installer dist/Nota-Setup-<ver>-x64.exe
-pwsh scripts/package-win.ps1 free arm64    # installer dist/Nota-Setup-<ver>-arm64.exe (cross-built)
+pwsh scripts/build-win.ps1            # native (x64/WASAPI) + managed + smoke
+pwsh scripts/package-win.ps1 x64      # installer dist/Nota-Setup-<ver>-x64.exe
+pwsh scripts/package-win.ps1 arm64    # installer dist/Nota-Setup-<ver>-arm64.exe (cross-built)
 ```
 
 `package-win.ps1` uses the VS generator (`-A x64|ARM64`), so both architectures build from

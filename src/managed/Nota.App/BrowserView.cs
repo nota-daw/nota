@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // M4.1-C / M7-4 + Phase 3 (HANDOFF 1g): left browser panel. A 46px icon rail
 // (Instruments / FX / Samples / Presets / Projects) swaps templated lists; a

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Built-in EQ-3 (device kind 16) — a three-band DJ-style PERFORMANCE EQ, not a
 // small EQ-8: three fixed bands (Low / Mid / High) split by two crossover frequencies,

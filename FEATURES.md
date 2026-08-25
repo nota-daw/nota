@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
@@ -33,9 +33,6 @@ Contents
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`).
-
-Editions: **free** (AGPLv3, free plugins only) and **pro** (commercial, JUCE Commercial +
-proprietary VST3) — both built from a single codebase.
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
@@ -412,9 +409,8 @@ Coverage:
 - **Undo/redo** for every editing operation.
 - **Semantic versioning** with a single source of truth (`VERSION`), a changelog in Keep a
   Changelog format, and `vX.Y.Z` git tags.
-- **Dual-license**: AGPL-3.0-only OR LicenseRef-Nota-Commercial.
+- **License**: AGPL-3.0-only.
 - **Building**: `scripts/build.sh` (macOS), `scripts/build-win.ps1` (Windows),
   `scripts/build-linux.sh` (Linux); packaging via `bundle-mac.sh`, `package-dmg.sh`,
-  `package-win.ps1`, `package-linux.sh`. Each takes an optional edition argument
-  (`free` | `pro`).
+  `package-win.ps1`, `package-linux.sh`.
 - **Tests**: an engine smoke test after every build.

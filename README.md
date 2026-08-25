@@ -80,8 +80,7 @@ cmake --build src/native/nota.engine/build
 
 ## Packaging (distributables)
 
-All scripts take an optional edition argument (`free` | `pro`, default `free`) and
-write to `dist/`.
+All scripts write to `dist/`.
 
 **macOS** — universal `.app` and `.dmg`:
 ```bash
@@ -91,8 +90,8 @@ scripts/package-dmg.sh         # -> dist/Nota-<version>-universal.dmg
 
 **Windows** — Inno Setup installer (x64 / arm64; one x64 host cross-builds both):
 ```powershell
-pwsh scripts/package-win.ps1 free x64     # -> dist/Nota-Setup-<version>-x64.exe
-pwsh scripts/package-win.ps1 free arm64   # -> dist/Nota-Setup-<version>-arm64.exe
+pwsh scripts/package-win.ps1 x64     # -> dist/Nota-Setup-<version>-x64.exe
+pwsh scripts/package-win.ps1 arm64   # -> dist/Nota-Setup-<version>-arm64.exe
 ```
 
 **Linux** — portable AppImage (built for the host arch; `appimagetool` auto-downloaded):
@@ -122,16 +121,9 @@ docker run --rm --platform linux/amd64 -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD"
 docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
 ```
 
-## Editions
-
-`free` builds under AGPLv3; `pro` is the commercial build (not yet distributable — it
-needs a purchased JUCE commercial license first). Select the edition when building
-native (`-DNOTA_EDITION=free|pro`) and managed (`-p:NotaEdition=free|pro`); the
-packaging scripts thread it through from their first argument.
-
 ## License
 
-Dual-licensed: **AGPL-3.0-only OR LicenseRef-Nota-Commercial** — see [`LICENSES/`](LICENSES/)
+Licensed under **AGPL-3.0-only** — see [`LICENSES/`](LICENSES/)
 for the terms, and [`LICENSES/third-party.md`](LICENSES/third-party.md) for the
 dependency register.
 

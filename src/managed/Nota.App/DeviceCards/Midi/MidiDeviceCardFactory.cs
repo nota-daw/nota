@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — maps a MIDI-effect kind to its body: Nota Arp (kind 0) the step editor,
 // Nota Chord (kind 1) its chord/keyboard editor, Nota Scale (kind 2) its note-map editor;

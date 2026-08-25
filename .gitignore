@@ -23,6 +23,7 @@ cmake_install.cmake
 .vs/
 .vscode/
 *.swp
+*.DotSettings.user
 
 # Nota project bundles created during testing
 *.nota/

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Changelog
 
 Every notable change to Nota is recorded in this file.

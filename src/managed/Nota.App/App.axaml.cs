@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using System;
 using Avalonia;
@@ -28,7 +28,7 @@ public partial class App : Avalonia.Application
         // Engine: one native handle, exposed to the layers through its port.
         services.AddSingleton<NotaEngine>();
         services.AddSingleton<IAudioEngine>(sp => sp.GetRequiredService<NotaEngine>());
-        services.AddSingleton(new EngineBuildInfo(NotaEngine.Version, NotaEngine.Edition));
+        services.AddSingleton(new EngineBuildInfo(NotaEngine.Version));
         // Application ports → Infrastructure implementations.
         services.AddSingleton<ILogSink, LogSink>();
         services.AddSingleton<ISettingsService, SettingsService>();
@@ -62,7 +62,7 @@ public partial class App : Avalonia.Application
 
         // Log crashes so a later bug report carries the stack trace.
         var log = Services.GetRequiredService<ILogSink>();
-        log.Info($"App started · v{AppInfo.Version} · {NotaEngine.Edition}");
+        log.Info($"App started · v{AppInfo.Version}");
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             log.Error("Unhandled exception", e.ExceptionObject as Exception);
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>

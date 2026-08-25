@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // M1 smoke test: transport + audio graph + file playback + mixer, exercised
 // through the offline render path (no audio device needed).
@@ -21,7 +21,7 @@ static float Rms(float[] buf, int frames)
     return (float)Math.Sqrt(sum / (frames * 2));
 }
 
-Console.WriteLine($"engine v{NotaEngine.Version}  edition={NotaEngine.Edition}");
+Console.WriteLine($"engine v{NotaEngine.Version}");
 
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused

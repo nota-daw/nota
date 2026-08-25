@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Infrastructure layer: P/Invoke (interop), persistence, settings, audio/midi config.
      Implements the Application ports. Depends on Application + Domain. -->
 <Project Sdk="Microsoft.NET.Sdk">

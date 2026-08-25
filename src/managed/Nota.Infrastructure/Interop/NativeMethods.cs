@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using System.Runtime.InteropServices;
 
@@ -29,9 +29,6 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_version")]
     internal static partial IntPtr Version();
-
-    [LibraryImport(Lib, EntryPoint = "nota_engine_edition")]
-    internal static partial IntPtr Edition();
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_create")]
     internal static partial IntPtr Create();

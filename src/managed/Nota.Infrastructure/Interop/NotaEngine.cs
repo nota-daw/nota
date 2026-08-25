@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
-// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for dual-license terms.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using System.Runtime.InteropServices;
 
@@ -25,9 +25,6 @@ public sealed partial class NotaEngine : IAudioEngine
 
     /// <summary>Engine library version, e.g. "0.1.0".</summary>
     public static string Version => Marshal.PtrToStringUTF8(NativeMethods.Version()) ?? "?";
-
-    /// <summary>Build edition: "free" or "pro".</summary>
-    public static string Edition => Marshal.PtrToStringUTF8(NativeMethods.Edition()) ?? "?";
 
     /// <summary>Negotiated output sample rate, or 0 if not started.</summary>
     public double SampleRate

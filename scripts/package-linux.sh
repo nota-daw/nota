@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Package Nota for Linux as a portable AppImage: build the native engine, publish
 # the self-contained app, assemble an AppDir (AppRun + .desktop + icon), then run
@@ -10,7 +10,7 @@
 # script downloads it next to itself. Set APPIMAGE_EXTRACT_AND_RUN=1 (done below)
 # so it works in containers without FUSE.
 #
-# Usage: scripts/package-linux.sh [free|pro] [x64|arm64]   (defaults: free x64)
+# Usage: scripts/package-linux.sh [x64|arm64]   (default: host arch)
 # Output: dist/Nota-<version>-<arch>.AppImage
 
 set -euo pipefail
@@ -29,7 +29,6 @@ MSG
   exit 1
 fi
 
-EDITION="${1:-free}"
 # The native engine is compiled for the build host's arch (no cross-compile), so the
 # default target arch follows uname -m; pass an explicit arch only if it matches.
 case "$(uname -m)" in
@@ -37,7 +36,7 @@ case "$(uname -m)" in
   aarch64|arm64) HOST_ARCH="arm64" ;;
   *)             HOST_ARCH="x64"   ;;
 esac
-ARCH="${2:-$HOST_ARCH}"
+ARCH="${1:-$HOST_ARCH}"
 case "${ARCH}" in
   x64)   AI_ARCH="x86_64"  ;;
   arm64) AI_ARCH="aarch64" ;;
@@ -72,13 +71,13 @@ if [ -f "${CACHE}" ]; then
   fi
 fi
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE}" \
-  -DCMAKE_BUILD_TYPE=Release "-DNOTA_EDITION=${EDITION}" >/dev/null
+  -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "${NATIVE}" >/dev/null
 
 echo "==> Publishing managed app (${RID}, self-contained)…"
 rm -rf "${PUB}"
 dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  "-p:NotaEdition=${EDITION}" "-p:NotaNativeDir=$(pwd)/${NATIVE}" -o "${PUB}" >/dev/null
+  "-p:NotaNativeDir=$(pwd)/${NATIVE}" -o "${PUB}" >/dev/null
 
 # The csproj copies the native artifacts for a linux RID; copy them explicitly too
 # as a safety net.
