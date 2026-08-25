@@ -1,5 +1,10 @@
 # Nota
 
+> **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
+> was developed with AI assistance. It started as a tool I built for myself, and was only
+> later opened up as open source. Guided and shaped throughout by me,
+> **Egor Khindikaynen** aka **Ambertape** ([music](https://soundcloud.com/ambertape)).
+
 Nota is a cross-platform digital audio workstation (DAW). The audio engine and DSP
 are a portable C++20 core; the UI is Avalonia (.NET). Plugin hosting (VST3, plus AU
 on macOS) runs through JUCE, isolated in its own module so the engine core stays
