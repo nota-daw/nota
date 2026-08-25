@@ -88,13 +88,16 @@ jobs:
 
   # --------------------------------------------------------------------------------
   # Windows — x64 + arm64 installers, both cross-built from the x64 runner via the
-  # Visual Studio generator. Requires the VS2022 ARM64 build tools (present on the
-  # GitHub windows-latest image).
+  # Visual Studio generator (its -A flag targets ARM64 from an x64 host). Pinned to
+  # windows-2022 for a known VS 2022 toolchain with the ARM64 build tools: as of June
+  # 2026 windows-latest/windows-2025 ship Visual Studio 2026, which the script also
+  # supports (it auto-selects the newest installed VS), but the 2022 image is the
+  # verified combination for the ARM64 cross-build.
   # --------------------------------------------------------------------------------
   windows:
     name: Build Windows (x64 + arm64)
     needs: guard
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v5
         with:

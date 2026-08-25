@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # Package Nota for Windows: build the native engine, publish the self-contained
-# app, then build an Inno Setup installer (scripts/nota.iss). Uses the Visual
-# Studio generator so a single x64 host can cross-build both x64 and ARM64.
-# Run from a "Developer PowerShell for VS 2022" (native build needs the MSVC env);
-# the ARM64 target also needs the "MSVC v143 - ARM64 build tools" VS component.
+# app, then build an Inno Setup installer (scripts/nota.iss). Uses the (default,
+# newest-installed) Visual Studio generator so a single x64 host can cross-build both
+# x64 and ARM64 via its -A flag — works with VS 2022 or VS 2026.
+# Run from a "Developer PowerShell for VS" (native build needs the MSVC env); the
+# ARM64 target also needs that VS's "ARM64 build tools" component.
 # Requires Inno Setup 6.3+ (iscc / ISCC.exe) for the installer.
 #
 # Usage: pwsh scripts/package-win.ps1 [x64|arm64]   (default: x64)
@@ -24,7 +25,10 @@ $Native    = "src/native/nota.engine/build-$Arch"
 $PubDir    = Join-Path (Get-Location) "dist/publish-$Arch"
 
 Write-Host "==> Building native engine ($Arch / WASAPI)…"
-cmake -G "Visual Studio 17 2022" -A $CmakeArch -S src/native/nota.engine -B $Native
+# Let CMake pick the default (newest installed) Visual Studio generator instead of
+# hardcoding one — "Visual Studio 17 2022" fails on images that ship only VS 2026.
+# -A selects the target architecture; it is valid for any VS generator.
+cmake -A $CmakeArch -S src/native/nota.engine -B $Native
 cmake --build $Native --config Release
 
 # Locate the freshly built engine DLL. The VS (multi-config) generator usually writes
