@@ -17,6 +17,18 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
+
+## [0.37.1] — 2026-08-25
+
+### Highlights
+- **Nota is now open source** — released under the GNU AGPLv3 and developed in the open.
+- **Play notes from a game controller on macOS** — Xbox, DualShock/DualSense, Switch Pro
+  and 8BitDo pads act as a small keyboard.
+- **Full third-party credits** — the About window and a new notices file attribute every
+  bundled library and its copyright.
+- **Removed the in-app "Send Feedback"** — bug reports and requests now live in the public
+  issue tracker.
+
 ### Added
 - **Gamepad as a source of live notes (macOS).** A connected controller (Xbox / DualShock /
   DualSense / Switch Pro / 8BitDo) acts as a small keyboard: the face buttons A/B/X/Y play
@@ -29,6 +41,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   responding. Unplugging a pad releases any held note. Built on Apple's GameController
   framework, which is why Switch Pro and 8BitDo decode correctly (raw HID reported their
   packet counter as phantom presses and spammed notes).
+- **Third-party attribution notices.** The About window now shows the copyright notice and
+  points to a new [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md) that
+  credits every bundled or linked dependency (JUCE, Avalonia, miniaudio, RtMidi, dr_libs,
+  Signalsmith, HIIR, …) with its copyright and license.
+
+### Changed
+- **Open-sourced under the GNU AGPLv3.** Nota is now a single-license open-source project.
+  The separate Pro / commercial edition — and the `NOTA_EDITION` / `NotaEdition` build
+  flags, the runtime edition string and the FREE/PRO badge — were removed; every source
+  file now carries the `AGPL-3.0-only` SPDX header.
 
 ### Removed
 - **Send Feedback.** The in-app feedback window, the "Share feedback" title-bar button
