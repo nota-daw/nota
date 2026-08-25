@@ -1,0 +1,1265 @@
+<title>Ember Graphite</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+/* ============================================================================
+   Ember Graphite — Nota's design system, documented in its own palette.
+   Every value below is lifted from src/managed/Nota.App/Theme/NotaTheme.axaml.
+   Single-theme by intent: Nota is dark-only, and these swatches are only
+   truthful on their real ground. Every colour is painted explicitly so the
+   page holds on any host background.
+   ========================================================================= */
+
+:root {
+  /* Surfaces */
+  --bg-sunken:      #100F0D;
+  --bg-app:         #171613;
+  --lane-b:         #191814;
+  --surface-card:   #1E1C18;
+  --surface-raised: #26231E;
+  --surface-hover:  #2E2B24;
+  --surface-active: #332F27;
+  --surface-selected: #24D8A03D;
+
+  /* Grid lines */
+  --grid-beat: #1F1D18;
+  --grid-bar:  #2A2721;
+
+  /* Text */
+  --text-primary:   #E9E4D8;
+  --text-secondary: #A39D8F;
+  --text-tertiary:  #6E6A5E;
+  --text-disabled:  #4A463D;
+  --text-on-accent: #171613;
+
+  /* Borders */
+  --border-default: #2C2923;
+  --border-strong:  #3A362D;
+
+  /* Accent (brass) + semantic */
+  --accent:        #D8A03D;
+  --accent-hover:  #E8B24C;
+  --accent-bright: #F0C060;
+  --accent-subtle: #24D8A03D;
+  --success: #58B368;
+  --warning: #D9C34C;
+  --danger:  #D95F4C;
+  --danger-hover: #E4715F;
+
+  /* Geometry */
+  --r-sm: 5px; --r-md: 7px; --r-lg: 10px; --r-xl: 14px; --r-clip: 4px; --r-pill: 8px;
+
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+  --measure: 68ch;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Shell -------------------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0;
+  max-width: 1240px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 32px 20px 32px 24px;
+  border-right: 1px solid var(--border-default);
+  background: var(--bg-sunken);
+}
+
+.rail__mark {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+
+.rail__sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.rail nav { display: flex; flex-direction: column; gap: 1px; }
+
+.rail a {
+  display: block;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 12px;
+  transition: background .12s ease-out, color .12s ease-out;
+}
+.rail a:hover { background: var(--surface-hover); color: var(--text-primary); }
+.rail a:focus-visible { outline: 1px solid var(--accent-bright); outline-offset: 1px; }
+
+.main { padding: 32px 40px 96px; min-width: 0; }
+
+/* ---- Masthead ----------------------------------------------------------- */
+
+.masthead { padding: 8px 0 40px; border-bottom: 1px solid var(--border-default); margin-bottom: 40px; }
+
+.masthead h1 {
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.02;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.masthead h1 em { font-style: normal; color: var(--accent); }
+
+.masthead p { max-width: var(--measure); color: var(--text-secondary); margin: 0 0 12px; }
+
+.hue-strip { display: flex; height: 4px; border-radius: 2px; overflow: hidden; margin: 24px 0 0; }
+.hue-strip span { flex: 1; }
+
+/* ---- Sections ----------------------------------------------------------- */
+
+section { margin-bottom: 52px; scroll-margin-top: 24px; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 10px;
+}
+
+section > h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+
+section > p { max-width: var(--measure); color: var(--text-secondary); margin: 0 0 20px; }
+
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 28px 0 12px;
+}
+
+a.inline { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--border-strong); }
+a.inline:hover { border-bottom-color: var(--accent); }
+
+code {
+  font-family: var(--font-mono);
+  font-size: .87em;
+  color: var(--accent-bright);
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-clip);
+  padding: 1px 5px;
+}
+
+/* ---- Panel (mirrors Border.Card) --------------------------------------- */
+
+.panel {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+
+.note {
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-clip);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: var(--measure);
+}
+.note.warn { border-left-color: var(--warning); }
+.note strong { color: var(--text-primary); font-weight: 600; }
+
+/* ---- Swatches ----------------------------------------------------------- */
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 10px;
+}
+
+.sw {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color .12s ease-out;
+}
+.sw:hover { border-color: var(--border-strong); }
+.sw:focus-visible { outline: 1px solid var(--accent-bright); outline-offset: 1px; }
+
+.sw__chip { height: 52px; border-bottom: 1px solid var(--border-default); }
+.sw__meta { padding: 8px 10px 9px; }
+
+.sw__key {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-primary);
+  display: block;
+  word-break: break-all;
+}
+.sw__hex {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.sw__role { font-size: 10.5px; color: var(--text-tertiary); }
+.sw.copied .sw__hex { color: var(--accent-bright); }
+
+/* Checkerboard behind translucent swatches so alpha reads honestly */
+.alpha {
+  background-image:
+    linear-gradient(45deg, var(--surface-raised) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--surface-raised) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--surface-raised) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--surface-raised) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+.alpha > i { display: block; height: 100%; }
+
+/* ---- Tables ------------------------------------------------------------- */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--border-default); border-radius: var(--r-md); }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 480px; }
+
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border-default); }
+th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: var(--bg-app);
+}
+tr:last-child td { border-bottom: none; }
+td.k { font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
+td.v { font-family: var(--font-mono); color: var(--accent-bright); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.d { color: var(--text-secondary); }
+
+/* ---- Specimen surface --------------------------------------------------- */
+
+.specimen {
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  padding: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.specimen.sunken { background: var(--bg-sunken); }
+.specimen.col { flex-direction: column; align-items: stretch; gap: 14px; }
+
+.specimen__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  width: 100%;
+  margin-bottom: -2px;
+}
+
+/* ---- Real component specimens (1:1 with NotaTheme.axaml) ---------------- */
+
+.btn {
+  height: 26px;
+  padding: 0 14px;
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: background .12s ease-out;
+}
+.btn:hover { background: var(--surface-hover); }
+.btn:active { background: var(--surface-active); }
+.btn:focus-visible { outline: none; border-color: var(--accent-bright); }
+
+.btn--primary { background: var(--accent); color: var(--text-on-accent); border: none; }
+.btn--primary:hover { background: var(--accent-hover); }
+.btn--ghost { background: transparent; border: none; }
+.btn--ghost:hover { background: var(--surface-hover); }
+.btn--danger { background: var(--danger); color: var(--text-on-accent); border: none; }
+.btn--danger:hover { background: var(--danger-hover); }
+.btn[disabled] { color: var(--text-disabled); opacity: .55; cursor: not-allowed; }
+
+.tgl {
+  height: 26px; padding: 0 12px; border-radius: var(--r-md);
+  font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+  background: var(--surface-card); color: var(--text-secondary);
+  border: 1px solid var(--border-strong); cursor: pointer;
+  transition: background .12s ease-out;
+}
+.tgl:hover { background: var(--surface-hover); }
+.tgl--on { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-bright); }
+.tgl--rec { background: var(--danger); border-color: var(--danger); color: var(--text-on-accent); }
+
+.tp {
+  width: 28px; height: 28px; padding: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 11px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tp:hover { background: var(--surface-hover); }
+.tp--rec-on { background: #33D95F4C; border-color: var(--danger); color: var(--danger); }
+.tp--play { width: 34px; background: var(--accent); border: none; color: var(--text-on-accent); }
+.tp--session { background: var(--success); }
+
+.chip {
+  height: 28px; padding: 0 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-ui); font-size: 11px; cursor: pointer;
+  display: inline-flex; align-items: center;
+}
+.chip:hover { background: var(--surface-hover); }
+
+.well {
+  height: 28px;
+  display: inline-flex; align-items: center;
+  padding: 0 10px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.seg {
+  display: inline-flex; gap: 0; padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+}
+.seg button {
+  height: 22px; padding: 0 10px; border-radius: 3px;
+  background: transparent; border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-ui); font-size: 11px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+
+.cbx { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+.cbx__box {
+  width: 16px; height: 16px; border-radius: var(--r-sm);
+  background: var(--bg-sunken); border: 1px solid var(--border-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.cbx--on .cbx__box { background: var(--accent); border-color: var(--accent); }
+.cbx--on { color: var(--text-primary); }
+.cbx__box svg { display: block; }
+
+.field {
+  height: 28px; padding: 0 9px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  font-family: var(--font-ui); font-size: 11px;
+  min-width: 160px;
+}
+.field::placeholder { color: var(--text-tertiary); }
+.field:focus { outline: none; border-color: var(--accent); }
+
+.listbox {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  padding: 3px;
+  max-width: 260px;
+}
+.listbox div {
+  font-size: 11px; color: var(--text-secondary);
+  padding: 5px 8px; border-radius: var(--r-md); cursor: pointer;
+}
+.listbox div:hover { background: var(--surface-hover); }
+.listbox div[aria-selected="true"] { background: var(--surface-selected); color: var(--text-primary); }
+
+/* ---- Track colour cycle ------------------------------------------------- */
+
+.tracks { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
+.track {
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+.track__bar { height: 6px; }
+.track__body { padding: 8px 10px; }
+.track__name { font-size: 11px; color: var(--text-primary); }
+.track__hex { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+/* ---- Arrangement lane mock --------------------------------------------- */
+
+.lane-demo {
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--bg-app);
+}
+.lane {
+  height: 40px;
+  position: relative;
+  border-bottom: 1px solid var(--border-default);
+  background:
+    repeating-linear-gradient(to right, var(--grid-bar) 0 1px, transparent 1px 80px),
+    repeating-linear-gradient(to right, var(--grid-beat) 0 1px, transparent 1px 20px),
+    var(--bg-app);
+}
+.lane:nth-child(even) { background:
+    repeating-linear-gradient(to right, var(--grid-bar) 0 1px, transparent 1px 80px),
+    repeating-linear-gradient(to right, var(--grid-beat) 0 1px, transparent 1px 20px),
+    var(--lane-b);
+}
+.lane:last-child { border-bottom: none; }
+.clip {
+  position: absolute; top: 6px; bottom: 6px;
+  border-radius: var(--r-clip);
+  display: flex; align-items: center; padding: 0 7px;
+  font-size: 10px; color: var(--text-on-accent); font-weight: 500;
+  overflow: hidden; white-space: nowrap;
+}
+.playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent-bright); }
+
+/* ---- Do / Don't --------------------------------------------------------- */
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 12px; }
+.rule {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+.rule h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex; align-items: center; gap: 7px;
+}
+.rule p { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; }
+.rule--do h4 { color: var(--success); }
+.rule--dont h4 { color: var(--danger); }
+.rule__glyph { font-family: var(--font-mono); font-size: 13px; }
+
+footer {
+  border-top: 1px solid var(--border-default);
+  padding-top: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  max-width: var(--measure);
+}
+
+/* ---- Device card anatomy ------------------------------------------------ */
+
+.card-anatomy {
+  width: 100%;
+  max-width: 620px;
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  font-size: 11px;
+}
+.ca-row { display: flex; align-items: center; gap: 8px; padding: 0 9px; }
+.ca-head { height: 26px; background: var(--surface-card); border-bottom: 1px solid var(--border-default); }
+.ca-live { height: 34px; background: var(--surface-card); border-bottom: 1px solid var(--border-default); }
+.ca-body { height: 132px; display: flex; }
+
+.ca-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex: none; }
+.ca-name { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+.ca-tag { font-size: 9px; font-weight: 700; letter-spacing: .08em; color: var(--text-tertiary); }
+.ca-preset {
+  height: 18px; min-width: 92px; background: var(--bg-sunken);
+  border: 1px solid var(--border-default); border-radius: 4px;
+  display: flex; align-items: center; gap: 5px; padding: 0 6px;
+  font-size: 10px; color: var(--text-primary);
+}
+.ca-preset span:last-child { margin-left: auto; color: var(--text-tertiary); font-size: 8px; }
+.ca-ab { display: flex; background: var(--bg-sunken); border: 1px solid var(--border-default); border-radius: 4px; padding: 1px; gap: 1px; }
+.ca-ab i { font-style: normal; font-size: 9px; padding: 1px 6px; border-radius: 3px; color: var(--text-tertiary); }
+.ca-ab i.on { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+.ca-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.ca-cpu { font-family: var(--font-mono); font-size: 9px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.ca-peak { font-family: var(--font-mono); font-size: 9px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ca-meters { display: flex; flex-direction: column; gap: 2px; width: 46px; }
+.ca-meters div { height: 3px; border-radius: 2px; background: var(--bg-sunken); overflow: hidden; display: flex; }
+.ca-glyph { font-size: 10px; color: var(--text-tertiary); }
+
+.ca-seclabel { font-size: 8px; font-weight: 700; letter-spacing: .1em; color: var(--text-tertiary); flex: none; }
+.ca-slider { display: flex; align-items: center; gap: 5px; }
+.ca-slider b { font-size: 8px; font-weight: 700; color: var(--text-tertiary); }
+.ca-track { width: 50px; height: 3px; border-radius: 2px; background: var(--bg-sunken); position: relative; }
+.ca-track i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; }
+.ca-thumb { position: absolute; top: -3px; width: 8px; height: 9px; border-radius: 2px; background: var(--text-secondary); margin-left: -4px; }
+.ca-val { font-family: var(--font-mono); font-size: 9px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+.ca-rail { width: 80px; flex: none; background: #1B1916; border-right: 1px solid var(--border-default); padding: 5px; display: flex; flex-direction: column; gap: 2px; }
+.ca-tab { height: 20px; border-radius: 4px; border-left: 2px solid transparent; display: flex; align-items: center; padding: 0 7px; font-size: 10px; font-weight: 500; color: var(--text-tertiary); }
+.ca-tab.on { background: var(--surface-raised); border-left-color: var(--accent); color: var(--text-primary); }
+.ca-tab.mod.on { border-left-color: #5B9E9C; }
+.ca-main { flex: 1; padding: 10px; display: flex; gap: 14px; align-items: center; }
+.ca-out { width: 108px; flex: none; background: #1B1916; border-left: 1px solid var(--border-default); padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.ca-out .ca-track { width: auto; flex: 1; }
+.ca-outrow { display: flex; align-items: center; gap: 5px; }
+.ca-spine { border-left: 2px solid #5B9E9C; padding-left: 7px; display: flex; flex-direction: column; gap: 4px; }
+.ca-spine .ca-seclabel { color: #5B9E9C; }
+
+.ca-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--text-tertiary); }
+.ca-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ca-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* Knob specimen drawn to the real geometry */
+.knobcell { width: 58px; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.knobcell figure { margin: 0; width: 38px; height: 38px; }
+.knobcell .kv { font-family: var(--font-mono); font-size: 8px; color: var(--text-primary); }
+.knobcell .kl { font-size: 8px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .02em; }
+
+.kit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.kit {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.kit h4 { margin: 0 0 3px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-bright); }
+.kit .dim { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); display: block; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.kit p { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+.vizcat { margin-bottom: 14px; }
+.vizcat h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.vizcat p { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.vizcat code { font-size: 11px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border-default); }
+  .rail nav { flex-direction: row; flex-wrap: wrap; gap: 2px; }
+  .main { padding: 28px 20px 72px; }
+}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <p class="rail__mark">Nota</p>
+    <p class="rail__sub">Ember Graphite<br>design system</p>
+    <nav>
+      <a href="#principles">Principles</a>
+      <a href="#colour">Colour</a>
+      <a href="#type">Typography</a>
+      <a href="#geometry">Geometry</a>
+      <a href="#components">Components</a>
+      <a href="#data">Data surfaces</a>
+      <a href="#tracks">Track palette</a>
+      <a href="#cards">Device cards</a>
+      <a href="#kit">Control kit</a>
+      <a href="#viz">Visualisers</a>
+      <a href="#motion">Motion &amp; copy</a>
+      <a href="#drift">Known drift</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+
+    <header class="masthead">
+      <h1>Ember <em>Graphite</em></h1>
+      <p>Nota's UI runs on a warm graphite palette — neutrals pulled to roughly 40° hue, lit by a single brass accent. It is dark-only by intent: a DAW is used in dark rooms for long sessions, and every value here is tuned for that.</p>
+      <p>The concrete source of truth is <code>src/managed/Nota.App/Theme/NotaTheme.axaml</code>, mirrored for custom-drawn views in <code>Theme/NotaPalette.cs</code>. This page documents those two files. <strong style="color:var(--text-primary);font-weight:600">Never hardcode a colour or size in a view</strong> — reference the resource key.</p>
+      <div class="hue-strip">
+        <span style="background:#100F0D"></span><span style="background:#171613"></span><span style="background:#1E1C18"></span><span style="background:#26231E"></span><span style="background:#3A362D"></span><span style="background:#6E6A5E"></span><span style="background:#A39D8F"></span><span style="background:#E9E4D8"></span><span style="background:#D8A03D"></span><span style="background:#F0C060"></span>
+      </div>
+    </header>
+
+    <section id="principles">
+      <p class="eyebrow">01 — Foundation</p>
+      <h2>Principles</h2>
+      <p>Six rules decide almost every question that comes up. When a new screen feels wrong, one of these is usually being broken.</p>
+      <div class="rules">
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> One accent, spent carefully</h4>
+          <p>Brass marks primary actions, selection, focus, active state, and the time-domain data that is the point of a DAW. Everything else stays neutral. Green, amber and red are for status only — never decoration.</p>
+        </div>
+        <div class="rule rule--dont">
+          <h4><span class="rule__glyph">&minus;</span> No gradients or texture</h4>
+          <p>Flat solid fills throughout. No background images, no glass, no glow. The waveform is the imagery.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Structure over shadows</h4>
+          <p>Panels are separated by 1px <code>Brush.BorderDefault</code> lines. Shadows belong only to floating layers — menus and dialogs.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Dense, but on a grid</h4>
+          <p>Controls are 22–28px, text runs 10–13px. A DAW shows a lot at once; density is the point. Spacing still steps in 4px.</p>
+        </div>
+        <div class="rule rule--dont">
+          <h4><span class="rule__glyph">&minus;</span> No emoji, no scale transforms</h4>
+          <p>Icons follow Lucide geometry at ~1.75 stroke. The only glyphs allowed as text are the meta separator <code>·</code> and the transport symbols already in use. Hover never bounces or scales.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Mono means data</h4>
+          <p>If a number is read, compared or aligned — position, BPM, sample counts, latency — it is set in the mono face. Prose never is.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="colour">
+      <p class="eyebrow">02 — Colour</p>
+      <h2>Palette</h2>
+      <p>Click any swatch to copy its hex. Translucent tokens are shown over a checkerboard so the alpha reads honestly.</p>
+
+      <h3>Surfaces</h3>
+      <div class="swatches">
+        <button class="sw" data-hex="#100F0D"><span class="sw__chip" style="background:#100F0D"></span><span class="sw__meta"><span class="sw__key">Brush.BgSunken</span><span class="sw__hex">#100F0D</span> <span class="sw__role">· wells, lanes, chrome</span></span></button>
+        <button class="sw" data-hex="#171613"><span class="sw__chip" style="background:#171613"></span><span class="sw__meta"><span class="sw__key">Brush.BgApp</span><span class="sw__hex">#171613</span> <span class="sw__role">· app ground</span></span></button>
+        <button class="sw" data-hex="#191814"><span class="sw__chip" style="background:#191814"></span><span class="sw__meta"><span class="sw__key">Brush.LaneB</span><span class="sw__hex">#191814</span> <span class="sw__role">· lane alternation</span></span></button>
+        <button class="sw" data-hex="#1E1C18"><span class="sw__chip" style="background:#1E1C18"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceCard</span><span class="sw__hex">#1E1C18</span> <span class="sw__role">· panels, cards</span></span></button>
+        <button class="sw" data-hex="#26231E"><span class="sw__chip" style="background:#26231E"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceRaised</span><span class="sw__hex">#26231E</span> <span class="sw__role">· transport, chips</span></span></button>
+        <button class="sw" data-hex="#2E2B24"><span class="sw__chip" style="background:#2E2B24"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceHover</span><span class="sw__hex">#2E2B24</span> <span class="sw__role">· hover</span></span></button>
+        <button class="sw" data-hex="#332F27"><span class="sw__chip" style="background:#332F27"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceActive</span><span class="sw__hex">#332F27</span> <span class="sw__role">· pressed</span></span></button>
+        <button class="sw" data-hex="#24D8A03D"><span class="sw__chip alpha"><i style="background:#24D8A03D"></i></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceSelected</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· 14% brass</span></span></button>
+      </div>
+
+      <h3>Text</h3>
+      <div class="swatches">
+        <button class="sw" data-hex="#E9E4D8"><span class="sw__chip" style="background:#E9E4D8"></span><span class="sw__meta"><span class="sw__key">Brush.TextPrimary</span><span class="sw__hex">#E9E4D8</span> <span class="sw__role">· warm off-white</span></span></button>
+        <button class="sw" data-hex="#A39D8F"><span class="sw__chip" style="background:#A39D8F"></span><span class="sw__meta"><span class="sw__key">Brush.TextSecondary</span><span class="sw__hex">#A39D8F</span> <span class="sw__role">· labels, captions</span></span></button>
+        <button class="sw" data-hex="#6E6A5E"><span class="sw__chip" style="background:#6E6A5E"></span><span class="sw__meta"><span class="sw__key">Brush.TextTertiary</span><span class="sw__hex">#6E6A5E</span> <span class="sw__role">· section labels</span></span></button>
+        <button class="sw" data-hex="#4A463D"><span class="sw__chip" style="background:#4A463D"></span><span class="sw__meta"><span class="sw__key">Brush.TextDisabled</span><span class="sw__hex">#4A463D</span> <span class="sw__role">· disabled</span></span></button>
+        <button class="sw" data-hex="#171613"><span class="sw__chip" style="background:#171613"></span><span class="sw__meta"><span class="sw__key">Brush.TextOnAccent</span><span class="sw__hex">#171613</span> <span class="sw__role">· ink on brass</span></span></button>
+      </div>
+
+      <h3>Borders &amp; grid</h3>
+      <div class="swatches">
+        <button class="sw" data-hex="#2C2923"><span class="sw__chip" style="background:#2C2923"></span><span class="sw__meta"><span class="sw__key">Brush.BorderDefault</span><span class="sw__hex">#2C2923</span> <span class="sw__role">· panel separation</span></span></button>
+        <button class="sw" data-hex="#3A362D"><span class="sw__chip" style="background:#3A362D"></span><span class="sw__meta"><span class="sw__key">Brush.BorderStrong</span><span class="sw__hex">#3A362D</span> <span class="sw__role">· control outlines</span></span></button>
+        <button class="sw" data-hex="#1F1D18"><span class="sw__chip" style="background:#1F1D18"></span><span class="sw__meta"><span class="sw__key">Brush.GridBeat</span><span class="sw__hex">#1F1D18</span> <span class="sw__role">· beat lines</span></span></button>
+        <button class="sw" data-hex="#2A2721"><span class="sw__chip" style="background:#2A2721"></span><span class="sw__meta"><span class="sw__key">Brush.GridBar</span><span class="sw__hex">#2A2721</span> <span class="sw__role">· bar lines</span></span></button>
+      </div>
+
+      <h3>Accent &amp; semantic</h3>
+      <div class="swatches">
+        <button class="sw" data-hex="#D8A03D"><span class="sw__chip" style="background:#D8A03D"></span><span class="sw__meta"><span class="sw__key">Brush.Accent</span><span class="sw__hex">#D8A03D</span> <span class="sw__role">· brass</span></span></button>
+        <button class="sw" data-hex="#E8B24C"><span class="sw__chip" style="background:#E8B24C"></span><span class="sw__meta"><span class="sw__key">Brush.AccentHover</span><span class="sw__hex">#E8B24C</span> <span class="sw__role">· hover</span></span></button>
+        <button class="sw" data-hex="#F0C060"><span class="sw__chip" style="background:#F0C060"></span><span class="sw__meta"><span class="sw__key">Brush.AccentBright</span><span class="sw__hex">#F0C060</span> <span class="sw__role">· focus, playhead</span></span></button>
+        <button class="sw" data-hex="#24D8A03D"><span class="sw__chip alpha"><i style="background:#24D8A03D"></i></span><span class="sw__meta"><span class="sw__key">Brush.AccentSubtle</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· toggle-on wash</span></span></button>
+        <button class="sw" data-hex="#58B368"><span class="sw__chip" style="background:#58B368"></span><span class="sw__meta"><span class="sw__key">Brush.Success</span><span class="sw__hex">#58B368</span> <span class="sw__role">· session play</span></span></button>
+        <button class="sw" data-hex="#D9C34C"><span class="sw__chip" style="background:#D9C34C"></span><span class="sw__meta"><span class="sw__key">Brush.Warning</span><span class="sw__hex">#D9C34C</span> <span class="sw__role">· caution</span></span></button>
+        <button class="sw" data-hex="#D95F4C"><span class="sw__chip" style="background:#D95F4C"></span><span class="sw__meta"><span class="sw__key">Brush.Danger</span><span class="sw__hex">#D95F4C</span> <span class="sw__role">· record, destructive</span></span></button>
+        <button class="sw" data-hex="#E4715F"><span class="sw__chip" style="background:#E4715F"></span><span class="sw__meta"><span class="sw__key">Brush.DangerHover</span><span class="sw__hex">#E4715F</span> <span class="sw__role">· hover</span></span></button>
+      </div>
+
+      <div class="note" style="margin-top:20px">
+        <strong>Fluent is retinted, not overridden.</strong> The theme reassigns <code>SystemAccentColor</code> and its six light/dark ramps to the brass family, so stock Avalonia controls — slider fills, checkboxes, focus rings — match the palette instead of shipping default blue.
+      </div>
+    </section>
+
+    <section id="type">
+      <p class="eyebrow">03 — Typography</p>
+      <h2>Two faces, one job each</h2>
+      <p>Inter carries every word a person reads. The mono face carries every number a person compares. There is no third role.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Role</th><th>Key / class</th><th>Spec</th><th>Colour</th></tr></thead>
+          <tbody>
+            <tr><td class="d">UI text</td><td class="k">Font.UI</td><td class="v">Inter</td><td class="d">Everything readable</td></tr>
+            <tr><td class="d">Data</td><td class="k">Font.Mono</td><td class="v">Cascadia Code → Menlo → Consolas</td><td class="d">Position, BPM, counts, latency</td></tr>
+            <tr><td class="d">Heading</td><td class="k">TextBlock.Heading</td><td class="v">13px / SemiBold</td><td class="d">TextPrimary</td></tr>
+            <tr><td class="d">Body / control</td><td class="k">— (default)</td><td class="v">11px / Medium</td><td class="d">TextPrimary</td></tr>
+            <tr><td class="d">Caption</td><td class="k">TextBlock.Caption</td><td class="v">10px</td><td class="d">TextSecondary</td></tr>
+            <tr><td class="d">Section label</td><td class="k">TextBlock.SectionLabel</td><td class="v">10px / Bold</td><td class="d">TextTertiary</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Copy</h3>
+      <p>Sentence case everywhere — buttons, menus, titles. Imperative for actions, declarative for status. The middle dot <code>·</code> separates meta fields. Empty states get one short line and one primary action.</p>
+      <div class="specimen col">
+        <span class="specimen__label">Status readouts</span>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <span class="well">Playing · 128.00 BPM · 4/4</span>
+          <span class="well">Bar 5 · 1 · 000</span>
+          <span class="well">Plugins: 46</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="geometry">
+      <p class="eyebrow">04 — Geometry</p>
+      <h2>Radii, heights, spacing</h2>
+      <p>Radius scales with the size of the thing: the smaller and denser the element, the tighter the corner.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Token</th><th>Value</th><th>Applies to</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Radius.Clip</td><td class="v">4</td><td class="d">Arrangement clips</td></tr>
+            <tr><td class="k">Radius.Sm</td><td class="v">5</td><td class="d">Chips, wells, transport buttons, checkboxes</td></tr>
+            <tr><td class="k">Radius.Md</td><td class="v">7</td><td class="d">Buttons, list boxes, menus</td></tr>
+            <tr><td class="k">Radius.Pill</td><td class="v">8</td><td class="d">Pills</td></tr>
+            <tr><td class="k">Radius.Lg</td><td class="v">10</td><td class="d">Cards, panels, track rows</td></tr>
+            <tr><td class="k">Radius.Xl</td><td class="v">14</td><td class="d">Dialogs</td></tr>
+            <tr><td class="k">Control.Sm</td><td class="v">22</td><td class="d">Segmented buttons</td></tr>
+            <tr><td class="k">Control.Md</td><td class="v">26</td><td class="d">Buttons, toggles — the default</td></tr>
+            <tr><td class="k">Control.Lg</td><td class="v">28</td><td class="d">Transport, chips, fields, combo boxes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn" style="margin-top:18px">
+        <strong>Spacing is a convention, not a token.</strong> The 4px step (4 · 8 · 12 · 16 · 20 · 24) is followed throughout, but no <code>Space.*</code> resources exist in the theme — values are written inline. Panels pad 16; cards and track rows pad 10.
+      </div>
+    </section>
+
+    <section id="components">
+      <p class="eyebrow">05 — Components</p>
+      <h2>Specimens</h2>
+      <p>Every control below is rebuilt from the styles in <code>NotaTheme.axaml</code> at true size. Hover and click them — the states are the real ones.</p>
+
+      <h3>Buttons</h3>
+      <div class="specimen">
+        <span class="specimen__label">Button — secondary is the default</span>
+        <button class="btn btn--primary" type="button">Add instrument track</button>
+        <button class="btn" type="button">Secondary</button>
+        <button class="btn btn--ghost" type="button">Ghost</button>
+        <button class="btn btn--danger" type="button">Delete track</button>
+        <button class="btn" type="button" disabled>Disabled</button>
+      </div>
+
+      <h3>Toggles</h3>
+      <div class="specimen">
+        <span class="specimen__label">ToggleButton — brass wash when checked</span>
+        <button class="tgl" type="button" aria-pressed="false">Loop</button>
+        <button class="tgl tgl--on" type="button" aria-pressed="true">Metro</button>
+        <button class="tgl tgl--rec" type="button" aria-pressed="true">Rec arm</button>
+      </div>
+
+      <h3>Transport</h3>
+      <div class="specimen">
+        <span class="specimen__label">Transport bar — 28px chrome on surface-raised</span>
+        <button class="tp tp--play" type="button" aria-label="Play">&#9654;</button>
+        <button class="tp" type="button" aria-label="Stop">&#9632;</button>
+        <button class="tp tp--rec-on" type="button" aria-label="Record" aria-pressed="true">&#9679;</button>
+        <span class="well">5 · 1 · 000</span>
+        <span class="well">128.00</span>
+        <span class="well">4/4</span>
+        <span class="seg" role="group" aria-label="View">
+          <button type="button" aria-pressed="true">Arrangement</button>
+          <button type="button" aria-pressed="false">Session</button>
+        </span>
+        <button class="chip" type="button">Snap ¼</button>
+      </div>
+      <div class="note" style="margin-top:14px">
+        <strong>Play turns green in Session.</strong> The one place the accent yields: <code>Button.tp-play.session</code> swaps brass for <code>Brush.Success</code>, so the transport tells you which context you are driving.
+      </div>
+
+      <h3>Fields &amp; selection</h3>
+      <div class="specimen">
+        <span class="specimen__label">Inputs sit in a sunken well; focus borders brass</span>
+        <input class="field" type="text" placeholder="Search devices…" aria-label="Search devices">
+        <label class="cbx cbx--on"><span class="cbx__box"><svg width="9" height="7" viewBox="0 0 9 7" fill="none" aria-hidden="true"><path d="M0 3.5 L3.2 6.7 L9 0" stroke="#171613" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Normalize</label>
+        <label class="cbx"><span class="cbx__box"></span>Dither</label>
+      </div>
+      <div class="specimen" style="margin-top:10px">
+        <span class="specimen__label">ListBox — selection is a brass wash, not a solid fill</span>
+        <div class="listbox" role="listbox" aria-label="Devices">
+          <div role="option" aria-selected="false">Nota Volt</div>
+          <div role="option" aria-selected="true">Nota Operator</div>
+          <div role="option" aria-selected="false">Nota Sampler</div>
+          <div role="option" aria-selected="false">Drum Rack</div>
+        </div>
+      </div>
+
+      <h3>States</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>State</th><th>Treatment</th></tr></thead>
+          <tbody>
+            <tr><td class="d">Hover</td><td class="d"><code>Brush.SurfaceHover</code> on rows and ghost buttons; solid buttons go to <code>Brush.AccentHover</code></td></tr>
+            <tr><td class="d">Pressed</td><td class="d"><code>Brush.SurfaceActive</code></td></tr>
+            <tr><td class="d">Checked</td><td class="d"><code>Brush.AccentSubtle</code> fill, <code>Brush.Accent</code> border, <code>Brush.AccentBright</code> text</td></tr>
+            <tr><td class="d">Selected</td><td class="d"><code>Brush.SurfaceSelected</code> + text promoted to primary</td></tr>
+            <tr><td class="d">Keyboard focus</td><td class="d">1px <code>Brush.AccentBright</code> ring — no glow, no offset</td></tr>
+            <tr><td class="d">Disabled</td><td class="d"><code>Brush.TextDisabled</code>, opacity 0.5–0.55</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn" style="margin-top:18px">
+        <strong>Transport buttons are deliberately not focusable.</strong> <code>IsTabStop</code> and <code>Focusable</code> are false on every Button and ToggleButton, so global hotkeys (Space, R, L, Return) always reach the window instead of being swallowed by a focused control.
+      </div>
+    </section>
+
+    <section id="data">
+      <p class="eyebrow">06 — Data surfaces</p>
+      <h2>The waveform is the imagery</h2>
+      <p>Custom-drawn views — arrangement, piano roll, waveform — sit on <code>Brush.BgSunken</code> and carry the accent family. Grid lines stay under ~12% contrast against the lane so they read as structure, never as content.</p>
+
+      <div class="lane-demo" aria-hidden="true">
+        <div class="lane"><span class="clip" style="left:12px;width:150px;background:#C99C55">Drums</span><span class="clip" style="left:184px;width:96px;background:#C99C55">Fill</span></div>
+        <div class="lane"><span class="clip" style="left:52px;width:210px;background:#5B9E9C">Bass</span></div>
+        <div class="lane"><span class="clip" style="left:92px;width:170px;background:#9B7FA6">Keys</span><span class="playhead" style="left:196px"></span></div>
+      </div>
+
+      <div class="tablewrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Element</th><th>Token</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td class="d">Lane ground</td><td class="k">Brush.BgApp / Brush.LaneB</td><td class="v">#171613 / #191814</td></tr>
+            <tr><td class="d">Beat lines</td><td class="k">Brush.GridBeat</td><td class="v">#1F1D18</td></tr>
+            <tr><td class="d">Bar lines</td><td class="k">Brush.GridBar</td><td class="v">#2A2721</td></tr>
+            <tr><td class="d">Clip radius</td><td class="k">Radius.Clip</td><td class="v">4</td></tr>
+            <tr><td class="d">Playhead, selected note</td><td class="k">Brush.AccentBright</td><td class="v">#F0C060</td></tr>
+            <tr><td class="d">Waveform, MIDI note</td><td class="k">Brush.Accent</td><td class="v">#D8A03D</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <strong>Render overrides cannot resolve XAML resources cheaply</strong>, so custom-drawn views read from <code>NotaPalette.cs</code> instead. That file mirrors the theme one-for-one — change a colour in both, or the arrangement drifts from the chrome around it.
+      </div>
+    </section>
+
+    <section id="tracks">
+      <p class="eyebrow">07 — Track palette</p>
+      <h2>Eight tracks, then it wraps</h2>
+      <p>Track colours are assigned round-robin from <code>Brush.Track1..8</code>. They are muted and equal-weight on purpose: no track should look more important than another, and none competes with the brass accent.</p>
+
+      <div class="tracks">
+        <div class="track"><div class="track__bar" style="background:#C4756A"></div><div class="track__body"><div class="track__name">Track 1 · rust</div><div class="track__hex">#C4756A</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#C99C55"></div><div class="track__body"><div class="track__name">Track 2 · amber</div><div class="track__hex">#C99C55</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#9BA65D"></div><div class="track__body"><div class="track__name">Track 3 · olive</div><div class="track__hex">#9BA65D</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#6FA383"></div><div class="track__body"><div class="track__name">Track 4 · sage</div><div class="track__hex">#6FA383</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#5B9E9C"></div><div class="track__body"><div class="track__name">Track 5 · teal</div><div class="track__hex">#5B9E9C</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#6D8FB5"></div><div class="track__body"><div class="track__name">Track 6 · slate</div><div class="track__hex">#6D8FB5</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#9B7FA6"></div><div class="track__body"><div class="track__name">Track 7 · mauve</div><div class="track__hex">#9B7FA6</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#B57286"></div><div class="track__body"><div class="track__name">Track 8 · rose</div><div class="track__hex">#B57286</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#7C88A0"></div><div class="track__body"><div class="track__name">Return A</div><div class="track__hex">#7C88A0</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#A08A7C"></div><div class="track__body"><div class="track__name">Return B</div><div class="track__hex">#A08A7C</div></div></div>
+        <div class="track"><div class="track__bar" style="background:#D8A03D"></div><div class="track__body"><div class="track__name">Master</div><div class="track__hex">#D8A03D</div></div></div>
+      </div>
+      <p style="margin-top:14px;font-size:12.5px">Track 5 (teal) doubles as the modulation accent in custom-drawn views. Master reuses the brass accent — the master strip is the one channel that <em>should</em> read as primary.</p>
+    </section>
+
+    <section id="cards">
+      <p class="eyebrow">08 — Device cards</p>
+      <h2>Anatomy of a card</h2>
+      <p>Every built-in device and instrument editor is a card of fixed height <strong style="color:var(--text-primary);font-weight:600">260px</strong> (<code>DeviceCardKit.CardH</code>). Width varies per device kind and is declared by the body strategy. The vertical budget is spent the same way every time.</p>
+
+      <div class="card-anatomy" aria-hidden="true">
+        <div class="ca-row ca-head">
+          <span class="ca-dot"></span>
+          <span class="ca-name">Nota Auto Filter</span>
+          <span class="ca-tag">BUILT-IN</span>
+          <span class="ca-preset"><span>Default</span><span>▾</span></span>
+          <span class="ca-ab"><i class="on">A</i><i>B</i></span>
+          <span class="ca-right">
+            <span class="ca-cpu">0.2 %</span>
+            <span class="ca-meters">
+              <div><i style="width:62%;background:var(--success)"></i><i style="width:5%;background:var(--warning)"></i></div>
+              <div><i style="width:57%;background:var(--success)"></i><i style="width:4%;background:var(--warning)"></i></div>
+            </span>
+            <span class="ca-peak">−5.2</span>
+            <span class="ca-glyph">✕ ⠿</span>
+          </span>
+        </div>
+
+        <div class="ca-row ca-live">
+          <span class="ca-seclabel">LIVE</span>
+          <span class="ca-slider"><b>FREQ</b><span class="ca-track"><i style="width:58%;background:var(--accent)"></i><span class="ca-thumb" style="left:58%"></span></span><span class="ca-val">1.2 kHz</span></span>
+          <span class="ca-slider"><b>RES</b><span class="ca-track"><i style="width:34%;background:var(--accent)"></i><span class="ca-thumb" style="left:34%"></span></span><span class="ca-val">0.34</span></span>
+          <span class="ca-slider"><b>LFO</b><span class="ca-track"><i style="width:45%;background:#5B9E9C"></i><span class="ca-thumb" style="left:45%"></span></span><span class="ca-val">2.0 Hz</span></span>
+        </div>
+
+        <div class="ca-body">
+          <div class="ca-rail">
+            <div class="ca-tab on">Filter</div>
+            <div class="ca-tab mod">LFO</div>
+            <div class="ca-tab mod">Env</div>
+          </div>
+          <div class="ca-main">
+            <div class="knobcell">
+              <figure>
+                <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 0 1 27.57 5.49" fill="none" stroke="#D8A03D" stroke-width="3.52" stroke-linecap="round"/>
+                  <line x1="19" y1="19" x2="24.66" y2="10.08" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </figure>
+              <span class="kv">1.2k</span><span class="kl">Freq</span>
+            </div>
+            <div class="knobcell">
+              <figure>
+                <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 0 1 8.61 6.83" fill="none" stroke="#3A362D" stroke-width="3.52" stroke-linecap="round"/>
+                  <line x1="19" y1="19" x2="12.14" y2="10.97" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </figure>
+              <span class="kv">0.35</span><span class="kl">Res</span>
+            </div>
+            <div class="ca-spine">
+              <span class="ca-seclabel">MODULATION</span>
+              <div class="knobcell" style="width:46px">
+                <figure>
+                  <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+                    <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
+                    <path d="M7.69 30.31 A16 16 0 1 1 34.80 16.50" fill="none" stroke="#5B9E9C" stroke-width="3.52" stroke-linecap="round"/>
+                    <line x1="19" y1="19" x2="29.43" y2="17.35" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </figure>
+                <span class="kv" style="font-size:7px">80%</span><span class="kl" style="font-size:7px">Amount</span>
+              </div>
+            </div>
+          </div>
+          <div class="ca-out">
+            <div class="ca-outrow"><b class="ca-seclabel">GAIN</b><span class="ca-val" style="margin-left:auto">−2.0</span></div>
+            <span class="ca-track"><i style="width:80%;background:var(--border-strong)"></i><span class="ca-thumb" style="left:80%"></span></span>
+            <div class="ca-outrow" style="margin-top:auto"><b class="ca-seclabel">PAN</b><span class="ca-track"><span class="ca-thumb" style="left:50%"></span></span><span class="ca-val" style="font-size:8px;color:var(--text-tertiary)">C</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ca-legend">
+        <span><i style="background:var(--accent)"></i> Brass — audio path</span>
+        <span><i style="background:#5B9E9C"></i> Teal — modulation &amp; detection</span>
+        <span><i style="background:var(--border-strong)"></i> Muted — output rail</span>
+        <span><i style="background:var(--success)"></i> Green — signal present</span>
+      </div>
+
+      <h3>Vertical budget</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Band</th><th>Height</th><th>Contains</th></tr></thead>
+          <tbody>
+            <tr><td class="d">Header</td><td class="v">26</td><td class="d">Power dot · name · type tag · preset · A/B · CPU · stereo meter · peak dB · close &amp; drag</td></tr>
+            <tr><td class="d">LIVE strip</td><td class="v">34</td><td class="d">The two or three parameters worth reaching for mid-take, as inline sliders</td></tr>
+            <tr><td class="d">Body</td><td class="v">200</td><td class="d">Tab rail (80) · main area · output rail (100–150)</td></tr>
+            <tr><td class="d"><strong style="color:var(--text-primary)">Total</strong></td><td class="v">260</td><td class="d"><code>DeviceCardKit.CardH</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The two-colour rule</h3>
+      <p>This is the one convention that carries the most meaning, and the easiest to get wrong.</p>
+      <div class="rules">
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Brass is the audio path</h4>
+          <p>Anything the signal actually passes through — gain, frequency, drive, mix — draws its arc or fill in <code>Brush.Accent</code>. On a knob that means <code>Accent = true</code>.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Teal is modulation</h4>
+          <p>Anything that <em>controls</em> rather than carries the signal — LFOs, envelopes, sidechain detectors, followers — uses teal <code>#5B9E9C</code> (<code>Brush.Track5</code>, aliased in the kit as <code>Teal</code>), passed via the knob's <code>ArcColor</code>. Group them behind a 2px teal left border with a teal section label.</p>
+        </div>
+        <div class="rule rule--dont">
+          <h4><span class="rule__glyph">&minus;</span> The output rail stays muted</h4>
+          <p>Trim and pan at the end of the chain fill with <code>Brush.BorderStrong</code>, not brass. They are housekeeping, not the sound.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Tab accent follows the tab</h4>
+          <p>An active tab takes a 2px left border: brass for signal pages (Osc, Filter), teal for modulation pages (Env, LFO, Mod).</p>
+        </div>
+      </div>
+
+      <h3>Frame</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Part</th><th>Spec</th></tr></thead>
+          <tbody>
+            <tr><td class="d">Card</td><td class="d"><code>Brush.SurfaceRaised</code> fill, 1px <code>Brush.BorderDefault</code>, radius 7, clipped to bounds</td></tr>
+            <tr><td class="d">Header</td><td class="d">26px, 1px bottom border, 8px horizontal pad, title 11px SemiBold <code>TextPrimary</code></td></tr>
+            <tr><td class="d">Body inset</td><td class="d">10px — unless the strategy sets <code>FullBleed</code>, then it pads itself</td></tr>
+            <tr><td class="d">Tab rail</td><td class="d">80px, background <code>#1B1916</code>, 1px right border, 5px pad, tabs 20px tall / radius 4</td></tr>
+            <tr><td class="d">Output rail</td><td class="d">100–150px, background <code>#1B1916</code>, 1px left border</td></tr>
+            <tr><td class="d">Graph panels</td><td class="d"><code>Brush.BgSunken</code> ground with a <code>#221F1A</code> inner border</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note warn" style="margin-top:16px">
+        <strong><code>#1B1916</code> and <code>#221F1A</code> are not tokens.</strong> Both are in daily use — 36 and 22 files respectively — but neither is declared in <code>NotaTheme.axaml</code> or <code>NotaPalette.cs</code>. They are de-facto surfaces that should be promoted to <code>Brush.SurfaceRail</code> and <code>Brush.BorderPanel</code>.
+      </div>
+    </section>
+
+    <section id="kit">
+      <p class="eyebrow">09 — Control kit</p>
+      <h2>What you build a card out of</h2>
+      <p>Card bodies are assembled from a small set of custom-drawn controls plus the state-free builders in <code>DeviceCardKit</code>. Avalonia's stock controls are too chunky at this density, so almost everything here is purpose-built.</p>
+
+      <h3>Interaction contract</h3>
+      <p>Every value control in the kit behaves identically. Match this exactly when adding one — the consistency is the feature.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Gesture</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr><td class="d">Vertical drag</td><td class="d">Up increases. The knob travels its full range over ~140px of movement.</td></tr>
+            <tr><td class="d">Double-click</td><td class="d">Restores the parameter default (<code>Default</code>; <code>NaN</code> disables it).</td></tr>
+            <tr><td class="d">Left button only</td><td class="d">Right-click deliberately bubbles through, so the CV-modulate context menu still opens.</td></tr>
+            <tr><td class="d">Gesture brackets</td><td class="d"><code>GestureBegin</code> / <code>GestureEnd</code> wrap <code>BeginAutomationWrite</code> / <code>EndAutomationWrite</code>, so a move recorded while playing lands as automation.</td></tr>
+            <tr><td class="d">MIDI learn</td><td class="d">Knobs register through <code>MidiLearn.Bind</code> with the parameter's display name.</td></tr>
+            <tr><td class="d">Live follow</td><td class="d">A refresher re-reads engine state each UI tick and skips while <code>Dragging</code> is true, so automation never fights the hand.</td></tr>
+            <tr><td class="d">Numeric readout</td><td class="d">Mono, so the width does not jump as digits change.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Value controls</h3>
+      <div class="kit-grid">
+        <div class="kit">
+          <h4>Knob</h4><span class="dim">38 × 38 · 270° sweep from 135°</span>
+          <p>The workhorse. Dark <code>BgSunken</code> groove, value arc over it, pointer line at 0.66 r. Arc thickness scales with radius. Neutral <code>BorderStrong</code> by default; brass with <code>Accent</code>; any colour via <code>ArcColor</code>.</p>
+        </div>
+        <div class="kit">
+          <h4>KnobCell</h4><span class="dim">58 wide · knob / value / caption</span>
+          <p>The standard labelled cell: knob, 8px mono value, 8px uppercase tertiary caption. Below 52px wide both texts drop to 7px and the caption ellipsises.</p>
+        </div>
+        <div class="kit">
+          <h4>ValueBar</h4><span class="dim">h 18 · min-w 46</span>
+          <p>A rounded sunken field with the value text centred over a horizontal fill. Same drag and reset contract as the knob. Fill is teal or brass by role.</p>
+        </div>
+        <div class="kit">
+          <h4>MiniFader</h4><span class="dim">h 12 · min-w 40 · 3px track</span>
+          <p>Thin horizontal fader with an 8×9 cap. Built for the 64px arrangement track header, where the stock slider does not fit.</p>
+        </div>
+        <div class="kit">
+          <h4>VFader</h4><span class="dim">w 30 · range 0–1.5</span>
+          <p>Vertical fader for mixer strips. Cap is <code>SurfaceHover</code> with a <code>TextDisabled</code> outline and a track-coloured line.</p>
+        </div>
+        <div class="kit">
+          <h4>PanKnob</h4><span class="dim">26 × 26 · −1…1</span>
+          <p>Radial pan. Sunken face, 1.5px <code>BorderStrong</code> ring, 2px round-capped <code>TextSecondary</code> indicator.</p>
+        </div>
+        <div class="kit">
+          <h4>PanBar</h4><span class="dim">bipolar, centre-out</span>
+          <p>Horizontal pan for the track header. Brass fill grows from the centre toward the panned side; reads “50L … C … 50R”.</p>
+        </div>
+        <div class="kit">
+          <h4>DragNumber</h4><span class="dim">mono readout</span>
+          <p>Numeric field that edits by vertical drag, or double-click to type. Commits on Enter or blur.</p>
+        </div>
+      </div>
+
+      <h3>Meters</h3>
+      <div class="kit-grid">
+        <div class="kit">
+          <h4>MeterBar</h4><span class="dim">v: w 10 · h: 12 × min 80</span>
+          <p>Peak/RMS level, fed ~30 Hz. dB-mapped −60…0 with green / amber / red zones. Rises instantly, falls on a fixed decay, peak-hold ticks in <code>TextPrimary</code>.</p>
+        </div>
+        <div class="kit">
+          <h4>StereoMeter</h4><span class="dim">two 3px bars</span>
+          <p>L over R, for the output rail and the card header. Same zone colours as MeterBar.</p>
+        </div>
+        <div class="kit">
+          <h4>GrMeter</h4><span class="dim">hangs from the top</span>
+          <p>Gain reduction — draws downward from 0 dB, so more compression reads as more bar.</p>
+        </div>
+        <div class="kit">
+          <h4>MixBar</h4><span class="dim">h 6</span>
+          <p>Proportional source levels as amber segments, bright to faint. Used under Volt's noise panel to show the Osc1 / Osc2 / Noise sum.</p>
+        </div>
+      </div>
+
+      <h3>Chrome builders</h3>
+      <div class="kit-grid">
+        <div class="kit">
+          <h4>ChipRow</h4><span class="dim">radius 4 · 9px · pad 6×2</span>
+          <p>Single-select over an integer. Selected chip fills brass with <code>TextOnAccent</code> ink; the rest sit on <code>SurfaceCard</code> with a <code>BorderStrong</code> outline.</p>
+        </div>
+        <div class="kit">
+          <h4>Labeled</h4><span class="dim">8px uppercase tertiary</span>
+          <p>Puts a centred caption above any control. The default way to title something that is not a knob.</p>
+        </div>
+        <div class="kit">
+          <h4>TextButton</h4><span class="dim">radius 5 · 11px · pad 10×4</span>
+          <p>In-card action button on <code>SurfaceCard</code> with a <code>BorderStrong</code> outline.</p>
+        </div>
+        <div class="kit">
+          <h4>BypassTag</h4><span class="dim">8px bold · radius 3</span>
+          <p>The “BYPASSED” marker on a disabled device.</p>
+        </div>
+        <div class="kit">
+          <h4>NaBadge</h4><span class="dim">h 16 · radius 8 (Pill)</span>
+          <p>Marks a control drawn from the mockup whose feature is not built yet. Two variants — <code>N/A</code> and <code>M7+</code>. The control it sits on stays visible but disabled, so nothing shifts when the feature ships.</p>
+        </div>
+        <div class="kit">
+          <h4>Glyph &amp; Hint</h4><span class="dim">10px / 11px tertiary</span>
+          <p>A clickable text glyph that dims to <code>TextDisabled</code> when inactive, and a quiet inline hint line.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="viz">
+      <p class="eyebrow">10 — Visualisers</p>
+      <h2>Every device shows its own state</h2>
+      <p>Around forty custom-drawn views live in <code>Controls/</code>. The rule behind all of them: a device should draw the thing it does, not a generic graph. They share one ground — <code>Brush.BgSunken</code> with a <code>#221F1A</code> inner border — and read data straight from the engine on the UI tick.</p>
+
+      <div class="vizcat">
+        <h4>Transfer curves — what goes in against what comes out</h4>
+        <p><code>AmpCurve</code> · <code>CompTransfer</code> · <code>VintageViz</code> · <code>VelocityCurveViz</code>. Input on x, output on y, dashed unity diagonal for reference.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Frequency response</h4>
+        <p><code>AutoFilterCurve</code> · <code>DynamicEqCurve</code> · <code>EqThreeCurve</code> · <code>EqCurve</code> · <code>AmpToneCurve</code>. Magnitude over a log-frequency grid. A dynamic EQ draws two curves — static and reacted.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Spectra</h4>
+        <p><code>AmpHarmonics</code> · <code>OperatorSpectrumViz</code> · <code>CollisionViz</code>. Harmonic magnitudes as bars — the amp pushes a unit sine through its own waveshaper to get real numbers rather than a drawing.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Scrolling history</h4>
+        <p><code>AutoGainViz</code> · <code>CompGrHistory</code> · <code>CeilingScope</code> · <code>AutoShiftViz</code> · <code>FluxReactScope</code> · <code>ShutterViz</code> · <code>ForgeViz</code>. A ring of the last few seconds. Gain reduction hangs downward from the top.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Waveform &amp; sample</h4>
+        <p><code>GrainWaveViz</code> · <code>RhythmWaveViz</code> · <code>StrataWave</code> · <code>AuroraStack</code> · <code>MonolithViews</code>. Drawn in the app's standard waveform style so a sample looks the same wherever it appears.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Grids &amp; sequencers</h4>
+        <p><code>ArpGrid</code> (16 steps per lane) · <code>VoltMatrix</code> (bipolar source × destination) · <code>BeatRepeatViz</code> (64 slots) · <code>DelayTaps</code> (echo train, L above R).</p>
+      </div>
+      <div class="vizcat">
+        <h4>Envelopes &amp; shapes</h4>
+        <p><code>SynthViz</code> · <code>VoltEnv</code> · <code>ReverbTail</code> · <code>RhythmHitViz</code> · <code>LengthGateViz</code> · <code>DistributionViz</code> · <code>AutoPanViz</code>. Where possible these are real — the reverb tail is an actual decaying impulse response, not a drawn curve.</p>
+      </div>
+      <div class="vizcat">
+        <h4>The instrument drawn as itself</h4>
+        <p><code>PendulumViz</code> · <code>FluxVectorPad</code> · <code>ChordKeysViz</code> · <code>OperatorAlgoViz</code>. The strongest cards in the set: Pendulum shows its balls swinging across the triangular field, Flux gives you the XY pad to drag, Chord shows the resulting notes on a keyboard.</p>
+      </div>
+      <div class="vizcat">
+        <h4>Icons</h4>
+        <p><code>WaveIcon</code> · <code>GrainShapeIcon</code> · <code>AutoFilterIcons</code>. Tiny custom glyphs — waveform shapes, grain windows, filter types — drawn rather than shipped as assets.</p>
+      </div>
+    </section>
+
+    <section id="motion">
+      <p class="eyebrow">11 — Motion &amp; voice</p>
+      <h2>Fast and quiet</h2>
+      <p>Transitions run 100–240ms on an ease-out curve, and they may only change opacity or translate by 6px or less. No scaling, no bouncing, no spring. A DAW is operated, not admired — motion that delays a click is a bug.</p>
+      <div class="rules">
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Layout skeleton</h4>
+          <p>Transport bar → toolbar → track area (scrolls, on <code>Brush.BgApp</code>) → 26px status bar. Panels are <code>Brush.SurfaceCard</code> with a 1px bottom border. Track rows are cards: radius 10, 1px border, 10px pad.</p>
+        </div>
+        <div class="rule rule--do">
+          <h4><span class="rule__glyph">+</span> Scrollbars recede</h4>
+          <p>9px wide, thumb on <code>Brush.BorderStrong</code>, brightening to tertiary on hover and brass while dragged. The stepper arrows are hidden — at this scale they are noise.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="drift">
+      <p class="eyebrow">12 — Maintenance</p>
+      <h2>Known drift &amp; gaps</h2>
+      <p>Things that are true today and should not surprise you.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Item</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="d">The <code>nota-design</code> agent skill</td><td class="d"><strong style="color:var(--danger)">Stale.</strong> It still documents a cool-slate palette with a cyan accent (<code>#1690B2</code>) from an earlier direction. The theme file is authoritative; the skill needs rewriting to match this page.</td></tr>
+            <tr><td class="d">Custom title bar</td><td class="d">Not built. The OS title bar is still in use; the status bar carries the chrome identity until a frameless 40px bar lands.</td></tr>
+            <tr><td class="d">Display face</td><td class="d">Inter is bundled as a stand-in for Geist. Swap <code>Font.UI</code> once Geist ships with the app.</td></tr>
+            <tr><td class="d"><code>Space.*</code> tokens</td><td class="d">Do not exist. The 4px grid is honoured by convention only.</td></tr>
+            <tr><td class="d">Two palette files</td><td class="d"><code>NotaTheme.axaml</code> and <code>NotaPalette.cs</code> must be edited together — nothing enforces it.</td></tr>
+            <tr><td class="d">Hardcoded hex in card bodies</td><td class="d"><strong style="color:var(--warning)">628 literal hex values</strong> across <code>DeviceCards/</code> and <code>Controls/</code>. The “never hardcode a colour” rule holds in XAML but has largely not held in the custom-drawn layer.</td></tr>
+            <tr><td class="d">Undeclared surfaces</td><td class="d"><code>#1B1916</code> (rail) and <code>#221F1A</code> (graph border) behave like tokens but are not declared anywhere.</td></tr>
+            <tr><td class="d"><code>AccentSubtle</code> alpha</td><td class="d">The theme defines <code>#24D8A03D</code>; <code>DeviceCardKit.AccentSubtleB</code> uses <code>#28D8A03D</code>. Two slightly different washes ship side by side.</td></tr>
+            <tr><td class="d">Mockup typography</td><td class="d">The mockups specify Geist and Geist Mono throughout. The app substitutes Inter and the Cascadia/Menlo/Consolas stack, so weights sit slightly differently than the source designs.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      Nota · Ember Graphite. Generated from <code>Theme/NotaTheme.axaml</code> and <code>Theme/NotaPalette.cs</code>. When this page and those files disagree, the files win — and this page is wrong.
+    </footer>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll(".sw").forEach(function (sw) {
+    sw.addEventListener("click", function () {
+      var hex = sw.getAttribute("data-hex") || "";
+      var done = function () {
+        sw.classList.add("copied");
+        var el = sw.querySelector(".sw__hex");
+        if (!el) return;
+        var prev = el.textContent;
+        el.textContent = "copied";
+        setTimeout(function () { el.textContent = prev; sw.classList.remove("copied"); }, 900);
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(hex).then(done, function () {});
+        }
+      } catch (e) { /* clipboard unavailable — the swatch still shows its hex */ }
+    });
+  });
+})();
+</script>

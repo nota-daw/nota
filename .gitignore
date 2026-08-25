@@ -1,0 +1,30 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+build/
+build-*/
+out/
+*.user
+
+# .NET
+project.lock.json
+*.nupkg
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vs/
+.vscode/
+*.swp
+
+# Nota project bundles created during testing
+*.nota/
+dist/
+

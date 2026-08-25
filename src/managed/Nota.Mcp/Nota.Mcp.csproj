@@ -1,0 +1,29 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!-- MCP server: exposes the engine (IAudioEngine) as Model Context Protocol tools over a
+     loopback HTTP transport, so an AI (Claude Desktop / Claude Code) can drive the live app.
+     Kept free of Avalonia — the UI-thread marshal + arrangement refresh are injected as
+     interfaces (IEngineDispatch / IArrangementRefresh) implemented by Nota.App. -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- The MCP HTTP server rides on ASP.NET Core (Kestrel). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="2.1.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nota.Application\Nota.Application.csproj" />
+  </ItemGroup>
+
+</Project>

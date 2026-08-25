@@ -1,0 +1,3 @@
+[submodule "src/native/nota.engine/vendor/JUCE"]
+	path = src/native/nota.engine/vendor/JUCE
+	url = https://github.com/juce-framework/JUCE.git

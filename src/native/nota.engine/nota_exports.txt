@@ -1,0 +1,6 @@
+# Exported symbols for libnota_engine.dylib (macOS ld64 -exported_symbols_list).
+# ONLY the C ABI (nota_*, with the Mach-O leading underscore) is public. Everything
+# else — notably the statically-linked JUCE — stays private, so a hosted plugin that
+# also links JUCE cannot coalesce its weak symbols with ours (which corrupted the heap
+# and crashed when a plugin opened its editor). All P/Invoke entry points are nota_*.
+_nota_*

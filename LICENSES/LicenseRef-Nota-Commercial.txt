@@ -1,0 +1,120 @@
+Nota Commercial License
+SPDX identifier: LicenseRef-Nota-Commercial
+Version 0.1 — DRAFT. NOT LEGAL ADVICE. Review with a qualified lawyer before
+offering this license to any third party.
+
+Copyright (c) 2026 Egor Khindikaynen. All rights reserved.
+
+-------------------------------------------------------------------------------
+0. RELATIONSHIP TO THE OPEN SOURCE LICENSE
+-------------------------------------------------------------------------------
+
+Nota source files carry the identifier:
+
+    SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial
+
+You may use each such file under EITHER the GNU Affero General Public License
+version 3 (see LICENSES/AGPL-3.0-only.txt) OR the terms below. If you have not
+signed a commercial agreement with the Licensor, the AGPL-3.0-only terms are the
+only terms available to you, and this document does not grant you any rights.
+
+-------------------------------------------------------------------------------
+1. DEFINITIONS
+-------------------------------------------------------------------------------
+
+"Licensor" means Egor Khindikaynen.
+"Software" means the Nota source code and binaries covered by this license,
+excluding Third-Party Components.
+"Licensee" means the individual or legal entity named in an executed Order Form.
+"Order Form" means a written agreement, signed by both parties, that references
+this document and states the scope, term, and fees of the grant.
+"Third-Party Components" means the dependencies listed in LICENSES/third-party.md,
+each of which remains governed by its own license.
+
+-------------------------------------------------------------------------------
+2. GRANT
+-------------------------------------------------------------------------------
+
+Subject to an executed Order Form, payment of all fees, and continued compliance
+with this license, the Licensor grants the Licensee a non-exclusive,
+non-transferable, non-sublicensable, worldwide license, for the term stated in
+the Order Form, to:
+
+  (a) use, reproduce, and modify the Software internally; and
+  (b) distribute the Software, in source or object form, as an integrated part of
+      the Licensee's own product, WITHOUT the source-disclosure and network-use
+      obligations of the AGPL-3.0-only.
+
+-------------------------------------------------------------------------------
+3. RESTRICTIONS
+-------------------------------------------------------------------------------
+
+The Licensee shall not:
+
+  (a) distribute the Software as a standalone product, software development kit,
+      or component library competing with Nota;
+  (b) remove or alter any copyright, trademark, or license notice;
+  (c) use the names "Nota", "Ambertape", or the Licensor's name to endorse or
+      promote products without prior written permission;
+  (d) sublicense, rent, lease, or sell the Software except as permitted by
+      Section 2(b).
+
+-------------------------------------------------------------------------------
+4. THIRD-PARTY COMPONENTS
+-------------------------------------------------------------------------------
+
+This license covers ONLY the Licensor's own code. It grants no rights in any
+Third-Party Component. Several dependencies are copyleft or proprietary and
+require the Licensee to obtain separate licenses directly from their vendors —
+including, without limitation, the JUCE framework (Raw Material Software Limited)
+and the VST 3 SDK (Steinberg Media Technologies GmbH). See LICENSES/third-party.md
+for the current register. Obtaining those licenses is the Licensee's sole
+responsibility.
+
+-------------------------------------------------------------------------------
+5. OWNERSHIP
+-------------------------------------------------------------------------------
+
+The Software is licensed, not sold. The Licensor retains all right, title, and
+interest in and to the Software, including all intellectual property rights.
+
+-------------------------------------------------------------------------------
+6. WARRANTY DISCLAIMER
+-------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+-------------------------------------------------------------------------------
+7. LIMITATION OF LIABILITY
+-------------------------------------------------------------------------------
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE LICENSOR
+BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, OR DATA, ARISING OUT OF OR RELATED
+TO THIS LICENSE. THE LICENSOR'S TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED THE
+FEES PAID BY THE LICENSEE UNDER THE APPLICABLE ORDER FORM IN THE TWELVE (12)
+MONTHS PRECEDING THE CLAIM.
+
+-------------------------------------------------------------------------------
+8. TERMINATION
+-------------------------------------------------------------------------------
+
+This license terminates automatically if the Licensee breaches any term and fails
+to cure the breach within thirty (30) days of written notice. On termination the
+Licensee shall cease distribution of the Software. Sections 4 through 9 survive.
+
+-------------------------------------------------------------------------------
+9. GENERAL
+-------------------------------------------------------------------------------
+
+The governing law and dispute-resolution venue are those stated in the Order Form.
+This license, together with the Order Form, is the entire agreement between the
+parties regarding the Software and supersedes all prior proposals.
+
+-------------------------------------------------------------------------------
+CONTACT
+-------------------------------------------------------------------------------
+
+Commercial licensing enquiries: khek@ambertape.ru

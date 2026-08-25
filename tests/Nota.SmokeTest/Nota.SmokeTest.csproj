@@ -1,0 +1,42 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Copy the right native engine for the build host: nota_engine.dll on Windows,
+       libnota_engine.dylib on macOS, libnota_engine.so on Linux. -->
+  <PropertyGroup>
+    <NotaNativeDir Condition="'$(NotaNativeDir)' == ''">$(MSBuildProjectDirectory)/../../src/native/nota.engine/build</NotaNativeDir>
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == '' and '$(NotaEngineDylib)' != ''">$(NotaEngineDylib)</NotaEngineLib>
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">$(NotaNativeDir)/nota_engine.dll</NotaEngineLib>
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">$(NotaNativeDir)/libnota_engine.so</NotaEngineLib>
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == ''">$(NotaNativeDir)/libnota_engine.dylib</NotaEngineLib>
+    <NotaEngineLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">nota_engine.dll</NotaEngineLibName>
+    <NotaEngineLibName Condition="'$(NotaEngineLibName)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">libnota_engine.so</NotaEngineLibName>
+    <NotaEngineLibName Condition="'$(NotaEngineLibName)' == ''">libnota_engine.dylib</NotaEngineLibName>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(NotaEngineLib)')">
+    <None Include="$(NotaEngineLib)">
+      <Link>$(NotaEngineLibName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\managed\Nota.Infrastructure\Nota.Infrastructure.csproj" />
+    <!-- Referenced only so the arch-boundary check can reflect on the Presentation
+         assembly (Phase 0.7); Presentation is not in Infrastructure's closure. -->
+    <ProjectReference Include="..\..\src\managed\Nota.Presentation\Nota.Presentation.csproj" />
+    <ProjectReference Include="..\..\src\managed\Nota.Mcp\Nota.Mcp.csproj" />
+  </ItemGroup>
+
+  <!-- Engine contract types + ports live in the Application namespace. -->
+  <ItemGroup>
+    <Using Include="Nota.Application" />
+  </ItemGroup>
+
+</Project>

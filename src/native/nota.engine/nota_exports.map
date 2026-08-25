@@ -1,0 +1,12 @@
+# Exported symbols for libnota_engine.so (GNU ld / lld --version-script).
+# ONLY the C ABI (nota_*) is public; everything else — notably the statically-linked
+# JUCE — is forced local, so a hosted plugin that also links JUCE cannot interpose its
+# symbols with ours (which corrupts the heap and crashes when a plugin opens its
+# editor). The ELF analogue of macOS's nota_exports.txt. All P/Invoke entry points are
+# nota_*.
+NOTA {
+  global:
+    nota_*;
+  local:
+    *;
+};

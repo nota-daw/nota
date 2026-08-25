@@ -1,0 +1,23 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<!--
+  Solution-wide build settings. Edition (AR-10) mirrors the CMake NOTA_EDITION
+  flag on the managed side: pass -p:NotaEdition=pro to build the Pro edition.
+  Free is the default. The PRO compile constant gates Pro-only C# code.
+-->
+<Project>
+  <PropertyGroup>
+    <NotaEdition Condition="'$(NotaEdition)' == ''">free</NotaEdition>
+    <DefineConstants Condition="'$(NotaEdition)' == 'pro'">$(DefineConstants);PRO</DefineConstants>
+
+    <!-- Single source of truth for the app version: the VERSION file at the repo
+         root (semver MAJOR.MINOR.PATCH). Bumped only when cutting a release,
+         never edited by hand. Feeds AssemblyVersion/FileVersion/InformationalVersion
+         so the running app can read it back via reflection (see AppInfo). The macOS
+         bundle reads the same file for CFBundleShortVersionString. -->
+    <NotaVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</NotaVersion>
+    <Version>$(NotaVersion)</Version>
+    <AssemblyVersion>$(NotaVersion)</AssemblyVersion>
+    <FileVersion>$(NotaVersion)</FileVersion>
+    <InformationalVersion>$(NotaVersion)</InformationalVersion>
+  </PropertyGroup>
+</Project>

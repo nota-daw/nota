@@ -1,0 +1,96 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Nota-Commercial -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Windows .exe icon (Explorer / taskbar / alt-tab). The WinExe output embeds
+         this .ico as the Win32 icon resource. macOS uses the .icns produced by
+         scripts/bundle-mac.sh for the .app bundle, so we only set this on Windows. -->
+    <ApplicationIcon Condition="$([MSBuild]::IsOSPlatform('Windows')) or $(RuntimeIdentifier.StartsWith('win'))">..\..\..\assets\icons\windows\nota.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+  </ItemGroup>
+
+  <!-- App icon for the window / taskbar. The macOS .app dock & Finder icon comes
+       from the .icns produced by scripts/bundle-mac.sh out of the same source PNG. -->
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\..\assets\icons\logo.png" Link="Assets/logo.png" />
+    <!-- Windows/Linux window icon (.ico with multiple resolutions). macOS uses the
+         .icns produced by scripts/bundle-mac.sh for the dock/Finder icon. -->
+    <AvaloniaResource Include="..\..\..\assets\icons\windows\nota.ico" Link="Assets/nota.ico" />
+    <!-- Ship the changelog inside the app so the "What's New" window can parse the
+         entries for the current version at runtime (avares://Nota.App/Assets/CHANGELOG.md). -->
+    <AvaloniaResource Include="..\..\..\CHANGELOG.md" Link="Assets/CHANGELOG.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nota.Presentation\Nota.Presentation.csproj" />
+    <ProjectReference Include="..\Nota.Infrastructure\Nota.Infrastructure.csproj" />
+    <ProjectReference Include="..\Nota.Mcp\Nota.Mcp.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the native engine + scan worker next to the app binary so P/Invoke can
+       find them. Built separately by CMake (see src/native/nota.engine). The right
+       artifact per platform: libnota_engine.dylib / nota-scanworker on macOS,
+       nota_engine.dll / nota-scanworker.exe on Windows, libnota_engine.so /
+       nota-scanworker on Linux. Never copy the wrong OS's binary into a
+       cross-publish. Paths can be overridden in CI via
+       -p:NotaEngineLib=... / -p:NotaScanWorker=... -->
+  <PropertyGroup>
+    <NotaNativeDir Condition="'$(NotaNativeDir)' == ''">$(MSBuildProjectDirectory)/../../native/nota.engine/build</NotaNativeDir>
+    <!-- Target OS: an explicit RID wins, otherwise the build host. -->
+    <NotaTargetWin Condition="$(RuntimeIdentifier.StartsWith('win')) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows')))">true</NotaTargetWin>
+    <NotaTargetMac Condition="$(RuntimeIdentifier.StartsWith('osx')) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX')))">true</NotaTargetMac>
+    <NotaTargetLinux Condition="$(RuntimeIdentifier.StartsWith('linux')) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux')))">true</NotaTargetLinux>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NotaTargetMac)' == 'true'">
+    <!-- Honour the legacy -p:NotaEngineDylib override if callers still pass it. -->
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == '' and '$(NotaEngineDylib)' != ''">$(NotaEngineDylib)</NotaEngineLib>
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == ''">$(NotaNativeDir)/libnota_engine.dylib</NotaEngineLib>
+    <NotaScanWorker Condition="'$(NotaScanWorker)' == ''">$(NotaNativeDir)/nota-scanworker</NotaScanWorker>
+    <NotaEngineLibName>libnota_engine.dylib</NotaEngineLibName>
+    <NotaScanWorkerName>nota-scanworker</NotaScanWorkerName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NotaTargetWin)' == 'true'">
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == ''">$(NotaNativeDir)/nota_engine.dll</NotaEngineLib>
+    <NotaScanWorker Condition="'$(NotaScanWorker)' == ''">$(NotaNativeDir)/nota-scanworker.exe</NotaScanWorker>
+    <NotaEngineLibName>nota_engine.dll</NotaEngineLibName>
+    <NotaScanWorkerName>nota-scanworker.exe</NotaScanWorkerName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NotaTargetLinux)' == 'true'">
+    <NotaEngineLib Condition="'$(NotaEngineLib)' == ''">$(NotaNativeDir)/libnota_engine.so</NotaEngineLib>
+    <NotaScanWorker Condition="'$(NotaScanWorker)' == ''">$(NotaNativeDir)/nota-scanworker</NotaScanWorker>
+    <NotaEngineLibName>libnota_engine.so</NotaEngineLibName>
+    <NotaScanWorkerName>nota-scanworker</NotaScanWorkerName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NotaCopyNative Condition="'$(NotaTargetMac)' == 'true' or '$(NotaTargetWin)' == 'true' or '$(NotaTargetLinux)' == 'true'">true</NotaCopyNative>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(NotaCopyNative)' == 'true' and Exists('$(NotaEngineLib)')">
+    <None Include="$(NotaEngineLib)">
+      <Link>$(NotaEngineLibName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <!-- Out-of-process plugin scanner (M3-1), copied next to the app binary. -->
+  <ItemGroup Condition="'$(NotaCopyNative)' == 'true' and Exists('$(NotaScanWorker)')">
+    <None Include="$(NotaScanWorker)">
+      <Link>$(NotaScanWorkerName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,28 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Nota.App.App"
+             Name="Nota"
+             RequestedThemeVariant="Dark">
+             <!-- Nota is dark-first (see .claude/skills/nota-design). -->
+
+    <!-- macOS application menu (the bold "Nota" menu). Its first item is merged into
+         the app menu, so About/Settings live there instead of a duplicate "Nota". -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="Nota">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="About Nota" Click="OnAppAbout"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Settings…" Click="OnAppPreferences" Gesture="Cmd+,"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+        </NativeMenu>
+    </NativeMenu.Menu>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Nota.App/Theme/NotaTheme.axaml"/>
+    </Application.Styles>
+</Application>
