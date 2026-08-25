@@ -38,6 +38,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "assets", "assets", "{BCB3042B-3AFA-4988-8B69-8663C3C49020}"
 	ProjectSection(SolutionItems) = preProject
 		assets\icons\logo.png = assets\icons\logo.png
+		assets\screenshots\screenshot_001.png = assets\screenshots\screenshot_001.png
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution items", "solution items", "{B3D44776-BD66-4C5B-BDDC-853B9BB27BF0}"

@@ -5,6 +5,8 @@ are a portable C++20 core; the UI is Avalonia (.NET). Plugin hosting (VST3, plus
 on macOS) runs through JUCE, isolated in its own module so the engine core stays
 JUCE-free.
 
+![screenshot_001.png](assets/screenshots/screenshot_001.png)
+
 - **UI / app:** .NET 10, Avalonia 12 (C#) — `src/managed`
 - **Engine / DSP:** C++20, built with CMake + Ninja — `src/native/nota.engine`
 - **Audio backends:** CoreAudio (macOS), WASAPI (Windows), PulseAudio/ALSA (Linux, via miniaudio)
