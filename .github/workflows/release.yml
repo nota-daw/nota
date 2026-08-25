@@ -1,0 +1,193 @@
+name: Release
+
+# Builds and publishes Nota for every x64 + arm64 target across macOS, Windows and
+# Linux. Runs ONLY on a semver release tag (vX.Y.Z), and only when that tag points at a
+# commit contained in `main`. The GitHub release is created as a DRAFT with the matching
+# CHANGELOG section as its body; you review the artifacts and publish manually.
+#
+# Artifacts:
+#   macOS   -> Nota-<version>-universal.dmg   (arm64 + x86_64 in one bundle)
+#   Windows -> Nota-Setup-<version>-x64.exe , Nota-Setup-<version>-arm64.exe
+#   Linux   -> Nota-<version>-x86_64.AppImage , Nota-<version>-aarch64.AppImage
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write   # create the release + upload assets
+
+jobs:
+  # --------------------------------------------------------------------------------
+  # Gate: the tag must be on main, must match the VERSION file, and must have a
+  # CHANGELOG section. Every build job depends on this, so a bad tag never builds.
+  # --------------------------------------------------------------------------------
+  guard:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can test ancestry against main
+
+      - name: Verify tag is on main, matches VERSION, and has a changelog entry
+        id: meta
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          echo "Release tag: $GITHUB_REF_NAME  (version $version)"
+
+          # 1) The tagged commit must be reachable from main.
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME ($GITHUB_SHA) is not contained in main — releases build only from main."
+            exit 1
+          fi
+
+          # 2) The tag must match the VERSION file (the release single source of truth).
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          if [ "$version" != "$file_version" ]; then
+            echo "::error::Tag version ($version) does not match VERSION file ($file_version)."
+            exit 1
+          fi
+
+          # 3) There must be a CHANGELOG section to use as the release body.
+          if ! grep -qE "^## \[${version}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${version}]' section."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # --------------------------------------------------------------------------------
+  # macOS — single universal .dmg (arm64 + x86_64).
+  # --------------------------------------------------------------------------------
+  macos:
+    name: Build macOS (universal)
+    needs: guard
+    runs-on: macos-14   # Apple Silicon; the script cross-builds the x86_64 slice
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # JUCE
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install build tools
+        run: brew install cmake ninja
+      - name: Package universal .dmg
+        run: bash scripts/package-dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/Nota-*-universal.dmg
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------------
+  # Windows — x64 + arm64 installers, both cross-built from the x64 runner via the
+  # Visual Studio generator. Requires the VS2022 ARM64 build tools (present on the
+  # GitHub windows-latest image).
+  # --------------------------------------------------------------------------------
+  windows:
+    name: Build Windows (x64 + arm64)
+    needs: guard
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # JUCE
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Package x64 installer
+        run: pwsh scripts/package-win.ps1 x64
+      - name: Package arm64 installer
+        run: pwsh scripts/package-win.ps1 arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/Nota-Setup-*.exe
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------------
+  # Linux — one AppImage per arch. The native .so can't be cross-compiled, so each
+  # arch builds on its own native runner.
+  # --------------------------------------------------------------------------------
+  linux:
+    name: Build Linux (${{ matrix.arch }})
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # JUCE
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install build + packaging deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build build-essential curl ca-certificates file squashfs-tools \
+            libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libfreetype6-dev libfontconfig1-dev
+      - name: Package AppImage
+        run: bash scripts/package-linux.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/Nota-*.AppImage
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------------
+  # Draft release — collect every artifact and attach the CHANGELOG section as the body.
+  # --------------------------------------------------------------------------------
+  release:
+    name: Create draft release
+    needs: [guard, macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract CHANGELOG section for this version
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          # Print the body of the "## [<version>]" section, up to the next "## [" heading.
+          awk -v ver="$version" '
+            $0 ~ ("^## \\[" ver "\\]") { grab = 1; next }
+            grab && /^## \[/           { exit }
+            grab                        { print }
+          ' CHANGELOG.md | sed '/./,$!d' > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "See CHANGELOG.md for details." > RELEASE_NOTES.md
+          fi
+          echo "----- release notes -----"; cat RELEASE_NOTES.md
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Nota ${{ needs.guard.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: artifacts/**/*
+          fail_on_unmatched_files: true
