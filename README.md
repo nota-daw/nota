@@ -1,5 +1,7 @@
 # Nota
 
+[![Latest release](https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver)](https://github.com/nota-daw/nota/releases/latest)
+
 > **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
 > was developed with AI assistance. It started as a tool I built for myself, and was only
 > later opened up as open source. Guided and shaped throughout by me,
