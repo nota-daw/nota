@@ -108,6 +108,12 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
     /// source, 2 linked frozen. Set by MainWindow; queried while rebuilding headers.</summary>
     public Func<int, int>? FreezeRole;
+    /// <summary>Freeze / Live Freeze entries for a track's context menu (empty when the track
+    /// can't be frozen). Built by MainWindow, which owns the freeze state and commands.</summary>
+    public Func<int, IReadOnlyList<Control>>? FreezeMenuItems;
+    /// <summary>Called at the start of a full <see cref="Refresh"/>, before the track model is
+    /// rebuilt — MainWindow drops live-freeze links whose tracks were deleted or undone.</summary>
+    public Action? RefreshStarting;
     /// <summary>A transient status line the arrangement wants shown (e.g. an automation-follow hint).</summary>
     public event Action<string>? StatusMessage;
     /// <summary>Raised after a clip is copied into a session slot (M5-6).</summary>
@@ -506,6 +512,7 @@ public sealed partial class ArrangementView : UserControl
     /// context menu survive the 60 Hz tick instead of being torn down each frame).</summary>
     public void Refresh(bool rebuildHeaders = true)
     {
+        if (rebuildHeaders) RefreshStarting?.Invoke();
         // Peak reuse (⑤): on a live refresh (no header rebuild) the audio content of existing
         // clips can't change — recording appends a separate take drawn elsewhere, and the live
         // MIDI-drag path only touches a MIDI clip. So carry each audio clip's already-fetched
@@ -1491,10 +1498,18 @@ public sealed partial class ArrangementView : UserControl
             ungroup.Click += (_, _) => UngroupGroup(ungroupId);
         }
 
+        // Freeze ▸ state-dependent entries (Freeze / Live Freeze, or Unfreeze / Edit / Flatten).
+        var freeze = FreezeMenuItems?.Invoke(trackId) ?? Array.Empty<Control>();
+
         flyout.Items.Add(rename);
         flyout.Items.Add(color);
         if (recInput is not null) flyout.Items.Add(recInput);
         if (midiFrom is not null) flyout.Items.Add(midiFrom);
+        if (freeze.Count > 0)
+        {
+            flyout.Items.Add(new Separator());
+            foreach (var item in freeze) flyout.Items.Add(item);
+        }
         flyout.Items.Add(new Separator());
         flyout.Items.Add(group);
         if (ungroup is not null) flyout.Items.Add(ungroup);

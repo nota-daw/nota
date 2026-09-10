@@ -6,8 +6,10 @@
 // the live chain — the mixer strip stays live. Right-click offers Flatten, which
 // replaces the track with a plain audio clip of the frozen sound. Frozen state shows
 // as an ice tint + snowflake on the arrangement header and a dimmed device chain.
+// The arrangement track context menu exposes the same commands (plus Live Freeze).
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -51,10 +53,9 @@ public partial class MainWindow
 
         bool frozen = Engine.IsTrackFrozen(trackId);
         FreezeLabel.Text = frozen ? "Frozen" : "Freeze";
-        IBrush ice = new SolidColorBrush(Color.Parse("#7FC7EC"));
         IBrush idle = (IBrush?)this.FindResource("Brush.TextSecondary") ?? Brushes.Gray;
-        FreezeIcon.Foreground = frozen ? ice : idle;
-        FreezeLabel.Foreground = frozen ? ice : idle;
+        FreezeIcon.Foreground = frozen ? IceBrush : idle;
+        FreezeLabel.Foreground = frozen ? IceBrush : idle;
         EnsureFreezeMenu();
     }
 
@@ -120,22 +121,105 @@ public partial class MainWindow
         catch (Exception ex) { _vm.StatusText = $"Freeze failed: {ex.Message}"; }
         finally { _vm.SuspendEnginePolling = false; }
 
-        AfterFreezeChange(trackId);
+        AfterFreezeChange();
     }
 
     private void UnfreezeTrack(int trackId)
     {
         Engine.UnfreezeTrack(trackId);
         if (_vm is not null) _vm.StatusText = "Track unfrozen.";
-        AfterFreezeChange(trackId);
+        AfterFreezeChange();
     }
 
-    private void AfterFreezeChange(int trackId)
+    // Refresh the header buttons + chain dim for the *shown* track (not necessarily the one
+    // acted on), then repaint the arrangement header snowflake / ice tint.
+    private void AfterFreezeChange()
     {
-        UpdateFreezeButton(trackId);
-        ApplyFrozenChainDim(trackId);
-        Timeline.Refresh();   // repaint the header snowflake / ice tint
+        UpdateFreezeButton(_freezeTrackId);
+        ApplyFrozenChainDim(_freezeTrackId);
+        Timeline.Refresh();
     }
+
+    // --- arrangement track context menu -----------------------------------
+
+    // Freeze entries for a track header's right-click menu, mirroring the header button
+    // cluster: Freeze / Live Freeze on a live track; Unfreeze / Flatten when frozen in place;
+    // Edit (or Done / Discard mid-session) + Unfreeze / Flatten on either side of a live-freeze
+    // link. Each command first selects its track so the device panel and header buttons follow.
+    private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
+    {
+        var items = new List<Control>();
+        if ((LinkForSource(trackId) ?? LinkForFrozen(trackId)) is { } link)
+        {
+            int src = link.SourceId;
+            if (link.State == LinkState.Editing)
+            {
+                items.Add(FreezeMenuItem("Done — re-freeze", GlyphIcon("✓", accent: true),
+                    async () => { Timeline.Select(trackId, -1); await CommitEditSessionAsync(src); }));
+                items.Add(FreezeMenuItem("Discard edits", GlyphIcon("✗", accent: false),
+                    () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }));
+            }
+            else
+                // Editing changes the source's notes/devices, so land on the source track.
+                items.Add(FreezeMenuItem("Edit source", GlyphIcon("✎", accent: true),
+                    () => { Timeline.Select(src, -1); BeginEditSession(src); }));
+            items.Add(FreezeMenuItem("Unfreeze (wake source)", null, () => UnfreezeLink(src)));
+            items.Add(FreezeMenuItem("Flatten (remove source)", null, () => FlattenLinkAsync(src)));
+            return items;
+        }
+
+        if (!IsFreezable(trackId)) return items;
+        if (Engine.IsTrackFrozen(trackId))
+        {
+            items.Add(FreezeMenuItem("Unfreeze track", SnowflakeIcon(),
+                () => { Timeline.Select(trackId, -1); UnfreezeTrack(trackId); }));
+            items.Add(FreezeMenuItem("Flatten to audio track", null,
+                async () => { Timeline.Select(trackId, -1); await FlattenTrackAsync(trackId); }));
+        }
+        else
+        {
+            items.Add(FreezeMenuItem("Freeze track", SnowflakeIcon(),
+                async () => { Timeline.Select(trackId, -1); await FreezeTrackAsync(trackId); }));
+            items.Add(FreezeMenuItem("Live Freeze", ChainLinkIcon(),
+                async () => { Timeline.Select(trackId, -1); await LiveFreezeAsync(trackId); }));
+        }
+        return items;
+    }
+
+    private static MenuItem FreezeMenuItem(string header, Control? icon, Action run)
+    {
+        var mi = new MenuItem { Header = header, Icon = icon };
+        mi.Click += (_, _) => run();
+        return mi;
+    }
+
+    private static MenuItem FreezeMenuItem(string header, Control? icon, Func<Task> run)
+    {
+        var mi = new MenuItem { Header = header, Icon = icon };
+        mi.Click += async (_, _) => await run();
+        return mi;
+    }
+
+    // Menu-icon glyphs matching the arrangement header badges (❄ / chain-link in ice blue)
+    // and the Edit / Done / Discard header buttons.
+    private static readonly IBrush IceBrush = new SolidColorBrush(Color.Parse("#7FC7EC"));
+
+    private static Control SnowflakeIcon()
+        => new TextBlock { Text = "❄", FontSize = 12, Foreground = IceBrush, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+
+    private static Control ChainLinkIcon()
+        => new Avalonia.Controls.Shapes.Path
+        {
+            Data = NotaIcons.ChainLink, Stretch = Stretch.None, Stroke = IceBrush, StrokeThickness = 1.4,
+            Width = 14, Height = 14, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+    private Control GlyphIcon(string glyph, bool accent)
+        => new TextBlock
+        {
+            Text = glyph, FontSize = 12, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Foreground = (IBrush?)this.FindResource(accent ? "Brush.AccentBright" : "Brush.TextTertiary") ?? Brushes.Gray,
+        };
 
     // --- Flatten -----------------------------------------------------------
 

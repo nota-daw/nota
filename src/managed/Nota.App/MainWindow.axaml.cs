@@ -138,6 +138,8 @@ public partial class MainWindow : Window
 
         Timeline.Engine = vm.Engine;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
+        Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
+        Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)

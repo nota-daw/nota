@@ -192,6 +192,7 @@ public partial class MainWindow
     private void OnMenuNew(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _links.Clear();    // no live-freeze links (cleared first: stale ids must not hit the new graph)
         Engine.Reset();
         // Reset transport to defaults (these setters drive the engine + UI).
         _vm.Transport.Bpm = 120;
@@ -202,7 +203,6 @@ public partial class MainWindow
         _vm.Transport.TimeSigDenominator = 4;
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
-        _links.Clear();    // and no live-freeze links
         RefreshAfterLoad();
         UpdateWindowTitle();
         _vm.StatusText = "New project.";
@@ -245,6 +245,7 @@ public partial class MainWindow
             ProjectLoadResult result;
             try { result = _projects.Load(Engine, dir); }
             finally { Engine.SetDeferWarpBuild(false); }
+            _links.Clear();   // the old project's live-freeze ids mean nothing in the loaded graph
             // Load resets the engine but leaves transport; restore it via the VM.
             _vm.Transport.Bpm = (decimal)result.Transport.Bpm;
             _vm.Transport.MasterVolume = result.Transport.MasterVolume;

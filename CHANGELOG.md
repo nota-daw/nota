@@ -18,6 +18,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Freeze and Live Freeze from the track's context menu.** Right-clicking a track header in
+  the arrangement now offers the whole freeze workflow, not just the Devices panel buttons:
+  **Freeze track** and **Live Freeze** on a live track; **Unfreeze track** and **Flatten to
+  audio track** on a frozen one; and on either half of a live-freeze pair — the sleeping
+  source or its frozen audio track — **Edit source**, or **Done — re-freeze** / **Discard
+  edits** while you're editing, plus **Unfreeze (wake source)** and **Flatten (remove
+  source)**. Each command selects its track, so the Devices panel follows along; **Edit**
+  always jumps to the source, where the notes and devices live.
+
+### Fixed
+- **Deleting one half of a live-freeze pair no longer leaves the other half stuck.** If the
+  frozen track is deleted (or undone away), its source wakes up and plays again. If the
+  source is deleted, the frozen audio becomes an ordinary track, and if you were in the middle
+  of an edit it is no longer left muted.
+- **Flatten during a live-freeze edit no longer leaves a silent track.** The kept audio track
+  is unmuted, and its "(frozen)" suffix is dropped, since it's now an ordinary track.
+- **Unfreezing a live freeze while its frozen track is selected** now selects the source
+  track, instead of leaving the selection on a track that no longer exists.
+
 ## [0.37.1] — 2026-08-25
 
 ### Highlights

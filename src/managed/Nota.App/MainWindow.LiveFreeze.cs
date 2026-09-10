@@ -46,6 +46,30 @@ public partial class MainWindow
     private int FreezeRoleOf(int trackId)
         => _links.ContainsKey(trackId) ? 1 : LinkForFrozen(trackId) is not null ? 2 : 0;
 
+    private const string FrozenSuffix = " (frozen)";
+
+    // Drop links whose tracks no longer exist (deleted, cut, or undone away) — runs before
+    // every full arrangement refresh. A lost frozen track wakes its sleeping source; a lost
+    // source leaves the frozen audio as a plain track, un-silenced if it was mid-edit.
+    private void PruneFreezeLinks()
+    {
+        if (_links.Count == 0) return;
+        List<int>? dead = null;
+        foreach (var l in _links.Values)
+        {
+            bool hasSrc = TrackIndexOf(l.SourceId) >= 0, hasFrz = TrackIndexOf(l.FrozenId) >= 0;
+            if (hasSrc && hasFrz) continue;
+            if (hasSrc && l.State == LinkState.Frozen) Engine.SetTrackMute(l.SourceId, false);
+            if (hasFrz && l.State == LinkState.Editing) Engine.SetTrackMute(l.FrozenId, false);
+            (dead ??= new()).Add(l.SourceId);
+        }
+        if (dead is null) return;
+        foreach (int s in dead) _links.Remove(s);
+        if (_vm is not null) _vm.StatusText = "Live-freeze link removed — its track was deleted.";
+        UpdateFreezeButton(_freezeTrackId);
+        ApplyFrozenChainDim(_freezeTrackId);
+    }
+
     // --- button cluster (next to the in-place Freeze button) ---------------
 
     // Reflect the shown track's live-freeze state onto the header buttons.
@@ -107,7 +131,7 @@ public partial class MainWindow
             for (int b = 0; b < 4; b++) sends[b] = Engine.GetTrackSend(sourceId, b);
 
             int frozenId = Engine.AddAudioTrack();
-            Engine.SetTrackName(frozenId, (srcName is { Length: > 0 } ? srcName : $"Track {sourceId}") + " (frozen)");
+            Engine.SetTrackName(frozenId, (srcName is { Length: > 0 } ? srcName : $"Track {sourceId}") + FrozenSuffix);
             if (color >= 0) Engine.SetTrackColorIndex(frozenId, color);
             Engine.SetTrackVolume(frozenId, vol);
             Engine.SetTrackPan(frozenId, pan);
@@ -192,7 +216,7 @@ public partial class MainWindow
         _links.Remove(sourceId);
         if (_vm is not null) _vm.StatusText = "Unfrozen — the source is live again.";
         Timeline.Refresh();
-        ShowDevices(sourceId);
+        Timeline.Select(sourceId, -1);   // the frozen track may have been selected — it's gone now
     }
 
     // Make permanent: keep the frozen audio track, drop the link, and remove the sleeping source.
@@ -207,6 +231,10 @@ public partial class MainWindow
         int frozenId = link.FrozenId;
         _links.Remove(sourceId);
         Engine.RemoveTrack(sourceId);
+        Engine.SetTrackMute(frozenId, false);   // flattened mid-edit: the bounce was silenced
+        string name = Engine.GetTrackName(frozenId);
+        if (name.EndsWith(FrozenSuffix, StringComparison.Ordinal))
+            Engine.SetTrackName(frozenId, name[..^FrozenSuffix.Length]);   // no longer a "frozen" copy
         _vm.StatusText = "Flattened — the frozen audio is now a plain track.";
         Timeline.Refresh();
         if (Engine.TryGetTrackInfo(TrackIndexOf(frozenId), out _)) Timeline.Select(frozenId, -1);
