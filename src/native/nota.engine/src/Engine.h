@@ -381,6 +381,14 @@ public:
     // splitClipsAtRange cuts every listed track's clips at both `start` and `end` (keeping
     // all content) so the covered slice becomes its own clip(s). One undo step; no ripple.
     bool    splitClipsAtRange(const std::vector<int32_t>& trackIds, double start, double end);
+    // consolidateRange (Consolidate, ⌘J) replaces every listed track's content in
+    // [start,end) with ONE clip spanning the range; the parts of clips outside it survive.
+    // MIDI merges the covered notes (tails cut by a clip end stay cut, velocity envelopes
+    // baked into the notes, volume envelopes stitched into one). Audio renders what the
+    // covered clips play — gain, pitch, warp, edge fades, clip envelopes — into a new
+    // sample (warped when any source was, so it keeps following tempo). Deactivated
+    // clips contribute silence. One undo step; lastPlaced() reports the new clips.
+    bool    consolidateRange(const std::vector<int32_t>& trackIds, double start, double end);
 
     // Automation-follows-clips (req 8.3). When unlocked (default), moving a clip carries the
     // track automation in its span with it: same-track moves take everything; cross-track moves
@@ -809,8 +817,10 @@ private:
                           int32_t frames, double beatStart, double spb, bool playing);
     void applyMidiCcRouting(Track& t);
     void renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb); // M5-4
-    void renderAudioClipsRaw(Track& t, float* dst, int32_t frames,
+    void renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
                              double blockStart, double spb);
+    // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
+    AudioClip consolidateAudioClips(const std::vector<AudioClip>& clips, double start, double end);
     // Freeze playback (M7): fill dst with the track's frozen buffer for this segment,
     // sampling by beat (frame = beat·frozenSpb) with linear interpolation.
     void fillFrozen(Track& t, float* dst, int32_t frames, double blockStart, double spb);

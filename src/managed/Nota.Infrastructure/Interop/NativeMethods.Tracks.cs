@@ -189,6 +189,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clips_split_range")]
     internal static partial NotaResult ClipsSplitRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clips_consolidate_range")]
+    internal static partial NotaResult ClipsConsolidateRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_automation_lock")]
     internal static partial void SetAutomationLock(IntPtr engine, int locked);
 

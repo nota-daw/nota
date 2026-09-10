@@ -41,6 +41,7 @@
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Duplicate clip" Click="OnMenuDuplicate" Gesture="Cmd+D"/>
             <NativeMenuItem Header="Split at playhead" Click="OnMenuSplit" Gesture="Cmd+E"/>
+            <NativeMenuItem Header="Consolidate" Click="OnMenuConsolidate" Gesture="Cmd+J"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Lock Envelopes" Click="OnToggleLockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>

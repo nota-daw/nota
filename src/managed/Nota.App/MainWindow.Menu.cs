@@ -95,6 +95,14 @@ public partial class MainWindow
         else _vm.StatusText = "Select a range, or a clip the playhead crosses.";
     }
 
+    private void OnMenuConsolidate(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        // A time-range selection wins; otherwise the span of the selected clips.
+        if (Timeline.ConsolidateSelection()) { _session?.Refresh(); _vm.StatusText = "Consolidated"; }
+        else _vm.StatusText = "Select a range or clips to consolidate.";
+    }
+
     private void OnToggleLockEnvelopes(object? sender, EventArgs e)
     {
         if (_vm is null) return;

@@ -225,6 +225,12 @@ public sealed partial class NotaEngine
     public bool SplitClipsInRange(int[] trackIds, double start, double end)
     { ThrowIfDisposed(); return NativeMethods.ClipsSplitRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
 
+    /// <summary>Consolidate: replaces each given track's content in [start,end) with one clip
+    /// spanning the range (MIDI merged, audio rendered to a new sample). One undo step; the new
+    /// clips are reported by <see cref="LastPlacedClips"/>. False when no track had content.</summary>
+    public bool ConsolidateRange(int[] trackIds, double start, double end)
+    { ThrowIfDisposed(); return NativeMethods.ClipsConsolidateRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
+
     /// <summary>Freezes track envelopes so clip moves no longer carry automation (req 8.3.3).</summary>
     public void SetAutomationLock(bool locked)
     { ThrowIfDisposed(); NativeMethods.SetAutomationLock(_handle, locked ? 1 : 0); }

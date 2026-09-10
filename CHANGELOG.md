@@ -38,6 +38,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tabs, a voice-activity strip, meters, a Voice setup flyout), 40 factory presets, and full
   automation, MIDI learn, persistence and MCP support. It also builds as a standalone VST3
   (`-DNOTA_BUILD_PENTAD_VST3=ON`) for testing in other hosts.
+- **Consolidate (⌘J).** Merges clips into one, as in Ableton: select a time range, or some
+  clips, and press ⌘J (Ctrl+J on Windows and Linux), use **Edit ▸ Consolidate**, or pick
+  **Consolidate** from the clip's right-click menu. Each track gets one clip covering the
+  whole range, and any clip parts outside it stay as they were. On MIDI tracks the notes are
+  merged: notes cut short by a clip's end stay cut, and the velocity envelope is baked into
+  the notes. On audio tracks the clips are rendered into a new sample exactly as they play,
+  with clip gain, transpose, warping, fades and clip envelopes baked in and silence in the
+  gaps. If any of the source clips was warped, the new clip is warped too, so it keeps
+  following tempo changes. Deactivated clips count as silence. The new clips are selected,
+  and one Undo reverts the whole operation. Also available over MCP as `consolidate_clips`.
+- **Shortcuts screen: the missing Edit-menu keys.** ⌘Z / ⌘⇧Z, ⌘D, ⌘E and ⌘L are now listed
+  alongside the new ⌘J.
 - **Fine knob adjustment.** Hold ⌘ or ⇧ (Ctrl on Windows and Linux) while dragging a device
   knob to change its value in steps ten times finer.
 - **MCP: `set_instrument_param_by_id`** sets an instrument parameter by its stable id

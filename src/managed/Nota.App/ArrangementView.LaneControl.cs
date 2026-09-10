@@ -836,17 +836,33 @@ public sealed partial class ArrangementView
             flyout.ShowAt(this, showAtPointer: true);
         }
 
-        // Right-click on empty lane space: paste the clipboard clip here (type permitting).
+        // ⌘J / Ctrl+J, shown next to the context-menu Consolidate items.
+        private static readonly KeyGesture ConsolidateGesture =
+            new(Key.J, OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control);
+
+        // Right-click on empty lane space: paste the clipboard clip here (type permitting), and
+        // consolidate the time selection when the click lands inside it.
         private void ShowLaneMenu(Point pos, double beat)
         {
             int ti = (int)(pos.Y / ArrangementView.RowHeight);
-            if (ti < 0 || ti >= _o._tracks.Count || !_o.HasClipClipboard) return;
+            if (ti < 0 || ti >= _o._tracks.Count) return;
             int trackId = _o._tracks[ti].Id;
+            bool inRange = _o.TimeSelectionCovers(trackId, beat);
+            if (!_o.HasClipClipboard && !inRange) return;
             double at = _o.Snap(beat);
             var flyout = new MenuFlyout();
-            var paste = new MenuItem { Header = "Paste" };
-            paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
-            flyout.Items.Add(paste);
+            if (_o.HasClipClipboard)
+            {
+                var paste = new MenuItem { Header = "Paste" };
+                paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
+                flyout.Items.Add(paste);
+            }
+            if (inRange)
+            {
+                var consolidate = new MenuItem { Header = "Consolidate selection", InputGesture = ConsolidateGesture };
+                consolidate.Click += (_, _) => _o.ConsolidateSelection();
+                flyout.Items.Add(consolidate);
+            }
             flyout.ShowAt(this, showAtPointer: true);
         }
 
@@ -878,6 +894,19 @@ public sealed partial class ArrangementView
                 InputGesture = new KeyGesture(Key.D0),
             };
             deact.Click += (_, _) => { EnsureSelected(); _o.ToggleSelectedClipsActive(); };
+            // Consolidate: a right-click inside the time selection acts on that range; otherwise
+            // on the multi-selection's span, or just this clip (bakes its edits into one clip).
+            bool inRange = _o.TimeSelectionCovers(trackId, beat);
+            var consolidate = new MenuItem
+            {
+                Header = inRange || inGroup ? "Consolidate selection" : "Consolidate",
+                InputGesture = ConsolidateGesture,
+            };
+            consolidate.Click += (_, _) =>
+            {
+                if (!inRange) EnsureSelected();
+                _o.ConsolidateSelection();
+            };
             var copy = new MenuItem { Header = inGroup ? "Copy selection" : "Copy" };
             copy.Click += (_, _) => { EnsureSelected(); _o.CopySelectedClip(); };
             var cut = new MenuItem { Header = inGroup ? "Cut selection" : "Cut" };
@@ -893,6 +922,7 @@ public sealed partial class ArrangementView
             flyout.Items.Add(new Separator());
             flyout.Items.Add(split);
             flyout.Items.Add(dup);
+            flyout.Items.Add(consolidate);
             flyout.Items.Add(deact);
             flyout.Items.Add(del);
 

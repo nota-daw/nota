@@ -551,12 +551,13 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
     sp.localBeats += frames / spb;
 }
 
-// Renders a track's dry audio clips (pre-fader) into `dst` (zeroed here).
-void Engine::renderAudioClipsRaw(Track& t, float* dst, int32_t frames,
+// Renders a track's dry audio clips (pre-fader) into `dst` (zeroed here). Also drives
+// Consolidate's offline bounce (consolidateRange) over a detached clip list.
+void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
                                  double blockStart, double spb) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
     const double sr = transport_.sampleRate();
-    for (const AudioClip& clip : t.clips) {
+    for (const AudioClip& clip : clips) {
         if (!clip.active) continue;   // deactivated clip (key 0): stays on the timeline but silent
         const double startSamples = clip.startBeat * spb;
         // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
@@ -916,7 +917,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 else if (t.type() == TrackType::Instrument)
                     renderInstrumentRaw(g, t, scratch_.data(), frames, blockStart, spb, playing);
                 else if (playing && arrangementActive)
-                    renderAudioClipsRaw(t, scratch_.data(), frames, blockStart, spb);
+                    renderAudioClipsRaw(t.clips, scratch_.data(), frames, blockStart, spb);
                 else
                     { t.setMeter(0, 0, 0, 0); continue; } // stopped / session-only audio track: nothing to do
             }

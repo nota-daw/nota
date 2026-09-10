@@ -1195,6 +1195,159 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
     return len;
 }
 
+// --- consolidate (⌘J): one clip per track over a range ------------------------
+namespace {
+// One source clip's audible slice [a,b) of a consolidate range (timeline beats), with the
+// clip's start and its envelope (null/empty = unity) for stitching.
+struct EnvSpan { double a, b, clipStart; const AutomationLane* lane; };
+
+// Stitch per-clip envelopes into one lane in consolidated-clip-local beats: each span keeps
+// its clip's curve, clips without one and the gaps between clips hold unity, and a boundary
+// between two clips is a step (two points on the same beat). Empty when no span carries an
+// envelope, so the result keeps the no-envelope fast path.
+AutomationLane stitchEnvelopes(const std::vector<EnvSpan>& spans, double start, double end) {
+    AutomationLane out;
+    if (std::none_of(spans.begin(), spans.end(), [](const EnvSpan& s) { return s.lane && !s.lane->points.empty(); }))
+        return out;
+    auto add = [&](double beat, float v, float curve = 0.0f) { out.points.push_back({beat - start, v, curve}); };
+    double cursor = start;
+    for (const auto& s : spans) {
+        const double a = std::max(s.a, cursor), b = s.b;
+        if (b <= a) continue;
+        if (a > cursor) { add(cursor, 1.0f); add(a, 1.0f); }
+        const bool has = s.lane && !s.lane->points.empty();
+        add(a, has ? s.lane->valueAt(a - s.clipStart) : 1.0f);
+        if (has)
+            for (const auto& p : s.lane->points) {
+                const double x = s.clipStart + p.beat;
+                if (x > a && x < b) add(x, p.value, p.curve);
+            }
+        add(b, has ? s.lane->valueAt(b - s.clipStart) : 1.0f);
+        cursor = b;
+    }
+    if (cursor < end) { add(cursor, 1.0f); add(end, 1.0f); }
+    return out;
+}
+
+// The covered MIDI clips merged into one clip over [s,e): exactly the notes that play —
+// a note must start inside its clip's window and the range, and its tail stops at its clip's
+// end (or the range end), as playback cuts it. Velocity envelopes are baked into the notes.
+MidiClip consolidateMidiClips(const std::vector<MidiClip>& clips, double s, double e) {
+    constexpr double eps = 1e-6;
+    std::vector<const MidiClip*> src;
+    for (const auto& c : clips)
+        if (c.startBeat + c.lengthBeats > s + eps && c.startBeat < e - eps) src.push_back(&c);
+    std::sort(src.begin(), src.end(), [](const MidiClip* x, const MidiClip* y) { return x->startBeat < y->startBeat; });
+
+    MidiClip out;
+    out.startBeat = s;
+    out.lengthBeats = e - s;
+    for (const MidiClip* c : src) if (!c->name.empty()) { out.name = c->name; break; }
+    std::vector<EnvSpan> spans;
+    for (const MidiClip* c : src) {
+        if (!c->active) continue;   // a deactivated clip is silent
+        const double cs = c->startBeat, ce = std::min(cs + c->lengthBeats, e);
+        spans.push_back({std::max(cs, s), ce, cs, &c->volumeEnvelope});
+        const bool hasVel = !c->velocityEnvelope.points.empty();
+        for (const Note& n : c->notes) {
+            if (n.startBeat < 0.0 || n.startBeat >= c->lengthBeats) continue;
+            const double on = cs + n.startBeat;
+            if (on < s - eps || on >= e - eps) continue;
+            Note m = n;
+            m.startBeat = std::max(0.0, on - s);
+            m.lengthBeats = std::min(on + n.lengthBeats, ce) - on;
+            if (m.lengthBeats <= 0.0) continue;
+            if (hasVel) m.velocity = n.velocity * std::clamp(c->velocityEnvelope.valueAt(n.startBeat), 0.0f, 1.0f);
+            out.notes.push_back(m);
+        }
+    }
+    out.volumeEnvelope = stitchEnvelopes(spans, s, e);
+    return out;
+}
+} // namespace
+
+// Bounce what the covered clips play over [s,e) — the same renderer the audio thread uses,
+// so gain, varispeed, warp, edge fades and clip envelopes are all baked — into a new
+// device-rate stereo sample, placed as one clip at `s`. If any audible source was warped the
+// result is warped too (neutral markers, that clip's mode) so it keeps following tempo; an
+// all-unwarped range stays an unwarped, sample-exact copy.
+AudioClip Engine::consolidateAudioClips(const std::vector<AudioClip>& clips, double s, double e) {
+    constexpr double eps = 1e-6;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    std::vector<AudioClip> src;
+    for (const auto& c : clips) {
+        const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
+        if (ce <= s + eps || cs >= e - eps) continue;
+        src.push_back(c);
+        // A deferred (project-load) warp cache isn't built yet; the renderer would skip it.
+        if (src.back().warpEnabled && !src.back().warpCache) buildWarpCache(src.back(), spb, devSR);
+    }
+    std::sort(src.begin(), src.end(), [](const AudioClip& x, const AudioClip& y) { return x.startBeat < y.startBeat; });
+
+    const int64_t frames = std::max<int64_t>(1, std::llround((e - s) * spb));
+    auto sb = std::make_shared<SampleBuffer>();
+    sb->channels = 2;
+    sb->frames = frames;
+    sb->sourceSampleRate = devSR;
+    sb->samples.assign(static_cast<size_t>(frames) * 2, 0.0f);
+    constexpr int64_t kBlock = 4096;
+    for (int64_t off = 0; off < frames; off += kBlock) {
+        const int32_t n = static_cast<int32_t>(std::min(kBlock, frames - off));
+        renderAudioClipsRaw(src, sb->samples.data() + off * 2, n, s * spb + static_cast<double>(off), spb);
+    }
+
+    AudioClip out;
+    out.sample = std::move(sb);
+    out.startBeat = s;
+    out.lengthFrames = frames;
+    for (const auto& c : src) if (!c.name.empty()) { out.name = c.name; break; }
+    const auto warped = std::find_if(src.begin(), src.end(), [](const AudioClip& c) { return c.active && c.warpEnabled; });
+    if (warped != src.end()) {
+        out.warpEnabled = true;
+        out.warpMode = warped->warpMode;
+        seedNeutralWarp(out, spb, devSR);
+        configureClipWarp(out, spb, devSR);
+    }
+    return out;
+}
+
+bool Engine::consolidateRange(const std::vector<int32_t>& trackIds, double start, double end) {
+    start = std::max(0.0, start);
+    if (end <= start + 1e-9 || trackIds.empty()) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    if (spb <= 0.0 || devSR <= 0.0) return false;
+    auto listed = [&](int32_t id){ return std::find(trackIds.begin(), trackIds.end(), id) != trackIds.end(); };
+    std::vector<std::pair<int32_t,int32_t>> placed;
+    auto g = std::make_shared<Graph>();
+    g->sceneCount = authoring_->sceneCount;
+    g->masterVolume = authoring_->masterVolume;
+    g->masterTrack = authoring_->masterTrack;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        const bool clipTrack = t->type() == TrackType::Instrument || t->type() == TrackType::Audio;
+        if (!clipTrack || !listed(t->id()) || !rangeTouchesTrack(*t, start, end, spb, devSR))
+        { g->tracks.push_back(t); continue; }
+        auto nt = cloneTrack(*t);
+        if (nt->type() == TrackType::Instrument) {
+            MidiClip merged = consolidateMidiClips(nt->midiClips, start, end);
+            midiOverwriteRange(nt->midiClips, start, end);
+            nt->midiClips.push_back(std::move(merged));
+            placed.emplace_back(nt->id(), static_cast<int32_t>(nt->midiClips.size()) - 1);
+        } else {
+            AudioClip bounced = consolidateAudioClips(nt->clips, start, end);
+            audioOverwriteRange(nt->clips, start, end, spb, devSR);
+            nt->clips.push_back(std::move(bounced));
+            placed.emplace_back(nt->id(), static_cast<int32_t>(nt->clips.size()) - 1);
+        }
+        g->tracks.push_back(nt);
+    }
+    if (placed.empty()) return false;
+    pushUndo();
+    publishRaw(std::move(g));
+    lastPlaced_ = std::move(placed);
+    return true;
+}
+
 bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, double newLengthBeats) {
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;

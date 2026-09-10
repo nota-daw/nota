@@ -4998,6 +4998,141 @@ Console.WriteLine("-- block clip ops (multi-selection) --");
     }
 }
 
+// ============ consolidate (⌘J): one clip per track over a range ===========
+Console.WriteLine("-- consolidate --");
+{
+    const double eps = 1e-6;
+    static Nota.Application.NotaNote N(int p, double s, double l, float v = 0.8f) => new(p, s, l, v);
+
+    // MIDI: two clips merge into one [0,8). A tail cut by its clip's end stays cut, a note
+    // hidden outside its clip window is dropped, and the first clip's name carries over.
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int t = e.AddInstrumentTrack();
+        int c0 = e.AddMidiClip(t, 0.0, 4.0);
+        int c1 = e.AddMidiClip(t, 6.0, 2.0);
+        e.SetClipNotes(t, c0, new[] { N(60, 0, 1), N(62, 3, 2), N(65, 5, 1) });   // 62's tail cut at 4; 65 hidden
+        e.SetClipNotes(t, c1, new[] { N(64, 0.5, 1) });
+        e.SetClipName(t, c0, "Verse");
+        Check(e.ConsolidateRange(new[] { t }, 0.0, 8.0), "consolidate MIDI returns true");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 1, "MIDI: two clips became one");
+        var placed = e.LastPlacedClips();
+        Check(placed.Length == 1 && placed[0].trackId == t, "MIDI: last-placed reports the new clip");
+        int nc = placed[0].clipIndex;
+        Check(e.TryGetClipInfo(t, nc, out var ci) && Math.Abs(ci.StartBeat) < eps && Math.Abs(ci.LengthBeats - 8.0) < eps, "MIDI: new clip spans [0,8)");
+        var got = e.GetClipNotes(t, nc).OrderBy(n => n.StartBeat).ToArray();
+        Check(got.Length == 3, $"MIDI: 3 audible notes kept (got {got.Length})");
+        Check(got.Length == 3 && got[1].Pitch == 62 && Math.Abs(got[1].LengthBeats - 1.0) < eps, "MIDI: tail cut by the clip end stays cut");
+        Check(got.Length == 3 && got[2].Pitch == 64 && Math.Abs(got[2].StartBeat - 6.5) < eps, "MIDI: second clip's note re-based to 6.5");
+        Check(e.GetClipName(t, nc) == "Verse", "MIDI: first clip's name carried over");
+        Check(e.Undo() && e.TryGetTrackInfo(FindTrackIndex(e, t), out var tu) && tu.ClipCount == 2, "MIDI: undo restores both clips");
+    }
+
+    // MIDI time range inside one clip: remainders survive on both sides; a note crossing the
+    // range end is cut there; got outside the range stay in the remainders.
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        int c = e.AddMidiClip(t, 0.0, 8.0);
+        e.SetClipNotes(t, c, new[] { N(60, 1, 1), N(62, 3, 1), N(64, 5, 2), N(67, 7, 1) });
+        Check(e.ConsolidateRange(new[] { t }, 2.0, 6.0), "consolidate MIDI range");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 3, "MIDI range: left + consolidated + right");
+        int nc = e.LastPlacedClips()[0].clipIndex;
+        var got = e.GetClipNotes(t, nc).OrderBy(n => n.StartBeat).ToArray();
+        Check(got.Length == 2 && Math.Abs(got[0].StartBeat - 1.0) < eps && Math.Abs(got[1].StartBeat - 3.0) < eps,
+              "MIDI range: notes at 3 and 5 re-based to 1 and 3");
+        Check(got.Length == 2 && Math.Abs(got[1].LengthBeats - 1.0) < eps, "MIDI range: note crossing the range end cut there");
+    }
+
+    // MIDI envelopes: velocity baked into the got; volume envelopes stitched (unity where a
+    // clip had none); a deactivated clip contributes nothing.
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        int a = e.AddMidiClip(t, 0.0, 4.0);
+        int b = e.AddMidiClip(t, 4.0, 4.0);
+        int d = e.AddMidiClip(t, 8.0, 4.0);
+        e.SetClipNotes(t, a, new[] { N(60, 0, 1, 0.8f) });
+        e.SetClipNotes(t, b, new[] { N(62, 0, 1, 0.8f) });
+        e.SetClipNotes(t, d, new[] { N(64, 0, 1, 0.8f) });
+        e.SetMidiClipEnvelope(t, a, Nota.Application.MidiClipEnvelope.Velocity, new[] { new Nota.Application.AutomationPoint(0, 0.5f), new Nota.Application.AutomationPoint(4, 0.5f) });
+        e.SetMidiClipEnvelope(t, a, Nota.Application.MidiClipEnvelope.Volume, new[] { new Nota.Application.AutomationPoint(0, 0.25f), new Nota.Application.AutomationPoint(4, 0.25f) });
+        e.SetClipActive(t, d, false);
+        Check(e.ConsolidateRange(new[] { t }, 0.0, 12.0), "consolidate MIDI with envelopes");
+        int nc = e.LastPlacedClips()[0].clipIndex;
+        var got = e.GetClipNotes(t, nc).OrderBy(n => n.StartBeat).ToArray();
+        Check(got.Length == 2, $"MIDI env: deactivated clip's note dropped ({got.Length} notes)");
+        Check(got.Length == 2 && Math.Abs(got[0].Velocity - 0.4f) < 1e-4 && Math.Abs(got[1].Velocity - 0.8f) < 1e-4,
+              "MIDI env: velocity envelope baked (0.8 x 0.5 = 0.4), other clip untouched");
+        Check(e.GetMidiClipEnvelope(t, nc, Nota.Application.MidiClipEnvelope.Velocity).Length == 0, "MIDI env: no velocity envelope left");
+        var vol = e.GetMidiClipEnvelope(t, nc, Nota.Application.MidiClipEnvelope.Volume);
+        static float At(Nota.Application.AutomationPoint[] p, double beat)
+        {
+            if (beat <= p[0].Beat) return p[0].Value;
+            for (int i = 1; i < p.Length; i++)
+                if (beat <= p[i].Beat)
+                    return p[i].Beat - p[i - 1].Beat <= 0 ? p[i].Value
+                         : (float)(p[i - 1].Value + (p[i].Value - p[i - 1].Value) * (beat - p[i - 1].Beat) / (p[i].Beat - p[i - 1].Beat));
+            return p[^1].Value;
+        }
+        Check(vol.Length > 0 && Math.Abs(At(vol, 2.0) - 0.25f) < 1e-4 && Math.Abs(At(vol, 6.0) - 1.0f) < 1e-4,
+              "MIDI env: volume envelope stitched (0.25 in the first clip, unity after)");
+    }
+
+    // Audio: the bounce plays exactly what the source did (gain + varispeed baked), as one
+    // unwarped, unity-gain clip spanning the range.
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120); e.SetTimeSignature(4, 4);
+        int t = e.AddAudioTrack();
+        int c = e.AddAudioClip(t, wav, 0.0);         // 1 s sine = 2 beats at 120
+        e.SetClipGain(t, c, 0.5f);
+        e.SetClipPitch(t, c, 3.0f);
+        const int fr = 44100;
+        var before = new float[fr * 2];
+        var after = new float[fr * 2];
+        e.Seek(0); e.Play(); e.RenderOffline(before, fr); e.StopTransport();
+        Check(e.ConsolidateRange(new[] { t }, 0.0, 4.0), "consolidate audio returns true");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 1, "audio: one clip after consolidate");
+        int nc = e.LastPlacedClips()[0].clipIndex;
+        Check(e.TryGetClipInfo(t, nc, out var ci) && Math.Abs(ci.StartBeat) < eps && Math.Abs(ci.LengthBeats - 4.0) < 1e-3,
+              $"audio: new clip spans [0,4) (len {ci.LengthBeats:F4})");
+        Check(e.TryGetAudioClipInfo(t, nc, out var ai) && ai.WarpEnabled == 0 && Math.Abs(ai.Gain - 1f) < 1e-6 && Math.Abs(ai.PitchSemitones) < 1e-6,
+              "audio: result is unwarped, unity gain, no transpose");
+        e.Seek(0); e.Play(); e.RenderOffline(after, fr); e.StopTransport();
+        double maxDiff = 0;
+        for (int i = 1024 * 2; i < fr * 2; i++) maxDiff = Math.Max(maxDiff, Math.Abs(before[i] - after[i]));
+        Check(Rms(before, fr) > 0.01f && maxDiff < 1e-3, $"audio: consolidated render matches the original (max diff {maxDiff:E2})");
+        Check(e.Undo() && e.TryGetAudioClipInfo(t, 0, out var ui) && Math.Abs(ui.Gain - 0.5f) < 1e-6, "audio: undo restores the source clip");
+    }
+
+    // Audio time range inside a clip: remainders survive; a warped source yields a warped
+    // (tempo-following) result.
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int t = e.AddAudioTrack();
+        int c = e.AddAudioClip(t, wav, 0.0);
+        e.SetClipWarp(t, c, true, 3);
+        Check(e.ConsolidateRange(new[] { t }, 0.5, 1.5), "consolidate warped audio range");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 3, "audio range: left + consolidated + right");
+        int nc = e.LastPlacedClips()[0].clipIndex;
+        Check(e.TryGetAudioClipInfo(t, nc, out var ai) && ai.WarpEnabled == 1 && ai.WarpMode == 3, "audio range: warped source -> warped result (same mode)");
+        Check(e.TryGetClipInfo(t, nc, out var ci) && Math.Abs(ci.StartBeat - 0.5) < eps && Math.Abs(ci.LengthBeats - 1.0) < 1e-3,
+              "audio range: new clip spans [0.5,1.5)");
+    }
+
+    // Nothing to consolidate (empty range / no listed track with content) is a no-op.
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.AddMidiClip(t, 0.0, 2.0);
+        Check(!e.ConsolidateRange(new[] { t }, 4.0, 8.0), "consolidate over empty space is a no-op");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 1, "no-op consolidate leaves the clip alone");
+    }
+}
+
 // ============ track/clip names + colour + track clipboard ==================
 Console.WriteLine("-- names, colour, track clipboard --");
 {
@@ -5546,6 +5681,9 @@ Console.WriteLine("-- MCP tools --");
     }).Wait();
     var mcpNotes = mcpMidi.GetClipNotes(mcpT, mcpClip).Result;
     Check(mcpNotes.Length == 3 && mcpNotes[0].Pitch == 60 && Math.Abs(mcpNotes[2].Length - 2) < 1e-3, $"MCP set/get_clip_notes round-trip ({mcpNotes.Length})");
+    var mcpCons = mcpMidi.ConsolidateClips(new[] { mcpT }, 0, 4).Result;
+    Check(mcpCons.Length == 1 && mcpCons[0].TrackId == mcpT && mcpMidi.GetClipNotes(mcpT, mcpCons[0].ClipIndex).Result.Length == 3,
+          "MCP consolidate_clips keeps the notes in one clip");
 
     int mcpDev = mcpDevices.AddDevice(mcpT, 2).Result;        // 2 = Reverb
     Check(mcpDev >= 0 && mcpEng.TrackDeviceBuiltinKind(mcpT, mcpDev) == 2, "MCP add_device (Reverb)");

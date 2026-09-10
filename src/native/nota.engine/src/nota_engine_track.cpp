@@ -360,6 +360,11 @@ NotaResult nota_clips_split_range(NotaEngine* e, const int32_t* track_ids, int32
     std::vector<int32_t> ids; if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);
     return ENG(e)->splitClipsAtRange(ids, start, end) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_clips_consolidate_range(NotaEngine* e, const int32_t* track_ids, int32_t n, double start, double end) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    std::vector<int32_t> ids; if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);
+    return ENG(e)->consolidateRange(ids, start, end) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 void nota_engine_set_automation_lock(NotaEngine* e, int32_t locked) { if (e) ENG(e)->setAutomationLock(locked != 0); }
 int32_t nota_engine_automation_lock(const NotaEngine* e) { return (e && CENG(e)->automationLock()) ? 1 : 0; }
 int32_t nota_engine_last_move_kept_device_automation(const NotaEngine* e) {

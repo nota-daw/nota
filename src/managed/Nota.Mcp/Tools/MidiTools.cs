@@ -54,4 +54,16 @@ public sealed class MidiTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     [McpServerTool(Name = "trim_clip"), Description("Resize a clip to a new start + length in beats.")]
     public Task TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats)
         => Mutate(() => E.TrimClip(trackId, clipIndex, Math.Max(0, newStartBeat), Math.Max(0.25, newLengthBeats)));
+
+    public sealed record ClipRef(int TrackId, int ClipIndex);
+
+    [McpServerTool(Name = "consolidate_clips"), Description(
+        "Consolidate (like Ableton's Cmd+J): on each given MIDI or audio track, replace everything in " +
+        "[startBeat, endBeat) with ONE clip spanning the range. MIDI notes are merged; audio clips are " +
+        "rendered (gain, pitch, warp, fades, clip envelopes baked in) into a new sample. Parts of clips " +
+        "outside the range are kept. Returns the new clips (empty when no track had content there).")]
+    public Task<ClipRef[]> ConsolidateClips(int[] trackIds, double startBeat, double endBeat) => Mutate(() =>
+        E.ConsolidateRange(trackIds, Math.Max(0, startBeat), endBeat)
+            ? Array.ConvertAll(E.LastPlacedClips(), p => new ClipRef(p.trackId, p.clipIndex))
+            : Array.Empty<ClipRef>());
 }

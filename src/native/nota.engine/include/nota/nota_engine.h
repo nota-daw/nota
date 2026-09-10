@@ -657,6 +657,11 @@ NOTA_API double     nota_clips_duplicate_range(NotaEngine* engine, const int32_t
 /* split_range cuts each listed track's clips at both boundaries, keeping all content, so the
  * covered slice becomes its own clip(s). One undo step, no ripple. */
 NOTA_API NotaResult nota_clips_split_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
+/* consolidate_range (Consolidate) replaces each listed track's content in [start,end) with one
+ * clip spanning the range: MIDI merges the covered notes, audio renders the covered clips
+ * (gain, pitch, warp, fades, clip envelopes baked) into a new sample. Parts of clips outside
+ * the range survive. One undo step; nota_clips_last_placed then reports the new clips. */
+NOTA_API NotaResult nota_clips_consolidate_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
 /* Automation-follows-clips (req 8.3). Lock freezes envelopes so clip moves don't carry them.
  * last_move_kept_device_automation is 1 when the most recent cross-track move left device/plugin
  * automation on the source (UI hint); it resets at the start of each move. */

@@ -162,6 +162,11 @@ public interface IAudioEngine : IDisposable
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);
+    /// <summary>Consolidate: replaces each given track's content in [start,end) with ONE clip
+    /// spanning the range — MIDI notes merged, audio clips rendered (gain/pitch/warp/fades/clip
+    /// envelopes baked) into a new sample. Parts of clips outside the range survive. One undo
+    /// step; <see cref="LastPlacedClips"/> then reports the new clips. False = nothing changed.</summary>
+    bool ConsolidateRange(int[] trackIds, double start, double end);
     /// <summary>Locks track envelopes so clip moves stop carrying automation (req 8.3.3).</summary>
     void SetAutomationLock(bool locked);
     bool AutomationLock { get; }

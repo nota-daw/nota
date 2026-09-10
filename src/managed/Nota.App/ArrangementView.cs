@@ -983,6 +983,16 @@ public sealed partial class ArrangementView : UserControl
         return ids.ToArray();
     }
 
+
+    /// <summary>True when the time selection spans this track's row at this beat (right-click
+    /// inside the range acts on the range).</summary>
+    internal bool TimeSelectionCovers(int trackId, double beat)
+    {
+        if (!HasTimeSelection) return false;
+        int r = RowOfTrack(trackId);
+        return r >= _timeSelRowLo && r <= _timeSelRowHi && beat >= _timeSelStart && beat <= _timeSelEnd;
+    }
+
     /// <summary>Delete the covered clip content in the time selection (split at edges, no
     /// ripple; req 5.3). Consumes the key whenever a range is active.</summary>
     public bool DeleteTimeSelection()
@@ -1002,6 +1012,35 @@ public sealed partial class ArrangementView : UserControl
         var ids = TimeSelectionTrackIds();
         if (ids.Length == 0 || !_engine.SplitClipsInRange(ids, _timeSelStart, _timeSelEnd)) return false;
         Refresh();
+        return true;
+    }
+
+    /// <summary>Cmd+J Consolidate: merge the time selection — or, without one, the span of the
+    /// clip selection on the selected clips' tracks — into one clip per track (MIDI notes merged,
+    /// audio rendered to a new sample). The new clips become the selection. False when there's
+    /// nothing to consolidate.</summary>
+    public bool ConsolidateSelection()
+    {
+        if (_engine is null) return false;
+        int[] ids;
+        double start, end;
+        if (HasTimeSelection)
+        {
+            ids = TimeSelectionTrackIds();
+            start = _timeSelStart; end = _timeSelEnd;
+        }
+        else
+        {
+            var sel = SelectionBlock();
+            start = double.MaxValue; end = double.MinValue;
+            foreach (var (track, clip) in sel)
+                if (FindClipVM(track, clip) is { } c)
+                { start = Math.Min(start, c.StartBeat); end = Math.Max(end, c.StartBeat + c.LengthBeats); }
+            ids = sel.Select(s => s.trackId).Distinct().ToArray();
+        }
+        if (ids.Length == 0 || end <= start || !_engine.ConsolidateRange(ids, start, end)) return false;
+        Refresh();
+        ReselectPlaced();
         return true;
     }
 
