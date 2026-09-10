@@ -207,6 +207,60 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("monolith", 13, "Sci-Fi Mod",    ("o1range", 0.6f), ("o1wave", 0.4f), ("o3range", 0.0f), ("o3wave", 0.4f), ("osc3kbd", 0f), ("oscmodon", 1f), ("modwheel", 0.5f), ("modmix", 0f), ("cutoff", 0.65f), ("emph", 0.35f), ("contour", 0.5f), ("fsustain", 0.55f), ("volume", 0.72f));
         Inst("monolith", 13, "Random Bleeps",  ("o1range", 0.8f), ("o1wave", 1f), ("filtmodon", 1f), ("modwheel", 0.4f), ("o3range", 0.0f), ("osc3kbd", 0f), ("cutoff", 0.7f), ("emph", 0.4f), ("contour", 0.4f), ("fdecay", 0.2f), ("fsustain", 0.3f), ("adecay", 0.2f), ("asustain", 0.2f), ("decayon", 1f), ("volume", 0.74f));
 
+        // ---- Nota Pentad (kind 14) — 5-voice Prophet-5-style poly. Octave 32'/16'/8'/4' =
+        //      0/.333/.667/1; semitone .5 = 0 (±12 over 0..1, +7 = .7917); fine .5 = 0 (±50 c);
+        //      cutoff v = log10(Hz/20)/3; voice mode Poly/Uni/Mono = 0/.5/1; toggles 0/1.
+        //      Unlisted params keep the init patch (two saws, half-open filter).
+        // Brass
+        Inst("pentad", 14, "Poly Brass",      ("obfine", 0.53f), ("cutoff", 0.42f), ("reso", 0.15f), ("fenvamt", 0.55f), ("fattack", 0.45f), ("fdecay", 0.55f), ("fsustain", 0.45f), ("frelease", 0.45f), ("aattack", 0.35f), ("adecay", 0.5f), ("asustain", 0.9f), ("arelease", 0.45f));
+        Inst("pentad", 14, "Soft Horns",      ("obfine", 0.52f), ("cutoff", 0.38f), ("fenvamt", 0.45f), ("fattack", 0.6f), ("fdecay", 0.6f), ("fsustain", 0.5f), ("aattack", 0.55f), ("asustain", 0.9f), ("arelease", 0.5f), ("drift", 0.35f));
+        Inst("pentad", 14, "Brass Stab",      ("cutoff", 0.40f), ("reso", 0.2f), ("fenvamt", 0.6f), ("fattack", 0.2f), ("fdecay", 0.45f), ("fsustain", 0.15f), ("aattack", 0.05f), ("adecay", 0.5f), ("asustain", 0.4f), ("arelease", 0.3f));
+        Inst("pentad", 14, "Octave Brass",    ("oboct", 0.333f), ("mixb", 0.7f), ("cutoff", 0.45f), ("fenvamt", 0.5f), ("fattack", 0.4f), ("fdecay", 0.55f), ("fsustain", 0.5f), ("aattack", 0.3f), ("asustain", 0.9f));
+        Inst("pentad", 14, "Sync Brass",      ("oasync", 1f), ("oasemi", 0.625f), ("pmenv", 0.35f), ("pmfreqa", 1f), ("cutoff", 0.5f), ("fenvamt", 0.4f), ("fattack", 0.3f), ("fdecay", 0.55f), ("fsustain", 0.4f), ("aattack", 0.2f));
+        // Strings / pads
+        Inst("pentad", 14, "Glass Strings",   ("oapulse", 1f), ("oapw", 0.38f), ("obsaw", 0f), ("obpulse", 1f), ("obpw", 0.52f), ("oboct", 0.333f), ("obfine", 0.57f),
+                                              ("mixa", 0.82f), ("mixb", 0.7f), ("mixnoise", 0.12f), ("noisecolor", 1f), ("drift", 0.28f), ("glide", 0.418f), ("glidemode", 0.5f),
+                                              ("cutoff", 0.656f), ("reso", 0.34f), ("fenvamt", 0.5f), ("velfilt", 0.5f), ("fattack", 0.362f), ("fdecay", 0.648f), ("fsustain", 0.52f), ("frelease", 0.6f),
+                                              ("aattack", 0.624f), ("adecay", 0.736f), ("asustain", 0.74f), ("arelease", 0.707f), ("spread", 0.44f), ("volume", 0.574f), ("unidetune", 0.18f));
+        Inst("pentad", 14, "Analog Strings",  ("obfine", 0.56f), ("cutoff", 0.5f), ("reso", 0.05f), ("fenvamt", 0.15f), ("aattack", 0.62f), ("adecay", 0.6f), ("asustain", 0.9f), ("arelease", 0.65f), ("lfoamt", 0.12f), ("lforate", 0.62f), ("drift", 0.35f), ("spread", 0.6f));
+        Inst("pentad", 14, "Warm Pad",        ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.45f), ("obfine", 0.55f), ("cutoff", 0.42f), ("fenvamt", 0.3f), ("fattack", 0.7f), ("fdecay", 0.7f), ("fsustain", 0.6f), ("frelease", 0.7f), ("aattack", 0.7f), ("asustain", 0.95f), ("arelease", 0.75f), ("drift", 0.4f));
+        Inst("pentad", 14, "PWM Pad",         ("oasaw", 0f), ("oapulse", 1f), ("obsaw", 0f), ("obpulse", 1f), ("wmpwa", 1f), ("wmpwb", 1f), ("wmfreqa", 0f), ("wmfreqb", 0f), ("lfoamt", 0.35f), ("lforate", 0.52f), ("cutoff", 0.52f), ("aattack", 0.6f), ("asustain", 0.9f), ("arelease", 0.6f));
+        Inst("pentad", 14, "Choir Vox",       ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.3f), ("obsaw", 0f), ("obtri", 1f), ("oboct", 1f), ("cutoff", 0.48f), ("reso", 0.35f), ("fenvamt", 0.2f), ("keytrk", 0.7f), ("aattack", 0.6f), ("asustain", 0.9f), ("arelease", 0.6f), ("mixnoise", 0.08f), ("noisecolor", 1f), ("lfoamt", 0.08f), ("lforate", 0.6f));
+        Inst("pentad", 14, "Sweep Pad",       ("cutoff", 0.3f), ("reso", 0.45f), ("fenvamt", 0.55f), ("fattack", 0.85f), ("fdecay", 0.85f), ("fsustain", 0.3f), ("frelease", 0.8f), ("aattack", 0.6f), ("asustain", 0.9f), ("arelease", 0.8f), ("drift", 0.3f));
+        Inst("pentad", 14, "Per-Voice PWM",   ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.5f), ("obsaw", 0f), ("obtri", 1f), ("oblofreq", 1f), ("mixb", 0f), ("pmoscb", 0.55f), ("pmpwa", 1f), ("cutoff", 0.55f), ("aattack", 0.5f), ("asustain", 0.9f), ("arelease", 0.6f), ("drift", 0.4f));
+        Inst("pentad", 14, "Solar Drift",     ("drift", 0.8f), ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.3f), ("obsaw", 0f), ("obtri", 1f), ("obsemi", 0.7917f), ("cutoff", 0.5f), ("fenvamt", 0.25f), ("aattack", 0.65f), ("asustain", 0.9f), ("arelease", 0.75f), ("spread", 0.8f));
+        // Leads
+        Inst("pentad", 14, "Sync Lead",       ("oasync", 1f), ("pmenv", 0.45f), ("pmfreqa", 1f), ("mixb", 0f), ("cutoff", 0.75f), ("reso", 0.2f), ("fenvamt", 0.25f), ("fdecay", 0.55f), ("fsustain", 0.4f), ("aattack", 0.1f), ("asustain", 0.9f), ("arelease", 0.35f), ("voicemode", 1f), ("glide", 0.3f));
+        Inst("pentad", 14, "Unison Lead",     ("voicemode", 0.5f), ("unidetune", 0.35f), ("cutoff", 0.62f), ("reso", 0.25f), ("fenvamt", 0.4f), ("fdecay", 0.5f), ("fsustain", 0.5f), ("glide", 0.32f));
+        Inst("pentad", 14, "Pulse Lead",      ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.3f), ("mixb", 0f), ("voicemode", 1f), ("cutoff", 0.66f), ("reso", 0.3f), ("fenvamt", 0.35f), ("glide", 0.3f));
+        Inst("pentad", 14, "Screamer",        ("voicemode", 1f), ("reso", 0.75f), ("cutoff", 0.55f), ("fenvamt", 0.5f), ("keytrk", 1f), ("mixa", 1f), ("mixb", 0.9f), ("glide", 0.28f));
+        Inst("pentad", 14, "Fifth Lead",      ("obsemi", 0.7917f), ("voicemode", 0.5f), ("unidetune", 0.2f), ("cutoff", 0.64f), ("fenvamt", 0.35f), ("glide", 0.3f));
+        Inst("pentad", 14, "Whistle Lead",    ("mixa", 0f), ("mixb", 0f), ("mixnoise", 0.01f), ("reso", 0.93f), ("keytrk", 1f), ("cutoff", 0.62f), ("fenvamt", 0.05f), ("voicemode", 1f), ("glide", 0.3f), ("lfoamt", 0.1f), ("lforate", 0.72f));
+        Inst("pentad", 14, "Soft Lead",       ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.5f), ("obsaw", 0f), ("obtri", 1f), ("cutoff", 0.55f), ("fenvamt", 0.2f), ("aattack", 0.35f), ("glide", 0.25f), ("voicemode", 1f));
+        // Bass
+        Inst("pentad", 14, "Pentad Bass",     ("oaoct", 0.333f), ("oboct", 0.333f), ("obfine", 0.52f), ("cutoff", 0.33f), ("reso", 0.25f), ("fenvamt", 0.55f), ("fdecay", 0.42f), ("fsustain", 0.15f), ("adecay", 0.5f), ("asustain", 0.7f), ("arelease", 0.25f), ("voicemode", 1f));
+        Inst("pentad", 14, "Sync Bass",       ("oaoct", 0.333f), ("oboct", 0f), ("oasync", 1f), ("oasemi", 0.7917f), ("mixb", 0.4f), ("cutoff", 0.4f), ("fenvamt", 0.5f), ("fdecay", 0.4f), ("fsustain", 0.2f), ("voicemode", 1f));
+        Inst("pentad", 14, "Unison Bass",     ("oaoct", 0.333f), ("oboct", 0.333f), ("voicemode", 0.5f), ("unidetune", 0.25f), ("cutoff", 0.36f), ("reso", 0.2f), ("fenvamt", 0.5f), ("fdecay", 0.45f), ("fsustain", 0.25f), ("asustain", 0.8f), ("arelease", 0.25f));
+        Inst("pentad", 14, "Pluck Bass",      ("oaoct", 0.333f), ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.3f), ("mixb", 0f), ("cutoff", 0.3f), ("reso", 0.35f), ("fenvamt", 0.6f), ("fdecay", 0.35f), ("fsustain", 0f), ("adecay", 0.45f), ("asustain", 0f), ("arelease", 0.3f), ("voicemode", 1f));
+        Inst("pentad", 14, "Rubber Bass",     ("oaoct", 0.333f), ("oboct", 0.333f), ("cutoff", 0.28f), ("reso", 0.6f), ("fenvamt", 0.55f), ("fdecay", 0.38f), ("fsustain", 0.1f), ("voicemode", 1f), ("glide", 0.25f));
+        Inst("pentad", 14, "Sub Drone",       ("oaoct", 0f), ("oboct", 0f), ("obsaw", 0f), ("obtri", 1f), ("cutoff", 0.3f), ("fenvamt", 0.1f), ("asustain", 1f), ("arelease", 0.5f));
+        // Keys / plucks
+        Inst("pentad", 14, "Poly Keys",       ("cutoff", 0.48f), ("fenvamt", 0.4f), ("fdecay", 0.55f), ("fsustain", 0.2f), ("adecay", 0.65f), ("asustain", 0.3f), ("arelease", 0.5f), ("velfilt", 0.4f), ("velamp", 0.3f));
+        Inst("pentad", 14, "Riley Organ",     ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.5f), ("obsaw", 0f), ("obpulse", 1f), ("oboct", 1f), ("obpw", 0.35f), ("mixb", 0.5f), ("cutoff", 0.6f), ("reso", 0.15f), ("fenvamt", 0.25f), ("fdecay", 0.35f), ("fsustain", 0.3f), ("adecay", 0.4f), ("asustain", 0.6f), ("arelease", 0.2f), ("drift", 0.15f));
+        Inst("pentad", 14, "Clavi",           ("oasaw", 0f), ("oapulse", 1f), ("oapw", 0.2f), ("mixb", 0f), ("cutoff", 0.55f), ("reso", 0.3f), ("fenvamt", 0.5f), ("fdecay", 0.3f), ("fsustain", 0f), ("adecay", 0.45f), ("asustain", 0f), ("arelease", 0.15f), ("keytrk", 0.8f), ("velfilt", 0.5f));
+        Inst("pentad", 14, "Bell Keys",       ("obsaw", 0f), ("obtri", 1f), ("oboct", 1f), ("obsemi", 0.7917f), ("mixb", 0f), ("pmoscb", 0.35f), ("pmfreqa", 1f), ("cutoff", 0.7f), ("fenvamt", 0.2f), ("adecay", 0.7f), ("asustain", 0f), ("arelease", 0.6f));
+        Inst("pentad", 14, "Harpsi",          ("oapulse", 1f), ("oapw", 0.15f), ("oboct", 1f), ("mixb", 0.4f), ("cutoff", 0.62f), ("reso", 0.2f), ("fenvamt", 0.35f), ("fdecay", 0.45f), ("fsustain", 0f), ("adecay", 0.55f), ("asustain", 0f), ("arelease", 0.45f));
+        Inst("pentad", 14, "Marimba Pluck",   ("oasaw", 0f), ("obsaw", 0f), ("obtri", 1f), ("mixa", 0f), ("mixb", 1f), ("cutoff", 0.45f), ("reso", 0.5f), ("fenvamt", 0.5f), ("fdecay", 0.3f), ("fsustain", 0f), ("adecay", 0.45f), ("asustain", 0f), ("arelease", 0.35f), ("keytrk", 1f));
+        // Poly-Mod / SFX
+        Inst("pentad", 14, "Poly-Mod Bells",  ("obsaw", 0f), ("obtri", 1f), ("oboct", 1f), ("obfine", 0.6f), ("mixb", 0f), ("pmoscb", 0.45f), ("pmfreqa", 1f), ("cutoff", 0.75f), ("fenvamt", 0.1f), ("adecay", 0.7f), ("asustain", 0.1f), ("arelease", 0.7f));
+        Inst("pentad", 14, "Metallic Clang",  ("obsaw", 0f), ("obpulse", 1f), ("obsemi", 0.75f), ("mixb", 0.2f), ("pmoscb", 0.7f), ("pmfreqa", 1f), ("pmfilter", 1f), ("cutoff", 0.6f), ("reso", 0.4f), ("fenvamt", 0.3f), ("fdecay", 0.5f), ("fsustain", 0f), ("adecay", 0.55f), ("asustain", 0f), ("arelease", 0.5f));
+        Inst("pentad", 14, "Env Sync Sweep",  ("oasync", 1f), ("pmenv", 0.6f), ("pmfreqa", 1f), ("mixb", 0f), ("fattack", 0.5f), ("fdecay", 0.7f), ("fsustain", 0f), ("cutoff", 0.7f), ("fenvamt", 0.2f), ("asustain", 0.9f));
+        Inst("pentad", 14, "Laser Zap",       ("pmenv", 0.8f), ("pmfreqa", 1f), ("mixb", 0f), ("fdecay", 0.35f), ("fsustain", 0f), ("adecay", 0.4f), ("asustain", 0f), ("cutoff", 0.8f), ("fenvamt", 0.1f));
+        Inst("pentad", 14, "Wind & Surf",     ("mixa", 0f), ("mixb", 0f), ("mixnoise", 1f), ("noisecolor", 1f), ("cutoff", 0.45f), ("reso", 0.6f), ("keytrk", 0f), ("wmfilter", 1f), ("wmfreqa", 0f), ("wmfreqb", 0f), ("lfoamt", 0.5f), ("lforate", 0.35f), ("aattack", 0.75f), ("asustain", 1f), ("arelease", 0.8f));
+        Inst("pentad", 14, "Lo-Freq Growl",   ("oblofreq", 1f), ("obkbd", 0f), ("obsaw", 0f), ("obtri", 1f), ("mixb", 0f), ("pmoscb", 0.35f), ("pmfreqa", 1f), ("pmfilter", 1f), ("cutoff", 0.5f), ("reso", 0.4f));
+        Inst("pentad", 14, "Random Computer", ("oasaw", 0f), ("oapulse", 1f), ("lfotri", 0f), ("lfosaw", 1f), ("lfosquare", 1f), ("lforate", 0.75f), ("lfoamt", 0.8f), ("wmfilter", 1f), ("cutoff", 0.6f), ("reso", 0.5f));
+        Inst("pentad", 14, "Dive Bomb",       ("oasync", 1f), ("pmenv", 1f), ("pmfreqa", 1f), ("mixb", 0f), ("fattack", 0.8f), ("fdecay", 0.85f), ("fsustain", 0f), ("cutoff", 0.6f), ("reso", 0.3f), ("glide", 0.8f), ("glidemode", 0.5f));
+
         // ---- EQ-8 (kind 0) — 8 bands × (On/Type/Freq/Gain/Q), param names "<band> <field>",
         //      band 1 = low shelf, 2/3 = bells, 4 = high shelf (defaults). Type: 0 LowCut,
         //      1 LowShelf, 2 Bell, 3 Notch, 4 HighShelf, 5 HighCut.
@@ -417,6 +471,9 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         foreach (var (info, _) in _all) list.Add(info);
         return list;
     }
+
+    /// <summary>The preset's document (named params), or null — for validation and tests.</summary>
+    public PresetDocument? Document(string id) => _byId.TryGetValue(id, out var doc) ? doc : null;
 
     public string Apply(IAudioEngine engine, string id, int targetTrackId)
         => _byId.TryGetValue(id, out var doc)

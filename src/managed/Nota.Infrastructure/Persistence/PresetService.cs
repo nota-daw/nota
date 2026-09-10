@@ -171,6 +171,7 @@ public static class PresetService
                     11 => engine.AddFluxSynthTrack(),
                     12 => engine.AddRhythmTrack(),
                     13 => engine.AddMonolithTrack(),
+                    14 => engine.AddPentadTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
                 if (t <= 0) return "Failed to add instrument.";

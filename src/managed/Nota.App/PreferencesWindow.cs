@@ -103,7 +103,9 @@ public sealed class PreferencesWindow : NotaWindow
             ((TextBlock)_navItems[i].Child!).Foreground = on ? AccentBright : TextSecondary;
             ((TextBlock)_navItems[i].Child!).FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
         }
-        _content.Content = new ScrollViewer { Content = BuildPane(index), Padding = new Thickness(20, 18) };
+        // Padding lives inside the scrolled content: a ScrollViewer's own Padding isn't part of
+        // its extent, so the last rows of a long pane (Shortcuts) couldn't be scrolled into view.
+        _content.Content = new ScrollViewer { Content = new Border { Padding = new Thickness(20, 18), Child = BuildPane(index) } };
     }
 
     private Control BuildPane(int index) => index switch
@@ -569,6 +571,8 @@ public sealed class PreferencesWindow : NotaWindow
         {
             ("Double-click clip", "Open in the clip editor"),
             ("Drag ⠿", "Reorder devices (◀ ▶)"),
+            ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
+            ("Double-click knob", "Reset the value to its default"),
         }),
     };
 

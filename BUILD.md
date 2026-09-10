@@ -66,6 +66,18 @@ build directory and place it next to the binary: `libnota_engine.dylib` +
 On memory-constrained machines and containers, cap parallelism so the large JUCE
 translation units are not OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
 
+### Nota Pentad as a standalone VST3 (optional)
+
+For checking the Pentad synth in another host, the same DSP (`src/Pentad.h`) also builds
+as a VST3 with JUCE's generic editor. It is off by default and not part of the app:
+
+```bash
+cmake -G Ninja -S src/native/nota.engine -B build-pentad -DCMAKE_BUILD_TYPE=Release \
+  -DNOTA_BUILD_PENTAD_VST3=ON
+cmake --build build-pentad --target NotaPentad_VST3
+# → build-pentad/NotaPentad_artefacts/Release/VST3/Nota Pentad.vst3
+```
+
 ## Building on Windows (x64)
 
 ### Requirements

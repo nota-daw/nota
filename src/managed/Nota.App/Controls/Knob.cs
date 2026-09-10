@@ -3,7 +3,7 @@
 //
 // A rotary knob for device / instrument parameters (mockup style): a faint ring,
 // a brass value arc over a 270° sweep, and a pointer line. Drag vertically to
-// change (up = increase). Same public API as MiniFader (Value / max / Accent /
+// change (up = increase; Ctrl/⌘/Shift = fine), double-click resets. Same public API as MiniFader (Value / max / Accent /
 // ValueChanged / GestureBegin / GestureEnd) so it drops into the plugin editors.
 
 using System;
@@ -93,7 +93,10 @@ public sealed class Knob : Control
         double dy = _lastY - y;                       // up = increase
         _lastY = y;
         if (dy == 0) return;
-        double v = Math.Clamp(_value + dy / 140.0 * _max, 0, _max);
+        // Fine adjust: hold Ctrl (Windows/Linux), ⌘ or Shift — 10× finer (macOS turns
+        // Ctrl+click into a right-click, so Cmd/Shift cover it there).
+        bool fine = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) != 0;
+        double v = Math.Clamp(_value + dy / (fine ? 1400.0 : 140.0) * _max, 0, _max);
         if (Math.Abs(v - _value) < 1e-6) return;
         _value = v;
         InvalidateVisual();

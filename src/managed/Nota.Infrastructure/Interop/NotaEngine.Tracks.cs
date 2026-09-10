@@ -612,6 +612,15 @@ public sealed partial class NotaEngine
         return id;
     }
 
+    /// <summary>Adds an instrument track with the built-in Nota Pentad poly synth. Returns its id.</summary>
+    public int AddPentadTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddPentadTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Pentad track.");
+        return id;
+    }
+
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }

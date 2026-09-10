@@ -57,7 +57,8 @@ public sealed partial class DeviceChainView
 
     internal readonly record struct ShellSpec(
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
-        bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind);
+        bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
+        Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null);
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
@@ -89,7 +90,7 @@ public sealed partial class DeviceChainView
         if (s.IsInstrument && _engine.InstrumentVoiceCount(_trackId) >= 0)
         {
             var vt = Mono("0/16", 30); vt.Foreground = Teal; vt.TextAlignment = TextAlignment.Left;
-            _deviceLiveRefreshers.Add(() => { int v = _engine.InstrumentVoiceCount(_trackId); vt.Text = _engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? "MONO" : $"{Math.Max(0, v)}/16"; });
+            _deviceLiveRefreshers.Add(() => { int v = _engine.InstrumentVoiceCount(_trackId); vt.Text = s.VoiceLabel?.Invoke(_engine, _trackId, v) ?? (_engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? "MONO" : $"{Math.Max(0, v)}/16"); });
             right.Children.Add(vt);
         }
 

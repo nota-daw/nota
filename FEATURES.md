@@ -210,6 +210,14 @@ and user presets, automation, persistence and cloning.
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D), accents, per-step velocity, Swing/Humanize, and a per-voice **Sample** mode
   (load your own one-shot). Six factory kits (808/909/Trap/House/Lo-Fi/Techno).
+- **Nota Pentad** — 5-voice analog poly in the Prophet-5 mould: Osc A (saw + pulse, hard
+  sync) and Osc B (saw + triangle + pulse, Lo-Freq, keyboard off), noise, a 24 dB/oct
+  resonant filter that self-oscillates and tracks the keyboard, two analog-curve ADSRs,
+  **Poly-Mod** (filter envelope and Osc B at audio rate → Osc A freq / PW / cutoff),
+  Wheel-Mod (LFO ↔ noise), 5/10/16 voices, round-robin or oldest-note stealing,
+  Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
+  (seeded per-voice spread — a render is identical for the same seed, so freezing is
+  exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric.
@@ -396,7 +404,7 @@ Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome.
 - **Project**: `get_overview` (a full snapshot).
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
-- **Instruments**: add by kind, read and write parameters.
+- **Instruments**: add by kind, read and write parameters (by index or by stable id).
 - **Audio effects**: add, remove, reorder, bypass, parameters.
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split.

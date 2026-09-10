@@ -19,6 +19,29 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Pentad — a 5-voice polyphonic synth (Prophet-5).** A new built-in instrument
+  (kind 14) modelled on the Prophet-5 Rev 3: Osc A (saw and pulse together, hard sync to
+  B) and Osc B (saw, triangle, pulse; Lo-Freq mode; keyboard tracking off), white/pink
+  noise, a mixer that overdrives the filter, a 24 dB/oct resonant low-pass that
+  self-oscillates as a clean sine and follows the keyboard (off / ½ / full or any amount),
+  and filter and amplifier envelopes with analog curves that retrigger from their current
+  level. **Poly-Mod** routes the filter envelope and Osc B — at audio rate, for FM, PWM and
+  sync sweeps — to Osc A frequency, Osc A pulse width and the cutoff; **Wheel-Mod** mixes
+  the LFO (saw/triangle/square, free or tempo-synced) with noise. 5, 10 or 16 voices with
+  round-robin or oldest-note stealing (a 4 ms fade, no clicks), Poly / Unison / Mono,
+  unison stacks with detune, glide (off / on / legato), the Release switch, velocity and
+  aftertouch amounts, pitch-bend range up to ±12. **Vintage Drift** gives every voice its
+  own pitch, cutoff and envelope spread plus slow drift, from a seed saved with the
+  project, so the same patch always renders the same way and a freeze matches playback
+  exactly. Band-limited oscillators and ×2/×4 oversampling keep aliasing below -80 dB.
+  A card editor (Wheels column, Oscillators / Filter · Amp / Poly Mod and Mixer / Output
+  tabs, a voice-activity strip, meters, a Voice setup flyout), 40 factory presets, and full
+  automation, MIDI learn, persistence and MCP support. It also builds as a standalone VST3
+  (`-DNOTA_BUILD_PENTAD_VST3=ON`) for testing in other hosts.
+- **Fine knob adjustment.** Hold ⌘ or ⇧ (Ctrl on Windows and Linux) while dragging a device
+  knob to change its value in steps ten times finer.
+- **MCP: `set_instrument_param_by_id`** sets an instrument parameter by its stable id
+  rather than by index.
 - **Freeze and Live Freeze from the track's context menu.** Right-clicking a track header in
   the arrangement now offers the whole freeze workflow, not just the Devices panel buttons:
   **Freeze track** and **Live Freeze** on a live track; **Unfreeze track** and **Flatten to
@@ -29,6 +52,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   always jumps to the source, where the notes and devices live.
 
 ### Fixed
+- **Preferences: the end of long sections can be scrolled into view.** The last rows of
+  the Shortcuts list sat below the window's edge.
 - **Deleting one half of a live-freeze pair no longer leaves the other half stuck.** If the
   frozen track is deleted (or undone away), its source wakes up and plays again. If the
   source is deleted, the frozen audio becomes an ordinary track, and if you were in the middle

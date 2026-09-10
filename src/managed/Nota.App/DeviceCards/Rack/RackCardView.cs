@@ -504,7 +504,7 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         var f = new MenuFlyout();
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { int c = a.AddChain(k); if (c >= 0) Sel = c; _ctx.RequestRebuild(); }; f.Items.Add(mi); }
         Add("Nota Synth", 0); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
-        Add("Nota Volt", 6); Add("Nota Bass", 7); Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13);
+        Add("Nota Volt", 6); Add("Nota Bass", 7); Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14);
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -1739,7 +1739,9 @@ internal sealed class RackCardView(DeviceCardContext ctx)
             fl.Click += (_, _) => { a.AddChain(11); _ctx.RequestRebuild(); };
             var mo = new MenuItem { Header = "Nota Monolith" };
             mo.Click += (_, _) => { a.AddChain(13); _ctx.RequestRebuild(); };
-            f.Items.Add(s); f.Items.Add(p); f.Items.Add(w); f.Items.Add(vo); f.Items.Add(ba); f.Items.Add(pe); f.Items.Add(op); f.Items.Add(gr); f.Items.Add(fl); f.Items.Add(mo);
+            var pd = new MenuItem { Header = "Nota Pentad" };
+            pd.Click += (_, _) => { a.AddChain(14); _ctx.RequestRebuild(); };
+            f.Items.Add(s); f.Items.Add(p); f.Items.Add(w); f.Items.Add(vo); f.Items.Add(ba); f.Items.Add(pe); f.Items.Add(op); f.Items.Add(gr); f.Items.Add(fl); f.Items.Add(mo); f.Items.Add(pd);
             f.ShowAt(b, showAtPointer: true);
         };
         return b;
@@ -1905,6 +1907,7 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         Add("Nota Grain", 10);
         Add("Nota Flux", 11);
         Add("Nota Monolith", 13);
+        Add("Nota Pentad", 14);
         f.ShowAt(anchor, showAtPointer: true);
     }
 

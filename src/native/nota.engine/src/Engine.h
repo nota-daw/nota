@@ -499,6 +499,7 @@ public:
     int32_t addFluxSynthTrack();                        // built-in Nota Flux (vector-morph, sidechain React)
     int32_t addRhythmSynthTrack();                      // built-in Nota Rhythm (drum machine, kind 12)
     int32_t addMonolithTrack();                         // built-in Nota Monolith (mono Model-D synth, kind 13)
+    int32_t addPentadTrack();                           // built-in Nota Pentad (5-voice Prophet-5 poly, kind 14)
     void    instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg); // UI editing channel
     bool    setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path);  // Phase 2
     bool    rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;     // sample id per voice

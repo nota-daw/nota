@@ -257,6 +257,8 @@ public interface IAudioEngine : IDisposable
     int AddRhythmTrack();
     /// <summary>Adds an instrument track with the built-in Nota Monolith mono synth (kind 13).</summary>
     int AddMonolithTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Pentad 5-voice poly synth (kind 14).</summary>
+    int AddPentadTrack();
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>

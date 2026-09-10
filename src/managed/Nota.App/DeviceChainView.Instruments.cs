@@ -27,7 +27,8 @@ public sealed partial class DeviceChainView
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: strategy.Subtitle, DeviceIndex: -1, Count: 1,
             Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
-            PresetKind: kind, IsInstrument: true, Width: strategy.CardWidth, Kind: ChainKind.Instrument);
+            PresetKind: kind, IsInstrument: true, Width: strategy.CardWidth, Kind: ChainKind.Instrument,
+            VoiceLabel: strategy.VoiceLabel);
         return BuildCardShell(spec, body);
     }
 

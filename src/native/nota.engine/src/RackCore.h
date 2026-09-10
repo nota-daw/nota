@@ -30,6 +30,7 @@
 #include "FluxSynth.h"
 #include "RhythmMachine.h"
 #include "Monolith.h"
+#include "Pentad.h"
 #include "GrainSynth.h"
 #include "Sampler.h"
 #include "SampleBuffer.h"
@@ -645,6 +646,7 @@ public:
             case 11: return std::make_shared<FluxSynth>();
             case 12: return std::make_shared<RhythmMachine>();
             case 13: return std::make_shared<Monolith>();
+            case 14: return std::make_shared<Pentad>();
             default: return nullptr;   // -1 = no instrument (effect rack); plugins are a follow-up
         }
     }

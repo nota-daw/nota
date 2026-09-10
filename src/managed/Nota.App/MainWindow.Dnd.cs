@@ -62,6 +62,7 @@ public partial class MainWindow
                         11 => Engine.AddFluxSynthTrack(),
                         12 => Engine.AddRhythmTrack(),
                         13 => Engine.AddMonolithTrack(),
+                        14 => Engine.AddPentadTrack(),
                         1 => Engine.AddSamplerInstrumentTrack(),
                         _ => Engine.AddInstrumentTrack(),
                     };

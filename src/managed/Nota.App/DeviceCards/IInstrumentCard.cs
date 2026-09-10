@@ -24,4 +24,8 @@ internal interface IInstrumentCard
     /// <summary>Card width when wrapped by the shared shell (bodies keep their natural
     /// width; the chrome is what's unified). Only used when BodyOnly.</summary>
     double CardWidth => 700;
+
+    /// <summary>Voice readout for the shell header (e.g. "3/5"), or null for the default
+    /// "active/16". Called on the live-refresh tick. Only used when BodyOnly.</summary>
+    string? VoiceLabel(Nota.Application.IAudioEngine engine, int trackId, int active) => null;
 }

@@ -131,6 +131,9 @@ int32_t nota_engine_add_rhythm_track(NotaEngine* e) {
 int32_t nota_engine_add_monolith_track(NotaEngine* e) {
     return e ? ENG(e)->addMonolithTrack() : 0;
 }
+int32_t nota_engine_add_pentad_track(NotaEngine* e) {
+    return e ? ENG(e)->addPentadTrack() : 0;
+}
 void nota_track_instrument_action(NotaEngine* e, int32_t track_id, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->instrumentAction(track_id, id, iarg, farg);
 }

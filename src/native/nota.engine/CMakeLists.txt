@@ -209,3 +209,33 @@ target_compile_definitions(nota-scanworker PRIVATE ${NOTA_JUCE_DEFS})
 if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
 endif()
+
+# --- Nota Pentad as a standalone VST3 (debugging in third-party hosts) -------
+# Off by default: the app runs Pentad in-process; this wraps the same header-only DSP
+# (src/Pentad.h) in a JUCE plugin with the generic editor. Configure with
+# -DNOTA_BUILD_PENTAD_VST3=ON and build the `NotaPentad_VST3` target; the bundle lands
+# in <build>/NotaPentad_artefacts/<config>/VST3/.
+option(NOTA_BUILD_PENTAD_VST3 "Build Nota Pentad as a standalone VST3 plugin" OFF)
+if(NOTA_BUILD_PENTAD_VST3)
+    juce_add_plugin(NotaPentad
+        COMPANY_NAME "Nota"
+        PRODUCT_NAME "Nota Pentad"
+        BUNDLE_ID "app.nota.pentad"
+        PLUGIN_MANUFACTURER_CODE Nota
+        PLUGIN_CODE Pntd
+        FORMATS VST3
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        NEEDS_MIDI_OUTPUT FALSE
+        VST3_CATEGORIES Instrument Synth
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    target_sources(NotaPentad PRIVATE plugins/pentad/PentadPlugin.cpp)
+    target_include_directories(NotaPentad PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
+    target_compile_definitions(NotaPentad PUBLIC
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
+    target_link_libraries(NotaPentad
+        PRIVATE juce::juce_audio_utils
+        PUBLIC  juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+endif()

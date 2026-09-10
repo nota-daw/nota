@@ -1206,6 +1206,253 @@ Console.WriteLine("-- Nota Monolith --");
     }
 }
 
+// ============================ Nota Pentad ==================================
+Console.WriteLine("-- Nota Pentad --");
+{
+    using var pe = new NotaEngine();
+    pe.SetBpm(120); pe.SetTimeSignature(4, 4);
+    int t = pe.AddPentadTrack();
+    Check(t > 0, "AddPentadTrack returns a track");
+    Check(pe.TrackInstrumentKind(t) == 14, $"instrument kind is 14 (got {pe.TrackInstrumentKind(t)})");
+    Check(pe.DeviceName(t, -1) == "Nota Pentad", $"instrument is Nota Pentad (got '{pe.DeviceName(t, -1)}')");
+
+    int pc = pe.PluginParamCount(t, -1);
+    Check(pc == 76, $"Nota Pentad exposes 76 params (got {pc})");
+    var ids = new HashSet<string>();
+    bool namesOk = true;
+    for (int i = 0; i < pc; i++) { ids.Add(pe.PluginParamId(t, -1, i)); if (pe.PluginParamName(t, -1, i).Length == 0) namesOk = false; }
+    Check(ids.Count == pc && !ids.Contains("") && namesOk, "param ids are unique + non-empty, every param has a name");
+    int P(NotaEngine e, int tr, string id) { for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) return i; return -1; }
+    void SetId(NotaEngine e, int tr, string id, float v) => e.PluginParamSet(tr, -1, P(e, tr, id), v);
+    int cut = P(pe, t, "cutoff");
+
+    // State (incl. the vintage seed) round-trips to another track; duplicate clones it.
+    pe.PluginParamSet(t, -1, cut, 0.77f);
+    SetId(pe, t, "seed", 0.123f);
+    var state = pe.GetPluginState(t, -1);
+    Check(state.Length >= 76 * 4, $"pentad state serialized ({state.Length} bytes)");
+    int t2 = pe.AddPentadTrack();
+    pe.SetPluginState(t2, -1, state);
+    Check(Math.Abs(pe.PluginParamGet(t2, -1, cut) - 0.77f) < 1e-4 && Math.Abs(pe.PluginParamGet(t2, -1, P(pe, t2, "seed")) - 0.123f) < 1e-4,
+          "pentad state restores params + vintage seed on another track");
+    pe.PluginParamSet(t, -1, cut, 0.22f);
+    int t3 = pe.DuplicateTrack(t);
+    Check(t3 > 0 && Math.Abs(pe.PluginParamGet(t3, -1, cut) - 0.22f) < 1e-4, "duplicate track clones pentad params");
+
+    // A chord renders audible + finite in every voice mode (Poly / Unison / Mono).
+    var chord = new[] { new NotaNote(48, 0.0, 2.0, 0.9f), new NotaNote(55, 0.0, 2.0, 0.9f), new NotaNote(60, 0.0, 2.0, 0.9f), new NotaNote(64, 0.0, 2.0, 0.9f) };
+    foreach (var (mode, name) in new[] { (0f, "Poly"), (0.5f, "Unison"), (1f, "Mono") })
+    {
+        int ta = pe.AddPentadTrack();
+        SetId(pe, ta, "voicemode", mode);
+        pe.AddMidiClip(ta, 0.0, 4.0);
+        pe.SetClipNotes(ta, 0, chord);
+        var pbuf = new float[8192 * 2];
+        pe.Seek(0.0); pe.Play(); pe.RenderOffline(pbuf, 8192);
+        int voices = pe.InstrumentVoiceCount(ta);
+        pe.StopTransport();
+        bool finite = pbuf.All(float.IsFinite);
+        Check(finite && Rms(pbuf, 8192) > 0.001f, $"Nota Pentad {name} is audible + finite (RMS {Rms(pbuf, 8192):F3}, {voices} voices)");
+        int want = name == "Poly" ? 4 : name == "Unison" ? 5 : 1;
+        Check(voices == want, $"Nota Pentad {name} sounds {want} voice(s) for a 4-note chord (got {voices})");
+        pe.RemoveTrack(ta);
+    }
+
+    // Polyphony: 8 held pnotes on 5 voices → 5 sounding; 16-voice mode → 8.
+    foreach (var (poly, want) in new[] { (0f, 5), (1f, 8) })
+    {
+        int ta = pe.AddPentadTrack();
+        SetId(pe, ta, "polyphony", poly);
+        pe.AddMidiClip(ta, 0.0, 4.0);
+        var pnotes = new NotaNote[8];
+        for (int i = 0; i < 8; i++) pnotes[i] = new NotaNote(48 + i * 3, 0.0, 4.0, 0.8f);
+        pe.SetClipNotes(ta, 0, pnotes);
+        var pbuf = new float[4096 * 2];
+        pe.Seek(0.0); pe.Play(); pe.RenderOffline(pbuf, 4096);
+        int v = pe.InstrumentVoiceCount(ta);
+        pe.StopTransport();
+        Check(v == want, $"Nota Pentad {(poly < 0.5f ? 5 : 16)}-voice mode sounds {want} of 8 held notes (got {v})");
+        pe.RemoveTrack(ta);
+    }
+
+    // Determinism (Freeze: offline == realtime): the same patch + seed renders bit-identically
+    // regardless of block size, and a different seed changes the vintage spread.
+    float[] RenderPhrase(float seed, int block)
+    {
+        using var de = new NotaEngine();
+        de.SetBpm(120);
+        int dt = de.AddPentadTrack();
+        SetId(de, dt, "seed", seed); SetId(de, dt, "drift", 0.8f); SetId(de, dt, "mixnoise", 0.3f);
+        SetId(de, dt, "pmoscb", 0.5f); SetId(de, dt, "pmfreqa", 1f); SetId(de, dt, "oasync", 1f); SetId(de, dt, "lfoamt", 0.3f);
+        de.AddMidiClip(dt, 0.0, 4.0);
+        de.SetClipNotes(dt, 0, new[] { new NotaNote(60, 0.0, 1.5, 0.8f), new NotaNote(64, 0.25, 1.0, 0.7f), new NotaNote(67, 0.5, 1.5, 0.9f), new NotaNote(72, 1.0, 0.5, 0.6f) });
+        const int N = 44100;
+        var outv = new float[N * 2]; var tmp = new float[block * 2];
+        de.Seek(0.0); de.Play();
+        for (int done = 0; done < N;) { int m = Math.Min(block, N - done); de.RenderOffline(tmp, m); Array.Copy(tmp, 0, outv, done * 2, m * 2); done += m; }
+        de.StopTransport();
+        return outv;
+    }
+    var ra = RenderPhrase(0.5f, 4096); var rb = RenderPhrase(0.5f, 128); var rc = RenderPhrase(0.5f, 777); var rd = RenderPhrase(0.9f, 4096);
+    double dAB = 0, dAC = 0, dAD = 0;
+    for (int i = 0; i < ra.Length; i++) { dAB = Math.Max(dAB, Math.Abs(ra[i] - rb[i])); dAC = Math.Max(dAC, Math.Abs(ra[i] - rc[i])); dAD = Math.Max(dAD, Math.Abs(ra[i] - rd[i])); }
+    Check(Rms(ra, 44100) > 0.001f && dAB == 0 && dAC == 0, $"Nota Pentad null test: same seed renders bit-identically at blocks 4096/128/777 (maxdiff {Math.Max(dAB, dAC):G3})");
+    Check(dAD > 1e-3, $"Nota Pentad: a different vintage seed changes the render (maxdiff {dAD:F3})");
+
+    // Extreme settings never produce NaN/Inf (resonance 100 % + Poly-Mod at max + sync + 16-voice unison).
+    {
+        int ta = pe.AddPentadTrack();
+        foreach (var id in new[] { "reso", "pmenv", "pmoscb", "pmfreqa", "pmpwa", "pmfilter", "oasync", "oapulse", "obpulse", "obtri", "mixa", "mixb", "mixnoise", "fenvamt", "lfoamt", "wmfilter", "wmpwa", "wmpwb", "cutoff", "keytrk", "modwheel", "polyphony" })
+            SetId(pe, ta, id, 1f);
+        SetId(pe, ta, "voicemode", 0.5f);
+        pe.AddMidiClip(ta, 0.0, 8.0);
+        pe.SetClipNotes(ta, 0, new[] { new NotaNote(24, 0.0, 4.0, 1f), new NotaNote(108, 0.0, 4.0, 1f), new NotaNote(60, 4.0, 4.0, 1f) });
+        var pbuf = new float[44100 * 4 * 2];
+        pe.Seek(0.0); pe.Play(); pe.RenderOffline(pbuf, 44100 * 4);
+        SetId(pe, ta, "cutoff", 0f); pe.RenderOffline(pbuf, 44100 * 2);
+        pe.StopTransport();
+        Check(pbuf.All(float.IsFinite), "Nota Pentad stays finite at resonance 100 % + Poly-Mod max + 16-voice unison");
+        pe.RemoveTrack(ta);
+    }
+
+    // Aliasing (13.2): a 5 kHz-ish saw / pulse, filter open — spurious (non-harmonic)
+    // components in 20 Hz–20 kHz must stay ≤ -80 dB below the fundamental.
+    foreach (var (wave, os) in new[] { ("saw", 0f), ("pulse", 0f), ("saw", 1f), ("pulse", 1f) })
+    {
+        using var ae = new NotaEngine();
+        ae.SetBpm(120);
+        int ta = ae.AddPentadTrack();
+        foreach (var (id, v) in new[] { ("drift", 0f), ("noisefloor", 0f), ("cutoff", 1f), ("reso", 0f), ("keytrk", 0f), ("fenvamt", 0f), ("aattack", 0f), ("asustain", 1f),
+                                        ("mixb", 0f), ("mixa", 0.5f), ("spread", 0f), ("oversample", os), ("oasaw", wave == "saw" ? 1f : 0f), ("oapulse", wave == "pulse" ? 1f : 0f), ("oapw", 0.3f) })
+            SetId(ae, ta, id, v);
+        ae.AddMidiClip(ta, 0.0, 8.0);
+        ae.SetClipNotes(ta, 0, new[] { new NotaNote(111, 0.0, 8.0, 1f) });
+        const int N = 32768;
+        var warm = new float[22050 * 2]; var pbuf = new float[N * 2];
+        ae.Seek(0.0); ae.Play(); ae.RenderOffline(warm, 22050); ae.RenderOffline(pbuf, N); ae.StopTransport();
+        double sr = 44100, f0 = 440 * Math.Pow(2, (111 - 69) / 12.0);
+        var re = new double[N]; var im = new double[N];
+        for (int i = 0; i < N; i++) { double w = 2 * Math.PI * i / (N - 1); re[i] = pbuf[i * 2] * (0.35875 - 0.48829 * Math.Cos(w) + 0.14128 * Math.Cos(2 * w) - 0.01168 * Math.Cos(3 * w)); }
+        Fft(re, im);
+        double peak = 0, worst = 0, binHz = sr / N;
+        for (int i = 1; i < N / 2; i++) peak = Math.Max(peak, Math.Sqrt(re[i] * re[i] + im[i] * im[i]));
+        for (int i = (int)(20 / binHz); i < (int)(20000 / binHz); i++)
+        {
+            double h = i * binHz / f0;
+            if (Math.Round(h) >= 1 && Math.Abs(h - Math.Round(h)) * f0 < 10 * binHz) continue;   // a true harmonic
+            worst = Math.Max(worst, Math.Sqrt(re[i] * re[i] + im[i] * im[i]));
+        }
+        double db = 20 * Math.Log10(worst / peak + 1e-30);
+        Check(db <= -80, $"Nota Pentad {wave} at {f0:0} Hz, ×{(os > 0.5f ? 4 : 2)} oversampling: worst alias {db:0.0} dB (≤ -80)");
+    }
+
+    // Stress (13.4): 16-voice unison + max resonance + Poly-Mod renders 128-frame blocks in real time.
+    {
+        using var se = new NotaEngine();
+        se.SetBpm(120);
+        int ta = se.AddPentadTrack();
+        foreach (var id in new[] { "reso", "pmenv", "pmoscb", "pmfreqa", "pmpwa", "pmfilter", "oasync", "polyphony", "oversample" }) SetId(se, ta, id, 1f);
+        SetId(se, ta, "voicemode", 0.5f);
+        se.AddMidiClip(ta, 0.0, 16.0);
+        se.SetClipNotes(ta, 0, new[] { new NotaNote(48, 0.0, 16.0, 1f) });
+        var blk = new float[128 * 2];
+        se.Seek(0.0); se.Play();
+        for (int i = 0; i < 50; i++) se.RenderOffline(blk, 128);   // warm up
+        double worstMs = 0, totalMs = 0; const int blocks = 2000;
+        var sw = new System.Diagnostics.Stopwatch();
+        for (int i = 0; i < blocks; i++) { sw.Restart(); se.RenderOffline(blk, 128); sw.Stop(); worstMs = Math.Max(worstMs, sw.Elapsed.TotalMilliseconds); totalMs += sw.Elapsed.TotalMilliseconds; }
+        int active = se.InstrumentVoiceCount(ta);
+        se.StopTransport();
+        double budget = 128 / 44.1;
+        Check(active == 16 && totalMs / blocks < budget * 0.5, $"Nota Pentad stress: 16-voice unison ×4 OS avg {totalMs / blocks:0.000} ms, worst {worstMs:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+    }
+
+    // Automation: a plugin-param lane drives the cutoff during playback.
+    {
+        int ta = pe.AddPentadTrack();
+        int fi = P(pe, ta, "cutoff");
+        pe.PluginParamSet(ta, -1, fi, 0.1f);
+        int lane = pe.AddPluginAutomationLane(ta, -1, "cutoff");
+        Check(lane >= 0, "add plugin automation lane on pentad cutoff");
+        pe.SetAutomationPoints(ta, lane, new[] { new AutomationPoint(0.0, 0.1f, 0f), new AutomationPoint(2.0, 0.9f, 0f) });
+        var abuf = new float[4096 * 2];
+        pe.Seek(1.99); pe.Play(); pe.RenderOffline(abuf, 4096); pe.StopTransport();
+        Check(pe.PluginParamGet(ta, -1, fi) > 0.7f, $"automation drives Pentad cutoff (cutoff = {pe.PluginParamGet(ta, -1, fi):F2})");
+    }
+
+    // Freeze captures exactly what the live chain plays (deterministic voice state).
+    {
+        using var fe = new NotaEngine();
+        fe.SetBpm(120);
+        int ft = fe.AddPentadTrack();
+        SetId(fe, ft, "drift", 0.7f); SetId(fe, ft, "mixnoise", 0.2f);
+        fe.AddMidiClip(ft, 0.0, 4.0);
+        fe.SetClipNotes(ft, 0, new[] { new NotaNote(57, 0.0, 3.0, 0.9f), new NotaNote(64, 0.5, 2.0, 0.8f) });
+        const int N = 8192 * 4;
+        fe.Seek(0); fe.Play(); var live = new float[N * 2]; fe.RenderOffline(live, N); fe.StopTransport();
+        fe.Stop(); fe.SetLoop(false, 0, 0); fe.SetMetronome(false); fe.StopTransport();
+        long total = fe.BeginFreeze(ft, 4.0);
+        fe.StopTransport(); fe.Seek(0); fe.Play();
+        var chunk = new float[4096 * 2];
+        for (long rem = total; rem > 0;) { int m = (int)Math.Min(4096, rem); fe.RenderOffline(chunk, m); rem -= m; }
+        fe.StopTransport(); fe.EndFreeze(ft);
+        fe.Seek(0); fe.Play(); var frozen = new float[N * 2]; fe.RenderOffline(frozen, N); fe.StopTransport();
+        double md = 0; for (int i = 0; i < live.Length; i++) md = Math.Max(md, Math.Abs(live[i] - frozen[i]));
+        Check(fe.IsTrackFrozen(ft) && Rms(live, N) > 1e-3f && md < 1e-5, $"Nota Pentad freeze == live render (maxdiff {md:G3})");
+    }
+
+    // Factory presets: 40 ship, every named param is a real Pentad id, each applies in place.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 14).ToList();
+        Check(mine.Count == 40, $"Nota Pentad ships 40 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Pentad preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int ta = pe.AddPentadTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(pe, p.Id, ta, -1).Length != 0);
+        Check(fails == 0, $"every Pentad preset applies in place ({fails} failed)");
+        cat.ApplyInPlace(pe, "pentad/Sync Lead", ta, -1);
+        Check(pe.PluginParamGet(ta, -1, P(pe, ta, "oasync")) > 0.5f && pe.PluginParamGet(ta, -1, P(pe, ta, "voicemode")) > 0.9f, "Sync Lead preset sets sync + mono mode");
+    }
+
+    // MCP: add by kind 14, set a param by stable id.
+    {
+        var mcp = new Nota.Mcp.Tools.InstrumentTools(pe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        int mt = mcp.AddInstrumentTrack(14).Result;
+        Check(mt > 0 && pe.TrackInstrumentKind(mt) == 14, "MCP add_instrument_track(14) adds a Nota Pentad");
+        Check(mcp.ListInstrumentKinds().Any(k => k.Kind == 14 && k.Name == "Nota Pentad"), "MCP list_instrument_kinds includes Nota Pentad");
+        Check(mcp.SetInstrumentParamById(mt, "pmoscb", 0.4f).Result && Math.Abs(pe.PluginParamGet(mt, -1, P(pe, mt, "pmoscb")) - 0.4f) < 1e-4, "MCP set_instrument_param_by_id sets Poly-Mod Osc-B");
+        Check(!mcp.SetInstrumentParamById(mt, "nope", 0.4f).Result, "MCP set_instrument_param_by_id rejects an unknown id");
+    }
+}
+
+static void Fft(double[] re, double[] im)
+{
+    int n = re.Length;
+    for (int i = 1, j = 0; i < n; i++)
+    {
+        int bit = n >> 1;
+        for (; (j & bit) != 0; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) { (re[i], re[j]) = (re[j], re[i]); (im[i], im[j]) = (im[j], im[i]); }
+    }
+    for (int len = 2; len <= n; len <<= 1)
+    {
+        double ang = -2 * Math.PI / len, wr = Math.Cos(ang), wi = Math.Sin(ang);
+        for (int i = 0; i < n; i += len)
+        {
+            double cr = 1, ci = 0;
+            for (int k = 0; k < len / 2; k++)
+            {
+                int a = i + k, b = a + len / 2;
+                double tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+                re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+                double nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+            }
+        }
+    }
+}
+
 // ============================ Nota Pendulum ================================
 Console.WriteLine("-- Nota Pendulum --");
 {
