@@ -59,6 +59,7 @@ public partial class MainWindow
                         12 => Engine.AddRhythmTrack(),
                         13 => Engine.AddMonolithTrack(),
                         14 => Engine.AddPentadTrack(),
+                        15 => Engine.AddConsortTrack(),
                         1 => Engine.AddSamplerInstrumentTrack(),
                         _ => Engine.AddInstrumentTrack(),
                     };

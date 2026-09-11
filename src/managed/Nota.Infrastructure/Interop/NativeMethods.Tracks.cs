@@ -307,6 +307,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_pentad_track")]
     internal static partial int AddPentadTrack(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_consort_track")]
+    internal static partial int AddConsortTrack(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
 

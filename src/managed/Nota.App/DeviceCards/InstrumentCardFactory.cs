@@ -27,6 +27,7 @@ internal sealed class InstrumentCardFactory
         [12] = new RhythmInstrumentCard(),
         [13] = new MonolithInstrumentCard(),
         [14] = new PentadInstrumentCard(),
+        [15] = new ConsortInstrumentCard(),
     };
 
     /// <summary>Resolve the editor for a built-in instrument kind. The Sampler (1) always

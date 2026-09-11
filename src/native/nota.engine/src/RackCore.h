@@ -31,6 +31,7 @@
 #include "RhythmMachine.h"
 #include "Monolith.h"
 #include "Pentad.h"
+#include "Consort.h"
 #include "GrainSynth.h"
 #include "Sampler.h"
 #include "SampleBuffer.h"
@@ -649,6 +650,7 @@ public:
             case 12: return std::make_shared<RhythmMachine>();
             case 13: return std::make_shared<Monolith>();
             case 14: return std::make_shared<Pentad>();
+            case 15: return std::make_shared<Consort>();
             default: return nullptr;   // -1 = no instrument (effect rack); plugins are a follow-up
         }
     }

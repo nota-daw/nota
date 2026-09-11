@@ -546,7 +546,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("⌘A", "Toggle automation mode"),
             ("⌘M", "Toggle the Mixer view"),
             ("Tab", "Switch Devices / Clip in the detail panel"),
-            ("Esc", "Cancel the current gesture / clear the selection"),
+            ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clip (or automation range)"),
             ("⌘D", "Duplicate the selected clip(s) / range"),
@@ -578,6 +578,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Drag ⠿", "Reorder devices (◀ ▶)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
+            ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
         }),
     };
 

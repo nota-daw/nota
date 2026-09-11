@@ -190,6 +190,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             new() { Name = "Nota Rhythm", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 12, Sub = "drum machine" },
             new() { Name = "Nota Monolith", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 13, Sub = "mono synth" },
             new() { Name = "Nota Pentad", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 14, Sub = "poly synth" },
+            new() { Name = "Nota Consort", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 15, Sub = "paraphonic synth" },
             new() { Name = "Nota Sampler", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 1, Sub = "built-in" },
             new() { Name = "Nota Instrument Rack", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 3, Sub = "built-in" },
             new() { Name = "Nota Drum Rack", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 4, Sub = "built-in" }

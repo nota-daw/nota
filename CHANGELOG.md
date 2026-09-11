@@ -19,6 +19,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Consort — a paraphonic semi-modular synth.** A new built-in instrument (kind 15) in
+  the spirit of a four-oscillator paraphonic Moog. Four oscillators (triangle, saw, square or
+  pulse with PWM; 32′–2′; oscillator 2 syncs to 1 and 4 to 3) feed a mixer with noise, drive
+  and an EXT input that is normalled to the output for the classic feedback growl, then two
+  ladder filters — HP→LP in series, or parallel stereo as LP/LP or HP/LP with a Spacing
+  offset between them — and two ADSR envelopes. **MONO**, **DUO** and **PARA** share one
+  filter and envelope pair the way a paraphonic synth does (each held note gets its own
+  oscillators; Multi trig retriggers the envelopes; Unison doubles idle oscillators with a
+  detune), and **True poly** gives 16 complete voices instead. Glide per oscillator — linear
+  rate, linear time or exponential, optionally legato-only. An LFO with six shapes (free or
+  tempo-synced) modulates pitch, cutoff and PWM, and a stereo **bucket-brigade delay** (darker
+  as it gets longer, with compander, overload and ping-pong; or a clean digital line) sits at
+  the end. A 16-step **sequencer / arpeggiator** with ratchets, ties, rests, swing, forward /
+  backward / random order and latch plays in time with the song. The **patch bay** takes up to
+  12 cables across 42 points — oscillator, filter, envelope, LFO, keyboard, sequencer and
+  utility outputs into pitch, PWM, cutoff, resonance, VCA, delay and LFO-rate inputs, plus
+  Gate, Filter, VCA and EXT inputs whose internal connection a cable replaces; feedback loops
+  are allowed. Patch it as a matrix, as a strip of jacks inside the Patch tab, or on a
+  full-card overlay with every point; drag from jack to jack to connect, ⌥-click to pull a
+  cable. Cables are ordinary parameters, so patches are saved with the project and in presets,
+  duplicate with the track, and their depths can be automated. 28 factory presets; a freeze
+  matches playback exactly.
 - **Nota Prism — multiband dynamics.** A new built-in audio effect (kind 21) that splits the
   signal into Low / Mid / High with phase-coherent crossovers — or two bands, or one — and gives
   each band a compressor above a threshold and an expander (or an upward compressor, which lifts

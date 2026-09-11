@@ -388,6 +388,8 @@ NOTA_API int32_t nota_engine_add_rhythm_track(NotaEngine* engine);
 NOTA_API int32_t nota_engine_add_monolith_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Pentad (5-voice Prophet-5-style poly, kind 14). id (>0). */
 NOTA_API int32_t nota_engine_add_pentad_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Consort (paraphonic semi-modular synth, kind 15). id (>0). */
+NOTA_API int32_t nota_engine_add_consort_track(NotaEngine* engine);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);

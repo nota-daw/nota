@@ -1426,6 +1426,212 @@ Console.WriteLine("-- Nota Pentad --");
     }
 }
 
+// ============================ Nota Consort =================================
+Console.WriteLine("-- Nota Consort --");
+{
+    using var ce = new NotaEngine();
+    ce.SetBpm(120); ce.SetTimeSignature(4, 4);
+    int CI(NotaEngine e, int tr, string id) { for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) return i; return -1; }
+    void CS(NotaEngine e, int tr, string id, float v) => e.PluginParamSet(tr, -1, CI(e, tr, id), v);
+    void Cable(NotaEngine e, int tr, int slot, int src, int dst, float depth) { CS(e, tr, $"c{slot}src", src / 63f); CS(e, tr, $"c{slot}dst", dst / 63f); CS(e, tr, $"c{slot}amt", 0.5f + depth / 2); }
+    float[] Play(Action<NotaEngine, int> setup, NotaNote[] notes, int frames, int block = 512, Action<NotaEngine, int>? each = null)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int tr = e.AddConsortTrack();
+        setup(e, tr);
+        e.AddMidiClip(tr, 0.0, 32.0);
+        e.SetClipNotes(tr, 0, notes);
+        var outv = new float[frames * 2]; var tmp = new float[block * 2];
+        e.Seek(0); e.Play();
+        for (int done = 0; done < frames;) { int m = Math.Min(block, frames - done); e.RenderOffline(tmp, m); Array.Copy(tmp, 0, outv, done * 2, m * 2); done += m; each?.Invoke(e, tr); }
+        e.StopTransport();
+        return outv;
+    }
+    static float RmsRange(float[] b, int from, int to) { double sum = 0; for (int i = from * 2; i < to * 2; i++) sum += b[i] * (double)b[i]; return (float)Math.Sqrt(sum / Math.Max(1, (to - from) * 2)); }
+    static double MaxDiff(float[] a, float[] b) { double d = 0; for (int i = 0; i < Math.Min(a.Length, b.Length); i++) d = Math.Max(d, Math.Abs(a[i] - b[i])); return d; }
+
+    int t = ce.AddConsortTrack();
+    Check(t > 0, "AddConsortTrack returns a track");
+    Check(ce.TrackInstrumentKind(t) == 15, $"instrument kind is 15 (got {ce.TrackInstrumentKind(t)})");
+    Check(ce.DeviceName(t, -1) == "Nota Consort", $"instrument is Nota Consort (got '{ce.DeviceName(t, -1)}')");
+    int pc = ce.PluginParamCount(t, -1);
+    Check(pc == 145, $"Nota Consort exposes 145 params (got {pc})");
+    var cids = new HashSet<string>();
+    bool cnames = true;
+    for (int i = 0; i < pc; i++) { cids.Add(ce.PluginParamId(t, -1, i)); if (ce.PluginParamName(t, -1, i).Length == 0) cnames = false; }
+    Check(cids.Count == pc && !cids.Contains("") && cnames, "consort param ids are unique + non-empty, every param has a name");
+
+    // State (incl. a patch cable and a step) round-trips to another track; duplicate clones it.
+    CS(ce, t, "cutoff", 0.77f); Cable(ce, t, 3, 1, 10, 0.4f); CS(ce, t, "sp5", 0.9f);
+    var cstate = ce.GetPluginState(t, -1);
+    int t2c = ce.AddConsortTrack();
+    ce.SetPluginState(t2c, -1, cstate);
+    Check(Math.Abs(ce.PluginParamGet(t2c, -1, CI(ce, t2c, "cutoff")) - 0.77f) < 1e-4 && Math.Abs(ce.PluginParamGet(t2c, -1, CI(ce, t2c, "c3dst")) - 10 / 63f) < 1e-4
+          && Math.Abs(ce.PluginParamGet(t2c, -1, CI(ce, t2c, "sp5")) - 0.9f) < 1e-4, "consort state restores params, cables and steps on another track");
+    int t3c = ce.DuplicateTrack(t);
+    Check(t3c > 0 && Math.Abs(ce.PluginParamGet(t3c, -1, CI(ce, t3c, "c3amt")) - 0.7f) < 1e-4, "duplicate track clones the consort patch");
+
+    // Every voice structure sounds a 4-note chord: MONO 1, DUO 2, PARA 4, true poly 4 notes.
+    var cchord = new[] { new NotaNote(48, 0.0, 2.0, 0.9f), new NotaNote(55, 0.0, 2.0, 0.9f), new NotaNote(60, 0.0, 2.0, 0.9f), new NotaNote(64, 0.0, 2.0, 0.9f) };
+    foreach (var (name, mode, poly, want) in new[] { ("MONO", 0f, 0f, 1), ("DUO", 0.5f, 0f, 2), ("PARA", 1f, 0f, 4), ("POLY", 1f, 1f, 4) })
+    {
+        int voices = -1;
+        var b = Play((e, tr) => { CS(e, tr, "voicemode", mode); CS(e, tr, "truepoly", poly); }, cchord, 8192, 512, (e, tr) => voices = e.InstrumentVoiceCount(tr));
+        Check(b.All(float.IsFinite) && Rms(b, 8192) > 0.01f && voices == want, $"Nota Consort {name}: a chord is audible + finite, {want} note(s) sound (RMS {Rms(b, 8192):F3}, {voices})");
+    }
+    // Paraphony: the notes land on the oscillators (scope telemetry).
+    {
+        using var e = new NotaEngine(); e.SetBpm(120);
+        int tr = e.AddConsortTrack(); CS(e, tr, "unison", 0f);
+        e.AddMidiClip(tr, 0, 4); e.SetClipNotes(tr, 0, new[] { new NotaNote(48, 0, 2, 0.9f), new NotaNote(55, 0, 2, 0.9f), new NotaNote(62, 0, 2, 0.9f) });
+        var tmp = new float[4096 * 2]; e.Seek(0); e.Play(); e.RenderOffline(tmp, 4096);
+        var sc = new float[32]; e.InstrumentScope(tr, sc); e.StopTransport();
+        var oscNotes = sc.Skip(12).Take(4).Select(v => (int)v).OrderBy(v => v).ToArray();
+        Check(oscNotes.SequenceEqual(new[] { -1, 48, 55, 62 }), $"Nota Consort PARA assigns 3 held notes to 3 oscillators, the 4th idle without unison (got {string.Join(",", oscNotes)})");
+    }
+    // Filter modes and waves render finite + audible at high resonance.
+    foreach (var fm in new[] { 0f, 0.5f, 1f })
+    {
+        var b = Play((e, tr) => { CS(e, tr, "filtmode", fm); CS(e, tr, "reso", 0.95f); }, new[] { new NotaNote(48, 0, 2, 0.9f) }, 22050);
+        Check(b.All(float.IsFinite) && Rms(b, 22050) > 0.003f, $"Nota Consort filter mode {fm:0.0} audible + finite at resonance 95 % (RMS {Rms(b, 22050):F4})");
+    }
+
+    // Sequencer: 1/16 at 120 BPM = 8 steps a second, locked to the host grid; ARP walks the chord.
+    {
+        var steps = new HashSet<int>(); var seqNotes = new HashSet<int>();
+        Play((e, tr) => { CS(e, tr, "seqmode", 0.5f); }, new[] { new NotaNote(60, 0, 8, 0.9f) }, 44100 * 2, 256,
+             (e, tr) => { var sc = new float[32]; e.InstrumentScope(tr, sc); steps.Add((int)sc[7]); if (sc[24] >= 0) seqNotes.Add((int)sc[24]); });
+        Check(steps.Contains(0) && steps.Contains(15) && steps.Count >= 16, $"Nota Consort SEQ runs all 16 steps in 2 s at 1/16, 120 BPM (saw {steps.Count} distinct)");
+        Check(seqNotes.SetEquals(new[] { 60, 63, 65, 67, 70, 72 }), $"Nota Consort SEQ transposes the default pattern from the held key (got {string.Join(",", seqNotes.OrderBy(x => x))})");
+        var arpNotes = new HashSet<int>();
+        Play((e, tr) => { CS(e, tr, "seqmode", 1f); CS(e, tr, "arpoct", 0.5f); }, new[] { new NotaNote(60, 0, 8, 0.9f), new NotaNote(64, 0, 8, 0.9f), new NotaNote(67, 0, 8, 0.9f) }, 44100 * 2, 256,
+             (e, tr) => { var sc = new float[32]; e.InstrumentScope(tr, sc); if (sc[24] >= 0) arpNotes.Add((int)sc[24]); });
+        Check(arpNotes.SetEquals(new[] { 60, 64, 67, 72, 76, 79 }), $"Nota Consort ARP plays the chord over 2 octaves (got {string.Join(",", arpNotes.OrderBy(x => x))})");
+        // rests are silent: an all-rest pattern plays nothing
+        var rest = Play((e, tr) => { CS(e, tr, "seqmode", 0.5f); for (int s2 = 1; s2 <= 16; s2++) CS(e, tr, $"st{s2}", 1f); }, new[] { new NotaNote(60, 0, 8, 0.9f) }, 44100);
+        Check(Rms(rest, 44100) < 1e-4f, $"Nota Consort SEQ: an all-rest pattern is silent (RMS {Rms(rest, 44100):G3})");
+    }
+
+    // BBD delay: echoes after the note, each repeat ~fb lower (−6 dB at 50 %), BBD and digital alike.
+    foreach (var dig in new[] { 0f, 1f })
+    {
+        var b = Play((e, tr) => { CS(e, tr, "dlymix", 1f); CS(e, tr, "dlyfb", 0.5f); CS(e, tr, "dlyping", 0f); CS(e, tr, "dlyspacing", 0.5f); CS(e, tr, "dlydigital", dig);
+                                  CS(e, tr, "adecay", 0.05f); CS(e, tr, "asustain", 0f); CS(e, tr, "arelease", 0.02f); },
+                     new[] { new NotaNote(72, 0, 0.05, 1f) }, 44100 * 2);
+        double T = 0.02 * Math.Pow(75, 0.62);
+        float Pk(int k) { int c0 = (int)(k * T * 44100), c1 = c0 + 4000; float pk = 0; for (int i = c0; i < c1; i++) pk = Math.Max(pk, Math.Abs(b[i * 2])); return pk; }
+        double r = 20 * Math.Log10(Pk(3) / Pk(2));
+        Check(Pk(1) > 0.01f && r < -4.5 && r > -8.5, $"Nota Consort {(dig > 0 ? "digital" : "BBD")} delay repeats decay ~6 dB at 50 % feedback ({r:0.0} dB)");
+    }
+
+    // Patch bay: a cable changes the sound; Noise → Filt in breaks the mixer normal; LFO → Gate 2 gates the VCA.
+    {
+        var note = new[] { new NotaNote(57, 0, 2, 0.9f) };
+        var dry = Play((e, tr) => { }, note, 22050);
+        var vib = Play((e, tr) => Cable(e, tr, 1, 1, 4, 0.5f), note, 22050);
+        Check(MaxDiff(dry, vib) > 0.05, "Nota Consort: LFO → Osc pitch changes the render");
+        var silentMix = Play((e, tr) => { foreach (var m in new[] { "mix1", "mix2", "mix3", "mix4" }) CS(e, tr, m, 0f); }, note, 22050);
+        var noiseIn = Play((e, tr) => { foreach (var m in new[] { "mix1", "mix2", "mix3", "mix4" }) CS(e, tr, m, 0f); Cable(e, tr, 1, 8, 13, 1f); CS(e, tr, "cutoff", 0.8f); }, note, 22050);
+        Check(Rms(silentMix, 22050) < 1e-3f && Rms(noiseIn, 22050) > 0.01f, $"Nota Consort: Noise → Filt in replaces the (silent) mixer normal (RMS {Rms(silentMix, 22050):G2} → {Rms(noiseIn, 22050):F3})");
+        var gated = Play((e, tr) => { CS(e, tr, "lfowave", 0.6f); CS(e, tr, "lforate", 0.577f); CS(e, tr, "arelease", 0.05f); CS(e, tr, "aattack", 0f); Cable(e, tr, 1, 1, 3, 1f); }, note, 44100);
+        float lo = 1, hi = 0; for (int w = 2; w < 20; w++) { float r = RmsRange(gated, w * 2205, (w + 1) * 2205); lo = Math.Min(lo, r); hi = Math.Max(hi, r); }
+        Check(hi > 0.01f && lo < hi * 0.2f, $"Nota Consort: LFO square → Gate 2 in chops the amp envelope (min {lo:F4} / max {hi:F3})");
+        var extreme = Play((e, tr) =>
+        {
+            for (int k = 1; k <= 12; k++) Cable(e, tr, k, 1 + (k * 7) % 20, 1 + (k * 5) % 22, k % 2 == 0 ? 1f : -1f);
+            foreach (var id in new[] { "reso", "mixnoise", "mixext", "mixdrive", "fenvamt", "lfocut", "lfopwm", "dlyfb", "dlymix", "truepoly", "oversample", "unison", "o2sync", "o4sync" }) CS(e, tr, id, 1f);
+        }, new[] { new NotaNote(24, 0, 4, 1f), new NotaNote(108, 0, 4, 1f), new NotaNote(60, 1, 4, 1f) }, 44100 * 3);
+        Check(extreme.All(float.IsFinite), "Nota Consort stays finite with all 12 cables at ±100 %, resonance, feedback and drive at max");
+    }
+
+    // Determinism (Freeze: offline == realtime): bit-identical at any block size.
+    {
+        Action<NotaEngine, int> st = (e, tr) => { CS(e, tr, "drift", 0.8f); CS(e, tr, "mixnoise", 0.3f); CS(e, tr, "dlymix", 0.4f); CS(e, tr, "seqmode", 1f); CS(e, tr, "seqorder", 1f); CS(e, tr, "lfowave", 0.8f); Cable(e, tr, 1, 1, 10, 0.6f); Cable(e, tr, 2, 6, 5, 0.2f); };
+        NotaNote[] ph = { new(60, 0, 1.5, 0.8f), new(64, 0.25, 1, 0.7f), new(67, 0.5, 1.5, 0.9f) };
+        var a = Play(st, ph, 44100, 4096); var b2 = Play(st, ph, 44100, 128); var c = Play(st, ph, 44100, 777);
+        Check(Rms(a, 44100) > 0.001f && MaxDiff(a, b2) == 0 && MaxDiff(a, c) == 0, $"Nota Consort null test: bit-identical at blocks 4096/128/777 (maxdiff {Math.Max(MaxDiff(a, b2), MaxDiff(a, c)):G3})");
+    }
+    // Freeze captures exactly what the live chain plays.
+    {
+        using var fe = new NotaEngine(); fe.SetBpm(120);
+        int ft = fe.AddConsortTrack();
+        CS(fe, ft, "drift", 0.7f); CS(fe, ft, "dlymix", 0.3f); CS(fe, ft, "seqmode", 0.5f);
+        fe.AddMidiClip(ft, 0.0, 4.0);
+        fe.SetClipNotes(ft, 0, new[] { new NotaNote(57, 0.0, 3.0, 0.9f) });
+        const int N = 8192 * 4;
+        fe.Seek(0); fe.Play(); var live = new float[N * 2]; fe.RenderOffline(live, N); fe.StopTransport();
+        fe.Stop(); fe.SetLoop(false, 0, 0); fe.SetMetronome(false); fe.StopTransport();
+        long total = fe.BeginFreeze(ft, 4.0);
+        fe.StopTransport(); fe.Seek(0); fe.Play();
+        var chunk = new float[4096 * 2];
+        for (long rem = total; rem > 0;) { int m = (int)Math.Min(4096, rem); fe.RenderOffline(chunk, m); rem -= m; }
+        fe.StopTransport(); fe.EndFreeze(ft);
+        fe.Seek(0); fe.Play(); var frozen = new float[N * 2]; fe.RenderOffline(frozen, N); fe.StopTransport();
+        double md = MaxDiff(live, frozen);
+        Check(fe.IsTrackFrozen(ft) && Rms(live, N) > 1e-3f && md < 1e-5, $"Nota Consort freeze == live render (maxdiff {md:G3})");
+    }
+    // Automation drives the cutoff and a cable's depth.
+    {
+        int ta = ce.AddConsortTrack();
+        foreach (var id in new[] { "cutoff", "c1amt" })
+        {
+            int fi = CI(ce, ta, id);
+            ce.PluginParamSet(ta, -1, fi, 0.1f);
+            int lane = ce.AddPluginAutomationLane(ta, -1, id);
+            ce.SetAutomationPoints(ta, lane, new[] { new AutomationPoint(0.0, 0.1f, 0f), new AutomationPoint(2.0, 0.9f, 0f) });
+            var abuf = new float[4096 * 2];
+            ce.Seek(1.99); ce.Play(); ce.RenderOffline(abuf, 4096); ce.StopTransport();
+            Check(lane >= 0 && ce.PluginParamGet(ta, -1, fi) > 0.7f, $"automation drives Consort {id} ({ce.PluginParamGet(ta, -1, fi):F2})");
+        }
+    }
+    // Stress: 16-voice true poly, ×4 oversampling, resonance and four cables in real time.
+    {
+        using var se = new NotaEngine(); se.SetBpm(120);
+        int ta = se.AddConsortTrack();
+        CS(se, ta, "truepoly", 1f); CS(se, ta, "oversample", 1f); CS(se, ta, "reso", 1f); CS(se, ta, "dlymix", 0.5f);
+        for (int k = 1; k <= 4; k++) Cable(se, ta, k, k, 3 + k, 0.4f);
+        se.AddMidiClip(ta, 0, 16);
+        var ns = new NotaNote[16]; for (int i = 0; i < 16; i++) ns[i] = new NotaNote(36 + i * 3, 0, 16, 1f);
+        se.SetClipNotes(ta, 0, ns);
+        var blk = new float[128 * 2]; se.Seek(0); se.Play();
+        for (int i = 0; i < 50; i++) se.RenderOffline(blk, 128);
+        var sw = System.Diagnostics.Stopwatch.StartNew(); const int blocks = 1000;
+        for (int i = 0; i < blocks; i++) se.RenderOffline(blk, 128);
+        sw.Stop();
+        double budget = 128 / 44.1, avg = sw.Elapsed.TotalMilliseconds / blocks;
+        Check(se.InstrumentVoiceCount(ta) == 16 && avg < budget * 0.5, $"Nota Consort stress: 16 voices ×4 OS avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        se.StopTransport();
+    }
+    // Factory presets: every named param is a real Consort id, each applies in place and sounds.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 15).ToList();
+        Check(mine.Count == 28, $"Nota Consort ships 28 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !cids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Consort preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int ta = ce.AddConsortTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(ce, p.Id, ta, -1).Length != 0);
+        Check(fails == 0, $"every Consort preset applies in place ({fails} failed)");
+        var quiet = new List<string>();
+        foreach (var p in mine)
+        {
+            var b = Play((e, tr) => cat.ApplyInPlace(e, p.Id, tr, -1), new[] { new NotaNote(48, 0, 2, 0.9f), new NotaNote(55, 0, 2, 0.9f), new NotaNote(60, 0, 2, 0.9f) }, 44100);
+            float r = Rms(b, 44100), pk = b.Max(Math.Abs);
+            if (!b.All(float.IsFinite) || r < 0.005f || pk > 2f) quiet.Add($"{p.DisplayName} ({r:F3}/{pk:F2})");
+        }
+        Check(quiet.Count == 0, $"every Consort preset sounds a held chord, finite and not clipping hard{(quiet.Count > 0 ? " — " + string.Join(", ", quiet) : "")}");
+    }
+    // MCP: add by kind 15.
+    {
+        var mcp = new Nota.Mcp.Tools.InstrumentTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        int mt = mcp.AddInstrumentTrack(15).Result;
+        Check(mt > 0 && ce.TrackInstrumentKind(mt) == 15, "MCP add_instrument_track(15) adds a Nota Consort");
+        Check(mcp.ListInstrumentKinds().Any(k => k.Kind == 15 && k.Name == "Nota Consort"), "MCP list_instrument_kinds includes Nota Consort");
+        Check(mcp.SetInstrumentParamById(mt, "c1amt", 0.3f).Result && Math.Abs(ce.PluginParamGet(mt, -1, CI(ce, mt, "c1amt")) - 0.3f) < 1e-4, "MCP set_instrument_param_by_id sets a Consort cable depth");
+    }
+}
+
 static void Fft(double[] re, double[] im)
 {
     int n = re.Length;

@@ -19,7 +19,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         (0, "Nota Synth"), (1, "Nota Sampler"), (2, "Nota Physical"), (3, "Instrument Rack"),
         (4, "Drum Rack"), (5, "Nota Aurora"), (6, "Nota Volt"), (7, "Nota Bass"),
         (8, "Nota Pendulum"), (9, "Nota Operator"), (10, "Nota Grain"), (11, "Nota Flux"),
-        (12, "Nota Rhythm"), (13, "Nota Monolith"), (14, "Nota Pentad"),
+        (12, "Nota Rhythm"), (13, "Nota Monolith"), (14, "Nota Pentad"), (15, "Nota Consort"),
     };
 
     public sealed record InstrumentKind(int Kind, string Name);
@@ -29,7 +29,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     public InstrumentKind[] ListInstrumentKinds() => Array.ConvertAll(Kinds, k => new InstrumentKind(k.Kind, k.Name));
 
     [McpServerTool(Name = "add_instrument_track"), Description("Add an instrument track with the given built-in kind (see list_instrument_kinds). Returns the track id.")]
-    public Task<int> AddInstrumentTrack([Description("Instrument kind id (0..14)")] int kind) => Mutate(() => kind switch
+    public Task<int> AddInstrumentTrack([Description("Instrument kind id (0..15)")] int kind) => Mutate(() => kind switch
     {
         1 => E.AddSamplerInstrumentTrack(),
         2 => E.AddPhysicalSynthTrack(),
@@ -45,6 +45,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         12 => E.AddRhythmTrack(),
         13 => E.AddMonolithTrack(),
         14 => E.AddPentadTrack(),
+        15 => E.AddConsortTrack(),
         _ => E.AddInstrumentTrack(),   // 0 = Nota Synth
     });
 

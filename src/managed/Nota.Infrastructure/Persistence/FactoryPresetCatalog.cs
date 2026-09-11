@@ -261,6 +261,95 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("pentad", 14, "Random Computer", ("oasaw", 0f), ("oapulse", 1f), ("lfotri", 0f), ("lfosaw", 1f), ("lfosquare", 1f), ("lforate", 0.75f), ("lfoamt", 0.8f), ("wmfilter", 1f), ("cutoff", 0.6f), ("reso", 0.5f));
         Inst("pentad", 14, "Dive Bomb",       ("oasync", 1f), ("pmenv", 1f), ("pmfreqa", 1f), ("mixb", 0f), ("fattack", 0.8f), ("fdecay", 0.85f), ("fsustain", 0f), ("cutoff", 0.6f), ("reso", 0.3f), ("glide", 0.8f), ("glidemode", 0.5f));
 
+        // ---- Nota Consort (kind 15) — paraphonic semi-modular. Octave 32'/16'/8'/4'/2' =
+        //      0/.25/.5/.75/1; freq .5 = 0 (±7 st); wave tri/saw/square/pulse = 0/.333/.667/1;
+        //      voice mode Mono/Duo/Para = 0/.5/1 (+ truepoly); filter HP/LP ser, LP/LP st, HP/LP st
+        //      = 0/.5/1; cutoff v = log10(Hz/20)/3; spacing .5 + oct/6; env amount .5 + d/20.
+        //      ConsortSeq(types, pitches) writes the 16 steps ('n' note, 'r' ratchet, 't' tie,
+        //      '.' rest); Cab(slot, source, dest, depth) patches a cable (jack indices, Consort.h).
+        // Paraphonic
+        Inst("consort", 15, "Stereo Consort", Cat(P(("o2freq", 0.505f), ("o3oct", 0.25f), ("o3wave", 0.667f), ("o4oct", 0.75f), ("o4wave", 1f), ("pw", 0.42f),
+            ("mix1", 0.88f), ("mix2", 0.74f), ("mix3", 0.64f), ("mix4", 0.5f), ("filtmode", 0.5f), ("cutoff", 0.497f), ("reso", 0.35f), ("spacing", 0.667f), ("fenvamt", 0.72f),
+            ("fattack", 0.25f), ("fdecay", 0.6f), ("fsustain", 0.46f), ("frelease", 0.6f), ("aattack", 0.3f), ("adecay", 0.68f), ("asustain", 0.72f), ("arelease", 0.66f),
+            ("drift", 0.34f), ("glide", 0.519f), ("glidetype", 1f), ("lfopitch", 0.546f), ("lforate", 0.6f), ("lfodest", 1f),
+            ("dlymix", 0.3f), ("dlyfb", 0.5f), ("dlytime", 0.678f), ("dlyspacing", 0.63f), ("dlyping", 1f))));
+        Inst("consort", 15, "Para Strings", ("o2freq", 0.507f), ("o3freq", 0.493f), ("o4freq", 0.511f), ("filtmode", 0.5f), ("cutoff", 0.56f), ("reso", 0.1f), ("spacing", 0.583f),
+            ("fenvamt", 0.62f), ("fattack", 0.7f), ("fdecay", 0.75f), ("fsustain", 0.6f), ("frelease", 0.75f), ("aattack", 0.72f), ("adecay", 0.7f), ("asustain", 0.9f), ("arelease", 0.78f),
+            ("drift", 0.45f), ("lforate", 0.36f), ("lfopitch", 0.54f), ("dlymix", 0.22f), ("dlydigital", 1f), ("dlyping", 0f), ("dlytime", 0.72f), ("dlyfb", 0.35f));
+        Inst("consort", 15, "Glass Chords", ("o1wave", 0f), ("o2wave", 1f), ("o2oct", 0.75f), ("o3wave", 0f), ("o4wave", 1f), ("pw", 0.6f), ("filtmode", 1f), ("cutoff", 0.46f),
+            ("spacing", 0.833f), ("reso", 0.25f), ("fenvamt", 0.75f), ("fattack", 0f), ("fdecay", 0.55f), ("fsustain", 0.2f), ("frelease", 0.6f),
+            ("aattack", 0f), ("adecay", 0.7f), ("asustain", 0.3f), ("arelease", 0.7f), ("lfopwm", 0.3f), ("lforate", 0.45f), ("dlymix", 0.35f), ("dlyfb", 0.45f), ("dlytime", 0.585f));
+        Inst("consort", 15, "Consort Brass", ("o2freq", 0.509f), ("o3freq", 0.491f), ("o4freq", 0.505f), ("cutoff", 0.42f), ("reso", 0.15f), ("fenvamt", 0.78f),
+            ("fattack", 0.55f), ("fdecay", 0.6f), ("fsustain", 0.5f), ("frelease", 0.5f), ("aattack", 0.45f), ("asustain", 0.9f), ("arelease", 0.5f),
+            ("mixdrive", 1f), ("spacing", 0.55f), ("drift", 0.3f));
+        Inst("consort", 15, "Spread Voicing", ("o1oct", 0.25f), ("o4oct", 0.75f), ("o3wave", 0.667f), ("cutoff", 0.6f), ("fenvamt", 0.62f), ("fdecay", 0.62f), ("fsustain", 0.45f),
+            ("aattack", 0.2f), ("adecay", 0.7f), ("asustain", 0.8f), ("arelease", 0.62f), ("dlymix", 0.25f), ("drift", 0.3f));
+        Inst("consort", 15, "Duo Fifths", ("voicemode", 0.5f), ("o2freq", 1f), ("o4freq", 1f), ("cutoff", 0.62f), ("reso", 0.3f), ("fenvamt", 0.68f), ("fdecay", 0.55f), ("fsustain", 0.45f),
+            ("glide", 0.434f), ("glidetype", 1f), ("dlymix", 0.28f), ("dlytime", 0.627f));
+        Inst("consort", 15, "Duo Sync Pad", Cat(P(("voicemode", 0.5f), ("o2sync", 1f), ("o2freq", 0.893f), ("o4freq", 0.505f), ("mix1", 0.5f), ("mix2", 0.85f), ("mix3", 0.7f), ("mix4", 0.6f),
+            ("cutoff", 0.58f), ("reso", 0.2f), ("fenvamt", 0.6f), ("aattack", 0.62f), ("asustain", 0.9f), ("arelease", 0.72f), ("lfowave", 0f), ("lforate", 0.25f), ("dlymix", 0.3f)),
+            Cab(1, 1, 6, 0.3f)));
+        // True poly
+        Inst("consort", 15, "Poly Pad", ("truepoly", 1f), ("o2freq", 0.507f), ("o3oct", 0.25f), ("o3wave", 0.667f), ("o4oct", 0.75f), ("o4wave", 0f), ("mix3", 0.55f), ("mix4", 0.45f),
+            ("cutoff", 0.5f), ("fenvamt", 0.64f), ("fattack", 0.6f), ("fdecay", 0.7f), ("fsustain", 0.55f), ("frelease", 0.7f), ("aattack", 0.7f), ("asustain", 0.9f), ("arelease", 0.8f),
+            ("lfocut", 0.25f), ("lforate", 0.3f), ("drift", 0.4f), ("dlymix", 0.2f));
+        Inst("consort", 15, "Poly Keys", ("truepoly", 1f), ("o1wave", 1f), ("o3wave", 1f), ("o3oct", 0.25f), ("mix3", 0.5f), ("mix4", 0.4f), ("pw", 0.5f), ("cutoff", 0.55f), ("fenvamt", 0.75f),
+            ("fdecay", 0.55f), ("fsustain", 0.25f), ("aattack", 0.1f), ("adecay", 0.65f), ("asustain", 0.5f), ("arelease", 0.55f), ("velvca", 1f), ("dlymix", 0.25f));
+        // Mono
+        Inst("consort", 15, "Ladder Bass", ("voicemode", 0f), ("unison", 0f), ("o1oct", 0.25f), ("o2oct", 0.25f), ("o2freq", 0.507f), ("o3oct", 0f), ("o3wave", 0.667f), ("mix1", 0.9f), ("mix2", 0.8f),
+            ("mix3", 0.6f), ("mix4", 0f), ("cutoff", 0.36f), ("reso", 0.3f), ("fenvamt", 0.72f), ("fdecay", 0.5f), ("fsustain", 0.2f), ("frelease", 0.4f),
+            ("adecay", 0.55f), ("asustain", 0.8f), ("arelease", 0.35f), ("mixdrive", 1f), ("spacing", 0.5f));
+        Inst("consort", 15, "Deep Sub", ("voicemode", 0f), ("unison", 0f), ("o1oct", 0.25f), ("o1wave", 0f), ("o2oct", 0f), ("o2wave", 0.667f), ("mix1", 0.9f), ("mix2", 0.6f), ("mix3", 0f), ("mix4", 0f),
+            ("cutoff", 0.3f), ("reso", 0.1f), ("fenvamt", 0.6f), ("fdecay", 0.45f), ("fsustain", 0.3f), ("basscomp", 1f), ("spacing", 0.5f), ("arelease", 0.3f));
+        Inst("consort", 15, "Unison Lead", ("voicemode", 0f), ("unison", 1f), ("drift", 0.45f), ("o4oct", 0.75f), ("cutoff", 0.62f), ("reso", 0.35f), ("fenvamt", 0.65f), ("fdecay", 0.55f),
+            ("fsustain", 0.5f), ("glide", 0.36f), ("glidetype", 0.5f), ("glidegated", 1f), ("lfopitch", 0.565f), ("lforate", 0.64f), ("dlymix", 0.3f), ("dlytime", 0.627f));
+        Inst("consort", 15, "Sync Lead", Cat(P(("voicemode", 0f), ("unison", 0f), ("o2sync", 1f), ("o2freq", 0.857f), ("mix1", 0.4f), ("mix2", 0.9f), ("mix3", 0f), ("mix4", 0f),
+            ("cutoff", 0.7f), ("fenvamt", 0.62f), ("fdecay", 0.55f), ("fsustain", 0.25f), ("glide", 0.3f), ("dlymix", 0.25f)),
+            Cab(1, 2, 6, 0.35f)));
+        Inst("consort", 15, "Feedback Growl", ("voicemode", 0f), ("unison", 0f), ("o1oct", 0.25f), ("o2oct", 0.25f), ("o2freq", 0.505f), ("mix3", 0f), ("mix4", 0f), ("mixext", 0.6f),
+            ("mixdrive", 1f), ("cutoff", 0.42f), ("reso", 0.45f), ("fenvamt", 0.7f), ("fdecay", 0.45f), ("fsustain", 0.35f), ("spacing", 0.55f));
+        Inst("consort", 15, "Ladder Whistle", ("voicemode", 0f), ("unison", 0f), ("mix1", 0f), ("mix2", 0f), ("mix3", 0f), ("mix4", 0f), ("mixnoise", 0.02f), ("reso", 1f), ("kbdtrk", 1f),
+            ("cutoff", 0.55f), ("fenvamt", 0.5f), ("spacing", 0.667f), ("glide", 0.36f), ("lfocut", 0.12f), ("lforate", 0.7f), ("aattack", 0.3f), ("arelease", 0.5f));
+        Inst("consort", 15, "Wheel Wah", Cat(P(("voicemode", 0f), ("cutoff", 0.35f), ("reso", 0.6f), ("fenvamt", 0.55f), ("glide", 0.3f), ("modwheel", 0.4f)),
+            Cab(1, 17, 10, 0.8f), Cab(2, 17, 11, 0.6f), Cab(3, 16, 4, 0.1f)));
+        // Sequencer / arpeggiator
+        Inst("consort", 15, "Ratchet Run", Cat(P(("seqmode", 0.5f), ("seqrate", 0.6f), ("seqswing", 0.24f), ("cutoff", 0.5f), ("reso", 0.4f), ("fenvamt", 0.72f), ("fdecay", 0.45f),
+            ("fsustain", 0.15f), ("adecay", 0.5f), ("asustain", 0.3f), ("arelease", 0.35f), ("dlymix", 0.3f), ("dlyfb", 0.45f)),
+            ConsortSeq("n.nrnt.nn.rnnt.n", 0, 0, 5, -2, 7, 7, 0, 10, 12, 0, -2, 5, 7, 7, 0, 3)));
+        Inst("consort", 15, "Acid Run", Cat(P(("voicemode", 0f), ("unison", 0f), ("seqmode", 0.5f), ("seqrate", 0.6f), ("seqswing", 0.2f), ("o1oct", 0.25f), ("mix1", 0.9f), ("mix2", 0f),
+            ("mix3", 0f), ("mix4", 0f), ("cutoff", 0.38f), ("reso", 0.82f), ("fenvamt", 0.82f), ("fdecay", 0.45f), ("fsustain", 0.05f), ("adecay", 0.5f), ("asustain", 0.6f),
+            ("glide", 0.3f), ("glidetype", 0.5f), ("glidegated", 1f), ("mixdrive", 1f), ("spacing", 0.5f), ("dlymix", 0.2f)),
+            ConsortSeq("nntnrn.nntn.nrtn", 0, 0, 0, 12, 0, 3, 0, -2, 0, 0, 10, 0, 7, 12, 12, 0)));
+        Inst("consort", 15, "Arp Cascade", ("seqmode", 1f), ("arpoct", 0.5f), ("seqrate", 0.6f), ("o1wave", 0f), ("o3wave", 0f), ("cutoff", 0.6f), ("fenvamt", 0.7f), ("fdecay", 0.42f),
+            ("fsustain", 0.1f), ("adecay", 0.45f), ("asustain", 0.2f), ("arelease", 0.45f), ("dlymix", 0.38f), ("dlyfb", 0.55f), ("dlyping", 1f));
+        Inst("consort", 15, "Random Arp", ("seqmode", 1f), ("seqorder", 1f), ("arpoct", 1f), ("seqrate", 0.8f), ("lfowave", 0.8f), ("lfosync", 1f), ("lforate", 0.846f), ("lfocut", 0.45f),
+            ("cutoff", 0.5f), ("reso", 0.35f), ("fdecay", 0.4f), ("fsustain", 0.1f), ("adecay", 0.42f), ("asustain", 0.15f), ("dlymix", 0.35f), ("dlydigital", 1f));
+        Inst("consort", 15, "Latch Sequence", Cat(P(("seqmode", 0.5f), ("seqlatch", 1f), ("seqrate", 0.2f), ("seqlen", 0.733f), ("cutoff", 0.52f), ("fenvamt", 0.62f), ("fattack", 0.3f),
+            ("fdecay", 0.6f), ("aattack", 0.3f), ("adecay", 0.65f), ("asustain", 0.5f), ("arelease", 0.6f), ("dlymix", 0.3f), ("drift", 0.4f)),
+            ConsortSeq("ntn.nrntn.nt....", 0, 0, 7, 0, 3, 5, 10, 10, 12, 0, 7, 7, 0, 0, 0, 0)));
+        // Modular (patch bay)
+        Inst("consort", 15, "Patched Drift", Cat(P(("lfowave", 1f), ("lforate", 0.36f), ("drift", 0.6f), ("cutoff", 0.52f), ("fenvamt", 0.62f), ("aattack", 0.4f), ("adecay", 0.7f),
+            ("asustain", 0.8f), ("arelease", 0.7f), ("dlymix", 0.35f), ("dlyfb", 0.5f)),
+            Cab(1, 1, 7, 0.14f), Cab(2, 2, 16, 0.38f), Cab(3, 6, 14, 0.48f)));
+        Inst("consort", 15, "Ring Bells", Cat(P(("truepoly", 1f), ("o1wave", 0f), ("o3wave", 0f), ("o3oct", 0.75f), ("o3freq", 0.736f), ("mix1", 0.9f), ("mix2", 0f), ("mix3", 0f), ("mix4", 0f),
+            ("cutoff", 0.8f), ("fenvamt", 0.5f), ("adecay", 0.7f), ("asustain", 0f), ("arelease", 0.7f), ("dlymix", 0.3f)),
+            Cab(1, 6, 14, 0.95f)));
+        Inst("consort", 15, "FM Growl", Cat(P(("voicemode", 0f), ("unison", 0f), ("o1oct", 0.25f), ("o4oct", 0.25f), ("mix2", 0f), ("mix3", 0f), ("mix4", 0f), ("cutoff", 0.45f), ("reso", 0.3f),
+            ("fenvamt", 0.7f), ("fdecay", 0.5f), ("fsustain", 0.3f), ("mixdrive", 1f)),
+            Cab(1, 7, 5, 0.28f)));
+        Inst("consort", 15, "Trance Gate", Cat(P(("lfowave", 0.6f), ("lfosync", 1f), ("lforate", 0.846f), ("cutoff", 0.55f), ("fenvamt", 0.6f), ("aattack", 0.2f), ("adecay", 0.45f),
+            ("asustain", 0.6f), ("arelease", 0.3f), ("dlymix", 0.3f)),
+            Cab(1, 1, 3, 1f)));
+        Inst("consort", 15, "Wind Noise", Cat(P(("reso", 0.85f), ("kbdtrk", 1f), ("lfowave", 1f), ("lforate", 0.3f), ("lfocut", 0.55f), ("aattack", 0.6f), ("arelease", 0.75f),
+            ("cutoff", 0.5f), ("fenvamt", 0.5f), ("spacing", 0.667f), ("dlymix", 0.3f)),
+            Cab(1, 8, 13, 1f)));
+        Inst("consort", 15, "Touch Stereo", Cat(P(("truepoly", 1f), ("velvca", 1f), ("spacing", 0.5f), ("cutoff", 0.35f), ("fenvamt", 0.6f), ("fdecay", 0.5f), ("fsustain", 0.2f),
+            ("adecay", 0.6f), ("asustain", 0.4f), ("arelease", 0.5f)),
+            Cab(1, 13, 11, 1f), Cab(2, 15, 10, 0.7f)));
+        Inst("consort", 15, "Delay Warp", Cat(P(("lfowave", 0f), ("lforate", 0.28f), ("dlymix", 0.5f), ("dlyfb", 0.7f), ("dlytime", 0.72f), ("cutoff", 0.58f), ("fenvamt", 0.7f),
+            ("fdecay", 0.5f), ("fsustain", 0.15f), ("adecay", 0.55f), ("asustain", 0.3f)),
+            Cab(1, 1, 16, 0.4f)));
+
         // ---- EQ-8 (kind 0) — 8 bands × (On/Type/Freq/Gain/Q), param names "<band> <field>",
         //      band 1 = low shelf, 2/3 = bells, 4 = high shelf (defaults). Type: 0 LowCut,
         //      1 LowShelf, 2 Bell, 3 Notch, 4 HighShelf, 5 HighCut.
@@ -580,6 +669,28 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         => _byId.TryGetValue(id, out var doc)
             ? PresetService.ApplyInPlace(doc, engine, trackId, deviceIndex)
             : "Unknown factory preset.";
+
+    // Nota Consort preset helpers (see the Consort block above).
+    private static (string, float)[] P(params (string, float)[] ps) => ps;
+    private static (string, float)[] Cat(params (string, float)[][] parts)
+    {
+        var l = new List<(string, float)>();
+        foreach (var p in parts) l.AddRange(p);
+        return l.ToArray();
+    }
+    private static (string, float)[] ConsortSeq(string types, params int[] pitches)
+    {
+        var l = new List<(string, float)>();
+        for (int s = 0; s < 16; s++)
+        {
+            char c = s < types.Length ? types[s] : 'n';
+            l.Add(($"st{s + 1}", c switch { 'r' => 1f / 3f, 't' => 2f / 3f, '.' => 1f, _ => 0f }));
+            l.Add(($"sp{s + 1}", 0.5f + (s < pitches.Length ? pitches[s] : 0) / 48f));
+        }
+        return l.ToArray();
+    }
+    private static (string, float)[] Cab(int slot, int src, int dst, float depth)
+        => new[] { ($"c{slot}src", src / 63f), ($"c{slot}dst", dst / 63f), ($"c{slot}amt", 0.5f + depth / 2f) };
 
     private void Inst(string group, int kind, string name, params (string Id, float Value)[] ps)
         => Add(group, name, "builtin-instrument", kind, isInstrument: true, isMidi: false, ps);

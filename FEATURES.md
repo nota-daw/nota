@@ -218,6 +218,13 @@ and user presets, automation, persistence and cloning.
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
   exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+- **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
+  pulse, sync 2→1 and 4→3), a mixer with noise, drive and a feedback-normalled EXT input, dual
+  ladder filters (HP→LP series, LP/LP or HP/LP parallel stereo with spacing), two ADSRs,
+  MONO / DUO / PARA paraphony or 16-voice true poly, per-oscillator glide (LCR / LCT / EXP),
+  a six-shape LFO, a stereo bucket-brigade delay, a 16-step sequencer / arpeggiator with
+  ratchets and ties, and a 12-cable patch bay over 42 points (matrix, jack strip or full-card
+  overlay). Cables are parameters: saved, preset-able and automatable. 28 factory presets.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric.
