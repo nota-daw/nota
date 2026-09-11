@@ -347,6 +347,62 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("chamber", 20, "Send · Big Hall",   ("IR", 0f), ("Blend", 0.5f), ("Wet Only", 1f), ("Conv Predelay", 0.2f), ("Algo Decay", 0.65f), ("EQ Low Cut", 0.437f), ("EQ High Cut", 0.8f), ("Bass Mono", 0.548f));
         Fx("chamber", 20, "Send · Plate",      ("IR", 0.5f), ("Blend", 0.5f), ("Wet Only", 1f), ("Algo Mode", 0.333f), ("Algo Decay", 0.5f), ("Conv Predelay", 0.2f), ("Algo Predelay", 0.2f), ("EQ Low Cut", 0.5f));
 
+        // ---- Nota Prism (kind 21) — three-band dynamics, all params normalized 0..1 (unnamed params
+        //      reset to their defaults: every band compresses −18 dB 2:1). Bands 0 = 3 / .5 = 2 / 1 = 1;
+        //      Crossover 20·1000^v Hz (180 Hz .318, 2.4 kHz .693); Above Thresh −60+60·v dB; Above Ratio
+        //      = 1 − 1/ratio (.5 = 2:1, .75 = 4:1, 1 = ∞:1, 0 = off); Below Thresh −80+80·v dB; Below Ratio
+        //      4^((v−.5)·2) (.5 = 1:1, .75 = 2:1 expansion, .25 = 2:1 upward); Attack 0.1·3000^v ms;
+        //      Release 5·600^v ms; Gain / Output (v−.5)·48 dB; Floor v·48 dB; Knee v·24 dB; Lookahead v·10 ms.
+        Fx("prism", 21, "Bus Glue",           ("Amount", 0.74f), ("Output", 0.525f), ("Soft Clip", 1f),
+                                              ("Low Above Thresh", 0.767f), ("Low Above Ratio", 0.667f), ("Low Gain", 0.529f),
+                                              ("Mid Below On", 1f), ("Mid Below Thresh", 0.475f), ("Mid Below Ratio", 0.6214f),
+                                              ("High Above Thresh", 0.6f), ("High Above Ratio", 0.75f), ("High Gain", 0.483f));
+        Fx("prism", 21, "Upward Squash",      ("Amount", 0.8f), ("Mix", 0.65f), ("Output", 0.4375f), ("Soft Clip", 1f),
+                                              ("Low Above Thresh", 0.533f), ("Low Above Ratio", 0.9f), ("Low Attack", 0.4248f), ("Low Release", 0.4334f), ("Low Gain", 0.5625f),
+                                              ("Low Below On", 1f), ("Low Below Ratio", 0f), ("Low Below Attack", 0.4248f), ("Low Below Release", 0.4334f), ("Low Floor", 0.75f),
+                                              ("Mid Above Thresh", 0.533f), ("Mid Above Ratio", 0.9f), ("Mid Attack", 0.4248f), ("Mid Release", 0.4334f),
+                                              ("Mid Below On", 1f), ("Mid Below Ratio", 0f), ("Mid Below Attack", 0.4248f), ("Mid Below Release", 0.4334f), ("Mid Floor", 0.75f),
+                                              ("High Above Thresh", 0.533f), ("High Above Ratio", 0.9f), ("High Attack", 0.4248f), ("High Release", 0.4334f), ("High Gain", 0.5625f),
+                                              ("High Below On", 1f), ("High Below Ratio", 0f), ("High Below Attack", 0.4248f), ("High Below Release", 0.4334f), ("High Floor", 0.75f));
+        Fx("prism", 21, "Vocal Control",      ("Amount", 0.8f), ("Detect", 1f), ("Lookahead", 0.3f), ("Output", 0.55f), ("Auto Makeup", 1f),
+                                              ("Crossover Low", 0.2917f), ("Crossover High", 0.7993f),
+                                              ("Low Above Thresh", 0.6f), ("Low Above Ratio", 0.75f), ("Low Attack", 0.7038f), ("Low Release", 0.6596f), ("Low Auto Release", 1f), ("Low Gain", 0.479f),
+                                              ("Mid Above Thresh", 0.667f), ("Mid Attack", 0.5752f), ("Mid Release", 0.6052f),
+                                              ("High Above Thresh", 0.5f), ("High Above Ratio", 0.667f), ("High Attack", 0.4248f), ("High Release", 0.4968f), ("High Auto Release", 1f));
+        Fx("prism", 21, "De-Esser",           ("Crossover Low", 0.534f), ("Crossover High", 0.8257f), ("Lookahead", 0.2f),
+                                              ("Low Above Ratio", 0f), ("Mid Above Ratio", 0f),
+                                              ("High Above Thresh", 0.5f), ("High Above Ratio", 0.833f), ("High Attack", 0.2876f), ("High Release", 0.36f), ("High Knee", 0.125f));
+        Fx("prism", 21, "Low-End Tamer",      ("Crossover Low", 0.2594f), ("Crossover High", 0.699f),
+                                              ("Low Above Thresh", 0.6f), ("Low Above Ratio", 0.75f), ("Low Attack", 0.6618f), ("Low Release", 0.5317f),
+                                              ("Mid Above Ratio", 0f), ("High Above Ratio", 0f));
+        Fx("prism", 21, "Drum Punch",         ("Crossover Low", 0.3333f), ("Crossover High", 0.7253f), ("Output", 0.52f),
+                                              ("Low Above Thresh", 0.8f), ("Low Attack", 0.7124f), ("Low Release", 0.4683f), ("Low Gain", 0.5417f),
+                                              ("Low Below On", 1f), ("Low Below Thresh", 0.5625f), ("Low Below Ratio", 0.75f), ("Low Floor", 0.25f),
+                                              ("Mid Above Thresh", 0.8f), ("Mid Attack", 0.6618f), ("Mid Release", 0.4334f),
+                                              ("Mid Below On", 1f), ("Mid Below Thresh", 0.5625f), ("Mid Below Ratio", 0.75f), ("Mid Floor", 0.25f),
+                                              ("High Above Thresh", 0.8f), ("High Attack", 0.5752f), ("High Release", 0.36f),
+                                              ("High Below On", 1f), ("High Below Thresh", 0.5f), ("High Below Ratio", 0.75f), ("High Floor", 0.25f));
+        Fx("prism", 21, "Gentle Master",      ("Lookahead", 0.5f), ("Soft Clip", 1f), ("Crossover Low", 0.3333f), ("Crossover High", 0.7253f),
+                                              ("Low Above Thresh", 0.667f), ("Low Above Ratio", 0.333f), ("Low Attack", 0.7124f), ("Low Release", 0.6401f), ("Low Knee", 0.5f), ("Low Auto Release", 1f),
+                                              ("Mid Above Thresh", 0.667f), ("Mid Above Ratio", 0.333f), ("Mid Attack", 0.7124f), ("Mid Release", 0.6401f), ("Mid Knee", 0.5f), ("Mid Auto Release", 1f),
+                                              ("High Above Thresh", 0.667f), ("High Above Ratio", 0.333f), ("High Attack", 0.6618f), ("High Release", 0.5767f), ("High Knee", 0.5f), ("High Auto Release", 1f));
+        Fx("prism", 21, "Noise Floor Cleanup",("Low Above Ratio", 0f), ("Mid Above Ratio", 0f), ("High Above Ratio", 0f),
+                                              ("Low Below On", 1f), ("Low Below Thresh", 0.375f), ("Low Below Ratio", 0.8962f),
+                                              ("Mid Below On", 1f), ("Mid Below Thresh", 0.375f), ("Mid Below Ratio", 0.8962f),
+                                              ("High Below On", 1f), ("High Below Thresh", 0.4375f), ("High Below Ratio", 0.8962f), ("High Floor", 0.625f));
+        Fx("prism", 21, "Air Lift",           ("Crossover High", 0.8257f), ("Low Above Ratio", 0f), ("Mid Above Ratio", 0f),
+                                              ("High Above Thresh", 0.6f), ("High Above Ratio", 0.5f), ("High Gain", 0.5417f),
+                                              ("High Below On", 1f), ("High Below Thresh", 0.4375f), ("High Below Ratio", 0.25f), ("High Floor", 0.25f));
+        Fx("prism", 21, "Two-Band Bass",      ("Bands", 0.5f), ("Crossover Low", 0.3333f), ("Detect", 1f),
+                                              ("Low Above Thresh", 0.667f), ("Low Above Ratio", 0.75f), ("Low Attack", 0.6618f), ("Low Release", 0.5767f),
+                                              ("Mid Above Thresh", 0.6f), ("Mid Attack", 0.4886f), ("Mid Release", 0.4683f));
+        Fx("prism", 21, "Single-Band Leveler",("Bands", 1f), ("Detect", 1f), ("Auto Makeup", 1f),
+                                              ("Mid Above Thresh", 0.6f), ("Mid Above Ratio", 0.667f), ("Mid Attack", 0.7124f), ("Mid Release", 0.6401f), ("Mid Auto Release", 1f), ("Mid Knee", 0.5f));
+        Fx("prism", 21, "Parallel Crush",     ("Mix", 0.4f), ("Output", 0.54f),
+                                              ("Low Above Thresh", 0.5f), ("Low Above Ratio", 0.9f), ("Low Attack", 0.4248f), ("Low Release", 0.4334f), ("Low Gain", 0.625f),
+                                              ("Mid Above Thresh", 0.5f), ("Mid Above Ratio", 0.9f), ("Mid Attack", 0.4248f), ("Mid Release", 0.4334f), ("Mid Gain", 0.625f),
+                                              ("High Above Thresh", 0.5f), ("High Above Ratio", 0.9f), ("High Attack", 0.4248f), ("High Release", 0.4334f), ("High Gain", 0.625f));
+
         // ---- Compressor (kind 1) — Thresh -60..0, Ratio 1..20, Attack .1..100 ms, Release 5..1000 ms, Makeup 0..24 dB
         // Character: Clean 0 / Glue 1 / Punch 2 / Opto 3 / FET 4.
         Fx("comp", 1, "Drum Glue",   ("Character", 1f), ("Thresh", -18f), ("Ratio", 3f),  ("Attack", 30f),  ("Release", 200f), ("Knee", 8f),  ("AutoGain", 1f), ("Mix", 100f));

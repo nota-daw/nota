@@ -2673,6 +2673,216 @@ Console.WriteLine("-- Nota Chamber --");
     }
 }
 
+// ============================ Nota Prism ===================================
+Console.WriteLine("-- Nota Prism --");
+{
+    // Prism = three-band dynamics (kind 21). Own engines (it changes level). The input is a
+    // deterministic clip — one steady sine per band (80 Hz / 800 Hz / 6 kHz) — so renders
+    // compare exactly; a loud copy drives compression, a quiet one expansion / upward.
+    const int Amount = 0, Bands = 2, Lookahead = 6, Solo = 10, Mix = 12, G = 13, PB = 13;
+    const int AboveThresh = 0, AboveRatio = 1, BelowOn = 5, BelowThresh = 6, BelowRatio = 7, Floor = 10;
+    string loudWav = Path.Combine(Path.GetTempPath(), "nota_prism_loud_" + Guid.NewGuid().ToString("N") + ".wav");
+    string quietWav = Path.Combine(Path.GetTempPath(), "nota_prism_quiet_" + Guid.NewGuid().ToString("N") + ".wav");
+    double[] tones = { 80, 800, 6000 };
+    Nota.SmokeTest.WavWriter.WriteTones(loudWav, 4.0, tones, 0.25, 44100);
+    Nota.SmokeTest.WavWriter.WriteTones(quietWav, 4.0, tones, 0.003, 44100);
+    (NotaEngine e, int t, int d) Make(string wav)
+    {
+        var e = new NotaEngine();
+        e.SetBpm(120); e.SetTimeSignature(4, 4);
+        int t = e.AddAudioTrack();
+        e.AddAudioClip(t, wav, startBeat: 0.0);
+        return (e, t, e.AddBuiltinDevice(t, 21));
+    }
+    var (pe, pt, pd) = Make(loudWav);
+    var (qe, qt, qd) = Make(quietWav);
+    try
+    {
+        Check(pd >= 0, "add built-in Nota Prism");
+        Check(pe.DeviceName(pt, pd) == "Nota Prism", $"name is Nota Prism (got '{pe.DeviceName(pt, pd)}')");
+        Check(pe.TrackDeviceBuiltinKind(pt, pd) == 21, $"builtin kind is 21 (got {pe.TrackDeviceBuiltinKind(pt, pd)})");
+        int ppc = pe.DeviceParamCount(pt, pd);
+        Check(ppc == 52, $"Nota Prism exposes 52 params (got {ppc})");
+        var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pd, i)).ToList();
+        Check(pnames.Distinct().Count() == ppc && pnames.All(n => n.Length > 0), "Prism param names are unique and non-empty");
+        Check(pe.DeviceAcceptsSidechain(pt, pd), "Prism accepts a sidechain");
+        pe.DeviceSetParam(pt, pd, Amount, 0.42f);
+        Check(Math.Abs(pe.DeviceGetParam(pt, pd, Amount) - 0.42f) < 1e-4, "Prism param set/get round-trips");
+        pe.DeviceSetParam(pt, pd, Amount, 1f);
+
+        const int N = 8192;
+        var pb = new float[N * 2];
+        var psc = new float[32];
+        int P(int band, int f) => G + band * PB + f;
+        (bool fin, float rms) Render(NotaEngine e, int blocks = 4)
+        {
+            e.Seek(0); e.Play();
+            bool f = true; float r = 0;
+            for (int k = 0; k < blocks; k++)
+            {
+                e.RenderOffline(pb, N);
+                foreach (var s in pb) if (!float.IsFinite(s)) { f = false; break; }
+                r = Rms(pb, N);
+            }
+            e.StopTransport();
+            return (f, r);
+        }
+        void Neutral(NotaEngine e, int t, int d) { for (int b = 0; b < 3; b++) { e.DeviceSetParam(t, d, P(b, AboveRatio), 0f); e.DeviceSetParam(t, d, P(b, BelowOn), 0f); } }
+        void Defaults() { for (int i = 0; i < ppc; i++) pe.DeviceSetParam(pt, pd, i, pe.DeviceParamDefault(pt, pd, i)); }
+        static double DbRatio(float a, float b) => 20 * Math.Log10(a / Math.Max(1e-9f, b));
+
+        // Bypassed reference vs neutral settings: the LR4 split sums back flat.
+        pe.SetDeviceBypassed(pt, pd, true);
+        var rByp = Render(pe);
+        pe.SetDeviceBypassed(pt, pd, false);
+        Neutral(pe, pt, pd);
+        var rNeu = Render(pe);
+        Check(rNeu.fin && rByp.rms > 1e-2f && Math.Abs(DbRatio(rNeu.rms, rByp.rms)) < 0.2, $"neutral Prism sums flat ({DbRatio(rNeu.rms, rByp.rms):+0.00;-0.00} dB vs bypass)");
+
+        // Compression: a low threshold and a high ratio pull every band down; the scope reports GR.
+        for (int b = 0; b < 3; b++) { pe.DeviceSetParam(pt, pd, P(b, AboveThresh), 0.4f); pe.DeviceSetParam(pt, pd, P(b, AboveRatio), 0.8f); }
+        var rComp = Render(pe);
+        int pn = pe.DeviceScope(pt, pd, psc, psc.Length);
+        Check(pn == 20, $"Prism scope returns 20 values (got {pn})");
+        Check(rComp.fin && DbRatio(rComp.rms, rNeu.rms) < -6, $"compression lowers the level ({DbRatio(rComp.rms, rNeu.rms):0.0} dB)");
+        Check(psc[0] > 6f && psc[1] > 6f && psc[2] > 6f, $"every band reports gain reduction ({psc[0]:F1} / {psc[1]:F1} / {psc[2]:F1} dB)");
+        Check(pe.DeviceGainReduction(pt, pd) > 6f, $"shell GR meter follows ({pe.DeviceGainReduction(pt, pd):F1} dB)");
+        pe.DeviceSetParam(pt, pd, Amount, 0f);
+        var rAmt0 = Render(pe);
+        Check(Math.Abs(DbRatio(rAmt0.rms, rNeu.rms)) < 0.1, $"Amount 0 % leaves the signal unprocessed ({DbRatio(rAmt0.rms, rNeu.rms):+0.00;-0.00} dB)");
+        pe.DeviceSetParam(pt, pd, Amount, 1f);
+        pe.DeviceSetParam(pt, pd, Mix, 0f);
+        var rMix0 = Render(pe);
+        Check(Math.Abs(DbRatio(rMix0.rms, rNeu.rms)) < 0.1, $"Mix 0 % passes the dry band sum ({DbRatio(rMix0.rms, rNeu.rms):+0.00;-0.00} dB)");
+        pe.DeviceSetParam(pt, pd, Mix, 0.5f);
+        var rMix50 = Render(pe);
+        Check(rMix50.rms < rNeu.rms && rMix50.rms > rComp.rms, "Mix 50 % sits between dry and compressed");
+        pe.DeviceSetParam(pt, pd, Mix, 1f);
+
+        // Upward compression lifts a quiet signal (below −20 dB, ratio 1 : 4 upward, floor 24 dB);
+        // expansion (4 : 1) pushes it down.
+        Neutral(qe, qt, qd);
+        var rQuiet = Render(qe);
+        for (int b = 0; b < 3; b++)
+        {
+            qe.DeviceSetParam(qt, qd, P(b, BelowOn), 1f); qe.DeviceSetParam(qt, qd, P(b, BelowThresh), 0.75f);
+            qe.DeviceSetParam(qt, qd, P(b, BelowRatio), 0f); qe.DeviceSetParam(qt, qd, P(b, Floor), 0.5f);
+        }
+        var rUp = Render(qe);
+        qe.DeviceScope(qt, qd, psc, psc.Length);
+        Check(rUp.fin && DbRatio(rUp.rms, rQuiet.rms) > 12 && psc[3] > 12 && psc[4] > 12 && psc[5] > 12,
+              $"upward compression lifts a quiet signal ({DbRatio(rUp.rms, rQuiet.rms):+0.0} dB, boost {psc[3]:F1} / {psc[4]:F1} / {psc[5]:F1})");
+        for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, P(b, BelowRatio), 1f);
+        var rExp = Render(qe);
+        Check(rExp.fin && DbRatio(rExp.rms, rQuiet.rms) < -12, $"downward expansion pushes a quiet signal down ({DbRatio(rExp.rms, rQuiet.rms):0.0} dB)");
+        for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, P(b, Floor), 0.125f);
+        var rFloor = Render(qe);
+        Check(Math.Abs(DbRatio(rFloor.rms, rQuiet.rms) + 6) < 1, $"Floor limits the expansion (6 dB: {DbRatio(rFloor.rms, rQuiet.rms):0.0} dB)");
+        Defaults();
+
+        // Band modes; solo keeps one tone of three.
+        foreach (float mode in new[] { 0.5f, 1f, 0f })
+        {
+            pe.DeviceSetParam(pt, pd, Bands, mode);
+            var rm = Render(pe);
+            pe.DeviceScope(pt, pd, psc, psc.Length);
+            int expect = mode > 0.75f ? 1 : mode > 0.25f ? 2 : 3;
+            Check(rm.fin && rm.rms > 1e-3f && (int)psc[17] == expect, $"{expect}-band mode renders ({rm.rms:F3}, scope {psc[17]})");
+        }
+        Neutral(pe, pt, pd);
+        var solos = new float[3];
+        for (int b = 0; b < 3; b++) { pe.DeviceSetParam(pt, pd, Solo, (b + 1) / 3f); solos[b] = Render(pe).rms; }
+        pe.DeviceSetParam(pt, pd, Solo, 0f);
+        Check(solos.All(r => Math.Abs(DbRatio(r, rNeu.rms) + 4.77) < 1), $"solo keeps one band ({string.Join(" / ", solos.Select(r => DbRatio(r, rNeu.rms).ToString("0.0")))} dB, expect −4.8)");
+        Defaults();
+
+        // Lookahead is reported as latency (for PDC).
+        pe.DeviceSetParam(pt, pd, Lookahead, 0.5f);
+        Render(pe, 1);
+        pe.DeviceScope(pt, pd, psc, psc.Length);
+        Check(psc[14] > 200 && psc[14] < 240 && pe.TrackLatencySamples(pt) == (int)psc[14], $"5 ms lookahead reports its latency ({psc[14]} smp, track {pe.TrackLatencySamples(pt)})");
+        pe.DeviceSetParam(pt, pd, Lookahead, 0f);
+
+        // Telemetry rings for the card: spectrum samples + detector traces.
+        var ring = new float[2048];
+        Check(pe.DeviceLayerWave(pt, pd, 0, ring, ring.Length) == 2048 && ring.Any(v => Math.Abs(v) > 1e-3f), "Prism exposes the input spectrum ring");
+        Check(pe.DeviceLayerWave(pt, pd, 3, ring, 256) == 256 && ring.Take(256).Any(v => v > 1e-3f), "Prism exposes the detector trace");
+
+        // Sidechain: an external key source keys the detectors.
+        int pkey = pe.AddInstrumentTrack();
+        pe.AddMidiClip(pkey, 0.0, 8.0);
+        pe.SetClipNotes(pkey, 0, new[] { new NotaNote(40, 0.0, 7.5, 1.0f) });
+        pe.SetDeviceSidechainSource(pt, pd, pkey);
+        Check(pe.DeviceSidechainSource(pt, pd) == pkey, "Prism accepts an external key source");
+        var rSc = Render(pe);
+        pe.DeviceScope(pt, pd, psc, psc.Length);
+        Check(rSc.fin && psc[15] > 0.5f, "Prism with an external key renders finite and reports the key");
+        pe.SetDeviceSidechainSource(pt, pd, -1);
+        pe.RemoveTrack(pkey);
+
+        // Project round-trip keeps the params.
+        pe.DeviceSetParam(pt, pd, P(2, BelowRatio), 0.21f); pe.DeviceSetParam(pt, pd, Bands, 0.5f);
+        string pproj = Path.Combine(Path.GetTempPath(), "nota-prism-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var pwarn = new System.Collections.Generic.List<string>();
+            ProjectService.Save(ProjectService.Capture(pe, new TransportState(120, 1, false, false), pwarn), pproj, pe);
+            using var pe2 = new NotaEngine();
+            ProjectService.Apply(ProjectService.Load(pproj), pe2, pproj);
+            int rt = -1;
+            for (int i = 0; i < pe2.TrackCount; i++) if (pe2.TryGetTrackInfo(i, out var ti) && pe2.TrackDeviceCount(ti.Id) > 0) { rt = ti.Id; break; }
+            Check(rt > 0 && pe2.TrackDeviceBuiltinKind(rt, 0) == 21 && Math.Abs(pe2.DeviceGetParam(rt, 0, P(2, BelowRatio)) - 0.21f) < 1e-3
+                  && Math.Abs(pe2.DeviceGetParam(rt, 0, Bands) - 0.5f) < 1e-3, "project round-trip restores Prism params");
+        }
+        finally { try { Directory.Delete(pproj, true); } catch { } }
+        Defaults();
+
+        // Clone: duplicating the track carries Prism params.
+        pe.DeviceSetParam(pt, pd, P(1, AboveThresh), 0.33f);
+        int ptD = pe.DuplicateTrack(pt); int pdD = pe.TrackDeviceCount(ptD) - 1;
+        Check(ptD > 0 && Math.Abs(pe.DeviceGetParam(ptD, pdD, P(1, AboveThresh)) - 0.33f) < 1e-3, "duplicate track clones Prism params");
+        pe.RemoveTrack(ptD);
+
+        // Automation drives Amount.
+        int plane = pe.AddAutomationLane(pt, AutomationTarget.DeviceParam, pd, Amount);
+        Check(plane >= 0, "add Prism Amount automation lane");
+        pe.SetAutomationPoints(pt, plane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+        pe.Seek(1.99); pe.Play(); pe.RenderOffline(pb, 4096); pe.StopTransport();
+        Check(pe.DeviceGetParam(pt, pd, Amount) > 0.7f, $"automation drives Prism Amount ({pe.DeviceGetParam(pt, pd, Amount):F2})");
+        pe.RemoveAutomationLane(pt, plane);
+
+        // Factory presets: every named param exists and each applies in place + renders.
+        {
+            var cat = new FactoryPresetCatalog();
+            var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 21).ToList();
+            Check(mine.Count >= 10, $"Nota Prism ships factory presets ({mine.Count})");
+            var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !pnames.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+            Check(bad.Count == 0, $"every Prism preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+            int pf = 0;
+            foreach (var p in mine)
+            {
+                if (cat.ApplyInPlace(pe, p.Id, pt, pd).Length != 0) { pf++; continue; }
+                var rp = Render(pe, 2);
+                if (!rp.fin || rp.rms < 1e-3f || rp.rms > 1.5f) { pf++; Console.WriteLine($"    preset {p.DisplayName}: rms {rp.rms}"); }
+            }
+            Check(pf == 0, $"every Prism preset applies and renders ({pf} failed)");
+            cat.ApplyInPlace(pe, "prism/Two-Band Bass", pt, pd);
+            Check(Math.Abs(pe.DeviceGetParam(pt, pd, Bands) - 0.5f) < 1e-3, "Two-Band Bass preset selects the 2-band mode");
+            cat.ApplyInPlace(pe, "prism/Bus Glue", pt, pd);
+            Check(pe.DeviceGetParam(pt, pd, Bands) < 1e-3, "unnamed params reset to defaults between presets");
+        }
+
+        // MCP lists the kind.
+        var dt = new Nota.Mcp.Tools.DeviceTools(pe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Check(dt.ListDeviceKinds().Any(k => k.Kind == 21 && k.Name == "Nota Prism"), "MCP lists Nota Prism (kind 21)");
+    }
+    finally
+    {
+        pe.Dispose(); qe.Dispose();
+        try { File.Delete(loudWav); File.Delete(quietWav); } catch { }
+    }
+}
+
 // ============================ Nota Level ===================================
 Console.WriteLine("-- Nota Level (AutoGain) --");
 {

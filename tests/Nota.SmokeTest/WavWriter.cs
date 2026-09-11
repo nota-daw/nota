@@ -89,6 +89,25 @@ internal static class WavWriter
         }
     }
 
+    // A steady sum of sines (each at `amp`), mono — one tone per band for the multiband tests.
+    public static void WriteTones(string path, double seconds, double[] freqs, double amp, int sampleRate)
+    {
+        int frames = (int)(seconds * sampleRate);
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var w = new BinaryWriter(fs);
+        int dataBytes = frames * 2;
+        w.Write("RIFF"u8.ToArray()); w.Write(36 + dataBytes); w.Write("WAVE"u8.ToArray());
+        w.Write("fmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)1);
+        w.Write(sampleRate); w.Write(sampleRate * 2); w.Write((short)2); w.Write((short)16);
+        w.Write("data"u8.ToArray()); w.Write(dataBytes);
+        for (int i = 0; i < frames; i++)
+        {
+            double s = 0;
+            foreach (double f in freqs) s += Math.Sin(2.0 * Math.PI * f * i / sampleRate) * amp;
+            w.Write((short)(Math.Clamp(s, -1, 1) * short.MaxValue));
+        }
+    }
+
     // A stereo impulse response: `lead` seconds of silence, then decaying noise (independent
     // L / R, deterministic LCG) — a stand-in for a user IR file.
     public static void WriteNoiseIr(string path, double seconds, double lead, int sampleRate)

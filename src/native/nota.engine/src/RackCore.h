@@ -54,6 +54,7 @@
 #include "AutoGain.h"
 #include "Shutter.h"
 #include "Chamber.h"
+#include "Prism.h"
 
 #include <algorithm>
 #include <atomic>
@@ -674,6 +675,7 @@ protected:
             case 18: return std::make_shared<AutoGain>();
             case 19: return std::make_shared<Shutter>();
             case 20: return std::make_shared<Chamber>();
+            case 21: return std::make_shared<Prism>();
             default: return nullptr;   // 5 = Effect Rack (nesting) / plugin: not via this factory
         }
     }

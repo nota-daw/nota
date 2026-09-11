@@ -398,9 +398,10 @@ public sealed partial class ArrangementView
                 {
                     if (!sepAdded) { flyout.Items.Add(new Separator()); sepAdded = true; }
                     var devMenu = new MenuItem { Header = dn };
-                    // Nota Chamber (45 params) groups by its section prefix ("IR", "Algo", "EQ" …):
-                    // a word shared by two or more params becomes a submenu.
-                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) == 20;
+                    // Nota Chamber (45 params) groups by its section prefix ("IR", "Algo", "EQ" …),
+                    // Nota Prism (52) by band ("Low", "Mid", "High", "Crossover"): a word shared
+                    // by two or more params becomes a submenu.
+                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 20 or 21;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }

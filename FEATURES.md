@@ -277,6 +277,13 @@ and user presets, automation, persistence and cloning.
   shifter; Blend (parallel or serial), separate free/synced pre-delays, a 4-band EQ at the
   input / tail / output, ducking, width + bass mono, Dry/Wet, wet-only send mode. IR edits
   morph the tail without clicks; user IRs persist in the project.
+- **Nota Prism** (21) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
+  crossovers dragged on a live input/output spectrum, 3 / 2 / 1-band modes; per band a
+  compressor above one threshold (ratio to ∞:1, knee) and an expander or upward compressor
+  below another (limited by Floor), each with its own attack/release (auto release above), plus
+  band gain and solo. Amount scales every ratio; Peak/RMS detection, lookahead (PDC), a
+  band-split external sidechain with Listen, auto makeup, Mix, output gain and a −0.3 dBFS soft
+  clip. Transfer curve with drag handles, detector-envelope trace, per-band GR meters.
 - **Nota Chorus** — modulation (chorus) effect.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.

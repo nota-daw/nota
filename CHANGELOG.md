@@ -19,6 +19,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Prism — multiband dynamics.** A new built-in audio effect (kind 21) that splits the
+  signal into Low / Mid / High with phase-coherent crossovers — or two bands, or one — and gives
+  each band a compressor above a threshold and an expander (or an upward compressor, which lifts
+  quiet detail) below a second one, with their own attack and release. Drag the crossovers on
+  the live input/output spectrum, drag the threshold dots on the transfer curve, watch each
+  band's detector against its threshold on the *Time* tab, and solo a band to hear it alone.
+  Amount scales all the dynamics at once; there is Peak / RMS detection, auto release, lookahead
+  (latency-compensated), an external sidechain split into the same bands (with Listen), auto
+  makeup, Mix for parallel compression, output gain and a soft clip at −0.3 dBFS. The card
+  follows the design mockup (Global column, Bands / Band detail / Time and Meters / Output tabs,
+  a status line with CPU). 12 factory presets (Bus Glue, Upward Squash, Vocal Control, De-Esser
+  and more); every control can be automated, MIDI learned and A/B compared.
 - **Nota Chamber — a hybrid reverb.** A new built-in audio effect (kind 20) that runs a
   convolution reverb and an algorithmic reverb side by side, as in Ableton's Hybrid Reverb.
   **Blend** mixes the two — in parallel, or in **Serial** with the convolution feeding the

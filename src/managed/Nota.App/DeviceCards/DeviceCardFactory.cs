@@ -39,6 +39,7 @@ internal sealed class DeviceCardFactory
         [18] = new AutoGainDeviceBody(),
         [19] = new ShutterDeviceBody(),
         [20] = new ChamberDeviceBody(),
+        [21] = new PrismDeviceBody(),
     };
 
     /// <summary>Resolve the body for a device: -1 = hosted plugin, a mapped built-in kind,
