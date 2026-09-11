@@ -265,9 +265,11 @@ public partial class MainWindow
     }
 
     // Refresh the device panel after an in-place instrument swap, but only when it's already
-    // open on that track (never force it open).
+    // open on that track (never force it open). The old instrument's preset label is dropped
+    // either way so it doesn't reappear on the new one.
     private void RefreshDeviceChainIfShowing(int trackId)
     {
+        _deviceChain?.ForgetInstrumentState(trackId);
         if (_deviceChain?.IsVisible == true && _deviceChain.TrackId == trackId) _deviceChain.Show(trackId);
     }
 

@@ -102,7 +102,27 @@ public sealed partial class DeviceChainView : UserControl
         });
     }
 
-    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; _cardExtra.Clear(); Rebuild(); }
+    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; Rebuild(); }
+
+    /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
+    /// opened / created, so track ids no longer mean the same tracks).</summary>
+    public void ForgetCardState() => _cardExtra.Clear();
+
+    /// <summary>Forgets the instrument card's remembered preset label + A/B slots on a
+    /// track (its instrument was just swapped in place, possibly for one of the same kind).</summary>
+    public void ForgetInstrumentState(int trackId)
+    { if (_cardExtra.TryGetValue(trackId, out var d)) d.Remove(ExtraKey(ChainKind.Instrument, -1)); }
+
+    /// <summary>Records a preset applied outside the card (from the browser) so its card shows
+    /// the name and ‹ › continue from it. <paramref name="presetId"/> is the factory id, or ""
+    /// for a user preset. The card's A/B slots start fresh for the new device.</summary>
+    internal void RememberPreset(int trackId, ChainKind kind, int deviceIndex, string name, string presetId)
+    {
+        if (trackId <= 0) return;
+        TrackExtras(trackId).Remove(ExtraKey(kind, deviceIndex));   // a new device: drop any stale entry
+        var e = ExtraFor(trackId, kind, deviceIndex);
+        e.Preset = name; e.PresetId = presetId;
+    }
     public void Refresh() { if (_trackId > 0) Rebuild(); }
     public int TrackId => _trackId;
 

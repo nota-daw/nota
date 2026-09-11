@@ -357,6 +357,7 @@ public partial class MainWindow
         _editorTrackId = -1;
         _editorClipIndex = -1;
         DetailPanel.IsVisible = false;
+        _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
         Timeline.Refresh();
         _session?.Refresh();
     }

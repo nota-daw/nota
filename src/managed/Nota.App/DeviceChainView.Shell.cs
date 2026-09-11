@@ -33,16 +33,47 @@ public sealed partial class DeviceChainView
     // reorder / preset API, branched on below.
     internal enum ChainKind { Instrument, Effect, Midi }
 
-    // A/B snapshots + last-applied preset per card, keyed so a MIDI effect and an audio
-    // effect at the same index don't collide. Survives Rebuild(); cleared on track switch.
-    private sealed class CardExtra { public float[]? A, B; public int Active; public string Preset = ""; }
-    private readonly System.Collections.Generic.Dictionary<int, CardExtra> _cardExtra = new();
+    // A/B snapshots + last-applied preset per card, kept per track so switching tracks and
+    // back restores them, and keyed so a MIDI effect and an audio effect at the same index
+    // don't collide. Sig ties an entry to the device it was made for: when that slot now
+    // holds a different device (swapped, removed behind our back, undo), the card starts fresh.
+    private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; }
+    private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _cardExtra = new();   // trackId → key → extra
     private static int ExtraKey(ChainKind k, int di) => k switch { ChainKind.Instrument => -1, ChainKind.Midi => -1000 - di, _ => di };
-    private CardExtra Extra(int key)
+    private static ChainKind KeyKind(int key) => key >= 0 ? ChainKind.Effect : key == -1 ? ChainKind.Instrument : ChainKind.Midi;
+    private static int KeyIndex(int key) => key >= 0 ? key : key == -1 ? -1 : -1000 - key;
+    private string CardSig(int t, ChainKind k, int di) => k switch
     {
-        if (!_cardExtra.TryGetValue(key, out var e)) { e = new CardExtra(); _cardExtra[key] = e; }
+        ChainKind.Instrument => $"{_engine.TrackInstrumentKind(t)}|{_engine.DeviceName(t, -1)}",
+        ChainKind.Midi => $"{_engine.MidiEffectKind(t, di)}|{_engine.MidiEffectName(t, di)}",
+        _ => $"{_engine.TrackDeviceBuiltinKind(t, di)}|{_engine.DeviceName(t, di)}",
+    };
+    private System.Collections.Generic.Dictionary<int, CardExtra> TrackExtras(int t)
+    {
+        if (!_cardExtra.TryGetValue(t, out var d)) { d = new(); _cardExtra[t] = d; }
+        return d;
+    }
+    private System.Collections.Generic.Dictionary<int, CardExtra> TrackExtras() => TrackExtras(_trackId);
+    private CardExtra ExtraFor(int t, ChainKind k, int di)
+    {
+        var d = TrackExtras(t); int key = ExtraKey(k, di); string sig = CardSig(t, k, di);
+        if (!d.TryGetValue(key, out var e) || e.Sig != sig) { e = new CardExtra { Sig = sig }; d[key] = e; }
         return e;
     }
+    private CardExtra Extra(ChainKind k, int di) => ExtraFor(_trackId, k, di);
+
+    // Keep each card's extra glued to its device when this view reorders / removes devices.
+    // map: old index → new index, or -1 when the device is gone.
+    private void RemapExtras(ChainKind k, Func<int, int> map)
+    {
+        if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
+        var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
+        foreach (var kv in domain) d.Remove(kv.Key);
+        foreach (var kv in domain) { int ni = map(KeyIndex(kv.Key)); if (ni >= 0) d[ExtraKey(k, ni)] = kv.Value; }
+    }
+    private void ExtrasMoved(ChainKind k, int from, int to) => RemapExtras(k, i =>
+        i == from ? to : from < to && i > from && i <= to ? i - 1 : to < from && i >= to && i < from ? i + 1 : i);
+    private void ExtrasRemoved(ChainKind k, int di) => RemapExtras(k, i => i == di ? -1 : i > di ? i - 1 : i);
 
     private int ParamCount(ChainKind k, int di) => k switch
     { ChainKind.Instrument => _engine.PluginParamCount(_trackId, -1), ChainKind.Midi => _engine.MidiEffectParamCount(_trackId, di), _ => _engine.DeviceParamCount(_trackId, di) };
@@ -67,7 +98,7 @@ public sealed partial class DeviceChainView
     private Border BuildCardShell(ShellSpec s, Control body)
     {
         int di = s.DeviceIndex;
-        var extra = Extra(ExtraKey(s.Kind, di));
+        var extra = Extra(s.Kind, di);
         // Rich chrome (preset picker · A/B · meter) needs room; narrow effect cards get
         // the essential chrome only. Instruments (≥700) and wide effects show everything.
         bool full = !double.IsNaN(s.Width) && s.Width >= 520;
@@ -97,13 +128,13 @@ public sealed partial class DeviceChainView
 
         if (full) { right.Children.Add(ABControl(s, extra)); right.Children.Add(MeterBadge()); }
 
-        void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); Rebuild(); Changed?.Invoke(); }
+        void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
         if (s.CanMove)
         {
             right.Children.Add(Glyph("◀", di > 0, () => Move(di - 1)));
             right.Children.Add(Glyph("▶", di < s.Count - 1, () => Move(di + 1)));
         }
-        if (s.CanDelete) right.Children.Add(Glyph("✕", true, () => { if (s.Kind == ChainKind.Midi) _engine.RemoveMidiEffect(_trackId, di); else _engine.RemoveDevice(_trackId, di); Rebuild(); Changed?.Invoke(); }));
+        if (s.CanDelete) right.Children.Add(Glyph("✕", true, () => { if (s.Kind == ChainKind.Midi) _engine.RemoveMidiEffect(_trackId, di); else _engine.RemoveDevice(_trackId, di); ExtrasRemoved(s.Kind, di); Rebuild(); Changed?.Invoke(); }));
         var handle = new TextBlock
         {
             Text = "⠿", FontSize = 11, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
@@ -155,32 +186,74 @@ public sealed partial class DeviceChainView
     private int IndexOfId(string id)
     { int n = _engine.PluginParamCount(_trackId, -1); for (int i = 0; i < n; i++) if (_engine.PluginParamId(_trackId, -1, i) == id) return i; return -1; }
 
-    // Preset box "Name ▾" → flyout of factory presets for this kind, applied in place.
+    // Preset picker "‹ Name ▾ ›": the name opens a flyout of factory presets for this kind
+    // (current one checked); ‹ › step to the previous / next preset, wrapping. From Init,
+    // › goes to the first preset and ‹ to the last. Always applied in place.
     private Control PresetPicker(ShellSpec s, CardExtra extra)
     {
+        var presets = _factory.All().Where(p => p.BuiltinKind == s.PresetKind
+            && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect))).ToList();
+        int cur = presets.FindIndex(p => p.Id == extra.PresetId);
+        void Apply(FactoryPresetInfo p)
+        {
+            _factory.ApplyInPlace(_engine, p.Id, _trackId, s.DeviceIndex);
+            extra.PresetId = p.Id; extra.Preset = p.DisplayName;
+            Rebuild();
+        }
+
         var label = new TextBlock { Text = string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset, FontSize = 10, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 90 };
         var box = new Border
         {
-            Height = 18, MinWidth = 96, Background = ShellInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 96, Background = Brushes.Transparent, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel { Children = { new TextBlock { Text = "▾", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right }, label } },
         };
-        var presets = _factory.All().Where(p => p.BuiltinKind == s.PresetKind
-            && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect))).ToList();
         box.PointerPressed += (_, _) =>
         {
             var flyout = new MenuFlyout();
             if (presets.Count == 0) flyout.Items.Add(new MenuItem { Header = "No presets", IsEnabled = false });
-            foreach (var p in presets)
+            for (int i = 0; i < presets.Count; i++)
             {
-                var mi = new MenuItem { Header = p.DisplayName };
-                var info = p;
-                mi.Click += (_, _) => { _factory.ApplyInPlace(_engine, info.Id, _trackId, s.DeviceIndex); Extra(ExtraKey(s.Kind, s.DeviceIndex)).Preset = info.DisplayName; Rebuild(); };
+                var info = presets[i];
+                var mi = new MenuItem { Header = info.DisplayName, ToggleType = MenuItemToggleType.CheckBox, IsChecked = i == cur };
+                mi.Click += (_, _) => Apply(info);
                 flyout.Items.Add(mi);
             }
             flyout.ShowAt(box, showAtPointer: true);
         };
-        return box;
+
+        Border Step(int dir)
+        {
+            bool on = presets.Count > 0;
+            var chevron = new Path
+            {
+                Data = Geometry.Parse(dir < 0 ? "M3.5,0 L0,3.5 L3.5,7" : "M0,0 L3.5,3.5 L0,7"),
+                Stroke = on ? TextTertiary : TextDisabled, StrokeThickness = 1.2,
+                StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            };
+            var b = new Border { Width = 16, Background = Brushes.Transparent, Child = chevron };
+            if (!on) return b;
+            b.Cursor = new Cursor(StandardCursorType.Hand);
+            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
+            b.PointerEntered += (_, _) => chevron.Stroke = TextPrimary;
+            b.PointerExited += (_, _) => chevron.Stroke = TextTertiary;
+            b.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                int n = presets.Count;
+                Apply(presets[cur < 0 ? (dir > 0 ? 0 : n - 1) : ((cur + dir) % n + n) % n]);
+            };
+            return b;
+        }
+        Border Divider() => new() { Width = 1, Background = BorderDef };
+
+        return new Border
+        {
+            Height = 18, Background = ShellInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
+            ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1), Divider(), box, Divider(), Step(+1) } },
+        };
     }
 
     // A | B compare of two full-param snapshots + copy-active-to-other.

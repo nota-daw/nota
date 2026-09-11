@@ -50,6 +50,7 @@ public sealed partial class DeviceChainView
         public int MidiKind;         // MIDI effect kind
         public float[]? MidiParams;  // MIDI effect param snapshot
         public bool Bypassed;
+        public string Preset = "", PresetId = "";   // the source card's preset label follows the paste
     }
     private DeviceClip? _clip;
 
@@ -72,6 +73,7 @@ public sealed partial class DeviceChainView
             for (int i = 0; i < n; i++) p[i] = _engine.MidiEffectGetParam(_trackId, di, i);
             _clip = new DeviceClip { Kind = ChainKind.Midi, MidiKind = _engine.MidiEffectKind(_trackId, di), MidiParams = p, Bypassed = _engine.MidiEffectBypassed(_trackId, di) };
         }
+        if (_clip != null) { var ex = Extra(_selChainKind, di); _clip.Preset = ex.Preset; _clip.PresetId = ex.PresetId; }
     }
 
     private void DeleteSelectedDevice()
@@ -81,6 +83,7 @@ public sealed partial class DeviceChainView
         if (k == ChainKind.Effect) _engine.RemoveDevice(_trackId, di);
         else if (k == ChainKind.Midi) _engine.RemoveMidiEffect(_trackId, di);
         else return;
+        ExtrasRemoved(k, di);
         _selDeviceIndex = -1;
         Rebuild(); Changed?.Invoke();
     }
@@ -110,9 +113,10 @@ public sealed partial class DeviceChainView
             }
             if (newIdx < 0) return;
             if (c.Bypassed) _engine.SetDeviceBypassed(_trackId, newIdx, true);
+            TrackExtras().Remove(ExtraKey(ChainKind.Effect, newIdx));   // a fresh slot: drop any stale entry
             // Drop it right after the selected effect, else leave it appended.
             if (_selChainKind == ChainKind.Effect && _selDeviceIndex >= 0 && _selDeviceIndex < newIdx)
-            { int to = _selDeviceIndex + 1; _engine.MoveDevice(_trackId, newIdx, to); newIdx = to; }
+            { int to = _selDeviceIndex + 1; _engine.MoveDevice(_trackId, newIdx, to); ExtrasMoved(ChainKind.Effect, newIdx, to); newIdx = to; }
             _selChainKind = ChainKind.Effect;
         }
         else if (c.Kind == ChainKind.Midi)
@@ -125,11 +129,13 @@ public sealed partial class DeviceChainView
                 for (int i = 0; i < n; i++) _engine.MidiEffectSetParam(_trackId, newIdx, i, c.MidiParams[i]);
             }
             if (c.Bypassed) _engine.SetMidiEffectBypassed(_trackId, newIdx, true);
+            TrackExtras().Remove(ExtraKey(ChainKind.Midi, newIdx));
             if (_selChainKind == ChainKind.Midi && _selDeviceIndex >= 0 && _selDeviceIndex < newIdx)
-            { int to = _selDeviceIndex + 1; _engine.MoveMidiEffect(_trackId, newIdx, to); newIdx = to; }
+            { int to = _selDeviceIndex + 1; _engine.MoveMidiEffect(_trackId, newIdx, to); ExtrasMoved(ChainKind.Midi, newIdx, to); newIdx = to; }
             _selChainKind = ChainKind.Midi;
         }
         else return;
+        var pasted = Extra(c.Kind, newIdx); pasted.Preset = c.Preset; pasted.PresetId = c.PresetId;
         _selDeviceIndex = newIdx;
         Rebuild(); Changed?.Invoke();
     }
@@ -220,6 +226,7 @@ public sealed partial class DeviceChainView
             if (to == from) return;
             if (kindL == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, from, to);
             else _engine.MoveDevice(_trackId, from, to);
+            ExtrasMoved(kindL, from, to);
             _selChainKind = kindL; _selDeviceIndex = to;
             Rebuild(); Changed?.Invoke();
         };

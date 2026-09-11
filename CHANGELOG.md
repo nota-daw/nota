@@ -119,8 +119,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   edits** while you're editing, plus **Unfreeze (wake source)** and **Flatten (remove
   source)**. Each command selects its track, so the Devices panel follows along; **Edit**
   always jumps to the source, where the notes and devices live.
+- **Step through presets from a device card.** The preset box in a card's header now has ‹
+  and › buttons on either side that load the previous or next factory preset, wrapping
+  around at the ends. The preset list marks the one currently loaded.
 
 ### Fixed
+- **A device card keeps showing its preset name.** Switching to another track and back no
+  longer resets the name to Init. The name stays with its device when devices are
+  reordered, deleted or copied, and presets loaded from the browser now show their name on
+  the card too.
 - Applying a built-in effect's factory preset now resets the parameters the preset doesn't
   name to their defaults, so switching presets no longer keeps leftovers from the last one.
 - **Preferences: the end of long sections can be scrolled into view.** The last rows of

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -31,9 +32,36 @@ public partial class MainWindow
     // the shipped catalog; user presets load from disk. Instrument presets create a new
     // track (targetTrackId is ignored for them); effect presets target the track.
     private string ApplyPresetItem(BrowserItem item, int targetTrackId)
-        => item.Path.StartsWith("factory:", StringComparison.Ordinal)
-            ? _factory.Apply(Engine, item.Path["factory:".Length..], targetTrackId)
+    {
+        bool factory = item.Path.StartsWith("factory:", StringComparison.Ordinal);
+        string factoryId = factory ? item.Path["factory:".Length..] : "";
+        // Apply doesn't say where the preset landed, so diff the chain around it: a new track
+        // (instrument preset) or one more device / MIDI effect on the target (appended last).
+        var tracksBefore = TrackIds();
+        int fxBefore = targetTrackId > 0 ? Engine.TrackDeviceCount(targetTrackId) : 0;
+        int midiBefore = targetTrackId > 0 ? Engine.TrackMidiEffectCount(targetTrackId) : 0;
+        string warn = factory
+            ? _factory.Apply(Engine, factoryId, targetTrackId)
             : _presets.ApplyFromFile(Engine, item.Path, targetTrackId);
+        if (warn.Length > 0 || _deviceChain is null) return warn;
+
+        int newTrack = TrackIds().FirstOrDefault(id => !tracksBefore.Contains(id));
+        if (newTrack > 0)
+            _deviceChain.RememberPreset(newTrack, DeviceChainView.ChainKind.Instrument, -1, item.Name, factoryId);
+        else if (targetTrackId > 0 && Engine.TrackDeviceCount(targetTrackId) is var fx && fx > fxBefore)
+            _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Effect, fx - 1, item.Name, factoryId);
+        else if (targetTrackId > 0 && Engine.TrackMidiEffectCount(targetTrackId) is var midi && midi > midiBefore)
+            _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Midi, midi - 1, item.Name, factoryId);
+        return warn;
+    }
+
+    private HashSet<int> TrackIds()
+    {
+        var ids = new HashSet<int>();
+        for (int i = 0; i < Engine.TrackCount; i++)
+            if (Engine.TryGetTrackInfo(i, out var ti)) ids.Add(ti.Id);
+        return ids;
+    }
 
     private void OnBrowserItemActivated(BrowserItem item)
     {
