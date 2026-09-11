@@ -307,6 +307,46 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("shutter", 19, "Kick Duck",       ("Threshold", 0.42f),  ("Flip", 1f),       ("Attack", 0.2f),   ("Hold", 0.5f),   ("Release", 0.55f), ("Floor", 0.55f));
         Fx("shutter", 19, "Trance Gate",     ("Threshold", 0.55f),  ("Return", 0.08f),  ("Attack", 0.15f),  ("Hold", 0.45f),  ("Release", 0.4f),  ("Floor", 0f), ("Lookahead", 1f));
 
+        // ---- Nota Chamber (kind 20) — hybrid reverb, all params normalized 0..1 (unnamed params
+        //      reset to their defaults). IR = index/16 (0 Concert Hall · .0625 Stone Vault · .125
+        //      Cathedral · .1875 Scoring Stage · .25 Wood Chamber · .3125 Live Room · .375 Drum Room ·
+        //      .4375 Tiled Bathroom · .5 Vocal Plate · .5625 Bright Plate · .625 Spring Tank · .6875
+        //      Car Park · .75 Stairwell · .8125 Forest · .875 Gated Room · .9375 Metal Tank · 1 user).
+        //      Blend = algorithm share; Algo Mode 0 Dark Hall/.333 Plate/.667 Quartz/1 Shimmer;
+        //      Algo Decay 0.2·100^v s; predelays 500·v² ms; IR Size 0.5·4^v; Algo Size 0.4·6.25^v;
+        //      Damping 500·36^v Hz; Low/High Decay ×0.25·16^v; EQ Low Cut 20·100^v, High Cut 1k·20^v,
+        //      gains (v−.5)·36 dB; Duck Amount v·24 dB; Output −24+36·v dB; Width v·200 %.
+        Fx("chamber", 20, "Stone Vault",       ("IR", 0.0625f), ("Blend", 0.62f), ("Dry/Wet", 0.42f), ("Conv Predelay", 0.219f), ("IR Size", 0.619f), ("IR Attack", 0.19f), ("IR Decay", 0.74f),
+                                               ("Algo Decay", 0.681f), ("Algo Size", 0.405f), ("Algo Diffusion", 0.62f), ("Algo Damping", 0.518f), ("Algo Predelay", 0.268f), ("Algo Low Decay", 0.595f), ("Algo High Decay", 0.235f),
+                                               ("Duck Amount", 0.142f), ("Duck Release", 0.602f), ("EQ Low Cut", 0.389f), ("EQ High Cut", 0.8f));
+        Fx("chamber", 20, "Concert Hall",      ("IR", 0f), ("Blend", 0.45f), ("Dry/Wet", 0.3f), ("Conv Predelay", 0.2f), ("Algo Decay", 0.6f), ("Algo Size", 0.6f), ("Algo Damping", 0.65f), ("EQ Low Cut", 0.301f));
+        Fx("chamber", 20, "Cathedral Wash",    ("IR", 0.125f), ("Blend", 0.35f), ("Dry/Wet", 0.45f), ("Conv Predelay", 0.3f), ("IR Size", 0.6f), ("Algo Decay", 0.8f), ("Algo Size", 0.878f),
+                                               ("Algo Diffusion", 0.85f), ("Algo Damping", 0.45f), ("Algo Low Decay", 0.646f), ("Mod Depth", 0.45f), ("Width", 0.7f));
+        Fx("chamber", 20, "Scoring Stage",     ("IR", 0.1875f), ("Blend", 0.3f), ("Dry/Wet", 0.25f), ("Conv Predelay", 0.141f), ("Algo Decay", 0.5f), ("Algo Size", 0.55f));
+        Fx("chamber", 20, "Wood Chamber",      ("IR", 0.25f), ("Blend", 0.25f), ("Dry/Wet", 0.25f), ("Conv Predelay", 0.1f), ("Algo Mode", 0.667f), ("Algo Decay", 0.4f), ("Algo Size", 0.3f));
+        Fx("chamber", 20, "Drum Room",         ("IR", 0.375f), ("Blend", 0.1f), ("Dry/Wet", 0.22f), ("Conv Predelay", 0f), ("Algo Decay", 0.3f), ("EQ Low Cut", 0.437f), ("Duck Amount", 0.2f), ("Duck Release", 0.4f));
+        Fx("chamber", 20, "Live Room",         ("IR", 0.3125f), ("Blend", 0.2f), ("Dry/Wet", 0.2f), ("Algo Decay", 0.35f), ("EQ Low Cut", 0.5f), ("EQ High Cut", 0.8f));
+        Fx("chamber", 20, "Vocal Plate",       ("IR", 0.5f), ("Blend", 0.5f), ("Dry/Wet", 0.28f), ("Conv Predelay", 0.245f), ("Algo Mode", 0.333f), ("Algo Decay", 0.5f), ("Algo Size", 0.45f),
+                                               ("Algo Diffusion", 0.8f), ("Algo Damping", 0.8f), ("Algo High Decay", 0.45f), ("Algo Predelay", 0.245f), ("EQ Low Cut", 0.5f), ("Duck Amount", 0.25f), ("Duck Release", 0.477f));
+        Fx("chamber", 20, "Snare Plate",       ("IR", 0.5625f), ("Blend", 0.55f), ("Dry/Wet", 0.3f), ("Algo Mode", 0.333f), ("Algo Decay", 0.42f), ("Algo Damping", 0.85f), ("EQ Low Cut", 0.588f));
+        Fx("chamber", 20, "Spring Box",        ("IR", 0.625f), ("Blend", 0f), ("Algo On", 0f), ("Dry/Wet", 0.3f), ("EQ Low Cut", 0.5f), ("EQ High Cut", 0.6f));
+        Fx("chamber", 20, "Wide Shimmer",      ("IR", 0.125f), ("Blend", 0.48f), ("Dry/Wet", 0.55f), ("Algo Mode", 1f), ("Algo Decay", 0.8f), ("Algo Diffusion", 0.9f),
+                                               ("Mod Rate", 0.419f), ("Mod Depth", 0.38f), ("Shimmer Amount", 0.52f), ("Shimmer Pitch", 1f), ("Shimmer Feedback", 1f),
+                                               ("EQ Low Cut", 0.389f), ("EQ Low Gain", 0.389f), ("EQ High Shelf", 0.589f), ("EQ High Cut", 0.8f), ("Width", 0.64f), ("Bass Mono", 0.548f), ("Output", 0.611f));
+        Fx("chamber", 20, "Octave Down Bloom", ("Blend", 1f), ("Conv On", 0f), ("Dry/Wet", 0.45f), ("Algo Mode", 1f), ("Algo Decay", 0.75f), ("Shimmer Amount", 0.45f), ("Shimmer Pitch", 0f),
+                                               ("Shimmer Feedback", 0f), ("Algo Damping", 0.45f), ("Mod Depth", 0.4f));
+        Fx("chamber", 20, "Endless Pad",       ("Blend", 1f), ("Conv On", 0f), ("Dry/Wet", 0.5f), ("Algo Mode", 1f), ("Algo Decay", 1f), ("Algo Size", 0.8f), ("Algo Diffusion", 0.9f),
+                                               ("Shimmer Amount", 0.6f), ("Mod Depth", 0.5f), ("Width", 0.75f), ("EQ Low Cut", 0.5f));
+        Fx("chamber", 20, "Reverse Swell",     ("IR", 0.0625f), ("IR Reverse", 1f), ("IR Decay", 0.55f), ("Blend", 0.15f), ("Dry/Wet", 0.4f), ("Conv Predelay", 0f), ("Algo Decay", 0.5f));
+        Fx("chamber", 20, "Car Park",          ("IR", 0.6875f), ("Blend", 0.3f), ("Dry/Wet", 0.3f), ("Algo Mode", 0.667f), ("Algo Decay", 0.62f));
+        Fx("chamber", 20, "Forest Echoes",     ("IR", 0.8125f), ("Blend", 0.2f), ("Dry/Wet", 0.3f), ("Algo Mode", 0.667f), ("Algo Decay", 0.45f), ("Algo Diffusion", 0.3f));
+        Fx("chamber", 20, "Gated Snare",       ("IR", 0.875f), ("Blend", 0f), ("Algo On", 0f), ("Dry/Wet", 0.35f), ("EQ Low Cut", 0.5f));
+        Fx("chamber", 20, "Metal Tank",        ("IR", 0.9375f), ("Blend", 0.2f), ("Dry/Wet", 0.3f), ("IR Size", 0.4f));
+        Fx("chamber", 20, "Vintage Hall",      ("Blend", 0.85f), ("Dry/Wet", 0.3f), ("Algo Vintage", 1f), ("Algo Decay", 0.65f), ("Mod Rate", 0.55f), ("Mod Depth", 0.5f), ("EQ High Cut", 0.694f));
+        Fx("chamber", 20, "Ducked Vocal Hall", ("IR", 0.1875f), ("Blend", 0.55f), ("Dry/Wet", 0.35f), ("Conv Predelay", 0.3f), ("Algo Decay", 0.62f), ("Duck Amount", 0.375f), ("Duck Release", 0.548f));
+        Fx("chamber", 20, "Send · Big Hall",   ("IR", 0f), ("Blend", 0.5f), ("Wet Only", 1f), ("Conv Predelay", 0.2f), ("Algo Decay", 0.65f), ("EQ Low Cut", 0.437f), ("EQ High Cut", 0.8f), ("Bass Mono", 0.548f));
+        Fx("chamber", 20, "Send · Plate",      ("IR", 0.5f), ("Blend", 0.5f), ("Wet Only", 1f), ("Algo Mode", 0.333f), ("Algo Decay", 0.5f), ("Conv Predelay", 0.2f), ("Algo Predelay", 0.2f), ("EQ Low Cut", 0.5f));
+
         // ---- Compressor (kind 1) — Thresh -60..0, Ratio 1..20, Attack .1..100 ms, Release 5..1000 ms, Makeup 0..24 dB
         // Character: Clean 0 / Glue 1 / Punch 2 / Opto 3 / FET 4.
         Fx("comp", 1, "Drum Glue",   ("Character", 1f), ("Thresh", -18f), ("Ratio", 3f),  ("Attack", 30f),  ("Release", 200f), ("Knee", 8f),  ("AutoGain", 1f), ("Mix", 100f));

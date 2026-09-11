@@ -79,6 +79,10 @@ internal static partial class NativeMethods
     internal static partial int DeviceGetState(IntPtr engine, int trackId, int deviceIndex, [Out] byte[]? outBytes, int cap);
     [LibraryImport(Lib, EntryPoint = "nota_device_set_state")]
     internal static partial void DeviceSetState(IntPtr engine, int trackId, int deviceIndex, [In] byte[] data, int size);
+    [LibraryImport(Lib, EntryPoint = "nota_device_load_file", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult DeviceLoadFile(IntPtr engine, int trackId, int deviceIndex, string path);
+    [LibraryImport(Lib, EntryPoint = "nota_device_text")]
+    internal static partial int DeviceText(IntPtr engine, int trackId, int deviceIndex, int id, [Out] byte[]? outBytes, int cap);
 
     // --- MIDI effects ---
     [LibraryImport(Lib, EntryPoint = "nota_track_add_midi_effect")]

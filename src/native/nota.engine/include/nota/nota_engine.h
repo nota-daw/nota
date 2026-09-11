@@ -827,6 +827,11 @@ NOTA_API int32_t     nota_device_layer_wave(const NotaEngine* engine, int32_t tr
  * probe the size first); set restores from data. Empty for param-only devices. */
 NOTA_API int32_t     nota_device_get_state(const NotaEngine* engine, int32_t track_id, int32_t device_index, uint8_t* out, int32_t cap);
 NOTA_API void        nota_device_set_state(NotaEngine* engine, int32_t track_id, int32_t device_index, const uint8_t* data, int32_t size);
+/* Load an auxiliary audio file into a device (Nota Chamber: a user impulse response). */
+NOTA_API NotaResult  nota_device_load_file(NotaEngine* engine, int32_t track_id, int32_t device_index, const char* path);
+/* A device's resource text (Chamber: 0 IR name, 1 category, 2 user IR name, 10 built-in IR list).
+   Returns the full UTF-8 length; copies up to cap-1 bytes + NUL when out is non-null. */
+NOTA_API int32_t     nota_device_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t id, char* out, int32_t cap);
 /* Sidechain routing (Phase B): point a device's detector at another track's signal.
  * source_track_id -1 clears it; get returns the current source (-1 = none). */
 NOTA_API void        nota_device_set_sidechain_source(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t source_track_id);

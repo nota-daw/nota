@@ -155,11 +155,11 @@ public sealed partial class DeviceChainView : UserControl
         int kind = _engine.TrackDeviceBuiltinKind(_trackId, index);
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
-        string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
 
         Control body;
         double width;
         bool fullBleed = false;
+        string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no 8px inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
@@ -170,6 +170,7 @@ public sealed partial class DeviceChainView : UserControl
             body = strategy.Build(NewCardContext(), index);
             width = strategy.AutoWidth ? double.NaN : strategy.Width;   // NaN → card sizes to content
             fullBleed = strategy.FullBleed;
+            if (strategy.Subtitle is { } sub) tag = sub;
         }
         // Effects share the same shell as instruments (bypass + reorder + remove + preset,
         // and the rich chrome when wide enough). Non-full-bleed bodies get an 8px inset.

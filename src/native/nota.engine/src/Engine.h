@@ -540,6 +540,9 @@ public:
     // Opaque device state blob (looper PCM etc.) for project save/restore.
     int32_t     deviceGetState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const;
     void        deviceSetState(int32_t trackId, int32_t deviceIndex, const uint8_t* data, int32_t size);
+    // Load an auxiliary file into a device (the Chamber's user IR) / read its resource text.
+    bool        deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path);
+    std::string deviceText(int32_t trackId, int32_t deviceIndex, int32_t id) const;
     int32_t     deviceParamCount(int32_t trackId, int32_t deviceIndex) const;
     const char* deviceParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float       deviceParamMin(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;

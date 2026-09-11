@@ -107,6 +107,14 @@ public:
     // maxSamples peak bins of layer's buffer, oldest→newest, returning the count.
     virtual int32_t layerWave(int32_t /*layer*/, float* /*out*/, int32_t /*maxSamples*/) const { return 0; }
 
+    // Devices that carry a named resource (the Chamber's impulse response): an id-specific
+    // text (resource name, category, a catalogue listing …); empty by default. Message thread.
+    virtual std::string deviceText(int32_t /*id*/) const { return {}; }
+
+    // Load an auxiliary audio file into the device (the Chamber's user impulse response).
+    // Returns false when the device takes no file or it can't be decoded. Message thread.
+    virtual bool loadFile(const std::string& /*path*/) { return false; }
+
     // Sidechain / signal routing (Phase B). A device may key its processing off
     // another track's signal. sidechainSourceTrackId() reports the chosen source
     // track (-1 = none); the engine assigns a routing slot and, right before each

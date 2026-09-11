@@ -398,11 +398,23 @@ public sealed partial class ArrangementView
                 {
                     if (!sepAdded) { flyout.Items.Add(new Separator()); sepAdded = true; }
                     var devMenu = new MenuItem { Header = dn };
+                    // Nota Chamber (45 params) groups by its section prefix ("IR", "Algo", "EQ" …):
+                    // a word shared by two or more params becomes a submenu.
+                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) == 20;
+                    var names = new string[builtinPc];
+                    for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
+                    static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }
+                    var groups = new System.Collections.Generic.Dictionary<string, MenuItem>();
                     for (int p = 0; p < builtinPc; p++)
                     {
                         int dd = d, pp = p;
-                        devMenu.Items.Add(Leaf(e.DeviceParamName(t.Id, d, p), $"D:{dd}:{pp}",
-                            () => SetAutoTarget(t, AutomationTarget.DeviceParam, dd, pp), automated));
+                        string head = grouped ? Head(names[p]) : "";
+                        bool sub = head.Length > 0 && names.Count(n => Head(n) == head) >= 2;
+                        var leaf = Leaf(sub ? names[p][(head.Length + 1)..] : names[p], $"D:{dd}:{pp}",
+                            () => SetAutoTarget(t, AutomationTarget.DeviceParam, dd, pp), automated);
+                        if (!sub) { devMenu.Items.Add(leaf); continue; }
+                        if (!groups.TryGetValue(head, out var g)) { g = new MenuItem { Header = head }; groups[head] = g; devMenu.Items.Add(g); }
+                        g.Items.Add(leaf);
                     }
                     flyout.Items.Add(devMenu);
                 }

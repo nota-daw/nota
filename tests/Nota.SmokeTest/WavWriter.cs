@@ -88,4 +88,26 @@ internal static class WavWriter
             w.Write((short)(s * short.MaxValue));
         }
     }
+
+    // A stereo impulse response: `lead` seconds of silence, then decaying noise (independent
+    // L / R, deterministic LCG) — a stand-in for a user IR file.
+    public static void WriteNoiseIr(string path, double seconds, double lead, int sampleRate)
+    {
+        int frames = (int)(seconds * sampleRate), leadF = (int)(lead * sampleRate);
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var w = new BinaryWriter(fs);
+        int dataBytes = frames * 4;           // 16-bit stereo
+        w.Write("RIFF"u8.ToArray()); w.Write(36 + dataBytes); w.Write("WAVE"u8.ToArray());
+        w.Write("fmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)2);
+        w.Write(sampleRate); w.Write(sampleRate * 4); w.Write((short)4); w.Write((short)16);
+        w.Write("data"u8.ToArray()); w.Write(dataBytes);
+        uint seed = 12345;
+        double Next() { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / 8388608.0 - 1.0; }
+        for (int i = 0; i < frames; i++)
+        {
+            double env = i < leadF ? 0.0 : Math.Exp(-(i - leadF) / (0.25 * sampleRate)) * 0.7;
+            w.Write((short)(Next() * env * short.MaxValue));
+            w.Write((short)(Next() * env * short.MaxValue));
+        }
+    }
 }

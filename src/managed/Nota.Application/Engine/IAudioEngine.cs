@@ -366,6 +366,12 @@ public interface IAudioEngine : IDisposable
     /// empty for param-only devices.</summary>
     byte[] DeviceGetState(int trackId, int deviceIndex);
     void DeviceSetState(int trackId, int deviceIndex, byte[] data);
+    /// <summary>Load an auxiliary audio file into a device (Nota Chamber: a user impulse
+    /// response — WAV / FLAC / MP3, mono, stereo or 4-channel true stereo). False if unsupported.</summary>
+    bool DeviceLoadFile(int trackId, int deviceIndex, string path);
+    /// <summary>A device's resource text (Nota Chamber: 0 IR name, 1 IR category, 2 user IR
+    /// name, 10 the built-in IR list as "name\tcategory\tseconds" lines); "" when none.</summary>
+    string DeviceText(int trackId, int deviceIndex, int id);
     /// <summary>Sidechain routing: point a device's detector at another track's signal (-1 clears).</summary>
     void SetDeviceSidechainSource(int trackId, int deviceIndex, int sourceTrackId);
     int DeviceSidechainSource(int trackId, int deviceIndex);

@@ -38,6 +38,7 @@ internal sealed class DeviceCardFactory
         [17] = new ForgeDeviceBody(),
         [18] = new AutoGainDeviceBody(),
         [19] = new ShutterDeviceBody(),
+        [20] = new ChamberDeviceBody(),
     };
 
     /// <summary>Resolve the body for a device: -1 = hosted plugin, a mapped built-in kind,

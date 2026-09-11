@@ -119,6 +119,17 @@ public sealed partial class NotaEngine
     }
     public void DeviceSetState(int trackId, int deviceIndex, byte[] data)
     { ThrowIfDisposed(); if (data is { Length: > 0 }) NativeMethods.DeviceSetState(_handle, trackId, deviceIndex, data, data.Length); }
+    public bool DeviceLoadFile(int trackId, int deviceIndex, string path)
+    { ThrowIfDisposed(); return NativeMethods.DeviceLoadFile(_handle, trackId, deviceIndex, path) == NativeMethods.NotaResult.Ok; }
+    public string DeviceText(int trackId, int deviceIndex, int id)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.DeviceText(_handle, trackId, deviceIndex, id, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.DeviceText(_handle, trackId, deviceIndex, id, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
 
     // --- MIDI effects ---
     public int AddMidiEffect(int trackId, int kind) { ThrowIfDisposed(); return NativeMethods.AddMidiEffect(_handle, trackId, kind); }

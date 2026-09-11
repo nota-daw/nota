@@ -20,6 +20,7 @@
 #include "Forge.h"
 #include "AutoGain.h"
 #include "Shutter.h"
+#include "Chamber.h"
 #include "Ceiling.h"
 #include "Strata.h"
 #include "Vintage.h"
@@ -427,6 +428,7 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
     else if (kind == 17) dev = std::make_shared<Forge>();
     else if (kind == 18) dev = std::make_shared<AutoGain>();
     else if (kind == 19) dev = std::make_shared<Shutter>();
+    else if (kind == 20) dev = std::make_shared<Chamber>();
     else return -1;
     dev->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0, kMaxBlock);
     if (kind == 5) if (auto* rk = dynamic_cast<RackDevice*>(dev.get())) rk->addChain(-1);  // one pass-through chain
@@ -488,6 +490,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
         case 17: d = std::make_shared<Forge>(); break;
         case 18: d = std::make_shared<AutoGain>(); break;
         case 19: d = std::make_shared<Shutter>(); break;
+        case 20: d = std::make_shared<Chamber>(); break;
         default: d = src.clone(); break;                                       // hosted plugin
     }
     if (!d) return nullptr;
@@ -562,6 +565,7 @@ static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
         case 17: return std::make_shared<Forge>();
         case 18: return std::make_shared<AutoGain>();
         case 19: return std::make_shared<Shutter>();
+        case 20: return std::make_shared<Chamber>();
         default: return nullptr;   // Rack / plugin: no simple per-param default
     }
 }
@@ -780,6 +784,16 @@ int32_t Engine::deviceGetState(int32_t trackId, int32_t deviceIndex, uint8_t* ou
 
 void Engine::deviceSetState(int32_t trackId, int32_t deviceIndex, const uint8_t* data, int32_t size) {
     if (auto* d = deviceAt(trackId, deviceIndex)) d->setState(data, size);
+}
+
+bool Engine::deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path) {
+    auto* d = deviceAt(trackId, deviceIndex);
+    return d && d->loadFile(path);
+}
+
+std::string Engine::deviceText(int32_t trackId, int32_t deviceIndex, int32_t id) const {
+    auto* d = deviceAt(trackId, deviceIndex);
+    return d ? d->deviceText(id) : std::string{};
 }
 
 void Engine::setDeviceSidechainSource(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId) {

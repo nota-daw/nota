@@ -269,6 +269,14 @@ and user presets, automation, persistence and cloning.
 - **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
   Attack/Hold/Release, Floor, Lookahead, Flip (ducker), band-pass sidechain with Listen; a
   signal graph, IN/GR meters, LED.
+- **Nota Chamber** (20) — hybrid reverb: a zero-latency convolution engine (16 synthesised
+  IRs — halls, rooms, plates, spring, spaces, FX — or your own WAV/FLAC/MP3, mono / stereo /
+  4-ch true stereo, dropped on the IR view) with Start/Decay trims, Attack, Size, Reverse,
+  True Stereo, and an algorithmic engine (Dark Hall / Plate / Quartz / Shimmer) with
+  per-band decay, diffusion, damping, modulation, Freeze + Hold in, Vintage and a pitch
+  shifter; Blend (parallel or serial), separate free/synced pre-delays, a 4-band EQ at the
+  input / tail / output, ducking, width + bass mono, Dry/Wet, wet-only send mode. IR edits
+  morph the tail without clicks; user IRs persist in the project.
 - **Nota Chorus** — modulation (chorus) effect.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
@@ -405,7 +413,8 @@ Coverage:
 - **Project**: `get_overview` (a full snapshot).
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id).
-- **Audio effects**: add, remove, reorder, bypass, parameters.
+- **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
+  device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split.
 - **Automation**: create a lane, read and write points.

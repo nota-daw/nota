@@ -19,6 +19,29 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Chamber — a hybrid reverb.** A new built-in audio effect (kind 20) that runs a
+  convolution reverb and an algorithmic reverb side by side, as in Ableton's Hybrid Reverb.
+  **Blend** mixes the two — in parallel, or in **Serial** with the convolution feeding the
+  algorithm. The convolution engine comes with 16 impulse responses (concert hall, stone
+  vault, cathedral, scoring stage, wood chamber, live and drum rooms, tiled bathroom, two
+  plates, a spring tank, car park, stairwell, forest, gated room, metal tank), and loads your
+  own WAV / FLAC / MP3 file — mono, stereo or 4-channel true stereo — with **Load…** or by
+  dropping it on the waveform. Drag the waveform's brass lines to trim the IR (Start / Decay),
+  and shape it with Attack, Size (stretch 50–200 %), Reverse and True Stereo; a *Result* lane
+  under it shows the IR exactly as it is convolved, after the pre-delay. The engine has
+  no latency, and changing the IR re-renders the whole tail without a click. The algorithm
+  has four modes — **Dark Hall**, **Plate**, **Quartz** and **Shimmer** — with Decay, Size,
+  Diffusion, Damping and separate low / high decay times you drag on the *Decay per band*
+  graph — drawn over the algorithm's real, rendered impulse response — plus modulation, **Freeze** (the tail holds forever), **Hold in** (keep layering the
+  input into a frozen tail), a **Vintage** colour and a pitch shifter (−12 / +7 / +12, fed
+  back into the tail or on top). Each engine has its own pre-delay, free or tempo-synced.
+  Around them: a four-band EQ you can place at the input, on the tail or at the output (with
+  a drag-handle curve), ducking of the wet while you play, width and bass mono, Dry/Wet with
+  a dry level, a **Wet only** switch for send tracks, output gain and meters. The card follows
+  the design mockup (Blend column, Convolution / Algorithm / EQ · Mod and Levels / Output
+  tabs, a status line with CPU). 22 factory presets; every control can be automated, MIDI
+  learned and A/B compared, and a loaded IR is saved inside the project. MCP can add it,
+  load an IR file and read the IR names.
 - **Nota Pentad — a 5-voice polyphonic synth (Prophet-5).** A new built-in instrument
   (kind 14) modelled on the Prophet-5 Rev 3: Osc A (saw and pulse together, hard sync to
   B) and Osc B (saw, triangle, pulse; Lo-Freq mode; keyboard tracking off), white/pink
@@ -64,6 +87,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   always jumps to the source, where the notes and devices live.
 
 ### Fixed
+- Applying a built-in effect's factory preset now resets the parameters the preset doesn't
+  name to their defaults, so switching presets no longer keeps leftovers from the last one.
 - **Preferences: the end of long sections can be scrolled into view.** The last rows of
   the Shortcuts list sat below the window's edge.
 - **Deleting one half of a live-freeze pair no longer leaves the other half stuck.** If the

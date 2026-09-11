@@ -25,8 +25,8 @@ namespace Nota.App;
 
 internal sealed class RackCardView(DeviceCardContext ctx)
 {
-    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Reverb", "Nota Delay", "Nota Utility", "Nota Level", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata" };
-    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 2, 3, 4, 18, 14, 19, 6, 7, 8, 17, 12, 9, 10, 11, 15 };
+    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata" };
+    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 2, 20, 3, 4, 18, 14, 19, 6, 7, 8, 17, 12, 9, 10, 11, 15 };
     private static readonly IBrush RowSel = new SolidColorBrush(Color.FromArgb(0x22, 0xD8, 0xA0, 0x3D)); // selected chain wash
 
     private readonly DeviceCardContext _ctx = ctx;
@@ -2088,6 +2088,8 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.DeviceBypassed):     return Access.ChainDeviceBypassed(Chain, Dev);
             case nameof(Nota.Application.IAudioEngine.SetDeviceBypassed):  Access.SetChainDeviceBypassed(Chain, Dev, (bool)args![2]!); return null;
             case nameof(Nota.Application.IAudioEngine.DeviceGainReduction):   return 0f;
+            case nameof(Nota.Application.IAudioEngine.DeviceLoadFile):        return false;   // chain devices keep params only
+            case nameof(Nota.Application.IAudioEngine.DeviceText):            return "";
             case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain): return false;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):  return -1;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return 0f;

@@ -53,6 +53,7 @@
 #include "Forge.h"
 #include "AutoGain.h"
 #include "Shutter.h"
+#include "Chamber.h"
 
 #include <algorithm>
 #include <atomic>
@@ -672,6 +673,7 @@ protected:
             case 17: return std::make_shared<Forge>();
             case 18: return std::make_shared<AutoGain>();
             case 19: return std::make_shared<Shutter>();
+            case 20: return std::make_shared<Chamber>();
             default: return nullptr;   // 5 = Effect Rack (nesting) / plugin: not via this factory
         }
     }

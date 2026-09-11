@@ -234,9 +234,12 @@ public static class PresetService
                 int pc = engine.DeviceParamCount(trackId, deviceIndex);
                 if (doc.NamedParams is { Count: > 0 })
                 {
+                    // A param the preset doesn't name goes back to its default (like instruments),
+                    // so switching presets never inherits leftovers from the previous one.
                     for (int i = 0; i < pc; i++)
-                        if (doc.NamedParams.TryGetValue(engine.DeviceParamName(trackId, deviceIndex, i), out var v))
-                            engine.DeviceSetParam(trackId, deviceIndex, i, v);
+                        engine.DeviceSetParam(trackId, deviceIndex, i,
+                            doc.NamedParams.TryGetValue(engine.DeviceParamName(trackId, deviceIndex, i), out var v)
+                                ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
                 }
                 else
                 {

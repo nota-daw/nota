@@ -24,5 +24,9 @@ internal interface IDeviceBody
     /// and the shell wraps it with no inset. Default false = the shell pads the body 8px.</summary>
     bool FullBleed => false;
 
+    /// <summary>Tag shown after the device name in the shared header (e.g. "HYBRID");
+    /// null = the default "BUILT-IN".</summary>
+    string? Subtitle => null;
+
     Control Build(DeviceCardContext ctx, int deviceIndex);
 }

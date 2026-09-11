@@ -16,8 +16,10 @@
 #include "Reverb.h"
 #include "Utility.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -100,6 +102,21 @@ int32_t nota_device_get_state(const NotaEngine* e, int32_t track_id, int32_t dev
 }
 void nota_device_set_state(NotaEngine* e, int32_t track_id, int32_t device_index, const uint8_t* data, int32_t size) {
     if (e) ENG(e)->deviceSetState(track_id, device_index, data, size);
+}
+NotaResult nota_device_load_file(NotaEngine* e, int32_t track_id, int32_t device_index, const char* path) {
+    if (!e || !path) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->deviceLoadFile(track_id, device_index, path) ? NOTA_OK : NOTA_ERR_UNKNOWN;
+}
+int32_t nota_device_text(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t id, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->deviceText(track_id, device_index, id);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;   // full length (probe with a null buffer, then fetch)
 }
 
 // --- MIDI effects ---

@@ -2466,6 +2466,213 @@ Console.WriteLine("-- Nota Shutter --");
     Check(ge.DeviceGetParam(gt, gd, 0) > 0.7f, $"automation drives Shutter Threshold ({ge.DeviceGetParam(gt, gd, 0):F2})");
 }
 
+// ============================ Nota Chamber =================================
+Console.WriteLine("-- Nota Chamber --");
+{
+    // Chamber = hybrid reverb (kind 20). Own engine. IR shaping rebuilds kernels on a worker
+    // thread, so the test waits a moment after IR-shaping edits before rendering.
+    const int Blend = 0, DryWet = 1, ConvOn = 2, AlgoOn = 3, Routing = 5, IrSelect = 6, IrSize = 10, AlgoMode = 15,
+              AlgoDecay = 16, Freeze = 24, ShimmerAmount = 29, EqPosition = 36, DuckAmount = 37, WetOnly = 43, ZeroLatency = 44;
+    using var ce = new NotaEngine();
+    ce.SetBpm(120); ce.SetTimeSignature(4, 4);
+    int ct = ce.AddInstrumentTrack();
+    ce.AddMidiClip(ct, 0.0, 8.0);
+    ce.SetClipNotes(ct, 0, new[] { new NotaNote(60, 0.0, 0.5, 0.8f) });   // a short note, then the tail
+    int cd = ce.AddBuiltinDevice(ct, 20);
+    Check(cd >= 0, "add built-in Nota Chamber");
+    Check(ce.DeviceName(ct, cd) == "Nota Chamber", $"name is Nota Chamber (got '{ce.DeviceName(ct, cd)}')");
+    Check(ce.TrackDeviceBuiltinKind(ct, cd) == 20, $"builtin kind is 20 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
+    int cpc = ce.DeviceParamCount(ct, cd);
+    Check(cpc == 45, $"Nota Chamber exposes 45 params (got {cpc})");
+    var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cd, i)).ToList();
+    Check(cnames.Distinct().Count() == cpc && cnames.All(n => n.Length > 0), "Chamber param names are unique and non-empty");
+    ce.DeviceSetParam(ct, cd, AlgoDecay, 0.42f);
+    Check(Math.Abs(ce.DeviceGetParam(ct, cd, AlgoDecay) - 0.42f) < 1e-4, "Chamber param set/get round-trips");
+    ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay));
+    var irs = ce.DeviceText(ct, cd, 10).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    Check(irs.Length == 16, $"Chamber lists 16 built-in IRs (got {irs.Length})");
+    Check(ce.DeviceText(ct, cd, 0) == "Concert Hall · Wide", $"default IR is Concert Hall · Wide (got '{ce.DeviceText(ct, cd, 0)}')");
+
+    const int N = 8192;
+    var cb = new float[N * 2];
+    var csc = new float[32];
+    // Render 6 blocks (~1.1 s at 44.1 k): the note ends at 0.25 s, so the last block is pure tail.
+    (bool fin, float tail, float all) RenderTail()
+    {
+        ce.Seek(0); ce.Play();
+        bool f = true; float t = 0, a = 0;
+        for (int k = 0; k < 6; k++)
+        {
+            ce.RenderOffline(cb, N);
+            foreach (var s in cb) if (!float.IsFinite(s)) { f = false; break; }
+            float r = Rms(cb, N); a = Math.Max(a, r); if (k == 5) t = r;
+        }
+        ce.StopTransport();
+        return (f, t, a);
+    }
+    void Settle() => System.Threading.Thread.Sleep(150);   // let the IR worker publish a new kernel
+    ce.DeviceSetParam(ct, cd, WetOnly, 1f);
+    Settle();
+    var r0 = RenderTail();
+    Check(r0.fin && r0.tail > 1e-4f, $"Chamber renders a finite reverb tail (tail rms {r0.tail:F4})");
+    int cn = ce.DeviceScope(ct, cd, csc, csc.Length);
+    Check(cn == 22, $"Chamber scope returns 22 values (got {cn})");
+    Check(csc[6] == 0f && csc[9] > 2f && csc[11] == 4f, $"zero-latency kernel of a 4-ch built-in IR (lat {csc[6]}, {csc[9]:F1} s, {csc[11]} ch)");
+
+    // Card previews: the processed IR (layer 2) and the algorithm's rendered impulse response
+    // (layer 3) follow the params — Size stretches the result, Decay lengthens the echogram.
+    {
+        var pv = new float[128];
+        Check(ce.DeviceLayerWave(ct, cd, 2, pv, pv.Length) == 128 && ce.DeviceLayerWave(ct, cd, 3, pv, pv.Length) == 128, "Chamber exposes result + echogram previews");
+        ce.DeviceScope(ct, cd, csc, csc.Length);
+        float res0 = csc[19], echo0 = csc[20];
+        ce.DeviceSetParam(ct, cd, IrSize, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 0.9f); Settle();
+        ce.DeviceScope(ct, cd, csc, csc.Length);
+        Check(csc[19] > res0 * 1.8f && csc[20] > echo0 * 2f, $"previews follow Size + Decay (result {res0:F2}→{csc[19]:F2} s, echogram {echo0:F2}→{csc[20]:F2} s)");
+        ce.DeviceSetParam(ct, cd, IrSize, 0.5f); ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay)); Settle();
+    }
+
+    // Engines on their own, and each algorithm.
+    ce.DeviceSetParam(ct, cd, AlgoOn, 0f); ce.DeviceSetParam(ct, cd, Blend, 0f);
+    var rc = RenderTail();
+    Check(rc.fin && rc.tail > 1e-4f, $"convolution alone renders a tail ({rc.tail:F4})");
+    ce.DeviceSetParam(ct, cd, AlgoOn, 1f); ce.DeviceSetParam(ct, cd, ConvOn, 0f); ce.DeviceSetParam(ct, cd, Blend, 1f);
+    string[] modes = { "Dark Hall", "Plate", "Quartz", "Shimmer" };
+    for (int m = 0; m < 4; m++)
+    {
+        ce.DeviceSetParam(ct, cd, AlgoMode, m / 3f);
+        var ra = RenderTail();
+        Check(ra.fin && ra.tail > 1e-4f && ra.all < 4f, $"algorithm {modes[m]} renders a bounded tail ({ra.tail:F4}, peak rms {ra.all:F3})");
+    }
+    ce.DeviceSetParam(ct, cd, ShimmerAmount, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 1f);
+    var rs = RenderTail();
+    Check(rs.fin && rs.all < 4f, $"max shimmer + max decay stays bounded (peak rms {rs.all:F3})");
+    ce.DeviceSetParam(ct, cd, ShimmerAmount, 0.5f); ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay));
+    ce.DeviceSetParam(ct, cd, AlgoMode, 0f);
+
+    // Freeze holds the tail: with a short decay the free tail dies, the frozen one doesn't.
+    ce.DeviceSetParam(ct, cd, AlgoDecay, 0.2f);
+    var rFree = RenderTail();
+    ce.Seek(0); ce.Play();
+    ce.RenderOffline(cb, N);                                  // the note plays into the tank
+    ce.DeviceSetParam(ct, cd, Freeze, 1f);
+    for (int k = 0; k < 5; k++) ce.RenderOffline(cb, N);
+    ce.StopTransport();
+    float frozen = Rms(cb, N);
+    Check(frozen > rFree.tail * 4 && frozen > 1e-4f, $"Freeze holds the algorithm tail (frozen {frozen:F4} vs free {rFree.tail:F5})");
+    ce.DeviceSetParam(ct, cd, Freeze, 0f);
+    ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay));
+
+    // Serial routing, EQ positions, ducking, dry/wet mix.
+    ce.DeviceSetParam(ct, cd, ConvOn, 1f); ce.DeviceSetParam(ct, cd, Blend, 0.5f); ce.DeviceSetParam(ct, cd, Routing, 1f);
+    var rser = RenderTail();
+    Check(rser.fin && rser.tail > 1e-4f, $"serial routing (conv → algo) renders ({rser.tail:F4})");
+    ce.DeviceSetParam(ct, cd, Routing, 0f);
+    bool eqOk = true;
+    foreach (float pos in new[] { 0f, 0.5f, 1f })
+    {
+        ce.DeviceSetParam(ct, cd, EqPosition, pos); ce.DeviceSetParam(ct, cd, 32, 0.5f); ce.DeviceSetParam(ct, cd, 35, 0.4f);
+        var re = RenderTail(); eqOk &= re.fin && re.all > 1e-4f;
+    }
+    Check(eqOk, "tail EQ renders at input / tail / output");
+    ce.DeviceSetParam(ct, cd, 32, 0f); ce.DeviceSetParam(ct, cd, 35, 1f); ce.DeviceSetParam(ct, cd, EqPosition, 0.5f);
+    ce.DeviceSetParam(ct, cd, DuckAmount, 1f);
+    ce.Seek(0); ce.Play(); ce.RenderOffline(cb, N); ce.StopTransport();
+    ce.DeviceScope(ct, cd, csc, csc.Length);
+    Check(csc[4] > 1f, $"ducking pulls the wet down while the input plays (GR {csc[4]:F1} dB)");
+    ce.DeviceSetParam(ct, cd, DuckAmount, 0f);
+    ce.DeviceSetParam(ct, cd, WetOnly, 0f); ce.DeviceSetParam(ct, cd, DryWet, 0f);
+    var rdry = RenderTail();
+    Check(rdry.tail < 1e-4f && rdry.all > 1e-3f, $"Dry/Wet 0 passes only the dry signal (tail {rdry.tail:F5})");
+    ce.DeviceSetParam(ct, cd, DryWet, 0.35f); ce.DeviceSetParam(ct, cd, WetOnly, 1f);
+
+    // Zero latency off: the big block's delay is reported (absorbed in the predelay).
+    ce.DeviceSetParam(ct, cd, ZeroLatency, 0f); Settle();
+    ce.Seek(0); ce.Play(); ce.RenderOffline(cb, N); ce.StopTransport();
+    ce.DeviceScope(ct, cd, csc, csc.Length);
+    Check(csc[6] >= 1024f, $"Zero latency off uses the big-block kernel (conv +{csc[6]} smp)");
+    ce.DeviceSetParam(ct, cd, ZeroLatency, 1f);
+    // IR size changes swap kernels live (worker) without breaking the render.
+    ce.DeviceSetParam(ct, cd, IrSize, 0.9f); Settle();
+    ce.DeviceSetParam(ct, cd, IrSelect, 2f / 16f); Settle();
+    var rsz = RenderTail();
+    Check(rsz.fin && rsz.tail > 1e-4f && ce.DeviceText(ct, cd, 0) == "Cathedral", $"IR switch + stretch re-renders ({ce.DeviceText(ct, cd, 0)}, tail {rsz.tail:F4})");
+
+    // User IR: load a stereo WAV (with leading silence, auto-trimmed), it becomes the IR.
+    string irPath = Path.Combine(Path.GetTempPath(), "nota_chamber_ir_" + Guid.NewGuid().ToString("N") + ".wav");
+    Nota.SmokeTest.WavWriter.WriteNoiseIr(irPath, seconds: 1.2, lead: 0.05, sampleRate: 44100);
+    Check(ce.DeviceLoadFile(ct, cd, irPath), "Chamber loads a user IR file");
+    Check(!ce.DeviceLoadFile(ct, cd, irPath + ".missing"), "a missing IR file is rejected");
+    Check(ce.DeviceGetParam(ct, cd, IrSelect) > 0.999f, "loading selects the user IR slot");
+    string irName = Path.GetFileNameWithoutExtension(irPath);
+    Check(ce.DeviceText(ct, cd, 2) == irName && ce.DeviceText(ct, cd, 0) == irName, $"user IR is named after the file ({ce.DeviceText(ct, cd, 2)})");
+    var ublob = ce.DeviceGetState(ct, cd);
+    Check(ublob.Length > 100_000, $"state blob carries the user IR PCM ({ublob.Length} bytes)");
+    var cw = new float[64];
+    Check(ce.DeviceLayerWave(ct, cd, 0, cw, cw.Length) == 64 && cw.Max() > 0.5f, "IR waveform envelope is readable");
+    var ru = RenderTail();
+    Check(ru.fin && ru.all > 1e-3f, $"user IR renders ({ru.all:F4})");
+    ce.DeviceScope(ct, cd, csc, csc.Length);
+    Check(csc[11] == 2f && csc[9] > 1.0f && csc[9] < 1.2f, $"user IR: stereo, leading silence trimmed ({csc[9]:F3} s)");
+
+    // Clone: duplicating the track carries params + the user IR.
+    int ctD = ce.DuplicateTrack(ct); int cdD = ce.TrackDeviceCount(ctD) - 1;
+    Check(ctD > 0 && ce.DeviceText(ctD, cdD, 2) == irName && Math.Abs(ce.DeviceGetParam(ctD, cdD, IrSize) - 0.9f) < 1e-3,
+          "duplicate track clones Chamber params + user IR");
+
+    // Project round-trip keeps the user IR.
+    string cproj = Path.Combine(Path.GetTempPath(), "nota-chamber-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var cwarn = new System.Collections.Generic.List<string>();
+        var cdoc = ProjectService.Capture(ce, new TransportState(120, 1, false, false), cwarn);
+        ProjectService.Save(cdoc, cproj, ce);
+        using var ce2 = new NotaEngine();
+        ProjectService.Apply(ProjectService.Load(cproj), ce2, cproj);
+        int rt = -1;
+        for (int i = 0; i < ce2.TrackCount; i++) if (ce2.TryGetTrackInfo(i, out var ti) && ce2.TrackDeviceCount(ti.Id) > 0) { rt = ti.Id; break; }
+        Check(rt > 0 && ce2.DeviceText(rt, 0, 2) == irName && ce2.DeviceGetParam(rt, 0, IrSelect) > 0.999f, "project round-trip restores the user IR");
+    }
+    finally { try { Directory.Delete(cproj, true); } catch { } try { File.Delete(irPath); } catch { } }
+
+    // Automation drives Blend.
+    int clane = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cd, Blend);
+    Check(clane >= 0, "add Chamber Blend automation lane");
+    ce.SetAutomationPoints(ct, clane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    ce.Seek(1.99); ce.Play(); ce.RenderOffline(cb, 4096); ce.StopTransport();
+    Check(ce.DeviceGetParam(ct, cd, Blend) > 0.7f, $"automation drives Chamber Blend ({ce.DeviceGetParam(ct, cd, Blend):F2})");
+    ce.RemoveAutomationLane(ct, clane);
+
+    // Factory presets: every named param exists and each applies in place + renders.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 20).ToList();
+        Check(mine.Count >= 16, $"Nota Chamber ships factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !cnames.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Chamber preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(ce, p.Id, ct, cd).Length != 0) { pf++; continue; }
+            Settle();
+            var rp = RenderTail();
+            if (!rp.fin || rp.all < 1e-4f || rp.all > 4f) pf++;
+        }
+        Check(pf == 0, $"every Chamber preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(ce, "chamber/Wide Shimmer", ct, cd);
+        Check(Math.Abs(ce.DeviceGetParam(ct, cd, AlgoMode) - 1f) < 1e-3 && ce.DeviceGetParam(ct, cd, IrSelect) < 0.2f, "Wide Shimmer preset selects Shimmer + Cathedral");
+        cat.ApplyInPlace(ce, "chamber/Spring Box", ct, cd);
+        Check(ce.DeviceGetParam(ct, cd, AlgoMode) < 1e-3, "unnamed params reset to defaults between presets");
+    }
+
+    // MCP: kind listed, IR text + file load through the tools.
+    {
+        var dt = new Nota.Mcp.Tools.DeviceTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Check(dt.ListDeviceKinds().Any(k => k.Kind == 20 && k.Name == "Nota Chamber"), "MCP lists Nota Chamber (kind 20)");
+        Check(dt.GetDeviceText(ct, cd, 0).Result.Length > 0, "MCP reads the Chamber IR name");
+    }
+}
+
 // ============================ Nota Level ===================================
 Console.WriteLine("-- Nota Level (AutoGain) --");
 {
