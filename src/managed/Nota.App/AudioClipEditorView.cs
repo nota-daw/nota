@@ -590,17 +590,17 @@ public sealed class AudioClipEditorView : UserControl
     private sealed class WaveformView : Control
     {
         private static readonly IBrush Bg = NotaPalette.BgSunken;
-        private static readonly IBrush Mid = new SolidColorBrush(Color.FromArgb(0x40, 0xA3, 0x9D, 0x8F));
+        private static readonly IBrush Mid = NotaPalette.Wash(NotaPalette.TextSecondary, 0x40);
         private static readonly IBrush PlayheadCursor = NotaPalette.AccentBright;
-        private static readonly IBrush Marker = new SolidColorBrush(Color.Parse("#7FCCE1"));
-        private static readonly IBrush GridBeat = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
-        private static readonly IBrush GridBar = new SolidColorBrush(Color.FromArgb(0xC0, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush Marker = NotaPalette.Marker;
+        private static readonly IBrush GridBeat = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
+        private static readonly IBrush GridBar = NotaPalette.Wash(NotaPalette.BorderStrong, 0xC0);
         private static readonly IBrush GridLabel = NotaPalette.TextTertiary;
         private static readonly Typeface GridFace = new(FontFamily.Default);
         // BPM chip on the warp bar (drag to scrub the segment tempo).
-        private static readonly IBrush BpmChipBg = new SolidColorBrush(Color.FromArgb(0xDE, 0x12, 0x18, 0x1B));
-        private static readonly IBrush BpmChipBgHot = new SolidColorBrush(Color.FromArgb(0xF2, 0x1A, 0x2B, 0x31));
-        private static readonly IBrush BpmSuffix = new SolidColorBrush(Color.FromArgb(0x99, 0x7F, 0xCC, 0xE1));
+        private static readonly IBrush BpmChipBg = NotaPalette.Wash(NotaPalette.Ink("#12181B"), 0xDE);
+        private static readonly IBrush BpmChipBgHot = NotaPalette.Wash(NotaPalette.Ink("#1A2B31"), 0xF2);
+        private static readonly IBrush BpmSuffix = NotaPalette.Wash(NotaPalette.Marker, 0x99);
         private const int BeatsPerBar = 4;   // matches the props-rail bar.beat readouts
         private IBrush _wave = new SolidColorBrush(NotaPalette.TrackColors[1]);
         private float[]? _peaks;
@@ -615,9 +615,9 @@ public sealed class AudioClipEditorView : UserControl
 
         // Source-region brackets (unwarped clips): whole sample drawn, Start/End handles
         // pick the playable region [_srcOff, _srcOff+_srcLen] within _srcTotal frames.
-        private static readonly IBrush Bracket = new SolidColorBrush(Color.Parse("#7FCCE1"));
-        private static readonly IBrush BracketHot = new SolidColorBrush(Color.Parse("#CDEEF8"));
-        private static readonly IBrush OutsideDim = new SolidColorBrush(Color.FromArgb(0xAA, 0x10, 0x0F, 0x0D));
+        private static readonly IBrush Bracket = NotaPalette.Marker;
+        private static readonly IBrush BracketHot = NotaPalette.MarkerHot;
+        private static readonly IBrush OutsideDim = NotaPalette.Wash(NotaPalette.BgSunken, 0xAA);
         private double _srcOff, _srcLen, _srcTotal;
         private bool _srcMode;
         private int _srcDrag = -1;          // 0 = start bracket, 1 = end bracket, -1 = none
@@ -641,7 +641,7 @@ public sealed class AudioClipEditorView : UserControl
 
         // Volume envelope (M9 follow-up): points (beat, value 0..1) in clip-local beats.
         private static readonly IBrush EnvLine = NotaPalette.AccentBright;
-        private static readonly IBrush EnvLineDim = new SolidColorBrush(Color.FromArgb(0x60, 0xF0, 0xC0, 0x60));
+        private static readonly IBrush EnvLineDim = NotaPalette.Wash(NotaPalette.AccentBright, 0x60);
         private sealed class EnvPt { public double beat; public double val; public float curve; }
         private readonly System.Collections.Generic.List<EnvPt> _env = new();
         private double _clipBeats = 1;

@@ -541,7 +541,9 @@ public sealed class BrowserView : UserControl
 
     private static IBrush BrushFromHex(string hex)
     {
-        try { return new SolidColorBrush(Color.Parse(hex)); }
+        // A tag colour comes from the library, not the palette — Ink() re-tints it for the
+        // active theme instead of painting a graphite-tuned hue onto paper.
+        try { return NotaPalette.Ink(hex); }
         catch { return Brushes.Gray; }
     }
 
@@ -588,7 +590,7 @@ public sealed class BrowserView : UserControl
         {
             BorderThickness = new Thickness(0, 1, 0, 0),
             Padding = new Thickness(10, 8),
-            Background = new SolidColorBrush(Color.Parse("#1B1916")),
+            Background = NotaPalette.SurfaceInset,
             Child = new StackPanel { Children = { infoRow, playRow, row3 } },
         };
         footer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");

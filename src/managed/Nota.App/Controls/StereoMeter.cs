@@ -14,9 +14,9 @@ namespace Nota.App;
 
 internal sealed class StereoMeter : Control
 {
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Green = new SolidColorBrush(Color.Parse("#58B368"));
-    private static readonly IBrush Peak = new SolidColorBrush(Color.Parse("#D9C34C"));
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Green = NotaPalette.Success;
+    private static readonly IBrush Peak = NotaPalette.Warning;
     private float _l, _r, _pkL, _pkR;
 
     private static float Norm(float peak) => peak > 1e-4f ? (float)Math.Clamp((20 * Math.Log10(peak) + 60) / 60.0, 0, 1) : 0f;

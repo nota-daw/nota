@@ -6,13 +6,14 @@
 // Audio device / sample-rate / buffer are persisted natively (audio.json) and
 // applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings);
 // toolbar side persists via SettingsViewModel; scan folders via the catalog.
-// Test-tone / CPU-check and the Light theme are flagged (NaBadge) — not wired.
+// Test-tone / CPU-check are flagged (NaBadge) — not wired.
 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -29,7 +30,7 @@ namespace Nota.App;
 public sealed class PreferencesWindow : NotaWindow
 {
     private static readonly IBrush Panel = NotaPalette.SurfaceCard;
-    private static readonly IBrush Sidebar = new SolidColorBrush(Color.Parse("#1B1916"));
+    private static readonly IBrush Sidebar = NotaPalette.SurfaceInset;
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush Raised = NotaPalette.SurfaceRaised;
     private static readonly IBrush Divider = NotaPalette.BorderDefault;
@@ -462,23 +463,51 @@ public sealed class PreferencesWindow : NotaWindow
 
     // ---- Appearance -------------------------------------------------------
 
+    // Dark / Light / System as a segmented control. The choice applies immediately —
+    // NotaThemeService re-tints the palette and repaints every open window — and is
+    // persisted so the next launch starts in the same variant.
+    private static Control ThemePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(AppTheme Mode, ToggleButton Btn)>();
+
+        foreach (var (mode, label) in new[]
+                 {
+                     (AppTheme.Dark, "Ember Graphite"),
+                     (AppTheme.Light, "Ember Paper"),
+                     (AppTheme.System, "System"),
+                 })
+        {
+            var m = mode;
+            var btn = new ToggleButton
+            {
+                Content = label, Classes = { "seg" },
+                IsChecked = settings.Current.Theme == m,
+            };
+            btn.Click += (_, _) =>
+            {
+                // A segment can only be turned on: clicking the live one must not clear it.
+                foreach (var (bm, b) in buttons) b.IsChecked = bm == m;
+                if (settings.Current.Theme == m) return;
+                settings.Current.Theme = m;
+                settings.Save();
+                NotaThemeService.Set(m);
+            };
+            buttons.Add((m, btn));
+            strip.Children.Add(btn);
+        }
+
+        return new Border { Classes = { "segmented" }, Child = strip };
+    }
+
     private Control AppearancePane()
     {
         var body = new StackPanel { Spacing = 14 };
         body.Children.Add(SectionLabel("UI"));
 
-        var theme = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        var pill = new Border { Background = Sunken, BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2) };
-        var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        inner.Children.Add(new Border { Background = Brass, CornerRadius = new CornerRadius(3), Padding = new Thickness(10, 1), Child = new TextBlock { Text = "Ember (dark)", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = OnAccent } });
-        inner.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
-            Children = { new TextBlock { Text = "Light", FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, new NaBadge { Kind = NaBadgeKind.Future } },
-        });
-        pill.Child = inner;
-        theme.Children.Add(pill);
-        body.Children.Add(Row("Theme", theme));
+        body.Children.Add(Row("Theme", ThemePicker()));
+        body.Children.Add(Caption("Ember Graphite is the warm dark palette; Ember Paper is the same system on a light ground. System follows the OS appearance and switches with it."));
 
         // ---- AI control (MCP server) ----
         body.Children.Add(DividerLine());

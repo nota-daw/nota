@@ -19,7 +19,7 @@ internal sealed class AuroraStack : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.AccentBright;
-    private static readonly IBrush Faint = new SolidColorBrush(Color.FromArgb(0x42, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush Faint = NotaPalette.Wash(NotaPalette.Accent, 0x42);
     private const int Frames = 16, N = 72, HarmMax = 28;
 
     private int _bank;

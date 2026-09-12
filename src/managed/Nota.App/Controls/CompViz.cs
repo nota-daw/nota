@@ -17,7 +17,7 @@ namespace Nota.App;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-        private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly Typeface Face = new(FontFamily.Default);
         private float _thr = -18f, _ratio = 3f, _makeup;
         public CompViz() { MinWidth = 120; MinHeight = 70; }

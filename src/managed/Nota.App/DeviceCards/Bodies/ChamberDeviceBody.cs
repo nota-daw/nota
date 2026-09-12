@@ -51,10 +51,10 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         ("Stairwell", "SPACE", "3.2"), ("Forest Clearing", "OUTDOOR", "2.0"), ("Gated Room", "FX", "0.7"), ("Metal Tank", "FX", "3.4"),
     };
 
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
     private static readonly IBrush Panel = NotaPalette.BgApp;
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;

@@ -1875,8 +1875,7 @@ public sealed partial class ArrangementView : UserControl
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
-    private IBrush Brush(string key)
-        => this.TryFindResource(key, out var v) && v is IBrush b ? b : Brushes.Magenta;
+    private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? Brushes.Magenta;
 
     // Small bordered "−"/"+" zoom chip (HANDOFF 1b ruler: 11px, bordered, radius 4).
     private static Button ZoomChip(string text) => new()
@@ -1909,61 +1908,61 @@ public sealed partial class ArrangementView : UserControl
     private static readonly Color PlayheadColor = NotaPalette.AccentBrightColor;                 // Brush.AccentBright
     private static readonly IBrush PlayheadBrush = new SolidColorBrush(PlayheadColor);
     private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1.5);
-    private static readonly IPen PlayheadGlow = new Pen(new SolidColorBrush(Color.FromArgb(0x40, 0xF0, 0xC0, 0x60)), 4);
+    private static readonly IPen PlayheadGlow = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 4);
     private static readonly IPen ClipSelBorder = new Pen(PlayheadBrush, 2);
-    private static readonly IBrush EdgeHighlight = new SolidColorBrush(Color.Parse("#CDEEF8")); // resize-edge affordance
-    private static readonly IBrush InactiveVeil = new SolidColorBrush(Color.FromArgb(0xB0, 0x12, 0x14, 0x18)); // deactivated-clip scrim
+    private static readonly IBrush EdgeHighlight = NotaPalette.MarkerHot; // resize-edge affordance
+    private static readonly IBrush InactiveVeil = NotaPalette.Wash(NotaPalette.Veil, 0xB0); // deactivated-clip scrim
     private static readonly IBrush RulerText = NotaPalette.TextSecondary; // Brush.TextSecondary
     // Drag position tooltip (req 2.9): dark pill + bright text near the cursor.
-    private static readonly IBrush TooltipBg = new SolidColorBrush(Color.FromArgb(0xDC, 0x18, 0x18, 0x1E));
-    private static readonly IBrush TooltipText = new SolidColorBrush(Color.Parse("#F0E4C8"));
+    private static readonly IBrush TooltipBg = NotaPalette.Wash(NotaPalette.TooltipBg, 0xDC);
+    private static readonly IBrush TooltipText = NotaPalette.TooltipText;
     // Selected-track highlight: just a soft brass wash on the lane row — no edge
     // lines, so it never fights the grid. Header uses a warm tinted background.
-    private static readonly IBrush SelWash = new SolidColorBrush(Color.FromArgb(0x20, 0xD8, 0xA0, 0x3D)); // Accent @ ~12%
+    private static readonly IBrush SelWash = NotaPalette.Wash(NotaPalette.Accent, 0x20); // Accent @ ~12%
     // Browser drag-over: the lane the drop would land on glows (bright accent wash + edge).
-    private static readonly IBrush DropWash = new SolidColorBrush(Color.FromArgb(0x28, 0xF0, 0xC0, 0x60));
-    private static readonly IBrush DropEdge = new SolidColorBrush(Color.FromArgb(0xC0, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush DropWash = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
+    private static readonly IBrush DropEdge = NotaPalette.Wash(NotaPalette.AccentBright, 0xC0);
     internal int DropTrackIndex = -1;   // -1 = no drag over; set by OnLaneDragOver, drawn by LaneControl
     // In-progress audio take (M-fix): audio clips only materialise on stop, so a
     // translucent red region grows from the take start to the playhead as feedback.
-    private static readonly IBrush RecFill = new SolidColorBrush(Color.FromArgb(0x33, 0xD8, 0x56, 0x4B));
-    private static readonly IPen   RecBorder = new Pen(new SolidColorBrush(Color.FromArgb(0xC0, 0xD8, 0x56, 0x4B)), 1.5);
-    private static readonly IBrush RecText = new SolidColorBrush(Color.Parse("#F0928A"));
+    private static readonly IBrush RecFill = NotaPalette.Wash(NotaPalette.Danger, 0x33);
+    private static readonly IPen   RecBorder = new Pen(NotaPalette.Wash(NotaPalette.Danger, 0xC0), 1.5);
+    private static readonly IBrush RecText = NotaPalette.DangerPale;
     // Live capture waveform inside the growing take region — a brighter red so it
     // reads clearly against the translucent RecFill.
-    private static readonly IBrush RecWave = new SolidColorBrush(Color.FromArgb(0xE0, 0xF0, 0x92, 0x8A));
+    private static readonly IBrush RecWave = NotaPalette.Wash(NotaPalette.DangerPale, 0xE0);
     // Marquee rubber-band (multi-select): accent wash + accent border.
-    private static readonly IBrush MarqueeFill = new SolidColorBrush(Color.FromArgb(0x28, 0x7F, 0xCC, 0xE1));
-    private static readonly IPen   MarqueePen = new Pen(new SolidColorBrush(Color.FromArgb(0xC0, 0x7F, 0xCC, 0xE1)), 1);
+    private static readonly IBrush MarqueeFill = NotaPalette.Wash(NotaPalette.Marker, 0x28);
+    private static readonly IPen   MarqueePen = new Pen(NotaPalette.Wash(NotaPalette.Marker, 0xC0), 1);
 
     // Loop region: the transport-accent hue (AccentBright #F0C060). A solid brace
     // fills the ruler strip; a faint wash + edge lines mark the span over the lanes.
-    private static readonly IBrush LoopBrace = new SolidColorBrush(Color.FromArgb(0x66, 0xF0, 0xC0, 0x60));
-    private static readonly IBrush LoopBand = new SolidColorBrush(Color.FromArgb(0x14, 0xF0, 0xC0, 0x60));
-    private static readonly IPen   LoopEdge = new Pen(new SolidColorBrush(Color.FromArgb(0xA0, 0xF0, 0xC0, 0x60)), 1);
+    private static readonly IBrush LoopBrace = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
+    private static readonly IBrush LoopBand = NotaPalette.Wash(NotaPalette.AccentBright, 0x14);
+    private static readonly IPen   LoopEdge = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1);
     // Automation overlay (M9-A3): a scrim mutes the clip content, a dashed line marks
     // the flat baseline of an empty lane.
-    private static readonly IBrush AutoScrim = new SolidColorBrush(Color.FromArgb(0xC0, 0x10, 0x0F, 0x0D));
-    private static readonly IPen AutoBasePen = new Pen(new SolidColorBrush(Color.Parse("#6A6558")), 1)
+    private static readonly IBrush AutoScrim = NotaPalette.Wash(NotaPalette.BgSunken, 0xC0);
+    private static readonly IPen AutoBasePen = new Pen(NotaPalette.TextTertiary, 1)
         { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     // Write-arm REC button (M9-C): red dot + "REC", lit when armed.
-    private static readonly IBrush AutoArmOn = new SolidColorBrush(Color.Parse("#D8564B"));   // Brush.Danger-ish
-    private static readonly IPen   AutoArmOff = new Pen(new SolidColorBrush(Color.Parse("#6A6558")), 1);
-    private static readonly IBrush RecBgOff  = new SolidColorBrush(Color.Parse("#1E1B16"));   // sunken chip
-    private static readonly IBrush RecBgOn   = new SolidColorBrush(Color.FromArgb(0x33, 0xD8, 0x56, 0x4B));
-    private static readonly IBrush RecDotOff = new SolidColorBrush(Color.Parse("#6A6558"));
-    private static readonly IBrush RecTextOff = new SolidColorBrush(Color.Parse("#9A9384"));
+    private static readonly IBrush AutoArmOn = NotaPalette.Danger;   // Brush.Danger-ish
+    private static readonly IPen   AutoArmOff = new Pen(NotaPalette.TextTertiary, 1);
+    private static readonly IBrush RecBgOff  = NotaPalette.SurfaceInset;   // sunken chip
+    private static readonly IBrush RecBgOn   = NotaPalette.Wash(NotaPalette.Danger, 0x33);
+    private static readonly IBrush RecDotOff = NotaPalette.TextTertiary;
+    private static readonly IBrush RecTextOff = NotaPalette.TextSecondary;
     // Hover feedback (M9-D): brass-accent brighter line + point ring under the cursor.
     private static readonly IPen   AutoHoverPen = new Pen(PlayheadBrush, 2.6);
     private static readonly IPen   AutoHoverRing = new Pen(PlayheadBrush, 1.5);
     // Automation range selection (Phase 2): teal band + edges over the picked time span,
     // distinct from the brass loop band so the two never read as the same thing.
-    private static readonly IBrush AutoSelBand = new SolidColorBrush(Color.FromArgb(0x30, 0x4C, 0xC2, 0xB0));
-    private static readonly IPen   AutoSelEdge = new Pen(new SolidColorBrush(Color.FromArgb(0xC0, 0x4C, 0xC2, 0xB0)), 1);
-    private static readonly IBrush SelHeaderBg = new SolidColorBrush(Color.Parse("#332C1E")); // warm accent-tinted raised surface
+    private static readonly IBrush AutoSelBand = NotaPalette.Wash(NotaPalette.Ink("#4CC2B0"), 0x30);
+    private static readonly IPen   AutoSelEdge = new Pen(NotaPalette.Wash(NotaPalette.Ink("#4CC2B0"), 0xC0), 1);
+    private static readonly IBrush SelHeaderBg = NotaPalette.SelHeaderBg; // warm accent-tinted raised surface
     // Freeze (M7): cool ice tint for a frozen track's header + its snowflake glyph.
-    private static readonly IBrush FrozenHeaderBg = new SolidColorBrush(Color.Parse("#1B2A33"));
-    private static readonly IBrush FrozenAccent   = new SolidColorBrush(Color.Parse("#7FC7EC"));
+    private static readonly IBrush FrozenHeaderBg = NotaPalette.FrozenHeaderBg;
+    private static readonly IBrush FrozenAccent   = NotaPalette.Frozen;
 
     // Track palette (mirror Brush.Track1..8 + ReturnA/B), each base offered in 3 shades
     // (normal / lighter / darker) so a colour index is base*Shades + shade. Return buses
@@ -2005,21 +2004,33 @@ public sealed partial class ArrangementView : UserControl
         var baseColor = NotaPalette.TrackColors[(idx / PaletteShades) % PaletteBases];
         return (idx % PaletteShades) switch
         {
-            1 => Mix(baseColor, Colors.White, 0.24),                 // lighter
-            2 => Mix(baseColor, Color.FromRgb(0x14, 0x12, 0x10), 0.30), // darker
+            1 => Mix(baseColor, NotaPalette.ShadeUp.Color, 0.24),    // lighter
+            2 => Mix(baseColor, NotaPalette.ShadeDown.Color, 0.30),  // darker
             _ => baseColor,
         };
     }
 
+    // Clip brushes are alpha-derived from a track colour rather than being a slot, so they
+    // are registered as derivations: the cache survives a variant change and re-tints with it,
+    // which also keeps an already-open clip editor (handed `content`) honest.
     private static readonly Dictionary<int, (IBrush fill, IPen border, IBrush strip, IBrush content)> _clipColors = new();
     private static (IBrush fill, IPen border, IBrush strip, IBrush content) ClipColors(int idx)
     {
         if (_clipColors.TryGetValue(idx, out var v)) return v;
-        var c = TrackColorForIndex(idx);
-        v = (Alpha(c, 0.16), new Pen(Alpha(c, 0.50), 1), Alpha(c, 0.20), new SolidColorBrush(c));
+        v = (ClipTint(idx, 0.16), new Pen(ClipTint(idx, 0.50), 1), ClipTint(idx, 0.20),
+             NotaPalette.Derived(() => TrackColorForIndex(idx)));
         _clipColors[idx] = v;
         return v;
     }
+    /// <summary>A cached, theme-following tint of a palette index. Registers a derivation,
+    /// so only call it behind a per-index cache — never per frame; <see cref="Alpha"/> is the
+    /// throwaway form for a Render pass.</summary>
+    private static SolidColorBrush ClipTint(int idx, double a) => NotaPalette.Derived(() =>
+    {
+        var c = TrackColorForIndex(idx);
+        return Color.FromArgb((byte)(a * 255), c.R, c.G, c.B);
+    });
+
     private static IBrush Alpha(Color c, double a) => new SolidColorBrush(Color.FromArgb((byte)(a * 255), c.R, c.G, c.B));
 
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;

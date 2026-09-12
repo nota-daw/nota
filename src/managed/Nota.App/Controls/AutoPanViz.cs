@@ -22,7 +22,7 @@ internal sealed class AutoPanViz : Control
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush Teal = NotaPalette.Teal;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
     private static readonly Typeface Face = new(FontFamily.Default);
     private static readonly string[] WaveNames = { "SINE", "TRI", "SAW", "SQUARE", "S&H" };
 
@@ -91,7 +91,7 @@ internal sealed class AutoPanViz : Control
 
         // Live L—R position bar with a moving dot.
         double by = bot + 8, bh = 4;
-        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D)), null, new Rect(x0, by, x1 - x0, bh), 2, 2);
+        ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.BorderStrong, 0x40), null, new Rect(x0, by, x1 - x0, bh), 2, 2);
         ctx.DrawLine(new Pen(Grid, 1), new Point((x0 + x1) / 2, by - 1), new Point((x0 + x1) / 2, by + bh + 1));
         double dotX = x0 + Math.Clamp(_pan, 0f, 1f) * (x1 - x0);
         ctx.DrawEllipse(AccentBright, null, new Point(dotX, by + bh / 2), 3, 3);

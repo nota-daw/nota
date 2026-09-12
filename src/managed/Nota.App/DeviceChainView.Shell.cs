@@ -25,9 +25,9 @@ namespace Nota.App;
 
 public sealed partial class DeviceChainView
 {
-    private static readonly IBrush ShellBg = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush ShellHdr = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush ShellInset = new SolidColorBrush(Color.Parse("#100F0D"));
+    private static readonly IBrush ShellBg = NotaPalette.BgApp;
+    private static readonly IBrush ShellHdr = NotaPalette.SurfaceCard;
+    private static readonly IBrush ShellInset = NotaPalette.BgSunken;
 
     // The three device chains the one shell serves — each has its own param / bypass /
     // reorder / preset API, branched on below.

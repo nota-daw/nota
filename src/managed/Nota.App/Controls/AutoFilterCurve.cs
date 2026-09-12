@@ -23,19 +23,19 @@ internal sealed class AutoFilterCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x22, 0x3A, 0x36, 0x2D)));
+    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x22));
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8); // solid brass = current response
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x18, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush SpecFill = new SolidColorBrush(Color.FromArgb(0x22, 0x8A, 0xA6, 0xC0));
-    private static readonly IPen SpecPen = new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x9C, 0xB4, 0xCC)));
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x18);
+    private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.Ink("#8AA6C0"), 0x22);
+    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x44));
     private static readonly IBrush HandleB = NotaPalette.AccentBright;
 
     private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.2)
         { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed teal = at modulation
 
-    private static readonly IBrush SweepFill = new SolidColorBrush(Color.FromArgb(0x12, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush SweepFill = NotaPalette.Wash(NotaPalette.Teal, 0x12);
 
-    private static readonly IPen SweepEdge = new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0x5B, 0x9E, 0x9C)))
+    private static readonly IPen SweepEdge = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x55))
         { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;

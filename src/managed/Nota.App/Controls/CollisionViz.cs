@@ -20,7 +20,7 @@ internal sealed class CollisionViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
     private static readonly Typeface Face = new(FontFamily.Default);
     private static readonly string[] TypeNames = { "BEAM", "MARIMBA", "STRING", "MEMBRANE", "PLATE", "PIPE" };
 

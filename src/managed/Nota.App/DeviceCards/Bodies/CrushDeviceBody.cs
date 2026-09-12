@@ -32,23 +32,23 @@ internal sealed class CrushDeviceBody : IDeviceBody
     // NoiseFloor, PostFilter, DryWet, AntiAlias, Output, Drive.
     private static readonly float[] Defaults = { 0.55f, 0.35f, 0f, 0.15f, 0f, 0f, 0.85f, 1f, 0f, 0.5f, 0.333f };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush FieldBorder = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush RowLit = new SolidColorBrush(Color.Parse("#26231E"));
-    internal static readonly IBrush GridLine = new SolidColorBrush(Color.Parse("#1E1C18"));
-    internal static readonly IBrush GridCenter = new SolidColorBrush(Color.Parse("#2C2923"));
-    internal static readonly IBrush SrcLine = new SolidColorBrush(Color.Parse("#4A463D"));
-    internal static readonly IBrush NyqLine = new SolidColorBrush(Color.FromArgb(0x73, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush FieldBorder = NotaPalette.GraphBorder;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
+    private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
+    internal static readonly IBrush GridLine = NotaPalette.SurfaceCard;
+    internal static readonly IBrush GridCenter = NotaPalette.BorderDefault;
+    internal static readonly IBrush SrcLine = NotaPalette.TextDisabled;
+    internal static readonly IBrush NyqLine = NotaPalette.Wash(NotaPalette.AccentBright, 0x73);
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -89,8 +89,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
         {
             var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = new SolidColorBrush(Color.Parse("#3A362D")), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
+            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 11, MinWidth = 40 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
             var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (vw > 0) { val.Width = vw; val.TextAlignment = TextAlignment.Right; }
             bool drag = false;
@@ -113,7 +113,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var c = color ?? Amber;
             var fill = new Border { Height = 3, Background = c, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 10, MinWidth = 40, Children = { track2, fill, handle } };
             var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, Width = 48, TextAlignment = TextAlignment.Right };
             val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -182,7 +182,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
                 new StackPanel { [DockPanel.DockProperty] = Dock.Right, VerticalAlignment = VerticalAlignment.Center, Children = { AaToggle() } } } } };
 
         // ================= quantiser panel =================
-        var Dim = new SolidColorBrush(Color.Parse("#4A463D"));
+        var Dim = NotaPalette.TextDisabled;
         static TextBlock Tiny(string t, IBrush c) => new() { Text = t, FontSize = 8, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         TextBlock TinyMono(string t, IBrush c) { var b = Tiny(t, c); b.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return b; }
 
@@ -241,7 +241,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         DockPanel.SetDock(rightRail, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { rightRail, leftCol } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         void RefreshAll() { foreach (var a in readouts) a(); }
         SyncQuant(); SyncSpec();
@@ -296,8 +296,8 @@ internal sealed class CrushQuantiserViz : Control
 
         // Source waveform (thin grey line) + crushed output (brass steps)
         var srcPen = new Pen(CrushDeviceBody.SrcLine, 1);
-        var crushPen = new Pen(new SolidColorBrush(Color.Parse("#D8A03D")), 1.5);
-        var crushFill = new SolidColorBrush(Color.FromArgb(0x4D, 0xD8, 0xA0, 0x3D));
+        var crushPen = new Pen(NotaPalette.Accent, 1.5);
+        var crushFill = NotaPalette.Wash(NotaPalette.Accent, 0x4D);
         double scale = levels - 1.0;
         double invScale = 1.0 / scale;
         int holdMax = Math.Max(1, (int)(44100.0 / (500.0 * Math.Pow(44100.0 * 0.48 / 500.0, _rate))));
@@ -373,8 +373,8 @@ internal sealed class CrushSpectrumViz : Control
         dc.DrawLine(nyqPen, new Point(nyqX, 0), new Point(nyqX, h));
 
         // Spectrum bars: signal (brass) + aliased images (teal)
-        var sigBrush = new SolidColorBrush(Color.Parse("#D8A03D"));
-        var aliBrush = new SolidColorBrush(Color.Parse("#5B9E9C"));
+        var sigBrush = NotaPalette.Accent;
+        var aliBrush = NotaPalette.Teal;
         int bars = 26;
         double barW = w / bars;
         for (int i = 0; i < bars; i++)

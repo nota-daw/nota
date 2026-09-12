@@ -57,7 +57,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             double Val(double n) => Math.Exp(lmn + Math.Clamp(n, 0, 1) * lspan);
             var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
             var fill = new Border { Height = 3, Background = Brass, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2) };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
             var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
             canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
@@ -172,7 +172,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         return rootBody;
     }
 
-    private static IBrush Div() => new SolidColorBrush(Color.Parse("#26231E"));
+    private static IBrush Div() => NotaPalette.SurfaceRaised;
 
     // A titled bordered island panel (fixed width). headerless/custom lets the
     // stereo-field island supply its own dock layout that fills the height.
@@ -215,9 +215,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
     private sealed class Goniometer : Control
     {
         private static readonly IBrush Bg = NotaPalette.BgSunken;
-        private static readonly IBrush Grid = new SolidColorBrush(Color.Parse("#1E1C18"));
-        private static readonly IBrush Diag = new SolidColorBrush(Color.Parse("#26231E"));
-        private static readonly IBrush Dot = new SolidColorBrush(Color.FromArgb(0xCC, 0x7F, 0xCC, 0xE1));
+        private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+        private static readonly IBrush Diag = NotaPalette.SurfaceRaised;
+        private static readonly IBrush Dot = NotaPalette.Wash(NotaPalette.Marker, 0xCC);
         private float[]? _p; private int _n;
 
         public void Set(float[] p, int n) { _p = p; _n = n; InvalidateVisual(); }
@@ -255,8 +255,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
     private sealed class CorrMeter : Control
     {
         private static readonly IBrush Bg = NotaPalette.BgSunken;
-        private static readonly IBrush Risk = new SolidColorBrush(Color.FromArgb(0x33, 0xD9, 0x5F, 0x4C));
-        private static readonly IBrush Tick = new SolidColorBrush(Color.Parse("#3A362D"));
+        private static readonly IBrush Risk = NotaPalette.Wash(NotaPalette.Danger, 0x33);
+        private static readonly IBrush Tick = NotaPalette.BorderStrong;
         private float _c = 1;
         public void Set(float c) { _c = Math.Clamp(c, -1, 1); InvalidateVisual(); }
         public override void Render(DrawingContext ctx)

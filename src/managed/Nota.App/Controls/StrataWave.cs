@@ -17,7 +17,7 @@ namespace Nota.App;
 internal sealed class StrataWave : Control
 {
     private float[] _env = Array.Empty<float>();
-    private Color _color = Color.Parse("#C99C55");
+    private Color _color = NotaPalette.InkColor("#C99C55");
     private bool _muted, _recording;
     private float _progress = 1f;   // 0..1 of the loop that has been recorded (rec layer)
 
@@ -31,9 +31,9 @@ internal sealed class StrataWave : Control
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0 || _env.Length == 0) return;
         int n = _env.Length; double bw = w / n, mid = h / 2;
-        var full = _muted ? new SolidColorBrush(Color.Parse("#3A362D"))
-                          : new SolidColorBrush(_recording ? Color.Parse("#D95F4C") : Color.FromArgb(0xCC, _color.R, _color.G, _color.B));
-        var future = new SolidColorBrush(Color.Parse("#221F1A"));
+        var full = _muted ? NotaPalette.BorderStrong
+                          : new SolidColorBrush(_recording ? NotaPalette.Danger.Color : Color.FromArgb(0xCC, _color.R, _color.G, _color.B));
+        var future = NotaPalette.GraphBorder;
         double cut = _recording ? _progress * n : n;
         for (int i = 0; i < n; i++)
         {

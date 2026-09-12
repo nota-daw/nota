@@ -13,8 +13,8 @@ namespace Nota.App;
 internal sealed class RhythmWaveViz : Control
 {
     private float[] _peaks = System.Array.Empty<float>();   // per-column max |amp|, 0..1
-    private static readonly IBrush Fill = new SolidColorBrush(Color.Parse("#5B9E9C")) { Opacity = 0.85 };
-    private static readonly IPen Mid = new Pen(new SolidColorBrush(Color.Parse("#2C2923")), 1);
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Teal, 0xD9);
+    private static readonly IPen Mid = new Pen(NotaPalette.BorderDefault, 1);
 
     public void SetSamples(float[] interleaved, int channels)
     {

@@ -20,7 +20,7 @@ internal sealed class AmpCurve : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private float _drive = 1f, _bias;
@@ -81,7 +81,7 @@ internal sealed class AmpCurve : Control
             ctx.DrawText(t2, new Point(x1 - t2.Width, pad - 2));
         }
         // input-drive axis (−40 dB … 0 dB).
-        var axisB = new SolidColorBrush(Color.Parse("#4A463D"));
+        var axisB = NotaPalette.TextDisabled;
         ctx.DrawText(new FormattedText("in −40 dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB), new Point(x0, bot + 2));
         var zt = new FormattedText("0 dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB);
         ctx.DrawText(zt, new Point(x1 - zt.Width, bot + 2));

@@ -29,10 +29,12 @@ internal sealed class StrataDeviceBody : IDeviceBody
     private const int C_Record = 0, C_Overdub = 1, C_Play = 2, C_Stop = 3, C_Undo = 4, C_Clear = 5, A_LayerMute = 6, A_LayerGain = 7;
     private const int M_Empty = 0, M_Rec = 1, M_Play = 2, M_Over = 3, M_Stop = 4;
     private const int MaxLayers = 8;
-    private static readonly Color[] Palette =
+    // Per-layer identity hues, resolved through NotaPalette.Ink at draw time so they
+    // follow the theme (a snapshot here would freeze the loop bands in one variant).
+    private static readonly string[] Palette =
     {
-        Color.Parse("#C99C55"), Color.Parse("#9BA65D"), Color.Parse("#6FA383"), Color.Parse("#C4756A"),
-        Color.Parse("#6E93C4"), Color.Parse("#B07FC0"), Color.Parse("#C0A24E"), Color.Parse("#7FB0A0"),
+        "#C99C55", "#9BA65D", "#6FA383", "#C4756A",
+        "#6E93C4", "#B07FC0", "#C0A24E", "#7FB0A0",
     };
 
     public double Width => 700;
@@ -65,7 +67,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         // active mode's button lights in its colour.
         var actNames = new[] { "Record", "Overdub", "Play", "Stop" };
         var actCmds = new[] { C_Record, C_Overdub, C_Play, C_Stop };
-        var actColors = new[] { Color.Parse("#D95F4C"), Color.Parse("#D8A03D"), Color.Parse("#58B368"), Color.Parse("#A39D8F") };
+        var actColors = new[] { NotaPalette.Danger.Color, NotaPalette.Accent.Color, NotaPalette.Success.Color, NotaPalette.TextSecondary.Color };
         var actBtn = new Border[4]; var actSub = new TextBlock[4]; var actName = new TextBlock[4];
         var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 0; i < 4; i++)
@@ -79,7 +81,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             actRow.Children.Add(actBtn[i]);
         }
         DockPanel.SetDock(actRow, Dock.Right);
-        var live = new Border { Height = 34, Background = new SolidColorBrush(Color.Parse("#1E1C18")), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
+        var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new DockPanel { LastChildFill = false, Margin = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center, Children = {
                 actRow,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
@@ -133,7 +135,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             double tw = 84;
             var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
             var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2) };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
             var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
             canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
@@ -168,7 +170,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         {
             var dot = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = Sunken, Child = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = TextTertiary, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center } };
             var txt = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-            void Hi() { bool on = P(p) > 0.5f; var inner = (Border)dot.Child!; dot.Background = on ? tint : Sunken; inner.Background = on ? (IBrush)new SolidColorBrush(Color.Parse("#171613")) : TextTertiary; inner.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; inner.Margin = on ? new Thickness(0, 0, 2, 0) : new Thickness(2, 0, 0, 0); txt.Foreground = on ? tint : TextTertiary; }
+            void Hi() { bool on = P(p) > 0.5f; var inner = (Border)dot.Child!; dot.Background = on ? tint : Sunken; inner.Background = on ? (IBrush)NotaPalette.BgApp : TextTertiary; inner.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; inner.Margin = on ? new Thickness(0, 0, 2, 0) : new Thickness(2, 0, 0, 0); txt.Foreground = on ? tint : TextTertiary; }
             var b = new Border { Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { dot, txt } } };
             b.PointerPressed += (_, _) => { SetR(p, P(p) > 0.5f ? 0f : 1f); Hi(); };
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), label);
@@ -185,20 +187,20 @@ internal sealed class StrataDeviceBody : IDeviceBody
 
         var undo = ActionBtn("Undo", TextSecondary, () => Act(C_Undo));
         var export = ActionBtn("Export", TextSecondary, () => ctx.NotifyChanged());
-        var clear = ActionBtn("Clear", new SolidColorBrush(Color.Parse("#D95F4C")), () => Act(C_Clear));
+        var clear = ActionBtn("Clear", NotaPalette.Danger, () => Act(C_Clear));
         var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4, Margin = new Thickness(0, 4, 0, 0) };
         Grid.SetColumn(undo, 0); Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
         bottomActions.Children.Add(undo); bottomActions.Children.Add(export); bottomActions.Children.Add(clear);
 
         var qRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { new TextBlock { Text = "QUANTIZE", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, Seg(Quantize, new[] { "Off", "Bar", "1/4" }) } };
-        var rail = new Border { Width = 174, Background = new SolidColorBrush(Color.Parse("#1B1916")), BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 6),
+        var rail = new Border { Width = 174, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 6),
             Child = new StackPanel { Spacing = 5, Children = {
                 Lbl("LOOP", 8, TextTertiary),
                 HSlider(Feedback, "FEEDBACK", PctF, false, Teal),
                 HSlider(InputGain, "INPUT GAIN", DbF, false, Brass),
                 HSlider(Speed, "SPEED", SpeedF, true, Brass),
                 qRow,
-                new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")) },
+                new Border { Height = 1, Background = NotaPalette.SurfaceRaised },
                 Toggle(CountIn, "COUNT-IN 1 BAR", Teal),
                 Toggle(SetTempo, "SET TEMPO FROM LOOP", Teal),
                 Toggle(Reverse, "REVERSE", Brass),
@@ -249,15 +251,15 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 int st = (int)scope[6 + k * 3]; float gainDb = scope[7 + k * 3]; bool muted = scope[8 + k * 3] > 0.5f;
                 bool rec = recL == k;
                 stateTxts[k].Text = rec ? "REC" : muted ? "MUTED" : "PLAY";
-                stateTxts[k].Foreground = rec ? new SolidColorBrush(Color.Parse("#D95F4C")) : muted ? TextTertiary : Success;
+                stateTxts[k].Foreground = rec ? NotaPalette.Danger : muted ? TextTertiary : Success;
                 dbTxts[k].Text = $"{gainDb:+0.0;-0.0;0.0}";
                 var mtxt = (TextBlock)muteBtns[k].Child!;
-                muteBtns[k].Background = muted ? new SolidColorBrush(Color.Parse("#3A2320")) : Sunken;
-                muteBtns[k].BorderBrush = muted ? new SolidColorBrush(Color.Parse("#D95F4C")) : BorderDef;
-                mtxt.Foreground = muted ? new SolidColorBrush(Color.Parse("#D95F4C")) : TextTertiary;
-                var col = Palette[k % Palette.Length];
-                layerRows[k].Background = rec ? new SolidColorBrush(Color.FromArgb(0x1A, 0xD9, 0x5F, 0x4C)) : muted ? new SolidColorBrush(Color.Parse("#1B1916")) : new SolidColorBrush(Color.FromArgb(0x0D, 0xD8, 0xA0, 0x3D));
-                layerRows[k].BorderBrush = rec ? new SolidColorBrush(Color.Parse("#D95F4C")) : muted ? BorderDef : new SolidColorBrush(Color.FromArgb(0x73, col.R, col.G, col.B));
+                muteBtns[k].Background = muted ? NotaPalette.MuteTint : Sunken;
+                muteBtns[k].BorderBrush = muted ? NotaPalette.Danger : BorderDef;
+                mtxt.Foreground = muted ? NotaPalette.Danger : TextTertiary;
+                var col = NotaPalette.InkColor(Palette[k % Palette.Length]);
+                layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Danger, 0x1A) : muted ? NotaPalette.SurfaceInset : NotaPalette.Wash(NotaPalette.Accent, 0x0D);
+                layerRows[k].BorderBrush = rec ? NotaPalette.Danger : muted ? BorderDef : new SolidColorBrush(Color.FromArgb(0x73, col.R, col.G, col.B));
                 int wn = engine.DeviceLayerWave(track, di, k, waveBuf, waveBuf.Length);
                 var env = new float[Math.Max(1, wn)];
                 for (int i = 0; i < wn; i++) env[i] = Math.Clamp(waveBuf[i], 0f, 1f);
@@ -269,6 +271,6 @@ internal sealed class StrataDeviceBody : IDeviceBody
         Refresh();
 
         DockPanel.SetDock(live, Dock.Top);
-        return new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
     }
 }

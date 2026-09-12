@@ -24,20 +24,20 @@ namespace Nota.App;
 internal sealed class BassInstrumentCard : IInstrumentCard
 {
     // Mockup palette (matches the Nota Bass Mockup.html and VoltInstrumentCard).
-    private static readonly IBrush CardBg = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealLit = new SolidColorBrush(Color.Parse("#7FC9C6"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Handle = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush ArrowC = new SolidColorBrush(Color.Parse("#3E3A31"));
+    private static readonly IBrush CardBg = NotaPalette.BgApp;
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealLit = NotaPalette.TealBright;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush Handle = NotaPalette.TextSecondary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush ArrowC = NotaPalette.BorderStrong;
 
     public bool BodyOnly => true;
     public string Subtitle => "BASS SYNTH";

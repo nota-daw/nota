@@ -18,6 +18,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Light theme.** *Ember Paper* joins *Ember Graphite*: the same design system on a warm
+  paper ground, with brass darkened to bronze so marks keep their weight against a light
+  background. Preferences → Appearance picks Ember Graphite, Ember Paper or System (which
+  follows the OS appearance and switches with it). Switching applies immediately — no
+  restart — and the choice is remembered.
+
+### Changed
+- The colour tokens in `NotaTheme.axaml` now live in theme dictionaries, and `NotaPalette`
+  hands out brushes that re-tint in place, so both the XAML and the custom-drawn layer
+  follow the active variant. The ~970 hex literals that had accumulated across the device
+  cards, visualisers and editors now route through the palette; colours that are genuinely
+  data — tag swatches, Strata layer hues, Drum Rack kit dots — are re-tinted per variant
+  at the point of use.
+- `WaveformView` was still painted in the pre-Ember cool-slate palette; it now uses the
+  tokens its own comments named.
+
 ## [0.38.0] — 2026-09-12
 
 ### Highlights

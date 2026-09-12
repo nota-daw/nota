@@ -15,8 +15,8 @@ namespace Nota.App;
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private readonly IAudioEngine _e; private readonly int _t; private readonly int[] _ix;
         private static readonly IBrush S0 = NotaPalette.Accent;
-        private static readonly IBrush S1 = new SolidColorBrush(Color.FromArgb(0x8C, 0xD8, 0xA0, 0x3D));
-        private static readonly IBrush S2 = new SolidColorBrush(Color.FromArgb(0x47, 0xD8, 0xA0, 0x3D));
+        private static readonly IBrush S1 = NotaPalette.Wash(NotaPalette.Accent, 0x8C);
+        private static readonly IBrush S2 = NotaPalette.Wash(NotaPalette.Accent, 0x47);
         public MixBar(IAudioEngine e, int t, int[] ix) { _e = e; _t = t; _ix = ix; Height = 6; }
         public void Refresh() => InvalidateVisual();
         private float V(int k) => _ix[k] >= 0 ? _e.PluginParamGet(_t, -1, _ix[k]) : 0f;

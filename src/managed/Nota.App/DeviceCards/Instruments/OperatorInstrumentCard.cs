@@ -37,10 +37,10 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     private static readonly string[] OpId = { "a", "b", "c", "d" };
     private static readonly IBrush[] OpColor = { NotaPalette.Accent, NotaPalette.Accent, NotaPalette.Teal, NotaPalette.Teal };
 
-    private static readonly IBrush Strip = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Rail = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
+    private static readonly IBrush Strip = NotaPalette.SurfaceCard;
+    private static readonly IBrush Rail = NotaPalette.SurfaceInset;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
 
     public Control Build(DeviceCardContext ctx)
     {
@@ -210,7 +210,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             var inner = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(accentBar, Dock.Left); inner.Children.Add(accentBar);
             inner.Children.Add(new Border { Padding = new Thickness(6, 0), Child = g });
-            return new Border { Background = Ink, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true, Height = 34, Child = inner };
+            return new Border { Background = NotaPalette.BgApp, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true, Height = 34, Child = inner };
         }
 
         var opsHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
@@ -360,7 +360,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 
         var bodyRow = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(rail, Dock.Left); bodyRow.Children.Add(rail); bodyRow.Children.Add(mainHost);
-        var root = new DockPanel { LastChildFill = true, Background = Ink };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp };
         DockPanel.SetDock(stripHost, Dock.Top); root.Children.Add(stripHost); root.Children.Add(bodyRow);
 
         ctx.SetInstLiveViz(Refresh);

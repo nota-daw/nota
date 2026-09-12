@@ -19,16 +19,16 @@ namespace Nota.App;
 
 internal sealed class FluxVectorPad : Control
 {
-    private static readonly Color Inset   = Color.Parse("#100F0D");
-    private static readonly Color GridCol  = Color.Parse("#1C1A16");
-    private static readonly Color BorderCol = Color.Parse("#221F1A");
-    private static readonly Color Warm    = Color.Parse("#D8A03D");   // top-left
-    private static readonly Color Glass   = Color.Parse("#6D8FB5");   // top-right
-    private static readonly Color Moog    = Color.Parse("#C4756A");   // bottom-left
-    private static readonly Color Grain   = Color.Parse("#7E8A6A");   // bottom-right
-    private static readonly Color DotCol  = Color.Parse("#F0C060");
-    private static readonly Color Teal    = Color.Parse("#5B9E9C");
-    private static readonly IBrush Muted  = new SolidColorBrush(Color.Parse("#6E6A5E"));
+    private static Color Inset   => NotaPalette.BgSunken.Color;
+    private static Color GridCol  => NotaPalette.PadGrid.Color;
+    private static Color BorderCol => NotaPalette.GraphBorder.Color;
+    private static Color Warm    => NotaPalette.Accent.Color;   // top-left
+    private static Color Glass   => NotaPalette.InkColor("#6D8FB5");   // top-right
+    private static Color Moog    => NotaPalette.InkColor("#C4756A");   // bottom-left
+    private static Color Grain   => NotaPalette.InkColor("#7E8A6A");   // bottom-right
+    private static Color DotCol  => NotaPalette.AccentBright.Color;
+    private static Color Teal    => NotaPalette.Teal.Color;
+    private static readonly IBrush Muted  = NotaPalette.TextTertiary;
 
     private double _x = 0.34, _y = 0.28;         // base vector (params)
     private double _gx = 0.34, _gy = 0.28;       // effective (Motion + React) ghost
@@ -115,7 +115,7 @@ internal sealed class FluxVectorPad : Control
 
         // current vector dot (glow + bright core).
         ctx.DrawEllipse(new SolidColorBrush(DotCol, 0.28), null, new Point(bx, by), 11, 11);
-        ctx.DrawEllipse(new SolidColorBrush(DotCol), new Pen(new SolidColorBrush(Color.Parse("#171613")), 1), new Point(bx, by), 6, 6);
+        ctx.DrawEllipse(new SolidColorBrush(DotCol), new Pen(NotaPalette.BgApp, 1), new Point(bx, by), 6, 6);
 
         // 1px inner border to match the mockup pad frame.
         ctx.DrawRectangle(null, new Pen(new SolidColorBrush(BorderCol), 1), r, 8, 8);

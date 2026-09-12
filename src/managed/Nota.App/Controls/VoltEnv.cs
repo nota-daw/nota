@@ -21,7 +21,7 @@ namespace Nota.App;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-        private static readonly IBrush GridB = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly Typeface Face = new(FontFamily.Default);
         private readonly IAudioEngine _e;
         private readonly int _t;

@@ -16,16 +16,16 @@ namespace Nota.App;
 
 internal sealed class BeatRepeatViz : Control
 {
-    private static readonly IBrush Sunken = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderDef = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush WellBd = new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Faint = new SolidColorBrush(Color.Parse("#4A463D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush BarLine = new SolidColorBrush(Color.Parse("#4A463D"));
-    private static readonly Color Brass = Color.Parse("#D8A03D");
+    private static readonly IBrush Sunken = NotaPalette.BgSunken;
+    private static readonly IBrush BorderDef = NotaPalette.GraphBorder;
+    private static readonly IBrush Well = NotaPalette.SurfaceInset;
+    private static readonly IBrush WellBd = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Faint = NotaPalette.TextDisabled;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
+    private static readonly IBrush BarLine = NotaPalette.TextDisabled;
+    private static Color Brass => NotaPalette.Accent.Color;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
     private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
 
@@ -84,7 +84,7 @@ internal sealed class BeatRepeatViz : Control
 
         // Playhead.
         double px = x0 + _phase * (x1 - x0);
-        g.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0xF0, 0xC0, 0x60)), 3), new Point(px, top), new Point(px, bot));
+        g.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x55), 3), new Point(px, top), new Point(px, bot));
         g.DrawLine(new Pen(AmberLit, 1.5), new Point(px, top), new Point(px, bot));
 
         // Legend.

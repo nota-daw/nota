@@ -20,7 +20,8 @@ namespace Nota.App;
 
 public sealed class TagEditorWindow : NotaWindow
 {
-    // A small, dark-friendly palette; the first entry is the brass brand accent.
+    // The swatch choices offered for a new tag. These are stored with the tag, so they are
+    // data, not tokens; NotaPalette.Ink() gives whatever is stored a light-theme counterpart.
     private static readonly string[] Palette =
     {
         "#C8A24B", "#E0554E", "#E08A3C", "#E0C24E", "#6FB86F",
@@ -41,7 +42,7 @@ public sealed class TagEditorWindow : NotaWindow
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = this.TryFindResource("Brush.BgApp", out var bg) && bg is IBrush b ? b : Brushes.Magenta;
+        Background = NotaPalette.BgApp;
 
         _rows = new StackPanel { Spacing = 8 };
 
@@ -106,9 +107,9 @@ public sealed class TagEditorWindow : NotaWindow
             var sw = new Border
             {
                 Width = 16, Height = 16, CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Color.Parse(c)),
+                Background = NotaPalette.Ink(c),
                 BorderThickness = new Thickness(sel ? 2 : 0),
-                BorderBrush = Brushes.White,
+                BorderBrush = NotaPalette.HandleSel,
                 Cursor = new Cursor(StandardCursorType.Hand),
             };
             sw.PointerPressed += (_, _) => { _lib.UpdateTag(tag.Id, tag.Title, c); RebuildRows(); };

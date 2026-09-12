@@ -78,7 +78,7 @@ public partial class MainWindow
         {
             Text = "Select a clip in the arrangement to edit it here",
             FontSize = 12,
-            Foreground = Avalonia.Application.Current?.FindResource("Brush.TextTertiary") as IBrush,
+            Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         },

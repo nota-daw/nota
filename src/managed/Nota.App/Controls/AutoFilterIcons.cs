@@ -81,7 +81,7 @@ internal sealed class LfoWaveIcon : Control, IIconColor
 internal sealed class EnvGlyph : Control
 {
     private static readonly IBrush Line = NotaPalette.Teal;
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x1E, 0x5A, 0xC8, 0xD8));
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Ink("#5AC8D8"), 0x1E);
     public EnvGlyph() { }
     public override void Render(DrawingContext ctx)
     {

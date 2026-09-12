@@ -20,7 +20,7 @@ internal sealed class OperatorSpectrumViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly Color Brass = ((SolidColorBrush)NotaPalette.Accent).Color;
     private static readonly Color BrassLit = ((SolidColorBrush)NotaPalette.AccentBright).Color;
-    private static readonly IBrush Axis = new SolidColorBrush(Color.Parse("#4A463D"));
+    private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly IBrush Amber = NotaPalette.AccentBright;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
 

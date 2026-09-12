@@ -32,7 +32,7 @@ public sealed class SessionView : UserControl
     private const double Radius = 5;
 
     // Ember Graphite palette (static so cells can repaint without resource lookups).
-    private static readonly IBrush Lane = new SolidColorBrush(Color.Parse("#1B1916"));
+    private static readonly IBrush Lane = NotaPalette.SurfaceInset;
     private static readonly IBrush Card = NotaPalette.SurfaceCard;
     private static readonly IBrush Raised = NotaPalette.SurfaceRaised;
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
@@ -40,7 +40,7 @@ public sealed class SessionView : UserControl
     private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;
     private static readonly IBrush Success = NotaPalette.Success;
     private static readonly IBrush Warning = NotaPalette.Warning;
-    private static readonly IBrush Warning40 = new SolidColorBrush(Color.FromArgb(0x66, 0xD9, 0xC3, 0x4C)); // queued blink dim (HANDOFF §4)
+    private static readonly IBrush Warning40 = NotaPalette.Wash(NotaPalette.Warning, 0x66); // queued blink dim (HANDOFF §4)
     private static readonly IBrush Danger = NotaPalette.Danger;
     private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
@@ -49,9 +49,9 @@ public sealed class SessionView : UserControl
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly IBrush TextDisabled = NotaPalette.TextDisabled;
     private static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
-    private static readonly IBrush GreenFill = new SolidColorBrush(Color.FromArgb(0x21, 0x58, 0xB3, 0x68));
-    private static readonly IBrush RedFill = new SolidColorBrush(Color.FromArgb(0x28, 0xD9, 0x5F, 0x4C));
-    private static readonly IBrush AmberFill = new SolidColorBrush(Color.FromArgb(0x1F, 0xD9, 0xC3, 0x4C));
+    private static readonly IBrush GreenFill = NotaPalette.Wash(NotaPalette.Success, 0x21);
+    private static readonly IBrush RedFill = NotaPalette.Wash(NotaPalette.Danger, 0x28);
+    private static readonly IBrush AmberFill = NotaPalette.Wash(NotaPalette.Warning, 0x1F);
 
     // Track palette — mirrors ArrangementView.TrackBase (Brush.Track1..8 + Return A/B).
     private static readonly Color[] TrackBase = NotaPalette.TrackColors;
@@ -294,7 +294,7 @@ public sealed class SessionView : UserControl
 
     private void AddTrackColumn(NotaTrackInfo ti, int scenes, int colorIndex)
     {
-        var color = new SolidColorBrush(TrackBase[colorIndex]);
+        var color = NotaPalette.TrackBrushes[colorIndex];
         _headerRow.Children.Add(ColumnHeader((ti.IsInstrument ? "Inst " : "Audio ") + ti.Id, color));
 
         var mid = new StackPanel { Width = ColW, Spacing = Gap };
@@ -564,8 +564,9 @@ public sealed class SessionView : UserControl
             Scene = scene;
             _instrument = instrument;
             _trackColor = trackColor;
-            var c = trackColor.Color;
-            _trackBorder = new SolidColorBrush(Color.FromArgb(0x73, c.R, c.G, c.B));
+            _trackBorder = trackColor is SolidColorBrush slot
+                ? NotaPalette.Wash(slot, 0x73)
+                : new SolidColorBrush(Color.FromArgb(0x73, trackColor.Color.R, trackColor.Color.G, trackColor.Color.B));
 
             _icon = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
             _label = new TextBlock { FontSize = 10, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };

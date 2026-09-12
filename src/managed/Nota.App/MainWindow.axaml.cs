@@ -190,9 +190,9 @@ public partial class MainWindow : Window
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
         };
 
-        var cpuGreen = (IBrush?)this.FindResource("Brush.Success");
-        var cpuAmber = (IBrush?)this.FindResource("Brush.Warning");
-        var cpuRed = (IBrush?)this.FindResource("Brush.Danger");
+        var cpuGreen = (IBrush?)NotaPalette.Success;
+        var cpuAmber = (IBrush?)NotaPalette.Warning;
+        var cpuRed = (IBrush?)NotaPalette.Danger;
         vm.PlayheadUpdated += beats =>
         {
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message

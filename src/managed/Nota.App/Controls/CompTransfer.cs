@@ -22,9 +22,9 @@ internal sealed class CompTransfer : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.AccentBright;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x3C, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x3C);
     private static readonly IBrush Axis = NotaPalette.TextDisabled;
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x16, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x16);
     private static readonly Typeface Face = new(FontFamily.Default);
     private const int Threshold = 0, Ratio = 1, Knee = 5;
     private const double Lo = -60, Hi = 0;
@@ -78,7 +78,7 @@ internal sealed class CompTransfer : Control
         double thr = P(Threshold), ratio = Math.Max(1, P(Ratio)), knee = P(Knee);
         // Threshold line.
         double tx = X(thr, x0, x1);
-        ctx.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(0x50, 0xF0, 0xC0, 0x60)), 1), new Point(tx, top), new Point(tx, bot));
+        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x50), 1), new Point(tx, top), new Point(tx, bot));
 
         // Transfer curve + fill.
         var geo = new StreamGeometry();

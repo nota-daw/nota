@@ -14,12 +14,12 @@ namespace Nota.App;
 
 internal sealed class ChordKeysViz : Control
 {
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush WhiteKey = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush BlackKey = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Line = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Added = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush Played = new SolidColorBrush(Color.Parse("#F0C060"));
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush WhiteKey = NotaPalette.SurfaceRaised;
+    private static readonly IBrush BlackKey = NotaPalette.SurfaceInset;
+    private static readonly IBrush Line = NotaPalette.BorderDefault;
+    private static readonly IBrush Added = NotaPalette.Accent;
+    private static readonly IBrush Played = NotaPalette.AccentBright;
 
     private int _root = 60, _low = 60;
     private const int Span = 25;   // two octaves + 1

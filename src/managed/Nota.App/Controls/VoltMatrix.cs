@@ -21,13 +21,13 @@ internal sealed class VoltMatrix : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush GridB = new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush TealFill = new SolidColorBrush(Color.FromArgb(0x80, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush AmberFill = new SolidColorBrush(Color.FromArgb(0x80, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x80);
+    private static readonly IBrush AmberFill = NotaPalette.Wash(NotaPalette.Accent, 0x80);
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
-    private static readonly IBrush CellBg = new SolidColorBrush(Color.Parse("#100F0D"));
+    private static readonly IBrush CellBg = NotaPalette.BgSunken;
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private readonly IAudioEngine _e;

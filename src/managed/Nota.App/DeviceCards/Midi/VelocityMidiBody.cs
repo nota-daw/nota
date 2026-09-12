@@ -24,19 +24,19 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
     private static readonly string[] Modes = { "Curve", "Compand", "Fixed" };
     private static readonly string[] Dirs = { "Both", "Up", "Down" };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Bd = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush AmberDim = new SolidColorBrush(Color.FromArgb(0x73, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush Teal = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush Txt = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Bd = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush AmberDim = NotaPalette.Wash(NotaPalette.Accent, 0x73);
+    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Txt = NotaPalette.TextPrimary;
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -118,14 +118,14 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var transHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
         Grid.SetColumn(readout, 1); transHead.Children.Add(Cap("TRANSFER")); transHead.Children.Add(readout);
         var axis = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 10 };
-        var ax1 = Mono("64", new SolidColorBrush(Color.Parse("#4A463D")), 8); ax1.HorizontalAlignment = HorizontalAlignment.Center;
-        var ax2 = Mono("out 127", new SolidColorBrush(Color.Parse("#4A463D")), 8); ax2.HorizontalAlignment = HorizontalAlignment.Right;
+        var ax1 = Mono("64", NotaPalette.TextDisabled, 8); ax1.HorizontalAlignment = HorizontalAlignment.Center;
+        var ax2 = Mono("out 127", NotaPalette.TextDisabled, 8); ax2.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(ax1, 1); Grid.SetColumn(ax2, 2);
-        axis.Children.Add(Mono("in 1", new SolidColorBrush(Color.Parse("#4A463D")), 8)); axis.Children.Add(ax1); axis.Children.Add(ax2);
+        axis.Children.Add(Mono("in 1", NotaPalette.TextDisabled, 8)); axis.Children.Add(ax1); axis.Children.Add(ax2);
         var transDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(transHead, Dock.Top); DockPanel.SetDock(axis, Dock.Bottom);
         transDock.Children.Add(transHead); transDock.Children.Add(axis); transDock.Children.Add(viz);
-        var transPanel = new Border { Background = Inset, BorderBrush = new SolidColorBrush(Color.Parse("#221F1A")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Margin = new Thickness(8, 7), Child = transDock };
+        var transPanel = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Margin = new Thickness(8, 7), Child = transDock };
 
         readouts.Add(() =>
         {
@@ -145,7 +145,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var rangeVals = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         var loT = Mono("", Txt); var hiT = Mono("", Txt); hiT.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(hiT, 2); rangeVals.Children.Add(loT); rangeVals.Children.Add(hiT);
-        var rangeFill = new Border { Background = new SolidColorBrush(Color.FromArgb(0x73, 0xD8, 0xA0, 0x3D)), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var rangeFill = new Border { Background = NotaPalette.Wash(NotaPalette.Accent, 0x73), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
         var rangeBar = new Panel { Height = 8, Background = Inset, Cursor = new Cursor(StandardCursorType.Hand) };
         rangeBar.Children.Add(rangeFill);
         var rangeClip = new Border { Height = 8, CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = rangeBar };
@@ -189,7 +189,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var rail = new StackPanel { Spacing = 5, Children =
         {
             Cap("OUT RANGE"), rangeClip, rangeVals,
-            new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")), Margin = new Thickness(0, 1) },
+            new Border { Height = 1, Background = NotaPalette.SurfaceRaised, Margin = new Thickness(0, 1) },
             rndToggle, dirRow,
         } };
         var railDock = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Stretch };
@@ -199,7 +199,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
 
         var body = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(railBorder, Dock.Right); body.Children.Add(railBorder); body.Children.Add(transPanel);
-        var root = new DockPanel { LastChildFill = true, Background = Ink };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp };
         DockPanel.SetDock(liveStrip, Dock.Top); root.Children.Add(liveStrip); root.Children.Add(body);
 
         BuildStrip();

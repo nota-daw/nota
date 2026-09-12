@@ -14,9 +14,9 @@ namespace Nota.App;
 
 internal sealed class DistributionViz : Control
 {
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly Color Teal = Color.Parse("#5B9E9C");
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static Color Teal => NotaPalette.Teal.Color;
     private const int N = 16;
 
     private int _dist;

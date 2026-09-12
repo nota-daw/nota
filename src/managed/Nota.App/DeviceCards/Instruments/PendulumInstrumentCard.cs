@@ -37,17 +37,17 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
     private static readonly string[] ModeNames = { "Off", "Major", "Minor", "Dorian", "Mixo", "Penta" };
     private static readonly string[] RootNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush RowLit = new SolidColorBrush(Color.Parse("#26231E"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
 
     private static double Exp(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
 
@@ -114,7 +114,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             var accent = teal ? TealC : Amber;
             var accentLit = teal ? TealC : AmberLit;
-            var fillOn = teal ? new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C)) : AmberSubtle;
+            var fillOn = teal ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : AmberSubtle;
             var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
             void Hi() { bool on = G(id) > 0.5f; b.Background = on ? fillOn : Brushes.Transparent; b.BorderBrush = on ? accent : Border2; ((TextBlock)b.Child!).Foreground = on ? accentLit : MutedC; }
             b.PointerPressed += (_, _) => { SetId(id, G(id) > 0.5f ? 0 : 1); Refresh(); };
@@ -175,9 +175,9 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             const double TW = 84;
             var basec = new Border { Height = 5, Background = Inset, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center };
-            var center = new Border { Width = 1, Background = new SolidColorBrush(Color.Parse("#3A362D")), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(4, 1) };
+            var center = new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(4, 1) };
             var fill = new Border { Height = 5, Background = Amber, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 11, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var handle = new Border { Width = 8, Height = 11, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Width = TW, Height = 11, Children = { basec, center, fill, handle } };
             var val = new TextBlock { Text = "", FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
             val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -230,7 +230,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         var ballsNum = new TextBlock { Text = "3", FontSize = 9, Foreground = TxtC, [DockPanel.DockProperty] = Dock.Right };
         ballsNum.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         void StepBalls(int d) { int c = Math.Clamp(2 + (int)Math.Round(G("balls") * 4) + d, 2, MaxBalls); SetId("balls", (c - 2) / 4.0); Refresh(); }
-        Border StepBtn(string t, int d) { var b = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.Parse("#3A362D")), Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center } }; b.PointerPressed += (_, _) => StepBalls(d); return b; }
+        Border StepBtn(string t, int d) { var b = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center } }; b.PointerPressed += (_, _) => StepBalls(d); return b; }
         var stepGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 3 };
         var sm = StepBtn("−", -1); var sp = StepBtn("+", +1); Grid.SetColumn(sp, 1); stepGrid.Children.Add(sm); stepGrid.Children.Add(sp);
         var ballsBox = new StackPanel { Spacing = 3, Children = {
@@ -249,7 +249,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             TextBlock Mn(double w, IBrush c) { var t = new TextBlock { FontSize = 9, Foreground = c, Width = w, VerticalAlignment = VerticalAlignment.Center }; t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return t; }
             rDot(i, out var dot); rowDot[i] = dot;
-            rDiv[i] = Mn(30, TxtC); rRate[i] = Mn(30, new SolidColorBrush(Color.Parse("#A39D8F"))); rPhase[i] = Mn(30, MutedC);
+            rDiv[i] = Mn(30, TxtC); rRate[i] = Mn(30, NotaPalette.TextSecondary); rPhase[i] = Mn(30, MutedC);
             rDir[i] = new TextBlock { FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
             rNote[i] = new TextBlock { FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right };
             rNote[i].BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -349,7 +349,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         DockPanel.SetDock(tabRail, Dock.Left);
         var body = new DockPanel { LastChildFill = true, Children = { tabRail, bodyContent } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         SelectTab(0);
         ctx.SetInstLiveViz(Refresh);

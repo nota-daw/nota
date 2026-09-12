@@ -28,21 +28,21 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
     private static readonly string[] Scales = { "Chromatic", "Major", "Minor", "Penta Maj", "Penta Min" };
     private static readonly int[] Masks = { 0x0FFF, 0x0AB5, 0x05AD, 0x0295, 0x04A9 };
 
-    private static readonly IBrush Hdr = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Rail = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Bd = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Bd2 = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush CardBg = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealB = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush Txt = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedB = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Red = new SolidColorBrush(Color.Parse("#D95F4C"));
-    private static readonly IBrush Hue = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
+    private static readonly IBrush Hdr = NotaPalette.SurfaceCard;
+    private static readonly IBrush Rail = NotaPalette.SurfaceInset;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Bd = NotaPalette.BorderDefault;
+    private static readonly IBrush Bd2 = NotaPalette.GraphBorder;
+    private static readonly IBrush CardBg = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealB = NotaPalette.Teal;
+    private static readonly IBrush Txt = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedB = NotaPalette.TextTertiary;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
+    private static readonly IBrush Red = NotaPalette.Danger;
+    private static readonly IBrush Hue = NotaPalette.BorderStrong;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -84,7 +84,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
         // bipolar cents meter (fixed 96×8)
         var mCenter = new Border { Width = 1, Background = Hue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
-        var mBand = new Border { Background = new SolidColorBrush(Color.FromArgb(0x59, 0xD9, 0x5F, 0x4C)), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var mBand = new Border { Background = NotaPalette.Wash(NotaPalette.Danger, 0x59), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
         var mMark = new Border { Width = 2, Background = Red, CornerRadius = new CornerRadius(1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) };
         var centsMeter = new Panel { Width = 96, Height = 8, Children = { new Border { Background = Inset, CornerRadius = new CornerRadius(4) }, mCenter, mBand, mMark } };
         void SetMeter(double cents)
@@ -186,7 +186,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         }
         Control PillToggle(string label, int p, IBrush accent)
         {
-            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Ink, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1.5, 0) };
+            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BgApp, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1.5, 0) };
             var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = CardBg, BorderBrush = Hue, BorderThickness = new Thickness(1), Child = knob };
             var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedB, VerticalAlignment = VerticalAlignment.Center };
             void Sync() { bool on = P(p) >= 0.5f; pill.Background = on ? accent : CardBg; pill.BorderBrush = on ? Brushes.Transparent : Hue; knob.Background = on ? Ink : MutedB; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; lbl.Foreground = on ? accent : MutedB; }
@@ -227,7 +227,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         {
             var col = new StackPanel { Spacing = 2 };
             var cells = new Border[Scales.Length]; var texts = new TextBlock[Scales.Length];
-            void Sync() { int cur = ScaleOf(); for (int i = 0; i < Scales.Length; i++) { bool on = i == cur; cells[i].Background = on ? new SolidColorBrush(Color.FromArgb(0x30, 0xD8, 0xA0, 0x3D)) : Inset; texts[i].Foreground = on ? AmberLit : Sub; texts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
+            void Sync() { int cur = ScaleOf(); for (int i = 0; i < Scales.Length; i++) { bool on = i == cur; cells[i].Background = on ? NotaPalette.Wash(NotaPalette.Accent, 0x30) : Inset; texts[i].Foreground = on ? AmberLit : Sub; texts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
             for (int i = 0; i < Scales.Length; i++)
             {
                 int iv = i;

@@ -22,16 +22,16 @@ internal sealed class SynthViz : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Color TealColor = Color.Parse("#5B9E9C");
-    private static readonly Color BrassColor = Color.Parse("#D8A03D");
+    private static Color TealColor => NotaPalette.Teal.Color;
+    private static Color BrassColor => NotaPalette.Accent.Color;
     private static readonly IBrush Teal = new SolidColorBrush(TealColor);
     private static readonly IBrush TealFill = new SolidColorBrush(TealColor, 0.10);
     private static readonly IBrush Brass = new SolidColorBrush(BrassColor);
     private static readonly IBrush BrassFill = new SolidColorBrush(BrassColor, 0.09);
-    private static readonly IBrush Handle = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush DimMono = new SolidColorBrush(Color.Parse("#4A463D"));
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0xFF, 0x1E, 0x1C, 0x18));
-    private static readonly IBrush GridDash = new SolidColorBrush(Color.FromArgb(0xFF, 0x26, 0x23, 0x1E));
+    private static readonly IBrush Handle = NotaPalette.AccentBright;
+    private static readonly IBrush DimMono = NotaPalette.TextDisabled;
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xFF);
+    private static readonly IBrush GridDash = NotaPalette.Wash(NotaPalette.SurfaceRaised, 0xFF);
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private const double Pad = 8;
@@ -137,7 +137,7 @@ internal sealed class SynthViz : Control
         ctx.DrawLine(pen, new Point(cx, bumpY), new Point(x1, bot));
 
         // Cutoff handle + guide line.
-        ctx.DrawLine(new Pen(new SolidColorBrush(Color.Parse("#F0C060"), 0.22), 1), new Point(cx, top - 6), new Point(cx, bot));
+        ctx.DrawLine(new Pen(new SolidColorBrush(NotaPalette.AccentBright.Color, 0.22), 1), new Point(cx, top - 6), new Point(cx, bot));
         ctx.DrawEllipse(Handle, new Pen(Sunken, 2), new Point(cx, bumpY), 5.5, 5.5);
 
         // Labels: title, cutoff/Q readout, evenly-spaced Hz axis captions.

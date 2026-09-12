@@ -11,9 +11,16 @@ namespace Nota.Application;
 
 public enum ToolbarSide { Left, Right }
 
+/// <summary>Which palette the UI wears. <see cref="System"/> follows the OS appearance
+/// and flips live when the user changes it.</summary>
+public enum AppTheme { Dark, Light, System }
+
 public sealed class Settings
 {
     public ToolbarSide ToolbarSide { get; set; } = ToolbarSide.Left;
+    /// <summary>Palette variant: Ember Graphite (dark), Ember Paper (light), or the OS
+    /// appearance. Dark by default — a DAW is used in dark rooms for long sessions.</summary>
+    public AppTheme Theme { get; set; } = AppTheme.Dark;
     /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.</summary>
     public string SamplesFolder { get; set; } = "";
     /// <summary>Browser projects folder ("" = default ~/Documents/Nota Projects). M7-4.</summary>

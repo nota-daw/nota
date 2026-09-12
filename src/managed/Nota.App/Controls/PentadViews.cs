@@ -58,7 +58,7 @@ internal sealed class PentadWaveIcon : Control
 internal sealed class PentadFilterCurve : Control
 {
     private static readonly IBrush Grid = NotaPalette.SurfaceCard;
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x1E, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
     private static readonly Typeface Mono = new("ui-monospace, monospace");
     private double _cut = 0.5, _reso, _comp;
     private bool _drag;

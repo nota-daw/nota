@@ -16,14 +16,14 @@ internal sealed class SamplerWaveform : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Wave = NotaPalette.Accent;
-    private static readonly IBrush WaveDim = new SolidColorBrush(Color.FromArgb(0x40, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush Outside = new SolidColorBrush(Color.FromArgb(0x80, 0x10, 0x0F, 0x0D));
-    private static readonly IBrush LoopFill = new SolidColorBrush(Color.FromArgb(0x14, 0xD8, 0xA0, 0x3D));   // brass wash
-    private static readonly IPen StartPen = new Pen(new SolidColorBrush(Color.Parse("#58B368")), 2);          // start = green
-    private static readonly IPen EndPen = new Pen(new SolidColorBrush(Color.Parse("#D95F4C")), 2);            // end = red
-    private static readonly IPen LoopPen = new Pen(new SolidColorBrush(Color.FromArgb(0xC8, 0xF0, 0xC0, 0x60)), 1.2);
+    private static readonly IBrush WaveDim = NotaPalette.Wash(NotaPalette.Accent, 0x40);
+    private static readonly IBrush Outside = NotaPalette.Wash(NotaPalette.BgSunken, 0x80);
+    private static readonly IBrush LoopFill = NotaPalette.Wash(NotaPalette.Accent, 0x14);   // brass wash
+    private static readonly IPen StartPen = new Pen(NotaPalette.Success, 2);          // start = green
+    private static readonly IPen EndPen = new Pen(NotaPalette.Danger, 2);            // end = red
+    private static readonly IPen LoopPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xC8), 1.2);
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0x3A, 0x36, 0x2D)), 1);
+    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x55), 1);
     private static readonly IPen PlayPen = new Pen(NotaPalette.AccentBright, 1.4) { };
     private static readonly IBrush GridText = NotaPalette.TextTertiary;
     private static readonly Typeface Mono = new("monospace");

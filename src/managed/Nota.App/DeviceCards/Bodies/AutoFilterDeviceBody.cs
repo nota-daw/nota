@@ -30,19 +30,19 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
     private static readonly string[] DivNames = { "2/1", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64" };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush FieldBorder = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush RowLit = new SolidColorBrush(Color.Parse("#26231E"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush FieldBorder = NotaPalette.GraphBorder;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
+    private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -110,8 +110,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         {
             var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = new SolidColorBrush(Color.Parse("#3A362D")), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
+            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 11, MinWidth = 40 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
             var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (vw > 0) { val.Width = vw; val.TextAlignment = TextAlignment.Right; }
             bool drag = false;
@@ -371,7 +371,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         var root = new DockPanel
         {
             LastChildFill = true,
-            Background = new SolidColorBrush(Color.Parse("#171613")),
+            Background = NotaPalette.BgApp,
             Children = { live, body }
         };
 
@@ -404,9 +404,9 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // Sidechain gain slider (dB, ±24, bipolar).
         var gVal = new TextBlock { Text = $"{engine.DeviceSidechainGain(track, di):0.0}", FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Right, Width = 28 };
         gVal.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        var gFill = new Border { Height = 3, Background = new SolidColorBrush(Color.Parse("#3A362D")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var gFill = new Border { Height = 3, Background = NotaPalette.BorderStrong, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var gTrack = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-        var gHandle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var gHandle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var gSlot = new Panel { Height = 10, MinWidth = 34, Children = { gTrack, gFill, gHandle } };
         void GUpd() { double db = engine.DeviceSidechainGain(track, di); double v = Math.Clamp((db + 24) / 48.0, 0, 1); double W = gSlot.Bounds.Width; gHandle.Margin = new Thickness(Math.Clamp(v * W - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); gFill.Width = v * W; gVal.Text = $"{db:0.0}"; }
         bool gd = false;

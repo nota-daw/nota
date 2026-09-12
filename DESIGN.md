@@ -1,10 +1,19 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
 
-# Nota design guideline — Ember Graphite
+# Nota design guideline — Ember
 
-Nota's UI runs on **Ember Graphite**: warm graphite neutrals (hue ~40°) lit by a single
-brass accent. It is dark-only by intent — a DAW is used in dark rooms for long sessions.
+Nota's UI runs on **Ember**, one system in two variants:
+
+- **Ember Graphite** (dark, the default) — warm graphite neutrals (hue ~40°) lit by a
+  single brass accent. A DAW is used in dark rooms for long sessions, so this is what
+  the app ships with.
+- **Ember Paper** (light) — the same hue family and the same roles on a warm paper
+  ground. Brass darkens to bronze: against paper a mark needs *less* lightness, not
+  more, to carry the emphasis it had against graphite.
+
+Preferences → Appearance offers Ember Graphite / Ember Paper / System. The choice applies
+live — no restart — and System follows the OS appearance as it changes.
 
 **[→ Open `DESIGN.html`](DESIGN.html) for the visual reference.** That page renders every
 swatch, control specimen and card layout at true size in the real palette, and is the
@@ -17,11 +26,42 @@ rules, the token values, and what to do when they disagree.
 |---|---|---|
 | 1 | `src/managed/Nota.App/Theme/NotaTheme.axaml` | **Definitive.** Colour, geometry and control styles. |
 | 2 | `src/managed/Nota.App/Theme/NotaPalette.cs` | Mirror of (1) for custom-drawn views that cannot resolve XAML resources cheaply. Must stay in sync by hand. |
-| 3 | `src/managed/Nota.App/DeviceCardKit.cs` | Palette aliases and the atomic builders for device cards. |
-| 4 | `DESIGN.html` / this file | Documentation. If these disagree with 1–3, **these are wrong** — fix them. |
+| 3 | `src/managed/Nota.App/Theme/NotaThemeService.cs` | Applies a variant to both layers and repaints. |
+| 4 | `src/managed/Nota.App/DeviceCardKit.cs` | Palette aliases and the atomic builders for device cards. |
+| 5 | `DESIGN.html` / this file | Documentation. If these disagree with 1–4, **these are wrong** — fix them. |
 
 **Never hardcode a colour or size in a view.** In XAML use `{DynamicResource Brush.*}` /
 `{StaticResource Radius.*}`. In custom-drawn C# read from `NotaPalette` or `DeviceCardKit`.
+A literal is not just off-palette — it is stuck in one variant.
+
+## How theming works
+
+The colour tokens in `NotaTheme.axaml` live in `ResourceDictionary.ThemeDictionaries`
+under `Dark` and `Light`, so **`{DynamicResource Brush.*}` is mandatory** — a
+`StaticResource` cannot follow the variant. Geometry, fonts and control heights are
+variant-independent and stay in the shared dictionary as `StaticResource`.
+
+`NotaPalette` serves the custom-drawn layer. Each token is a **slot**: one long-lived
+`SolidColorBrush` whose `Color` is re-pointed on a variant change. Views (and the private
+`static readonly` fields that alias them) keep the same brush object, so nothing has to be
+rebuilt. Three ways to get a colour:
+
+| Call | For | Light value |
+|---|---|---|
+| `NotaPalette.SurfaceCard` | a named token | authored by hand |
+| `NotaPalette.Wash(slot, 0x24)` | a translucent tint of a token | tracks its source slot |
+| `NotaPalette.Ink("#D06FB0")` | the identity hue of one visualiser, band or stored tag | derived (same hue, lightness reflected), or pinned in `InkOverrides` |
+
+Two shapes cannot ride a slot and need care:
+
+- **`Color` values.** A `static readonly Color` snapshots the variant. Declare it as an
+  expression-bodied property (`static Color X => NotaPalette.Accent.Color;`).
+- **Gradients.** `LinearGradientBrush` copies its stop colours. Build one with
+  `NotaPalette.VGradient(...)`, and only ever into a `static` field — the registration
+  that re-tints it is permanent.
+
+Anything a view derives itself — per-index clip brushes, alpha-blended track fills — must
+be dropped on `NotaPalette.Changed`.
 
 ## The rules
 
@@ -55,43 +95,51 @@ rules, the token values, and what to do when they disagree.
 
 ### Surfaces
 
-| Key | Value | Use |
-|---|---|---|
-| `Brush.BgSunken` | `#100F0D` | Wells, lanes, graph grounds, chrome |
-| `Brush.BgApp` | `#171613` | App ground |
-| `Brush.LaneB` | `#191814` | Lane alternation |
-| `Brush.SurfaceCard` | `#1E1C18` | Panels, cards |
-| `Brush.SurfaceRaised` | `#26231E` | Transport, chips, device cards |
-| `Brush.SurfaceHover` | `#2E2B24` | Hover |
-| `Brush.SurfaceActive` | `#332F27` | Pressed |
-| `Brush.SurfaceSelected` | `#24D8A03D` | Selection (14% brass) |
+| Key | Graphite | Paper | Use |
+|---|---|---|---|
+| `Brush.BgSunken` | `#100F0D` | `#E4DFD1` | Wells, lanes, graph grounds, chrome |
+| `Brush.BgApp` | `#171613` | `#EFEADE` | App ground |
+| `Brush.LaneB` | `#191814` | `#E9E4D6` | Lane alternation |
+| `Brush.SurfaceCard` | `#1E1C18` | `#F8F5EC` | Panels, cards |
+| `Brush.SurfaceRaised` | `#26231E` | `#FFFEF8` | Transport, chips, device cards |
+| `Brush.SurfaceHover` | `#2E2B24` | `#E7E1D0` | Hover |
+| `Brush.SurfaceActive` | `#332F27` | `#DBD4C0` | Pressed |
+| `Brush.SurfaceSelected` | `#24D8A03D` | `#2EA87415` | Selection (accent wash) |
+
+Forward still means lighter in both variants, and a well is still darker than the surface
+it sits in. Hover is the one role that flips direction: it lifts on graphite and settles
+on paper.
 
 ### Text and borders
 
-| Key | Value | Use |
-|---|---|---|
-| `Brush.TextPrimary` | `#E9E4D8` | Warm off-white |
-| `Brush.TextSecondary` | `#A39D8F` | Labels, captions |
-| `Brush.TextTertiary` | `#6E6A5E` | Section labels |
-| `Brush.TextDisabled` | `#4A463D` | Disabled |
-| `Brush.TextOnAccent` | `#171613` | Ink on brass |
-| `Brush.BorderDefault` | `#2C2923` | Panel separation |
-| `Brush.BorderStrong` | `#3A362D` | Control outlines |
-| `Brush.GridBeat` | `#1F1D18` | Beat lines |
-| `Brush.GridBar` | `#2A2721` | Bar lines |
+| Key | Graphite | Paper | Use |
+|---|---|---|---|
+| `Brush.TextPrimary` | `#E9E4D8` | `#241F17` | Warm off-white / warm near-black |
+| `Brush.TextSecondary` | `#A39D8F` | `#5E5849` | Labels, captions |
+| `Brush.TextTertiary` | `#6E6A5E` | `#8A8474` | Section labels |
+| `Brush.TextDisabled` | `#4A463D` | `#ADA694` | Disabled |
+| `Brush.TextOnAccent` | `#171613` | `#FFFBF2` | Ink on the accent fill |
+| `Brush.BorderDefault` | `#2C2923` | `#D5CEBB` | Panel separation |
+| `Brush.BorderStrong` | `#3A362D` | `#BDB5A0` | Control outlines |
+| `Brush.GridBeat` | `#1F1D18` | `#DED8C8` | Beat lines |
+| `Brush.GridBar` | `#2A2721` | `#CFC8B4` | Bar lines |
 
 ### Accent and semantic
 
-| Key | Value | Use |
-|---|---|---|
-| `Brush.Accent` | `#D8A03D` | Brass — the audio path |
-| `Brush.AccentHover` | `#E8B24C` | Hover on solid fills |
-| `Brush.AccentBright` | `#F0C060` | Focus ring, playhead, selected note |
-| `Brush.AccentSubtle` | `#24D8A03D` | Toggle-on wash |
-| `Brush.Success` | `#58B368` | Signal present, Session play |
-| `Brush.Warning` | `#D9C34C` | Meter caution zone |
-| `Brush.Danger` | `#D95F4C` | Record, destructive |
-| `Brush.DangerHover` | `#E4715F` | Hover |
+| Key | Graphite | Paper | Use |
+|---|---|---|---|
+| `Brush.Accent` | `#D8A03D` | `#A87415` | Brass / bronze — the audio path |
+| `Brush.AccentHover` | `#E8B24C` | `#8F6110` | Hover on solid fills |
+| `Brush.AccentBright` | `#F0C060` | `#744D07` | Focus ring, playhead, selected note |
+| `Brush.AccentSubtle` | `#24D8A03D` | `#24A87415` | Toggle-on wash |
+| `Brush.Success` | `#58B368` | `#2C7A3E` | Signal present, Session play |
+| `Brush.Warning` | `#D9C34C` | `#837010` | Meter caution zone |
+| `Brush.Danger` | `#D95F4C` | `#B03A28` | Record, destructive |
+| `Brush.DangerHover` | `#E4715F` | `#C64A36` | Hover |
+
+The accent ramp reads "more prominent" downward on paper and upward on graphite:
+`AccentBright` is the hottest mark in both, which means the *lightest* on graphite and the
+*darkest* on paper.
 
 Fluent's `SystemAccentColor` and its six ramps are retinted to brass, so stock Avalonia
 controls match instead of shipping default blue.
@@ -104,10 +152,16 @@ controls match instead of shipping default blue.
 
 ### Track palette
 
-Assigned round-robin, muted and equal-weight so no track outranks another:
-`#C4756A` rust · `#C99C55` amber · `#9BA65D` olive · `#6FA383` sage · `#5B9E9C` teal ·
-`#6D8FB5` slate · `#9B7FA6` mauve · `#B57286` rose.
-Returns `#7C88A0` / `#A08A7C`; master reuses brass.
+Assigned round-robin, muted and equal-weight so no track outranks another. Paper keeps
+the eight hues and darkens them, so a clip's full-strength content still reads over a 16%
+fill of itself:
+
+| | rust | amber | olive | sage | teal | slate | mauve | rose |
+|---|---|---|---|---|---|---|---|---|
+| Graphite | `#C4756A` | `#C99C55` | `#9BA65D` | `#6FA383` | `#5B9E9C` | `#6D8FB5` | `#9B7FA6` | `#B57286` |
+| Paper | `#9A4A3E` | `#97682A` | `#646E32` | `#42765A` | `#2F7472` | `#3E6288` | `#6A5176` | `#86465B` |
+
+Returns `#7C88A0` / `#A08A7C` (paper `#4D5972` / `#705B4E`); master reuses the accent.
 
 Track 5 (teal, `#5B9E9C`) doubles as the **modulation accent** — see below.
 
@@ -146,9 +200,9 @@ strategy sets `FullBleed`.
 
 This carries the most meaning and is the easiest to get wrong:
 
-- **Brass `#D8A03D` = the audio path.** Anything the signal passes through — gain,
+- **Brass `Brush.Accent` = the audio path.** Anything the signal passes through — gain,
   frequency, drive, mix. On a knob: `Accent = true`.
-- **Teal `#5B9E9C` = modulation and detection.** Anything that *controls* rather than
+- **Teal `NotaPalette.Teal` = modulation and detection.** Anything that *controls* rather than
   carries the signal — LFOs, envelopes, sidechain detectors, followers. Pass it as the
   knob's `ArcColor`, and group those parameters behind a 2px teal left border with a teal
   section label.
@@ -202,7 +256,7 @@ Every value control behaves identically — match this exactly when adding one:
 ## Visualisers
 
 ~40 custom-drawn views in `Controls/`. The rule: **a device draws the thing it does**, not
-a generic graph. Shared ground is `Brush.BgSunken` with a `#221F1A` inner border.
+a generic graph. Shared ground is `Brush.BgSunken` with a `NotaPalette.GraphBorder` inner border.
 
 Families: transfer curves (`AmpCurve`, `CompTransfer`, `VintageViz`) · frequency response
 (`AutoFilterCurve`, `DynamicEqCurve`, `EqCurve`) · spectra (`AmpHarmonics`,
@@ -229,15 +283,21 @@ L, Return) always reach the window instead of a focused control.
 
 Things that are true today and should not surprise you:
 
-- **628 hardcoded hex literals** across `DeviceCards/` and `Controls/`. The "never
-  hardcode" rule holds in XAML but has largely not held in the custom-drawn layer.
-- **`#1B1916`** (rail background, 36 files) and **`#221F1A`** (graph border, 22 files)
-  behave like tokens but are declared nowhere. They should be promoted.
-- **`AccentSubtle` disagrees with itself** — `#24D8A03D` in the theme, `#28D8A03D` in
-  `DeviceCardKit.AccentSubtleB`.
+- **The hex literals are gone.** The custom-drawn layer used to carry ~970 of them; they
+  now route through `NotaPalette` (`#1B1916` → `SurfaceInset`, `#221F1A` → `GraphBorder`,
+  and so on). What remains as a literal is *data*: the tag-colour swatches in
+  `TagEditorWindow`, the layer hues in `StrataDeviceBody`, the kit-voice dots in
+  `RhythmInstrumentCard` — each resolved through `NotaPalette.Ink()` at use.
+- **Ink light values are derived, not authored.** A one-off device hue gets its paper
+  counterpart from a lightness reflection. Most land well; pin the ones that don't in
+  `NotaPalette.InkOverrides` rather than reaching for a literal.
+- **Black stays black.** Drop shadows and the black-key row tint are alpha-over-black in
+  both variants — that is correct, not drift.
 - **No custom title bar.** The OS title bar is still in use; the status bar carries the
   chrome identity.
 - **Font substitution.** Mockups specify Geist / Geist Mono; the app ships Inter and the
   Cascadia → Menlo → Consolas stack, so weights sit slightly differently.
 - **No `Space.*` tokens.** The 4px grid is honoured by convention only.
-- **Two palette files** must be edited together and nothing enforces it.
+- **Two palette files** must be edited together and nothing enforces it — and each token
+  now carries two values, so a change is four edits (`NotaTheme.axaml` Dark + Light,
+  `NotaPalette.cs`, this file).

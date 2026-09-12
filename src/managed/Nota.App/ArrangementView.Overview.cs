@@ -134,10 +134,10 @@ public sealed partial class ArrangementView
     {
         // Outside the viewport window the project is dimmed, so the window itself reads as
         // the lit part rather than needing a fill of its own.
-        private static readonly IBrush OvScrim = new SolidColorBrush(Color.FromArgb(0x9C, 0x0D, 0x0C, 0x0A));
-        private static readonly IPen OvFrame = new Pen(new SolidColorBrush(Color.FromArgb(0x99, 0xD8, 0xA0, 0x3D)), 1);
-        private static readonly IBrush OvHandle = new SolidColorBrush(Color.FromArgb(0xCC, 0xF0, 0xC0, 0x60));
-        private static readonly IPen OvBarPen = new Pen(new SolidColorBrush(Color.FromArgb(0xC0, 0x2A, 0x27, 0x21)), 1);
+        private static readonly IBrush OvScrim = NotaPalette.Wash(NotaPalette.BgSunken, 0x9C);
+        private static readonly IPen OvFrame = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x99), 1);
+        private static readonly IBrush OvHandle = NotaPalette.Wash(NotaPalette.AccentBright, 0xCC);
+        private static readonly IPen OvBarPen = new Pen(NotaPalette.Wash(NotaPalette.GridBar, 0xC0), 1);
         private static readonly IBrush OvEmptyText = NotaPalette.TextDisabled;
         private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
         private static readonly Cursor EdgeCursor = new(StandardCursorType.SizeWestEast);
@@ -149,7 +149,7 @@ public sealed partial class ArrangementView
         {
             var cache = active ? _ovClip : _ovClipOff;
             if (cache.TryGetValue(colorIndex, out var b)) return b;
-            b = Alpha(TrackColorForIndex(colorIndex), active ? 0.82 : 0.26);
+            b = ClipTint(colorIndex, active ? 0.82 : 0.26);
             cache[colorIndex] = b;
             return b;
         }

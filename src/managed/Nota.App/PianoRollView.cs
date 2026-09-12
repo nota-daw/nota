@@ -169,29 +169,29 @@ public sealed class PianoRollView : UserControl
 
     private static readonly IBrush Bg = NotaPalette.BgApp;
     private static readonly IBrush KeysBg = NotaPalette.BgSunken;
-    private static readonly IBrush VelBg = new SolidColorBrush(Color.Parse("#141311"));
-    private static readonly IBrush KeyWhite = new SolidColorBrush(Color.Parse("#B7B1A3"));
-    private static readonly IBrush KeyBlack = new SolidColorBrush(Color.Parse("#201E1A"));
+    private static readonly IBrush VelBg = NotaPalette.GridRow;
+    private static readonly IBrush KeyWhite = NotaPalette.KeyWhite;
+    private static readonly IBrush KeyBlack = NotaPalette.KeyBlack;
     private static readonly IBrush RowBlackTint = new SolidColorBrush(Color.FromArgb(0x2E, 0x00, 0x00, 0x00));
     // Scale overlay: out-of-scale rows/keys get a translucent dark wash (they read
     // dimmed / semi-transparent), in-scale rows a faint accent, the root a stronger one.
-    private static readonly IBrush OutScaleWash = new SolidColorBrush(Color.FromArgb(0xB4, 0x12, 0x11, 0x0F));
-    private static readonly IBrush InScaleTint = new SolidColorBrush(Color.FromArgb(0x1E, 0xF0, 0xC0, 0x60));
-    private static readonly IBrush RootTint = new SolidColorBrush(Color.FromArgb(0x40, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush OutScaleWash = NotaPalette.Wash(NotaPalette.BgSunken, 0xB4);
+    private static readonly IBrush InScaleTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x1E);
+    private static readonly IBrush RootTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x40);
     private static readonly IPen PlayheadPen = new Pen(NotaPalette.AccentBright, 1.5);
-    private static readonly IBrush KeyHover = new SolidColorBrush(Color.FromArgb(0x66, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush KeyHover = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     // Played-key highlight (currently-pressed keyboard / MIDI note): a solid key tint + a faint row wash.
-    private static readonly IBrush HeldKeyFill = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush HeldRowTint = new SolidColorBrush(Color.FromArgb(0x30, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush HeldKeyFill = NotaPalette.AccentBright;
+    private static readonly IBrush HeldRowTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x30);
     private static readonly IPen KeyLine = new Pen(NotaPalette.BgApp, 1);
-    private static readonly IPen RowLine = new Pen(new SolidColorBrush(Color.Parse("#141311")), 1);
+    private static readonly IPen RowLine = new Pen(NotaPalette.GridRow, 1);
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen SubBeatPen = new Pen(new SolidColorBrush(Color.Parse("#191712")), 1);   // sub-beat grid (finer than a beat)
+    private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // sub-beat grid (finer than a beat)
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush EdgeHighlight = new SolidColorBrush(Color.Parse("#FCE5B8"));
-    private static readonly IBrush MarqueeFill = new SolidColorBrush(Color.FromArgb(0x28, 0xF0, 0xC0, 0x60));
-    private static readonly IPen MarqueePen = new Pen(new SolidColorBrush(Color.FromArgb(0xA0, 0xF0, 0xC0, 0x60)), 1);
+    private static readonly IBrush EdgeHighlight = NotaPalette.AccentPale;
+    private static readonly IBrush MarqueeFill = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
+    private static readonly IPen MarqueePen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1);
     private static readonly IBrush LabelText = NotaPalette.TextTertiary;
     private static readonly IBrush KeyLabel = NotaPalette.BgSunken;
     private static readonly IBrush Divider = NotaPalette.BorderDefault;

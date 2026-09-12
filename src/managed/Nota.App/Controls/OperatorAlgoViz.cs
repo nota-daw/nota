@@ -126,7 +126,7 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush Teal = NotaPalette.Teal;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.Parse("#5B9E9C"), 0.18);
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x2E);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));

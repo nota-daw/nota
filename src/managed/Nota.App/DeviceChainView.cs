@@ -66,7 +66,7 @@ public sealed partial class DeviceChainView : UserControl
         IsVisible = false, IsHitTestVisible = false,
         BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(7),
         BorderBrush = NotaPalette.AccentBright,
-        Background = new SolidColorBrush(Color.FromArgb(0x14, 0xF0, 0xC0, 0x60)),
+        Background = NotaPalette.Wash(NotaPalette.AccentBright, 0x14),
         Margin = new Thickness(2),
     };
 

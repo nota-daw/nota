@@ -22,10 +22,10 @@ internal sealed class FluxReactScope : Control
     private int _head;
     private float _tilt = 0.5f, _follow;
 
-    private static readonly Color Inset = Color.Parse("#100F0D");
-    private static readonly Color Olive = Color.Parse("#52604F");
-    private static readonly Color Teal = Color.Parse("#5B9E9C");
-    private static readonly Color TealBright = Color.Parse("#7FC9C6");
+    private static Color Inset => NotaPalette.BgSunken.Color;
+    private static Color Olive => NotaPalette.SignalIn.Color;
+    private static Color Teal => NotaPalette.Teal.Color;
+    private static Color TealBright => NotaPalette.TealBright.Color;
 
     public FluxReactScope() { ClipToBounds = true; }
 
@@ -103,7 +103,7 @@ internal sealed class FluxReactScope : Control
 
         // right-edge spectral-tilt bar.
         double bx = w - barW;
-        ctx.FillRectangle(new SolidColorBrush(Color.Parse("#0A0908")), new Rect(bx, 3, barW, h - 6), 3);
+        ctx.FillRectangle(NotaPalette.SurfaceAbyss, new Rect(bx, 3, barW, h - 6), 3);
         double fillH = (h - 6) * _tilt;
         var grad = new LinearGradientBrush
         {

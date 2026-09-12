@@ -68,13 +68,13 @@ internal sealed class ForgeTransferCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen Grid = new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0x1E, 0x1C, 0x18)), 1);
-    private static readonly IPen Diag = new Pen(new SolidColorBrush(Color.FromArgb(0x40, 0x26, 0x23, 0x1E)), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen Grid = new Pen(NotaPalette.Wash(NotaPalette.SurfaceCard, 0x30), 1);
+    private static readonly IPen Diag = new Pen(NotaPalette.Wash(NotaPalette.SurfaceRaised, 0x40), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8);
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x14, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x14);
     private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.3) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private readonly IAudioEngine _engine;
@@ -151,9 +151,9 @@ internal sealed class ForgeHarmonics : Control
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
     private static readonly IBrush OddB = NotaPalette.Accent;
-    private static readonly IBrush EvenB = new SolidColorBrush(Color.FromArgb(0x73, 0xD8, 0xA0, 0x3D)); // 45%
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush LabelC = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush EvenB = NotaPalette.Wash(NotaPalette.Accent, 0x73); // 45%
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush LabelC = NotaPalette.TextSecondary;
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private readonly IAudioEngine _engine;

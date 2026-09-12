@@ -18,9 +18,9 @@ internal sealed class CompGrHistory : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x30, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x30);
     private static readonly IBrush Red = NotaPalette.Danger;                                   // design-system red
-    private static readonly IBrush RedFill = new SolidColorBrush(Color.FromArgb(0x55, 0xD9, 0x5F, 0x4C));
+    private static readonly IBrush RedFill = NotaPalette.Wash(NotaPalette.Danger, 0x55);
     private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Face = new(FontFamily.Default);
     private const int N = 220;
@@ -68,7 +68,7 @@ internal sealed class CompGrHistory : Control
             for (int i = 1; i < top.Count; i++) ctx.DrawLine(pen, top[i - 1], top[i]);
         }
         // Peak-hold line.
-        if (Peak > 0.05) { double py = top0 + Math.Clamp(Peak / MaxDb, 0, 1) * plotH; ctx.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(0x99, 0xD9, 0x5F, 0x4C)), 1) { DashStyle = DashStyle.Dash }, new Point(2, py), new Point(w - 2, py)); }
+        if (Peak > 0.05) { double py = top0 + Math.Clamp(Peak / MaxDb, 0, 1) * plotH; ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Danger, 0x99), 1) { DashStyle = DashStyle.Dash }, new Point(2, py), new Point(w - 2, py)); }
         // Labels drawn in the reserved header band: title top-left, current · peak top-right (in red).
         ctx.DrawText(new FormattedText("GAIN REDUCTION", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, Axis), new Point(5, 2));
         string cur = Current <= 0.05 ? "0.0" : $"−{Current:0.0}", pk = Peak <= 0.05 ? "0.0" : $"−{Peak:0.0}";

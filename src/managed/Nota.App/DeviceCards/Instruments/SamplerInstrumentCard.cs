@@ -28,21 +28,21 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
     public string Subtitle => "BUILT-IN";
     public double CardWidth => 700;
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush FieldBorder = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush GreenC = new SolidColorBrush(Color.Parse("#58B368"));
-    private static readonly IBrush RedC = new SolidColorBrush(Color.Parse("#D95F4C"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush RowLit = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush FieldBorder = NotaPalette.GraphBorder;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush GreenC = NotaPalette.Success;
+    private static readonly IBrush RedC = NotaPalette.Danger;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
 
     private static double Exp(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
 
@@ -72,7 +72,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
                 new TextBlock { Text = "↓", FontSize = 22, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center },
                 new TextBlock { Text = "Drop a sample here", FontSize = 11, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
                 new TextBlock { Text = "drag from the Files tab or the browser", FontSize = 9, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } } };
-            return new Border { Background = new SolidColorBrush(Color.Parse("#171613")), Child = prompt };
+            return new Border { Background = NotaPalette.BgApp, Child = prompt };
         }
 
         // Sample data: peaks for the waveform + raw mono for zero-crossing snapping.
@@ -147,7 +147,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         Control ActionBtn(string label, Action click)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.Parse("#3A362D")), Background = RowLit, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, Foreground = new SolidColorBrush(Color.Parse("#A39D8F")) } };
+            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, Foreground = NotaPalette.TextSecondary } };
             b.PointerPressed += (_, _) => click();
             return b;
         }
@@ -169,8 +169,8 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = new SolidColorBrush(Color.Parse("#3A362D")), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
+            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 11, MinWidth = 46 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
             var val = MonoTx(fmt(G(id)), TxtC, 9); val.Width = vw; val.TextAlignment = TextAlignment.Right;
             bool drag = false;
@@ -190,7 +190,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         Control RootStepper()
         {
             var lbl = MonoTx(NoteName(rootv), TxtC, 10); lbl.Width = 26; lbl.TextAlignment = TextAlignment.Center;
-            Border Btn(string t, int d) { var b = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.Parse("#3A362D")), Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = new SolidColorBrush(Color.Parse("#A39D8F")), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { rootv = Math.Clamp(rootv + d, 0, 127); acc.SetRoot(rootv); lbl.Text = NoteName(rootv); RefreshAll(); }; return b; }
+            Border Btn(string t, int d) { var b = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { rootv = Math.Clamp(rootv + d, 0, 127); acc.SetRoot(rootv); lbl.Text = NoteName(rootv); RefreshAll(); }; return b; }
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { Btn("−", -1), lbl, Btn("+", +1) } };
         }
 
@@ -293,7 +293,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         DockPanel.SetDock(tabRail, Dock.Left);
         var body = new DockPanel { LastChildFill = true, Children = { tabRail, bodyContent } };
         DockPanel.SetDock(live, Dock.Top);
-        var root2 = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root2 = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         void RefreshAll() { foreach (var a in readouts) a(); }
         registerTick(() => { wave.SetPlayhead(acc.PlayPosition()); RefreshAll(); });
@@ -355,8 +355,8 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 // ---- amp-envelope schematic (ADSR from normalized param values) ----
 internal sealed class SamplerEnv : Control
 {
-    private static readonly IBrush Teal = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealFill = new SolidColorBrush(Color.FromArgb(0x1F, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x1F);
     private double _a, _d, _s = 1, _r;
     public void Set(double a, double d, double s, double r) { _a = a; _d = d; _s = s; _r = r; InvalidateVisual(); }
     public override void Render(DrawingContext ctx)
@@ -379,9 +379,9 @@ internal sealed class SamplerEnv : Control
 // ---- filter magnitude response schematic ----
 internal sealed class SamplerFilter : Control
 {
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x1C, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1C);
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
     private int _type; private double _cut = 1, _reso;
     public void Set(int type, double cut, double reso) { _type = type; _cut = cut; _reso = reso; InvalidateVisual(); }
     public override void Render(DrawingContext ctx)
@@ -410,17 +410,17 @@ internal sealed class SamplerFilter : Control
         ctx.DrawGeometry(Fill, null, fill);
         var pen = new Pen(Amber, 1.5, lineJoin: PenLineJoin.Round);
         for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
-        if (_type > 0) ctx.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(0x66, 0xF0, 0xC0, 0x60)), 1) { DashStyle = DashStyle.Dash }, new Point(cx, 0), new Point(cx, h));
+        if (_type > 0) ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x66), 1) { DashStyle = DashStyle.Dash }, new Point(cx, 0), new Point(cx, h));
     }
 }
 
 // ---- mini keyboard marking the sampler's root (+ transposed pitch) ----
 internal sealed class SamplerKeys : Control
 {
-    private static readonly IBrush White = new SolidColorBrush(Color.Parse("#2A2721"));
-    private static readonly IBrush Black = new SolidColorBrush(Color.Parse("#151310"));
-    private static readonly IBrush RootB = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush TransB = new SolidColorBrush(Color.FromArgb(0x88, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush White = NotaPalette.MiniKeyWhite;
+    private static readonly IBrush Black = NotaPalette.MiniKeyBlack;
+    private static readonly IBrush RootB = NotaPalette.Accent;
+    private static readonly IBrush TransB = NotaPalette.Wash(NotaPalette.Teal, 0x88);
     private int _root = 60; private double _transpose;
     public void Set(int root, double transpose) { _root = root; _transpose = transpose; InvalidateVisual(); }
     public override void Render(DrawingContext ctx)

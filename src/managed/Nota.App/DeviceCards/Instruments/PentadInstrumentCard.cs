@@ -27,10 +27,10 @@ namespace Nota.App;
 
 internal sealed class PentadInstrumentCard : IInstrumentCard
 {
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
     private static readonly IBrush Panel = NotaPalette.BgApp;
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;
@@ -236,7 +236,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             int pi = I(id);
             var grad = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.Parse("#26231E"), 0), new GradientStop(Color.Parse("#100F0D"), 0.5), new GradientStop(Color.Parse("#26231E"), 1) } };
+                GradientStops = { new GradientStop(NotaPalette.SurfaceRaised.Color, 0), new GradientStop(NotaPalette.BgSunken.Color, 0.5), new GradientStop(NotaPalette.SurfaceRaised.Color, 1) } };
             var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Stretch };
             var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = new CornerRadius(1) };
             var lay = new Canvas { Width = 16 };

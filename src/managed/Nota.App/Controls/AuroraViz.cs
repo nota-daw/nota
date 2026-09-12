@@ -21,7 +21,7 @@ namespace Nota.App;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush TextSecondary = NotaPalette.TextSecondary;
         public enum K { Wave, Filter }
-        private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly Typeface Face = new(FontFamily.Default);
         private readonly K _k;
         private int _bank;
@@ -82,7 +82,7 @@ namespace Nota.App;
                 int samples = 128;
                 double span = x1 - x0, mid = (top + bot) / 2, amp = (bot - top) * 0.42;
                 // Faint stack of neighbouring frames (behind), offset up-left to suggest depth.
-                var faint = new Pen(new SolidColorBrush(Color.FromArgb(0x40, 0xF0, 0xC0, 0x60)), 1);
+                var faint = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 1);
                 for (int s = 2; s >= 1; s--)
                 {
                     double nf = Math.Clamp(_pos + s * 0.14, 0, 1) * 7.0;

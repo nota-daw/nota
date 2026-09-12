@@ -30,15 +30,15 @@ namespace Nota.App;
 public sealed class ModularView : UserControl
 {
     // ---- palette --------------------------------------------------------
-    private static readonly IBrush CanvasBg   = new SolidColorBrush(Color.Parse("#121110"));
-    private static readonly IBrush Dot        = NotaPalette.SurfaceRaised;         // #26231E
-    private static readonly IBrush Card       = NotaPalette.SurfaceCard;           // #1E1C18
-    private static readonly IBrush Sunken     = NotaPalette.BgSunken;              // #100F0D
-    private static readonly IBrush Rail       = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush BorderDef   = NotaPalette.BorderDefault;         // #2C2923
+    private static readonly IBrush CanvasBg   = NotaPalette.CanvasBg;
+    private static readonly IBrush Dot        = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Card       = NotaPalette.SurfaceCard;
+    private static readonly IBrush Sunken     = NotaPalette.BgSunken;
+    private static readonly IBrush Rail       = NotaPalette.SurfaceInset;
+    private static readonly IBrush BorderDef   = NotaPalette.BorderDefault;
     private static readonly IBrush BorderInner = NotaPalette.SurfaceRaised;
-    private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;         // #3A362D
-    private static readonly IBrush BorderHover = new SolidColorBrush(Color.Parse("#444038"));
+    private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;
+    private static readonly IBrush BorderHover = NotaPalette.BorderHover;
     private static readonly IBrush Text1      = NotaPalette.TextPrimary;
     private static readonly IBrush Text2      = NotaPalette.TextSecondary;
     private static readonly IBrush Text3      = NotaPalette.TextTertiary;
@@ -48,8 +48,8 @@ public sealed class ModularView : UserControl
     private static readonly IBrush OnAccent   = NotaPalette.TextOnAccent;
     private static readonly IBrush Teal       = NotaPalette.Teal;                  // modulation accent
     private static readonly IBrush Sage       = NotaPalette.Sage;                  // audio
-    private static readonly IBrush Slate      = new SolidColorBrush(Color.Parse("#6D8FB5")); // MIDI
-    private static readonly IBrush Mauve      = new SolidColorBrush(Color.Parse("#9B7FA6")); // MIDI FX
+    private static readonly IBrush Slate      = NotaPalette.Ink("#6D8FB5"); // MIDI
+    private static readonly IBrush Mauve      = NotaPalette.Ink("#9B7FA6"); // MIDI FX
     private static readonly IBrush Success    = NotaPalette.Success;
 
     private const double NodeW = 214;
@@ -2282,7 +2282,7 @@ public sealed class ModularView : UserControl
         }
     }
 
-    private static readonly IBrush ScopeBg = new SolidColorBrush(Color.FromRgb(0x14, 0x12, 0x0d));
+    private static readonly IBrush ScopeBg = NotaPalette.SurfaceDeep;
 
     private sealed class GridLayer : Control
     {
@@ -2440,7 +2440,7 @@ public sealed class ModularView : UserControl
         public override void Render(DrawingContext ctx)
         {
             if (_v._nodes.Count == 0) return;
-            var bg = new SolidColorBrush(Color.FromArgb(178, 0, 0, 0));
+            var bg = NotaPalette.Wash(NotaPalette.BgSunken, 0xB2);
             ctx.DrawRectangle(bg, new Pen(BorderDef, 1), new Rect(0, 0, Width, Height), 5, 5);
 
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
@@ -2472,7 +2472,7 @@ public sealed class ModularView : UserControl
                 double wx1 = (vw - _v._pan.X) / _v._scale, wy1 = (vh - _v._pan.Y) / _v._scale;
                 var a = M(wx0, wy0); var c = M(wx1, wy1);
                 var rect = new Rect(a, c).Intersect(new Rect(0, 0, Width, Height));
-                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(102, 255, 255, 255)), 1), rect, 3, 3);
+                ctx.DrawRectangle(null, new Pen(NotaPalette.Wash(NotaPalette.TextPrimary, 0x66), 1), rect, 3, 3);
             }
         }
     }

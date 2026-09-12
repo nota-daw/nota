@@ -36,7 +36,7 @@ internal sealed class MixerWindow : NotaWindow
         MinWidth = 560;
         MinHeight = 280;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Avalonia.Application.Current?.FindResource("Brush.BgApp") is IBrush bg ? bg : Brushes.Black;
+        Background = NotaPalette.BgApp;
 
         Host = new ContentControl { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
         SetBody(Host);

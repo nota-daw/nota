@@ -36,7 +36,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         S_ScActive = 15, S_ClipDb = 16, kScope = 20;
     private const int TraceLen = 256;
 
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
     private static readonly IBrush Panel = NotaPalette.BgApp;
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = PrismInk.InnerBorder;
@@ -45,7 +45,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
     private static readonly IBrush AmberSubtle = NotaPalette.AccentSubtle;
-    private static readonly IBrush RowSel = new SolidColorBrush(Color.FromArgb(0x10, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush RowSel = NotaPalette.Wash(NotaPalette.Accent, 0x10);
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;

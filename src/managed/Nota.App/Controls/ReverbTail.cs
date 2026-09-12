@@ -22,9 +22,9 @@ internal sealed class ReverbTail : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.AccentBright;
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush GridB = new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D));
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x20, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealFill = new SolidColorBrush(Color.FromArgb(0x1E, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x20);
+    private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x1E);
     private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Face = new(FontFamily.Default);
 

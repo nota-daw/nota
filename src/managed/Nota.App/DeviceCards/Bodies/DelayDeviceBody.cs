@@ -74,7 +74,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         {
             var bg = new Border { Width = w, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
             var fill = new Border { Height = 3, Background = Brass, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2) };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
             var canvas = new Canvas { Width = w, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             Canvas.SetTop(bg, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
             canvas.Children.Add(bg); canvas.Children.Add(fill); canvas.Children.Add(handle);
@@ -146,12 +146,12 @@ internal sealed class DelayDeviceBody : IDeviceBody
         var wowBand = Band("WOW", Row(Cell("Rate", WowRate, RateF, Teal), Cell("Depth", WowDepth, Pct, Teal)));
         var bands = new StackPanel { Width = 288, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { timePanel, wowBand } };
 
-        var rail = new Border { Width = 96, Background = new SolidColorBrush(Color.Parse("#1B1916")), BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(6, 8),
+        var rail = new Border { Width = 96, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(6, 8),
             Child = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
                 Cell("Dry/Wet", DryWet, Pct, Teal, 40), Cell("Out", Output, DbF, null, 38) } } };
         DockPanel.SetDock(rail, Dock.Right);
 
-        var live = new Border { Height = 34, Background = new SolidColorBrush(Color.Parse("#1E1C18")), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
+        var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0), Children = {
                 Slider(Feedback, "FEEDBACK", Pct, 64), Slider(Spread, "SPREAD", SpreadF, 52), Toggle(Freeze, "Freeze"),
                 new TextBlock { Text = "TAPS", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, tapsLbl,

@@ -137,5 +137,5 @@ public sealed class WhatsNewWindow : NotaWindow
     }
 
     private IBrush Brush(string key)
-        => this.TryFindResource(key, out var v) && v is IBrush b ? b : Brushes.Magenta;
+        => (IBrush?)NotaPalette.ByKey(key) ?? Brushes.Magenta;
 }

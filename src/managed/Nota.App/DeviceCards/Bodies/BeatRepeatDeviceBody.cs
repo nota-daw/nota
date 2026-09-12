@@ -30,19 +30,19 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
     private static readonly string[] GridLbl = { "1/4", "1/8", "1/16", "1/32", "1/8T", "1/16T" };
     private static readonly string[] ModeLbl = { "Mix", "Insert", "Gate" };
 
-    private static readonly IBrush Hdr = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Rail = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Bd = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush CardBg = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealB = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush Txt = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedB = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Hue = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
+    private static readonly IBrush Hdr = NotaPalette.SurfaceCard;
+    private static readonly IBrush Rail = NotaPalette.SurfaceInset;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Bd = NotaPalette.BorderDefault;
+    private static readonly IBrush CardBg = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealB = NotaPalette.Teal;
+    private static readonly IBrush Txt = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedB = NotaPalette.TextTertiary;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
+    private static readonly IBrush Hue = NotaPalette.BorderStrong;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -133,7 +133,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         }
         Control PillToggle(string label, int p, IBrush accent, out Action sync)
         {
-            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Ink, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1.5, 0) };
+            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BgApp, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1.5, 0) };
             var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = CardBg, BorderBrush = Hue, BorderThickness = new Thickness(1), Child = knob };
             var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedB, VerticalAlignment = VerticalAlignment.Center };
             void Sync() { bool on = P(p) >= 0.5f; pill.Background = on ? accent : CardBg; pill.BorderBrush = on ? Brushes.Transparent : Hue; knob.Background = on ? Ink : MutedB; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; lbl.Foreground = on ? accent : MutedB; }
@@ -188,7 +188,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // ============ LIVE strip ============
         var modeSeg = Seg(ModeLbl, () => Idx(Mode, 3), i => SetP(Mode, i / 2f));
         MidiLearn.Bind(modeSeg, MidiTarget.DeviceParam(track, di, Mode), engine.DeviceParamName(track, di, Mode));
-        var repeatBtn = TagBtn("Repeat ⏎", Amber, new SolidColorBrush(Color.FromArgb(0x24, 0xD8, 0xA0, 0x3D)), AmberLit, held => SetP(Latch, held ? 1f : 0f));
+        var repeatBtn = TagBtn("Repeat ⏎", Amber, NotaPalette.Wash(NotaPalette.Accent, 0x24), AmberLit, held => SetP(Latch, held ? 1f : 0f));
         var latchBtn = PillToggle("Latch", Latch, Amber, out _);
         var liveLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = {
             modeSeg, MiniSlider("CHANCE", Chance, PctF, 66), MiniSlider("GATE", Gate, StepF, 56) } };

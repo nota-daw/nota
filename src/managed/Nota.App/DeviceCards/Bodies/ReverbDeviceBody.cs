@@ -43,9 +43,9 @@ internal sealed class ReverbDeviceBody : IDeviceBody
     private const double PreDelayMaxMs = 200;
 
     // ── Device-local palette ─────────────────────────────────────────────────
-    private static readonly IBrush LiveStripBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush SliderHandleBg = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush LiveStripBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush SliderHandleBg = NotaPalette.TextSecondary;
 
     public double Width => 700;
     public bool FullBleed => true;

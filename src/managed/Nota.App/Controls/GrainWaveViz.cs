@@ -21,10 +21,10 @@ internal sealed class GrainWaveViz : Control
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Wave = NotaPalette.Accent;
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0x3A, 0x36, 0x2D)), 1);
-    private static readonly IBrush SprayFill = new SolidColorBrush(Color.FromArgb(0x16, 0xD8, 0xA0, 0x3D));
-    private static readonly IPen SprayEdge = new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0xD8, 0xA0, 0x3D)), 1);
-    private static readonly IPen PosPen = new Pen(new SolidColorBrush(Color.FromArgb(0x9A, 0xF0, 0xC0, 0x60)), 1) { DashStyle = DashStyle.Dash };
+    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x55), 1);
+    private static readonly IBrush SprayFill = NotaPalette.Wash(NotaPalette.Accent, 0x16);
+    private static readonly IPen SprayEdge = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x55), 1);
+    private static readonly IPen PosPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x9A), 1) { DashStyle = DashStyle.Dash };
     private static readonly IBrush PlayCol = NotaPalette.Success;
     private static readonly IBrush GridText = NotaPalette.TextTertiary;
     private static readonly Typeface Mono = new("monospace");

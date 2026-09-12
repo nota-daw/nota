@@ -40,7 +40,7 @@ internal sealed class DetailWindow : NotaWindow
         MinWidth = 520;
         MinHeight = 400;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Avalonia.Application.Current?.FindResource("Brush.BgApp") is IBrush bg ? bg : Brushes.Black;
+        Background = NotaPalette.BgApp;
 
         ClipHost = new ContentControl { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
         ChainHost = new ContentControl { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };

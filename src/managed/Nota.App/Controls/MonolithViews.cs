@@ -69,11 +69,11 @@ internal sealed class MonolithWaveIcon : Control
 // roll-off. Draggable — X sets cutoff, Y sets emphasis (via the Changed callback).
 internal sealed class MonolithFilterCurve : Control
 {
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Grid = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(0x1E, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
     private static readonly Typeface Mono = new("ui-monospace, monospace");
     private double _cut = 0.5, _reso;
     private bool _drag;
@@ -151,7 +151,7 @@ internal sealed class MonolithFilterCurve : Control
 internal sealed class MonolithEnvCurve : Control
 {
     private double _a, _d, _s = 0.8;
-    public IBrush Accent { get; set; } = new SolidColorBrush(Color.Parse("#D8A03D"));
+    public IBrush Accent { get; set; } = NotaPalette.Accent;
 
     public void Set(double a, double d, double s) { _a = a; _d = d; _s = s; }
 

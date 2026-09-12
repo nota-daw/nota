@@ -26,16 +26,16 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                        GOrder = 6, GSwing = 7, GHold = 8, GRetrig = 9, GTranspose = 10, GLoop = 11;
     internal const int LVel = 13, LLen = 29, LChance = 45, LRatchet = 61, LTransp = 77, LOn = 93, LCC = 109;
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
 
     private static readonly string[] RateNames = { "1/1", "1/2", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" };
     private static readonly string[] OrderNames = { "Up", "Down", "Up-Dn", "Converge", "As played", "Chord", "Random" };
@@ -129,7 +129,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var l = lanes[li]; laneSel = li;
             grid.SetLane(l.b, l.min, l.max, l.vel, l.isInt);
             laneName.Text = l.name.ToUpperInvariant();
-            for (int i = 0; i < lanes.Length; i++) { bool on = i == li; laneBtns[i].Background = on ? new SolidColorBrush(Color.Parse("#26231E")) : Brushes.Transparent; laneBtns[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)laneBtns[i].Child!).Foreground = on ? TxtC : MutedC; }
+            for (int i = 0; i < lanes.Length; i++) { bool on = i == li; laneBtns[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent; laneBtns[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)laneBtns[i].Child!).Foreground = on ? TxtC : MutedC; }
         }
         var railCol = new StackPanel { Spacing = 2 };
         for (int i = 0; i < lanes.Length; i++)
@@ -192,7 +192,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         DockPanel.SetDock(laneRail, Dock.Left); DockPanel.SetDock(rightRail, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { laneRail, rightRail, stepArea } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         SelectLane(0);
         // Live playhead + step readout.

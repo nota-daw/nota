@@ -36,11 +36,11 @@ internal sealed class CeilingMeters
 internal sealed class CeilingLevelPlot : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush Border = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush InC = new SolidColorBrush(Color.Parse("#3E4A3C"));
-    private static readonly IBrush OutC = new SolidColorBrush(Color.FromArgb(0xD9, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush OverC = new SolidColorBrush(Color.FromArgb(0x99, 0xD9, 0x5F, 0x4C));
-    private static readonly IBrush CeilC = new SolidColorBrush(Color.Parse("#F0C060"));
+    private static readonly IBrush Border = NotaPalette.GraphBorder;
+    private static readonly IBrush InC = NotaPalette.SignalInFill;
+    private static readonly IBrush OutC = NotaPalette.Wash(NotaPalette.Accent, 0xD9);
+    private static readonly IBrush OverC = NotaPalette.Wash(NotaPalette.Danger, 0x99);
+    private static readonly IBrush CeilC = NotaPalette.AccentBright;
     private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Face = new(FontFamily.Default);
     private const double Lo = -30, Hi = 3;    // dBFS display range
@@ -84,9 +84,9 @@ internal sealed class CeilingLevelPlot : Control
 internal sealed class CeilingGrLane : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush Border = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Teal = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D9C34C"));
+    private static readonly IBrush Border = NotaPalette.GraphBorder;
+    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Amber = NotaPalette.Warning;
     private static readonly Typeface Face = new(FontFamily.Default);
     private const double MaxGr = 6.0;
 

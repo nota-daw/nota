@@ -71,6 +71,10 @@ public partial class App : Avalonia.Application
             e.SetObserved();
         };
 
+        // Palette variant (Preferences → Appearance), applied before the first window
+        // paints so nothing flashes graphite on the way to paper.
+        NotaThemeService.Set(Services.GetRequiredService<ISettingsService>().Current.Theme);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Show the splash immediately, then defer the heavy engine spin-up to a

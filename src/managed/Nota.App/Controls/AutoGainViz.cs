@@ -24,14 +24,14 @@ internal sealed class AutoGainHistory : Control
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen Grid = new Pen(new SolidColorBrush(Color.FromArgb(0x40, 0x1E, 0x1C, 0x18)), 1);
-    private static readonly IBrush InFill = new SolidColorBrush(Color.FromArgb(0x8C, 0x3E, 0x4A, 0x3C));
-    private static readonly IPen InPen = new Pen(new SolidColorBrush(Color.FromArgb(0xB0, 0x52, 0x60, 0x50)), 1);
+    private static readonly IPen Grid = new Pen(NotaPalette.Wash(NotaPalette.SurfaceCard, 0x40), 1);
+    private static readonly IBrush InFill = NotaPalette.Wash(NotaPalette.SignalInFill, 0x8C);
+    private static readonly IPen InPen = new Pen(NotaPalette.Wash(NotaPalette.SignalIn, 0xB0), 1);
     private static readonly IPen OutPen = new Pen(NotaPalette.Accent, 1.8);
     private static readonly IPen TargetPen = new Pen(NotaPalette.Teal, 1) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Correcting = new SolidColorBrush(Color.Parse("#C48A6A"));
-    private static readonly IBrush TealBright = new SolidColorBrush(Color.Parse("#7FC9C6"));
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Correcting = NotaPalette.Ink("#C48A6A");
+    private static readonly IBrush TealBright = NotaPalette.TealBright;
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
     private static readonly Typeface Face = new(FontFamily.Default);
 
@@ -99,7 +99,7 @@ internal sealed class AutoGainHistory : Control
 
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("LOUDNESS", gx, 2, Muted);
-        Lbl("▩ input", gx + gw - 150, 2, new SolidColorBrush(Color.Parse("#52604F")));
+        Lbl("▩ input", gx + gw - 150, 2, NotaPalette.SignalIn);
         Lbl("─ output", gx + gw - 96, 2, NotaPalette.Accent);
         Lbl("┄ target", gx + gw - 44, 2, NotaPalette.Teal);
         if (_primed && Math.Abs(_desired - _applied) > 0.15f)

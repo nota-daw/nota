@@ -27,24 +27,24 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
     // scope layout — must match AutoGain.h.
     private const int S_InLufs = 0, S_OutLufs = 1, S_InMom = 2, S_Target = 3, S_Applied = 4, S_TruePeak = 5, S_Corr = 6, S_ScLufs = 7, kScope = 9;
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealBright = new SolidColorBrush(Color.Parse("#7FC9C6"));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush LabelC = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Dim = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush Green = new SolidColorBrush(Color.Parse("#58B368"));
-    private static readonly IBrush Yellow = new SolidColorBrush(Color.Parse("#D9C34C"));
-    private static readonly IBrush Red = new SolidColorBrush(Color.Parse("#C55A47"));
-    private static readonly IBrush HandleC = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealBright = NotaPalette.TealBright;
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush LabelC = NotaPalette.TextSecondary;
+    private static readonly IBrush Dim = NotaPalette.BorderStrong;
+    private static readonly IBrush Green = NotaPalette.Success;
+    private static readonly IBrush Yellow = NotaPalette.Warning;
+    private static readonly IBrush Red = NotaPalette.DangerDeep;
+    private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -143,7 +143,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         targetGroup.Opacity = engine.DeviceSidechainSource(track, di) >= 0 ? 0.4 : 1.0;
 
         var match = new Border { Background = Amber, CornerRadius = new CornerRadius(4), Padding = new Thickness(12, 3), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "MATCH", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#171613")) } };
+            Child = new TextBlock { Text = "MATCH", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextOnAccent } };
         match.PointerPressed += (_, e) => { e.Handled = true; SetP(Auto, 0f); foreach (var a in readouts) a(); };   // freeze the current correction
 
         var live = new Border { Height = 34, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1),
@@ -175,14 +175,14 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var numCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1, Children = {
             applied, new TextBlock { Text = "dB applied", FontSize = 9, Foreground = MutedC }.WithMono(),
             new Border { Height = 8 },
-            new TextBlock { Text = "boost +12", FontSize = 8, Foreground = new SolidColorBrush(Color.Parse("#4A463D")) }.WithMono(),
-            new TextBlock { Text = "0 dB", FontSize = 8, Foreground = new SolidColorBrush(Color.Parse("#4A463D")) }.WithMono(),
-            new TextBlock { Text = "cut −12", FontSize = 8, Foreground = new SolidColorBrush(Color.Parse("#4A463D")) }.WithMono() } };
+            new TextBlock { Text = "boost +12", FontSize = 8, Foreground = NotaPalette.TextDisabled }.WithMono(),
+            new TextBlock { Text = "0 dB", FontSize = 8, Foreground = NotaPalette.TextDisabled }.WithMono(),
+            new TextBlock { Text = "cut −12", FontSize = 8, Foreground = NotaPalette.TextDisabled }.WithMono() } };
         correction.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 9, Children = { barSlot, WithCol(numCol, 1) } });
         var corrPanel = new Border { Width = 206, Child = correction };
 
         // ================= middle graph + stats =================
-        var stats = new TextBlock { FontSize = 8, Foreground = new SolidColorBrush(Color.Parse("#4A463D")), HorizontalAlignment = HorizontalAlignment.Center }.WithMono();
+        var stats = new TextBlock { FontSize = 8, Foreground = NotaPalette.TextDisabled, HorizontalAlignment = HorizontalAlignment.Center }.WithMono();
         var mid = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 7, 8, 7) };
         mid.AddDock(new Border { Height = 12, Child = stats, [DockPanel.DockProperty] = Dock.Bottom }, Dock.Bottom);
         mid.Children.Add(new Border { Child = hist });
@@ -205,7 +205,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var rail = new Border { Width = 184, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7),
             Child = new StackPanel { Spacing = 5, Children = {
                 Cap("METERS"), inRow, outRow, tpRow, corRow,
-                new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")), Margin = new Thickness(0, 1) },
+                new Border { Height = 1, Background = NotaPalette.SurfaceRaised, Margin = new Thickness(0, 1) },
                 new Border { BorderBrush = TealC, BorderThickness = new Thickness(2, 0, 0, 0), Padding = new Thickness(7, 0, 0, 0), Child =
                     new StackPanel { Spacing = 5, Children = {
                         Cap("RESPONSE", TealC),
@@ -218,7 +218,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         DockPanel.SetDock(corrPanel, Dock.Left); DockPanel.SetDock(rail, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { corrPanel, rail, mid } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         // ---- live refresh from scope ----
         float MeterFrac(float lufs) => (float)Math.Clamp((lufs + 40) / 40.0, 0, 1);  // −40..0

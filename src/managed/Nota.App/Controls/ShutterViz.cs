@@ -27,14 +27,14 @@ internal sealed class ShutterSignal : Control
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IBrush InFill = new SolidColorBrush(Color.FromArgb(0x8C, 0x3E, 0x4A, 0x3C));
-    private static readonly IPen InPen = new Pen(new SolidColorBrush(Color.FromArgb(0xA0, 0x52, 0x60, 0x50)), 1);
+    private static readonly IBrush InFill = NotaPalette.Wash(NotaPalette.SignalInFill, 0x8C);
+    private static readonly IPen InPen = new Pen(NotaPalette.Wash(NotaPalette.SignalIn, 0xA0), 1);
     private static readonly IPen GatePen = new Pen(NotaPalette.Accent, 1.8);
-    private static readonly IBrush GateFill = new SolidColorBrush(Color.FromArgb(0x12, 0xD8, 0xA0, 0x3D));
-    private static readonly IPen ThrPen = new Pen(new SolidColorBrush(Color.Parse("#C9884F")), 1) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
-    private static readonly IPen RetPen = new Pen(new SolidColorBrush(Color.FromArgb(0xB0, 0x6E, 0x6A, 0x5E)), 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) };
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush ThrC = new SolidColorBrush(Color.Parse("#C9884F"));
+    private static readonly IBrush GateFill = NotaPalette.Wash(NotaPalette.Accent, 0x12);
+    private static readonly IPen ThrPen = new Pen(NotaPalette.Threshold, 1) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
+    private static readonly IPen RetPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0xB0), 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) };
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush ThrC = NotaPalette.Threshold;
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
     private static readonly Typeface Face = new(FontFamily.Default);
 
@@ -114,7 +114,7 @@ internal sealed class ShutterSignal : Control
 
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("SIGNAL", gx, 2, Muted);
-        Lbl("▩ input", gx + gw - 154, 2, new SolidColorBrush(Color.Parse("#52604F")));
+        Lbl("▩ input", gx + gw - 154, 2, NotaPalette.SignalIn);
         Lbl("─ gate gain", gx + gw - 108, 2, NotaPalette.Accent);
         Lbl("┄ threshold", gx + gw - 48, 2, ThrC);
         Lbl($"THRESHOLD {_thrDb:0}", gx + 2, YDb(_thrDb, gy, gh) - 10, ThrC);
@@ -130,11 +130,11 @@ internal sealed class ShutterDetectorEQ : Control
     private const double FMin = 20, FMax = 20000;
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IBrush BorderB = new SolidColorBrush(Color.Parse("#221F1A"));
+    private static readonly IBrush BorderB = NotaPalette.GraphBorder;
     private static readonly IPen CurvePen = new Pen(NotaPalette.Teal, 1.4);
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x14, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush Handle = new SolidColorBrush(Color.Parse("#7FC9C6"));
-    private static readonly IBrush Axis = new SolidColorBrush(Color.Parse("#4A463D"));
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Teal, 0x14);
+    private static readonly IBrush Handle = NotaPalette.TealBright;
+    private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private double _hp = 0.301, _lp = 0.548;   // normalized DetHP / DetLP
@@ -175,7 +175,7 @@ internal sealed class ShutterDetectorEQ : Control
         if (w <= 0 || h <= 0) return;
         ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 5, 5);
         double hpF = Exp(_hp, HpLo, HpHi), lpF = Exp(_lp, LpLo, LpHi);
-        ctx.DrawLine(new Pen(new SolidColorBrush(Color.Parse("#1E1C18")), 1), new Point(0, h * 0.75), new Point(w, h * 0.75));
+        ctx.DrawLine(new Pen(NotaPalette.SurfaceCard, 1), new Point(0, h * 0.75), new Point(w, h * 0.75));
 
         // band-pass magnitude (1-pole HP × 1-pole LP), log-x.
         int n = (int)Math.Clamp(w, 24, 150);
@@ -211,10 +211,10 @@ internal sealed class ShutterDetectorEQ : Control
 // Tiny attack/hold/release trapezoid glyph.
 internal sealed class AHRGlyph : Control
 {
-    private static readonly IBrush Bg = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderB = new SolidColorBrush(Color.Parse("#221F1A"));
+    private static readonly IBrush Bg = NotaPalette.BgSunken;
+    private static readonly IBrush BorderB = NotaPalette.GraphBorder;
     private static readonly IPen Line = new Pen(NotaPalette.Accent, 1.6) { LineJoin = PenLineJoin.Round };
-    private static readonly IPen Dash = new Pen(new SolidColorBrush(Color.Parse("#3A362D")), 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) };
+    private static readonly IPen Dash = new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) };
 
     public override void Render(DrawingContext ctx)
     {

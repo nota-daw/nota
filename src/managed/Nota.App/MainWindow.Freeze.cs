@@ -53,7 +53,7 @@ public partial class MainWindow
 
         bool frozen = Engine.IsTrackFrozen(trackId);
         FreezeLabel.Text = frozen ? "Frozen" : "Freeze";
-        IBrush idle = (IBrush?)this.FindResource("Brush.TextSecondary") ?? Brushes.Gray;
+        IBrush idle = NotaPalette.TextSecondary;
         FreezeIcon.Foreground = frozen ? IceBrush : idle;
         FreezeLabel.Foreground = frozen ? IceBrush : idle;
         EnsureFreezeMenu();
@@ -202,7 +202,7 @@ public partial class MainWindow
 
     // Menu-icon glyphs matching the arrangement header badges (❄ / chain-link in ice blue)
     // and the Edit / Done / Discard header buttons.
-    private static readonly IBrush IceBrush = new SolidColorBrush(Color.Parse("#7FC7EC"));
+    private static readonly IBrush IceBrush = NotaPalette.Frozen;
 
     private static Control SnowflakeIcon()
         => new TextBlock { Text = "❄", FontSize = 12, Foreground = IceBrush, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
@@ -218,7 +218,7 @@ public partial class MainWindow
         => new TextBlock
         {
             Text = glyph, FontSize = 12, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            Foreground = (IBrush?)this.FindResource(accent ? "Brush.AccentBright" : "Brush.TextTertiary") ?? Brushes.Gray,
+            Foreground = accent ? NotaPalette.AccentBright : NotaPalette.TextTertiary,
         };
 
     // --- Flatten -----------------------------------------------------------

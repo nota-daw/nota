@@ -34,18 +34,18 @@ public sealed class DynamicEqCurve : Control
     public const int HistLen = 120;   // 2 s at 60 Hz
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.Parse("#232019")), 1);
-    private static readonly IPen GridPenFaint = new Pen(new SolidColorBrush(Color.FromArgb(0x60, 0x23, 0x20, 0x19)), 1);
+    private static readonly IPen GridPen = new Pen(NotaPalette.WellGrid, 1);
+    private static readonly IPen GridPenFaint = new Pen(NotaPalette.Wash(NotaPalette.WellGrid, 0x60), 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.BorderStrong, 1);
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.7);
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x1E, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
     private static readonly IPen DynPen = new Pen(NotaPalette.Teal, 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
-    private static readonly IPen ReachPen = new Pen(new SolidColorBrush(Color.FromArgb(0x88, 0x5B, 0x9E, 0x9C)), 1) { DashStyle = new DashStyle(new double[] { 2, 3 }, 0) };
+    private static readonly IPen ReachPen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x88), 1) { DashStyle = new DashStyle(new double[] { 2, 3 }, 0) };
     private static readonly IBrush DotBrass = NotaPalette.AccentBright;
     private static readonly IBrush DotTeal = NotaPalette.Teal;
-    private static readonly IBrush DotOff = new SolidColorBrush(Color.Parse("#4A463D"));
+    private static readonly IBrush DotOff = NotaPalette.TextDisabled;
     private static readonly IBrush DotRing = NotaPalette.BgSunken;
-    private static readonly IBrush SelRing = new SolidColorBrush(Color.Parse("#F0C060"));
+    private static readonly IBrush SelRing = NotaPalette.AccentBright;
     private static readonly IBrush LabelDim = NotaPalette.TextTertiary;
     private static readonly IBrush LabelBright = NotaPalette.TextSecondary;
     private static readonly IBrush OnAccentText = NotaPalette.TextOnAccent;

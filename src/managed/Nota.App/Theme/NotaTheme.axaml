@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  Nota design tokens + control styles. Dark-first adaptation of the Lumenics
-  desktop design system (see .claude/skills/nota-design). This file is the
-  concrete source of truth for colors/geometry — views reference these keys,
-  never hardcoded values.
+  Nota design tokens + control styles. Adaptation of the Lumenics desktop design
+  system (see .claude/skills/nota-design), in two variants: "Ember Graphite" (dark,
+  the default) and "Ember Paper" (light). This file is the concrete source of truth
+  for colors/geometry — views reference these keys, never hardcoded values.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -14,68 +14,6 @@
            Swap Font.UI to Geist once it is bundled (HANDOFF §1). -->
       <FontFamily x:Key="Font.UI">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
       <FontFamily x:Key="Font.Mono">Cascadia Code,Menlo,Consolas,monospace</FontFamily>
-
-      <!-- ===== "Ember Graphite" palette (warm graphite, hue ~40°, brass accent).
-           HANDOFF §1. Views reference these keys, never hardcoded values. ===== -->
-
-      <!-- Surfaces -->
-      <SolidColorBrush x:Key="Brush.BgSunken">#100F0D</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.BgApp">#171613</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.LaneB">#191814</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.SurfaceCard">#1E1C18</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.SurfaceRaised">#26231E</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.SurfaceHover">#2E2B24</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.SurfaceActive">#332F27</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.SurfaceSelected">#24D8A03D</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.ChromeBg">#100F0D</SolidColorBrush>
-
-      <!-- Grid lines (drawn by custom views) — keep < 12% contrast vs lanes -->
-      <SolidColorBrush x:Key="Brush.GridBeat">#1F1D18</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.GridBar">#2A2721</SolidColorBrush>
-
-      <!-- Text (warm off-white) -->
-      <SolidColorBrush x:Key="Brush.TextPrimary">#E9E4D8</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.TextSecondary">#A39D8F</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.TextTertiary">#6E6A5E</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.TextDisabled">#4A463D</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.TextOnAccent">#171613</SolidColorBrush>
-
-      <!-- Borders -->
-      <SolidColorBrush x:Key="Brush.BorderDefault">#2C2923</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.BorderStrong">#3A362D</SolidColorBrush>
-
-      <!-- Accent (brass) + semantic -->
-      <SolidColorBrush x:Key="Brush.Accent">#D8A03D</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.AccentHover">#E8B24C</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.AccentBright">#F0C060</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.AccentSubtle">#24D8A03D</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.Success">#58B368</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.Warning">#D9C34C</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.Danger">#D95F4C</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.DangerHover">#E4715F</SolidColorBrush>
-
-      <!-- Retint Fluent's built-in accent (slider fills, checkboxes, focus) to
-           brass so stock controls match the palette instead of the default blue. -->
-      <Color x:Key="SystemAccentColor">#D8A03D</Color>
-      <Color x:Key="SystemAccentColorLight1">#DEAB52</Color>
-      <Color x:Key="SystemAccentColorLight2">#E4B667</Color>
-      <Color x:Key="SystemAccentColorLight3">#EAC17C</Color>
-      <Color x:Key="SystemAccentColorDark1">#C2902F</Color>
-      <Color x:Key="SystemAccentColorDark2">#A87C28</Color>
-      <Color x:Key="SystemAccentColorDark3">#8E6820</Color>
-
-      <!-- Track palette (8, assigned round-robin), returns, master -->
-      <SolidColorBrush x:Key="Brush.Track1">#C4756A</SolidColorBrush> <!-- rust -->
-      <SolidColorBrush x:Key="Brush.Track2">#C99C55</SolidColorBrush> <!-- amber -->
-      <SolidColorBrush x:Key="Brush.Track3">#9BA65D</SolidColorBrush> <!-- olive -->
-      <SolidColorBrush x:Key="Brush.Track4">#6FA383</SolidColorBrush> <!-- sage -->
-      <SolidColorBrush x:Key="Brush.Track5">#5B9E9C</SolidColorBrush> <!-- teal -->
-      <SolidColorBrush x:Key="Brush.Track6">#6D8FB5</SolidColorBrush> <!-- slate -->
-      <SolidColorBrush x:Key="Brush.Track7">#9B7FA6</SolidColorBrush> <!-- mauve -->
-      <SolidColorBrush x:Key="Brush.Track8">#B57286</SolidColorBrush> <!-- rose -->
-      <SolidColorBrush x:Key="Brush.ReturnA">#7C88A0</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.ReturnB">#A08A7C</SolidColorBrush>
-      <SolidColorBrush x:Key="Brush.Master">#D8A03D</SolidColorBrush>
 
       <!-- Geometry: radii (control/card/panel/xl/clip/pill) -->
       <CornerRadius x:Key="Radius.Sm">5</CornerRadius>
@@ -89,6 +27,142 @@
       <sys:Double x:Key="Control.Sm">22</sys:Double>
       <sys:Double x:Key="Control.Md">26</sys:Double>
       <sys:Double x:Key="Control.Lg">28</sys:Double>
+
+      <!-- ===== Palette =========================================================
+           Two variants of one system. "Ember Graphite" (dark) is the default: warm
+           graphite, hue ~40°, brass accent. "Ember Paper" (light) keeps the hue and
+           the roles and reflects the lightness ramp — brass darkens to bronze so a
+           mark carries the same emphasis against paper that it carried against
+           graphite. Every value here MIRRORS a slot in Theme/NotaPalette.cs, which
+           serves the custom-drawn layer; the two files must be edited together.
+
+           These live in ThemeDictionaries, so views must reach them with
+           {DynamicResource Brush.*} — a StaticResource cannot follow the variant. -->
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Dark">
+          <!-- Surfaces -->
+          <SolidColorBrush x:Key="Brush.BgSunken">#100F0D</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.BgApp">#171613</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.LaneB">#191814</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceCard">#1E1C18</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceRaised">#26231E</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceHover">#2E2B24</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceActive">#332F27</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceSelected">#24D8A03D</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.ChromeBg">#100F0D</SolidColorBrush>
+
+          <!-- Grid lines (drawn by custom views) — keep < 12% contrast vs lanes -->
+          <SolidColorBrush x:Key="Brush.GridBeat">#1F1D18</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.GridBar">#2A2721</SolidColorBrush>
+
+          <!-- Text (warm off-white) -->
+          <SolidColorBrush x:Key="Brush.TextPrimary">#E9E4D8</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextSecondary">#A39D8F</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextTertiary">#6E6A5E</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextDisabled">#4A463D</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextOnAccent">#171613</SolidColorBrush>
+
+          <!-- Borders -->
+          <SolidColorBrush x:Key="Brush.BorderDefault">#2C2923</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.BorderStrong">#3A362D</SolidColorBrush>
+
+          <!-- Accent (brass) + semantic -->
+          <SolidColorBrush x:Key="Brush.Accent">#D8A03D</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentHover">#E8B24C</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentBright">#F0C060</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentSubtle">#24D8A03D</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Success">#58B368</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Warning">#D9C34C</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Danger">#D95F4C</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.DangerHover">#E4715F</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.DangerSubtle">#33D95F4C</SolidColorBrush>
+
+          <!-- Retint Fluent's built-in accent (slider fills, checkboxes, focus) to
+               brass so stock controls match the palette instead of the default blue. -->
+          <Color x:Key="SystemAccentColor">#D8A03D</Color>
+          <Color x:Key="SystemAccentColorLight1">#DEAB52</Color>
+          <Color x:Key="SystemAccentColorLight2">#E4B667</Color>
+          <Color x:Key="SystemAccentColorLight3">#EAC17C</Color>
+          <Color x:Key="SystemAccentColorDark1">#C2902F</Color>
+          <Color x:Key="SystemAccentColorDark2">#A87C28</Color>
+          <Color x:Key="SystemAccentColorDark3">#8E6820</Color>
+
+          <!-- Track palette (8, assigned round-robin), returns, master -->
+          <SolidColorBrush x:Key="Brush.Track1">#C4756A</SolidColorBrush> <!-- rust -->
+          <SolidColorBrush x:Key="Brush.Track2">#C99C55</SolidColorBrush> <!-- amber -->
+          <SolidColorBrush x:Key="Brush.Track3">#9BA65D</SolidColorBrush> <!-- olive -->
+          <SolidColorBrush x:Key="Brush.Track4">#6FA383</SolidColorBrush> <!-- sage -->
+          <SolidColorBrush x:Key="Brush.Track5">#5B9E9C</SolidColorBrush> <!-- teal -->
+          <SolidColorBrush x:Key="Brush.Track6">#6D8FB5</SolidColorBrush> <!-- slate -->
+          <SolidColorBrush x:Key="Brush.Track7">#9B7FA6</SolidColorBrush> <!-- mauve -->
+          <SolidColorBrush x:Key="Brush.Track8">#B57286</SolidColorBrush> <!-- rose -->
+          <SolidColorBrush x:Key="Brush.ReturnA">#7C88A0</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.ReturnB">#A08A7C</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Master">#D8A03D</SolidColorBrush>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+          <!-- Surfaces (warm paper; forward still means lighter, wells go darker) -->
+          <SolidColorBrush x:Key="Brush.BgSunken">#E4DFD1</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.BgApp">#EFEADE</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.LaneB">#E9E4D6</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceCard">#F8F5EC</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceRaised">#FFFEF8</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceHover">#E7E1D0</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceActive">#DBD4C0</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceSelected">#2EA87415</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.ChromeBg">#E4DFD1</SolidColorBrush>
+
+          <!-- Grid lines — same job, now slightly darker than the lane they sit on -->
+          <SolidColorBrush x:Key="Brush.GridBeat">#DED8C8</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.GridBar">#CFC8B4</SolidColorBrush>
+
+          <!-- Text (warm near-black) -->
+          <SolidColorBrush x:Key="Brush.TextPrimary">#241F17</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextSecondary">#5E5849</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextTertiary">#8A8474</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextDisabled">#ADA694</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.TextOnAccent">#FFFBF2</SolidColorBrush>
+
+          <!-- Borders -->
+          <SolidColorBrush x:Key="Brush.BorderDefault">#D5CEBB</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.BorderStrong">#BDB5A0</SolidColorBrush>
+
+          <!-- Accent (bronze — brass darkened to hold its emphasis on paper) -->
+          <SolidColorBrush x:Key="Brush.Accent">#A87415</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentHover">#8F6110</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentBright">#744D07</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.AccentSubtle">#24A87415</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Success">#2C7A3E</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Warning">#837010</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Danger">#B03A28</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.DangerHover">#C64A36</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.DangerSubtle">#33B03A28</SolidColorBrush>
+
+          <Color x:Key="SystemAccentColor">#A87415</Color>
+          <Color x:Key="SystemAccentColorLight1">#B98219</Color>
+          <Color x:Key="SystemAccentColorLight2">#CA901D</Color>
+          <Color x:Key="SystemAccentColorLight3">#DB9E22</Color>
+          <Color x:Key="SystemAccentColorDark1">#966611</Color>
+          <Color x:Key="SystemAccentColorDark2">#83590E</Color>
+          <Color x:Key="SystemAccentColorDark3">#6F4B0B</Color>
+
+          <!-- Track palette — same eight hues, darkened so a clip's content reads on paper -->
+          <SolidColorBrush x:Key="Brush.Track1">#9A4A3E</SolidColorBrush> <!-- rust -->
+          <SolidColorBrush x:Key="Brush.Track2">#97682A</SolidColorBrush> <!-- amber -->
+          <SolidColorBrush x:Key="Brush.Track3">#646E32</SolidColorBrush> <!-- olive -->
+          <SolidColorBrush x:Key="Brush.Track4">#42765A</SolidColorBrush> <!-- sage -->
+          <SolidColorBrush x:Key="Brush.Track5">#2F7472</SolidColorBrush> <!-- teal -->
+          <SolidColorBrush x:Key="Brush.Track6">#3E6288</SolidColorBrush> <!-- slate -->
+          <SolidColorBrush x:Key="Brush.Track7">#6A5176</SolidColorBrush> <!-- mauve -->
+          <SolidColorBrush x:Key="Brush.Track8">#86465B</SolidColorBrush> <!-- rose -->
+          <SolidColorBrush x:Key="Brush.ReturnA">#4D5972</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.ReturnB">#705B4E</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.Master">#A87415</SolidColorBrush>
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -199,7 +273,7 @@
   </Style>
   <!-- Record engaged: translucent danger box, red glyph stays visible -->
   <Style Selector="ToggleButton.tp-icon:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#33D95F4C"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.DangerSubtle}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}"/>
   </Style>
   <Style Selector="Button.tp-play">

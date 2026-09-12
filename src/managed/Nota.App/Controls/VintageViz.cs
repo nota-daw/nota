@@ -20,7 +20,7 @@ internal sealed class VintageViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
     private static readonly Typeface Face = new(FontFamily.Default);
     private static readonly string[] ModeNames = { "VINYL", "CASSETTE", "REEL", "VHS", "TUBE", "ANALOG" };
     // Mirrors Vintage.h kMode: shape, driveMul, bias, bandHz.
@@ -93,7 +93,7 @@ internal sealed class VintageViz : Control
 
         // Grain speckle: dots scattered across the panel, count ∝ Noise+Crackle.
         int dots = (int)(_grain * 120);
-        var dotBrush = new SolidColorBrush(Color.FromArgb(0x90, 0xF0, 0xC0, 0x60));
+        var dotBrush = NotaPalette.Wash(NotaPalette.AccentBright, 0x90);
         for (int i = 0; i < dots; i++)
         {
             double dx = x0 + Rand() * (x1 - x0);
@@ -105,8 +105,8 @@ internal sealed class VintageViz : Control
         // Bandwidth bar along the bottom: filled portion = retained highs (narrows with Wear).
         double frac = Math.Clamp((BandHz[_mode] * (1.0 - 0.55 * _wear)) / 20000.0, 0.05, 1.0);
         double by = bot + 6, bh = 3;
-        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D)), null, new Rect(x0, by, x1 - x0, bh), 1.5, 1.5);
-        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(0xB0, 0x5A, 0xC8, 0xB0)), null, new Rect(x0, by, (x1 - x0) * frac, bh), 1.5, 1.5);
+        ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.BorderStrong, 0x40), null, new Rect(x0, by, x1 - x0, bh), 1.5, 1.5);
+        ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.Ink("#5AC8B0"), 0xB0), null, new Rect(x0, by, (x1 - x0) * frac, bh), 1.5, 1.5);
 
         ctx.DrawText(new FormattedText("DRIVE", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
         var t2 = new FormattedText(ModeNames[_mode], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, AccentBright);

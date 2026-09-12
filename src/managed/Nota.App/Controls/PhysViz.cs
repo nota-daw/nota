@@ -18,7 +18,7 @@ namespace Nota.App;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         public enum K { Glyph, Decay }
-        private static readonly IBrush Grid = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly Typeface Face = new(FontFamily.Default);
         private readonly K _k;
         private int _st;
@@ -43,7 +43,7 @@ namespace Nota.App;
                 string[] names = { "STRING", "MEMBRANE", "TUBE", "BODY" };
                 Label(ctx, names[Math.Clamp(_st, 0, 3)], x0, pad - 1, TextTertiary);
                 double cx = (x0 + x1) / 2, cy = (top + bot) / 2, rw = (x1 - x0) / 2, rh = (bot - top) / 2;
-                var faint = new Pen(new SolidColorBrush(Color.FromArgb(0x66, 0xF0, 0xC0, 0x60)), 1.2, lineCap: PenLineCap.Round);
+                var faint = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x66), 1.2, lineCap: PenLineCap.Round);
                 switch (Math.Clamp(_st, 0, 3))
                 {
                     case 0: // String: a plucked line pulled aside at the pluck position.
@@ -130,7 +130,7 @@ namespace Nota.App;
                     double oy = cyMid(top, bot) - a * (bot - top) * 0.42 * Math.Sin(t * f);
                     go.LineTo(new Point(x, oy));
                 }
-                ctx.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0xF0, 0xC0, 0x60)), 1), osc);
+                ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x55), 1), osc);
                 ctx.DrawGeometry(null, pen, env);
             }
         }

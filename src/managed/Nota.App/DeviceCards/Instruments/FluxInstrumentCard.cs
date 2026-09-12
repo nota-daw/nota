@@ -30,13 +30,13 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
     public string Subtitle => "VECTOR";
     public double CardWidth => 900;
 
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush ReactBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush TealB = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealBright = new SolidColorBrush(Color.Parse("#7FC9C6"));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
+    private static readonly IBrush ReactBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush TealB = NotaPalette.Teal;
+    private static readonly IBrush TealBright = NotaPalette.TealBright;
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
 
     private static readonly string[] Targets = { "Filter", "Pitch", "Space", "Vector" };
     private static readonly string[] RateNames = { "1/1", "1/2", "1/4", "1/8", "1/8T", "1/16" };
@@ -114,13 +114,13 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var scopeDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(scopeHead, Dock.Top); scopeDock.Children.Add(scopeHead);
         scopeDock.Children.Add(new Border { Margin = new Thickness(0, 3, 0, 0), Child = scope });
-        var scopeBox = new Border { Background = Inset, BorderBrush = new SolidColorBrush(Color.Parse("#221F1A")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 4), Child = scopeDock };
+        var scopeBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 4), Child = scopeDock };
 
         // LISTEN knob + TARGET segmented.
         var listen = InstrumentControls.InstKnob(ctx, idx, "listen", "LISTEN", DoRefresh, v => $"{v * 100:0} %", 40, 56, TealB);
         var targetChips = new Border[4];
         var targetRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        void SyncTarget() { int cur = TargetIdx(); for (int i = 0; i < 4; i++) { bool on = i == cur; targetChips[i].Background = on ? new SolidColorBrush(Color.FromArgb(0x28, 0x5B, 0x9E, 0x9C)) : Brushes.Transparent; targetChips[i].BorderBrush = on ? TealB : Brushes.Transparent; ((TextBlock)targetChips[i].Child!).Foreground = on ? TealBright : Muted; } }
+        void SyncTarget() { int cur = TargetIdx(); for (int i = 0; i < 4; i++) { bool on = i == cur; targetChips[i].Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x28) : Brushes.Transparent; targetChips[i].BorderBrush = on ? TealB : Brushes.Transparent; ((TextBlock)targetChips[i].Child!).Foreground = on ? TealBright : Muted; } }
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
@@ -176,7 +176,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         macroHead.Children.Add(mh);
         var macroDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(macroHead, Dock.Top); macroDock.Children.Add(macroHead);
-        var macroFoot = Mono("resonance · attack/release · unison — adaptive", new SolidColorBrush(Color.Parse("#4A463D")), 8);
+        var macroFoot = Mono("resonance · attack/release · unison — adaptive", NotaPalette.TextDisabled, 8);
         macroFoot.HorizontalAlignment = HorizontalAlignment.Center;
         DockPanel.SetDock(macroFoot, Dock.Bottom); macroDock.Children.Add(macroFoot);
         macroDock.Children.Add(macroRow);
@@ -196,7 +196,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         }
 
         // ---- assemble body --------------------------------------------------
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Background = Ink };
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Background = NotaPalette.BgApp };
         Grid.SetColumn(vecCol, 0); Grid.SetColumn(reactCol, 1); Grid.SetColumn(macroCol, 2);
         body.Children.Add(vecCol); body.Children.Add(reactCol); body.Children.Add(macroCol);
 

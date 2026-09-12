@@ -20,7 +20,7 @@ internal sealed class DelayTaps : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush GridB = new SolidColorBrush(Color.FromArgb(0x40, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
     private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Face = new(FontFamily.Default);
 

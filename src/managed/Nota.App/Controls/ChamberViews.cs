@@ -20,11 +20,11 @@ namespace Nota.App;
 
 internal static class ChamberInk
 {
-    public static readonly Color SlateColor = Color.Parse("#6D8FB5");   // convolution
-    public static readonly Color MauveColor = Color.Parse("#B57286");   // shimmer / pitch, low band
+    public static Color SlateColor => NotaPalette.InkColor("#6D8FB5");   // convolution
+    public static Color MauveColor => NotaPalette.InkColor("#B57286");   // shimmer / pitch, low band
     public static readonly IBrush Slate = new SolidColorBrush(SlateColor);
     public static readonly IBrush Mauve = new SolidColorBrush(MauveColor);
-    public static readonly IBrush Veil = new SolidColorBrush(Color.FromArgb(0xB8, 0x0B, 0x0A, 0x09));
+    public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
     private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
     private static readonly Typeface Sans = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);
@@ -274,7 +274,7 @@ internal sealed class ChamberIrView : Control
     {
         double lh = full - top;
         if (lh < 10) return;
-        ctx.FillRectangle(ChamberInk.Alpha(Color.Parse("#0B0A09"), 0xFF), new Rect(0, top, w, lh));
+        ctx.FillRectangle(ChamberInk.Alpha(NotaPalette.SurfaceAbyss.Color, 0xFF), new Rect(0, top, w, lh));
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, top + 0.5), new Point(w, top + 0.5));
         double axis = _axis > 0 ? _axis : 1, bot = full - 2, peakY = top + 9;
         double X(double t) => Math.Clamp(t / axis, 0, 1) * w;

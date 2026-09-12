@@ -35,7 +35,7 @@ internal static class DeviceCardKit
     internal static readonly IBrush AccentBright = NotaPalette.AccentBright;
     internal static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
     internal static readonly IBrush Teal = NotaPalette.Teal;                                     // modulation accent
-    internal static readonly IBrush AccentSubtleB = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
+    internal static readonly IBrush AccentSubtleB = NotaPalette.AccentSubtle;
 
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}%";
 

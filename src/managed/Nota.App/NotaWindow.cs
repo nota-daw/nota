@@ -31,7 +31,7 @@ public abstract class NotaWindow : Window
 
     protected NotaWindow()
     {
-        Background = Res("Brush.BgApp") ?? Brushes.Black;
+        Background = NotaPalette.BgApp;
 
         // Body + learn glass share the space below the title bar (glass on top).
         var bodyLayer = new Panel();

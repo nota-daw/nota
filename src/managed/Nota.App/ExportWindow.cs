@@ -263,7 +263,7 @@ public sealed class ExportWindow : NotaWindow
                 new TextBlock { Text = "· one file per track, post-fader", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
-        var headerBar = new Border { Height = 28, Background = new SolidColorBrush(Color.Parse("#1B1916")), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = header };
+        var headerBar = new Border { Height = 28, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = header };
         headerBar.PointerPressed += (_, _) => { _stems = !_stems; Paint(); };
         var box = new StackPanel { Children = { headerBar } };
         return new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), ClipToBounds = true, Child = box };

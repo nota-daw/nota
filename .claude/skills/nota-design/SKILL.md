@@ -1,13 +1,16 @@
 ---
 name: nota-design
-description: Nota's UI design language — "Ember Graphite", a dark-only warm-graphite palette with a brass accent, used across the Avalonia/C# desktop app. Use whenever building or restyling any Nota UI (windows, panels, controls, device cards, custom-drawn views like the piano roll / waveform / arrangement) so everything stays visually consistent. Points at the authoritative token files and the full guideline rather than restating values.
+description: Nota's UI design language — "Ember", a warm-graphite palette with a brass accent, in two variants (Ember Graphite dark, Ember Paper light), used across the Avalonia/C# desktop app. Use whenever building or restyling any Nota UI (windows, panels, controls, device cards, custom-drawn views like the piano roll / waveform / arrangement) so everything stays visually consistent. Points at the authoritative token files and the full guideline rather than restating values.
 user-invocable: true
 ---
 
-# Nota design language — Ember Graphite
+# Nota design language — Ember
 
-Warm graphite neutrals (hue ~40°) lit by a single **brass** accent `#D8A03D`.
-Dark-only by intent: a DAW is used in dark rooms for long sessions.
+Warm neutrals (hue ~40°) lit by a single **brass** accent, in two variants:
+**Ember Graphite** (dark, the default — a DAW is used in dark rooms for long sessions)
+and **Ember Paper** (light — same hues and roles, brass darkened to bronze so a mark
+carries the same emphasis against paper). Preferences → Appearance picks Dark / Light /
+System; switching is live.
 
 ## Read these first — do not work from memory
 
@@ -17,6 +20,7 @@ Dark-only by intent: a DAW is used in dark rooms for long sessions.
 | `DESIGN.html` | The same thing rendered — swatches, live control specimens, card anatomy at true size. Open it when the question is "what should this look like". |
 | `src/managed/Nota.App/Theme/NotaTheme.axaml` | **Definitive** source of colour, geometry and control styles. |
 | `src/managed/Nota.App/Theme/NotaPalette.cs` | Mirror of the above for custom-drawn views. Kept in sync by hand. |
+| `src/managed/Nota.App/Theme/NotaThemeService.cs` | Applies a variant to both layers and repaints. |
 | `src/managed/Nota.App/DeviceCardKit.cs` | Palette aliases + atomic builders for device cards. |
 
 If `DESIGN.md` / `DESIGN.html` disagree with the theme files, **the theme files win** and
@@ -28,9 +32,16 @@ the docs need fixing. Say so rather than propagating the drift.
 
 ## Non-negotiables
 
-- **Never hardcode a colour or size in a view.** XAML: `{DynamicResource Brush.*}` /
-  `{StaticResource Radius.*}`. Custom-drawn C#: read from `NotaPalette` or `DeviceCardKit`.
-  (The card layer currently breaks this in ~628 places — do not add to it.)
+- **Never hardcode a colour or size in a view.** XAML: `{DynamicResource Brush.*}` —
+  a `StaticResource` cannot follow the variant — and `{StaticResource Radius.*}` for
+  geometry. Custom-drawn C#: `NotaPalette` (a named token, `Wash(slot, alpha)`, or
+  `Ink("#hex")` for a one-off device hue) or `DeviceCardKit`. A literal is not just
+  off-palette, it is stuck in one variant.
+- **Nothing may snapshot a colour.** `NotaPalette` hands out long-lived brushes whose
+  `Color` is re-pointed on a variant change, so `new SolidColorBrush(slot.Color)` freezes
+  the view. A `static readonly Color` must become a property; a gradient must come from
+  `NotaPalette.VGradient`; anything a view derives itself must be dropped on
+  `NotaPalette.Changed`.
 - **One accent, spent sparingly.** Brass marks primary actions, selection, focus, active
   state, and the time-domain data that is the point of a DAW. Everything else is neutral.
   Green / amber / red are status only.
@@ -90,6 +101,7 @@ border. Families and existing views: `DESIGN.md` § Visualisers.
 
 ## When you change a colour
 
-1. Edit `NotaTheme.axaml`.
-2. Mirror it into `NotaPalette.cs` — nothing enforces this.
+1. Edit **both** branches in `NotaTheme.axaml` — `Dark` and `Light`.
+2. Mirror the pair into the `NotaPalette` slot — nothing enforces this.
 3. Update `DESIGN.md` **and** `DESIGN.html` so the docs stay true.
+4. Check it in both variants. `DESIGN.html` has a variant toggle in its masthead.

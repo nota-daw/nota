@@ -1,4 +1,4 @@
-<title>Ember Graphite</title>
+<title>Ember</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -6,11 +6,12 @@
 
 <style>
 /* ============================================================================
-   Ember Graphite — Nota's design system, documented in its own palette.
+   Ember — Nota's design system, documented in its own palette.
    Every value below is lifted from src/managed/Nota.App/Theme/NotaTheme.axaml.
-   Single-theme by intent: Nota is dark-only, and these swatches are only
-   truthful on their real ground. Every colour is painted explicitly so the
-   page holds on any host background.
+   Two variants: Ember Graphite (dark, the default) and Ember Paper (light).
+   The toggle in the masthead flips data-variant on :root, so every specimen
+   on this page is rendered by the same tokens the app uses. Nothing here is
+   painted with a raw hex — that is the point.
    ========================================================================= */
 
 :root {
@@ -23,6 +24,8 @@
   --surface-hover:  #2E2B24;
   --surface-active: #332F27;
   --surface-selected: #24D8A03D;
+  --surface-inset:  #1B1916;
+  --graph-border:   #221F1A;
 
   /* Grid lines */
   --grid-beat: #1F1D18;
@@ -48,6 +51,13 @@
   --warning: #D9C34C;
   --danger:  #D95F4C;
   --danger-hover: #E4715F;
+  --danger-subtle: #33D95F4C;
+
+  /* Track palette + returns */
+  --track-1: #C4756A; --track-2: #C99C55; --track-3: #9BA65D; --track-4: #6FA383;
+  --track-5: #5B9E9C; --track-6: #6D8FB5; --track-7: #9B7FA6; --track-8: #B57286;
+  --return-a: #7C88A0; --return-b: #A08A7C;
+  --teal: #5B9E9C;
 
   /* Geometry */
   --r-sm: 5px; --r-md: 7px; --r-lg: 10px; --r-xl: 14px; --r-clip: 4px; --r-pill: 8px;
@@ -57,6 +67,55 @@
 
   --measure: 68ch;
 }
+
+/* Ember Paper — the same roles on a warm paper ground. Only the colour tokens
+   move; geometry and type are variant-independent. */
+:root[data-variant="paper"] {
+  --bg-sunken:      #E4DFD1;
+  --bg-app:         #EFEADE;
+  --lane-b:         #E9E4D6;
+  --surface-card:   #F8F5EC;
+  --surface-raised: #FFFEF8;
+  --surface-hover:  #E7E1D0;
+  --surface-active: #DBD4C0;
+  --surface-selected: #2EA87415;
+  --surface-inset:  #E7E2D4;
+  --graph-border:   #D5CFBE;
+
+  --grid-beat: #DED8C8;
+  --grid-bar:  #CFC8B4;
+
+  --text-primary:   #241F17;
+  --text-secondary: #5E5849;
+  --text-tertiary:  #8A8474;
+  --text-disabled:  #ADA694;
+  --text-on-accent: #FFFBF2;
+
+  --border-default: #D5CEBB;
+  --border-strong:  #BDB5A0;
+
+  --accent:        #A87415;
+  --accent-hover:  #8F6110;
+  --accent-bright: #744D07;
+  --accent-subtle: #24A87415;
+  --success: #2C7A3E;
+  --warning: #837010;
+  --danger:  #B03A28;
+  --danger-hover: #C64A36;
+  --danger-subtle: #33B03A28;
+
+  --track-1: #9A4A3E; --track-2: #97682A; --track-3: #646E32; --track-4: #42765A;
+  --track-5: #2F7472; --track-6: #3E6288; --track-7: #6A5176; --track-8: #86465B;
+  --return-a: #4D5972; --return-b: #705B4E;
+  --teal: #2F7472;
+}
+
+/* Variant toggle */
+.variant { display: inline-flex; gap: 2px; padding: 2px; margin-top: 18px;
+  background: var(--bg-sunken); border: 1px solid var(--border-default); border-radius: var(--r-sm); }
+.variant button { appearance: none; border: 0; cursor: pointer; border-radius: 3px;
+  padding: 4px 12px; font: 500 11px/1.4 var(--font-ui); color: var(--text-secondary); background: transparent; }
+.variant button[aria-pressed="true"] { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
 
 * { box-sizing: border-box; }
 
@@ -608,7 +667,7 @@ footer {
 <div class="shell">
   <aside class="rail">
     <p class="rail__mark">Nota</p>
-    <p class="rail__sub">Ember Graphite<br>design system</p>
+    <p class="rail__sub">Ember<br>design system</p>
     <nav>
       <a href="#principles">Principles</a>
       <a href="#colour">Colour</a>
@@ -628,11 +687,15 @@ footer {
   <main class="main">
 
     <header class="masthead">
-      <h1>Ember <em>Graphite</em></h1>
-      <p>Nota's UI runs on a warm graphite palette — neutrals pulled to roughly 40° hue, lit by a single brass accent. It is dark-only by intent: a DAW is used in dark rooms for long sessions, and every value here is tuned for that.</p>
-      <p>The concrete source of truth is <code>src/managed/Nota.App/Theme/NotaTheme.axaml</code>, mirrored for custom-drawn views in <code>Theme/NotaPalette.cs</code>. This page documents those two files. <strong style="color:var(--text-primary);font-weight:600">Never hardcode a colour or size in a view</strong> — reference the resource key.</p>
+      <h1>Ember <em>Graphite</em> &amp; <em>Paper</em></h1>
+      <p>Nota's UI runs on a warm palette — neutrals pulled to roughly 40° hue, lit by a single brass accent. <strong style="color:var(--text-primary);font-weight:600">Ember Graphite</strong> is the dark default: a DAW is used in dark rooms for long sessions. <strong style="color:var(--text-primary);font-weight:600">Ember Paper</strong> is the same system on a warm light ground — same hues, same roles, with brass darkened to bronze because against paper a mark needs less lightness, not more, to carry the same emphasis.</p>
+      <p>The concrete source of truth is <code>src/managed/Nota.App/Theme/NotaTheme.axaml</code> (both variants, in <code>ThemeDictionaries</code>), mirrored for custom-drawn views in <code>Theme/NotaPalette.cs</code>. This page documents those two files. <strong style="color:var(--text-primary);font-weight:600">Never hardcode a colour or size in a view</strong> — reference the token, or it is stuck in one variant.</p>
+      <div class="variant" role="group" aria-label="Palette variant">
+        <button type="button" data-set="graphite" aria-pressed="true">Ember Graphite</button>
+        <button type="button" data-set="paper" aria-pressed="false">Ember Paper</button>
+      </div>
       <div class="hue-strip">
-        <span style="background:#100F0D"></span><span style="background:#171613"></span><span style="background:#1E1C18"></span><span style="background:#26231E"></span><span style="background:#3A362D"></span><span style="background:#6E6A5E"></span><span style="background:#A39D8F"></span><span style="background:#E9E4D8"></span><span style="background:#D8A03D"></span><span style="background:#F0C060"></span>
+        <span style="background:var(--bg-sunken)"></span><span style="background:var(--bg-app)"></span><span style="background:var(--surface-card)"></span><span style="background:var(--surface-raised)"></span><span style="background:var(--border-strong)"></span><span style="background:var(--text-tertiary)"></span><span style="background:var(--text-secondary)"></span><span style="background:var(--text-primary)"></span><span style="background:var(--accent)"></span><span style="background:var(--accent-bright)"></span>
       </div>
     </header>
 
@@ -671,47 +734,47 @@ footer {
     <section id="colour">
       <p class="eyebrow">02 — Colour</p>
       <h2>Palette</h2>
-      <p>Click any swatch to copy its hex. Translucent tokens are shown over a checkerboard so the alpha reads honestly.</p>
+      <p>Click any swatch to copy its hex. The hex shown is the one for the variant selected in the masthead. Translucent tokens are shown over a checkerboard so the alpha reads honestly.</p>
 
       <h3>Surfaces</h3>
       <div class="swatches">
-        <button class="sw" data-hex="#100F0D"><span class="sw__chip" style="background:#100F0D"></span><span class="sw__meta"><span class="sw__key">Brush.BgSunken</span><span class="sw__hex">#100F0D</span> <span class="sw__role">· wells, lanes, chrome</span></span></button>
-        <button class="sw" data-hex="#171613"><span class="sw__chip" style="background:#171613"></span><span class="sw__meta"><span class="sw__key">Brush.BgApp</span><span class="sw__hex">#171613</span> <span class="sw__role">· app ground</span></span></button>
-        <button class="sw" data-hex="#191814"><span class="sw__chip" style="background:#191814"></span><span class="sw__meta"><span class="sw__key">Brush.LaneB</span><span class="sw__hex">#191814</span> <span class="sw__role">· lane alternation</span></span></button>
-        <button class="sw" data-hex="#1E1C18"><span class="sw__chip" style="background:#1E1C18"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceCard</span><span class="sw__hex">#1E1C18</span> <span class="sw__role">· panels, cards</span></span></button>
-        <button class="sw" data-hex="#26231E"><span class="sw__chip" style="background:#26231E"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceRaised</span><span class="sw__hex">#26231E</span> <span class="sw__role">· transport, chips</span></span></button>
-        <button class="sw" data-hex="#2E2B24"><span class="sw__chip" style="background:#2E2B24"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceHover</span><span class="sw__hex">#2E2B24</span> <span class="sw__role">· hover</span></span></button>
-        <button class="sw" data-hex="#332F27"><span class="sw__chip" style="background:#332F27"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceActive</span><span class="sw__hex">#332F27</span> <span class="sw__role">· pressed</span></span></button>
-        <button class="sw" data-hex="#24D8A03D"><span class="sw__chip alpha"><i style="background:#24D8A03D"></i></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceSelected</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· 14% brass</span></span></button>
+        <button class="sw" data-hex="#100F0D" data-paper="#E4DFD1"><span class="sw__chip" style="background:var(--bg-sunken)"></span><span class="sw__meta"><span class="sw__key">Brush.BgSunken</span><span class="sw__hex">#100F0D</span> <span class="sw__role">· wells, lanes, chrome</span></span></button>
+        <button class="sw" data-hex="#171613" data-paper="#EFEADE"><span class="sw__chip" style="background:var(--bg-app)"></span><span class="sw__meta"><span class="sw__key">Brush.BgApp</span><span class="sw__hex">#171613</span> <span class="sw__role">· app ground</span></span></button>
+        <button class="sw" data-hex="#191814" data-paper="#E9E4D6"><span class="sw__chip" style="background:var(--lane-b)"></span><span class="sw__meta"><span class="sw__key">Brush.LaneB</span><span class="sw__hex">#191814</span> <span class="sw__role">· lane alternation</span></span></button>
+        <button class="sw" data-hex="#1E1C18" data-paper="#F8F5EC"><span class="sw__chip" style="background:var(--surface-card)"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceCard</span><span class="sw__hex">#1E1C18</span> <span class="sw__role">· panels, cards</span></span></button>
+        <button class="sw" data-hex="#26231E" data-paper="#FFFEF8"><span class="sw__chip" style="background:var(--surface-raised)"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceRaised</span><span class="sw__hex">#26231E</span> <span class="sw__role">· transport, chips</span></span></button>
+        <button class="sw" data-hex="#2E2B24" data-paper="#E7E1D0"><span class="sw__chip" style="background:var(--surface-hover)"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceHover</span><span class="sw__hex">#2E2B24</span> <span class="sw__role">· hover</span></span></button>
+        <button class="sw" data-hex="#332F27" data-paper="#DBD4C0"><span class="sw__chip" style="background:var(--surface-active)"></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceActive</span><span class="sw__hex">#332F27</span> <span class="sw__role">· pressed</span></span></button>
+        <button class="sw" data-hex="#24D8A03D" data-paper="#24A87415"><span class="sw__chip alpha"><i style="background:var(--accent-subtle)"></i></span><span class="sw__meta"><span class="sw__key">Brush.SurfaceSelected</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· 14% brass</span></span></button>
       </div>
 
       <h3>Text</h3>
       <div class="swatches">
-        <button class="sw" data-hex="#E9E4D8"><span class="sw__chip" style="background:#E9E4D8"></span><span class="sw__meta"><span class="sw__key">Brush.TextPrimary</span><span class="sw__hex">#E9E4D8</span> <span class="sw__role">· warm off-white</span></span></button>
-        <button class="sw" data-hex="#A39D8F"><span class="sw__chip" style="background:#A39D8F"></span><span class="sw__meta"><span class="sw__key">Brush.TextSecondary</span><span class="sw__hex">#A39D8F</span> <span class="sw__role">· labels, captions</span></span></button>
-        <button class="sw" data-hex="#6E6A5E"><span class="sw__chip" style="background:#6E6A5E"></span><span class="sw__meta"><span class="sw__key">Brush.TextTertiary</span><span class="sw__hex">#6E6A5E</span> <span class="sw__role">· section labels</span></span></button>
-        <button class="sw" data-hex="#4A463D"><span class="sw__chip" style="background:#4A463D"></span><span class="sw__meta"><span class="sw__key">Brush.TextDisabled</span><span class="sw__hex">#4A463D</span> <span class="sw__role">· disabled</span></span></button>
-        <button class="sw" data-hex="#171613"><span class="sw__chip" style="background:#171613"></span><span class="sw__meta"><span class="sw__key">Brush.TextOnAccent</span><span class="sw__hex">#171613</span> <span class="sw__role">· ink on brass</span></span></button>
+        <button class="sw" data-hex="#E9E4D8" data-paper="#241F17"><span class="sw__chip" style="background:var(--text-primary)"></span><span class="sw__meta"><span class="sw__key">Brush.TextPrimary</span><span class="sw__hex">#E9E4D8</span> <span class="sw__role">· warm off-white</span></span></button>
+        <button class="sw" data-hex="#A39D8F" data-paper="#5E5849"><span class="sw__chip" style="background:var(--text-secondary)"></span><span class="sw__meta"><span class="sw__key">Brush.TextSecondary</span><span class="sw__hex">#A39D8F</span> <span class="sw__role">· labels, captions</span></span></button>
+        <button class="sw" data-hex="#6E6A5E" data-paper="#8A8474"><span class="sw__chip" style="background:var(--text-tertiary)"></span><span class="sw__meta"><span class="sw__key">Brush.TextTertiary</span><span class="sw__hex">#6E6A5E</span> <span class="sw__role">· section labels</span></span></button>
+        <button class="sw" data-hex="#4A463D" data-paper="#ADA694"><span class="sw__chip" style="background:var(--text-disabled)"></span><span class="sw__meta"><span class="sw__key">Brush.TextDisabled</span><span class="sw__hex">#4A463D</span> <span class="sw__role">· disabled</span></span></button>
+        <button class="sw" data-hex="#171613" data-paper="#FFFBF2"><span class="sw__chip" style="background:var(--text-on-accent)"></span><span class="sw__meta"><span class="sw__key">Brush.TextOnAccent</span><span class="sw__hex">#171613</span> <span class="sw__role">· ink on brass</span></span></button>
       </div>
 
       <h3>Borders &amp; grid</h3>
       <div class="swatches">
-        <button class="sw" data-hex="#2C2923"><span class="sw__chip" style="background:#2C2923"></span><span class="sw__meta"><span class="sw__key">Brush.BorderDefault</span><span class="sw__hex">#2C2923</span> <span class="sw__role">· panel separation</span></span></button>
-        <button class="sw" data-hex="#3A362D"><span class="sw__chip" style="background:#3A362D"></span><span class="sw__meta"><span class="sw__key">Brush.BorderStrong</span><span class="sw__hex">#3A362D</span> <span class="sw__role">· control outlines</span></span></button>
-        <button class="sw" data-hex="#1F1D18"><span class="sw__chip" style="background:#1F1D18"></span><span class="sw__meta"><span class="sw__key">Brush.GridBeat</span><span class="sw__hex">#1F1D18</span> <span class="sw__role">· beat lines</span></span></button>
-        <button class="sw" data-hex="#2A2721"><span class="sw__chip" style="background:#2A2721"></span><span class="sw__meta"><span class="sw__key">Brush.GridBar</span><span class="sw__hex">#2A2721</span> <span class="sw__role">· bar lines</span></span></button>
+        <button class="sw" data-hex="#2C2923" data-paper="#D5CEBB"><span class="sw__chip" style="background:var(--border-default)"></span><span class="sw__meta"><span class="sw__key">Brush.BorderDefault</span><span class="sw__hex">#2C2923</span> <span class="sw__role">· panel separation</span></span></button>
+        <button class="sw" data-hex="#3A362D" data-paper="#BDB5A0"><span class="sw__chip" style="background:var(--border-strong)"></span><span class="sw__meta"><span class="sw__key">Brush.BorderStrong</span><span class="sw__hex">#3A362D</span> <span class="sw__role">· control outlines</span></span></button>
+        <button class="sw" data-hex="#1F1D18" data-paper="#DED8C8"><span class="sw__chip" style="background:var(--grid-beat)"></span><span class="sw__meta"><span class="sw__key">Brush.GridBeat</span><span class="sw__hex">#1F1D18</span> <span class="sw__role">· beat lines</span></span></button>
+        <button class="sw" data-hex="#2A2721" data-paper="#CFC8B4"><span class="sw__chip" style="background:var(--grid-bar)"></span><span class="sw__meta"><span class="sw__key">Brush.GridBar</span><span class="sw__hex">#2A2721</span> <span class="sw__role">· bar lines</span></span></button>
       </div>
 
       <h3>Accent &amp; semantic</h3>
       <div class="swatches">
-        <button class="sw" data-hex="#D8A03D"><span class="sw__chip" style="background:#D8A03D"></span><span class="sw__meta"><span class="sw__key">Brush.Accent</span><span class="sw__hex">#D8A03D</span> <span class="sw__role">· brass</span></span></button>
-        <button class="sw" data-hex="#E8B24C"><span class="sw__chip" style="background:#E8B24C"></span><span class="sw__meta"><span class="sw__key">Brush.AccentHover</span><span class="sw__hex">#E8B24C</span> <span class="sw__role">· hover</span></span></button>
-        <button class="sw" data-hex="#F0C060"><span class="sw__chip" style="background:#F0C060"></span><span class="sw__meta"><span class="sw__key">Brush.AccentBright</span><span class="sw__hex">#F0C060</span> <span class="sw__role">· focus, playhead</span></span></button>
-        <button class="sw" data-hex="#24D8A03D"><span class="sw__chip alpha"><i style="background:#24D8A03D"></i></span><span class="sw__meta"><span class="sw__key">Brush.AccentSubtle</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· toggle-on wash</span></span></button>
-        <button class="sw" data-hex="#58B368"><span class="sw__chip" style="background:#58B368"></span><span class="sw__meta"><span class="sw__key">Brush.Success</span><span class="sw__hex">#58B368</span> <span class="sw__role">· session play</span></span></button>
-        <button class="sw" data-hex="#D9C34C"><span class="sw__chip" style="background:#D9C34C"></span><span class="sw__meta"><span class="sw__key">Brush.Warning</span><span class="sw__hex">#D9C34C</span> <span class="sw__role">· caution</span></span></button>
-        <button class="sw" data-hex="#D95F4C"><span class="sw__chip" style="background:#D95F4C"></span><span class="sw__meta"><span class="sw__key">Brush.Danger</span><span class="sw__hex">#D95F4C</span> <span class="sw__role">· record, destructive</span></span></button>
-        <button class="sw" data-hex="#E4715F"><span class="sw__chip" style="background:#E4715F"></span><span class="sw__meta"><span class="sw__key">Brush.DangerHover</span><span class="sw__hex">#E4715F</span> <span class="sw__role">· hover</span></span></button>
+        <button class="sw" data-hex="#D8A03D" data-paper="#A87415"><span class="sw__chip" style="background:var(--accent)"></span><span class="sw__meta"><span class="sw__key">Brush.Accent</span><span class="sw__hex">#D8A03D</span> <span class="sw__role">· brass</span></span></button>
+        <button class="sw" data-hex="#E8B24C" data-paper="#8F6110"><span class="sw__chip" style="background:var(--accent-hover)"></span><span class="sw__meta"><span class="sw__key">Brush.AccentHover</span><span class="sw__hex">#E8B24C</span> <span class="sw__role">· hover</span></span></button>
+        <button class="sw" data-hex="#F0C060" data-paper="#744D07"><span class="sw__chip" style="background:var(--accent-bright)"></span><span class="sw__meta"><span class="sw__key">Brush.AccentBright</span><span class="sw__hex">#F0C060</span> <span class="sw__role">· focus, playhead</span></span></button>
+        <button class="sw" data-hex="#24D8A03D" data-paper="#24A87415"><span class="sw__chip alpha"><i style="background:var(--accent-subtle)"></i></span><span class="sw__meta"><span class="sw__key">Brush.AccentSubtle</span><span class="sw__hex">#24D8A03D</span> <span class="sw__role">· toggle-on wash</span></span></button>
+        <button class="sw" data-hex="#58B368" data-paper="#2C7A3E"><span class="sw__chip" style="background:var(--success)"></span><span class="sw__meta"><span class="sw__key">Brush.Success</span><span class="sw__hex">#58B368</span> <span class="sw__role">· session play</span></span></button>
+        <button class="sw" data-hex="#D9C34C" data-paper="#837010"><span class="sw__chip" style="background:var(--warning)"></span><span class="sw__meta"><span class="sw__key">Brush.Warning</span><span class="sw__hex">#D9C34C</span> <span class="sw__role">· caution</span></span></button>
+        <button class="sw" data-hex="#D95F4C" data-paper="#B03A28"><span class="sw__chip" style="background:var(--danger)"></span><span class="sw__meta"><span class="sw__key">Brush.Danger</span><span class="sw__hex">#D95F4C</span> <span class="sw__role">· record, destructive</span></span></button>
+        <button class="sw" data-hex="#E4715F" data-paper="#C64A36"><span class="sw__chip" style="background:var(--danger-hover)"></span><span class="sw__meta"><span class="sw__key">Brush.DangerHover</span><span class="sw__hex">#E4715F</span> <span class="sw__role">· hover</span></span></button>
       </div>
 
       <div class="note" style="margin-top:20px">
@@ -823,7 +886,7 @@ footer {
       <div class="specimen">
         <span class="specimen__label">Inputs sit in a sunken well; focus borders brass</span>
         <input class="field" type="text" placeholder="Search devices…" aria-label="Search devices">
-        <label class="cbx cbx--on"><span class="cbx__box"><svg width="9" height="7" viewBox="0 0 9 7" fill="none" aria-hidden="true"><path d="M0 3.5 L3.2 6.7 L9 0" stroke="#171613" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Normalize</label>
+        <label class="cbx cbx--on"><span class="cbx__box"><svg width="9" height="7" viewBox="0 0 9 7" fill="none" aria-hidden="true"><path d="M0 3.5 L3.2 6.7 L9 0" stroke="var(--text-on-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Normalize</label>
         <label class="cbx"><span class="cbx__box"></span>Dither</label>
       </div>
       <div class="specimen" style="margin-top:10px">
@@ -862,21 +925,21 @@ footer {
       <p>Custom-drawn views — arrangement, piano roll, waveform — sit on <code>Brush.BgSunken</code> and carry the accent family. Grid lines stay under ~12% contrast against the lane so they read as structure, never as content.</p>
 
       <div class="lane-demo" aria-hidden="true">
-        <div class="lane"><span class="clip" style="left:12px;width:150px;background:#C99C55">Drums</span><span class="clip" style="left:184px;width:96px;background:#C99C55">Fill</span></div>
-        <div class="lane"><span class="clip" style="left:52px;width:210px;background:#5B9E9C">Bass</span></div>
-        <div class="lane"><span class="clip" style="left:92px;width:170px;background:#9B7FA6">Keys</span><span class="playhead" style="left:196px"></span></div>
+        <div class="lane"><span class="clip" style="left:12px;width:150px;background:var(--track-2)">Drums</span><span class="clip" style="left:184px;width:96px;background:var(--track-2)">Fill</span></div>
+        <div class="lane"><span class="clip" style="left:52px;width:210px;background:var(--track-5)">Bass</span></div>
+        <div class="lane"><span class="clip" style="left:92px;width:170px;background:var(--track-7)">Keys</span><span class="playhead" style="left:196px"></span></div>
       </div>
 
       <div class="tablewrap" style="margin-top:16px">
         <table>
           <thead><tr><th>Element</th><th>Token</th><th>Value</th></tr></thead>
           <tbody>
-            <tr><td class="d">Lane ground</td><td class="k">Brush.BgApp / Brush.LaneB</td><td class="v">#171613 / #191814</td></tr>
-            <tr><td class="d">Beat lines</td><td class="k">Brush.GridBeat</td><td class="v">#1F1D18</td></tr>
-            <tr><td class="d">Bar lines</td><td class="k">Brush.GridBar</td><td class="v">#2A2721</td></tr>
+            <tr><td class="d">Lane ground</td><td class="k">Brush.BgApp / Brush.LaneB</td><td class="v">#171613 / #191814 · paper #EFEADE / #E9E4D6</td></tr>
+            <tr><td class="d">Beat lines</td><td class="k">Brush.GridBeat</td><td class="v">#1F1D18 · paper #DED8C8</td></tr>
+            <tr><td class="d">Bar lines</td><td class="k">Brush.GridBar</td><td class="v">#2A2721 · paper #CFC8B4</td></tr>
             <tr><td class="d">Clip radius</td><td class="k">Radius.Clip</td><td class="v">4</td></tr>
-            <tr><td class="d">Playhead, selected note</td><td class="k">Brush.AccentBright</td><td class="v">#F0C060</td></tr>
-            <tr><td class="d">Waveform, MIDI note</td><td class="k">Brush.Accent</td><td class="v">#D8A03D</td></tr>
+            <tr><td class="d">Playhead, selected note</td><td class="k">Brush.AccentBright</td><td class="v">#F0C060 · paper #744D07</td></tr>
+            <tr><td class="d">Waveform, MIDI note</td><td class="k">Brush.Accent</td><td class="v">#D8A03D · paper #A87415</td></tr>
           </tbody>
         </table>
       </div>
@@ -892,17 +955,17 @@ footer {
       <p>Track colours are assigned round-robin from <code>Brush.Track1..8</code>. They are muted and equal-weight on purpose: no track should look more important than another, and none competes with the brass accent.</p>
 
       <div class="tracks">
-        <div class="track"><div class="track__bar" style="background:#C4756A"></div><div class="track__body"><div class="track__name">Track 1 · rust</div><div class="track__hex">#C4756A</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#C99C55"></div><div class="track__body"><div class="track__name">Track 2 · amber</div><div class="track__hex">#C99C55</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#9BA65D"></div><div class="track__body"><div class="track__name">Track 3 · olive</div><div class="track__hex">#9BA65D</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#6FA383"></div><div class="track__body"><div class="track__name">Track 4 · sage</div><div class="track__hex">#6FA383</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#5B9E9C"></div><div class="track__body"><div class="track__name">Track 5 · teal</div><div class="track__hex">#5B9E9C</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#6D8FB5"></div><div class="track__body"><div class="track__name">Track 6 · slate</div><div class="track__hex">#6D8FB5</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#9B7FA6"></div><div class="track__body"><div class="track__name">Track 7 · mauve</div><div class="track__hex">#9B7FA6</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#B57286"></div><div class="track__body"><div class="track__name">Track 8 · rose</div><div class="track__hex">#B57286</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#7C88A0"></div><div class="track__body"><div class="track__name">Return A</div><div class="track__hex">#7C88A0</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#A08A7C"></div><div class="track__body"><div class="track__name">Return B</div><div class="track__hex">#A08A7C</div></div></div>
-        <div class="track"><div class="track__bar" style="background:#D8A03D"></div><div class="track__body"><div class="track__name">Master</div><div class="track__hex">#D8A03D</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-1)"></div><div class="track__body"><div class="track__name">Track 1 · rust</div><div class="track__hex">#C4756A</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-2)"></div><div class="track__body"><div class="track__name">Track 2 · amber</div><div class="track__hex">#C99C55</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-3)"></div><div class="track__body"><div class="track__name">Track 3 · olive</div><div class="track__hex">#9BA65D</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-4)"></div><div class="track__body"><div class="track__name">Track 4 · sage</div><div class="track__hex">#6FA383</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-5)"></div><div class="track__body"><div class="track__name">Track 5 · teal</div><div class="track__hex">#5B9E9C</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-6)"></div><div class="track__body"><div class="track__name">Track 6 · slate</div><div class="track__hex">#6D8FB5</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-7)"></div><div class="track__body"><div class="track__name">Track 7 · mauve</div><div class="track__hex">#9B7FA6</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--track-8)"></div><div class="track__body"><div class="track__name">Track 8 · rose</div><div class="track__hex">#B57286</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--return-a)"></div><div class="track__body"><div class="track__name">Return A</div><div class="track__hex">#7C88A0</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--return-b)"></div><div class="track__body"><div class="track__name">Return B</div><div class="track__hex">#A08A7C</div></div></div>
+        <div class="track"><div class="track__bar" style="background:var(--accent)"></div><div class="track__body"><div class="track__name">Master</div><div class="track__hex">#D8A03D</div></div></div>
       </div>
       <p style="margin-top:14px;font-size:12.5px">Track 5 (teal) doubles as the modulation accent in custom-drawn views. Master reuses the brass accent — the master strip is the one channel that <em>should</em> read as primary.</p>
     </section>
@@ -934,7 +997,7 @@ footer {
           <span class="ca-seclabel">LIVE</span>
           <span class="ca-slider"><b>FREQ</b><span class="ca-track"><i style="width:58%;background:var(--accent)"></i><span class="ca-thumb" style="left:58%"></span></span><span class="ca-val">1.2 kHz</span></span>
           <span class="ca-slider"><b>RES</b><span class="ca-track"><i style="width:34%;background:var(--accent)"></i><span class="ca-thumb" style="left:34%"></span></span><span class="ca-val">0.34</span></span>
-          <span class="ca-slider"><b>LFO</b><span class="ca-track"><i style="width:45%;background:#5B9E9C"></i><span class="ca-thumb" style="left:45%"></span></span><span class="ca-val">2.0 Hz</span></span>
+          <span class="ca-slider"><b>LFO</b><span class="ca-track"><i style="width:45%;background:var(--track-5)"></i><span class="ca-thumb" style="left:45%"></span></span><span class="ca-val">2.0 Hz</span></span>
         </div>
 
         <div class="ca-body">
@@ -947,9 +1010,9 @@ footer {
             <div class="knobcell">
               <figure>
                 <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
-                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
-                  <path d="M7.69 30.31 A16 16 0 0 1 27.57 5.49" fill="none" stroke="#D8A03D" stroke-width="3.52" stroke-linecap="round"/>
-                  <line x1="19" y1="19" x2="24.66" y2="10.08" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="var(--bg-sunken)" stroke-width="3.52" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 0 1 27.57 5.49" fill="none" stroke="var(--accent)" stroke-width="3.52" stroke-linecap="round"/>
+                  <line x1="19" y1="19" x2="24.66" y2="10.08" stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round"/>
                 </svg>
               </figure>
               <span class="kv">1.2k</span><span class="kl">Freq</span>
@@ -957,9 +1020,9 @@ footer {
             <div class="knobcell">
               <figure>
                 <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
-                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
-                  <path d="M7.69 30.31 A16 16 0 0 1 8.61 6.83" fill="none" stroke="#3A362D" stroke-width="3.52" stroke-linecap="round"/>
-                  <line x1="19" y1="19" x2="12.14" y2="10.97" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="var(--bg-sunken)" stroke-width="3.52" stroke-linecap="round"/>
+                  <path d="M7.69 30.31 A16 16 0 0 1 8.61 6.83" fill="none" stroke="var(--border-strong)" stroke-width="3.52" stroke-linecap="round"/>
+                  <line x1="19" y1="19" x2="12.14" y2="10.97" stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round"/>
                 </svg>
               </figure>
               <span class="kv">0.35</span><span class="kl">Res</span>
@@ -969,9 +1032,9 @@ footer {
               <div class="knobcell" style="width:46px">
                 <figure>
                   <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
-                    <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="#100F0D" stroke-width="3.52" stroke-linecap="round"/>
-                    <path d="M7.69 30.31 A16 16 0 1 1 34.80 16.50" fill="none" stroke="#5B9E9C" stroke-width="3.52" stroke-linecap="round"/>
-                    <line x1="19" y1="19" x2="29.43" y2="17.35" stroke="#E9E4D8" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M7.69 30.31 A16 16 0 1 1 30.31 30.31" fill="none" stroke="var(--bg-sunken)" stroke-width="3.52" stroke-linecap="round"/>
+                    <path d="M7.69 30.31 A16 16 0 1 1 34.80 16.50" fill="none" stroke="var(--track-5)" stroke-width="3.52" stroke-linecap="round"/>
+                    <line x1="19" y1="19" x2="29.43" y2="17.35" stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round"/>
                   </svg>
                 </figure>
                 <span class="kv" style="font-size:7px">80%</span><span class="kl" style="font-size:7px">Amount</span>
@@ -988,7 +1051,7 @@ footer {
 
       <div class="ca-legend">
         <span><i style="background:var(--accent)"></i> Brass — audio path</span>
-        <span><i style="background:#5B9E9C"></i> Teal — modulation &amp; detection</span>
+        <span><i style="background:var(--track-5)"></i> Teal — modulation &amp; detection</span>
         <span><i style="background:var(--border-strong)"></i> Muted — output rail</span>
         <span><i style="background:var(--success)"></i> Green — signal present</span>
       </div>
@@ -1220,14 +1283,13 @@ footer {
         <table>
           <thead><tr><th>Item</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td class="d">The <code>nota-design</code> agent skill</td><td class="d"><strong style="color:var(--danger)">Stale.</strong> It still documents a cool-slate palette with a cyan accent (<code>#1690B2</code>) from an earlier direction. The theme file is authoritative; the skill needs rewriting to match this page.</td></tr>
+            <tr><td class="d">The <code>nota-design</code> agent skill</td><td class="d">Rewritten to point at the theme files rather than restate values — the earlier copy had drifted to a cool-slate palette with a cyan accent. Now current for both variants.</td></tr>
             <tr><td class="d">Custom title bar</td><td class="d">Not built. The OS title bar is still in use; the status bar carries the chrome identity until a frameless 40px bar lands.</td></tr>
             <tr><td class="d">Display face</td><td class="d">Inter is bundled as a stand-in for Geist. Swap <code>Font.UI</code> once Geist ships with the app.</td></tr>
             <tr><td class="d"><code>Space.*</code> tokens</td><td class="d">Do not exist. The 4px grid is honoured by convention only.</td></tr>
-            <tr><td class="d">Two palette files</td><td class="d"><code>NotaTheme.axaml</code> and <code>NotaPalette.cs</code> must be edited together — nothing enforces it.</td></tr>
-            <tr><td class="d">Hardcoded hex in card bodies</td><td class="d"><strong style="color:var(--warning)">628 literal hex values</strong> across <code>DeviceCards/</code> and <code>Controls/</code>. The “never hardcode a colour” rule holds in XAML but has largely not held in the custom-drawn layer.</td></tr>
-            <tr><td class="d">Undeclared surfaces</td><td class="d"><code>#1B1916</code> (rail) and <code>#221F1A</code> (graph border) behave like tokens but are not declared anywhere.</td></tr>
-            <tr><td class="d"><code>AccentSubtle</code> alpha</td><td class="d">The theme defines <code>#24D8A03D</code>; <code>DeviceCardKit.AccentSubtleB</code> uses <code>#28D8A03D</code>. Two slightly different washes ship side by side.</td></tr>
+            <tr><td class="d">Two palette files</td><td class="d"><code>NotaTheme.axaml</code> and <code>NotaPalette.cs</code> must be edited together — nothing enforces it. Each token now carries two values, so one colour change is four edits: the Dark and Light dictionaries, the palette slot, and this page.</td></tr>
+            <tr><td class="d">Ink hues are derived</td><td class="d">A one-off device hue (<code>NotaPalette.Ink</code>) gets its Ember Paper counterpart from a lightness reflection rather than an authored value. Most land well; pin the ones that do not in <code>NotaPalette.InkOverrides</code> instead of reaching for a literal.</td></tr>
+            <tr><td class="d">Stored colours</td><td class="d">Tag swatches, Strata layer hues and Drum Rack kit dots are <em>data</em>, not tokens — they stay hex in source and are re-tinted through <code>Ink()</code> at the point of use.</td></tr>
             <tr><td class="d">Mockup typography</td><td class="d">The mockups specify Geist and Geist Mono throughout. The app substitutes Inter and the Cascadia/Menlo/Consolas stack, so weights sit slightly differently than the source designs.</td></tr>
           </tbody>
         </table>
@@ -1235,7 +1297,7 @@ footer {
     </section>
 
     <footer>
-      Nota · Ember Graphite. Generated from <code>Theme/NotaTheme.axaml</code> and <code>Theme/NotaPalette.cs</code>. When this page and those files disagree, the files win — and this page is wrong.
+      Nota · Ember Graphite &amp; Ember Paper. Generated from <code>Theme/NotaTheme.axaml</code> and <code>Theme/NotaPalette.cs</code>. When this page and those files disagree, the files win — and this page is wrong.
     </footer>
 
   </main>
@@ -1245,7 +1307,8 @@ footer {
 (function () {
   document.querySelectorAll(".sw").forEach(function (sw) {
     sw.addEventListener("click", function () {
-      var hex = sw.getAttribute("data-hex") || "";
+      var paper = document.documentElement.getAttribute("data-variant") === "paper";
+      var hex = (paper ? sw.getAttribute("data-paper") : sw.getAttribute("data-hex")) || "";
       var done = function () {
         sw.classList.add("copied");
         var el = sw.querySelector(".sw__hex");
@@ -1260,6 +1323,26 @@ footer {
         }
       } catch (e) { /* clipboard unavailable — the swatch still shows its hex */ }
     });
+  });
+
+  // Variant toggle. Flipping data-variant re-tints every specimen through the
+  // tokens; the swatch labels carry both hexes and swap with it.
+  var root = document.documentElement;
+  function setVariant(name) {
+    if (name === "paper") root.setAttribute("data-variant", "paper");
+    else root.removeAttribute("data-variant");
+    document.querySelectorAll(".variant button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set") === name));
+    });
+    document.querySelectorAll(".sw").forEach(function (sw) {
+      var hex = name === "paper" ? sw.getAttribute("data-paper") : sw.getAttribute("data-hex");
+      if (!hex) return;
+      var el = sw.querySelector(".sw__hex");
+      if (el) el.textContent = hex;
+    });
+  }
+  document.querySelectorAll(".variant button").forEach(function (b) {
+    b.addEventListener("click", function () { setVariant(b.getAttribute("data-set")); });
   });
 })();
 </script>

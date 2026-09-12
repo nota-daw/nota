@@ -40,20 +40,21 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
     private static readonly string[] Names = { "Kick", "Snare", "Clap", "Rim", "Closed Hat", "Open Hat", "Tom", "Perc" };
     private static readonly string[] Engines = { "Analog", "Noise", "Clap", "Rim", "Metal", "Metal", "Analog", "Ring" };
+    // Kit-voice identity hues — one dot per voice, themed through NotaPalette.Ink.
     private static readonly string[] Dots = { "#C4756A", "#D8A03D", "#7FC9C6", "#B58AC4", "#7E8A6A", "#8FB56A", "#6D8FB5", "#5B9E9C" };
 
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush Panel = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush SeqBg = new SolidColorBrush(Color.Parse("#131210"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush StepOff = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush StepOn = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse("#D8A03D"), 0), new GradientStop(Color.Parse("#B8842E"), 1) } };
-    private static readonly IBrush StepAcc = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse("#F4CE7A"), 0), new GradientStop(Color.Parse("#E0A840"), 1) } };
-    private static readonly IBrush TealB = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealBright = new SolidColorBrush(Color.Parse("#7FC9C6"));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush VelFill = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse("#A7B58A"), 0), new GradientStop(Color.Parse("#7E8A6A"), 1) } };
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
+    private static readonly IBrush Panel = NotaPalette.SurfaceInset;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush SeqBg = NotaPalette.SurfaceDeep;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush StepOff = NotaPalette.BgSunken;
+    private static readonly IBrush StepOn = NotaPalette.VGradient((NotaPalette.Accent, 0), (NotaPalette.AccentDeep, 1));
+    private static readonly IBrush StepAcc = NotaPalette.VGradient((NotaPalette.AccentGlow, 0), (NotaPalette.Accent, 1));
+    private static readonly IBrush TealB = NotaPalette.Teal;
+    private static readonly IBrush TealBright = NotaPalette.TealBright;
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush VelFill = NotaPalette.VGradient((NotaPalette.Ink("#A7B58A"), 0), (NotaPalette.Ink("#7E8A6A"), 1));
 
     public Control Build(DeviceCardContext ctx)
     {
@@ -86,21 +87,21 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             int vv = v; bool selRow = v == sel;
             bool isSmp = engine.RhythmVoiceSource(track, v) == 1;
-            var dot = new Ellipse { Width = 7, Height = 7, Fill = new SolidColorBrush(Color.Parse(Dots[v])), VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Ellipse { Width = 7, Height = 7, Fill = NotaPalette.Ink(Dots[v]), VerticalAlignment = VerticalAlignment.Center };
             kitDots[v] = dot;
-            var nm = new TextBlock { Text = Names[v], FontSize = 10, Foreground = selRow ? new SolidColorBrush(Color.Parse("#F0C060")) : new SolidColorBrush(Color.Parse("#C8C2B4")), VerticalAlignment = VerticalAlignment.Center };
+            var nm = new TextBlock { Text = Names[v], FontSize = 10, Foreground = selRow ? NotaPalette.AccentBright : NotaPalette.TextStrong, VerticalAlignment = VerticalAlignment.Center };
             var tag = new TextBlock { Text = isSmp ? "SMP" : "SYN", FontSize = 7, FontWeight = FontWeight.Bold, Foreground = isSmp ? TealB : selRow ? Brass : Muted, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 15, Margin = new Thickness(6, 0) };
             Grid.SetColumn(dot, 0); Grid.SetColumn(nm, 1); Grid.SetColumn(tag, 2);
             nm.Margin = new Thickness(6, 0, 0, 0);
-            var rowBox = new Border { CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand), Child = row, Background = selRow ? new SolidColorBrush(Color.FromArgb(0x24, 0xD8, 0xA0, 0x3D)) : Brushes.Transparent, BorderBrush = selRow ? new SolidColorBrush(Color.Parse("#5A4C2E")) : Brushes.Transparent, BorderThickness = new Thickness(1) };
+            var rowBox = new Border { CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand), Child = row, Background = selRow ? NotaPalette.Wash(NotaPalette.Accent, 0x24) : Brushes.Transparent, BorderBrush = selRow ? NotaPalette.AccentTint : Brushes.Transparent, BorderThickness = new Thickness(1) };
             row.Children.Add(dot); row.Children.Add(nm); row.Children.Add(tag);
             rowBox.PointerPressed += (_, _) => { Act(A_SelectVoice, vv); ctx.RequestRebuild(); };
             // Drop an audio file (browser or Finder) onto a voice → load it as that voice's sample.
             ToolTip.SetTip(rowBox, "Drop a sample to load it into this voice");
             DragDrop.SetAllowDrop(rowBox, true);
             DragDrop.AddDragOverHandler(rowBox, (_, e) => { if (BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.Copy; rowBox.BorderBrush = TealB; ctx.HideDropGlow(); } });
-            DragDrop.AddDragLeaveHandler(rowBox, (_, _) => rowBox.BorderBrush = selRow ? new SolidColorBrush(Color.Parse("#5A4C2E")) : Brushes.Transparent);
+            DragDrop.AddDragLeaveHandler(rowBox, (_, _) => rowBox.BorderBrush = selRow ? NotaPalette.AccentTint : Brushes.Transparent);
             DragDrop.AddDropHandler(rowBox, (_, e) =>
             {
                 foreach (var it in BrowserView.DroppedItems(e))
@@ -134,7 +135,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var srcSeg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right };
         Border SrcChip(string text, bool on, IBrush onBg)
             => new() { Background = on ? onBg : Brushes.Transparent, CornerRadius = new CornerRadius(4), Padding = new Thickness(9, 2), Cursor = new Cursor(StandardCursorType.Hand),
-                       Child = new TextBlock { Text = text, FontSize = 9, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal, Foreground = on ? new SolidColorBrush(Color.Parse("#171613")) : Muted } };
+                       Child = new TextBlock { Text = text, FontSize = 9, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal, Foreground = on ? NotaPalette.BgApp : Muted } };
         var synthChip = SrcChip("Synth", !sampleMode, Brass);
         var sampleChip = SrcChip("Sample", sampleMode, TealB);
         synthChip.PointerPressed += (_, _) => { Act(A_SetSource, sel, 0f); ctx.RequestRebuild(); };
@@ -152,7 +153,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         sampleChip.PointerPressed += (_, _) => { if (voiceSid != 0) { Act(A_SetSource, sel, 1f); ctx.RequestRebuild(); } else LoadSampleDialog(sampleChip); };
         ToolTip.SetTip(sampleChip, "Load a one-shot sample for this voice (or drop a file on the voice)");
         srcSeg.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, Children = { synthChip, sampleChip } };
-        var engBox = new Border { Height = 17, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = sampleMode ? "Sample" : Engines[sel], FontSize = 9, Foreground = new SolidColorBrush(Color.Parse("#C8C2B4")), VerticalAlignment = VerticalAlignment.Center } };
+        var engBox = new Border { Height = 17, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = sampleMode ? "Sample" : Engines[sel], FontSize = 9, Foreground = NotaPalette.TextStrong, VerticalAlignment = VerticalAlignment.Center } };
         var voiceHeadRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
         Grid.SetColumn(voiceHead, 0); Grid.SetColumn(srcSeg, 1); Grid.SetColumn(engBox, 2);
         voiceHeadRow.Children.Add(voiceHead); voiceHeadRow.Children.Add(srcSeg); voiceHeadRow.Children.Add(engBox);
@@ -175,7 +176,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var hitDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(hitHead, Dock.Top); hitDock.Children.Add(hitHead);
         hitDock.Children.Add(new Border { Margin = new Thickness(0, 2, 0, 0), Child = hitInner });
-        var hitBox = new Border { Width = 148, Background = Inset, BorderBrush = new SolidColorBrush(Color.Parse("#221F1A")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(5, 4), Child = hitDock };
+        var hitBox = new Border { Width = 148, Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(5, 4), Child = hitDock };
         if (sampleMode) { hitBox.Cursor = new Cursor(StandardCursorType.Hand); hitBox.PointerPressed += (_, _) => LoadSampleDialog(hitBox); }
 
         // engine knobs of the selected voice.
@@ -202,7 +203,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         perfKnobs.Children.Add(InstrumentControls.InstKnob(ctx, idx, "accent", "ACCENT", DoRefresh, 40, 52));
         var perfDock = new DockPanel { LastChildFill = true };
         var perfHead = Sec("PERFORM"); DockPanel.SetDock(perfHead, Dock.Top); perfDock.Children.Add(perfHead);
-        var perfFoot = Mono("shift+step = accent", new SolidColorBrush(Color.Parse("#4A463D")), 8); perfFoot.HorizontalAlignment = HorizontalAlignment.Center;
+        var perfFoot = Mono("shift+step = accent", NotaPalette.TextDisabled, 8); perfFoot.HorizontalAlignment = HorizontalAlignment.Center;
         DockPanel.SetDock(perfFoot, Dock.Bottom); perfDock.Children.Add(perfFoot);
         perfDock.Children.Add(perfKnobs);
         var perfCol = new Border { Width = 170, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(10, 7), Child = perfDock };
@@ -223,7 +224,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             var b = stepBtns[s];
             bool on = onArr[s], acc = accArr[s];
             b.Background = acc && on ? StepAcc : on ? StepOn : StepOff;
-            b.BorderBrush = acc && on ? new SolidColorBrush(Color.Parse("#F0C060")) : on ? new SolidColorBrush(Color.Parse("#E0B455")) : Border2;
+            b.BorderBrush = acc && on ? NotaPalette.AccentBright : on ? NotaPalette.AccentHover : Border2;
             b.BorderThickness = new Thickness(1);
         }
         void SyncVel(int s) => velFills[s].Height = VelH * (onArr[s] ? Math.Max(0.12f, velArr[s]) : 0);
@@ -253,7 +254,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
                 var fill = new Border { VerticalAlignment = VerticalAlignment.Bottom, Background = VelFill, CornerRadius = new CornerRadius(2) };
                 velFills[s] = fill; SyncVel(s);
-                var vb = new Border { Background = new SolidColorBrush(Color.Parse("#0A0908")), CornerRadius = new CornerRadius(2), Child = fill, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), ClipToBounds = true };
+                var vb = new Border { Background = NotaPalette.SurfaceAbyss, CornerRadius = new CornerRadius(2), Child = fill, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), ClipToBounds = true };
                 void SetVelFromY(PointerEventArgs pe)
                 {
                     double h = Math.Max(1, vb.Bounds.Height);
@@ -280,7 +281,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         for (int b = 0; b < 4; b++)
         {
             int bb = b; bool cur = b == bank;
-            var chip = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Background = cur ? TealB : Brushes.Transparent, Child = new TextBlock { Text = ((char)('A' + b)).ToString(), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = cur ? new SolidColorBrush(Color.Parse("#171613")) : Muted } };
+            var chip = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Background = cur ? TealB : Brushes.Transparent, Child = new TextBlock { Text = ((char)('A' + b)).ToString(), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = cur ? NotaPalette.BgApp : Muted } };
             chip.PointerPressed += (_, _) => { Act(A_SelectBank, bb); ctx.RequestRebuild(); };
             banks.Children.Add(chip);
         }
@@ -293,7 +294,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var seqCol = new Border { Height = 78, Background = SeqBg, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(10, 6), Child = seqInner };
 
         // ---- assemble body --------------------------------------------------
-        var body = new DockPanel { LastChildFill = true, Background = Ink };
+        var body = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp };
         DockPanel.SetDock(seqCol, Dock.Bottom); body.Children.Add(seqCol);
         body.Children.Add(upper);
 

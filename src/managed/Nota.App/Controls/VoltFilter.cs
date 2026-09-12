@@ -20,7 +20,7 @@ namespace Nota.App;
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-        private static readonly IBrush GridB = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly Typeface Face = new(FontFamily.Default);
         private readonly IAudioEngine _e;
         private readonly int _t;
@@ -57,7 +57,7 @@ namespace Nota.App;
             void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
             G1(_freq); G1(_reso);
         }
-        private static readonly IBrush FillB = new SolidColorBrush(Color.FromArgb(0x18, 0xD8, 0xA0, 0x3D));
+        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.Accent, 0x18);
         private static readonly IBrush AxisB = NotaPalette.TextDisabled;
         private static readonly IBrush HandleB = NotaPalette.AccentBright;
 
@@ -125,7 +125,7 @@ namespace Nota.App;
             for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
 
             // Cutoff marker line + draggable handle at the curve's cutoff point.
-            ctx.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(0x40, 0xF0, 0xC0, 0x60)), 1), new Point(cx, top), new Point(cx, bot));
+            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 1), new Point(cx, top), new Point(cx, bot));
             double hy = _type == 3 ? bot : Math.Max(top + 2, top + (bot - top) * 0.34 - res * ((bot - top) * 0.34) * 0.92);
             ctx.DrawEllipse(HandleB, new Pen(Sunken, 2), new Point(cx, hy), 4.5, 4.5);
 

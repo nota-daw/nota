@@ -53,7 +53,7 @@ public partial class MainWindow
         string summary = string.Format(System.Globalization.CultureInfo.InvariantCulture, "· {0} · Monitor Auto · PDC {1:0.0} ms", type, ms);
 
         var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = new SolidColorBrush(TrackColor(trackId)), VerticalAlignment = VerticalAlignment.Center };
-        var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = (IBrush?)this.FindResource("Brush.TextPrimary"), VerticalAlignment = VerticalAlignment.Center };
+        var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sumText = new TextBlock { Text = summary, Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
     }

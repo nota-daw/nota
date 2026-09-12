@@ -31,15 +31,15 @@ public sealed class EqCurve : Control
     private const int FftN = 2048, Bins = FftN / 2;
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.Parse("#232019")), 1);
-    private static readonly IPen GridPenFaint = new Pen(new SolidColorBrush(Color.FromArgb(0x60, 0x23, 0x20, 0x19)), 1);
+    private static readonly IPen GridPen = new Pen(NotaPalette.WellGrid, 1);
+    private static readonly IPen GridPenFaint = new Pen(NotaPalette.Wash(NotaPalette.WellGrid, 0x60), 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.BorderStrong, 1);
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.6);
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x1E, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush SpecFill = new SolidColorBrush(Color.FromArgb(0x30, 0x8A, 0xA6, 0xC0));
-    private static readonly IPen SpecPen = new Pen(new SolidColorBrush(Color.FromArgb(0x70, 0x9C, 0xB4, 0xCC)), 1);
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
+    private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.Ink("#8AA6C0"), 0x30);
+    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x70), 1);
     private static readonly IBrush DotOn = NotaPalette.AccentBright;
-    private static readonly IBrush DotSel = new SolidColorBrush(Color.Parse("#FFFFFF"));
+    private static readonly IBrush DotSel = NotaPalette.HandleSel;
     private static readonly IBrush DotRing = NotaPalette.BgSunken;
     private static readonly IBrush LabelDim = NotaPalette.TextTertiary;
     private static readonly IBrush LabelBright = NotaPalette.TextSecondary;

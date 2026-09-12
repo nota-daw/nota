@@ -27,26 +27,26 @@ internal sealed class Eq3DeviceBody : IDeviceBody
     private const int Low = 0, Mid = 1, High = 2, LowKill = 3, MidKill = 4, HighKill = 5,
                       FreqLo = 6, FreqHi = 7, Slope = 8, Gain = 9;
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush FieldBorder = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush LabelC = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush KillC = new SolidColorBrush(Color.Parse("#D95F4C"));
-    private static readonly IBrush KillSubtle = new SolidColorBrush(Color.FromArgb(0x2E, 0xD9, 0x5F, 0x4C));
-    private static readonly IBrush DetentC = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush HandleC = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush FieldBorder = NotaPalette.GraphBorder;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush LabelC = NotaPalette.TextSecondary;
+    private static readonly IBrush KillC = NotaPalette.Danger;
+    private static readonly IBrush KillSubtle = NotaPalette.Wash(NotaPalette.Danger, 0x2E);
+    private static readonly IBrush DetentC = NotaPalette.BorderStrong;
+    private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     private static readonly (string name, string span, IBrush hue)[] Bands =
     {
-        ("LOW",  "20 – 250 Hz",    new SolidColorBrush(Color.Parse("#C4756A"))),
-        ("MID",  "250 Hz – 2.5 k", new SolidColorBrush(Color.Parse("#C99C55"))),
-        ("HIGH", "2.5 – 20 kHz",   new SolidColorBrush(Color.Parse("#6D8FB5"))),
+        ("LOW",  "20 – 250 Hz",    NotaPalette.Ink("#C4756A")),
+        ("MID",  "250 Hz – 2.5 k", NotaPalette.Ink("#C99C55")),
+        ("HIGH", "2.5 – 20 kHz",   NotaPalette.Ink("#6D8FB5")),
     };
 
     public double Width => 700;
@@ -81,7 +81,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         {
             var trackBar = new Border { Width = 4, Background = Inset, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
             var detent = new Border { Height = 1, Background = DetentC, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 22, Height = 9, Background = new SolidColorBrush(Color.Parse("#2E2B24")), BorderBrush = new SolidColorBrush(Color.Parse("#4A463D")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
+            var handle = new Border { Width = 22, Height = 9, Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.TextDisabled, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
                 Child = new Border { Height = 2, Background = hue, CornerRadius = new CornerRadius(1), Margin = new Thickness(3, 2.5, 3, 0), VerticalAlignment = VerticalAlignment.Top } };
             var slot = new Panel { Width = 26, Children = { trackBar, detent, handle } };
             bool drag = false;
@@ -184,7 +184,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         DockPanel.SetDock(stripsPanel, Dock.Left);
         var body = new DockPanel { LastChildFill = true, Children = { stripsPanel, graph } };
         DockPanel.SetDock(strip, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { strip, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { strip, body } };
 
         void RefreshAll() { foreach (var a in readouts) a(); }
         SyncCurve();

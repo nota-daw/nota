@@ -18,9 +18,9 @@ public sealed class WaveformView : Control
     private int _buckets;
 
     // Design tokens (see .claude/skills/nota-design — Data colors).
-    private static readonly IBrush Background = new SolidColorBrush(Color.FromRgb(0x10, 0x13, 0x18)); // bg-sunken
-    private static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.FromRgb(0x16, 0x90, 0xB2)), 1); // accent
-    private static readonly IPen MidPen = new Pen(new SolidColorBrush(Color.FromRgb(0x2C, 0x32, 0x3D)), 1);  // border-default
+    private static readonly IBrush Background = NotaPalette.BgSunken;
+    private static readonly IPen WavePen = new Pen(NotaPalette.Accent, 1);
+    private static readonly IPen MidPen = new Pen(NotaPalette.BorderDefault, 1);
 
     public void SetPeaks(float[] minMax, int buckets)
     {

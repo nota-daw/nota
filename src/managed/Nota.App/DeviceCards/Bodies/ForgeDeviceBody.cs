@@ -29,20 +29,20 @@ internal sealed class ForgeDeviceBody : IDeviceBody
     private static readonly string[] OsNames = { "Off", "2×", "4×", "8×" };
     private static readonly string[] DivNames = { "2/1", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64" };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush LabelC = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Dim = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush HandleC = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush LabelC = NotaPalette.TextSecondary;
+    private static readonly IBrush Dim = NotaPalette.BorderStrong;
+    private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -236,8 +236,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var quality = new StackPanel { Spacing = 4, Children = {
             Cap("QUALITY", MutedC),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("OVERSAMPLE", MutedC), OsChips() } } } };
-        var divider1 = new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")) };
-        var divider2 = new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")) };
+        var divider1 = new Border { Height = 1, Background = NotaPalette.SurfaceRaised };
+        var divider2 = new Border { Height = 1, Background = NotaPalette.SurfaceRaised };
         var rail = new Border { Width = 176, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7),
             Child = new StackPanel { Spacing = 5, Children = { shape, divider1, mod, divider2, quality } } };
 
@@ -245,7 +245,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         DockPanel.SetDock(stagesPanel, Dock.Left); DockPanel.SetDock(rail, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { stagesPanel, rail, mid } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         void RefreshAll() { foreach (var a in readouts) a(); }
         SyncViz();

@@ -24,21 +24,21 @@ namespace Nota.App;
 
 internal sealed class MonolithInstrumentCard : IInstrumentCard
 {
-    private static readonly IBrush CardBg = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Panel = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush TabBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush RedC = new SolidColorBrush(Color.Parse("#D95F4C"));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Handle = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush CardBg = NotaPalette.BgApp;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Panel = NotaPalette.BgApp;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush RedC = NotaPalette.Danger;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush Handle = NotaPalette.TextSecondary;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
 
     private static readonly string[] Feet = { "LO", "32′", "16′", "8′", "4′", "2′" };
 
@@ -86,7 +86,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4) };
             var host = new Canvas { Width = 18, Height = 10 }; Canvas.SetTop(dot, 1.5); host.Children.Add(dot); knob.Child = host;
             var txt = new TextBlock { Text = label, FontSize = 8, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
-            void Hi() { bool on = G(id) > 0.5f; knob.Background = on ? Amber : new SolidColorBrush(Color.Parse("#26231E")); dot.Background = on ? CardBg : MutedC; Canvas.SetLeft(dot, on ? 9 : 1.5); txt.Foreground = on ? TxtC : MutedC; }
+            void Hi() { bool on = G(id) > 0.5f; knob.Background = on ? Amber : NotaPalette.SurfaceRaised; dot.Background = on ? CardBg : MutedC; Canvas.SetLeft(dot, on ? 9 : 1.5); txt.Foreground = on ? TxtC : MutedC; }
             var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { knob, txt } };
             wrap.PointerPressed += (_, _) => { SetP(id, G(id) > 0.5f ? 0f : 1f); Hi(); Refresh(); };
             readouts.Add(Hi); Hi();
@@ -156,7 +156,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             int pi = I(id); var lit = col ?? Amber;
             var grad = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.Parse("#26231E"), 0), new GradientStop(Color.Parse("#100F0D"), 0.5), new GradientStop(Color.Parse("#26231E"), 1) } };
+                GradientStops = { new GradientStop(NotaPalette.SurfaceRaised.Color, 0), new GradientStop(NotaPalette.BgSunken.Color, 0.5), new GradientStop(NotaPalette.SurfaceRaised.Color, 1) } };
             var trackBar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Stretch };
             var mark = new Border { Height = 2, Background = lit, CornerRadius = new CornerRadius(1), Margin = new Thickness(2, 0) };
             var lay = new Canvas { Width = 16, VerticalAlignment = VerticalAlignment.Stretch };
@@ -254,7 +254,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             var hdr = new Grid { ColumnDefinitions = new ColumnDefinitions("14,50,54,*,40"), Height = 12, Margin = new Thickness(4, 0) };
             string[] h = { "#", "RANGE", "FREQ", "WAVEFORM", "MOD" };
-            for (int i = 0; i < 5; i++) { var t = new TextBlock { Text = h[i], FontSize = 7, FontWeight = FontWeight.Bold, Foreground = new SolidColorBrush(Color.Parse("#4A463D")), HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : (i == 4 ? HorizontalAlignment.Right : HorizontalAlignment.Center) }; Grid.SetColumn(t, i); hdr.Children.Add(t); }
+            for (int i = 0; i < 5; i++) { var t = new TextBlock { Text = h[i], FontSize = 7, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextDisabled, HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : (i == 4 ? HorizontalAlignment.Right : HorizontalAlignment.Center) }; Grid.SetColumn(t, i); hdr.Children.Add(t); }
             var table = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(hdr, Dock.Top);
             table.Children.Add(hdr);

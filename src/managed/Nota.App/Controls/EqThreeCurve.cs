@@ -23,17 +23,17 @@ internal sealed class EqThreeCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen GridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x22, 0x3A, 0x36, 0x2D)), 1);
+    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x22), 1);
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8);
-    private static readonly IBrush CurveFill = new SolidColorBrush(Color.FromArgb(0x18, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush SpecFill = new SolidColorBrush(Color.FromArgb(0x22, 0x3E, 0x4A, 0x3C));
-    private static readonly IPen SpecPen = new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x52, 0x60, 0x50)), 1);
-    private static readonly IPen XoverPen = new Pen(new SolidColorBrush(Color.FromArgb(0x66, 0xD8, 0xA0, 0x3D)), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x18);
+    private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.SignalInFill, 0x22);
+    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.SignalIn, 0x44), 1);
+    private static readonly IPen XoverPen = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x66), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
-    private static readonly IBrush LowB = new SolidColorBrush(Color.Parse("#C4756A"));
-    private static readonly IBrush MidB = new SolidColorBrush(Color.Parse("#C99C55"));
-    private static readonly IBrush HighB = new SolidColorBrush(Color.Parse("#6D8FB5"));
-    private static readonly IBrush KillB = new SolidColorBrush(Color.Parse("#D95F4C"));
+    private static readonly IBrush LowB = NotaPalette.Ink("#C4756A");
+    private static readonly IBrush MidB = NotaPalette.Ink("#C99C55");
+    private static readonly IBrush HighB = NotaPalette.Ink("#6D8FB5");
+    private static readonly IBrush KillB = NotaPalette.Danger;
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private const double FMin = 20.0, FMax = 20000.0;

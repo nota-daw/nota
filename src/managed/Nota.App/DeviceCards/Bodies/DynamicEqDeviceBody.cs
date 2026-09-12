@@ -183,7 +183,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             var type = new TextBlock { FontSize = 9 };
             var hz = new TextBlock { FontSize = 9 }; hz.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var dyn = new TextBlock { FontSize = 9 }; dyn.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            var grBar = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.Parse("#2C2923")), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var grBar = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BorderDefault, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var grFill = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = Teal, HorizontalAlignment = HorizontalAlignment.Left };
             var grWrap = new Grid { Margin = new Thickness(0, 0, 4, 0) }; grWrap.Children.Add(grBar); grWrap.Children.Add(grFill);
 
@@ -202,7 +202,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 double gr = Math.Min(1, Math.Abs(curve.Gr(bb)) / 12);
                 grFill.Width = Math.Max(0, gr * 60);
                 grBar.Width = 60;
-                rowBorders[bb].Background = bb == Cur() ? new SolidColorBrush(Color.FromArgb(0x20, 0xD8, 0xA0, 0x3D)) : Brushes.Transparent;
+                rowBorders[bb].Background = bb == Cur() ? NotaPalette.Wash(NotaPalette.Accent, 0x20) : Brushes.Transparent;
             }
             ctx.AddDeviceRefresher(SyncRow);
 
@@ -247,7 +247,7 @@ internal sealed class GrHistoryView : Control
     private readonly float[] _buf = new float[DynamicEqCurve.HistLen];
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IPen Mid = new Pen(NotaPalette.BorderStrong, 1);
-    private static readonly IBrush DuckFill = new SolidColorBrush(Color.FromArgb(0x40, 0x5B, 0x9E, 0x9C));
+    private static readonly IBrush DuckFill = NotaPalette.Wash(NotaPalette.Teal, 0x40);
     private static readonly IPen DuckPen = new Pen(NotaPalette.Teal, 1.2);
     private static readonly IPen LiftPen = new Pen(NotaPalette.Accent, 1.2);
 

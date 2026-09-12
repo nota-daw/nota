@@ -30,18 +30,18 @@ internal sealed class AmpDeviceBody : IDeviceBody
     private static readonly string[] Cabs = { "Match", "1×12", "2×12", "4×12", "1×15" };
     private static readonly string[] Mics = { "Dyn", "Cond", "Rib" };
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Rail = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Bd = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush Txt = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Card = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush Rail = NotaPalette.SurfaceInset;
+    private static readonly IBrush Bd = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush Txt = NotaPalette.TextPrimary;
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
+    private static readonly IBrush Card = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -216,7 +216,7 @@ internal sealed class AmpDeviceBody : IDeviceBody
         var body = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(leftPanel, Dock.Left); DockPanel.SetDock(rightRail, Dock.Right);
         body.Children.Add(leftPanel); body.Children.Add(rightRail); body.Children.Add(tonePanel);
-        var root = new DockPanel { LastChildFill = true, Background = Ink };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp };
         DockPanel.SetDock(liveStrip, Dock.Top); root.Children.Add(liveStrip); root.Children.Add(body);
 
         Sync();

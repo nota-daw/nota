@@ -243,7 +243,7 @@ public sealed class ClipEditorView : UserControl
     private sealed class EnvCanvas : Control
     {
         private static readonly IBrush Bg = NotaPalette.BgSunken;
-        private static readonly IBrush GridBeat = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
+        private static readonly IBrush GridBeat = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly IBrush EnvLine = NotaPalette.AccentBright;
         private readonly System.Collections.Generic.List<EnvPt> _pts = new();
         private double _clipBeats;

@@ -21,9 +21,9 @@ internal sealed class ArpGrid : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Group = new SolidColorBrush(Color.FromArgb(0x30, 0x00, 0x00, 0x00));
-    private static readonly IBrush Play = new SolidColorBrush(Color.FromArgb(0x2A, 0xF0, 0xC0, 0x60));
+    private static readonly IBrush Play = NotaPalette.Wash(NotaPalette.AccentBright, 0x2A);
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush WellPen = new SolidColorBrush(Color.FromArgb(0x60, 0x3A, 0x36, 0x2D));
+    private static readonly IBrush WellPen = NotaPalette.Wash(NotaPalette.BorderStrong, 0x60);
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush Txt = NotaPalette.TextSecondary;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
@@ -117,7 +117,7 @@ internal sealed class ArpGrid : Control
             }
 
             // Step number strip (click to mute).
-            var numBrush = s == _playStep ? AccentBright : muted ? new SolidColorBrush(Color.FromArgb(0x66, 0x6E, 0x6A, 0x5E)) : Txt;
+            var numBrush = s == _playStep ? AccentBright : muted ? NotaPalette.Wash(NotaPalette.TextTertiary, 0x66) : Txt;
             DrawText(ctx, (s + 1).ToString(), x + cw / 2, numY, numBrush, 8);
         }
         if (_min < 0) ctx.DrawLine(new Pen(WellPen, 1), new Point(0, zero), new Point(w, zero));

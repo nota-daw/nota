@@ -15,12 +15,12 @@ namespace Nota.App;
 
 internal sealed class AmpToneCurve : Control
 {
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush Grid = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Ref = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush Axis = new SolidColorBrush(Color.Parse("#4A463D"));
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+    private static readonly IBrush Ref = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Axis = NotaPalette.TextDisabled;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
 
     private double _bass, _mid, _treb, _pres;   // dB

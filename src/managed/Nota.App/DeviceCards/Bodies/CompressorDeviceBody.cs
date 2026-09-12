@@ -86,7 +86,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
             var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
             var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2) };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
             var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
             canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
@@ -115,7 +115,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         string Hz(double v) => v >= 1000 ? $"{v / 1000:0.0}k" : $"{v:0}";
 
         // ---- top strip: character models + threshold/ratio/mix sliders ----
-        var live = new Border { Height = 34, Background = new SolidColorBrush(Color.Parse("#1E1C18")), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
+        var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0), Children = {
                 Chips(Character, Chars),
                 HSlider(Threshold, "THRESH", DbT, false, Brass, 60), HSlider(Ratio, "RATIO", RatioF, true, Brass, 52), HSlider(Mix, "MIX", Pct, false, Brass, 52) } } };
@@ -160,7 +160,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var timingCol = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { timing, Sidechain() } };
 
         // ---- output rail ----
-        var outRail = new Border { Width = 104, Background = new SolidColorBrush(Color.Parse("#1B1916")), BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(7, 8),
+        var outRail = new Border { Width = 104, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(7, 8),
             Child = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
                 Lbl("OUTPUT", 8, TextPrimary), Toggle(AutoGain, "Auto gain"),
                 Cell("Makeup", Makeup, Db1, null, 40), Cell("Range", Range, v => v >= 47.5 ? "off" : $"−{v:0}", null, 36) } } };
@@ -179,6 +179,6 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         foreach (var a in readouts) a();
 
         DockPanel.SetDock(live, Dock.Top);
-        return new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
     }
 }

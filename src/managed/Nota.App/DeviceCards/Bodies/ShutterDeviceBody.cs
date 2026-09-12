@@ -26,23 +26,23 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                       Lookahead = 6, Flip = 7, DetHP = 8, DetLP = 9, Listen = 10;
     private const int S_InDb = 0, S_GateGain = 1, S_GrDb = 2, S_DetDb = 3, S_Open = 4, kScope = 5;
 
-    private static readonly IBrush HdrBg = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush RailBg = new SolidColorBrush(Color.Parse("#1B1916"));
-    private static readonly IBrush Border2 = new SolidColorBrush(Color.Parse("#2C2923"));
-    private static readonly IBrush Inset = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberLit = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush AmberSubtle = new SolidColorBrush(Color.FromArgb(0x28, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush TealC = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealSubtle = new SolidColorBrush(Color.FromArgb(0x24, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush TxtC = new SolidColorBrush(Color.Parse("#E9E4D8"));
-    private static readonly IBrush MutedC = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush LabelC = new SolidColorBrush(Color.Parse("#A39D8F"));
-    private static readonly IBrush Dim = new SolidColorBrush(Color.Parse("#3A362D"));
-    private static readonly IBrush Green = new SolidColorBrush(Color.Parse("#58B368"));
-    private static readonly IBrush Red = new SolidColorBrush(Color.Parse("#C55A47"));
-    private static readonly IBrush ThrC = new SolidColorBrush(Color.Parse("#C9884F"));
-    private static readonly IBrush HandleC = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush LabelC = NotaPalette.TextSecondary;
+    private static readonly IBrush Dim = NotaPalette.BorderStrong;
+    private static readonly IBrush Green = NotaPalette.Success;
+    private static readonly IBrush Red = NotaPalette.DangerDeep;
+    private static readonly IBrush ThrC = NotaPalette.Threshold;
+    private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -136,7 +136,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         var env = new StackPanel { Spacing = 5, Margin = new Thickness(9, 7) };
         env.Children.Add(new Grid { Height = 10, ColumnDefinitions = new ColumnDefinitions("Auto,*"), Children = { Cap("ENVELOPE"), WithCol(new TextBlock { Text = "attack · hold · release", FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Right }, 1) } });
         env.Children.Add(envTop);
-        env.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")), Margin = new Thickness(0, 1) });
+        env.Children.Add(new Border { Height = 1, Background = NotaPalette.SurfaceRaised, Margin = new Thickness(0, 1) });
         env.Children.Add(new Grid { Height = 12, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { Cap("ATTACK", MutedC, 52), WithCol(HRow(Attack, "", AttF, 0, 0), 1), WithCol(new TextBlock { Text = AttF(P(Attack)), FontSize = 9, Foreground = TxtC, Width = 46, TextAlignment = TextAlignment.Right }.WithMono().Track(readouts, t => t.Text = AttF(P(Attack))), 2) } });
         env.Children.Add(new Grid { Height = 12, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { Cap("HOLD", MutedC, 52), WithCol(HRow(Hold, "", HoldF, 0, 0), 1), WithCol(new TextBlock { Text = HoldF(P(Hold)), FontSize = 9, Foreground = TxtC, Width = 46, TextAlignment = TextAlignment.Right }.WithMono().Track(readouts, t => t.Text = HoldF(P(Hold))), 2) } });
         env.Children.Add(new Grid { Height = 12, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { Cap("RELEASE", MutedC, 52), WithCol(HRow(Release, "", RelF, 0, 0), 1), WithCol(new TextBlock { Text = RelF(P(Release)), FontSize = 9, Foreground = TxtC, Width = 46, TextAlignment = TextAlignment.Right }.WithMono().Track(readouts, t => t.Text = RelF(P(Release))), 2) } });
@@ -196,7 +196,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         listenChip.PointerPressed += (_, e) => { e.Handled = true; SetP(Listen, P(Listen) >= 0.5f ? 0f : 1f); ListenSync(); };
         readouts.Add(ListenSync);
 
-        var scEqBox = new Border { Background = Inset, BorderBrush = new SolidColorBrush(Color.Parse("#221F1A")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(4), Child =
+        var scEqBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(4), Child =
             new DockPanel { LastChildFill = true, Children = {
                 new Grid { Height = 11, [DockPanel.DockProperty] = Dock.Top, ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { Cap("SC EQ", MutedC), WithCol(listenChip, 1) } },
                 detEq } } };
@@ -210,14 +210,14 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         var rail = new Border { Width = 176, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7), Child =
             new DockPanel { LastChildFill = true, Children = {
                 new StackPanel { [DockPanel.DockProperty] = Dock.Top, Spacing = 5, Children = { Cap("METERS"), inRow, grRow, ledRow,
-                    new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#26231E")), Margin = new Thickness(0, 2) } } },
+                    new Border { Height = 1, Background = NotaPalette.SurfaceRaised, Margin = new Thickness(0, 2) } } },
                 detector } } };
 
         // ================= assemble =================
         DockPanel.SetDock(envPanel, Dock.Left); DockPanel.SetDock(rail, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { envPanel, rail, mid } };
         DockPanel.SetDock(live, Dock.Top);
-        var root = new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
 
         // ---- live refresh from scope ----
         readouts.Add(() =>
@@ -250,10 +250,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     // Small teal toggle with a state getter/setter, registered to the refresher list.
     private static Control MakeToggle(Func<bool> get, Action<bool> set, string label, List<Action> readouts)
     {
-        var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.Parse("#171613")), VerticalAlignment = VerticalAlignment.Center };
+        var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BgApp, VerticalAlignment = VerticalAlignment.Center };
         var sw = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(1.5, 0), Child = knob };
-        var tb = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = new SolidColorBrush(Color.Parse("#5B9E9C")), VerticalAlignment = VerticalAlignment.Center };
-        void Sync() { bool on = get(); sw.Background = on ? new SolidColorBrush(Color.Parse("#5B9E9C")) : new SolidColorBrush(Color.Parse("#3A362D")); knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; }
+        var tb = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = NotaPalette.Teal, VerticalAlignment = VerticalAlignment.Center };
+        void Sync() { bool on = get(); sw.Background = on ? NotaPalette.Teal : NotaPalette.BorderStrong; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; }
         sw.PointerPressed += (_, e) => { e.Handled = true; set(!get()); Sync(); };
         readouts.Add(Sync);
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { sw, tb } };

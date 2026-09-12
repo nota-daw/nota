@@ -30,7 +30,7 @@ internal static class PrismInk
     // Text / handle tint for the selected band (the brass band lights up to AccentBright).
     public static readonly IBrush[] BandLit = { Band[0], NotaPalette.AccentBright, Band[2] };
     public static readonly string[] Names = { "Low", "Mid", "High" };
-    public static readonly IBrush InnerBorder = new SolidColorBrush(Color.Parse("#221F1A"));
+    public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
     private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
     private static readonly Typeface Sans = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);

@@ -64,7 +64,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
             var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
             var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = new SolidColorBrush(Color.Parse("#A39D8F")), CornerRadius = new CornerRadius(2) };
+            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
             var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
             canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
@@ -103,7 +103,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         grNum.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var grFill = new Border { Height = 8, Background = Teal, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left };
         var grBar = new Border { Width = 96, Height = 8, Background = Sunken, CornerRadius = new CornerRadius(4), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = grFill };
-        var live = new Border { Height = 34, Background = new SolidColorBrush(Color.Parse("#1E1C18")), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
+        var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0), Children = {
                 Lbl("GR", 8, TextTertiary), grNum, grBar,
                 HSlider(Ceil, "CEILING", DbT, false, Brass, 58), HSlider(Gain, "GAIN", Db1, false, Brass, 52), HSlider(Release, "RELEASE", Ms, true, Brass, 52),
@@ -167,8 +167,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         var bottomRow = new DockPanel { LastChildFill = false, Children = { scCombo } };
         DockPanel.SetDock(resetBtn, Dock.Right); bottomRow.Children.Add(resetBtn);
 
-        IBrush Div() => new SolidColorBrush(Color.Parse("#26231E"));
-        var rail = new Border { Width = 224, Background = new SolidColorBrush(Color.Parse("#1B1916")), BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7),
+        IBrush Div() => NotaPalette.SurfaceRaised;
+        var rail = new Border { Width = 224, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7),
             Child = new StackPanel { Spacing = 5, Children = {
                 charStack,
                 new Border { Height = 1, Background = Div() },
@@ -190,21 +190,21 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             meters.Push(inDb, outDb, grDb);
             levelPlot.Tick(); grLane.Tick();
 
-            grNum.Text = $"{-grDb:0.0}"; grNum.Foreground = grDb > 3.0f ? new SolidColorBrush(Color.Parse("#D9C34C")) : Teal;
-            grFill.Width = Math.Clamp(grDb / 6.0, 0, 1) * 96; grFill.Background = grDb > 3.0f ? new SolidColorBrush(Color.Parse("#D9C34C")) : Teal;
+            grNum.Text = $"{-grDb:0.0}"; grNum.Foreground = grDb > 3.0f ? NotaPalette.Warning : Teal;
+            grFill.Width = Math.Clamp(grDb / 6.0, 0, 1) * 96; grFill.Background = grDb > 3.0f ? NotaPalette.Warning : Teal;
 
             if (inDb > peakInHold) peakInHold = inDb;
             if (outDb > peakOutHold) peakOutHold = outDb;
             if (grDb > maxGrHold) maxGrHold = grDb;
             if (tpDb > truePeakHold) truePeakHold = tpDb;
-            vPeakIn.Text = MDb(peakInHold); vPeakIn.Foreground = peakInHold > 0 ? new SolidColorBrush(Color.Parse("#D95F4C")) : TextPrimary;
+            vPeakIn.Text = MDb(peakInHold); vPeakIn.Foreground = peakInHold > 0 ? NotaPalette.Danger : TextPrimary;
             vPeakOut.Text = MDb(peakOutHold);
-            vMaxGr.Text = maxGrHold > 0.05f ? $"−{maxGrHold:0.0}" : "0.0"; vMaxGr.Foreground = maxGrHold > 3 ? new SolidColorBrush(Color.Parse("#D9C34C")) : TextPrimary;
+            vMaxGr.Text = maxGrHold > 0.05f ? $"−{maxGrHold:0.0}" : "0.0"; vMaxGr.Foreground = maxGrHold > 3 ? NotaPalette.Warning : TextPrimary;
             vLufsS.Text = lufsS <= -119 ? "—" : $"{lufsS:0.0}";
             vLufsI.Text = lufsI <= -119 ? "—" : $"{lufsI:0.0}";
             float ceil = P(Ceil);
             vTruePeak.Text = MDb(truePeakHold);
-            vTruePeak.Foreground = truePeakHold <= ceil + 0.05f ? Success : new SolidColorBrush(Color.Parse("#D95F4C"));
+            vTruePeak.Foreground = truePeakHold <= ceil + 0.05f ? Success : NotaPalette.Danger;
 
             foreach (var a in readouts) a();
         }
@@ -212,6 +212,6 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Refresh();
 
         DockPanel.SetDock(live, Dock.Top);
-        return new DockPanel { LastChildFill = true, Background = new SolidColorBrush(Color.Parse("#171613")), Children = { live, body } };
+        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
     }
 }

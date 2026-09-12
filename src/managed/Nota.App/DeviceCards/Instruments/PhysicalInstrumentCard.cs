@@ -64,7 +64,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             }
             return col;
         }
-        Control Arrow() => new TextBlock { Text = "▸", FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#3E3A31")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0) };
+        Control Arrow() => new TextBlock { Text = "▸", FontSize = 12, Foreground = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0) };
         Control Cap(string t, IBrush? c = null) => new TextBlock { Text = t, FontSize = 9, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         Control Head(string title, params Control[] extras)
         {

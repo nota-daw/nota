@@ -17,17 +17,17 @@ namespace Nota.App;
 
 internal sealed class AutoShiftViz : Control
 {
-    private static readonly IBrush Sunken = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderDef = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Brass = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush Teal = new SolidColorBrush(Color.Parse("#5B9E9C"));
-    private static readonly IBrush TealDim = new SolidColorBrush(Color.FromArgb(0x8C, 0x5B, 0x9E, 0x9C));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Faint = new SolidColorBrush(Color.Parse("#4A463D"));
-    private static readonly IBrush LaneLine = new SolidColorBrush(Color.FromArgb(0x2A, 0x3A, 0x36, 0x2D));
-    private static readonly IBrush WhiteLane = new SolidColorBrush(Color.FromArgb(0x44, 0x3A, 0x36, 0x2D));
-    private static readonly IBrush TargetLine = new SolidColorBrush(Color.FromArgb(0x55, 0xF0, 0xC0, 0x60));
-    private static readonly IBrush TargetLabel = new SolidColorBrush(Color.Parse("#F0C060"));
+    private static readonly IBrush Sunken = NotaPalette.BgSunken;
+    private static readonly IBrush BorderDef = NotaPalette.GraphBorder;
+    private static readonly IBrush Brass = NotaPalette.Accent;
+    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush TealDim = NotaPalette.Wash(NotaPalette.Teal, 0x8C);
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Faint = NotaPalette.TextDisabled;
+    private static readonly IBrush LaneLine = NotaPalette.Wash(NotaPalette.BorderStrong, 0x2A);
+    private static readonly IBrush WhiteLane = NotaPalette.Wash(NotaPalette.BorderStrong, 0x44);
+    private static readonly IBrush TargetLine = NotaPalette.Wash(NotaPalette.AccentBright, 0x55);
+    private static readonly IBrush TargetLabel = NotaPalette.AccentBright;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
     private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
     private static readonly string[] Names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };

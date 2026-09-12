@@ -20,7 +20,7 @@ public sealed class ConfirmWindow : NotaWindow
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = this.TryFindResource("Brush.BgApp", out var bg) && bg is IBrush b ? b : Brushes.Magenta;
+        Background = NotaPalette.BgApp;
 
         var yes = new Button { Content = affirmative, Classes = { "primary" } };
         yes.Click += (_, _) => Close(true);

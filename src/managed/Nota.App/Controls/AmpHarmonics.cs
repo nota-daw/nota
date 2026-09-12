@@ -15,11 +15,11 @@ namespace Nota.App;
 
 internal sealed class AmpHarmonics : Control
 {
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly Color Amber = Color.Parse("#D8A03D");
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static Color Amber => NotaPalette.Accent.Color;
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
 
     private float _drive = 1, _bias;

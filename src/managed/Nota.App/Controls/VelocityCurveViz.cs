@@ -15,12 +15,12 @@ namespace Nota.App;
 
 internal sealed class VelocityCurveViz : Control
 {
-    private static readonly IBrush GridB = new SolidColorBrush(Color.Parse("#1E1C18"));
-    private static readonly IBrush Ident = new SolidColorBrush(Color.Parse("#26231E"));
-    private static readonly IBrush Brass = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush Teal = new SolidColorBrush(Color.Parse("#5B9E9C"), 0.5);
-    private static readonly IBrush Bright = new SolidColorBrush(Color.Parse("#F0C060"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#100F0D"));
+    private static readonly IBrush GridB = NotaPalette.SurfaceCard;
+    private static readonly IBrush Ident = NotaPalette.SurfaceRaised;
+    private static readonly IBrush Brass = NotaPalette.Accent;
+    private static readonly IBrush Teal = NotaPalette.Wash(NotaPalette.Teal, 0x80);
+    private static readonly IBrush Bright = NotaPalette.AccentBright;
+    private static readonly IBrush Ink = NotaPalette.BgSunken;
 
     private Func<double, double>? _f;
     private readonly List<(double x, double y)> _dots = new();
@@ -68,7 +68,7 @@ internal sealed class VelocityCurveViz : Control
         if (_last is { } l && (l.x > 0 || l.y > 0))
         {
             var p = P(l.x, l.y);
-            ctx.DrawEllipse(new SolidColorBrush(Color.Parse("#F0C060"), 0.28), null, p, 7, 7);
+            ctx.DrawEllipse(new SolidColorBrush(NotaPalette.AccentBright.Color, 0.28), null, p, 7, 7);
             ctx.DrawEllipse(Bright, new Pen(Ink, 2), p, 4.5, 4.5);
         }
     }

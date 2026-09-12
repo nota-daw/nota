@@ -23,7 +23,7 @@ public sealed class TextPromptWindow : NotaWindow
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = this.TryFindResource("Brush.BgApp", out var bg) && bg is IBrush b ? b : Brushes.Magenta;
+        Background = NotaPalette.BgApp;
 
         _input = new TextBox { Text = initial, PlaceholderText = prompt };
         _input.KeyDown += (_, e) => { if (e.Key == Key.Enter) Accept(); else if (e.Key == Key.Escape) Close(null); };

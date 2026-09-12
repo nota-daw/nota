@@ -3,7 +3,9 @@
              x:Class="Nota.App.App"
              Name="Nota"
              RequestedThemeVariant="Dark">
-             <!-- Nota is dark-first (see .claude/skills/nota-design). -->
+             <!-- Dark is the default; App.OnFrameworkInitializationCompleted hands the
+                  real choice (Preferences → Appearance) to NotaThemeService before the
+                  first window paints. See .claude/skills/nota-design. -->
 
     <!-- macOS application menu (the bold "Nota" menu). Its first item is merged into
          the app menu, so About/Settings live there instead of a duplicate "Nota". -->

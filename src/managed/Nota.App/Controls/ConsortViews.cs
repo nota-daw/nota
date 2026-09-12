@@ -83,7 +83,7 @@ internal static class ConsortJacks
     public static int Points => Sources.Length - 1 + Dests.Length - 1;
 
     public static IBrush ToneBrush(Tone t) => t switch { Tone.Env => NotaPalette.Teal, Tone.Audio => NotaPalette.Accent, _ => ChamberInk.Mauve };
-    public static Color ToneColor(Tone t) => t switch { Tone.Env => Color.Parse("#5B9E9C"), Tone.Audio => NotaPalette.AccentColor, _ => ChamberInk.MauveColor };
+    public static Color ToneColor(Tone t) => t switch { Tone.Env => NotaPalette.Teal.Color, Tone.Audio => NotaPalette.AccentColor, _ => ChamberInk.MauveColor };
     public static Jack Src(int i) => i > 0 && i < Sources.Length ? Sources[i] : Sources[0];
     public static Jack Dst(int i) => i > 0 && i < Dests.Length ? Dests[i] : Dests[0];
     public static string ShortName(string n) => n.Replace(" out", "").Replace(" in", "").Replace("Osc ", "Osc").Replace("Filt ", "Filt").Replace(" cutoff", "").Replace("Delay ", "Dly ").Replace(" pitch", "").Replace("Env ", "Env");
@@ -228,7 +228,7 @@ internal sealed class ConsortFilterCurve : Control
         var brass = NotaPalette.Accent;
         if (_mode == 0)
         {
-            var faint = new SolidColorBrush(Color.FromArgb(0x55, 0x6D, 0x8F, 0xB5));
+            var faint = NotaPalette.Wash(NotaPalette.Ink("#6D8FB5"), 0x55);
             ctx.DrawGeometry(null, new Pen(faint, 1), Curve(x => Db(Mag(Wr(x, _cut), true))));
             ctx.DrawGeometry(null, new Pen(brass, 1.5), Curve(x => Db(Mag(Wr(x, _cut), true) * Mag(Wr(x, cutB), false))));
         }
@@ -340,7 +340,7 @@ internal sealed class ConsortStepGrid : Control
         if (w < 16 || h < 4) return;
         const double gap = 3;
         double cw = (w - gap * 15) / 16;
-        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = Color.Parse("#5B9E9C");
+        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
         for (int i = 0; i < 16; i++)
         {
             var r = new Rect(i * (cw + gap) + 0.5, 0.5, cw - 1, h - 1);
@@ -408,7 +408,7 @@ internal sealed class ConsortPitchLane : Control
         double Y(int p) => Top + (1 - (p + 24) / 48.0) * hh;
         var grid = new Pen(NotaPalette.SurfaceCard, 1);
         foreach (int p in new[] { -12, 0, 12 }) ctx.DrawLine(grid, new Point(0, Y(p)), new Point(w, Y(p)));
-        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = Color.Parse("#5B9E9C");
+        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
         for (int i = 0; i < 16; i++)
         {
             if (_t[i] == 3) continue;

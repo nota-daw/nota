@@ -15,14 +15,14 @@ namespace Nota.App;
 
 internal sealed class LengthGateViz : Control
 {
-    private static readonly IBrush Well = new SolidColorBrush(Color.Parse("#100F0D"));
-    private static readonly IBrush BorderIn = new SolidColorBrush(Color.Parse("#221F1A"));
-    private static readonly IBrush Track = new SolidColorBrush(Color.Parse("#171613"));
-    private static readonly IBrush Amber = new SolidColorBrush(Color.Parse("#D8A03D"));
-    private static readonly IBrush AmberDim = new SolidColorBrush(Color.FromArgb(0x88, 0xD8, 0xA0, 0x3D));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#6E6A5E"));
-    private static readonly IBrush Axis = new SolidColorBrush(Color.Parse("#4A463D"));
-    private static readonly IBrush Sub = new SolidColorBrush(Color.Parse("#A39D8F"));
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static readonly IBrush Track = NotaPalette.BgApp;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush AmberDim = NotaPalette.Wash(NotaPalette.Accent, 0x88);
+    private static readonly IBrush Muted = NotaPalette.TextTertiary;
+    private static readonly IBrush Axis = NotaPalette.TextDisabled;
+    private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
     private const double FullMs = 2000.0;
 

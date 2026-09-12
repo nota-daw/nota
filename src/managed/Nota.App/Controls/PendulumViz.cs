@@ -24,16 +24,16 @@ namespace Nota.App;
 internal sealed class PendulumViz : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush FieldBorder = new SolidColorBrush(Color.Parse("#221F1A"));
+    private static readonly IBrush FieldBorder = NotaPalette.GraphBorder;
     private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush Lane = new SolidColorBrush(Color.Parse("#1E1C18"));
+    private static readonly IBrush Lane = NotaPalette.SurfaceCard;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Color TrailColor = Color.Parse("#D8A03D");
-    private static readonly IBrush RailUp = new SolidColorBrush(Color.Parse("#5B9E9C"));                 // ∧ solid teal
-    private static readonly IBrush RailDn = new SolidColorBrush(Color.FromArgb(0x8C, 0x5B, 0x9E, 0x9C)); // ∨ dimmed
-    private static readonly Pen TriggerPen = new(new SolidColorBrush(Color.FromArgb(0x47, 0xF0, 0xC0, 0x60)), 1) { DashStyle = DashStyle.Dash };
-    private static readonly Pen ApexPen = new(new SolidColorBrush(Color.FromArgb(0x59, 0xF0, 0xC0, 0x60)), 1);
+    private static Color TrailColor => NotaPalette.Accent.Color;
+    private static readonly IBrush RailUp = NotaPalette.Teal;                 // ∧ solid teal
+    private static readonly IBrush RailDn = NotaPalette.Wash(NotaPalette.Teal, 0x8C); // ∨ dimmed
+    private static readonly Pen TriggerPen = new(NotaPalette.Wash(NotaPalette.AccentBright, 0x47), 1) { DashStyle = DashStyle.Dash };
+    private static readonly Pen ApexPen = new(NotaPalette.Wash(NotaPalette.AccentBright, 0x59), 1);
     private static readonly Typeface Face = new(FontFamily.Default);
 
     private const int MaxBalls = 6;
