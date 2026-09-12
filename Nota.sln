@@ -51,6 +51,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution items", "solution 
 		FEATURES.md = FEATURES.md
 		ARCHITECTURE.md = ARCHITECTURE.md
 		CONTRIBUTING.md = CONTRIBUTING.md
+		DESIGN.html = DESIGN.html
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nota.Mcp", "src\managed\Nota.Mcp\Nota.Mcp.csproj", "{6025AE74-0180-4BD9-8DD5-0DBD18818C40}"
