@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.37.0** (plus changes in development on `main`). This document describes what is
+**0.38.0** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -391,7 +391,12 @@ and user presets, automation, persistence and cloning.
 
 ## Windows and interface
 
-- **A single frameless window style**: dark centred title, drag by the header, the macOS
+- **Two palette variants** — **Ember Graphite** (warm graphite neutrals with a brass
+  accent; the default, and what a DAW wants for long sessions in a dark room) and
+  **Ember Paper** (the same hues and roles on a warm light ground, with brass darkened to
+  bronze so marks keep their weight). Switching applies immediately, across every open
+  window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
   frame).
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
@@ -418,7 +423,9 @@ and user presets, automation, persistence and cloning.
   with a live activity indicator beside each pad.
 - **Plugins**: scan paths, Rescan.
 - **Library**: library folders.
-- **Appearance**: **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
+- **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which
+  follows the OS appearance and switches with it; the choice applies live and is
+  remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
