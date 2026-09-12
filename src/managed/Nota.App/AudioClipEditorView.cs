@@ -48,6 +48,8 @@ public sealed class AudioClipEditorView : UserControl
     private double _startBeat;
     private double _lengthBeats = 4;
     private int _pitch;
+    private bool _reversed;
+    private readonly TextBlock _reverseToggleText;
     private bool _warpEnabled;
     private int _warpMode = 3;   // Complex
     private bool _snapToGrid = true;                  // trim brackets snap to whole beats (default on)
@@ -106,6 +108,7 @@ public sealed class AudioClipEditorView : UserControl
         _fileText = new TextBlock { Text = "—", FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
         _gain = new MiniFader(1.0, 2.0) { VerticalAlignment = VerticalAlignment.Center };
         _gain.ValueChanged += v => { _engine.SetClipGain(TrackId, ClipIndex, (float)v); ShowGain(v); _wave.SetGain(v); _onChanged(); };
+        _reverseToggleText = new TextBlock { Text = "Reverse: Off", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _snapToggleText = new TextBlock { Text = "Grid snap: On", FontSize = 10, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _warpToggleText = new TextBlock { Text = "Warp: Off", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _warpModeText = new TextBlock { Text = "Complex ▾", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -150,6 +153,17 @@ public sealed class AudioClipEditorView : UserControl
         Grid.SetColumn(pBox, 1); pStep.Children.Add(pBox);
         Grid.SetColumn(pPlus, 2); pStep.Children.Add(pPlus);
         body.Children.Add(Section("PITCH (semitones)", pStep));
+
+        // Reverse: play the clip's region back-to-front. Non-destructive (the file is
+        // untouched) and free to toggle, so it doubles as an audition switch.
+        var revChip = Chip(_reverseToggleText);
+        revChip.PointerPressed += (_, e) => { e.Handled = true; ToggleReverse(); };
+        var revHint = new TextBlock
+        {
+            Text = "Plays the clip backwards · the waveform below mirrors with it, so it always reads left to right in playing order",
+            FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap,
+        };
+        body.Children.Add(Section("DIRECTION", new StackPanel { Spacing = 4, Children = { revChip, revHint } }));
 
         // Warp: on/off + mode (time-stretch to project tempo, Signalsmith Stretch).
         var warpToggle = Chip(_warpToggleText);
@@ -311,6 +325,10 @@ public sealed class AudioClipEditorView : UserControl
             _gain.Value = ai.Gain;
             ShowGain(ai.Gain);
             _wave.SetGain(ai.Gain);
+            _reversed = ai.Reversed != 0;
+            _wave.SetReversed(_reversed);   // draw the waveform the way the clip now plays
+            _reverseToggleText.Text = _reversed ? "Reverse: On" : "Reverse: Off";
+            _reverseToggleText.Foreground = _reversed ? AccentBright : TextSecondary;
             _warpEnabled = ai.WarpEnabled != 0;
             _warpMode = Math.Clamp(ai.WarpMode, 0, WarpModes.Length - 1);
             _warpToggleText.Text = _warpEnabled ? "Warp: On" : "Warp: Off";
@@ -392,6 +410,13 @@ public sealed class AudioClipEditorView : UserControl
         _snapToggleText.Text = _snapToGrid ? "Grid snap: On" : "Grid snap: Off";
         _snapToggleText.Foreground = _snapToGrid ? AccentBright : TextSecondary;
         _wave.SetSnapToGrid(_snapToGrid);
+    }
+
+    private void ToggleReverse()
+    {
+        _engine.SetClipReverse(TrackId, ClipIndex, !_reversed);
+        Reload();          // picks the new state up (and re-reads the played peaks)
+        _onChanged();
     }
 
     private void ToggleWarp()
@@ -687,8 +712,20 @@ public sealed class AudioClipEditorView : UserControl
         public double ScrollFrac => _scrollFrac;
         public double MaxScrollFrac => Math.Max(0, 1.0 - 1.0 / _zoom);
         public void SetScroll(double frac) { _scrollFrac = Math.Clamp(frac, 0, MaxScrollFrac); InvalidateVisual(); }
-        private double FracToX(double f, double w) => (f - _scrollFrac) * _zoom * w;
-        private double XToFrac(double x, double w) => x / Math.Max(1, _zoom * w) + _scrollFrac;
+
+        // Reverse: the clip is drawn MIRRORED, so the screen always reads left-to-right in
+        // playing order — a reversed clip's audible head (the region's end) sits on the left.
+        // Everything in the source/warp domain (peaks, brackets, markers, BPM chips, grid)
+        // goes through Frac<->X below, so mirroring here flips the whole view coherently and
+        // every hit-test/drag keeps working in content coordinates. The zoom/scroll window
+        // lives in VIEW space, hence the separate …View pair.
+        private bool _reversed;
+        public void SetReversed(bool on) { if (_reversed == on) return; _reversed = on; InvalidateVisual(); }
+        private double Mirror(double f) => _reversed ? 1.0 - f : f;   // involution: content <-> view
+        private double FracToXView(double vf, double w) => (vf - _scrollFrac) * _zoom * w;
+        private double XToFracView(double x, double w) => x / Math.Max(1, _zoom * w) + _scrollFrac;
+        private double FracToX(double f, double w) => FracToXView(Mirror(f), w);
+        private double XToFrac(double x, double w) => Mirror(XToFracView(x, w));
 
         private double SrcToX(double frame, double w) => _srcTotal > 0 ? FracToX(frame / _srcTotal, w) : 0;
         private double XToSrc(double x, double w) => Math.Clamp(XToFrac(x, w), 0, 1) * _srcTotal;
@@ -702,8 +739,11 @@ public sealed class AudioClipEditorView : UserControl
             for (int i = 0; i < beats.Length; i++) _env.Add(new EnvPt { beat = beats[i], val = values[i], curve = curves[i] });
             InvalidateVisual();
         }
-        private double EnvBeatToX(double beat, double w) => FracToX(beat / _clipBeats, w);
-        private double EnvXToBeat(double x, double w) => Math.Clamp(XToFrac(x, w), 0, 1) * _clipBeats;
+        // The clip envelope is authored in PLAYED time (the renderer evaluates it against the
+        // timeline position), so it always runs left-to-right — it must NOT mirror with the
+        // waveform. It stays on the view axis directly.
+        private double EnvBeatToX(double beat, double w) => FracToXView(beat / _clipBeats, w);
+        private double EnvXToBeat(double x, double w) => Math.Clamp(XToFracView(x, w), 0, 1) * _clipBeats;
         private double EnvValToY(double v, double h) { double pad = 4; double t = (Math.Clamp(v, _envMin, _envMax) - _envMin) / (_envMax - _envMin); return pad + (1 - t) * (h - 2 * pad); }
         private double EnvYToVal(double y, double h) { double pad = 4; double t = (h - pad - y) / Math.Max(1, h - 2 * pad); return _envMin + Math.Clamp(t, 0, 1) * (_envMax - _envMin); }
         private static double EnvShape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
@@ -873,7 +913,7 @@ public sealed class AudioClipEditorView : UserControl
             var mods = e.KeyModifiers;
             if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
             {
-                double anchor = XToFrac(e.GetPosition(this).X, w);          // keep the point under the cursor fixed
+                double anchor = XToFracView(e.GetPosition(this).X, w);      // keep the point under the cursor fixed (view space)
                 double old = _zoom;
                 _zoom = Math.Clamp(_zoom * WheelInput.ZoomFactor(e.Delta.Y, 1.2), 1.0, MaxZoom);
                 if (Math.Abs(_zoom - old) < 1e-9) { e.Handled = true; return; }
@@ -1066,9 +1106,11 @@ public sealed class AudioClipEditorView : UserControl
                 double bw = Math.Max(1, _zoom * w / _count);
                 for (int i = 0; i < _count; i++)
                 {
+                    // FracToX marks the bucket's leading edge — its RIGHT edge once mirrored.
                     double fx = FracToX((double)i / _count, w);
-                    if (fx + bw < 0) continue;
-                    if (fx > w) break;
+                    if (_reversed) fx -= bw;
+                    if (fx + bw < 0) { if (_reversed) break; continue; }
+                    if (fx > w) { if (_reversed) continue; break; }
                     float mn = (float)Math.Clamp(_peaks[i * 2] * _gain, -1.0, 1.0);
                     float mx = (float)Math.Clamp(_peaks[i * 2 + 1] * _gain, -1.0, 1.0);
                     ctx.FillRectangle(_wave, new Rect(fx, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
@@ -1096,7 +1138,8 @@ public sealed class AudioClipEditorView : UserControl
                         int barNo = b / BeatsPerBar + 1, beatNo = b % BeatsPerBar + 1;
                         var ft = new FormattedText($"{barNo}.{beatNo}", CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, GridFace, 8.5, GridLabel);
-                        ctx.DrawText(ft, new Point(x + 2, h - ft.Height - 2));
+                        // Keep the label inside its own beat: that's the other side when mirrored.
+                        ctx.DrawText(ft, new Point(_reversed ? x - 2 - ft.Width : x + 2, h - ft.Height - 2));
                     }
                 }
             }
@@ -1129,7 +1172,7 @@ public sealed class AudioClipEditorView : UserControl
                     double srcSpan = _mk[i + 1].src - _mk[i].src;
                     if (beatSpan <= 0 || srcSpan <= 0) continue;
                     double x0 = BeatToX(_mk[i].beat, w), x1 = BeatToX(_mk[i + 1].beat, w);
-                    if (x1 - x0 < 46) continue;
+                    if (Math.Abs(x1 - x0) < 46) continue;   // mirrored: x1 sits left of x0
                     double bpm = beatSpan * _srcSR * 60.0 / srcSpan;
                     bool hotChip = i == _bpmHoverSeg || i == _bpmScrubSeg;
                     var txtBrush = hotChip ? BracketHot : Marker;
@@ -1185,11 +1228,10 @@ public sealed class AudioClipEditorView : UserControl
             if (_srcMode && _srcTotal > 0)
             {
                 double xs = SrcToX(_srcOff, w), xe = SrcToX(_srcOff + _srcLen, w);
-                double xsc = Math.Clamp(xs, 0, w), xec = Math.Clamp(xe, 0, w);
-                if (xsc > 0.5) ctx.FillRectangle(OutsideDim, new Rect(0, 0, xsc, h));
-                if (xec < w - 0.5) ctx.FillRectangle(OutsideDim, new Rect(xec, 0, w - xec, h));
-                if (xs >= -1 && xs <= w + 1) DrawBracket(ctx, xs, h, true, _srcDrag == 0);
-                if (xe >= -1 && xe <= w + 1) DrawBracket(ctx, xe, h, false, _srcDrag == 1);
+                DimOutside(ctx, xs, xe, w, h);
+                // The grips point INTO the region, which is the other way round when mirrored.
+                if (xs >= -1 && xs <= w + 1) DrawBracket(ctx, xs, h, !_reversed, _srcDrag == 0);
+                if (xe >= -1 && xe <= w + 1) DrawBracket(ctx, xe, h, _reversed, _srcDrag == 1);
             }
 
             // Warped-clip trim brackets (beat domain over the full warp): dim the trimmed
@@ -1197,29 +1239,41 @@ public sealed class AudioClipEditorView : UserControl
             if (_trimMode && _trimTotal > 0)
             {
                 double xs = BeatToX(_trimStart, w), xe = BeatToX(_trimEnd, w);
-                double xsc = Math.Clamp(xs, 0, w), xec = Math.Clamp(xe, 0, w);
-                if (xsc > 0.5) ctx.FillRectangle(OutsideDim, new Rect(0, 0, xsc, h));
-                if (xec < w - 0.5) ctx.FillRectangle(OutsideDim, new Rect(xec, 0, w - xec, h));
-                if (xs >= -1 && xs <= w + 1) DrawBracket(ctx, xs, h, true, _trimDrag == 0);
-                if (xe >= -1 && xe <= w + 1) DrawBracket(ctx, xe, h, false, _trimDrag == 1);
+                DimOutside(ctx, xs, xe, w, h);
+                if (xs >= -1 && xs <= w + 1) DrawBracket(ctx, xs, h, !_reversed, _trimDrag == 0);
+                if (xe >= -1 && xe <= w + 1) DrawBracket(ctx, xe, h, _reversed, _trimDrag == 1);
             }
 
             if (_frac >= 0 && _frac <= 1)
             {
                 // _frac is relative to the played window; map it into the current domain.
-                double x = (_srcMode && _srcTotal > 0) ? SrcToX(_srcOff + _frac * _srcLen, w)
-                         : (_trimMode && _trimTotal > 0) ? BeatToX(_trimStart + _frac * (_trimEnd - _trimStart), w)
-                         : FracToX(_frac, w);
+                // _frac runs over the PLAYED window, so on a reversed clip it walks the region
+                // from its end back to its start (which the mirror then draws left-to-right).
+                double pf = _reversed ? 1 - _frac : _frac;
+                double x = (_srcMode && _srcTotal > 0) ? SrcToX(_srcOff + pf * _srcLen, w)
+                         : (_trimMode && _trimTotal > 0) ? BeatToX(_trimStart + pf * (_trimEnd - _trimStart), w)
+                         : FracToX(pf, w);
                 ctx.DrawLine(new Pen(PlayheadCursor, 1.5), new Point(x, 0), new Point(x, h));
             }
         }
 
-        // A trim bracket: vertical line + inward-pointing grips at top and bottom.
-        private void DrawBracket(DrawingContext ctx, double x, double h, bool start, bool hot)
+        // Shade everything outside the region's two edges. They arrive in content order, which
+        // is right-to-left on a mirrored (reversed) view, so normalise before filling.
+        private void DimOutside(DrawingContext ctx, double xa, double xb, double w, double h)
+        {
+            double lo = Math.Clamp(Math.Min(xa, xb), 0, w), hi = Math.Clamp(Math.Max(xa, xb), 0, w);
+            if (lo > 0.5) ctx.FillRectangle(OutsideDim, new Rect(0, 0, lo, h));
+            if (hi < w - 0.5) ctx.FillRectangle(OutsideDim, new Rect(hi, 0, w - hi, h));
+        }
+
+        // A trim bracket: vertical line + grips at top and bottom pointing into the region.
+        // Which screen side that is depends on the draw order, so the caller passes it —
+        // a mirrored (reversed) view has the region's start on the right.
+        private void DrawBracket(DrawingContext ctx, double x, double h, bool gripRight, bool hot)
         {
             var brush = hot ? BracketHot : Bracket;
             ctx.DrawLine(new Pen(brush, hot ? 2.4 : 1.6), new Point(x, 0), new Point(x, h));
-            double dir = start ? 1 : -1;   // grip points into the region
+            double dir = gripRight ? 1 : -1;
             var g = new StreamGeometry();
             using (var gc = g.Open())
             {

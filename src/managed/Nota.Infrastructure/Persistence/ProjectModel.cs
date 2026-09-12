@@ -224,6 +224,7 @@ public sealed class AudioClipDto
     public AutomationPointDto[]? PanEnvelope { get; set; }     // clip pan envelope, clip-local beats (v9)
     public double WarpPlayStart { get; set; }  // warped clip trim window start (beats, v11)
     public double WarpPlayEnd { get; set; }    // warped clip trim window end (0 = full, v11)
+    public bool Reversed { get; set; }         // plays back-to-front (v19); default false
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

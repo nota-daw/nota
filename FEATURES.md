@@ -147,6 +147,12 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Import** of audio files by drag and drop: WAV / AIFF / FLAC / MP3.
 - **Audio clip**: start and end, waveform drawing, trimming, split, fade in/out, clip
   gain. Changing the length shows the material actually being revealed or hidden.
+- **Reverse** (clip editor ▸ DIRECTION, or the clip's context menu): plays the clip
+  backwards without touching the file, so it costs nothing to toggle and composes with
+  gain, pitch and warp. The arrangement lane and the clip editor both draw it the way it
+  sounds — the editor mirrors the whole view (brackets, warp markers, BPM chips, grid and
+  cursor included) so the screen reads left-to-right in playing order — and trims and
+  splits mirror, so the audible head and tail follow the edit.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. A grid-snap toggle governs trimming a warped clip.

@@ -124,6 +124,9 @@ public interface IAudioEngine : IDisposable
     void SetClipActive(int trackId, int clipIndex, bool active);
     /// <summary>Sets an audio clip's varispeed transpose in semitones (runtime).</summary>
     void SetClipPitch(int trackId, int clipIndex, float semitones);
+    /// <summary>Reverses an audio clip (non-destructive): the played region is read
+    /// back-to-front. Composes with gain/pitch/warp; trims and splits mirror.</summary>
+    void SetClipReverse(int trackId, int clipIndex, bool reversed);
     /// <summary>Enables/disables warp + mode for an audio clip (rebuilds the stretch cache).</summary>
     void SetClipWarp(int trackId, int clipIndex, bool enabled, int mode);
     /// <summary>Sets a warped clip's target musical length in beats.</summary>

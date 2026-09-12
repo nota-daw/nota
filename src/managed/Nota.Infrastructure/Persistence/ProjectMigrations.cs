@@ -77,6 +77,9 @@ public static class ProjectMigrations
         // v17 -> v18: CV modulation (TrackDto.Modulators/CvLinks, Phase 3). Absent in v17
         // documents; the defaults (empty lists = no modulation) match old behaviour — no-op.
         new Migration(17, _ => { }),
+        // v18 -> v19: audio clips gain Reversed (non-destructive reverse). Absent in v18
+        // documents; the default (false = plays forwards) matches old behaviour — no-op.
+        new Migration(18, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

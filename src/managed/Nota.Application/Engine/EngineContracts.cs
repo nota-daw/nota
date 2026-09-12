@@ -69,6 +69,7 @@ public struct NotaAudioClipInfo
     public double WarpBeats;     // full warped material length in beats (0 when unwarped)
     public double WarpPlayStart; // trimmed play window start (beats within the warp)
     public double WarpPlayEnd;   // trimmed play window end (0 = to WarpBeats)
+    public int Reversed;         // 0/1: plays back-to-front (non-destructive)
 }
 
 /// <summary>Decoded-sample metadata. Matches native NotaSampleInfo (M7-6b).</summary>

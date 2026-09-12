@@ -30,7 +30,7 @@ public sealed class ProjectService
     /// per-segment curvature (automationPoint.curve). v5 adds audio-clip pitch + warp
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
-    public const int CurrentFormatVersion = 18;
+    public const int CurrentFormatVersion = 19;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -211,6 +211,7 @@ public sealed class ProjectService
                         WarpBeats = ac.WarpBeats,
                         WarpPlayStart = ac.WarpPlayStart,
                         WarpPlayEnd = ac.WarpPlayEnd,
+                        Reversed = ac.Reversed != 0,
                     };
                     if (ac.WarpEnabled != 0)
                     {
@@ -623,6 +624,7 @@ public sealed class ProjectService
                 if (ac.Name is { Length: > 0 } acn) engine.SetClipName(id, ci, acn);
                 if (!ac.Active) engine.SetClipActive(id, ci, false);   // clip deactivate (v17)
                 if (ac.PitchSemitones != 0) engine.SetClipPitch(id, ci, ac.PitchSemitones);
+                if (ac.Reversed) engine.SetClipReverse(id, ci, true);   // reverse (v19)
                 if (ac.WarpEnabled != 0)
                 {
                     engine.SetClipWarp(id, ci, true, ac.WarpMode);

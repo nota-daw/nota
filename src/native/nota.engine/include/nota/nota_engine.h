@@ -93,6 +93,7 @@ typedef struct NotaAudioClipInfo {
     double  warp_beats;        /* full warped material length in beats (0 when unwarped) */
     double  warp_play_start;   /* trimmed play window start (beats within the warp) */
     double  warp_play_end;     /* trimmed play window end (0 = to warp_beats) */
+    int32_t reversed;          /* 0/1: play the region back-to-front (non-destructive) */
 } NotaAudioClipInfo;
 
 /* Decoded-sample metadata (M7-6b). */
@@ -611,6 +612,11 @@ NOTA_API NotaResult nota_clip_set_warp_trim(NotaEngine* engine, int32_t track_id
 /* Audio-clip runtime edits: gain (linear) and varispeed transpose (semitones). */
 NOTA_API NotaResult nota_clip_set_gain(NotaEngine* engine, int32_t track_id, int32_t clip_index, float gain);
 NOTA_API NotaResult nota_clip_set_pitch(NotaEngine* engine, int32_t track_id, int32_t clip_index, float semitones);
+/* Reverse an audio clip (non-destructive): the played region is read back-to-front.
+ * The sample and any warp cache stay in file order — only the read direction flips — so
+ * this is as cheap as a gain change and composes with gain/pitch/warp/clip envelopes.
+ * Trims, splits and range carves mirror, so the audible head/tail follow the edit. */
+NOTA_API NotaResult nota_clip_set_reverse(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t reversed);
 /* Clip deactivate (key 0): active=0 keeps the clip on the timeline but plays nothing
  * (audio or MIDI). Works on audio and instrument tracks. */
 NOTA_API NotaResult nota_clip_set_active(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t active);

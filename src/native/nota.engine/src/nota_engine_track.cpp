@@ -231,6 +231,10 @@ NotaResult nota_clip_set_pitch(NotaEngine* e, int32_t track_id, int32_t clip_ind
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipPitch(track_id, clip_index, semitones) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_clip_set_reverse(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t reversed) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setClipReverse(track_id, clip_index, reversed != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clip_set_warp(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t enabled, int32_t mode) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipWarp(track_id, clip_index, enabled != 0, mode) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

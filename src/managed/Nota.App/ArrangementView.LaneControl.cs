@@ -899,6 +899,18 @@ public sealed partial class ArrangementView
                 InputGesture = new KeyGesture(Key.D0),
             };
             deact.Click += (_, _) => { EnsureSelected(); _o.ToggleSelectedClipsActive(); };
+            // Reverse (audio only): non-destructive, so the header reflects the clicked clip.
+            MenuItem? reverse = null;
+            if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
+            {
+                bool on = rai.Reversed != 0;
+                reverse = new MenuItem
+                {
+                    Header = on ? (inGroup ? "Un-reverse selection" : "Un-reverse")
+                                : (inGroup ? "Reverse selection" : "Reverse"),
+                };
+                reverse.Click += (_, _) => { EnsureSelected(); _o.ToggleSelectedClipsReverse(); };
+            }
             // Consolidate: a right-click inside the time selection acts on that range; otherwise
             // on the multi-selection's span, or just this clip (bakes its edits into one clip).
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
@@ -927,6 +939,7 @@ public sealed partial class ArrangementView
             flyout.Items.Add(new Separator());
             flyout.Items.Add(split);
             flyout.Items.Add(dup);
+            if (reverse is not null) flyout.Items.Add(reverse);
             flyout.Items.Add(consolidate);
             flyout.Items.Add(deact);
             flyout.Items.Add(del);

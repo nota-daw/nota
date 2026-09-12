@@ -39,6 +39,11 @@ struct AudioClip {
     bool    active = true;        // clip deactivate (key 0): false = stays but silent
     float   gain = 1.0f;
     float   pitchSemitones = 0.0f; // varispeed transpose (no warp): also scales duration
+    // Reverse (non-destructive): the played region is read back-to-front. The source and
+    // the warp cache stay in file order — only the read direction flips — so toggling it
+    // is free (no re-decode, no cache rebuild) and it composes with gain/pitch/warp.
+    // Trims, splits and range carves mirror so the audible head/tail follow the edit.
+    bool    reversed = false;
     // Warp (time-stretch to tempo). When enabled, `warpCache` (below) holds the played
     // window pre-stretched at the current tempo/device rate and the audio thread copies
     // it straight (pitch baked in). Rebuilt on tempo/pitch/mode/marker/window/SR change.

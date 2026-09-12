@@ -463,6 +463,7 @@ public:
     bool    setClipGain(int32_t trackId, int32_t clipIndex, float gain);       // audio clip runtime gain
     bool    setClipActive(int32_t trackId, int32_t clipIndex, bool active);    // clip deactivate (key 0): audio+MIDI
     bool    setClipPitch(int32_t trackId, int32_t clipIndex, float semitones); // audio clip varispeed transpose
+    bool    setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed);  // audio clip plays back-to-front
     bool    setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32_t mode); // toggle/mode + rebuild cache
     double  autoWarpClip(int32_t trackId, int32_t clipIndex); // detect tempo, enable warp, snap length to grid; returns detected BPM (0 = failed)
     double  beatWarpClip(int32_t trackId, int32_t clipIndex); // Beats mode: detect transients, pin grid-snapped markers at each hit; returns detected BPM (0 = failed)

@@ -110,6 +110,12 @@ public sealed partial class NotaEngine
     public void SetClipPitch(int trackId, int clipIndex, float semitones)
     { ThrowIfDisposed(); Check(NativeMethods.ClipSetPitch(_handle, trackId, clipIndex, semitones)); }
 
+    /// <summary>Reverses an audio clip: the played region is read back-to-front. Nothing is
+    /// re-rendered (the sample and any warp cache stay in file order), so this is as cheap
+    /// as a gain change.</summary>
+    public void SetClipReverse(int trackId, int clipIndex, bool reversed)
+    { ThrowIfDisposed(); Check(NativeMethods.ClipSetReverse(_handle, trackId, clipIndex, reversed ? 1 : 0)); }
+
     /// <summary>Enables/disables warp and picks the mode (rebuilds the stretch cache).</summary>
     public void SetClipWarp(int trackId, int clipIndex, bool enabled, int mode)
     { ThrowIfDisposed(); Check(NativeMethods.ClipSetWarp(_handle, trackId, clipIndex, enabled ? 1 : 0, mode)); }

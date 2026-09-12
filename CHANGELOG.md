@@ -19,6 +19,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Reverse for audio clips.** A `Reverse` item in a clip's context menu and a DIRECTION
+  toggle in the clip editor play a clip backwards. It is non-destructive — the file and
+  any warp cache stay in playing order and only the read direction flips — so toggling is
+  instant, undoable and free to audition, and it composes with clip gain, pitch, warp and
+  the clip envelopes. Both the arrangement and the clip editor draw the waveform the way
+  it now sounds — the editor mirrors the whole view, so its Start/End brackets, warp
+  markers, BPM chips, beat grid and playback cursor all flip together and the screen still
+  reads left-to-right in playing order (the clip envelope is authored in played time, so
+  it stays put). Trimming, resizing and splitting a reversed clip mirror too, so the
+  audible head and tail follow the edit instead of jumping. Consolidate and Freeze bake
+  the reversal in.
 - **Overview — a project strip above the arrangement.** The whole project on one band,
   a mini-clip per clip in its track colour (a collapsed group still shows the clips it
   hides), with the visible span drawn as a brass window over it and everything outside it

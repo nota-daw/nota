@@ -71,6 +71,7 @@ bool Engine::audioClipInfo(int32_t trackId, int32_t clipIndex, NotaAudioClipInfo
     out->warp_beats = c.warpBeats;
     out->warp_play_start = c.warpPlayStart;
     out->warp_play_end = c.warpPlayEnd;
+    out->reversed = c.reversed ? 1 : 0;
     return true;
 }
 
@@ -337,6 +338,19 @@ bool Engine::setClipPitch(int32_t trackId, int32_t clipIndex, float semitones) {
     auto nt = cloneTrack(*old);
     nt->clips[clipIndex].pitchSemitones = semitones;
     configureClipWarp(nt->clips[clipIndex], transport_.samplesPerBeat(), transport_.sampleRate()); // pitch is baked into the warp
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+// Reverse an audio clip (non-destructive): the played region is read back-to-front.
+// Nothing is re-rendered — the source and the warp cache stay in file order and the
+// renderer mirrors its read index — so this is as cheap as a gain change.
+bool Engine::setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Audio) return false;
+    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    auto nt = cloneTrack(*old);
+    nt->clips[clipIndex].reversed = reversed;
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -701,6 +715,15 @@ static int32_t warpPeaksRange(const AudioClip& clip, float* out, int32_t maxPoin
     return buckets;
 }
 
+// Flip a min/max peak array end-to-end (each bucket's own min/max is unchanged) so a
+// reversed clip draws the waveform it actually plays.
+static void reversePeaks(float* peaks, int32_t count) {
+    for (int32_t a = 0, b = count - 1; a < b; ++a, --b) {
+        std::swap(peaks[a * 2], peaks[b * 2]);
+        std::swap(peaks[a * 2 + 1], peaks[b * 2 + 1]);
+    }
+}
+
 int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex,
                              float* outMinMax, int32_t maxPoints) const {
     if (!outMinMax || maxPoints <= 0) return 0;
@@ -718,8 +741,11 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex,
     const auto& m = clip.warpMarkers;
     const bool warped = clip.warpEnabled && m.size() >= 2 && clip.warpBeats > 0.0;
 
-    if (warped)   // peaks over the PLAYED window (what the arrangement shows/plays)
-        return warpPeaksRange(clip, outMinMax, maxPoints, clip.warpPlayStart, clip.warpPlayEndEff());
+    if (warped) { // peaks over the PLAYED window (what the arrangement shows/plays)
+        const int32_t n = warpPeaksRange(clip, outMinMax, maxPoints, clip.warpPlayStart, clip.warpPlayEndEff());
+        if (clip.reversed) reversePeaks(outMinMax, n);
+        return n;
+    }
 
     const int64_t base = static_cast<int64_t>(clip.sourceOffsetFrames);
     const int64_t total = clip.effectiveLength();
@@ -737,12 +763,15 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex,
         }
         outMinMax[b * 2] = mn; outMinMax[b * 2 + 1] = mx;
     }
+    if (clip.reversed) reversePeaks(outMinMax, buckets);
     return buckets;
 }
 
 // Peaks over the WHOLE sample (frames 0..sample->frames), regardless of the clip's
 // trimmed region — the clip editor draws the full file so the Start/End brackets can
-// reveal audio that was trimmed off. Unwarped only (warped uses getClipPeaks).
+// reveal audio that was trimmed off. Unwarped only (warped uses getClipPeaks). Always in
+// FILE order: the editor draws this view together with source-frame brackets, so it
+// mirrors the two as one when the clip is reversed rather than flipping peaks here.
 int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex,
                                    float* outMinMax, int32_t maxPoints) const {
     if (!outMinMax || maxPoints <= 0) return 0;
@@ -772,6 +801,8 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex,
 
 // Peaks over the FULL warped material [0..warpBeats], ignoring the trim window — the
 // clip editor draws the whole warp so the Start/End brackets can reveal trimmed beats.
+// In marker (file) order — the editor mirrors this view and its markers together when the
+// clip is reversed, so flipping the peaks alone here would desync them.
 int32_t Engine::getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex,
                                      float* outMinMax, int32_t maxPoints) const {
     auto t = findTrackAuthoring(trackId);
@@ -854,6 +885,15 @@ double audioDisplayLenBeats(const AudioClip& c, double spb, double devSR) {
     if (c.warpEnabled && c.warpMarkers.size() >= 2 && c.warpBeats > 0.0) return c.warpPlayLen();
     return audioLenBeats(c, spb, devSR);
 }
+// Source frame just past a REVERSED clip's audible head (its region end) after the left
+// edge moved by `deltaBeats`. Trims measure a reversed clip backwards from here.
+double audioReverseHead(const AudioClip& c, double deltaBeats, double spb, double devSR) {
+    double head = c.sourceOffsetFrames + static_cast<double>(c.effectiveLength())
+                - audioBeatsToSrcFrames(c, deltaBeats, spb, devSR);
+    if (c.sample) head = std::min(head, static_cast<double>(c.sample->frames));
+    return std::max(0.0, head);
+}
+
 // Push `start` right until [start, start+len) overlaps no existing clip on the track.
 double placeMidiNonOverlap(const Track& t, double start, double len) {
     bool moved = true;
@@ -891,23 +931,40 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) {   // keep [sta
     for (const auto& n : src.notes) if (n.startBeat >= startLocal) { Note m = n; m.startBeat -= startLocal; r.notes.push_back(m); }
     return r;
 }
+// Both carves work in PLAYED time, so a reversed clip mirrors: its audible head is the
+// region's end, so keeping the first beats keeps the region's tail and vice versa.
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
-        left.warpPlayEnd = src.warpPlayStart + endLocal; buildWarpCache(left, spb, devSR);
+        if (src.reversed) {
+            left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
+            left.warpPlayEnd = src.warpPlayEndEff();
+        } else {
+            left.warpPlayEnd = src.warpPlayStart + endLocal;
+        }
+        buildWarpCache(left, spb, devSR);
     } else {
-        left.lengthFrames = static_cast<int64_t>(audioBeatsToSrcFrames(src, endLocal, spb, devSR));
+        const int64_t keep = static_cast<int64_t>(audioBeatsToSrcFrames(src, endLocal, spb, devSR));
+        if (src.reversed)
+            left.sourceOffsetFrames = src.sourceOffsetFrames + static_cast<double>(src.effectiveLength() - keep);
+        left.lengthFrames = keep;
     }
     return left;
 }
 AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, double devSR) {
     AudioClip right = src; right.startBeat = src.startBeat + startLocal;
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
-        right.warpPlayStart = src.warpPlayStart + startLocal; right.warpPlayEnd = src.warpPlayEndEff();
+        if (src.reversed) {
+            right.warpPlayStart = src.warpPlayStart;
+            right.warpPlayEnd = std::max(src.warpPlayStart, src.warpPlayEndEff() - startLocal);
+        } else {
+            right.warpPlayStart = src.warpPlayStart + startLocal; right.warpPlayEnd = src.warpPlayEndEff();
+        }
         buildWarpCache(right, spb, devSR);
     } else {
         const int64_t cut = static_cast<int64_t>(audioBeatsToSrcFrames(src, startLocal, spb, devSR));
-        right.sourceOffsetFrames = src.sourceOffsetFrames + static_cast<double>(cut);
+        if (!src.reversed)   // reversed drops the region's tail instead, so the offset stays
+            right.sourceOffsetFrames = src.sourceOffsetFrames + static_cast<double>(cut);
         right.lengthFrames = src.effectiveLength() - cut;
     }
     return right;
@@ -1367,11 +1424,22 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
         const double spb = transport_.samplesPerBeat();
         const double devSR = transport_.sampleRate();
         const double delta = newStartBeat - c.startBeat;
-        double newOffset = c.sourceOffsetFrames + audioBeatsToSrcFrames(c, delta, spb, devSR);
-        if (newOffset < 0) newOffset = 0;
-        c.startBeat = newStartBeat;
-        c.sourceOffsetFrames = newOffset;
-        c.lengthFrames = static_cast<int64_t>(audioBeatsToSrcFrames(c, newLengthBeats, spb, devSR));
+        const double want = audioBeatsToSrcFrames(c, newLengthBeats, spb, devSR);
+        if (c.reversed) {
+            // Mirrored: a reversed clip's audible head is the region's END, so the left
+            // edge moves that end in and the length is taken backwards from it.
+            const double headEnd = audioReverseHead(c, delta, spb, devSR);
+            const double off = std::max(0.0, headEnd - want);
+            c.startBeat = newStartBeat;
+            c.sourceOffsetFrames = off;
+            c.lengthFrames = static_cast<int64_t>(std::max(0.0, headEnd - off));
+        } else {
+            double newOffset = c.sourceOffsetFrames + audioBeatsToSrcFrames(c, delta, spb, devSR);
+            if (newOffset < 0) newOffset = 0;
+            c.startBeat = newStartBeat;
+            c.sourceOffsetFrames = newOffset;
+            c.lengthFrames = static_cast<int64_t>(want);
+        }
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -1395,8 +1463,14 @@ bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStart
         // the left edge shifts playStart (and startBeat); the right edge moves playEnd.
         constexpr double kMinBeat = 0.05;
         const double d = newStartBeat - c.startBeat;
-        double ps = std::clamp(c.warpPlayStart + d, 0.0, std::max(0.0, c.warpBeats - kMinBeat));
-        double pe = std::clamp(ps + newLengthBeats, ps + kMinBeat, c.warpBeats);
+        double ps, pe;
+        if (c.reversed) {   // the window's END is the audible head, so the edges swap roles
+            pe = std::clamp(c.warpPlayEndEff() - d, kMinBeat, c.warpBeats);
+            ps = std::clamp(pe - newLengthBeats, 0.0, pe - kMinBeat);
+        } else {
+            ps = std::clamp(c.warpPlayStart + d, 0.0, std::max(0.0, c.warpBeats - kMinBeat));
+            pe = std::clamp(ps + newLengthBeats, ps + kMinBeat, c.warpBeats);
+        }
         c.startBeat = newStartBeat;
         c.warpPlayStart = ps;
         c.warpPlayEnd = pe;
@@ -1409,12 +1483,24 @@ bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStart
     // can provide, auto-enable warp and stretch the current content to fit (this is
     // what lets a short one-shot be dragged out to a whole bar).
     const double delta = newStartBeat - c.startBeat;
-    double newOffset = c.sourceOffsetFrames + audioBeatsToSrcFrames(c, delta, spb, devSR);
+    const int64_t wantFrames = static_cast<int64_t>(audioBeatsToSrcFrames(c, newLengthBeats, spb, devSR));
+    // A reversed clip reads the region backwards, so the source a drag can reveal sits
+    // BEFORE its audible head (the region's end) rather than after the offset: the head is
+    // the anchor and the region grows leftwards from it.
+    double newOffset;
+    int64_t srcAvail;
+    if (c.reversed) {
+        const double head = audioReverseHead(c, delta, spb, devSR);
+        srcAvail = static_cast<int64_t>(head);
+        newOffset = head - static_cast<double>(std::min<int64_t>(wantFrames, srcAvail));
+    } else {
+        newOffset = c.sourceOffsetFrames + audioBeatsToSrcFrames(c, delta, spb, devSR);
+        if (newOffset < 0) newOffset = 0;
+        srcAvail = c.sample ? (c.sample->frames - static_cast<int64_t>(newOffset)) : 0;
+    }
     if (newOffset < 0) newOffset = 0;
     c.startBeat = newStartBeat;
     c.sourceOffsetFrames = newOffset;
-    const int64_t wantFrames = static_cast<int64_t>(audioBeatsToSrcFrames(c, newLengthBeats, spb, devSR));
-    const int64_t srcAvail = c.sample ? (c.sample->frames - static_cast<int64_t>(newOffset)) : 0;
     if (!c.sample || wantFrames <= srcAvail) {
         c.lengthFrames = wantFrames;   // plain trim (reveal/hide source)
     } else {
@@ -1482,39 +1568,15 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return -1;
         const double spb = transport_.samplesPerBeat();
         const double devSR = transport_.sampleRate();
-        AudioClip src = nt->clips[clipIndex];
+        const AudioClip src = nt->clips[clipIndex];
         const double local = atBeat - src.startBeat;
-        const bool warped = src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0;
-        if (warped) {
-            // Warped clips play the beat window [warpPlayStart, warpPlayEndEff()] — split
-            // in that domain (lengthFrames/sourceOffsetFrames are ignored when warped, so
-            // editing them left both halves showing/playing the whole material).
-            const double playLen = src.warpPlayLen();
-            if (local <= 0.0 || local >= playLen) return -1;
-            const double splitPlay = src.warpPlayStart + local;   // warp-material beat of the cut
-            AudioClip left = src, right = src;
-            left.warpPlayEnd = splitPlay;                         // concrete end (> start)
-            right.startBeat = atBeat;
-            right.warpPlayStart = splitPlay;
-            right.warpPlayEnd = src.warpPlayEndEff();
-            // Each half needs its own streaming stretcher (seek state is per-clip).
-            configureClipWarp(left, spb, devSR);
-            configureClipWarp(right, spb, devSR);
-            nt->clips[clipIndex] = left;
-            nt->clips.insert(nt->clips.begin() + clipIndex + 1, right);
-        } else {
-            const double lenBeats = audioLenBeats(src, spb, devSR);
-            if (local <= 0 || local >= lenBeats) return -1;
-            const int64_t splitSrc = static_cast<int64_t>(audioBeatsToSrcFrames(src, local, spb, devSR));
-            const int64_t total = src.effectiveLength();
-            AudioClip left = src, right = src;
-            left.lengthFrames = splitSrc;
-            right.startBeat = atBeat;
-            right.sourceOffsetFrames = src.sourceOffsetFrames + static_cast<double>(splitSrc);
-            right.lengthFrames = total - splitSrc;
-            nt->clips[clipIndex] = left;
-            nt->clips.insert(nt->clips.begin() + clipIndex + 1, right);
-        }
+        if (local <= 0.0 || local >= audioDisplayLenBeats(src, spb, devSR)) return -1;
+        // The same carves the range ops use: they cut in played time, so warped halves
+        // split over the beat window (not lengthFrames, which warp ignores) and a reversed
+        // clip's halves keep the audio each one sounded. Each warped half also gets its own
+        // stretch cache, since the stretcher's seek state is per-clip.
+        nt->clips[clipIndex] = audioCarveLeft(src, local, spb, devSR);
+        nt->clips.insert(nt->clips.begin() + clipIndex + 1, audioCarveRight(src, local, spb, devSR));
     }
     republishWithTrack(trackId, nt);
     return clipIndex + 1;

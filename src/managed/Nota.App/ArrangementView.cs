@@ -1172,6 +1172,31 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Reverse (non-destructive) on every selected AUDIO clip. Mixed selections
+    /// reverse the audio clips and leave MIDI alone; if any is still forwards the whole
+    /// selection turns on first, so a mixed state resolves to "all reversed".</summary>
+    public bool ToggleSelectedClipsReverse()
+    {
+        if (_engine is null) return false;
+        var sel = SelectionBlock();
+        if (sel.Length == 0) return false;
+        bool anyForward = false, anyAudio = false;
+        foreach (var (track, clip) in sel)
+            if (_engine.TryGetAudioClipInfo(track, clip, out var ai))
+            { anyAudio = true; if (ai.Reversed == 0) anyForward = true; }
+        if (!anyAudio) return false;
+        bool target = anyForward, any = false;
+        foreach (var (track, clip) in sel)
+        {
+            if (!_engine.TryGetAudioClipInfo(track, clip, out _)) continue;   // MIDI / stale entry
+            _engine.SetClipReverse(track, clip, target);
+            RaiseClipGeometryChanged(track, clip);   // an open clip editor re-reads the new direction
+            any = true;
+        }
+        if (any) Refresh();
+        return any;
+    }
+
     public bool DeleteSelectedClips()
     {
         if (_engine is null || _sel.Count == 0) return false;

@@ -99,6 +99,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_pitch")]
     internal static partial NotaResult ClipSetPitch(IntPtr engine, int trackId, int clipIndex, float semitones);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clip_set_reverse")]
+    internal static partial NotaResult ClipSetReverse(IntPtr engine, int trackId, int clipIndex, int reversed);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_warp")]
     internal static partial NotaResult ClipSetWarp(IntPtr engine, int trackId, int clipIndex, int enabled, int mode);
 

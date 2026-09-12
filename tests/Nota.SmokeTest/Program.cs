@@ -758,6 +758,149 @@ Console.WriteLine("-- warped clip trimming --");
           "warp trim clamped to [0, warpBeats]");
 }
 
+// ============== clip reverse (non-destructive playback direction) ===========
+Console.WriteLine("-- clip reverse --");
+{
+    // A silence|tone file makes direction audible: forwards is quiet-then-loud, reversed
+    // is loud-then-quiet. The clip is 2 beats at 120 BPM, so each half is one beat.
+    string rvw = Path.Combine(Path.GetTempPath(), "nota_smoke_reverse.wav");
+    Nota.SmokeTest.WavWriter.WriteSilenceThenTone(rvw, seconds: 1.0, freq: 440.0, sampleRate: 44100);
+    using var rv = new NotaEngine();
+    rv.SetBpm(120); rv.SetTimeSignature(4, 4);
+    int rt = rv.AddAudioTrack();
+    int rc = rv.AddAudioClip(rt, rvw, 0.0);
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rv0) && rv0.Reversed == 0, "clips start forwards");
+    long srcTotal = rv.TryGetSampleInfo(rv0.SampleId, out var rvs) ? rvs.Frames : 0;
+    Check(srcTotal > 0, "reverse: source frames known");
+
+    // Halves of the clip's own device span, so the check is independent of device rate.
+    Check(rv.TryGetClipInfo(rt, rc, out var rvc0) && rvc0.LengthBeats > 0, "reverse: clip length known");
+    double rvSpb = (rv.SampleRate > 0 ? rv.SampleRate : 48000.0) * 60.0 / 120.0;   // 120 BPM
+    int clipFrames = (int)Math.Round(rvc0.LengthBeats * rvSpb);
+    var rbuf = new float[(clipFrames + 64) * 2];
+    (float head, float tail) Halves()
+    {
+        Array.Clear(rbuf);
+        rv.Seek(0); rv.Play(); rv.RenderOffline(rbuf, clipFrames); rv.StopTransport();
+        return (RmsRange(rbuf, clipFrames / 8, clipFrames * 3 / 8),
+                RmsRange(rbuf, clipFrames * 5 / 8, clipFrames * 7 / 8));
+    }
+    static float RmsRange(float[] b, int from, int to)
+    { double sum = 0; for (int i = from * 2; i < to * 2; i++) sum += b[i] * (double)b[i]; return (float)Math.Sqrt(sum / Math.Max(1, (to - from) * 2)); }
+
+    var (fwdHead, fwdTail) = Halves();
+    Check(fwdTail > fwdHead + 0.05f, $"forwards plays silence then tone ({fwdHead:F3} -> {fwdTail:F3})");
+
+    rv.SetClipReverse(rt, rc, true);
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rv1) && rv1.Reversed != 0, "reverse flag set");
+    var (revHead, revTail) = Halves();
+    Check(revHead > revTail + 0.05f, $"reversed plays tone then silence ({revHead:F3} -> {revTail:F3})");
+    // Reverse only flips the read direction: the region and its musical length are untouched.
+    Check(Math.Abs(rv1.SourceOffsetFrames - rv0.SourceOffsetFrames) < 1e-9
+          && rv.TryGetClipInfo(rt, rc, out var rvc1) && Math.Abs(rvc1.LengthBeats - rvc0.LengthBeats) < 1e-9,
+          "reverse leaves geometry (offset + length) alone");
+    // Energy is conserved (same audio, other way round) — a resample bug would shift it.
+    Check(Math.Abs(Rms(rbuf, clipFrames) - Math.Sqrt((fwdHead * fwdHead + fwdTail * fwdTail) / 2.0)) < 0.06,
+          "reverse preserves overall level");
+
+    // The lane's peaks follow the ear: the loud half moves to the front.
+    var rpk = new float[512 * 2];
+    int rpn = rv.GetClipPeaks(rt, rc, rpk, 512);
+    float pkHead = 0, pkTail = 0;
+    for (int b = 0; b < rpn; b++)
+    {
+        float a = Math.Max(Math.Abs(rpk[b * 2]), Math.Abs(rpk[b * 2 + 1]));
+        if (b < rpn / 2) pkHead = Math.Max(pkHead, a); else pkTail = Math.Max(pkTail, a);
+    }
+    Check(rpn > 0 && pkHead > 0.3f && pkTail < 0.05f, $"reversed peaks are flipped too ({pkHead:F2}|{pkTail:F2})");
+    // The clip-editor view stays in FILE order (its brackets are source coordinates).
+    var rsp = new float[512 * 2];
+    int rsn = rv.GetClipSourcePeaks(rt, rc, rsp, 512);
+    float spHead = 0, spTail = 0;
+    for (int b = 0; b < rsn; b++)
+    {
+        float a = Math.Max(Math.Abs(rsp[b * 2]), Math.Abs(rsp[b * 2 + 1]));
+        if (b < rsn / 2) spHead = Math.Max(spHead, a); else spTail = Math.Max(spTail, a);
+    }
+    Check(rsn > 0 && spTail > 0.3f && spHead < 0.05f, "source peaks stay in file order when reversed");
+
+    // Undo/redo: reverse is one structural edit like any other clip property.
+    rv.Undo();
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rv2) && rv2.Reversed == 0, "undo un-reverses");
+    rv.Redo();
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rv3) && rv3.Reversed != 0, "redo re-reverses");
+
+    // Split mirrors: the reversed clip sounds tone|silence, so the LEFT half must keep the
+    // region's tail (the tone, at source offset ~half) and the right half its head.
+    double mid = rvc0.LengthBeats / 2;
+    Check(rv.SplitClip(rt, rc, mid) == rc + 1, "reverse: split returns the new clip index");
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rl) && rl.Reversed != 0
+          && Math.Abs(rl.SourceOffsetFrames - srcTotal / 2.0) < srcTotal * 0.02,
+          $"reversed split: left half keeps the region tail (offset {rl.SourceOffsetFrames:F0} of {srcTotal})");
+    Check(rv.TryGetAudioClipInfo(rt, rc + 1, out var rr) && rr.Reversed != 0 && rr.SourceOffsetFrames < srcTotal * 0.02,
+          $"reversed split: right half keeps the region head (offset {rr.SourceOffsetFrames:F0})");
+    rv.Undo();   // back to one clip for the trim check
+
+    // Trim mirrors: shortening the right edge cuts the TAIL of what you hear, so the
+    // audible head (the region's end) stays put and the offset moves up instead.
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rt0), "reverse: pre-trim info");
+    double head0 = rt0.SourceOffsetFrames + (rt0.LengthFrames > 0 ? rt0.LengthFrames : srcTotal);
+    rv.TrimClip(rt, rc, 0.0, rvc0.LengthBeats / 2);
+    Check(rv.TryGetAudioClipInfo(rt, rc, out var rt1)
+          && Math.Abs(rt1.SourceOffsetFrames + rt1.LengthFrames - head0) < srcTotal * 0.02
+          && rt1.SourceOffsetFrames > srcTotal * 0.4,
+          $"reversed trim keeps the audible head (region now {rt1.SourceOffsetFrames:F0}+{rt1.LengthFrames})");
+    // The trimmed clip is half as long, so measure over ITS span: the region it kept is
+    // the tone, so the whole thing sounds — nothing is silent any more.
+    Array.Clear(rbuf);
+    rv.Seek(0); rv.Play(); rv.RenderOffline(rbuf, clipFrames); rv.StopTransport();
+    int halfSpan = clipFrames / 2;
+    float trA = RmsRange(rbuf, halfSpan / 8, halfSpan * 3 / 8), trB = RmsRange(rbuf, halfSpan * 5 / 8, halfSpan * 7 / 8);
+    Check(trA > 0.05f && trB > 0.05f, $"reversed half-clip is all tone ({trA:F3}|{trB:F3})");
+}
+
+// ============== reverse on a WARPED clip (mirrors the stretch cache) =========
+Console.WriteLine("-- clip reverse (warped) --");
+{
+    string rww = Path.Combine(Path.GetTempPath(), "nota_smoke_reverse_warp.wav");
+    Nota.SmokeTest.WavWriter.WriteSilenceThenTone(rww, seconds: 1.0, freq: 440.0, sampleRate: 44100);
+    using var rw = new NotaEngine();
+    rw.SetBpm(120); rw.SetTimeSignature(4, 4);
+    int wt2 = rw.AddAudioTrack();
+    int wc2 = rw.AddAudioClip(wt2, rww, 0.0);
+    rw.SetClipWarp(wt2, wc2, true, 3);   // Complex; flat source -> neutral seed
+    Check(rw.TryGetAudioClipInfo(wt2, wc2, out var wi0) && wi0.WarpEnabled != 0 && wi0.WarpBeats > 0,
+          "reverse-warp: warp enabled");
+    Check(rw.TryGetClipInfo(wt2, wc2, out var wci) && wci.LengthBeats > 0, "reverse-warp: length known");
+    double rwSpb = (rw.SampleRate > 0 ? rw.SampleRate : 48000.0) * 60.0 / 120.0;   // 120 BPM
+    int wFrames = (int)Math.Round(wci.LengthBeats * rwSpb);
+    var wbuf = new float[(wFrames + 64) * 2];
+    (float head, float tail) WHalves()
+    {
+        Array.Clear(wbuf);
+        rw.Seek(0); rw.Play(); rw.RenderOffline(wbuf, wFrames); rw.StopTransport();
+        double a = 0, b = 0;
+        for (int i = wFrames / 8; i < wFrames * 3 / 8; i++) a += wbuf[i * 2] * (double)wbuf[i * 2];
+        for (int i = wFrames * 5 / 8; i < wFrames * 7 / 8; i++) b += wbuf[i * 2] * (double)wbuf[i * 2];
+        int n = Math.Max(1, wFrames / 4);
+        return ((float)Math.Sqrt(a / n), (float)Math.Sqrt(b / n));
+    }
+    var (wf1, wf2) = WHalves();
+    Check(wf2 > wf1 + 0.02f, $"warped forwards plays silence then tone ({wf1:F3} -> {wf2:F3})");
+    rw.SetClipReverse(wt2, wc2, true);
+    // Reverse must NOT invalidate the stretch cache: the warp geometry is untouched.
+    Check(rw.TryGetAudioClipInfo(wt2, wc2, out var wi1) && wi1.Reversed != 0
+          && Math.Abs(wi1.WarpBeats - wi0.WarpBeats) < 1e-9, "reverse-warp: warp geometry untouched");
+    var (wr1, wr2) = WHalves();
+    Check(wr1 > wr2 + 0.02f, $"warped reversed plays tone then silence ({wr1:F3} -> {wr2:F3})");
+
+    // Consolidate bakes the reversal into a fresh, forward sample.
+    Check(rw.ConsolidateRange(new[] { wt2 }, 0.0, wci.LengthBeats), "reverse-warp: consolidate range");
+    Check(rw.TryGetAudioClipInfo(wt2, 0, out var wi2) && wi2.Reversed == 0, "consolidate bakes reverse (clip is forwards)");
+    var (wc1, wc2b) = WHalves();
+    Check(wc1 > wc2b + 0.02f, $"consolidated clip still sounds reversed ({wc1:F3} -> {wc2b:F3})");
+}
+
 // ============== warp preserves pitch across a src≠device sample rate ==========
 Console.WriteLine("-- warp pitch vs sample rate --");
 {
@@ -4321,6 +4464,7 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
 
         // Pitch + warp should survive a save/load round-trip (v5).
         src.SetClipPitch(aTrk, aClip, 4.0f);
+        src.SetClipReverse(aTrk, aClip, true);   // reverse (v19)
         src.SetClipWarp(aTrk, aClip, true, 3);   // Complex
         src.SetClipWarpLength(aTrk, aClip, 2.0);
         // Warp markers (v6): enable seeds two end markers; add a midpoint.
@@ -4368,6 +4512,7 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
               && Math.Abs(aci1.SourceOffsetFrames - 1000) < 1e-6, "audio clip geometry restored");
         Check(Math.Abs(aci1.PitchSemitones - 4.0f) < 1e-4 && aci1.WarpEnabled != 0
               && aci1.WarpMode == 3 && Math.Abs(aci1.WarpBeats - 2.0) < 1e-4, "audio clip pitch + warp restored");
+        Check(aci1.Reversed != 0, "audio clip reverse restored (v19)");
         var lms = new double[16]; var lmb = new double[16];
         Check(dst.GetClipWarpMarkers(dAudio, 0, lms, lmb) == 3, "warp markers restored (3)");
         var lenv = dst.GetClipVolumeEnvelope(dAudio, 0);

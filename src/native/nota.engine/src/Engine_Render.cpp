@@ -593,7 +593,9 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
             const float* csamp = wc.samples.data();
             const float g = clip.gain;
             for (int32_t j = 0; j < segLen; ++j) {
-                const int64_t ci = cacheBase + j;
+                // Reverse reads the same cache back-to-front: the window is already the
+                // played length, so mirroring the index is exact (no resample).
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 if (hasEnv) applyEnv(ovStart + j, l, r);
@@ -617,7 +619,12 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         for (int32_t i = 0; i < frames; ++i) {
             const double p = blockStart + i;
             if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
-            const double srcPos = clip.sourceOffsetFrames + (p - startSamples) * ratio;
+            // Reverse walks the source region from its last frame back to its first;
+            // the interpolation is unchanged (srcPos is still a real source position).
+            double srcPos = clip.reversed
+                ? clip.sourceOffsetFrames + (len - 1) - (p - startSamples) * ratio
+                : clip.sourceOffsetFrames + (p - startSamples) * ratio;
+            if (srcPos < clip.sourceOffsetFrames) srcPos = clip.sourceOffsetFrames;
             const int64_t i0 = static_cast<int64_t>(srcPos);
             const double frac = srcPos - i0;
             float l0, r0, l1, r1;
