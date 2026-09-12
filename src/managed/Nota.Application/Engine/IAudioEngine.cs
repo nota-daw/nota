@@ -660,6 +660,11 @@ public interface IAudioEngine : IDisposable
     int GamepadCount { get; }
     IReadOnlyList<GamepadDevice> Gamepads();
     int PollGamepadEvents(GamepadButtonEvent[] buffer);
+    /// <summary>Latest position of every axis on <paramref name="pad"/>, written into
+    /// <paramref name="buffer"/> in <see cref="GamepadAxis"/> order as 0..127. Returns the
+    /// count written (0 for an out-of-range pad). Sampled rather than queued: a stick
+    /// would flood an event ring and only its latest position matters.</summary>
+    int GamepadAxisValues(int pad, int[] buffer);
 
     // --- Audio preview / audition (M7-4a) ----------------------------------
     void PreviewFile(string path);

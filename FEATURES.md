@@ -132,8 +132,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   - **Any button can be mapped instead** through MIDI Learn — a mapped button drives that
     control and stops playing its note, while the rest of the pad keeps the layout above,
     so one controller both plays and mixes. Nothing is reserved: mapping the D-pad takes
-    it over from octave/velocity. Mappings match on the button, not the pad slot, so a
+    it over from octave/velocity. Mappings match on the control, not the pad slot, so a
     replug does not break them.
+  - **Sticks and triggers map as continuous controls** — both stick axes on each stick
+    plus the two trigger travels, so a pad can sweep a filter or ride a fader, not just
+    switch things. They play no notes and do nothing until mapped. Sticks are bipolar and
+    rest centred (a deadzone keeps a worn stick from drifting a mapped parameter);
+    triggers are unipolar and rest at zero.
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
 - **Audio→MIDI** (right-click an audio clip → Convert):
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
@@ -189,9 +194,11 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   and filter included), track volume/pan/mute/solo, the master, the transport, rack
   macros, and chain and Drum Rack pad mute/solo. The **Map** tab in the browser exposes
   range, inversion and deletion. Saved with the project.
-  - Sources are a **CC**, a **MIDI note**, or a **gamepad button** (macOS) — all three
-    share one mapping table. A button is momentary: it fires a toggle target once on
-    press, and holds a continuous one at the top of its range until released.
+  - Sources are a **CC**, a **MIDI note**, or a **gamepad button, stick or trigger**
+    (macOS) — all of them share one mapping table. A button is momentary: it fires a
+    toggle target once on press, and holds a continuous one at the top of its range until
+    released. A stick or trigger drives a continuous target over its whole travel, and
+    fires a toggle target once as it crosses the half-way point.
 
 ---
 

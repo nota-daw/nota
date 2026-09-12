@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// MIDI Learn — map a hardware controller's CCs/notes, or a gamepad button, onto
-// Nota's on-screen controls. The mapping *target* reuses the engine's automation addressing
+// MIDI Learn — map a hardware controller's CCs/notes, or a gamepad button, stick
+// or trigger, onto Nota's on-screen controls. The mapping *target* reuses the engine's automation addressing
 // (track + AutomationTarget + device/param index) plus a few globals (master
 // volume, transport, per-track mute/solo), so an incoming MIDI message can be
 // applied straight through the existing engine setters, whether or not the
@@ -27,19 +27,45 @@ namespace Nota.App;
 /// apply path — a button edge is just a 0/127 momentary source.</summary>
 public enum MidiSourceKind { Cc = 0, Note = 1, Gamepad = 2 }
 
-/// <summary>Display names for the button ids that come out of the native gamepad queue:
-/// the d-pad has its own sentinels, everything else is a HID usage index whose physical
-/// label we cannot know, so it is shown by number.</summary>
-public static class GamepadButtons
+/// <summary>The gamepad's mappable controls, flattened into one id space so a mapping
+/// needs no extra field to say which kind it is. Buttons keep the ids the native queue
+/// emits (1..N HID usage, d-pad sentinels at -1000); the six continuous axes sit below
+/// them at -2000. A mapping stores the id in <see cref="MidiMapping.Number"/>.</summary>
+public static class GamepadControls
 {
-    public static string Name(int buttonId) => (GamepadButton)buttonId switch
+    private const int AxisBase = -2000;
+
+    public static int AxisId(GamepadAxis axis) => AxisBase - (int)axis;
+    public static bool IsAxis(int controlId) => controlId <= AxisBase && controlId > AxisBase - (int)GamepadAxis.Count;
+    public static GamepadAxis Axis(int controlId) => (GamepadAxis)(AxisBase - controlId);
+
+    /// <summary>Where an idle control sits, in the 0..127 scale the engine reports:
+    /// a spring-centred stick returns to the middle, a trigger falls back to zero.
+    /// Used to tell a deliberate move from a control settling back to rest.</summary>
+    public static int Rest(int controlId)
+        => IsAxis(controlId) && Axis(controlId) is not (GamepadAxis.LeftTrigger or GamepadAxis.RightTrigger) ? 64 : 0;
+
+    public static string Name(int controlId)
     {
-        GamepadButton.DpadUp => "D-pad ↑",
-        GamepadButton.DpadDown => "D-pad ↓",
-        GamepadButton.DpadLeft => "D-pad ←",
-        GamepadButton.DpadRight => "D-pad →",
-        _ => $"Button {buttonId}",
-    };
+        if (IsAxis(controlId))
+            return Axis(controlId) switch
+            {
+                GamepadAxis.LeftX => "Left stick ←→",
+                GamepadAxis.LeftY => "Left stick ↑↓",
+                GamepadAxis.RightX => "Right stick ←→",
+                GamepadAxis.RightY => "Right stick ↑↓",
+                GamepadAxis.LeftTrigger => "Left trigger",
+                _ => "Right trigger",
+            };
+        return (GamepadButton)controlId switch
+        {
+            GamepadButton.DpadUp => "D-pad ↑",
+            GamepadButton.DpadDown => "D-pad ↓",
+            GamepadButton.DpadLeft => "D-pad ←",
+            GamepadButton.DpadRight => "D-pad →",
+            _ => $"Button {controlId}",
+        };
+    }
 }
 
 /// <summary>What a mapping drives. The first three mirror <see cref="AutomationTarget"/>;
@@ -126,15 +152,20 @@ public sealed class MidiMapping
     public string DisplayName { get; set; } = "";
     public MidiSourceKind SourceKind { get; init; }
     public int Channel { get; init; }         // 0..15 (unused, and always 0, for Gamepad)
-    public int Number { get; init; }          // CC number, note pitch, or gamepad button id
+    public int Number { get; init; }          // CC number, note pitch, or GamepadControls id
     public double RangeMin { get; set; }       // normalized output floor
     public double RangeMax { get; set; } = 1;  // normalized output ceiling
     public bool Invert { get; set; }
 
+    /// <summary>Last on/off state applied to a button target, so only the crossing fires.
+    /// Runtime state, not part of the mapping — a swept CC or a squeezed trigger sends a
+    /// run of values past the threshold, and every one of them used to toggle.</summary>
+    internal bool TriggerLatch { get; set; }
+
     public string SourceLabel => SourceKind switch
     {
         MidiSourceKind.Cc => $"CC {Number} · ch{Channel + 1}",
-        MidiSourceKind.Gamepad => $"Pad · {GamepadButtons.Name(Number)}",
+        MidiSourceKind.Gamepad => $"Pad · {GamepadControls.Name(Number)}",
         _ => $"Note {Number} · ch{Channel + 1}",
     };
 }

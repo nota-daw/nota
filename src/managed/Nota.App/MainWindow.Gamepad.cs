@@ -9,13 +9,15 @@ using Nota.Infrastructure;
 
 namespace Nota.App;
 
-/// <summary>Gamepad input: polls the queued button edges every UI tick (hooked off
-/// <see cref="MainWindowViewModel.PlayheadUpdated"/>) and gives each one to MIDI
-/// Learn first. A button the user has mapped drives that control; everything else
-/// falls through to the built-in layout, turning a press into
-/// <c>Engine.NoteOn</c>/<c>NoteOff</c> — the exact same entry points as the computer
-/// keyboard, so armed-track recording, the piano-roll key highlight, and the engine's
-/// velocity handling all apply without a parallel path. Wired in MainWindow.</summary>
+/// <summary>Gamepad input, on the UI tick (hooked off
+/// <see cref="MainWindowViewModel.PlayheadUpdated"/>). Two shapes, one destination:
+/// button edges are drained from the engine's queue, and stick/trigger positions are
+/// sampled from its latest-value table. Both go to MIDI Learn first. A control the user
+/// has mapped drives that control; every unmapped button falls through to the built-in
+/// layout, turning a press into <c>Engine.NoteOn</c>/<c>NoteOff</c> — the exact same
+/// entry points as the computer keyboard, so armed-track recording, the piano-roll key
+/// highlight, and the engine's velocity handling all apply without a parallel path.
+/// Axes have no built-in behaviour: unmapped, they do nothing. Wired in MainWindow.</summary>
 public partial class MainWindow
 {
     // Base pitches (same shape as the computer keyboard's A-row = C4 major scale).
@@ -26,6 +28,8 @@ public partial class MainWindow
 
     private readonly Dictionary<(int pad, int button), int> _gamepadHeldPitch = new();
     private readonly GamepadButtonEvent[] _gamepadEventBuf = new GamepadButtonEvent[32]; // UI-tick batch
+    private readonly int[] _gamepadAxisBuf = new int[(int)GamepadAxis.Count];
+    private readonly Dictionary<(int pad, int axis), int> _gamepadAxisLast = new();      // last value dispatched
     private IGamepadService? _gamepads;
     private int _gamepadOctave;          // semitone shift = *12, mirrored into Settings
     private int _gamepadPadCount;        // last seen pad count — fires PadsChanged on diff
@@ -57,7 +61,9 @@ public partial class MainWindow
             // pending note-off would arrive under a different pad index and never
             // match its held entry — release everything to avoid a hung note. A pad
             // joining only appends, so held notes stay valid and keep ringing.
-            if (count < _gamepadPadCount) ReleaseAllGamepadNotes();
+            // …and the same reshuffle would leave the axis cache pointing at the wrong
+            // pad, so drop it and let the axes re-seed from their new slots.
+            if (count < _gamepadPadCount) { ReleaseAllGamepadNotes(); _gamepadAxisLast.Clear(); }
             _gamepadPadCount = count;
             (_gamepads as Infrastructure.GamepadService)?.RaisePadsChanged();
         }
@@ -67,6 +73,42 @@ public partial class MainWindow
         int n = Engine.PollGamepadEvents(_gamepadEventBuf);
         for (int i = 0; i < n; i++)
             HandleGamepadEdge(_gamepadEventBuf[i]);
+
+        PollGamepadAxes(count);
+    }
+
+    // Sticks and triggers are sampled, not queued: the engine keeps their latest position
+    // and we read it here, so a stick sweep costs one dispatch per tick instead of a
+    // hundred queued events. Only a value that actually moved is forwarded, which also
+    // keeps a resting pad silent.
+    private void PollGamepadAxes(int padCount)
+    {
+        if (_learn is null) return;
+        for (int pad = 0; pad < padCount; pad++)
+        {
+            int n = Engine.GamepadAxisValues(pad, _gamepadAxisBuf);
+            for (int a = 0; a < n; a++)
+            {
+                int value = _gamepadAxisBuf[a];
+                var key = (pad, a);
+                // First sight of an axis seeds the last value without dispatching, so a
+                // pad that connects with a trigger already held does not fire on arrival.
+                if (!_gamepadAxisLast.TryGetValue(key, out int prev)) { _gamepadAxisLast[key] = value; continue; }
+                if (value == prev) continue;
+                _gamepadAxisLast[key] = value;
+
+                int id = GamepadControls.AxisId((GamepadAxis)a);
+                bool consumed = _learn.HandleGamepadAxis(id, value);
+                // Flash the Preferences readout as the control leaves rest, not on every
+                // sample — a swept stick would otherwise rewrite the label 30 times a second.
+                if (prev == GamepadControls.Rest(id) && consumed)
+                {
+                    var mapped = _learn.GamepadMappingFor(id);
+                    (_gamepads as Infrastructure.GamepadService)?.RaiseActivity(
+                        pad, mapped is null ? GamepadControls.Name(id) : $"→ {mapped.DisplayName}");
+                }
+            }
+        }
     }
 
     private void HandleGamepadEdge(GamepadButtonEvent ev)
@@ -92,7 +134,7 @@ public partial class MainWindow
         {
             var mapped = _learn.GamepadMappingFor(ev.ButtonId);
             (_gamepads as Infrastructure.GamepadService)?.RaiseActivity(
-                ev.Pad, mapped is null ? GamepadButtons.Name(ev.ButtonId) : $"→ {mapped.DisplayName}");
+                ev.Pad, mapped is null ? GamepadControls.Name(ev.ButtonId) : $"→ {mapped.DisplayName}");
             return;
         }
 
@@ -111,7 +153,7 @@ public partial class MainWindow
                 // layout. Buttons beyond that are shown but play nothing (options/
                 // share/system buttons).
                 int idx = ev.ButtonId - 1;
-                if (idx < 0 || idx >= GamepadPitchByButton.Length) { label = GamepadButtons.Name(ev.ButtonId); break; }
+                if (idx < 0 || idx >= GamepadPitchByButton.Length) { label = GamepadControls.Name(ev.ButtonId); break; }
                 if (_gamepadHeldPitch.ContainsKey(key)) return; // auto-repeat guard
 
                 int note = Math.Clamp(GamepadPitchByButton[idx] + _gamepadOctave * 12, 0, 127);

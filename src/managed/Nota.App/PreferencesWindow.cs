@@ -371,7 +371,7 @@ public sealed class PreferencesWindow : NotaWindow
         body.Children.Add(DividerLine());
         body.Children.Add(SectionLabel("LAYOUT"));
         body.Children.Add(Caption("Face buttons play C4 D4 E4 F4 · shoulder buttons play G4 A4 B4 C5 · d-pad up/down shifts the octave · d-pad left/right nudges velocity. Notes go to the armed (record-enabled) instrument track — enable Record to capture them, or use the audition track to just play."));
-        body.Children.Add(Caption("Any button can be mapped to a control instead: click MIDI in the top-right, click the control, then press the button. A mapped button drives that control and stops playing its note; the rest of the pad keeps the layout above. Mappings are listed in the browser's MIDI Map tab and travel with the project."));
+        body.Children.Add(Caption("Any button can be mapped to a control instead: click MIDI in the top-right, click the control, then press the button. A mapped button drives that control and stops playing its note; the rest of the pad keeps the layout above. The sticks and the trigger travel map the same way and are continuous, so they suit a knob or a fader — they play no notes, and do nothing until mapped. Mappings are listed in the browser's MIDI Map tab and travel with the project."));
         return body;
     }
 
@@ -609,6 +609,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("D-pad ↑ / ↓", "Shift the gamepad octave"),
             ("D-pad ← / →", "Lower / raise velocity"),
             ("Any button", "Mappable through MIDI Learn — a mapped button drives the control instead"),
+            ("Sticks · triggers", "Mappable as continuous controls (a knob, a fader); they play no notes"),
         }),
         ("MOUSE", new[]
         {

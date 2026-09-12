@@ -85,11 +85,11 @@ public sealed class MidiLearnService
     /// <summary>The mapping bound to <paramref name="target"/>, if any (for the "mapped" badge).</summary>
     public MidiMapping? MappingFor(MidiTarget target) => _mappings.FirstOrDefault(m => m.Target.Equals(target));
 
-    /// <summary>The mapping a gamepad button drives, if any. Matched on the button alone,
+    /// <summary>The mapping a gamepad control drives, if any. Matched on the control alone,
     /// not on which pad sent it: pad slots reshuffle when a controller is unplugged, so
     /// binding to a slot would silently break the mapping on the next replug.</summary>
-    public MidiMapping? GamepadMappingFor(int buttonId)
-        => _mappings.FirstOrDefault(m => m.SourceKind == MidiSourceKind.Gamepad && m.Number == buttonId);
+    public MidiMapping? GamepadMappingFor(int controlId)
+        => _mappings.FirstOrDefault(m => m.SourceKind == MidiSourceKind.Gamepad && m.Number == controlId);
 
     /// <summary>Feed a gamepad button edge through the learn/dispatch machine. Returns
     /// true when the edge was consumed — it bound the pending control, or it drove a
@@ -100,7 +100,7 @@ public sealed class MidiLearnService
         if (pressed && _pending is { } p)
         {
             Bind(p, MidiSourceKind.Gamepad, 0, buttonId);
-            LogMidi($"MIDI learn: gamepad {GamepadButtons.Name(buttonId)} → bound to '{p.Name}'");
+            LogMidi($"MIDI learn: gamepad {GamepadControls.Name(buttonId)} → bound to '{p.Name}'");
             _padBoundOnPress = buttonId;
             return true;
         }
@@ -115,6 +115,25 @@ public sealed class MidiLearnService
         // toggle target that fires once, on the press; on a continuous one it is a
         // hold-to-open, which is the same thing a mapped MIDI note already does.
         return Dispatch(MidiSourceKind.Gamepad, 0, buttonId, pressed ? 127 : 0) > 0;
+    }
+
+    // How far a stick or trigger must leave its rest position to count as a deliberate
+    // move rather than a spring settling back. Only gates *learning*: once bound, the
+    // whole travel drives the target.
+    private const int AxisLearnThreshold = 24;
+
+    /// <summary>Feed a gamepad stick or trigger position (0..127) through the same machine.
+    /// Sampled on the UI tick, so call it only when the value actually moved. Returns true
+    /// when it bound the pending control or drove a mapping.</summary>
+    public bool HandleGamepadAxis(int axisId, int value127)
+    {
+        if (_pending is { } p && Math.Abs(value127 - GamepadControls.Rest(axisId)) >= AxisLearnThreshold)
+        {
+            Bind(p, MidiSourceKind.Gamepad, 0, axisId);
+            LogMidi($"MIDI learn: gamepad {GamepadControls.Name(axisId)} → bound to '{p.Name}'");
+            return true;
+        }
+        return Dispatch(MidiSourceKind.Gamepad, 0, axisId, value127) > 0;
     }
 
     public void RemoveMapping(MidiMapping m)
@@ -229,9 +248,14 @@ public sealed class MidiLearnService
         var t = m.Target;
         if (t.IsButton)
         {
-            // Trigger on a note-on or a CC crossing the half-way point.
-            bool trigger = m.SourceKind == MidiSourceKind.Note ? value127 > 0 : value127 >= 64;
-            if (!m.Invert ? trigger : !trigger) Trigger(t);
+            // A note-on, or anything else crossing the half-way point. Latch on the edge:
+            // a swept CC or a squeezed trigger sends a run of values past the threshold,
+            // and toggling on each one would make the target flutter.
+            bool on = m.SourceKind == MidiSourceKind.Note ? value127 > 0 : value127 >= 64;
+            if (m.Invert) on = !on;
+            if (on == m.TriggerLatch) return;
+            m.TriggerLatch = on;
+            if (on) Trigger(t);
             return;
         }
 

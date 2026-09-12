@@ -1223,10 +1223,11 @@ NOTA_API int32_t     nota_midi_poll_control_events(NotaEngine* engine, int32_t* 
  * drained into `out` with nota_gamepad_poll_events(). The UI then maps each
  * edge to nota_engine_note_on / nota_engine_note_off — the same entry points
  * the computer keyboard uses, so live play, armed-track recording and the
- * piano-roll key highlight all reuse the existing pipeline. Only buttons are
- * reported (d-pad hats resolve to U/D/L/R buttons); sticks/triggers are not
- * note input and are ignored in v1. Currently macOS only; other platforms
- * report zero pads. */
+ * piano-roll key highlight all reuse the existing pipeline. Buttons are edges
+ * (d-pad hats resolve to U/D/L/R buttons); sticks and trigger travel are
+ * continuous and are read as latest values instead, with
+ * nota_gamepad_axis_values(). Currently macOS only; other platforms report
+ * zero pads. */
 
 /* One button edge: pressed = 1 down / 0 up. buttonId identifies the control
  * (1..N = HID button usage; DpadUp/Down/Left/Right = -1000..-1003).
@@ -1258,6 +1259,27 @@ NOTA_API const char* nota_gamepad_name(NotaEngine* engine, int32_t index);
 /* Drain queued button edges into `out` (array of NotaGamepadButtonEvent).
  * Returns the count written (<= max). Call from a UI-thread tick. */
 NOTA_API int32_t     nota_gamepad_poll_events(NotaEngine* engine, NotaGamepadButtonEvent* out, int32_t max);
+
+/* The pad's continuous controls, in this order. A stick axis is bipolar and
+ * rests centred; trigger travel is unipolar and rests at zero. The triggers
+ * also fire button edges (L2/R2) — the edge is for note play, the travel for a
+ * mapped parameter. */
+typedef enum NotaGamepadAxis {
+    NOTA_GAMEPAD_AXIS_LEFT_X = 0,
+    NOTA_GAMEPAD_AXIS_LEFT_Y,
+    NOTA_GAMEPAD_AXIS_RIGHT_X,
+    NOTA_GAMEPAD_AXIS_RIGHT_Y,
+    NOTA_GAMEPAD_AXIS_LEFT_TRIGGER,
+    NOTA_GAMEPAD_AXIS_RIGHT_TRIGGER,
+    NOTA_GAMEPAD_AXIS_COUNT
+} NotaGamepadAxis;
+
+/* Latest position of every axis on pad `pad`, written to `out` in
+ * NotaGamepadAxis order as 0..127 (sticks centre at 64, triggers rest at 0).
+ * Returns the count written, 0 for an out-of-range pad. Unlike button edges
+ * these are not queued: a stick would flood a ring and only the latest position
+ * matters, so the UI samples this on its own tick. */
+NOTA_API int32_t     nota_gamepad_axis_values(NotaEngine* engine, int32_t pad, int32_t* out, int32_t max);
 
 
 #ifdef __cplusplus

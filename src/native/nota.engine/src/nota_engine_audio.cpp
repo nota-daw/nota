@@ -161,4 +161,9 @@ int32_t nota_gamepad_poll_events(NotaEngine* e, NotaGamepadButtonEvent* out, int
         reinterpret_cast<nota::GamepadInput::ButtonEvent*>(out), max);
 }
 
+int32_t nota_gamepad_axis_values(NotaEngine* e, int32_t pad, int32_t* out, int32_t max) {
+    if (!e || !out || max <= 0) return 0;
+    return ENG(e)->gamepadAxisValues(pad, out, max);
+}
+
 } // extern "C"

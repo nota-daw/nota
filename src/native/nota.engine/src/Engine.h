@@ -102,6 +102,7 @@ public:
     int32_t            gamepadCount() const;
     void               gamepadInfo(int32_t i, const char** outUid, const char** outName) const;
     int32_t            pollGamepadEvents(GamepadInput::ButtonEvent* out, int32_t max);
+    int32_t            gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const;
 
     // --- audio preview / audition (M7-4a) ---
     // Decode a file and mix it into the live output without a track, so the

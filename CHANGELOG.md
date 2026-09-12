@@ -19,13 +19,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
-- **Gamepad buttons can be mapped like a MIDI controller** (macOS). Arm MIDI Learn, click
-  a control, press a button — that button now drives the control and stops playing its
-  note, while every unmapped button keeps the built-in layout, so one pad both plays and
-  mixes. Nothing is reserved: mapping the d-pad takes it over from octave/velocity.
-  Gamepad sources share the mapping table with CCs and notes, show up in the browser's
-  MIDI Map tab, and travel with the project. Mappings match on the button rather than the
-  pad slot, so unplugging and reconnecting a controller does not break them.
+- **A gamepad can be mapped like a MIDI controller** (macOS). Arm MIDI Learn, click a
+  control, then press a button or move a stick — that control is now driven by the pad.
+  A mapped button stops playing its note while every unmapped one keeps the built-in
+  layout, so one pad both plays and mixes; nothing is reserved, and mapping the d-pad
+  takes it over from octave/velocity.
+  - **Sticks and triggers** come along as continuous sources — both axes of each stick and
+    the two trigger travels — so a pad can sweep a filter or ride a fader, not just switch
+    things. They play no notes and do nothing until mapped. Sticks rest centred behind a
+    deadzone so a worn one does not drift a mapped parameter; triggers rest at zero.
+  - Gamepad sources share the mapping table with CCs and notes, appear in the browser's
+    MIDI Map tab, and travel with the project. Mappings match on the control rather than
+    the pad slot, so unplugging and reconnecting a controller does not break them.
 - **Light theme.** *Ember Paper* joins *Ember Graphite*: the same design system on a warm
   paper ground, with brass darkened to bronze so marks keep their weight against a light
   background. Preferences → Appearance picks Ember Graphite, Ember Paper or System (which
@@ -41,6 +46,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at the point of use.
 - `WaveformView` was still painted in the pre-Ember cool-slate palette; it now uses the
   tokens its own comments named.
+
+### Fixed
+- A MIDI mapping onto a switch (mute, solo, a transport button) fired on every incoming
+  message past the half-way point, so sweeping a mapped CC across it made the target
+  flutter instead of toggling once. It now fires on the crossing only — which is also what
+  makes a mapped gamepad trigger usable.
 
 ## [0.38.0] — 2026-09-12
 

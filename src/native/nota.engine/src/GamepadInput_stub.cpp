@@ -23,5 +23,6 @@ void GamepadInput::padInfo(int32_t, const char** outUid, const char** outName) c
     *outName = "";
 }
 int32_t GamepadInput::pollEvents(ButtonEvent*, int32_t) { return 0; }
+int32_t GamepadInput::axisValues(int32_t, int32_t*, int32_t) const { return 0; }
 
 } // namespace nota

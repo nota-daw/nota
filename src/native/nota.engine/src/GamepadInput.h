@@ -15,8 +15,13 @@
 // GCController decodes the report properly and is silent when idle.
 //
 // The face buttons (A/B/X/Y) map to logical buttons 1..4, the shoulders and
-// triggers (L1/R1/L2/R2) to 5..8, and the d-pad to U/D/L/R events; sticks are
-// ignored (this is note input, not CC). A pad is identified by a session uid.
+// triggers (L1/R1/L2/R2) to 5..8, and the d-pad to U/D/L/R events. A pad is
+// identified by a session uid.
+//
+// Sticks and trigger travel are continuous, so they are NOT queued as events:
+// a stick would flood the ring in a few frames and the UI only ever wants the
+// latest position anyway. They live in a small latest-value table the UI reads
+// on its tick (axisValues), which coalesces by construction and cannot overflow.
 //
 // v1 is macOS-only; Win (XInput/RawInput) and Linux (evdev) come next.
 
@@ -54,6 +59,11 @@ public:
     // drop on overflow — losing a few edges on a saturated tick is fine.
     int32_t pollEvents(ButtonEvent* out, int32_t max);
 
+    // Latest position of every axis on pad `i`, written in GamepadAxis order as
+    // 0..127: sticks rest at 64, trigger travel rests at 0. Returns the count
+    // written (0 if the pad index is out of range).
+    int32_t axisValues(int32_t i, int32_t* out, int32_t max) const;
+
     struct Impl;
 private:
     Impl* impl_ = nullptr;
@@ -68,6 +78,15 @@ namespace GamepadButton {
     inline constexpr int32_t DpadLeft  = -1002;
     inline constexpr int32_t DpadRight = -1003;
     inline constexpr bool    isDpad(int32_t id) { return id >= DpadRight && id <= DpadUp; }
+}
+
+// The continuous controls, in the order axisValues() writes them. Triggers are
+// reported twice on purpose: as a button edge (L2/R2, for note play) and as
+// travel (for a mapped parameter), because those are two different questions.
+namespace GamepadAxis {
+    inline constexpr int32_t LeftX = 0, LeftY = 1, RightX = 2, RightY = 3;
+    inline constexpr int32_t LeftTrigger = 4, RightTrigger = 5;
+    inline constexpr int32_t Count = 6;
 }
 
 } // namespace nota

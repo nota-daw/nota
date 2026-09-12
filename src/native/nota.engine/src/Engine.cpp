@@ -120,6 +120,9 @@ void  Engine::gamepadInfo(int32_t i, const char** uid, const char** name) const 
 int32_t Engine::pollGamepadEvents(GamepadInput::ButtonEvent* out, int32_t max) {
     return (gamepadInput_ && out && max > 0) ? gamepadInput_->pollEvents(out, max) : 0;
 }
+int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const {
+    return (gamepadInput_ && out && max > 0) ? gamepadInput_->axisValues(pad, out, max) : 0;
+}
 
 void Engine::stop() {
     if (midiInput_) midiInput_->close();

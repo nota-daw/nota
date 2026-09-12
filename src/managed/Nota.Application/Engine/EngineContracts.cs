@@ -171,6 +171,17 @@ public enum GamepadButton
     DpadRight = -1003,
 }
 
+/// <summary>The pad's continuous controls, in the order
+/// <see cref="IAudioEngine.GamepadAxisValues"/> writes them. Values are 0..127: a stick
+/// axis is bipolar and rests at 64, trigger travel is unipolar and rests at 0. The
+/// triggers also fire L2/R2 button edges — the edge plays a note, the travel drives a
+/// mapped parameter.</summary>
+public enum GamepadAxis
+{
+    LeftX = 0, LeftY = 1, RightX = 2, RightY = 3, LeftTrigger = 4, RightTrigger = 5,
+    Count = 6,
+}
+
 /// <summary>An Instrument Rack macro mapping: macro <paramref name="Macro"/> drives the target
 /// param over [<paramref name="RangeMin"/>, <paramref name="RangeMax"/>] in the target's own units.
 /// <paramref name="DeviceIndex"/> &lt; 0 targets the chain's instrument (plugin-param index);

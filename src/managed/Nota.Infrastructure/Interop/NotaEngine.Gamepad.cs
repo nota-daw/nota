@@ -43,4 +43,14 @@ public sealed partial class NotaEngine
         if (buffer is null || buffer.Length < 1) return 0;
         return NativeMethods.GamepadPollEvents(_handle, buffer, buffer.Length);
     }
+
+    /// <summary>Latest position of each axis on <paramref name="pad"/>, 0..127 in
+    /// <see cref="GamepadAxis"/> order (sticks centre at 64, triggers rest at 0). Sampled
+    /// on the UI tick rather than queued — see nota_gamepad_axis_values.</summary>
+    public int GamepadAxisValues(int pad, int[] buffer)
+    {
+        ThrowIfDisposed();
+        if (buffer is null || buffer.Length < 1) return 0;
+        return NativeMethods.GamepadAxisValues(_handle, pad, buffer, buffer.Length);
+    }
 }

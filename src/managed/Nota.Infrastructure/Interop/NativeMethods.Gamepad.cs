@@ -27,4 +27,7 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_gamepad_poll_events")]
     internal static partial int GamepadPollEvents(IntPtr engine, [Out] GamepadButtonEvent[] buf, int max);
+
+    [LibraryImport(Lib, EntryPoint = "nota_gamepad_axis_values")]
+    internal static partial int GamepadAxisValues(IntPtr engine, int pad, [Out] int[] buf, int max);
 }
