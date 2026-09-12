@@ -144,6 +144,17 @@ public partial class MainWindow : Window
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
+        // Arrangement context menus add tracks through the toolbar's own handlers, so the two
+        // routes seed, refresh and report identically.
+        Timeline.AddTrackRequested += kind =>
+        {
+            switch (kind)
+            {
+                case NewTrackKind.Instrument: OnAddInstrumentClicked(this, new RoutedEventArgs()); break;
+                case NewTrackKind.Audio:      OnAddAudioClicked(this, new RoutedEventArgs()); break;
+                case NewTrackKind.Return:     OnAddReturnClicked(this, new RoutedEventArgs()); break;
+            }
+        };
 
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);

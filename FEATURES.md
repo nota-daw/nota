@@ -90,6 +90,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
   ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+- **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
+  arrangement, or the context menu — right-click the empty space below the tracks, or use
+  `Add track ▸` in a track's own menu.
 - **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
   Double-click resets to the default.
 - **Reordering** by dragging the name row (with an accent insertion line); returns stay

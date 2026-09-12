@@ -21,6 +21,9 @@ namespace Nota.App;
 /// <summary>Audio-clip → MIDI conversion modes (arrangement clip context menu).</summary>
 public enum ClipConvertMode { Drums, Slice, Melody, Harmony }
 
+/// <summary>Which kind of track an arrangement context menu asked for.</summary>
+public enum NewTrackKind { Instrument, Audio, Return }
+
 public sealed partial class ArrangementView : UserControl
 {
     // --- coordinate model / shared state ---
@@ -123,6 +126,10 @@ public sealed partial class ArrangementView : UserControl
     public event Action<BrowserItem, int, double>? ItemDropped;
     /// <summary>Audio-clip context-menu "Convert / Slice to New MIDI Track" (track id, clip index, mode).</summary>
     public event Action<int, int, ClipConvertMode>? ConvertClipRequested;
+    /// <summary>A context menu asked for a new track. MainWindow owns creation — the seed
+    /// MIDI clip, the session / modular / device-chain refreshes and the status line — so the
+    /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.</summary>
+    public event Action<NewTrackKind>? AddTrackRequested;
     /// <summary>Raised after a clip's start/length changed in place (edge-drag trim or
     /// stretch): track id, clip index. An open clip editor re-reads its geometry from this.</summary>
     public event Action<int, int>? ClipGeometryChanged;
@@ -1457,11 +1464,30 @@ public sealed partial class ArrangementView : UserControl
     private static readonly string[] TrackColorNames = { "Rust", "Amber", "Olive", "Sage", "Teal", "Slate", "Mauve", "Rose" };
     private static readonly string[] ShadeNames = { "", " (light)", " (dark)" };
 
-    // Right-click on the empty space below the tracks: paste a copied track.
+    // "Add …" entries shared by the arrangement's track-level menus. Return is left enabled
+    // when the buses are full, like the toolbar's + Return — MainWindow says so in the status
+    // line rather than the menu going quietly dead.
+    private IEnumerable<MenuItem> AddTrackItems()
+    {
+        MenuItem Item(string header, NewTrackKind kind)
+        {
+            var mi = new MenuItem { Header = header };
+            mi.Click += (_, _) => AddTrackRequested?.Invoke(kind);
+            return mi;
+        }
+        yield return Item("Add instrument track", NewTrackKind.Instrument);
+        yield return Item("Add audio track", NewTrackKind.Audio);
+        yield return Item("Add return track", NewTrackKind.Return);
+    }
+
+    // Right-click on the empty space below the tracks: add a track (the main thing to do
+    // down there) or paste a copied one.
     private void ShowEmptyAreaMenu(Control anchor)
     {
         if (_engine is null) return;
         var flyout = new MenuFlyout();
+        foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
+        flyout.Items.Add(new Separator());
         var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard() };
         paste.Click += (_, _) =>
         {
@@ -1593,7 +1619,11 @@ public sealed partial class ArrangementView : UserControl
         flyout.Items.Add(new Separator());
         flyout.Items.Add(group);
         if (ungroup is not null) flyout.Items.Add(ungroup);
+        var addTrack = new MenuItem { Header = "Add track" };   // submenu: this menu is long already
+        foreach (var mi in AddTrackItems()) addTrack.Items.Add(mi);
+
         flyout.Items.Add(new Separator());
+        flyout.Items.Add(addTrack);
         flyout.Items.Add(copy);
         flyout.Items.Add(cut);
         flyout.Items.Add(paste);

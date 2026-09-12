@@ -19,6 +19,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Add a track from the arrangement's context menus.** Right-clicking the empty space
+  below the tracks now offers `Add instrument track` / `Add audio track` / `Add return
+  track` above `Paste track`, and a track's own menu carries the same three under
+  `Add track ▸`. They route through the toolbar's handlers, so a track made this way is
+  seeded and reported exactly like one made with the `+` buttons.
 - **Reverse for audio clips.** A `Reverse` item in a clip's context menu and a DIRECTION
   toggle in the clip editor play a clip backwards. It is non-destructive — the file and
   any warp cache stay in playing order and only the read direction flips — so toggling is
