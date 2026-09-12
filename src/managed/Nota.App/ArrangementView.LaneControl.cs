@@ -97,8 +97,8 @@ public sealed partial class ArrangementView
         private double _rangeAnchor;
         public bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
         private static double RowTop(int i) => i * ArrangementView.RowHeight;
-        // Target-selector pill: width fits its label so nothing clips; REC button sits after it.
-        private const double PillH = 16, RecW = 40, GapW = 5;
+        // Target-selector pill: width fits its label so nothing clips.
+        private const double PillH = 16;
         private static double PillWidth(string label)
         {
             var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
@@ -106,7 +106,6 @@ public sealed partial class ArrangementView
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
         private static Rect PillRect(int i, double w) => new(4, RowTop(i) + 3, w, PillH);
-        private static Rect RecRect(int i, double pillW) => new(4 + pillW + GapW, RowTop(i) + 3, RecW, PillH);   // write-arm (M9-C)
         private double ValueToY(TrackVM t, int row, float v)
         {
             var (min, max) = _o.AutoRange(t);
@@ -554,7 +553,6 @@ public sealed partial class ArrangementView
 
             double pillW = PillWidth(t.AutoLabel);
             if (PillRect(i, pillW).Contains(pos)) { _o.ShowAutoTargetMenu(this, t); return; }
-            if (RecRect(i, pillW).Contains(pos)) { _o.ToggleAutoArm(t); return; }   // write-arm (M9-C)
 
             double curBeat = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
 
@@ -1479,16 +1477,6 @@ public sealed partial class ArrangementView
                     FlowDirection.LeftToRight, Typeface.Default, 9, content);
                 using (ctx.PushClip(pill))
                     ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));
-
-                // Write-arm button (M9-C): a record-style pill — red dot + "REC", lit when armed.
-                var rec = RecRect(i, pillW);
-                bool armed = _o.AutoArmed(t);
-                ctx.DrawRectangle(armed ? RecBgOn : RecBgOff, AutoArmOff, rec, 3, 3);
-                var dotC = new Point(rec.X + 9, rec.Y + rec.Height / 2);
-                ctx.DrawEllipse(armed ? AutoArmOn : RecDotOff, null, dotC, 3.5, 3.5);
-                var rt = new FormattedText("REC", CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, Typeface.Default, 8, armed ? AutoArmOn : RecTextOff);
-                ctx.DrawText(rt, new Point(dotC.X + 6, rec.Y + (PillH - rt.Height) / 2));
             }
         }
     }

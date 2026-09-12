@@ -98,7 +98,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         void End(string id) => engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id);
         List<ConsortCable>? cableCache = null;   // one read of the 36 cable params per tick / edit
         void Raw(string id, float v) { if (I(id) is var i and >= 0) { engine.PluginParamSet(track, -1, i, Math.Clamp(v, 0f, 1f)); cableCache = null; } }
-        // A discrete edit (click) is one automation gesture, so Touch/Latch/Write record it.
+        // A discrete edit (click) is one automation gesture, so it records while the transport does.
         void SetP(string id, float v) { if (I(id) < 0) return; Begin(id); Raw(id, v); End(id); }
 
         var common = new List<Action>();

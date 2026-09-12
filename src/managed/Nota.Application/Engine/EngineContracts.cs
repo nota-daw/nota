@@ -117,9 +117,6 @@ public struct NotaMeter
 /// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.</summary>
 public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4 }
 
-/// <summary>Automation record mode (M9-C). Read = play back only; Touch/Latch record
-/// while a control is touched; Write records armed targets from playback.</summary>
-public enum AutomationWriteMode { Read = 0, Touch = 1, Latch = 2, Write = 3 }
 
 /// <summary>MIDI clip envelope target (M9 follow-up). Velocity scales note velocities;
 /// Volume scales the instrument output during the clip.</summary>

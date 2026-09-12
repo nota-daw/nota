@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // C ABI — parameter automation (M9): lane CRUD & points (read, A-phases),
-// plugin-parameter lanes (B-phases), and write recording Touch/Latch/Write
+// plugin-parameter lanes (B-phases), and contextual write recording
 // (C-phases), plus the automation self-tests.
 
 #include "nota_engine_internal.h"
@@ -88,27 +88,26 @@ const char* nota_track_automation_lane_param_id(const NotaEngine* e, int32_t tra
 int32_t nota_engine_automation_write_selftest(NotaEngine* e) {
     return (e && ENG(e)->automationWriteSelfTest()) ? 1 : 0;
 }
-void nota_engine_set_automation_write_mode(NotaEngine* e, int32_t mode) {
-    if (e) ENG(e)->setAutomationWriteMode(mode);
+void nota_engine_set_automation_record(NotaEngine* e, int32_t on) {
+    if (e) ENG(e)->setAutomationRecord(on != 0);
 }
-int32_t nota_engine_automation_write_mode(const NotaEngine* e) {
-    return e ? CENG(e)->automationWriteMode() : 0;
+int32_t nota_engine_automation_record(const NotaEngine* e) {
+    return (e && CENG(e)->automationRecord()) ? 1 : 0;
 }
 void nota_track_begin_automation_write(NotaEngine* e, int32_t track_id,
-        int32_t target, int32_t device_index, int32_t param_index, const char* param_id) {
-    if (e) ENG(e)->beginAutomationWrite(track_id, target, device_index, param_index, param_id);
+        int32_t target, int32_t device_index, int32_t param_index, const char* param_id,
+        int32_t latch) {
+    if (e) ENG(e)->beginAutomationWrite(track_id, target, device_index, param_index, param_id, latch != 0);
 }
 void nota_track_end_automation_write(NotaEngine* e, int32_t track_id,
         int32_t target, int32_t device_index, int32_t param_index, const char* param_id) {
     if (e) ENG(e)->endAutomationWrite(track_id, target, device_index, param_index, param_id);
 }
-void nota_track_set_automation_arm(NotaEngine* e, int32_t track_id,
-        int32_t target, int32_t device_index, int32_t param_index, const char* param_id, int32_t armed) {
-    if (e) ENG(e)->setAutomationArm(track_id, target, device_index, param_index, param_id, armed != 0);
+void nota_engine_reenable_automation(NotaEngine* e) {
+    if (e) ENG(e)->reenableAutomation();
 }
-int32_t nota_track_automation_armed(const NotaEngine* e, int32_t track_id,
-        int32_t target, int32_t device_index, int32_t param_index, const char* param_id) {
-    return (e && CENG(e)->automationArmed(track_id, target, device_index, param_index, param_id)) ? 1 : 0;
+int32_t nota_engine_automation_overridden(const NotaEngine* e) {
+    return (e && CENG(e)->automationOverridden()) ? 1 : 0;
 }
 
 } // extern "C"

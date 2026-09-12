@@ -72,7 +72,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         int I(string id) => idx.TryGetValue(id, out var i) ? i : -1;
         bool On(string id) => G(id) > 0.5f;
         int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
-        // A discrete edit (click) is one automation gesture, so Touch/Latch/Write record it.
+        // A discrete edit (click) is one automation gesture, so it records while the transport does.
         void SetP(string id, float v)
         {
             if (I(id) is not (var i and >= 0)) return;

@@ -186,8 +186,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   they sort to the top of the list).
 - **Selection and paste**: shift-select a range, Cmd/Ctrl+D to duplicate, and paste that
   does not leave redundant points behind.
-- **Recording** automation (arm), and reading it during playback and scrubbing (volume and
-  pan controls follow the automation).
+- **Recording** automation: there are no record modes — lanes always play back, and with
+  the transport **Record** button engaged, moving a control writes that parameter's lane.
+  A mouse gesture stops writing on release; a hardware control (MIDI knob, fader, gamepad
+  stick or trigger) latches and keeps writing until the transport stops.
+- **Overriding** — touch an automated parameter while not recording and the lane hands
+  control to you; the toolbar's **Re-enable Automation** button gives it back.
+- **Reading** during playback and scrubbing (volume and pan controls follow the automation).
 - **MIDI Learn** — the MIDI button in the top right enters learn mode: mappable controls
   light up, and a click plus a move on the controller creates the binding. Mappable
   targets cover every built-in instrument, effect and MIDI FX parameter (switches, ADSR

@@ -30,23 +30,23 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_automation_write_selftest")]
     internal static partial int AutomationWriteSelfTest(IntPtr engine);
 
-    [LibraryImport(Lib, EntryPoint = "nota_engine_set_automation_write_mode")]
-    internal static partial void SetAutomationWriteMode(IntPtr engine, int mode);
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_automation_record")]
+    internal static partial void SetAutomationRecord(IntPtr engine, int on);
 
-    [LibraryImport(Lib, EntryPoint = "nota_engine_automation_write_mode")]
-    internal static partial int AutomationWriteMode(IntPtr engine);
+    [LibraryImport(Lib, EntryPoint = "nota_engine_automation_record")]
+    internal static partial int AutomationRecord(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_begin_automation_write", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void BeginAutomationWrite(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex, string paramId);
+    internal static partial void BeginAutomationWrite(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex, string paramId, int latch);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_end_automation_write", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void EndAutomationWrite(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex, string paramId);
 
-    [LibraryImport(Lib, EntryPoint = "nota_track_set_automation_arm", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void SetAutomationArm(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex, string paramId, int armed);
+    [LibraryImport(Lib, EntryPoint = "nota_engine_reenable_automation")]
+    internal static partial void ReenableAutomation(IntPtr engine);
 
-    [LibraryImport(Lib, EntryPoint = "nota_track_automation_armed", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int AutomationArmed(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex, string paramId);
+    [LibraryImport(Lib, EntryPoint = "nota_engine_automation_overridden")]
+    internal static partial int AutomationOverridden(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_add_automation_lane")]
     internal static partial int AddAutomationLane(IntPtr engine, int trackId, int target, int deviceIndex, int paramIndex);

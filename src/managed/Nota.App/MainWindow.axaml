@@ -245,16 +245,12 @@
             <ToggleButton x:Name="AutomationToggle" Classes="seg" Content="Automation"
                           Click="OnToggleAutomation" ToolTip.Tip="Show parameter-automation lanes"/>
           </Border>
-          <!-- Automation record mode (M9-C): Read / Touch / Latch / Write.
-               Only shown while automation editing is active. -->
-          <Border x:Name="AutoModeBar" Classes="segmented" IsVisible="False" ToolTip.Tip="Automation record mode">
-            <StackPanel Orientation="Horizontal" Spacing="2">
-              <ToggleButton x:Name="AutoModeRead" Classes="seg" Content="Read" IsChecked="True" Click="OnAutoModeRead"/>
-              <ToggleButton x:Name="AutoModeTouch" Classes="seg" Content="Touch" Click="OnAutoModeTouch"/>
-              <ToggleButton x:Name="AutoModeLatch" Classes="seg" Content="Latch" Click="OnAutoModeLatch"/>
-              <ToggleButton x:Name="AutoModeWrite" Classes="seg" Content="Write" Click="OnAutoModeWrite"/>
-            </StackPanel>
-          </Border>
+          <!-- Shown only while a hand-moved control has taken a lane over from
+               playback (M9-C); one click hands every overridden lane back. -->
+          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable Automation"
+                  IsVisible="False" Click="OnReenableAutomation"
+                  Foreground="{DynamicResource Brush.AccentBright}"
+                  ToolTip.Tip="A control you moved is overriding its automation — click to hand it back"/>
         </StackPanel>
       </Grid>
     </Border>

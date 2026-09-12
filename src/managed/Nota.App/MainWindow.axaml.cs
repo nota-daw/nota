@@ -201,6 +201,7 @@ public partial class MainWindow : Window
             _masterMeter?.Push(vm.Engine.MasterMeter());
             Timeline.UpdateMeters();                                   // per-track headers (M6-2)
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
+            SyncReenableAutomation();                                  // "a control is overriding its lane"
             if (_session?.IsVisible == true) _session.UpdateStates(); // live launch/queue/play
             if (_mixer?.IsVisible == true) _mixer.UpdateMeters();      // Mixer tab strips
             if (_modular?.IsVisible == true) _modular.Tick(vm.Engine.IsPlaying); // graph knobs follow automation + edge pulse
@@ -503,26 +504,24 @@ public partial class MainWindow : Window
         if (on) Browser.ShowMidiMap();
     }
 
+    // The Automation button only shows/edits the lanes: there are no record modes.
+    // Recording is contextual — with the transport record engaged, moving a control
+    // writes its lane (a mouse gesture stops on release, a hardware control latches).
     private void OnToggleAutomation(object? sender, RoutedEventArgs e)
+        => Timeline.AutomationMode = AutomationToggle.IsChecked == true;
+
+    /// <summary>Hand every lane a hand-moved control took over back to playback (M9-C).</summary>
+    private void OnReenableAutomation(object? sender, RoutedEventArgs e)
     {
-        bool on = AutomationToggle.IsChecked == true;
-        Timeline.AutomationMode = on;
-        AutoModeBar.IsVisible = on;   // record-mode selector is only relevant in automation mode
-        if (!on) SetAutoMode(AutomationWriteMode.Read, AutoModeRead); // no stray recording while hidden
+        _vm?.Engine.ReenableAutomation();
+        SyncReenableAutomation();
     }
 
-    // Automation record mode (M9-C): mutually-exclusive segmented Read/Touch/Latch/Write.
-    private void SetAutoMode(AutomationWriteMode mode, ToggleButton active)
+    /// <summary>Show the "Re-enable Automation" chip while any lane is overridden. Called
+    /// from the ~30 Hz tick; the engine query is a cheap flag read.</summary>
+    internal void SyncReenableAutomation()
     {
-        AutoModeRead.IsChecked = active == AutoModeRead;
-        AutoModeTouch.IsChecked = active == AutoModeTouch;
-        AutoModeLatch.IsChecked = active == AutoModeLatch;
-        AutoModeWrite.IsChecked = active == AutoModeWrite;
-        _vm?.Engine.SetAutomationWriteMode(mode);
-        if (Timeline is not null) Timeline.AutomationWriteMode = mode;
+        bool on = _vm is { } vm && vm.Engine.AutomationOverridden;
+        if (ReenableAutoBtn.IsVisible != on) ReenableAutoBtn.IsVisible = on;
     }
-    private void OnAutoModeRead(object? sender, RoutedEventArgs e) => SetAutoMode(AutomationWriteMode.Read, AutoModeRead);
-    private void OnAutoModeTouch(object? sender, RoutedEventArgs e) => SetAutoMode(AutomationWriteMode.Touch, AutoModeTouch);
-    private void OnAutoModeLatch(object? sender, RoutedEventArgs e) => SetAutoMode(AutomationWriteMode.Latch, AutoModeLatch);
-    private void OnAutoModeWrite(object? sender, RoutedEventArgs e) => SetAutoMode(AutomationWriteMode.Write, AutoModeWrite);
 }

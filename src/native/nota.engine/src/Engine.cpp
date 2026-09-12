@@ -396,6 +396,10 @@ void Engine::reset() {
     recording_.store(false, std::memory_order_relaxed);
     if (audioRecording_) stopAudioRecording();
     stopPreview();
+    // Drop automation write/override state: its lane indices belong to the old project.
+    activeWrites_.clear();
+    overrides_.clear();
+    autoRecord_.store(false, std::memory_order_relaxed);
     // Publish an empty graph (no undo checkpoint — a load is a fresh baseline)
     // and reset the id counter and history. A fresh master effect chain comes with it.
     auto empty = std::make_shared<Graph>();

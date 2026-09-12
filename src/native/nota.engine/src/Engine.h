@@ -220,16 +220,20 @@ public:
     std::string automationLaneParamId(int32_t trackId, int32_t laneIndex) const;
 
     // --- automation write / record (M9-C) ---
-    // Mode gates recording: Read=0 (default), Touch=1, Latch=2, Write=3. begin/end
-    // bracket a control gesture; arm marks a target for Write (records from play).
+    // There are no record modes. Lanes always play back; recording is contextual:
+    // with the transport record engaged, a control gesture writes into that target's
+    // lane. begin/end bracket the gesture — a mouse gesture stops writing on release,
+    // a latching one (hardware knob / MIDI / gamepad) keeps writing until the
+    // transport stops. With record off, touching a parameter that already carries
+    // automation *overrides* its lane so the hand leads, until reenableAutomation().
     // Sampling happens in poll() while playing; suppressRead lets the control lead.
-    void    setAutomationWriteMode(int32_t mode);
-    int32_t automationWriteMode() const { return autoWriteMode_.load(std::memory_order_relaxed); }
-    void    beginAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const char* paramId);
+    void    setAutomationRecord(bool on);
+    bool    automationRecord() const { return autoRecord_.load(std::memory_order_relaxed); }
+    void    beginAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const char* paramId, bool latch);
     void    endAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const char* paramId);
-    void    setAutomationArm(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const char* paramId, bool armed);
-    bool    automationArmed(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const char* paramId) const;
-    bool    automationWriteSelfTest();   // device-free: Touch gesture + Write-via-arm
+    void    reenableAutomation();        // hand the overridden lanes back to playback
+    bool    automationOverridden() const { return !overrides_.empty(); }
+    bool    automationWriteSelfTest();   // device-free: touch, latch, override/re-enable
 
     // --- debug oscillator (M0) ---
     void setToneEnabled(bool enabled);
@@ -1008,17 +1012,17 @@ private:
     double  recordReturnBeat_ = 0.0;
 
     // automation write/record state (M9-C, message thread only)
-    std::atomic<int32_t> autoWriteMode_{0};   // AutomationWriteMode
+    std::atomic<bool> autoRecord_{false};     // transport record engaged -> gestures write
     struct ActiveWrite {
         int32_t trackId; int32_t target; int32_t deviceIndex; int32_t paramIndex;
-        std::string paramId; int32_t laneIndex; double lastBeat;
+        std::string paramId; int32_t laneIndex; double lastBeat; bool latch;
     };
-    struct ArmTarget {
-        int32_t trackId; int32_t target; int32_t deviceIndex; int32_t paramIndex; std::string paramId;
-    };
-    std::vector<ActiveWrite> activeWrites_;
-    std::vector<ArmTarget>   armedWrites_;
-    bool wasPlaying_ = false;                 // poll() edge detection for Write auto-begin
+    // A lane the user took over by hand while NOT recording: it stops reading until
+    // reenableAutomation() (Live's "Re-Enable Automation").
+    struct OverrideTarget { int32_t trackId; int32_t laneIndex; };
+    std::vector<ActiveWrite>    activeWrites_;
+    std::vector<OverrideTarget> overrides_;
+    bool wasPlaying_ = false;                 // poll() edge detection: stop ends latched writes
     bool renderWasPlaying_ = false;           // audio-thread play→stop edge (flush stuck notes)
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot

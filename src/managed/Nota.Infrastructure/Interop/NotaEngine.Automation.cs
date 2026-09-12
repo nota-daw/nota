@@ -22,29 +22,35 @@ public sealed partial class NotaEngine
     public bool RackSelfTest()
     { ThrowIfDisposed(); return NativeMethods.RackSelfTest(_handle) != 0; }
 
-    /// <summary>Device-free self-test (M9-C): automation write path (Touch + Write-via-arm).</summary>
+    /// <summary>Device-free self-test (M9-C): automation write path (touch, latch, override).</summary>
     public bool AutomationWriteSelfTest()
     { ThrowIfDisposed(); return NativeMethods.AutomationWriteSelfTest(_handle) != 0; }
 
     // --- automation write / record (M9-C). deviceIndex < 0 = instrument. ---
-    public void SetAutomationWriteMode(AutomationWriteMode mode)
-    { ThrowIfDisposed(); NativeMethods.SetAutomationWriteMode(_handle, (int)mode); }
-    public AutomationWriteMode GetAutomationWriteMode()
-    { ThrowIfDisposed(); return (AutomationWriteMode)NativeMethods.AutomationWriteMode(_handle); }
+    /// <summary>While on, a control gesture records into that parameter's lane. The
+    /// transport record button drives this — <see cref="SetRecording"/> sets it too.</summary>
+    public void SetAutomationRecord(bool on)
+    { ThrowIfDisposed(); NativeMethods.SetAutomationRecord(_handle, on ? 1 : 0); }
+    public bool AutomationRecording
+    { get { ThrowIfDisposed(); return NativeMethods.AutomationRecord(_handle) != 0; } }
     /// <summary>Fires on every control gesture-begin so the arrangement can follow a touched knob.</summary>
     public event System.Action<int, AutomationTarget, int, int, string>? AutomationTouched;
-    public void BeginAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId)
+    /// <summary><paramref name="latch"/> marks a hardware/MIDI control: it keeps writing
+    /// past the release until the transport stops. Mouse gestures pass false.</summary>
+    public void BeginAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId, bool latch = false)
     {
         ThrowIfDisposed();
         AutomationTouched?.Invoke(trackId, target, deviceIndex, paramIndex, paramId ?? "");
-        NativeMethods.BeginAutomationWrite(_handle, trackId, (int)target, deviceIndex, paramIndex, paramId ?? "");
+        NativeMethods.BeginAutomationWrite(_handle, trackId, (int)target, deviceIndex, paramIndex, paramId ?? "", latch ? 1 : 0);
     }
     public void EndAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId)
     { ThrowIfDisposed(); NativeMethods.EndAutomationWrite(_handle, trackId, (int)target, deviceIndex, paramIndex, paramId ?? ""); }
-    public void SetAutomationArm(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId, bool armed)
-    { ThrowIfDisposed(); NativeMethods.SetAutomationArm(_handle, trackId, (int)target, deviceIndex, paramIndex, paramId ?? "", armed ? 1 : 0); }
-    public bool IsAutomationArmed(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId)
-    { ThrowIfDisposed(); return NativeMethods.AutomationArmed(_handle, trackId, (int)target, deviceIndex, paramIndex, paramId ?? "") != 0; }
+    /// <summary>Hand every lane the user took over by hand back to playback.</summary>
+    public void ReenableAutomation()
+    { ThrowIfDisposed(); NativeMethods.ReenableAutomation(_handle); }
+    /// <summary>True while at least one lane is overridden by a hand-moved control.</summary>
+    public bool AutomationOverridden
+    { get { ThrowIfDisposed(); return NativeMethods.AutomationOverridden(_handle) != 0; } }
 
     public int AddAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.AddAutomationLane(_handle, trackId, (int)target, deviceIndex, paramIndex); }

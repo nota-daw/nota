@@ -5103,35 +5103,47 @@ Console.WriteLine("-- M9-B1: plugin-param automation core --");
 }
 
 // ===================== M9-C W1: automation write/record engine =============
-// Device-free: a Touch gesture records the control value into the lane at the
-// playhead (suppressRead clears on end); Write-via-arm records an armed target.
+// Device-free: with record on, a mouse gesture writes the control value into the
+// lane at the playhead and stops on release while a latched one keeps going; with
+// record off, touching an automated param overrides its lane until re-enable.
 Console.WriteLine("-- M9-C W1: automation write/record --");
 {
-    Check(engine.AutomationWriteSelfTest(), "automation write path: Touch + Write-via-arm (device-free)");
+    Check(engine.AutomationWriteSelfTest(), "automation write path: touch, latch, override (device-free)");
 }
 
-// ===================== M9-C W2: write-mode C ABI + C# ======================
-// Device-free: mode get/set round-trips; arm toggles; a Touch begin creates the
-// target's lane and end doesn't throw. (Live sampling needs the audio clock and
-// is covered by the W1 self-test.)
-Console.WriteLine("-- M9-C W2: write-mode C ABI --");
+// ===================== M9-C W2: record-switch C ABI + C# ===================
+// Device-free: the record switch round-trips; a gesture while recording creates the
+// target's lane, and the same gesture with record off creates nothing. (Live sampling
+// needs the audio clock and is covered by the W1 self-test.)
+Console.WriteLine("-- M9-C W2: automation-record C ABI --");
 {
     int wT = engine.AddInstrumentTrack();
 
-    engine.SetAutomationWriteMode(Nota.Application.AutomationWriteMode.Latch);
-    Check(engine.GetAutomationWriteMode() == Nota.Application.AutomationWriteMode.Latch, "write mode round-trips");
-
-    Check(!engine.IsAutomationArmed(wT, Nota.Application.AutomationTarget.Volume, -1, -1, ""), "target not armed by default");
-    engine.SetAutomationArm(wT, Nota.Application.AutomationTarget.Volume, -1, -1, "", true);
-    Check(engine.IsAutomationArmed(wT, Nota.Application.AutomationTarget.Volume, -1, -1, ""), "arm toggles on");
-    engine.SetAutomationArm(wT, Nota.Application.AutomationTarget.Volume, -1, -1, "", false);
-    Check(!engine.IsAutomationArmed(wT, Nota.Application.AutomationTarget.Volume, -1, -1, ""), "arm toggles off");
+    Check(!engine.AutomationRecording, "automation record off by default");
+    engine.SetAutomationRecord(true);
+    Check(engine.AutomationRecording, "automation record round-trips");
 
     int before = engine.AutomationLaneCount(wT);
     engine.BeginAutomationWrite(wT, Nota.Application.AutomationTarget.Pan, -1, -1, "");
-    Check(engine.AutomationLaneCount(wT) == before + 1, "begin-write creates the target lane");
+    Check(engine.AutomationLaneCount(wT) == before + 1, "begin-write creates the target lane while recording");
     engine.EndAutomationWrite(wT, Nota.Application.AutomationTarget.Pan, -1, -1, "");
-    engine.SetAutomationWriteMode(Nota.Application.AutomationWriteMode.Read); // leave clean
+
+    engine.SetAutomationRecord(false);
+    engine.BeginAutomationWrite(wT, Nota.Application.AutomationTarget.Volume, -1, -1, "");
+    Check(engine.AutomationLaneCount(wT) == before + 1, "a touch with record off creates no lane");
+    Check(!engine.AutomationOverridden, "an un-automated param is not overridden");
+    engine.EndAutomationWrite(wT, Nota.Application.AutomationTarget.Volume, -1, -1, "");
+
+    // The Pan lane exists but is empty, so touching it still overrides nothing; give it a
+    // point and the same touch takes the lane over until re-enable.
+    int pan = engine.AddAutomationLane(wT, Nota.Application.AutomationTarget.Pan, -1, -1);
+    engine.SetAutomationPoints(wT, pan, new[] { new Nota.Application.AutomationPoint(0, 0.5f, 0) });
+    engine.BeginAutomationWrite(wT, Nota.Application.AutomationTarget.Pan, -1, -1, "");
+    Check(engine.AutomationOverridden, "touching an automated param overrides its lane");
+    engine.EndAutomationWrite(wT, Nota.Application.AutomationTarget.Pan, -1, -1, "");
+    Check(engine.AutomationOverridden, "the override survives the release");
+    engine.ReenableAutomation();
+    Check(!engine.AutomationOverridden, "re-enable hands the lane back");
 }
 
 // ===================== M9-A2: automation lane C ABI + C# ===================

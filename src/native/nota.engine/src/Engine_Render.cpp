@@ -95,30 +95,26 @@ void Engine::applyMidiCcRouting(Track& t) {
 void Engine::poll() {
     if (audioRecording_) drainInputQueue(); // keep the capture buffer flowing while recording
 
-    // Automation write/record (M9-C). Message thread: detect play edges, auto-begin
-    // armed targets in Write mode, sample active gestures at the live playhead.
+    // Automation write/record (M9-C). Message thread: a transport stop ends any
+    // latched gesture, and active gestures are sampled at the live playhead.
     {
         const bool playing = transport_.uiIsPlaying();
-        const int32_t mode = autoWriteMode_.load(std::memory_order_relaxed);
-        if (playing && !wasPlaying_ && mode == 3) {        // Write: arm -> record on play
-            auto armed = armedWrites_;                     // begin* mutates activeWrites_, not armed
-            for (auto& a : armed)
-                beginAutomationWrite(a.trackId, a.target, a.deviceIndex, a.paramIndex, a.paramId.c_str());
-        }
-        if (!playing && wasPlaying_) finishAllWrites();    // stop ends Latch + Write
+        const bool rec = autoRecord_.load(std::memory_order_relaxed);
+        if (!playing && wasPlaying_) finishAllWrites();    // stop ends latched writes
         wasPlaying_ = playing;
 
         // Plugin-GUI gestures (M9-C): grabbing a knob in the plugin's own editor
-        // begins/ends a write for that param, so Touch/Latch/Write record it just
-        // like our faders. Instruments/devices are stable across snapshots, so a
-        // copied track list stays valid while begin/end republish.
-        if (playing && mode != 0) {
+        // begins/ends a write for that param, so it records (or overrides) just like
+        // our own faders — a mouse gesture, so never latched. Instruments/devices are
+        // stable across snapshots, so a copied track list stays valid while
+        // begin/end republish.
+        {
             auto snapshot = authoring_->tracks;
             for (auto& tptr : snapshot) {
                 const int32_t tid = tptr->id();
                 if (auto& inst = tptr->instrument) {
                     int gb = inst->takePluginGestureBegin();
-                    if (gb >= 0) beginAutomationWrite(tid, 3, -1, -1, pluginParamId(tid, -1, gb).c_str());
+                    if (gb >= 0) beginAutomationWrite(tid, 3, -1, -1, pluginParamId(tid, -1, gb).c_str(), false);
                     int ge = inst->takePluginGestureEnd();
                     if (ge >= 0) endAutomationWrite(tid, 3, -1, -1, pluginParamId(tid, -1, ge).c_str());
                 }
@@ -126,14 +122,14 @@ void Engine::poll() {
                     auto& d = tptr->devices[di];
                     if (!d) continue;
                     int gb = d->takePluginGestureBegin();
-                    if (gb >= 0) beginAutomationWrite(tid, 3, di, -1, pluginParamId(tid, di, gb).c_str());
+                    if (gb >= 0) beginAutomationWrite(tid, 3, di, -1, pluginParamId(tid, di, gb).c_str(), false);
                     int ge = d->takePluginGestureEnd();
                     if (ge >= 0) endAutomationWrite(tid, 3, di, -1, pluginParamId(tid, di, ge).c_str());
                 }
             }
         }
 
-        if (playing && mode != 0 && !activeWrites_.empty())
+        if (playing && rec && !activeWrites_.empty())
             sampleAutomationWritesAt(transport_.uiPositionBeats());
     }
 

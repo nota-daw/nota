@@ -693,17 +693,22 @@ public interface IAudioEngine : IDisposable
     string AutomationLaneParamId(int trackId, int laneIndex);
     int PluginLastTouchedParam(int trackId, int deviceIndex);   // "Learn" (M9-B3)
     bool AutomationWriteSelfTest();   // M9-C: device-free write-path check
-    // Automation record (M9-C). deviceIndex < 0 = instrument; paramId for PluginParam.
-    void SetAutomationWriteMode(AutomationWriteMode mode);
-    AutomationWriteMode GetAutomationWriteMode();
-    void BeginAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId);
+    // Automation record (M9-C). There are no record modes: lanes always play back, and
+    // a control gesture records while automation record is on (the transport record
+    // button drives it). deviceIndex < 0 = instrument; paramId for PluginParam.
+    void SetAutomationRecord(bool on);
+    bool AutomationRecording { get; }
+    /// <summary><paramref name="latch"/> marks a hardware/MIDI control: it keeps writing past
+    /// the release until the transport stops. Mouse gestures pass false.</summary>
+    void BeginAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId, bool latch = false);
     /// <summary>Raised (UI thread) when a control begins an automation-write gesture, so the
     /// arrangement can follow the touched param in automation mode. Args: trackId, target,
     /// deviceIndex, paramIndex, paramId.</summary>
     event System.Action<int, AutomationTarget, int, int, string>? AutomationTouched;
     void EndAutomationWrite(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId);
-    void SetAutomationArm(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId, bool armed);
-    bool IsAutomationArmed(int trackId, AutomationTarget target, int deviceIndex, int paramIndex, string paramId);
+    /// <summary>Hand every lane a hand-moved control took over back to playback.</summary>
+    void ReenableAutomation();
+    bool AutomationOverridden { get; }
     int AddAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int paramIndex);
     int AutomationLaneCount(int trackId);
     AutomationLaneInfo AutomationLaneInfo(int trackId, int laneIndex);

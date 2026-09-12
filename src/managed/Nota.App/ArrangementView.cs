@@ -305,20 +305,14 @@ public sealed partial class ArrangementView : UserControl
         get => _automationMode;
         set { if (_automationMode == value) return; _automationMode = value; Refresh(); }
     }
-    private AutomationWriteMode _autoWriteMode;
-    /// <summary>Current record mode (M9-C) — drives the arm dot + live envelope refresh.</summary>
-    public AutomationWriteMode AutomationWriteMode
-    {
-        get => _autoWriteMode;
-        set { _autoWriteMode = value; if (_automationMode) Redraw(); }
-    }
     /// <summary>While recording, reload the visible envelopes so writes appear live (M9-C).</summary>
     public void RefreshAutomationLive()
     {
-        // Only reload while actually recording: a write mode + playing + no hand-drag
-        // in progress. Otherwise this would clobber manual envelope editing.
-        if (!_automationMode || _autoWriteMode == AutomationWriteMode.Read) return;
-        if (_engine is not { IsPlaying: true }) return;
+        // Only reload while actually recording: automation record on + playing + no
+        // hand-drag in progress. Otherwise this would clobber manual envelope editing.
+        if (!_automationMode) return;
+        var eng = _engine;
+        if (eng is not { IsPlaying: true } || !eng.AutomationRecording) return;
         if (_lanes.IsEditingPoint) return;
         foreach (var t in _tracks) LoadAutoPoints(t);
         _lanes.InvalidateVisual();
@@ -1946,12 +1940,6 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IPen AutoBasePen = new Pen(NotaPalette.TextTertiary, 1)
         { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     // Write-arm REC button (M9-C): red dot + "REC", lit when armed.
-    private static readonly IBrush AutoArmOn = NotaPalette.Danger;   // Brush.Danger-ish
-    private static readonly IPen   AutoArmOff = new Pen(NotaPalette.TextTertiary, 1);
-    private static readonly IBrush RecBgOff  = NotaPalette.SurfaceInset;   // sunken chip
-    private static readonly IBrush RecBgOn   = NotaPalette.Wash(NotaPalette.Danger, 0x33);
-    private static readonly IBrush RecDotOff = NotaPalette.TextTertiary;
-    private static readonly IBrush RecTextOff = NotaPalette.TextSecondary;
     // Hover feedback (M9-D): brass-accent brighter line + point ring under the cursor.
     private static readonly IPen   AutoHoverPen = new Pen(PlayheadBrush, 2.6);
     private static readonly IPen   AutoHoverRing = new Pen(PlayheadBrush, 1.5);

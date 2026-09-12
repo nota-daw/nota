@@ -68,7 +68,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         void Begin(int p) => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
         void End(int p) => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
         void Raw(int p, float v) => engine.DeviceSetParam(track, di, p, Math.Clamp(v, 0f, 1f));
-        // A discrete edit (click) is one automation gesture, so Touch / Latch / Write record it.
+        // A discrete edit (click) is one automation gesture, so it records while the transport does.
         void SetP(int p, float v) { Begin(p); Raw(p, v); End(p); }
         bool On(int p) => P(p) >= 0.5f;
         int Sel(int p, int n) => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1);

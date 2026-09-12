@@ -264,22 +264,25 @@ NOTA_API const char* nota_track_automation_lane_param_id(const NotaEngine* engin
 NOTA_API int32_t nota_plugin_last_touched_param(NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* ---- automation write / record (M9-C) -----------------------------------
- * Device-free self-test of the write path (Touch gesture + Write-via-arm). The
- * full mode/begin/end/arm C ABI arrives in W2. */
+ * Device-free self-test of the write path (touch, latch, override/re-enable). */
 NOTA_API int32_t nota_engine_automation_write_selftest(NotaEngine* engine);
-/* Record mode: 0=Read, 1=Touch, 2=Latch, 3=Write. begin/end bracket a control
- * gesture (Touch/Latch); arm marks a target for Write (records from play). For a
+/* There are no record modes: lanes always play back, and gestures record while
+ * automation record is on (the transport record button drives it — engaging it
+ * via nota_engine_set_recording sets this too). begin/end bracket a control
+ * gesture; latch != 0 means a hardware/MIDI control, which keeps writing past the
+ * release until the transport stops. With record off, touching a parameter that
+ * already carries automation overrides its lane until re-enable. For a
  * PluginParam target pass param_id; otherwise param_id may be NULL/empty. */
-NOTA_API void    nota_engine_set_automation_write_mode(NotaEngine* engine, int32_t mode);
-NOTA_API int32_t nota_engine_automation_write_mode(const NotaEngine* engine);
+NOTA_API void    nota_engine_set_automation_record(NotaEngine* engine, int32_t on);
+NOTA_API int32_t nota_engine_automation_record(const NotaEngine* engine);
 NOTA_API void    nota_track_begin_automation_write(NotaEngine* engine, int32_t track_id,
-                    int32_t target, int32_t device_index, int32_t param_index, const char* param_id);
+                    int32_t target, int32_t device_index, int32_t param_index, const char* param_id,
+                    int32_t latch);
 NOTA_API void    nota_track_end_automation_write(NotaEngine* engine, int32_t track_id,
                     int32_t target, int32_t device_index, int32_t param_index, const char* param_id);
-NOTA_API void    nota_track_set_automation_arm(NotaEngine* engine, int32_t track_id,
-                    int32_t target, int32_t device_index, int32_t param_index, const char* param_id, int32_t armed);
-NOTA_API int32_t nota_track_automation_armed(const NotaEngine* engine, int32_t track_id,
-                    int32_t target, int32_t device_index, int32_t param_index, const char* param_id);
+/* Hand every hand-overridden lane back to playback, and whether any is overridden. */
+NOTA_API void    nota_engine_reenable_automation(NotaEngine* engine);
+NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
 
 /* ---- DSP load (Phase 11) -------------------------------------------------
  * Smoothed real-time render load, 0..1 (render time / audio block budget).

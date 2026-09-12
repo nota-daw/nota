@@ -77,6 +77,11 @@ int32_t Engine::liveHeldNotes(int32_t* out, int32_t maxN) const {
 }
 
 void Engine::setRecording(bool on) {
+    // The record button is also the automation-record switch (M9-C): while it is
+    // engaged, moving any control writes that parameter's lane. This is set even
+    // when no track is armed for a take — if the UI then pops the button back up
+    // it calls us again with false, which clears it.
+    setAutomationRecord(on);
     if (!on) {
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling

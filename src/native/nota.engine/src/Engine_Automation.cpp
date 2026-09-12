@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Engine — parameter automation (M9): read/apply, lane CRUD, hosted-plugin parameter surface, write recording (Touch/Latch/Write), self-tests.
+// Engine — parameter automation (M9): read/apply, lane CRUD, hosted-plugin parameter surface, contextual write recording, self-tests.
 
 #include "Engine.h"
 #include "AudioFile.h"
@@ -235,17 +235,54 @@ void Engine::setLaneSuppressRead(int32_t trackId, int32_t laneIndex, bool suppre
     republishWithTrackRaw(trackId, nt);   // transient flag — never an undo step
 }
 
-void Engine::setAutomationWriteMode(int32_t mode) {
-    autoWriteMode_.store(mode, std::memory_order_relaxed);
-    if (mode == 0) finishAllWrites();     // leaving record mode ends any gesture
+void Engine::setAutomationRecord(bool on) {
+    autoRecord_.store(on, std::memory_order_relaxed);
+    if (!on) finishAllWrites();           // leaving record ends any gesture in progress
+}
+
+// Find an existing lane for a target without creating one (used by the override
+// path, which must not litter the project with empty lanes).
+static int32_t findLaneFor(const Track& t, int32_t target, int32_t deviceIndex,
+                           int32_t paramIndex, const std::string& paramId) {
+    for (size_t i = 0; i < t.automation.size(); ++i) {
+        const AutomationLane& l = t.automation[i];
+        if (l.target != static_cast<AutomationTarget>(target)) continue;
+        switch (l.target) {
+            case AutomationTarget::DeviceParam:
+            case AutomationTarget::MidiDeviceParam:
+                if (l.deviceIndex != deviceIndex || l.paramIndex != paramIndex) continue;
+                break;
+            case AutomationTarget::PluginParam:
+                if (l.deviceIndex != deviceIndex || l.paramId != paramId) continue;
+                break;
+            default: break;               // Volume / Pan: one lane per track
+        }
+        return static_cast<int32_t>(i);
+    }
+    return -1;
 }
 
 void Engine::beginAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex,
-                                  int32_t paramIndex, const char* paramId) {
+                                  int32_t paramIndex, const char* paramId, bool latch) {
     const std::string id = paramId ? paramId : "";
     for (auto& aw : activeWrites_)        // already writing this target?
-        if (sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id))
+        if (aw.trackId == trackId &&
+            sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id))
             return;
+
+    if (!autoRecord_.load(std::memory_order_relaxed)) {
+        // Not recording: the lane keeps playing back unless it actually has automation,
+        // in which case the hand takes over (override) until reenableAutomation().
+        auto t = findTrackAuthoring(trackId);
+        if (!t) return;
+        const int32_t lane = findLaneFor(*t, target, deviceIndex, paramIndex, id);
+        if (lane < 0 || t->automation[lane].points.empty()) return;
+        for (auto& o : overrides_) if (o.trackId == trackId && o.laneIndex == lane) return;
+        setLaneSuppressRead(trackId, lane, true);
+        overrides_.push_back({trackId, lane});
+        return;
+    }
+
     // Resolve (or create) the target's lane. PluginParam resolves paramIndex by id.
     int32_t laneIndex, resolvedParam = paramIndex;
     if (static_cast<AutomationTarget>(target) == AutomationTarget::PluginParam) {
@@ -255,24 +292,28 @@ void Engine::beginAutomationWrite(int32_t trackId, int32_t target, int32_t devic
         laneIndex = addAutomationLane(trackId, target, deviceIndex, paramIndex);
     }
     if (laneIndex < 0) return;
+    // Recording this lane supersedes any hand override of it.
+    for (size_t i = 0; i < overrides_.size(); ++i)
+        if (overrides_[i].trackId == trackId && overrides_[i].laneIndex == laneIndex)
+            { overrides_.erase(overrides_.begin() + i); break; }
     // Checkpoint the clean pre-write state once per write session (concurrent
-    // Write targets share one undo step); subsequent grows are raw.
+    // targets share one undo step); subsequent grows are raw.
     if (activeWrites_.empty()) pushUndo();
     setLaneSuppressRead(trackId, laneIndex, true);
     const double beat = transport_.uiPositionBeats();
-    activeWrites_.push_back({trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat});
+    activeWrites_.push_back({trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat, latch});
 }
 
 void Engine::endAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex,
                                 int32_t paramIndex, const char* paramId) {
-    // Only Touch stops on release; Latch/Write keep writing until the transport
-    // stops (finishAllWrites). Read never has active writes.
-    if (autoWriteMode_.load(std::memory_order_relaxed) != 1 /*Touch*/) return;
+    // A released mouse gesture stops writing here; a latched one (hardware control)
+    // keeps writing its last value until the transport stops (finishAllWrites).
     const std::string id = paramId ? paramId : "";
     for (size_t i = 0; i < activeWrites_.size(); ++i) {
         auto& aw = activeWrites_[i];
         if (aw.trackId == trackId &&
             sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id)) {
+            if (aw.latch) return;
             setLaneSuppressRead(aw.trackId, aw.laneIndex, false);
             activeWrites_.erase(activeWrites_.begin() + i);
             return;
@@ -285,28 +326,9 @@ void Engine::finishAllWrites() {
     activeWrites_.clear();
 }
 
-void Engine::setAutomationArm(int32_t trackId, int32_t target, int32_t deviceIndex,
-                              int32_t paramIndex, const char* paramId, bool armed) {
-    const std::string id = paramId ? paramId : "";
-    for (size_t i = 0; i < armedWrites_.size(); ++i) {
-        auto& a = armedWrites_[i];
-        if (a.trackId == trackId &&
-            sameTarget(a.target, a.deviceIndex, a.paramIndex, a.paramId, target, deviceIndex, paramIndex, id)) {
-            if (!armed) armedWrites_.erase(armedWrites_.begin() + i);
-            return;
-        }
-    }
-    if (armed) armedWrites_.push_back({trackId, target, deviceIndex, paramIndex, id});
-}
-
-bool Engine::automationArmed(int32_t trackId, int32_t target, int32_t deviceIndex,
-                             int32_t paramIndex, const char* paramId) const {
-    const std::string id = paramId ? paramId : "";
-    for (auto& a : armedWrites_)
-        if (a.trackId == trackId &&
-            sameTarget(a.target, a.deviceIndex, a.paramIndex, a.paramId, target, deviceIndex, paramIndex, id))
-            return true;
-    return false;
+void Engine::reenableAutomation() {
+    for (auto& o : overrides_) setLaneSuppressRead(o.trackId, o.laneIndex, false);
+    overrides_.clear();
 }
 
 void Engine::sampleAutomationWritesAt(double beat) {
@@ -330,9 +352,9 @@ void Engine::sampleAutomationWritesAt(double beat) {
 }
 
 bool Engine::automationWriteSelfTest() {
-    // Device-free. Touch: begin -> move control -> sample at a beat -> the lane gets
-    // a point ~= the control value, suppressRead clears on end. Then Write via arm:
-    // arm a target, "play" (begin), sample, stop (finish) records it too.
+    // Device-free. Record on: a mouse gesture (latch=false) writes at the playhead and
+    // stops on release; a latched gesture ignores the release and only a stop ends it.
+    // Record off: touching an automated param overrides its lane until re-enable.
     reset();
     auto t = std::make_shared<Track>(1, TrackType::Instrument);
     t->instrument = std::make_shared<Synth>();
@@ -340,9 +362,9 @@ bool Engine::automationWriteSelfTest() {
     g->tracks.push_back(t);
     publishRaw(g);
 
-    // Touch gesture on Volume.
-    setAutomationWriteMode(1); // Touch
-    beginAutomationWrite(1, 0, -1, -1, "");
+    // Mouse gesture on Volume while recording.
+    setAutomationRecord(true);
+    beginAutomationWrite(1, 0, -1, -1, "", false);
     if (findTrackAuthoring(1)->automation.empty()) return false;
     if (!findTrackAuthoring(1)->automation[0].suppressRead) return false;
     setTrackVolume(1, 1.5f);   // by id — targets the live authoring track (as the UI does)
@@ -350,44 +372,37 @@ bool Engine::automationWriteSelfTest() {
     endAutomationWrite(1, 0, -1, -1, "");
     {
         auto tt = findTrackAuthoring(1);
-        if (tt->automation[0].suppressRead) return false;         // cleared on end
+        if (tt->automation[0].suppressRead) return false;         // cleared on release
         const auto& pts = tt->automation[0].points;
         bool ok = false;
         for (auto& p : pts) if (std::fabs(p.beat - 3.0) < 1e-6 && std::fabs(p.value - 1.5f) < 1e-4f) ok = true;
         if (!ok) return false;
     }
 
-    // Latch: releasing must NOT end the write (only a stop does). endAutomationWrite
-    // is a no-op in Latch; suppressRead stays set until finishAllWrites.
-    setAutomationWriteMode(2); // Latch
-    beginAutomationWrite(1, 0, -1, -1, "");
-    endAutomationWrite(1, 0, -1, -1, "");                          // release — ignored in Latch
+    // Latched gesture (hardware control): releasing must NOT end the write — only a
+    // transport stop does, via finishAllWrites.
+    beginAutomationWrite(1, 0, -1, -1, "", true);
+    endAutomationWrite(1, 0, -1, -1, "");                          // release — ignored when latched
     if (!findTrackAuthoring(1)->automation[0].suppressRead) return false; // still writing
     finishAllWrites();                                            // transport stop
     if (findTrackAuthoring(1)->automation[0].suppressRead) return false;  // now cleared
 
-    // Write via arm on Pan.
-    setAutomationWriteMode(3); // Write
-    setAutomationArm(1, 1, -1, -1, "", true);
-    if (!automationArmed(1, 1, -1, -1, "")) return false;
-    beginAutomationWrite(1, 1, -1, -1, "");   // what the play edge does for armed targets
-    setTrackPan(1, -0.75f);
-    sampleAutomationWritesAt(2.0);
-    finishAllWrites();                          // what transport stop does
-    {
-        auto tt = findTrackAuthoring(1);
-        int panLane = -1;
-        for (size_t i = 0; i < tt->automation.size(); ++i)
-            if (tt->automation[i].target == AutomationTarget::Pan) panLane = static_cast<int32_t>(i);
-        if (panLane < 0) return false;
-        if (tt->automation[panLane].suppressRead) return false;
-        bool ok = false;
-        for (auto& p : tt->automation[panLane].points)
-            if (std::fabs(p.beat - 2.0) < 1e-6 && std::fabs(p.value + 0.75f) < 1e-4f) ok = true;
-        if (!ok) return false;
-    }
-    setAutomationArm(1, 1, -1, -1, "", false);
-    setAutomationWriteMode(0);
+    // Record off: a touch on a target with no automation must not create a lane...
+    setAutomationRecord(false);
+    const size_t lanes = findTrackAuthoring(1)->automation.size();
+    beginAutomationWrite(1, 1, -1, -1, "", false);                 // Pan — no lane yet
+    if (findTrackAuthoring(1)->automation.size() != lanes) return false;
+    if (automationOverridden()) return false;
+    // ...but on the automated Volume lane it overrides playback until re-enable.
+    beginAutomationWrite(1, 0, -1, -1, "", false);
+    if (!automationOverridden()) return false;
+    if (!findTrackAuthoring(1)->automation[0].suppressRead) return false;
+    endAutomationWrite(1, 0, -1, -1, "");                          // release keeps the override
+    if (!findTrackAuthoring(1)->automation[0].suppressRead) return false;
+    reenableAutomation();
+    if (automationOverridden()) return false;
+    if (findTrackAuthoring(1)->automation[0].suppressRead) return false;
+
     reset();
     return true;
 }

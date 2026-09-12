@@ -314,18 +314,6 @@ public sealed partial class ArrangementView
         else      e.SetAutomationPoints(t.Id, lane, pts);
     }
 
-    // Arm the current target for Write recording (M9-C). paramIndex only matters
-    // for DeviceParam; PluginParam is keyed by paramId, others ignore both.
-    private int ArmParamIndex(TrackVM t) => t.AutoTarget is AutomationTarget.DeviceParam or AutomationTarget.MidiDeviceParam ? t.AutoParamIndex : -1;
-    internal bool AutoArmed(TrackVM t)
-        => _engine is { } e && e.IsAutomationArmed(t.Id, t.AutoTarget, t.AutoDeviceIndex, ArmParamIndex(t), t.AutoParamId);
-    internal void ToggleAutoArm(TrackVM t)
-    {
-        if (_engine is not { } e) return;
-        e.SetAutomationArm(t.Id, t.AutoTarget, t.AutoDeviceIndex, ArmParamIndex(t), t.AutoParamId, !AutoArmed(t));
-        Redraw();
-    }
-
     /// <summary>Target picker: Volume / Pan / built-in device params, plus a
     /// filterable param picker + "Learn" for each hosted plugin (M9-B3).</summary>
     internal void ShowAutoTargetMenu(Control anchor, TrackVM t)

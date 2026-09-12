@@ -263,6 +263,8 @@ public sealed class MidiLearnService
         if (m.Invert) norm = 1.0 - norm;
         double outv = m.RangeMin + norm * (m.RangeMax - m.RangeMin);   // 0..1 within the mapped window
 
+        BeginLatchWrite(t);   // a hardware move is a latching automation gesture
+
         switch (t.Kind)
         {
             case MidiTargetKind.DeviceParam:
@@ -292,6 +294,35 @@ public sealed class MidiLearnService
             case MidiTargetKind.RackChainGain:
                 if (t.DeviceIndex < 0) _engine.RackSetChainGain(t.TrackId, t.ParamIndex, (float)(outv * RackGainMax));
                 else _engine.RackDevSetChainGain(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(outv * RackGainMax));
+                break;
+        }
+    }
+
+    // Moving a hardware control (knob, fader, stick, trigger) is a latching automation
+    // gesture: while the transport is recording it writes this parameter's lane and keeps
+    // writing past the release until the transport stops — a physical control has no
+    // "release", so Live's Latch is the behaviour that fits. With record off, the engine
+    // turns this into an override of an already-automated lane, and ignores it otherwise.
+    // Targets with no automation lane of their own (master volume, rack chains) are skipped.
+    private void BeginLatchWrite(MidiTarget t)
+    {
+        switch (t.Kind)
+        {
+            case MidiTargetKind.DeviceParam:
+                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.DeviceParam, t.DeviceIndex, t.ParamIndex, "", latch: true);
+                break;
+            case MidiTargetKind.MidiDeviceParam:
+                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.MidiDeviceParam, t.DeviceIndex, t.ParamIndex, "", latch: true);
+                break;
+            case MidiTargetKind.PluginParam:
+                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.PluginParam, t.DeviceIndex, -1,
+                    _engine.PluginParamId(t.TrackId, t.DeviceIndex, t.ParamIndex), latch: true);
+                break;
+            case MidiTargetKind.TrackVolume:
+                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.Volume, -1, -1, "", latch: true);
+                break;
+            case MidiTargetKind.TrackPan:
+                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.Pan, -1, -1, "", latch: true);
                 break;
         }
     }

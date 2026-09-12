@@ -38,6 +38,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **Automation has no record modes any more.** Read / Touch / Latch / Write are gone, and
+  the **Automation** button now only shows and edits the lanes. Automation always plays
+  back, and recording is contextual, the way Live does it: engage the transport **Record**
+  button and move a control, and that parameter's lane records what you do. A control you
+  move with the mouse stops writing the moment you let go; a hardware knob, fader, stick
+  or trigger keeps writing its last value until the transport stops, because a physical
+  control has no release. The per-parameter **REC** arm button on the lane header is gone
+  with the Write mode it existed for.
+- **Touching an automated parameter while not recording overrides its lane**, so the knob
+  answers your hand instead of being dragged back by the envelope on the next block. A
+  **Re-enable Automation** button appears in the toolbar while anything is overridden;
+  one click hands every overridden lane back to playback.
 - The colour tokens in `NotaTheme.axaml` now live in theme dictionaries, and `NotaPalette`
   hands out brushes that re-tint in place, so both the XAML and the custom-drawn layer
   follow the active variant. The ~970 hex literals that had accumulated across the device
