@@ -19,6 +19,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Overview — a project strip above the arrangement.** The whole project on one band,
+  a mini-clip per clip in its track colour (a collapsed group still shows the clips it
+  hides), with the visible span drawn as a brass window over it and everything outside it
+  dimmed. Drag the window sideways to scroll at a fixed zoom, drag up or down to zoom out
+  or in, drag either edge to zoom by resizing it, click anywhere to jump there, double-click
+  to fit the whole project
+  on screen. The loop region and the playhead show along it, and the header cell reads out
+  the visible bar range. View ▸ Toggle overview hides it.
 - **Nota Consort — a paraphonic semi-modular synth.** A new built-in instrument (kind 15) in
   the spirit of a four-oscillator paraphonic Moog. Four oscillators (triangle, saw, square or
   pulse with PWM; 32′–2′; oscillator 2 syncs to 1 and 4 to 3) feed a mixer with noise, drive

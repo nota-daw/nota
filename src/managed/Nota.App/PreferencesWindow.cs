@@ -575,6 +575,9 @@ public sealed class PreferencesWindow : NotaWindow
         ("MOUSE", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Drag overview strip", "Drag sideways to scroll · up / down to zoom out / in"),
+            ("Drag overview edge", "Zoom by resizing the viewport window"),
+            ("Double-click overview", "Fit the whole project on screen"),
             ("Drag ⠿", "Reorder devices (◀ ▶)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),

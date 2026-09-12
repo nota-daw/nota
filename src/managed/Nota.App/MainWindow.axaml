@@ -59,6 +59,7 @@
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Toggle browser" Click="OnMenuToggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" Click="OnMenuToggleClip"/>
+            <NativeMenuItem Header="Toggle overview" Click="OnMenuToggleOverview"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>

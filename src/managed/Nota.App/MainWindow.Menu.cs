@@ -144,6 +144,11 @@ public partial class MainWindow
     }
     private void OnMenuToggleBrowser(object? sender, EventArgs e) => Browser.IsVisible = !Browser.IsVisible;
     private void OnMenuToggleClip(object? sender, EventArgs e) => DetailPanel.IsVisible = !DetailPanel.IsVisible;
+    private void OnMenuToggleOverview(object? sender, EventArgs e)
+    {
+        Timeline.ShowOverview = !Timeline.ShowOverview;
+        if (_vm is not null) _vm.StatusText = Timeline.ShowOverview ? "Overview strip shown" : "Overview strip hidden";
+    }
     private void OnMenuPlayStop(object? sender, EventArgs e) => _vm?.Transport.PlayStopCommand.Execute(null);
     private void OnMenuRecord(object? sender, EventArgs e) { if (_vm is not null) _vm.Transport.RecordOn = !_vm.Transport.RecordOn; }
     private void OnMenuLoop(object? sender, EventArgs e)

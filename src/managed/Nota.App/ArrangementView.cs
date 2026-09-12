@@ -133,6 +133,7 @@ public sealed partial class ArrangementView : UserControl
     public ArrangementView()
     {
         _ruler = new RulerControl(this) { Height = RulerH };
+        _overview = new OverviewControl(this);
         _lanes = new LaneControl(this) { VerticalAlignment = VerticalAlignment.Top };
         // Sits in the same grid cell as _lanes, on top; hit-transparent so all pointer
         // gestures pass through to the lanes beneath.
@@ -177,6 +178,9 @@ public sealed partial class ArrangementView : UserControl
         top.Children.Add(topLeft);
         Grid.SetColumn(_ruler, 1);
         top.Children.Add(_ruler);
+
+        // Above the ruler: the Overview strip (whole project + a draggable viewport window).
+        _overviewRow = BuildOverviewRow();
 
         // Center: vertical scroll over [headers | lanes].
         // Top-anchored: the ScrollViewer would otherwise stretch the short
@@ -258,9 +262,11 @@ public sealed partial class ArrangementView : UserControl
         bottom.Children.Add(_hScroll);
 
         var root = new DockPanel();
+        DockPanel.SetDock(_overviewRow, Dock.Top);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         DockPanel.SetDock(_footer, Dock.Bottom);
+        root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(top);
         root.Children.Add(bottom);
         root.Children.Add(_footer);
@@ -326,6 +332,7 @@ public sealed partial class ArrangementView : UserControl
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
+        _overview.InvalidateVisual();
     }
 
     // Recentre the horizontal scroll on the playhead (called each tick while following +
@@ -366,6 +373,7 @@ public sealed partial class ArrangementView : UserControl
         _ruler.InvalidateVisual();
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
+        TickOverviewPlayhead();   // only when the marker crossed a pixel of the strip
 
         // Automation mode: an empty lane draws a baseline at the param's live value, so it must
         // follow a knob turned in the device. Redraw the lanes only when a visible empty lane's
@@ -510,6 +518,8 @@ public sealed partial class ArrangementView : UserControl
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();   // playhead/loop band track scroll+zoom+loop edits
         _footerLanes.InvalidateVisual();
+        _overview.InvalidateVisual();  // the viewport window follows scroll+zoom
+        UpdateOverviewRange();
     }
 
     /// <summary>Rebuilds the track/clip model + headers from the engine. Pass

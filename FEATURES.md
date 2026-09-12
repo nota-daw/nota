@@ -66,7 +66,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Arrangement View** — a linear timeline: place, move, trim and duplicate clips; grid
   and snap to bars/beats; scroll and zoom; recording into the arrangement (audio and
   MIDI); split at the cursor or across a selection (Cmd/Ctrl+E cuts every track in the
-  selection); clip scrubbing on the ruler.
+  selection); clip scrubbing on the ruler. An **Overview** strip above the ruler shows
+  the whole project in miniature with the visible span as a window over it — drag it to
+  scroll, drag its edges (or drag vertically) to zoom, double-click to fit the project.
 - **Session View** — a clip grid (tracks × scenes): launch and stop a clip, launch a whole
   scene, launch quantization, recording into a clip slot (MIDI or audio), loop clips with
   a configurable length, and moving material between Session and Arrangement.
