@@ -18,6 +18,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-09-12
+
+### Highlights
+- **Two new synths.** *Nota Pentad* is a five-voice Prophet-5 with Poly-Mod and per-voice
+  vintage drift; *Nota Consort* is a paraphonic four-oscillator Moog with a 42-point patch
+  bay you wire by dragging, a step sequencer and a bucket-brigade delay.
+- **Two new effects.** *Nota Chamber* is a hybrid reverb — 16 impulse responses (or your own
+  file) blended with four algorithmic modes, with Freeze and a shimmer pitch shifter.
+  *Nota Prism* is multiband dynamics, compressing above one threshold and expanding or
+  lifting quiet detail below another, per band.
+- **Overview.** The whole project sits on one strip above the arrangement: drag it to scroll,
+  drag up or down to zoom, click to jump anywhere.
+- **Consolidate (⌘J).** Merge a time range or a handful of clips into one clip per track —
+  notes merged, audio rendered with gain, transpose, warp, fades and envelopes baked in.
+- **Reverse audio clips.** Play a clip backwards from its right-click menu or the clip
+  editor. Nothing is re-rendered, so it is instant and free to try, and both waveform views
+  flip to match what you hear.
+- **More in the right-click menus, and a long list of fixes.** Freeze, Live Freeze and adding
+  instrument / audio / return tracks are now in the arrangement's context menus; device cards
+  step through presets with ‹ › and keep their preset names; knobs take ⌘ or ⇧ for fine
+  steps; and the clip editor now follows clips you resize or move in the arrangement.
+
 ### Added
 - **Add a track from the arrangement's context menus.** Right-clicking the empty space
   below the tracks now offers `Add instrument track` / `Add audio track` / `Add return
