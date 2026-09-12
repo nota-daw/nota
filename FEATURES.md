@@ -129,6 +129,11 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   notes, the D-pad shifts octave and velocity. Notes travel the same path as typed ones
   (live play, recording, roll highlighting); unplugging releases held notes. Enable and
   monitor controllers in Preferences → Gamepads (hot-plug aware).
+  - **Any button can be mapped instead** through MIDI Learn — a mapped button drives that
+    control and stops playing its note, while the rest of the pad keeps the layout above,
+    so one controller both plays and mixes. Nothing is reserved: mapping the D-pad takes
+    it over from octave/velocity. Mappings match on the button, not the pad slot, so a
+    replug does not break them.
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
 - **Audio→MIDI** (right-click an audio clip → Convert):
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
@@ -184,6 +189,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   and filter included), track volume/pan/mute/solo, the master, the transport, rack
   macros, and chain and Drum Rack pad mute/solo. The **Map** tab in the browser exposes
   range, inversion and deletion. Saved with the project.
+  - Sources are a **CC**, a **MIDI note**, or a **gamepad button** (macOS) — all three
+    share one mapping table. A button is momentary: it fires a toggle target once on
+    press, and holds a continuous one at the top of its range until released.
 
 ---
 
@@ -419,8 +427,9 @@ and user presets, automation, persistence and cloning.
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
   (Windows).
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes).
-- **Gamepads** (macOS): enable gamepad note input; the controller list updates on hot-plug,
-  with a live activity indicator beside each pad.
+- **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
+  list updates on hot-plug, with a live activity indicator beside each pad that names the
+  note played or the control driven.
 - **Plugins**: scan paths, Rescan.
 - **Library**: library folders.
 - **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which

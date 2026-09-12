@@ -252,7 +252,7 @@ public sealed class PreferencesWindow : NotaWindow
     private Control GamepadsPane()
     {
         var body = new StackPanel { Spacing = 10 };
-        body.Children.Add(SectionLabel("GAMEPADS AS NOTE INPUT"));
+        body.Children.Add(SectionLabel("GAMEPAD INPUT"));
         if (_main is null) { body.Children.Add(Caption("Gamepad settings are unavailable in this window.")); return body; }
         if (!OperatingSystem.IsMacOS())
         {
@@ -261,11 +261,11 @@ public sealed class PreferencesWindow : NotaWindow
         }
 
         // The master switch lives in Settings (not the native engine): the pad thread
-        // always runs once started so new pads are still detected, but note edges only
+        // always runs once started so new pads are still detected, but button edges only
         // reach the engine while this is on.
         var enable = new CheckBox
         {
-            Content = "Use a connected gamepad as a live note source",
+            Content = "Use a connected gamepad for notes and mapped controls",
             IsChecked = _main.Settings.Current.GamepadEnabled,
         };
         enable.IsCheckedChanged += (_, _) =>
@@ -371,6 +371,7 @@ public sealed class PreferencesWindow : NotaWindow
         body.Children.Add(DividerLine());
         body.Children.Add(SectionLabel("LAYOUT"));
         body.Children.Add(Caption("Face buttons play C4 D4 E4 F4 · shoulder buttons play G4 A4 B4 C5 · d-pad up/down shifts the octave · d-pad left/right nudges velocity. Notes go to the armed (record-enabled) instrument track — enable Record to capture them, or use the audition track to just play."));
+        body.Children.Add(Caption("Any button can be mapped to a control instead: click MIDI in the top-right, click the control, then press the button. A mapped button drives that control and stops playing its note; the rest of the pad keeps the layout above. Mappings are listed in the browser's MIDI Map tab and travel with the project."));
         return body;
     }
 
@@ -600,6 +601,14 @@ public sealed class PreferencesWindow : NotaWindow
             ("W E · T Y U", "Black keys (sharps)"),
             ("Z / X", "Shift octave down / up"),
             ("C / V", "Lower / raise velocity"),
+        }),
+        ("GAMEPAD (MACOS)", new[]
+        {
+            ("Face buttons", "Play C4 D4 E4 F4"),
+            ("Shoulder buttons", "Play G4 A4 B4 C5"),
+            ("D-pad ↑ / ↓", "Shift the gamepad octave"),
+            ("D-pad ← / →", "Lower / raise velocity"),
+            ("Any button", "Mappable through MIDI Learn — a mapped button drives the control instead"),
         }),
         ("MOUSE", new[]
         {

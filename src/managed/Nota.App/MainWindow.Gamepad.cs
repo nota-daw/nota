@@ -9,12 +9,13 @@ using Nota.Infrastructure;
 
 namespace Nota.App;
 
-/// <summary>Gamepad-as-note-source: polls the queued button edges every UI tick
-/// (hooked off <see cref="MainWindowViewModel.PlayheadUpdated"/>) and turns a
-/// pressed button into <c>Engine.NoteOn</c>/<c>NoteOff</c> — the exact same entry
-/// points as the computer keyboard, so armed-track recording, the piano-roll key
-/// highlight, and the engine's velocity handling all apply without a parallel
-/// path. Wired in MainWindow.</summary>
+/// <summary>Gamepad input: polls the queued button edges every UI tick (hooked off
+/// <see cref="MainWindowViewModel.PlayheadUpdated"/>) and gives each one to MIDI
+/// Learn first. A button the user has mapped drives that control; everything else
+/// falls through to the built-in layout, turning a press into
+/// <c>Engine.NoteOn</c>/<c>NoteOff</c> — the exact same entry points as the computer
+/// keyboard, so armed-track recording, the piano-roll key highlight, and the engine's
+/// velocity handling all apply without a parallel path. Wired in MainWindow.</summary>
 public partial class MainWindow
 {
     // Base pitches (same shape as the computer keyboard's A-row = C4 major scale).
@@ -75,8 +76,23 @@ public partial class MainWindow
         if (ev.Pressed == 0)
         {
             // Note-off at the exact pitch it started on (same rule as the keyboard,
-            // so a d-pad octave shift mid-hold doesn't hang the note).
+            // so a d-pad octave shift mid-hold doesn't hang the note). A button with
+            // no held pitch was either mapped or idle — give the release to Learn so a
+            // hold-to-open mapping closes again.
             if (_gamepadHeldPitch.Remove(key, out int pitch)) Engine.NoteOff(pitch);
+            else _learn?.HandleGamepadButton(ev.ButtonId, false);
+            return;
+        }
+
+        // MIDI Learn gets first refusal: while a control is pending this press binds it,
+        // and a button that already has a mapping drives that control instead of playing.
+        // Nothing is reserved — mapping the d-pad takes over from octave/velocity too —
+        // and every unmapped button keeps the built-in layout below.
+        if (_learn is not null && _learn.HandleGamepadButton(ev.ButtonId, true))
+        {
+            var mapped = _learn.GamepadMappingFor(ev.ButtonId);
+            (_gamepads as Infrastructure.GamepadService)?.RaiseActivity(
+                ev.Pad, mapped is null ? GamepadButtons.Name(ev.ButtonId) : $"→ {mapped.DisplayName}");
             return;
         }
 
@@ -95,7 +111,7 @@ public partial class MainWindow
                 // layout. Buttons beyond that are shown but play nothing (options/
                 // share/system buttons).
                 int idx = ev.ButtonId - 1;
-                if (idx < 0 || idx >= GamepadPitchByButton.Length) { label = $"Button {ev.ButtonId}"; break; }
+                if (idx < 0 || idx >= GamepadPitchByButton.Length) { label = GamepadButtons.Name(ev.ButtonId); break; }
                 if (_gamepadHeldPitch.ContainsKey(key)) return; // auto-repeat guard
 
                 int note = Math.Clamp(GamepadPitchByButton[idx] + _gamepadOctave * 12, 0, 127);

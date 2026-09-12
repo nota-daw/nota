@@ -39,7 +39,7 @@ public sealed class MidiMapView : UserControl
         {
             _rows.Children.Add(new TextBlock
             {
-                Text = "No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller.",
+                Text = "No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button on a connected gamepad.",
                 FontSize = 11, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
                 Margin = new Avalonia.Thickness(6, 10), Foreground = NotaPalette.TextTertiary,
             });

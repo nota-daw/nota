@@ -19,6 +19,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Gamepad buttons can be mapped like a MIDI controller** (macOS). Arm MIDI Learn, click
+  a control, press a button — that button now drives the control and stops playing its
+  note, while every unmapped button keeps the built-in layout, so one pad both plays and
+  mixes. Nothing is reserved: mapping the d-pad takes it over from octave/velocity.
+  Gamepad sources share the mapping table with CCs and notes, show up in the browser's
+  MIDI Map tab, and travel with the project. Mappings match on the button rather than the
+  pad slot, so unplugging and reconnecting a controller does not break them.
 - **Light theme.** *Ember Paper* joins *Ember Graphite*: the same design system on a warm
   paper ground, with brass darkened to bronze so marks keep their weight against a light
   background. Preferences → Appearance picks Ember Graphite, Ember Paper or System (which

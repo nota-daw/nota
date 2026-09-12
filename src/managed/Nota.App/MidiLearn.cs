@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// MIDI Learn — map a hardware controller's CCs/notes onto Nota's on-screen
-// controls. The mapping *target* reuses the engine's automation addressing
+// MIDI Learn — map a hardware controller's CCs/notes, or a gamepad button, onto
+// Nota's on-screen controls. The mapping *target* reuses the engine's automation addressing
 // (track + AutomationTarget + device/param index) plus a few globals (master
 // volume, transport, per-track mute/solo), so an incoming MIDI message can be
 // applied straight through the existing engine setters, whether or not the
@@ -11,7 +11,8 @@
 // A control opts in by carrying a MidiBinding attached property; that's all a
 // build site needs. The learn overlay finds those bindings by walking the visual
 // tree while armed, and MidiLearnService owns the mapping table, the learn state
-// machine, and the per-tick drain/apply of native MIDI events.
+// machine, and the per-tick drain/apply of native MIDI events. Gamepad buttons are
+// fed into the same machine by MainWindow.Gamepad, so one table holds both.
 
 using System;
 using System.Collections.Generic;
@@ -21,8 +22,25 @@ using Nota.Application;
 
 namespace Nota.App;
 
-/// <summary>CC (continuous) vs Note (a controller pad/button).</summary>
-public enum MidiSourceKind { Cc = 0, Note = 1 }
+/// <summary>What a mapping listens to: a CC (continuous), a MIDI note (a controller
+/// pad/button), or a gamepad button. Gamepad sources ride the same table and the same
+/// apply path — a button edge is just a 0/127 momentary source.</summary>
+public enum MidiSourceKind { Cc = 0, Note = 1, Gamepad = 2 }
+
+/// <summary>Display names for the button ids that come out of the native gamepad queue:
+/// the d-pad has its own sentinels, everything else is a HID usage index whose physical
+/// label we cannot know, so it is shown by number.</summary>
+public static class GamepadButtons
+{
+    public static string Name(int buttonId) => (GamepadButton)buttonId switch
+    {
+        GamepadButton.DpadUp => "D-pad ↑",
+        GamepadButton.DpadDown => "D-pad ↓",
+        GamepadButton.DpadLeft => "D-pad ←",
+        GamepadButton.DpadRight => "D-pad →",
+        _ => $"Button {buttonId}",
+    };
+}
 
 /// <summary>What a mapping drives. The first three mirror <see cref="AutomationTarget"/>;
 /// the rest are Nota globals with no automation lane.</summary>
@@ -107,13 +125,16 @@ public sealed class MidiMapping
     public MidiTarget Target { get; init; }
     public string DisplayName { get; set; } = "";
     public MidiSourceKind SourceKind { get; init; }
-    public int Channel { get; init; }         // 0..15
-    public int Number { get; init; }          // CC number or note pitch
+    public int Channel { get; init; }         // 0..15 (unused, and always 0, for Gamepad)
+    public int Number { get; init; }          // CC number, note pitch, or gamepad button id
     public double RangeMin { get; set; }       // normalized output floor
     public double RangeMax { get; set; } = 1;  // normalized output ceiling
     public bool Invert { get; set; }
 
-    public string SourceLabel => SourceKind == MidiSourceKind.Cc
-        ? $"CC {Number} · ch{Channel + 1}"
-        : $"Note {Number} · ch{Channel + 1}";
+    public string SourceLabel => SourceKind switch
+    {
+        MidiSourceKind.Cc => $"CC {Number} · ch{Channel + 1}",
+        MidiSourceKind.Gamepad => $"Pad · {GamepadButtons.Name(Number)}",
+        _ => $"Note {Number} · ch{Channel + 1}",
+    };
 }

@@ -8,6 +8,10 @@
 // engine via the same setters the on-screen controls use, so mapped controls work
 // even when their card is closed. Buttons (mute/solo/transport) trigger/toggle;
 // everything else is an absolute value scaled through the mapping's range.
+//
+// Gamepad buttons are a third source kind, pushed in by MainWindow.Gamepad rather
+// than drained here (the pad queue is polled on its own tick). They bind, dispatch
+// and persist exactly like a MIDI note.
 
 using System;
 using System.Collections.Generic;
@@ -31,6 +35,10 @@ public sealed class MidiLearnService
 
     private bool _armed;
     private MidiBinding? _pending;
+    // The gamepad button whose press just bound a control. Its release must not then
+    // dispatch through the fresh mapping — that would immediately drive the control to
+    // its floor the moment you let go of the button you learned with.
+    private int? _padBoundOnPress;
     // Also echo MIDI to the console for live watching under `dotnet run` (opt-in, to
     // avoid flooding the terminal with a knob's CC stream during normal use).
     private readonly bool _echo = Environment.GetEnvironmentVariable("NOTA_MIDI_LOG") is not null;
@@ -76,6 +84,38 @@ public sealed class MidiLearnService
 
     /// <summary>The mapping bound to <paramref name="target"/>, if any (for the "mapped" badge).</summary>
     public MidiMapping? MappingFor(MidiTarget target) => _mappings.FirstOrDefault(m => m.Target.Equals(target));
+
+    /// <summary>The mapping a gamepad button drives, if any. Matched on the button alone,
+    /// not on which pad sent it: pad slots reshuffle when a controller is unplugged, so
+    /// binding to a slot would silently break the mapping on the next replug.</summary>
+    public MidiMapping? GamepadMappingFor(int buttonId)
+        => _mappings.FirstOrDefault(m => m.SourceKind == MidiSourceKind.Gamepad && m.Number == buttonId);
+
+    /// <summary>Feed a gamepad button edge through the learn/dispatch machine. Returns
+    /// true when the edge was consumed — it bound the pending control, or it drove a
+    /// mapping — so the caller knows to skip whatever the button does by default. An
+    /// unmapped button returns false and goes on playing its note.</summary>
+    public bool HandleGamepadButton(int buttonId, bool pressed)
+    {
+        if (pressed && _pending is { } p)
+        {
+            Bind(p, MidiSourceKind.Gamepad, 0, buttonId);
+            LogMidi($"MIDI learn: gamepad {GamepadButtons.Name(buttonId)} → bound to '{p.Name}'");
+            _padBoundOnPress = buttonId;
+            return true;
+        }
+
+        if (!pressed && _padBoundOnPress == buttonId)
+        {
+            _padBoundOnPress = null;
+            return true;
+        }
+
+        // A button edge is momentary: held reads full-scale, released reads zero. On a
+        // toggle target that fires once, on the press; on a continuous one it is a
+        // hold-to-open, which is the same thing a mapped MIDI note already does.
+        return Dispatch(MidiSourceKind.Gamepad, 0, buttonId, pressed ? 127 : 0) > 0;
+    }
 
     public void RemoveMapping(MidiMapping m)
     {
