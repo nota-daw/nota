@@ -124,6 +124,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   around at the ends. The preset list marks the one currently loaded.
 
 ### Fixed
+- **Resizing a clip in the arrangement now updates its open editor.** Dragging a clip's edge
+  left the clip editor showing the old length — its Start/Length read-outs, the piano roll's
+  own span and the envelope editor's beat axis all kept the length they had when the editor
+  was opened. Moving a clip likewise leaves its Start read-out correct now.
+- **Editing a clip in the arrangement no longer throws you out of the Clip tab.** Clicking a
+  clip — or grabbing its edge to resize it — selects its track, which used to switch the
+  detail panel to Devices. The panel now stays on Clip and follows the clip you picked.
+- **Deleting the selected track clears the device panel.** Its instrument and effect cards
+  stayed on screen, still editing a track that no longer existed; the Modular view kept the
+  removed track's nodes the same way.
 - **A device card keeps showing its preset name.** Switching to another track and back no
   longer resets the name to Init. The name stays with its device when devices are
   reordered, deleted or copied, and presets loaded from the browser now show their name on

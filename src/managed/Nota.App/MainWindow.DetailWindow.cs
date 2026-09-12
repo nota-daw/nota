@@ -66,7 +66,7 @@ public partial class MainWindow
         _detailWindow = null;
         if (_shuttingDown) return;
         // Re-open docked on the Devices tab; the clip editor stays reachable via the Clip tab.
-        int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : _lastInstrumentTrackId;
+        int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
         if (t > 0) ShowDevices(t);
         SyncClipTab();
     }

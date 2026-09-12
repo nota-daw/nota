@@ -83,9 +83,19 @@ public partial class MainWindow
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.
         if (_editorTrackId != trackId && _audioEditorTrackId != trackId)
             ResetClipEditor();
-        ShowDevices(trackId);
+
+        // Selecting a clip in the arrangement also selects its track — including the select
+        // that an edge-drag does before it trims. That must not pull a user who is working in
+        // the Clip tab over to Devices, so refresh the chain underneath and re-point the Clip
+        // tab at the newly selected clip. With no clip to show, Devices takes the panel as before.
+        bool keepClipTab = !DetailFloating && DetailPanel.IsVisible
+                           && DetailBody.Content is ClipEditorView or AudioClipEditorView
+                           && SelectedClip(out _, out _, out _);
+
+        ShowDevices(trackId, takeOverPanel: !keepClipTab);
         if (_modular?.IsVisible == true) _modular.Show(trackId);   // keep the graph on the selected track
         SyncClipTab();
+        if (keepClipTab) OnDetailClip(this, new RoutedEventArgs());
     }
 
     // Clear all clip-editor state and blank the clip pane (placeholder while floating, so the
@@ -122,14 +132,30 @@ public partial class MainWindow
             ? _clipEditor is not null
             : SelectedClip(out _, out _, out _);
 
-    private void ShowDevices(int trackId)
+    // takeOverPanel: false shows the chain without claiming the docked panel, for callers that
+    // only follow the selection (see OnTrackSelected). Explicit "show me the devices" callers
+    // — a browser drop, Convert, the Devices tab — leave it true.
+    private void ShowDevices(int trackId, bool takeOverPanel = true)
     {
-        if (_vm is null || _deviceChain is null || trackId <= 0) return;
+        if (_vm is null || _deviceChain is null) return;
+        // No track (the selected one was just deleted): empty the chain instead of leaving the
+        // dead track's instrument/effect cards on screen — they'd still edit a removed track.
+        // Don't pop the panel open for it; just clear whatever is already showing.
+        if (trackId <= 0)
+        {
+            _deviceChain.Show(-1);
+            SetDetailChip(-1, "Devices");
+            ApplyFrozenChainDim(-1);
+            return;
+        }
         _deviceChain.Show(trackId);
-        SetHost(DeviceHost, _deviceChain);
         SetDetailChip(trackId);
         ApplyFrozenChainDim(trackId);      // M7: dim the chain while frozen
-        if (DetailFloating) return;   // floating: bottom pane only, don't touch the docked row/tabs
+        // Docked, both tabs share one host, so hosting the chain *is* the switch to Devices —
+        // skip it when we're only following the selection. Floating has its own pane, so the
+        // chain always goes there and no tab is at stake.
+        if (DetailFloating || takeOverPanel) SetHost(DeviceHost, _deviceChain);
+        if (DetailFloating || !takeOverPanel) return;   // floating: bottom pane only, don't touch the docked row/tabs
         DetailDevicesBtn.IsChecked = true;
         DetailClipBtn.IsChecked = false;
         ShowDetail(320, honorPersist: false);   // Devices: natural card-fitting height
@@ -243,6 +269,29 @@ public partial class MainWindow
         ShowDetail(250, honorPersist: true);
     }
 
+    // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
+    // clip's geometry when they're built, so push the new start+length into whichever one is
+    // open on that clip — otherwise the editor keeps drawing the pre-drag length until it's
+    // rebuilt (double-click, track switch, undo).
+    private void OnClipGeometryChanged(int trackId, int clipIndex)
+    {
+        if (trackId <= 0 || clipIndex < 0 || !Engine.TryGetClipInfo(trackId, clipIndex, out var ci)) return;
+
+        if (_editorRoll is not null && _editorTrackId == trackId && _editorClipIndex == clipIndex)
+        {
+            double len = ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
+            // SetNotes resets the roll's selection, so only re-seed it when the span really moved;
+            // a pure move leaves the notes (clip-local) untouched.
+            if (Math.Abs(len - _editorRoll.LengthBeats) > 1e-9)
+                _editorRoll.SetNotes(Engine.GetClipNotes(trackId, clipIndex), len);
+            _clipEditor?.SetClipBounds(ci.StartBeat, len);
+        }
+        else if (_audioEditor is not null && _audioEditorTrackId == trackId && _audioEditorClipIndex == clipIndex)
+        {
+            _audioEditor.Reload();
+        }
+    }
+
     private void ReloadEditorNotes()
     {
         if (_vm is null || _editorRoll is null || _editorTrackId < 0) return;
@@ -265,7 +314,7 @@ public partial class MainWindow
 
     private void OnDetailDevices(object? sender, RoutedEventArgs e)
     {
-        int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : _lastInstrumentTrackId;
+        int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
         if (t > 0) ShowDevices(t);
         else { DetailDevicesBtn.IsChecked = false; if (_vm is not null) _vm.StatusText = "Select a track first."; }
     }

@@ -25,8 +25,17 @@ public partial class MainWindow
 {
     private int _lastInstrumentTrackId;
 
+    /// <summary>The fallback target when nothing is selected: the last instrument track added,
+    /// but only while it still exists — it may have been deleted, cut or undone since, and
+    /// acting on a dead track id silently edits nothing (or re-shows its stale device chain).</summary>
+    private int LastInstrumentTrack()
+    {
+        if (_lastInstrumentTrackId > 0 && TrackIndexOf(_lastInstrumentTrackId) < 0) _lastInstrumentTrackId = 0;
+        return _lastInstrumentTrackId;
+    }
+
     // Effects target the selected track, else the last instrument track added.
-    private int EffectTarget() => Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : _lastInstrumentTrackId;
+    private int EffectTarget() => Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
 
     // Applies a preset browser row: factory presets (Path "factory:<id>") resolve through
     // the shipped catalog; user presets load from disk. Instrument presets create a new

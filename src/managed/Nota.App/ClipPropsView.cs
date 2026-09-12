@@ -39,7 +39,7 @@ public sealed class ClipPropsView : UserControl
         { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4T", "1/8T", "1/16T", "1/32T" };
 
     private readonly PianoRollView _roll;
-    private readonly double _startBeat;
+    private readonly TextBlock _startText;
     private readonly TextBlock _lengthText;
     private readonly TextBlock _loopText;
     private readonly TextBlock _selInfo;
@@ -52,12 +52,12 @@ public sealed class ClipPropsView : UserControl
     public ClipPropsView(PianoRollView roll, string clipName, double startBeat)
     {
         _roll = roll;
-        _startBeat = startBeat;
         Width = 200;
         Background = Panel;
         BorderBrush = BorderDef;
         BorderThickness = new Thickness(0, 0, 1, 0);
 
+        _startText = Mono(Position(startBeat));
         _lengthText = Mono(Duration(roll.LengthBeats));
         _loopText = Mono($"{roll.LengthBeats:0.#}b");
         _loopText.Foreground = AccentBright;
@@ -69,7 +69,8 @@ public sealed class ClipPropsView : UserControl
         body.Children.Add(Section("CLIP", ReadoutBox(clipName, TextPrimary, 24, 11, false)));
 
         var startLen = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-        startLen.Children.Add(Labeled("START", ReadoutBox(Position(startBeat), TextPrimary, 22, 10, true)));
+        var startBox = FieldBox(22); startBox.Child = _startText;
+        startLen.Children.Add(Labeled("START", startBox));
         var lenBox = FieldBox(22); lenBox.Child = _lengthText;
         var lenWrap = Labeled("LENGTH", lenBox);
         Grid.SetColumn(lenWrap, 1);
@@ -147,6 +148,10 @@ public sealed class ClipPropsView : UserControl
 
         _roll.Changed += OnRollChanged;
     }
+
+    /// <summary>Re-points the START read-out after the clip moved or was trimmed from the
+    /// left in the arrangement. LENGTH / LOOP follow the roll's own Changed event.</summary>
+    public void SetStart(double startBeat) => _startText.Text = Position(startBeat);
 
     private void OnRollChanged()
     {

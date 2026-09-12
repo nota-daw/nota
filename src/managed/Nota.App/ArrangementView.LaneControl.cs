@@ -460,6 +460,9 @@ public sealed partial class ArrangementView
                             keptDeviceAuto |= eng.LastMoveKeptDeviceAutomation();
                         }
                         else eng.MoveClip(m.track, m.clip, m.vm.StartBeat);
+                        // Same-track moves keep their clip index, so an open editor on one of
+                        // them stays valid — but its START read-out is now off.
+                        if (rowDelta == 0) _o.RaiseClipGeometryChanged(m.track, m.clip);
                     }
                 if (keptDeviceAuto)   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
                     _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
@@ -483,6 +486,8 @@ public sealed partial class ArrangementView
                     eng.TrimClip(_dragTrackId, _dragClipIndex, _dragClip.StartBeat, _dragClip.LengthBeats);
                 else
                     eng.ResizeAudioClip(_dragTrackId, _dragClipIndex, _dragClip.StartBeat, _dragClip.LengthBeats);
+                // An editor open on this clip still holds the pre-drag geometry.
+                _o.RaiseClipGeometryChanged(_dragTrackId, _dragClipIndex);
             }
             _drag = Drag.None;
             _dragClip = null;

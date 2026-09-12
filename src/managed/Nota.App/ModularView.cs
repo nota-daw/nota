@@ -184,10 +184,12 @@ public sealed class ModularView : UserControl
 
     // ---- public API (mirrors DeviceChainView.Show / MixerView.Refresh) ---
 
-    /// <summary>Point the graph at a track and rebuild it.</summary>
+    /// <summary>Point the graph at a track and rebuild it. A non-positive id means "no track"
+    /// (the selected one was just deleted) and empties the canvas rather than leaving the
+    /// removed track's nodes on screen still wired to a dead track id.</summary>
     public void Show(int trackId)
     {
-        if (trackId <= 0) return;
+        if (trackId <= 0) { _trackId = -1; Rebuild(); RefreshSidebar(); return; }
         bool changed = trackId != _trackId;
         _trackId = trackId;
         Rebuild();

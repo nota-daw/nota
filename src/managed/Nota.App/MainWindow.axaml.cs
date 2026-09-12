@@ -232,6 +232,7 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         Timeline.TrackSelected += OnTrackSelected;
+        Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
         _session = new SessionView(vm.Engine) { IsVisible = false };
@@ -423,7 +424,7 @@ public partial class MainWindow : Window
         if (session) _session.Refresh();
         if (modular)
         {
-            int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : _lastInstrumentTrackId;
+            int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
             if (t > 0) _modular.Show(t);
         }
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)

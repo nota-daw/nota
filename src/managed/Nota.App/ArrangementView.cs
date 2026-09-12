@@ -123,6 +123,12 @@ public sealed partial class ArrangementView : UserControl
     public event Action<BrowserItem, int, double>? ItemDropped;
     /// <summary>Audio-clip context-menu "Convert / Slice to New MIDI Track" (track id, clip index, mode).</summary>
     public event Action<int, int, ClipConvertMode>? ConvertClipRequested;
+    /// <summary>Raised after a clip's start/length changed in place (edge-drag trim or
+    /// stretch): track id, clip index. An open clip editor re-reads its geometry from this.</summary>
+    public event Action<int, int>? ClipGeometryChanged;
+
+    internal void RaiseClipGeometryChanged(int trackId, int clipIndex)
+        => ClipGeometryChanged?.Invoke(trackId, clipIndex);
 
     public ArrangementView()
     {

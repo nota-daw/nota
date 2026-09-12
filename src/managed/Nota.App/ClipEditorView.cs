@@ -30,7 +30,8 @@ public sealed class ClipEditorView : UserControl
     public PianoRollView Roll { get; }
 
     private readonly ContentControl _rightHost;
-    private readonly Control? _envPanel;
+    private readonly EnvPanel? _envPanel;
+    private readonly ClipPropsView _props;
     private Border _notesTab = null!, _envTab = null!;
 
     public ClipEditorView(PianoRollView roll, string clipName, double startBeat,
@@ -43,8 +44,8 @@ public sealed class ClipEditorView : UserControl
             _envPanel = new EnvPanel(engine, trackId, clipIndex, lengthBeats);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var props = new ClipPropsView(roll, clipName, startBeat);
-        grid.Children.Add(props);
+        _props = new ClipPropsView(roll, clipName, startBeat);
+        grid.Children.Add(_props);
         Grid.SetColumn(_rightHost, 1);
         grid.Children.Add(_rightHost);
 
@@ -54,6 +55,16 @@ public sealed class ClipEditorView : UserControl
         dock.Children.Add(header);
         dock.Children.Add(grid);
         Content = dock;
+    }
+
+    /// <summary>Follows a clip that was moved or resized in the arrangement while this editor
+    /// stayed on screen. The roll's own length is pushed by <c>PianoRollView.SetNotes</c>
+    /// (which also refreshes the props rail's LENGTH/LOOP); this carries the pieces that
+    /// otherwise keep their construction-time snapshot.</summary>
+    public void SetClipBounds(double startBeat, double lengthBeats)
+    {
+        _props.SetStart(startBeat);
+        _envPanel?.SetLength(lengthBeats);
     }
 
     private void ShowTab(bool envelopes)
@@ -199,6 +210,8 @@ public sealed class ClipEditorView : UserControl
             Load();
         }
 
+        public void SetLength(double lengthBeats) => _canvas.SetLength(lengthBeats);
+
         private void CycleTarget()
         {
             _target = _target == MidiClipEnvelope.Velocity ? MidiClipEnvelope.Volume : MidiClipEnvelope.Velocity;
@@ -233,13 +246,23 @@ public sealed class ClipEditorView : UserControl
         private static readonly IBrush GridBeat = new SolidColorBrush(Color.FromArgb(0x50, 0x3A, 0x36, 0x2D));
         private static readonly IBrush EnvLine = NotaPalette.AccentBright;
         private readonly System.Collections.Generic.List<EnvPt> _pts = new();
-        private readonly double _clipBeats;
+        private double _clipBeats;
         private int _drag = -1;
         private EnvPt? _bend;
         private const double HandlePx = 7;
 
         public Action<double[], double[], float[]>? Committed;
         public EnvCanvas(double clipBeats) { _clipBeats = Math.Max(1e-6, clipBeats); }
+
+        // The clip was trimmed/stretched in the arrangement: re-span the beat axis. Points keep
+        // their beats (the engine clamps them to the new length), so only the mapping changes.
+        public void SetLength(double clipBeats)
+        {
+            double v = Math.Max(1e-6, clipBeats);
+            if (Math.Abs(v - _clipBeats) < 1e-9) return;
+            _clipBeats = v;
+            InvalidateVisual();
+        }
 
         public void SetPoints(double[] beats, double[] values, float[] curves)
         {
