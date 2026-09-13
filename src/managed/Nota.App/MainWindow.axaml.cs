@@ -231,6 +231,7 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
+        Browser.SetSettings(vm.Settings);   // the ⋮ view options persist
         Browser.SetViewModel(vm.Browser);
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.PreviewRequested += OnBrowserPreview;

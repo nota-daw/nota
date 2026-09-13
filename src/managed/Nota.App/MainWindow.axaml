@@ -287,15 +287,17 @@
         <RowDefinition Height="0"/>
       </Grid.RowDefinitions>
 
-      <!-- Left browser (240) + main area (fills) -->
+      <!-- Left browser (240) + main area (fills). The browser is an island: it floats on
+           the app ground with an even gutter, so the splitter beside it carries no line of
+           its own — it is a 2px transparent grab strip inside that gutter. -->
       <Grid Grid.Row="0">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="240" MinWidth="160" MaxWidth="480"/>
+          <ColumnDefinition Width="288" MinWidth="160" MaxWidth="480"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <app:BrowserView x:Name="Browser" Grid.Column="0"/>
-        <GridSplitter Grid.Column="1" Width="3" Background="{DynamicResource Brush.BorderDefault}"
+        <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="8,8,6,8"/>
+        <GridSplitter Grid.Column="1" Width="2" Background="Transparent"
                       ResizeDirection="Columns"/>
         <Panel x:Name="MainContent" Grid.Column="2">
           <app:ArrangementView x:Name="Timeline"/>
@@ -305,10 +307,10 @@
       <!-- Drag handle to resize the Detail panel (only shown when it is open). -->
       <GridSplitter x:Name="DetailSplitter"
                     Grid.Row="1"
-                    Height="3"
+                    Height="2"
                     IsVisible="False"
                     HorizontalAlignment="Stretch" ResizeDirection="Rows"
-                    Background="{DynamicResource Brush.BorderDefault}"/>
+                    Background="Transparent"/>
 
       <!-- Detail panel: Devices chain / Clip (piano roll) / Mixer for the selected track -->
       <Border x:Name="DetailPanel" Grid.Row="2" Classes="Panel"

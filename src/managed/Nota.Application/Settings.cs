@@ -46,6 +46,14 @@ public sealed class Settings
     /// <summary>Base-octave shift for gamepad notes, in semitones ÷ 12 (d-pad
     /// up/down live-shifts this)</summary>
     public int GamepadOctave { get; set; }
+
+    // --- browser view options (the ⋮ button next to the browser search) ------
+    /// <summary>Show each row's type as a quiet tag on the right edge of the browser list.</summary>
+    public bool BrowserShowTypeTags { get; set; } = true;
+    /// <summary>Group the device tabs into BUILT-IN and PLUG-INS sections with counts.</summary>
+    public bool BrowserGroupBySource { get; set; } = true;
+    /// <summary>Float favorited devices to the top of their section.</summary>
+    public bool BrowserFavoritesFirst { get; set; } = true;
 }
 
 public interface ISettingsService

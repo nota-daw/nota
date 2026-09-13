@@ -16,6 +16,9 @@ namespace Nota.Presentation;
 public enum BrowserItemKind
 {
     BuiltinInstrument, BuiltinEffect, BuiltinMidiEffect, PluginInstrument, PluginEffect, Sample, Project, Preset, Folder,
+    /// <summary>A section header row (BUILT-IN / PLUG-INS) inside a flattened list — never
+    /// selectable, draggable or activatable.</summary>
+    Group,
 }
 
 /// <summary>Active library filter for the device tabs (Instr / FX / MIDI).</summary>
@@ -27,8 +30,22 @@ public sealed class BrowserItem
     public required BrowserItemKind Kind { get; init; }
     public int CatalogIndex { get; init; } = -1; // plugins
     public int BuiltinKind { get; init; } = -1;   // effects: 0=EQ,1=Compressor,2=Reverb,3=Delay,4=Utility · instruments: 0=Synth,2=Physical,5=Aurora
-    public string Sub { get; init; } = "";        // format / manufacturer / folder
+    public string Sub { get; init; } = "";        // type / manufacturer / folder
+    public string Format { get; init; } = "";     // plug-ins: "VST3" / "AU" (Sub carries the vendor)
     public string Path { get; init; } = "";       // file/bundle path for samples/projects/presets
+
+    /// <summary>Section-header row (see <see cref="BrowserItemKind.Group"/>): Name is the
+    /// caption and <see cref="GroupCount"/> how many rows it heads.</summary>
+    public bool IsGroup => Kind == BrowserItemKind.Group;
+    public int GroupCount { get; init; }
+
+    /// <summary>The brand prefix a built-in device name carries ("Nota"), or "" — the browser
+    /// prints it in tertiary ink so names scan on their distinctive word.</summary>
+    public string Prefix => Name.StartsWith("Nota ", StringComparison.Ordinal) ? "Nota" : "";
+    /// <summary>The name without its brand prefix.</summary>
+    public string ShortName => Prefix.Length > 0 ? Name[5..] : Name;
+    /// <summary>True for a scanned AU/VST3 row (as opposed to one of Nota's own devices).</summary>
+    public bool IsPlugin => Kind is BrowserItemKind.PluginInstrument or BrowserItemKind.PluginEffect;
 
     // --- tree (Instruments / FX): a built-in device parent with factory-preset children ---
     public int Depth { get; init; }                            // 0 = device/plugin, 1 = preset child
@@ -46,7 +63,9 @@ public sealed class BrowserItem
         BrowserItemKind.BuiltinInstrument => $"bi:{BuiltinKind}",
         BrowserItemKind.BuiltinEffect => $"be:{BuiltinKind}",
         BrowserItemKind.BuiltinMidiEffect => $"bm:{BuiltinKind}",
-        BrowserItemKind.PluginInstrument or BrowserItemKind.PluginEffect => $"pl:{Name}|{Sub}",
+        // Keyed on the format, not the (display-only) vendor, so favorites and tags
+        // saved before the vendor moved into Sub still resolve.
+        BrowserItemKind.PluginInstrument or BrowserItemKind.PluginEffect => $"pl:{Name}|{Format}",
         _ => "",
     };
 }
@@ -74,6 +93,24 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     private BrowserFilter _filterMode = BrowserFilter.None;
     private string _filterTagId = "";
+    private bool _groupBySource = true;
+    private bool _favoritesFirst = true;
+
+    /// <summary>Split the device tabs into BUILT-IN / PLUG-INS sections with counts.</summary>
+    public bool GroupBySource
+    {
+        get => _groupBySource;
+        set { if (_groupBySource == value) return; _groupBySource = value; RebuildDeviceTabs(); }
+    }
+
+    /// <summary>Float favorited devices to the top of their section.</summary>
+    public bool FavoritesFirst
+    {
+        get => _favoritesFirst;
+        set { if (_favoritesFirst == value) return; _favoritesFirst = value; RebuildDeviceTabs(); }
+    }
+
+    private void RebuildDeviceTabs() { RebuildVisible(0); RebuildVisible(1); RebuildVisible(2); }
 
     public ObservableCollection<BrowserItem> Instruments { get; } = new();
     public ObservableCollection<BrowserItem> Effects { get; } = new();
@@ -127,9 +164,7 @@ public sealed partial class BrowserViewModel : ObservableObject
     {
         _filterMode = mode;
         _filterTagId = tagId ?? "";
-        RebuildVisible(0);
-        RebuildVisible(1);
-        RebuildVisible(2);
+        RebuildDeviceTabs();
     }
 
     // Any favorite/tag mutation → refresh device rows (markers + active filter). If the
@@ -138,9 +173,7 @@ public sealed partial class BrowserViewModel : ObservableObject
     {
         if (_filterMode == BrowserFilter.Tag && !Tags.Any(t => t.Id == _filterTagId))
         { _filterMode = BrowserFilter.None; _filterTagId = ""; }
-        RebuildVisible(0);
-        RebuildVisible(1);
-        RebuildVisible(2);
+        RebuildDeviceTabs();
         LibraryChanged?.Invoke();
     }
 
@@ -252,20 +285,24 @@ public sealed partial class BrowserViewModel : ObservableObject
             var parts = desc.Split('|');
             string name = parts.Length > 0 ? parts[0].Trim() : desc;
             string fmt = parts.Length > 1 ? parts[1].Trim() : "";
+            string vendor = parts.Length > 3 ? parts[3].Trim() : "";
             bool isInstrument = desc.Contains("| inst |");
             var item = new BrowserItem
             {
                 Name = name,
-                Sub = fmt,
+                // The row's right-edge tag. Format first: the same plug-in is often installed
+                // in two formats, and those rows are otherwise identical. The vendor follows,
+                // and is what gets trimmed when the panel is narrow.
+                Sub = fmt.Length > 0 && vendor.Length > 0 ? $"{fmt} · {vendor}"
+                    : vendor.Length > 0 ? vendor : fmt,
+                Format = fmt,
                 Kind = isInstrument ? BrowserItemKind.PluginInstrument : BrowserItemKind.PluginEffect,
                 CatalogIndex = i,
             };
             (isInstrument ? _instrTree : _fxTree).Add(item);
         }
 
-        RebuildVisible(0);
-        RebuildVisible(1);
-        RebuildVisible(2);
+        RebuildDeviceTabs();
         RebuildSamples();
         RebuildProjects();
         RebuildPresets();
@@ -307,42 +344,79 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     // Flatten a tree into its visible ObservableCollection, honouring expand state and
     // the current query. With a query, matching is name/sub substring; a matching device
-    // shows all its presets, and a device with matching presets shows just those.
+    // shows all its presets, and a device with matching presets shows just those. With
+    // GroupBySource on, a BUILT-IN / PLUG-INS header carrying the section's device count
+    // is emitted ahead of each run — so it is clear where Nota's own devices end.
     private void RebuildVisible(int tab)
     {
         var tree = tab == 2 ? _midiTree : tab == 1 ? _fxTree : _instrTree;
         var dst = tab == 2 ? MidiEffects : tab == 1 ? Effects : Instruments;
         string q = _treeQuery[tab].Trim();
         dst.Clear();
-        // Favorited devices float to the top (stable: keeps alphabetical order within each group).
-        var ordered = _library is null ? (IEnumerable<BrowserItem>)tree
-            : tree.OrderByDescending(n => _library.IsFavorite(n.LibraryKey));
+
+        // Favorited devices float to the top (stable sorts: alphabetical order survives
+        // inside each run, and the source sort keeps the favorites-first order within a section).
+        IEnumerable<BrowserItem> ordered = tree;
+        if (_favoritesFirst && _library is not null)
+            ordered = ordered.OrderByDescending(n => _library.IsFavorite(n.LibraryKey));
+        if (_groupBySource) ordered = ordered.OrderBy(n => n.IsPlugin ? 1 : 0);
+
+        // Visible devices first, so a section header can carry its real count.
+        var devices = new List<BrowserItem>();
         foreach (var node in ordered)
         {
             if (!PassesLibraryFilter(node)) continue;   // header favorite/tag chip
+            if (q.Length == 0 || Matches(node, q) || node.Children.Any(c => Matches(c, q)))
+                devices.Add(node);
+        }
+
+        string section = "";
+        foreach (var node in devices)
+        {
+            if (_groupBySource)
+            {
+                string s = node.IsPlugin ? "PLUG-INS" : "BUILT-IN";
+                if (s != section)
+                {
+                    section = s;
+                    dst.Add(new BrowserItem
+                    {
+                        Name = s,
+                        Kind = BrowserItemKind.Group,
+                        GroupCount = devices.Count(d => (d.IsPlugin ? "PLUG-INS" : "BUILT-IN") == s),
+                    });
+                }
+            }
+            dst.Add(node);
+            // No query: presets follow only while the device is expanded. With a query, a
+            // device that matched shows all of its presets; one that didn't shows the hits.
             if (q.Length == 0)
             {
-                dst.Add(node);
-                if (node.IsExpanded)
-                    foreach (var c in node.Children) dst.Add(c);
-                continue;
+                if (node.IsExpanded) foreach (var c in node.Children) dst.Add(c);
             }
-            bool nodeHit = Matches(node, q);
-            if (nodeHit)
+            else if (Matches(node, q))
             {
-                dst.Add(node);
                 foreach (var c in node.Children) dst.Add(c);
             }
             else
             {
-                var hits = node.Children.Where(c => Matches(c, q)).ToList();
-                if (hits.Count > 0)
-                {
-                    dst.Add(node);
-                    foreach (var c in hits) dst.Add(c);
-                }
+                foreach (var c in node.Children) if (Matches(c, q)) dst.Add(c);
             }
         }
+    }
+
+    /// <summary>Device rows on a tab, split by source — for the browser's status line.
+    /// Counts what is actually visible (search + favorite/tag filter applied).</summary>
+    public (int builtin, int plugins) VisibleDeviceCounts(int tab)
+    {
+        var src = tab == 2 ? MidiEffects : tab == 1 ? Effects : Instruments;
+        int bi = 0, pl = 0;
+        foreach (var it in src)
+        {
+            if (it.IsGroup || it.Depth > 0) continue;
+            if (it.IsPlugin) pl++; else bi++;
+        }
+        return (bi, pl);
     }
 
     private static bool Matches(BrowserItem it, string q)

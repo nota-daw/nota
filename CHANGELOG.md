@@ -38,6 +38,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **The browser is a compact index.** It is now an island panel — rounded, floating on the
+  app ground — and its rows are single-line: sectioned into **BUILT-IN** and **PLUG-INS**
+  with counts, the repeated "Nota" prefix dropped to tertiary ink so names scan on their
+  distinctive word, and the device type moved to the right edge as a quiet tag. The name
+  keeps its room: a long one pushes the tag out rather than being truncated by it. A
+  plug-in's tag carries its format and vendor, so the AU and VST3 builds of one plug-in are
+  no longer two identical rows. The icon rail was redrawn on a 24-unit grid with round caps
+  — the glyphs are sized against each other rather than each filling its box — and lost its
+  chip backgrounds along with the per-row amber icons; the active tab is marked by a brass
+  edge, with a hairline between the device tabs and the library tabs. The panel also opens
+  a little wider than before, so a device name and its type both fit on the line.
+  - A **⋮ button** beside the search box holds the view options — show type tags, group by
+    source, favourites first — and the tag editor, which used to need a chip of its own.
+  - The filter chips keep to **one line**; whatever does not fit collapses into a **+N**
+    that opens the rest, instead of wrapping and pushing the list down.
+  - A **status line** along the bottom counts what the tab is showing.
+- **The splitters between the browser, the arrangement and the detail panel are invisible
+  now** — 2px transparent grab strips inside the gutter, since the browser island's own
+  edge already draws the line.
 - **Automation has no record modes any more.** Read / Touch / Latch / Write are gone, and
   the **Automation** button now only shows and edits the lanes. Automation always plays
   back, and recording is contextual, the way Live does it: engage the transport **Record**

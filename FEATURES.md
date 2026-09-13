@@ -373,16 +373,28 @@ and user presets, automation, persistence and cloning.
 
 ## Browser and assets
 
-- Tabs: **Samples** (files, with folder tree navigation), **Projects**, **Presets** (a tree
-  of category → device → preset), **Plugins** (AU/VST3), **Instruments / Audio Effects /
-  MIDI Effects**, and **Map** (MIDI Learn mappings).
+- An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
+  MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
+  category → device → preset), **Projects**, and **Map** (MIDI Learn mappings). A hairline
+  separates the device tabs from the library tabs, and the active one carries a brass edge.
+- **A compact index**: single-line rows, sectioned into **BUILT-IN** and **PLUG-INS** with
+  counts, so it is clear where Nota's own devices end and the scanned plug-ins begin. The
+  "Nota" prefix drops to tertiary ink — names scan on their distinctive word — and the
+  device type sits at the right edge as a quiet tag (a plug-in's tag names its format and
+  vendor, which tells the AU and VST3 builds of one plug-in apart). The name always wins
+  the room: the tag gives way rather than truncating it.
+- **View options** (the ⋮ button beside the search box): show type tags, group by source,
+  favourites first — each remembered across sessions — plus the tag editor.
+- A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
+  search box counts the matches.
 - **Preview** a sample from the browser, and **drag and drop** onto a track, into the grid,
   or into a rack chain.
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
     Racks are not replaced in place.
 - **Favourites** (★) and **tags** (assign and clear, an editor with a title and colour,
-  filter chips in the header); favourited devices sort to the top of their lists.
+  filter chips in the header); favourited devices sort to the top of their section. The
+  chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
   confirmation); Files — Reveal in Finder; Presets — Reveal in Finder.
 - **Hints for empty tabs** — explaining what the tab is and how to add content to it.
