@@ -60,6 +60,9 @@
             <NativeMenuItem Header="Toggle browser" Click="OnMenuToggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" Click="OnMenuToggleClip"/>
             <NativeMenuItem Header="Toggle overview" Click="OnMenuToggleOverview"/>
+            <NativeMenuItem Header="Toggle sections" Click="OnMenuToggleSections"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Clip names" Click="OnMenuCycleClipNames"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -287,9 +290,9 @@
         <RowDefinition Height="0"/>
       </Grid.RowDefinitions>
 
-      <!-- Left browser (240) + main area (fills). The browser is an island: it floats on
-           the app ground with an even gutter, so the splitter beside it carries no line of
-           its own — it is a 2px transparent grab strip inside that gutter. -->
+      <!-- Left browser (240) + main area (fills). Browser and arrangement are both islands:
+           they float on the app ground with an even gutter, so the splitter between them
+           carries no line of its own — it is a 2px transparent grab strip inside that gutter. -->
       <Grid Grid.Row="0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="288" MinWidth="160" MaxWidth="480"/>
@@ -300,7 +303,7 @@
         <GridSplitter Grid.Column="1" Width="2" Background="Transparent"
                       ResizeDirection="Columns"/>
         <Panel x:Name="MainContent" Grid.Column="2">
-          <app:ArrangementView x:Name="Timeline"/>
+          <app:ArrangementView x:Name="Timeline" Margin="0,8,8,8"/>
         </Panel>
       </Grid>
 

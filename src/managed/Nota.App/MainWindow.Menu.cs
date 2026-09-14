@@ -149,6 +149,37 @@ public partial class MainWindow
         Timeline.ShowOverview = !Timeline.ShowOverview;
         if (_vm is not null) _vm.StatusText = Timeline.ShowOverview ? "Overview strip shown" : "Overview strip hidden";
     }
+    private void OnMenuToggleSections(object? sender, EventArgs e)
+    {
+        Timeline.ShowSections = !Timeline.ShowSections;
+        if (_vm is null) return;
+        _vm.Settings.Current.ArrangementShowSections = Timeline.ShowSections;
+        _vm.Settings.Save();
+        _vm.StatusText = Timeline.ShowSections ? "Sections lane shown" : "Sections lane hidden";
+    }
+    // Cycles how much of the arrangement prints clip names: every clip → the head of each run
+    // (the default, so a repeated pattern reads as one block) → none.
+    private void OnMenuCycleClipNames(object? sender, EventArgs e)
+    {
+        Timeline.ClipLabels = Timeline.ClipLabels switch
+        {
+            ClipLabelMode.Every => ClipLabelMode.RunStart,
+            ClipLabelMode.RunStart => ClipLabelMode.None,
+            _ => ClipLabelMode.Every,
+        };
+        if (_vm is not null)
+        {
+            _vm.Settings.Current.ArrangementClipLabels = (int)Timeline.ClipLabels;
+            _vm.Settings.Save();
+        }
+        if (_vm is not null)
+            _vm.StatusText = Timeline.ClipLabels switch
+            {
+                ClipLabelMode.Every => "Clip names: every clip",
+                ClipLabelMode.RunStart => "Clip names: first of a run",
+                _ => "Clip names: none",
+            };
+    }
     private void OnMenuPlayStop(object? sender, EventArgs e) => _vm?.Transport.PlayStopCommand.Execute(null);
     private void OnMenuRecord(object? sender, EventArgs e) { if (_vm is not null) _vm.Transport.RecordOn = !_vm.Transport.RecordOn; }
     private void OnMenuLoop(object? sender, EventArgs e)

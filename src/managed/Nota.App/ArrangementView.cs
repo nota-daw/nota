@@ -24,6 +24,9 @@ public enum ClipConvertMode { Drums, Slice, Melody, Harmony }
 /// <summary>Which kind of track an arrangement context menu asked for.</summary>
 public enum NewTrackKind { Instrument, Audio, Return }
 
+/// <summary>How much of the arrangement names its clips (View ▸ Clip names).</summary>
+public enum ClipLabelMode { Every, RunStart, None }
+
 public sealed partial class ArrangementView : UserControl
 {
     // --- coordinate model / shared state ---
@@ -67,10 +70,85 @@ public sealed partial class ArrangementView : UserControl
     // Per-track chosen automation target, kept across Refresh (which rebuilds VMs).
     private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId)> _autoTargets = new();
 
-    private const double HeaderW = 224;
-    private const double RowHeight = 64;
+    private const double HeaderW = 228;
+    private const double RowHeight = 64;         // a track row: header carries every control
+    private const double GroupRowHeight = 26;    // a group row: a slim titled bar, no controls
     private const double RulerH = 24;
+    private const double SectionsH = 22;    // song-structure lane above the ruler
     private const double FooterRowH = 40;   // slim return/master rows
+
+    // Row geometry. Rows are no longer a fixed pitch — a group weighs a fraction of a track
+    // (design 1a), so every y↔row conversion goes through the prefix table below instead of
+    // multiplying/dividing by one constant. Rebuilt on every Refresh, after ApplyHierarchy.
+    private double[] _rowTops = { 0 };
+
+    private void RebuildRowGeometry()
+    {
+        var tops = new double[_tracks.Count + 1];
+        double y = 0;
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            tops[i] = y;
+            y += IsSlimRow(_tracks[i]) ? GroupRowHeight : RowHeight;
+        }
+        tops[_tracks.Count] = y;
+        _rowTops = tops;
+    }
+
+    /// <summary>Height of arrangement row <paramref name="i"/> — a slim bar for a group.</summary>
+    internal double RowHeightAt(int i)
+        => i >= 0 && i < _tracks.Count && IsSlimRow(_tracks[i]) ? GroupRowHeight : RowHeight;
+
+    /// <summary>A group is a slim titled bar (1a: "groups weigh the same as their children"
+    /// was the problem) — until it is the selected track, where it opens to a full row so its
+    /// own mute/solo, fader, pan and meter stay reachable.</summary>
+    private bool IsSlimRow(TrackVM t) => t.IsGroup && t.Id != SelTrackId;
+    internal bool IsSlimRowAt(int i) => i >= 0 && i < _tracks.Count && IsSlimRow(_tracks[i]);
+
+    /// <summary>Top edge of row <paramref name="i"/> in lane coordinates. Indices past the
+    /// last row extrapolate by a full track row, so "the gap after the end" still has a y.</summary>
+    internal double RowTop(int i)
+    {
+        if (i <= 0) return 0;
+        int n = _tracks.Count;
+        return i <= n ? _rowTops[i] : _rowTops[n] + (i - n) * RowHeight;
+    }
+
+    /// <summary>Combined height of every visible row.</summary>
+    internal double RowsHeight => _rowTops[_tracks.Count];
+
+    /// <summary>Row containing <paramref name="y"/>, or -1 when it falls outside the rows.</summary>
+    internal int RowAtY(double y)
+    {
+        if (y < 0 || _tracks.Count == 0 || y >= _rowTops[_tracks.Count]) return -1;
+        for (int i = 0; i < _tracks.Count; i++)
+            if (y < _rowTops[i + 1]) return i;
+        return -1;
+    }
+
+    /// <summary>Like <see cref="RowAtY"/> but clamped to the first/last row (-1 only when
+    /// there are no rows at all) — for gestures that must always land somewhere.</summary>
+    internal int RowAtYClamped(double y)
+    {
+        if (_tracks.Count == 0) return -1;
+        int r = RowAtY(y);
+        return r >= 0 ? r : (y < 0 ? 0 : _tracks.Count - 1);
+    }
+
+    /// <summary>Insertion gap nearest <paramref name="y"/> (0.._tracks.Count) — where a
+    /// header-reorder drop would land.</summary>
+    internal int RowGapAtY(double y)
+    {
+        int n = _tracks.Count;
+        if (n == 0) return 0;
+        for (int i = 0; i < n; i++)
+        {
+            double top = _rowTops[i], bot = _rowTops[i + 1];
+            if (y < (top + bot) / 2) return i;
+            if (y < bot) return i + 1;
+        }
+        return n;
+    }
 
     private IAudioEngine? _engine;
 
@@ -141,6 +219,7 @@ public sealed partial class ArrangementView : UserControl
     {
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
+        _sectionsLane = new SectionsControl(this);
         _lanes = new LaneControl(this) { VerticalAlignment = VerticalAlignment.Top };
         // Sits in the same grid cell as _lanes, on top; hit-transparent so all pointer
         // gestures pass through to the lanes beneath.
@@ -186,8 +265,10 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(_ruler, 1);
         top.Children.Add(_ruler);
 
-        // Above the ruler: the Overview strip (whole project + a draggable viewport window).
+        // Above the ruler: the Overview strip (whole project + a draggable viewport window),
+        // then the Sections lane — song structure sits directly over the bar numbers it names.
         _overviewRow = BuildOverviewRow();
+        _sectionsRow = BuildSectionsRow();
 
         // Center: vertical scroll over [headers | lanes].
         // Top-anchored: the ScrollViewer would otherwise stretch the short
@@ -229,7 +310,7 @@ public sealed partial class ArrangementView : UserControl
         {
             if (!e.GetCurrentPoint(scroller).Properties.IsRightButtonPressed) return;
             double y = e.GetPosition(_headers).Y;                     // shared vertical (scrolls with content)
-            if (y >= 0 && y < _tracks.Count * RowHeight) return;      // on a track → it shows its own menu
+            if (y >= 0 && y < RowsHeight) return;                     // on a track → it shows its own menu
             ShowEmptyAreaMenu(scroller);
         };
         // Wheel over the empty area below the tracks (top-anchored lanes leave a gap when few
@@ -270,15 +351,30 @@ public sealed partial class ArrangementView : UserControl
 
         var root = new DockPanel();
         DockPanel.SetDock(_overviewRow, Dock.Top);
+        DockPanel.SetDock(_sectionsRow, Dock.Top);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         DockPanel.SetDock(_footer, Dock.Bottom);
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
+        root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
         root.Children.Add(bottom);
         root.Children.Add(_footer);
         root.Children.Add(centerArea);
-        Content = root;
+
+        // The island: like the browser, the arrangement is a rounded card floating on the app
+        // ground rather than a full-bleed region. ClipToBounds keeps the ruler, the header
+        // column and the pinned footer inside the rounded corners.
+        var island = new Border
+        {
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            Child = root,
+        };
+        island.BindResource(Border.CornerRadiusProperty, "Radius.Md");
+        island.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        Content = island;
     }
 
     public IAudioEngine? Engine
@@ -299,6 +395,15 @@ public sealed partial class ArrangementView : UserControl
     public int BeatsPerBar { get => _beatsPerBar; set { _beatsPerBar = value; Redraw(); } }
     /// <summary>Clip-drag snap grid in beats (toolbar Snap chip, 1b).</summary>
     public double SnapBeats { get => _snapBeats; set { _snapBeats = Math.Max(1.0 / 32, value); Redraw(); } }
+
+    /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
+    /// names only the head of each run, so a repeating pattern reads as one block.</summary>
+    public ClipLabelMode ClipLabels
+    {
+        get => _clipLabels;
+        set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
+    }
+    private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -318,7 +423,6 @@ public sealed partial class ArrangementView : UserControl
         _lanes.InvalidateVisual();
     }
     internal IReadOnlyList<TrackVM> Tracks => _tracks;
-    internal double RowH => RowHeight;
 
     /// <summary>When on, the grid scrolls to keep the playhead centred during playback
     /// ("Follow"); the transport-bar Follow toggle drives this.</summary>
@@ -330,6 +434,7 @@ public sealed partial class ArrangementView : UserControl
     {
         CenterOnPlayhead();
         _ruler.InvalidateVisual();
+        _sectionsLane.InvalidateVisual();
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
@@ -372,6 +477,7 @@ public sealed partial class ArrangementView : UserControl
         // Only the overlay (playhead + loop band) moves each tick — the lane surface
         // beneath is unchanged, so leave it be to avoid a full clip/waveform repaint.
         _ruler.InvalidateVisual();
+        if (_sectionsRow.IsVisible) _sectionsLane.InvalidateVisual();
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
         TickOverviewPlayhead();   // only when the marker crossed a pixel of the strip
@@ -508,14 +614,15 @@ public sealed partial class ArrangementView : UserControl
         if (_tracks.Count == 0) return (0, -1);
         double offY = _scroller?.Offset.Y ?? 0;
         double vpH = _scroller is { } s && s.Viewport.Height > 0 ? s.Viewport.Height : _lanes.Bounds.Height;
-        int lo = Math.Max(0, (int)(offY / RowHeight) - 1);
-        int hi = Math.Min(_tracks.Count - 1, (int)((offY + vpH) / RowHeight) + 1);
+        int lo = Math.Max(0, (RowAtYClamped(offY)) - 1);
+        int hi = Math.Min(_tracks.Count - 1, RowAtYClamped(offY + vpH) + 1);
         return (lo, hi);
     }
 
     private void Redraw()
     {
         _ruler.InvalidateVisual();
+        _sectionsLane.InvalidateVisual();   // spans follow scroll + zoom
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();   // playhead/loop band track scroll+zoom+loop edits
         _footerLanes.InvalidateVisual();
@@ -617,11 +724,13 @@ public sealed partial class ArrangementView : UserControl
                     }
                     tvm.Clips.Add(cvm);
                 }
+                MarkClipRuns(tvm);
                 (tvm.IsReturn ? _returns : _tracks).Add(tvm);
             }
         }
 
         ApplyHierarchy();   // reorder _tracks into group DFS order (depth + collapse-filtered)
+        RebuildRowGeometry();   // row tops depend on which rows are groups → after the reorder
         RecomputeTotalBeats();
         LoadMasterAuto();   // master-volume automation for the footer row (M9 follow-up)
         if (rebuildHeaders)
@@ -629,7 +738,7 @@ public sealed partial class ArrangementView : UserControl
             RebuildHeaders();
             RebuildFooterHeaders();
         }
-        _lanes.Height = Math.Max(RowHeight, _tracks.Count * RowHeight);
+        _lanes.Height = Math.Max(RowHeight, RowsHeight);
         _overlay.Height = _lanes.Height;   // keep the playhead/loop overlay the same span
         double footerH = (_returns.Count + 1) * FooterRowH;   // returns + master
         _footer.Height = footerH;
@@ -637,6 +746,21 @@ public sealed partial class ArrangementView : UserControl
         _footerLanes.InvalidateVisual();
         SyncScroll(_lanes.Bounds.Width);
         Redraw();
+    }
+
+    // A clip heads a run when nothing on the track ends where it begins. Engine clip order
+    // is not sorted by time, so this walks a start-ordered view and leaves the VM order alone
+    // (clip indices there address the engine).
+    private static void MarkClipRuns(TrackVM t)
+    {
+        if (t.Clips.Count == 0) return;
+        var byStart = t.Clips.OrderBy(c => c.StartBeat).ToList();
+        double runEnd = double.NegativeInfinity;
+        foreach (var c in byStart)
+        {
+            c.RunStart = c.StartBeat > runEnd + 1e-6;
+            runEnd = Math.Max(runEnd, c.StartBeat + c.LengthBeats);
+        }
     }
 
     private void RecomputeTotalBeats()
@@ -873,7 +997,7 @@ public sealed partial class ArrangementView : UserControl
     {
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
-        int ti = ok ? (int)(e.GetPosition(_lanes).Y / RowHeight) : -1;
+        int ti = ok ? RowAtY(e.GetPosition(_lanes).Y) : -1;
         if (ti != DropTrackIndex) { DropTrackIndex = ti; _lanes.InvalidateVisual(); }
     }
 
@@ -883,8 +1007,8 @@ public sealed partial class ArrangementView : UserControl
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;
         var p = e.GetPosition(_lanes);
-        int ti = (int)(p.Y / RowHeight);
-        int trackId = (ti >= 0 && ti < _tracks.Count) ? _tracks[ti].Id : -1;
+        int ti = RowAtY(p.Y);
+        int trackId = ti >= 0 ? _tracks[ti].Id : -1;
         double beat = Math.Max(0.0, Snap(_scrollBeats + p.X / _pixelsPerBeat));
         // One internal item drops as-is; multiple external files land the first on the
         // target track and each of the rest on its own new track (trackId -1), so they
@@ -896,14 +1020,35 @@ public sealed partial class ArrangementView : UserControl
     internal void Select(int trackId, int clipIndex)
     {
         if (HasTimeSelection) ClearTimeSelection();   // clip- and time-selection are exclusive (1.2.5)
+        int prev = SelTrackId;
         SelTrackId = trackId;
         SelClipIndex = clipIndex;
         _sel.Clear();
         if (trackId > 0 && clipIndex >= 0) _sel.Add((trackId, clipIndex));
+        // Selecting into or out of a group changes that row's height, so the rows below it
+        // move: re-lay them before the headers repaint their selection.
+        if (prev != trackId && (IsGroupTrack(prev) || IsGroupTrack(trackId))) RelayoutRows();
         UpdateHeaderSelection();
         RebuildFooterHeaders();   // returns/master carry the selection highlight too (1e)
         Redraw();
         if (trackId > 0) TrackSelected?.Invoke(trackId);
+    }
+
+    private bool IsGroupTrack(int id)
+    {
+        if (id <= 0) return false;
+        foreach (var t in _tracks) if (t.Id == id) return t.IsGroup;
+        return false;
+    }
+
+    // Re-measure the rows and rebuild the header cards against the new heights. Cheaper than a
+    // full Refresh (no engine read, no peak fetch) and enough for a pure layout change.
+    private void RelayoutRows()
+    {
+        RebuildRowGeometry();
+        RebuildHeaders();
+        _lanes.Height = Math.Max(RowHeight, RowsHeight);
+        _overlay.Height = _lanes.Height;
     }
 
     /// <summary>True if the clip is part of the current multi-selection.</summary>
@@ -1240,14 +1385,97 @@ public sealed partial class ArrangementView : UserControl
         {
             var card = BuildHeaderCard(_tracks[i]);
             Canvas.SetLeft(card, 0);
-            Canvas.SetTop(card, i * RowHeight); // pin to the same Y as the lane row
+            Canvas.SetTop(card, RowTop(i));     // pin to the same Y as the lane row
             _headers.Children.Add(card);
         }
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
-        _headers.Height = Math.Max(RowHeight, _tracks.Count * RowHeight);
+        _headers.Height = Math.Max(RowHeight, RowsHeight);
     }
 
     private Control BuildHeaderCard(TrackVM t)
+    {
+        if (IsSlimRow(t)) return BuildGroupBar(t);
+        return BuildTrackCard(t);
+    }
+
+    // A group's row, collapsed to a title bar: disclosure, name, its own mute/solo, kind tag.
+    // The fader, pan and meter live on the same card when the group is selected (BuildTrackCard),
+    // so nothing is lost — it just stops costing a full row while you work on its children.
+    private Control BuildGroupBar(TrackVM t)
+    {
+        bool selected = IsTrackMultiSelected(t.Id);
+        var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
+
+        var tri = new TextBlock
+        {
+            Text = _collapsed.Contains(t.Id) ? "▸" : "▾", FontSize = 9,
+            Foreground = Brush("Brush.TextSecondary"), VerticalAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Background = Brushes.Transparent, Padding = new Thickness(2, 0),
+        };
+        tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
+
+        var name = new TextBlock
+        {
+            Text = t.Name, FontSize = 11, FontWeight = FontWeight.SemiBold,
+            Foreground = Brush(selected ? "Brush.AccentBright" : "Brush.TextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(4, 0, 0, 0),
+        };
+
+        var chips = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 3,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                ChipToggle("M", t.Muted, danger: false, v => _engine?.SetTrackMute(t.Id, v)),
+                ChipToggle("S", t.Soloed, danger: false, v => _engine?.SetTrackSolo(t.Id, v)),
+            },
+        };
+
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
+        Grid.SetColumn(tri, 0);
+        Grid.SetColumn(name, 1);
+        Grid.SetColumn(chips, 2);
+        var kind = TypeTag("GROUP");
+        Grid.SetColumn(kind, 3);
+        row.Children.Add(tri);
+        row.Children.Add(name);
+        row.Children.Add(chips);
+        row.Children.Add(kind);
+
+        // A group keeps its level readable at 26px as a 2px rail under the title.
+        var meter = new MeterBar(horizontal: true) { Height = 4, MinWidth = 0 };
+        _meters[t.Id] = meter;
+        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(8 + t.Depth * 14, 0, 8, 0) };
+        DockPanel.SetDock(meter, Dock.Bottom);
+        meter.Margin = new Thickness(0, 0, 0, 3);
+        body.Children.Add(meter);
+        body.Children.Add(row);
+
+        var spine = new Border { Width = 3, Background = spineBrush };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
+        Grid.SetColumn(spine, 0);
+        Grid.SetColumn(body, 1);
+        grid.Children.Add(spine);
+        grid.Children.Add(body);
+
+        var card = new Border
+        {
+            Width = HeaderW, Height = GroupRowHeight, ClipToBounds = true,
+            Background = selected ? SelHeaderBg : Brush("Brush.SurfaceRaised"),
+            BorderBrush = Brush("Brush.BorderDefault"),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Child = grid,
+        };
+        _headerCards[t.Id] = (card, name, true);
+        AttachHeaderGestures(card, t);
+        return card;
+    }
+
+    private Control BuildTrackCard(TrackVM t)
     {
         bool selected = IsTrackMultiSelected(t.Id);
         var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
@@ -1336,7 +1564,8 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        void ShowDb(double v) => db.Text = v <= 0.0011 ? "-∞" : AudioMath.LinToDb(v).ToString("0.0");
+        void ShowDb(double v) => db.Text = v <= 0.0011 ? "-∞"
+            : AudioMath.LinToDb(v).ToString("0.0", CultureInfo.InvariantCulture);
         ShowDb(t.Volume);
         fader.ValueChanged += v => { _engine?.SetTrackVolume(volTrackId, (float)v); ShowDb(v); };
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
@@ -1388,6 +1617,13 @@ public sealed partial class ArrangementView : UserControl
             Child = grid,
         };
         _headerCards[t.Id] = (card, name, t.IsGroup);   // for in-place selection repaint
+        AttachHeaderGestures(card, t);
+        return card;
+    }
+
+    // Select / reorder / context-menu gestures shared by a full track card and a slim group bar.
+    private void AttachHeaderGestures(Border card, TrackVM t)
+    {
         card.PointerPressed += (_, e) =>
         {
             // A click inside the input ComboBox must reach it (and not reselect the track,
@@ -1430,9 +1666,9 @@ public sealed partial class ArrangementView : UserControl
             _hdrDragging = true;
             card.Cursor = new Cursor(StandardCursorType.SizeAll);
             card.Opacity = 0.55;
-            int gap = Math.Clamp((int)Math.Round(p.Y / RowHeight), 0, _tracks.Count);
+            int gap = RowGapAtY(p.Y);
             _hdrDropGap = gap;
-            Canvas.SetTop(_trackDropLine, gap * RowHeight - 1);
+            Canvas.SetTop(_trackDropLine, RowTop(gap) - 1);
             _trackDropLine.IsVisible = true;
         };
         card.PointerReleased += (_, e) =>
@@ -1450,7 +1686,6 @@ public sealed partial class ArrangementView : UserControl
             if (!dragged) { Select(id, -1); return; }   // never crossed the threshold → plain select
             HandleHeaderDrop(id, dropY);
         };
-        return card;
     }
 
     // Track context menu (Duplicate / Delete). Both go through the engine's
@@ -1644,6 +1879,11 @@ public sealed partial class ArrangementView : UserControl
         {
             var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextTertiary"), Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
+            // The closed box hoists this content out of its item, where it stops following the
+            // theme foreground and keeps whatever it was built with — so on the paper variant
+            // the name rendered near-white. A NotaPalette brush re-points on a variant change,
+            // so setting it locally holds in both.
+            valTb.Foreground = Brush("Brush.TextPrimary");
             DockPanel.SetDock(inTb, Dock.Left);
             // MinWidth so the closed selection box (which doesn't stretch its content in
             // Avalonia) still spreads In to the left edge and the name to the right.
@@ -1683,6 +1923,11 @@ public sealed partial class ArrangementView : UserControl
         {
             var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextTertiary"), Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
+            // The closed box hoists this content out of its item, where it stops following the
+            // theme foreground and keeps whatever it was built with — so on the paper variant
+            // the name rendered near-white. A NotaPalette brush re-points on a variant change,
+            // so setting it locally holds in both.
+            valTb.Foreground = Brush("Brush.TextPrimary");
             DockPanel.SetDock(inTb, Dock.Left);
             var content = new DockPanel { LastChildFill = true, MinWidth = 84, Children = { inTb, valTb } };
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
@@ -1745,21 +1990,17 @@ public sealed partial class ArrangementView : UserControl
         Dispatcher.UIThread.Post(() => { box.SelectAll(); box.Focus(); }, DispatcherPriority.Input);
     }
 
-    // Bordered MIDI/AUDIO type-tag chip.
+    // MIDI/AUDIO/GROUP kind tag: a quiet mono label, not a chip. It names the row's kind,
+    // which is reference information — a border would give it the weight of a control (1a).
     private Control TypeTag(string text)
     {
         var tb = new TextBlock
         {
-            Text = text, FontSize = 8, FontWeight = FontWeight.Bold,
-            Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center,
+            Text = text, FontSize = 8, FontWeight = FontWeight.Medium, Classes = { "Mono" },
+            Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
         };
-        var b = new Border
-        {
-            BorderThickness = new Thickness(1), BorderBrush = Brush("Brush.BorderDefault"),
-            CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0),
-            VerticalAlignment = VerticalAlignment.Center, Child = tb,
-        };
-        return b;
+        return tb;
     }
 
     // A small 18×16 stateful chip toggle (M/S/●). Danger variant reds when active.
@@ -1913,6 +2154,10 @@ public sealed partial class ArrangementView : UserControl
     // Selected-track highlight: just a soft brass wash on the lane row — no edge
     // lines, so it never fights the grid. Header uses a warm tinted background.
     private static readonly IBrush SelWash = NotaPalette.Wash(NotaPalette.Accent, 0x20); // Accent @ ~12%
+    // A group's lane is chrome between its children, not another lane to scan.
+    internal static readonly IBrush GroupLaneBg = NotaPalette.Wash(NotaPalette.BgSunken, 0xE0);
+    // Plate behind a clip's name so it survives a dense waveform without a full-width strip.
+    internal static readonly IBrush LabelPlate = NotaPalette.Wash(NotaPalette.BgSunken, 0x99);
     // Browser drag-over: the lane the drop would land on glows (bright accent wash + edge).
     private static readonly IBrush DropWash = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
     private static readonly IBrush DropEdge = NotaPalette.Wash(NotaPalette.AccentBright, 0xC0);
@@ -1963,13 +2208,19 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Colour index for a return bus (0/1).</summary>
     internal static int ReturnColorIndex(int returnIdx) => ReturnColorBase + (Math.Max(0, returnIdx) % NotaPalette.ReturnColors.Length);
 
-    /// <summary>The effective palette index for a track: its stored colour if set,
-    /// otherwise the automatic colour for its position. Shared by every view so a
-    /// user-picked colour shows consistently in the arrangement, mixer and detail.</summary>
+    /// <summary>The effective palette index for a track: its stored colour if set, else its
+    /// group's hue (shaded per sibling), else the automatic colour for its position. Shared by
+    /// every view so a user-picked colour shows consistently in the arrangement, mixer and
+    /// detail — and so a grouped session reads as a handful of families rather than one
+    /// unrelated hue per track (design 1a).</summary>
     public static int EffectiveColorIndex(IAudioEngine eng, int trackId)
+        => EffectiveColorIndex(eng, trackId, 0);
+
+    private static int EffectiveColorIndex(IAudioEngine eng, int trackId, int depth)
     {
         int stored = eng.GetTrackColorIndex(trackId);
         if (stored >= 0) return stored;
+        if (depth < 8 && GroupShadeFor(eng, trackId, depth) is { } inherited) return inherited;
         int nth = 0;
         for (int i = 0; i < eng.TrackCount; i++)
         {
@@ -1979,6 +2230,32 @@ public sealed partial class ArrangementView : UserControl
             nth++;
         }
         return 0;
+    }
+
+    // An uncoloured member of a group takes the group's base hue; siblings walk the three
+    // shades of that base so they stay apart without leaving the family. Nested groups inherit
+    // the same way (depth-guarded — a malformed parent chain must not hang the paint).
+    private static int? GroupShadeFor(IAudioEngine eng, int trackId, int depth)
+    {
+        int groupId = -1;
+        for (int i = 0; i < eng.TrackCount; i++)
+        {
+            if (!eng.TryGetTrackInfo(i, out var ti) || ti.Id != trackId) continue;
+            if (ti.IsReturn) return null;
+            groupId = ti.GroupId;
+            break;
+        }
+        if (groupId < 0) return null;
+        int parent = EffectiveColorIndex(eng, groupId, depth + 1);
+        if (parent >= ReturnColorBase) return null;
+        int nth = 0;
+        for (int i = 0; i < eng.TrackCount; i++)
+        {
+            if (!eng.TryGetTrackInfo(i, out var ti) || ti.GroupId != groupId) continue;
+            if (ti.Id == trackId) break;
+            nth++;
+        }
+        return (parent / PaletteShades) * PaletteShades + nth % PaletteShades;
     }
 
     private static Color Mix(Color a, Color b, double t) => Color.FromRgb(

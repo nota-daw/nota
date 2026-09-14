@@ -96,7 +96,8 @@ public sealed partial class ArrangementView
         private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
         private double _rangeAnchor;
         public bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
-        private static double RowTop(int i) => i * ArrangementView.RowHeight;
+        private double RowTop(int i) => _o.RowTop(i);
+        private double RowH(int i) => _o.RowHeightAt(i);
         // Target-selector pill: width fits its label so nothing clips.
         private const double PillH = 16;
         private static double PillWidth(string label)
@@ -105,18 +106,18 @@ public sealed partial class ArrangementView
                 Typeface.Default, 9, Brushes.White);
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
-        private static Rect PillRect(int i, double w) => new(4, RowTop(i) + 3, w, PillH);
+        private Rect PillRect(int i, double w) => new(4, RowTop(i) + 3, w, PillH);
         private double ValueToY(TrackVM t, int row, float v)
         {
             var (min, max) = _o.AutoRange(t);
-            double top = RowTop(row) + 8, bot = RowTop(row) + ArrangementView.RowHeight - 8;
+            double top = RowTop(row) + 8, bot = RowTop(row) + RowH(row) - 8;
             double frac = max > min ? Math.Clamp((v - min) / (max - min), 0, 1) : 0.5;
             return bot - frac * (bot - top);
         }
         private float YToValue(TrackVM t, int row, double py)
         {
             var (min, max) = _o.AutoRange(t);
-            double top = RowTop(row) + 8, bot = RowTop(row) + ArrangementView.RowHeight - 8;
+            double top = RowTop(row) + 8, bot = RowTop(row) + RowH(row) - 8;
             double frac = Math.Clamp((bot - py) / (bot - top), 0, 1);
             return (float)(min + frac * (max - min));
         }
@@ -127,8 +128,8 @@ public sealed partial class ArrangementView
         private (TrackVM track, ClipVM clip)? HitTest(Point p, out double beat)
         {
             beat = _o._scrollBeats + p.X / _o._pixelsPerBeat;
-            int ti = (int)(p.Y / ArrangementView.RowHeight);
-            if (ti < 0 || ti >= _o._tracks.Count) return null;
+            int ti = _o.RowAtY(p.Y);
+            if (ti < 0) return null;
             var t = _o._tracks[ti];
             foreach (var c in t.Clips)
                 if (beat >= c.StartBeat && beat <= c.StartBeat + c.LengthBeats)
@@ -154,8 +155,8 @@ public sealed partial class ArrangementView
                 // Double-click empty space on an instrument track's lane → new MIDI clip there.
                 if (e.ClickCount == 2)
                 {
-                    int ti = (int)(pt.Position.Y / ArrangementView.RowHeight);
-                    if (ti >= 0 && ti < _o._tracks.Count && _o._tracks[ti].IsInstrument)
+                    int ti = _o.RowAtY(pt.Position.Y);
+                    if (ti >= 0 && _o._tracks[ti].IsInstrument)
                     {
                         _o.AddMidiClipAt(_o._tracks[ti].Id, beat);
                         return;
@@ -278,8 +279,8 @@ public sealed partial class ArrangementView
                         // extend across rows vertically (req 1.2.1/1.2.2).
                         double a = _o.SnapMaybe(_o._scrollBeats + _marqueePress.X / _o._pixelsPerBeat, e.KeyModifiers);
                         double b = _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers);
-                        int rowA = Math.Clamp((int)(_marqueePress.Y / ArrangementView.RowHeight), 0, Math.Max(0, _o._tracks.Count - 1));
-                        int rowB = Math.Clamp((int)(pos.Y / ArrangementView.RowHeight), 0, Math.Max(0, _o._tracks.Count - 1));
+                        int rowA = Math.Max(0, _o.RowAtYClamped(_marqueePress.Y));
+                        int rowB = Math.Max(0, _o.RowAtYClamped(pos.Y));
                         _o.SetTimeSelection(a, b, rowA, rowB);
                     }
                     else
@@ -339,7 +340,7 @@ public sealed partial class ArrangementView
                 double delta = snappedStart - _grabOrigStart;
                 foreach (var m in _groupMove) m.vm.StartBeat = Math.Max(0, m.origStart + delta);
                 // Vertical: how many rows to shift (instrument→instrument only).
-                int targetRow = Math.Clamp((int)(pos.Y / ArrangementView.RowHeight), 0, _o._tracks.Count - 1);
+                int targetRow = Math.Max(0, _o.RowAtYClamped(pos.Y));
                 _moveRowDelta = ClampRowDelta(targetRow - _grabRow);
                 InvalidateVisual();
                 return;
@@ -529,13 +530,13 @@ public sealed partial class ArrangementView
             var hits = new List<(int, int)>();
             for (int i = 0; i < _o._tracks.Count; i++)
             {
-                double y = i * ArrangementView.RowHeight;
-                if (!r.Intersects(new Rect(0, y, double.MaxValue, ArrangementView.RowHeight))) continue;
+                double y = RowTop(i);
+                if (!r.Intersects(new Rect(0, y, double.MaxValue, RowH(i)))) continue;
                 foreach (var c in _o._tracks[i].Clips)
                 {
                     double cx0 = _o.BeatToX(c.StartBeat);
                     double cx1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
-                    var clipRect = new Rect(cx0, y, Math.Max(1, cx1 - cx0), ArrangementView.RowHeight);
+                    var clipRect = new Rect(cx0, y, Math.Max(1, cx1 - cx0), RowH(i));
                     if (r.Intersects(clipRect)) hits.Add((_o._tracks[i].Id, c.ClipIndex));
                 }
             }
@@ -547,8 +548,8 @@ public sealed partial class ArrangementView
         {
             var pt = e.GetCurrentPoint(this);
             var pos = pt.Position;
-            int i = (int)(pos.Y / ArrangementView.RowHeight);
-            if (i < 0 || i >= _o._tracks.Count) return;
+            int i = _o.RowAtY(pos.Y);
+            if (i < 0) return;
             var t = _o._tracks[i];
 
             double pillW = PillWidth(t.AutoLabel);
@@ -676,8 +677,8 @@ public sealed partial class ArrangementView
         private void UpdateHover(Point pos)
         {
             AutoPt? pt = null, seg = null; TrackVM? tr = null;
-            int i = (int)(pos.Y / ArrangementView.RowHeight);
-            if (i >= 0 && i < _o._tracks.Count)
+            int i = _o.RowAtY(pos.Y);
+            if (i >= 0)
             {
                 var t = _o._tracks[i];
                 foreach (var p in t.AutoPoints)
@@ -847,8 +848,8 @@ public sealed partial class ArrangementView
         // consolidate the time selection when the click lands inside it.
         private void ShowLaneMenu(Point pos, double beat)
         {
-            int ti = (int)(pos.Y / ArrangementView.RowHeight);
-            if (ti < 0 || ti >= _o._tracks.Count) return;
+            int ti = _o.RowAtY(pos.Y);
+            if (ti < 0) return;
             int trackId = _o._tracks[ti].Id;
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
             if (!_o.HasClipClipboard && !inRange) return;
@@ -1001,9 +1002,11 @@ public sealed partial class ArrangementView
             // Lane backgrounds + separators.
             for (int i = rLo; i <= rHi; i++)
             {
-                double y = i * ArrangementView.RowHeight;
-                ctx.FillRectangle((i & 1) == 0 ? LaneBgA : LaneBgB, new Rect(0, y, w, ArrangementView.RowHeight));
-                ctx.DrawLine(BeatPen, new Point(0, y + ArrangementView.RowHeight), new Point(w, y + ArrangementView.RowHeight));
+                double y = RowTop(i), rh = RowH(i);
+                // A group row reads as chrome between its children, not as another lane.
+                ctx.FillRectangle(_o.IsSlimRowAt(i) ? GroupLaneBg : (i & 1) == 0 ? LaneBgA : LaneBgB,
+                    new Rect(0, y, w, rh));
+                ctx.DrawLine(BeatPen, new Point(0, y + rh), new Point(w, y + rh));
             }
             if (_o._tracks.Count == 0)
                 ctx.FillRectangle(LaneBgA, new Rect(0, 0, w, h));
@@ -1013,15 +1016,15 @@ public sealed partial class ArrangementView
             for (int i = rLo; i <= rHi; i++)
             {
                 if (_o._tracks[i].Id != _o.SelTrackId) continue;
-                double sy = i * ArrangementView.RowHeight;
-                ctx.FillRectangle(SelWash, new Rect(0, sy, w, ArrangementView.RowHeight));
+                double sy = RowTop(i);
+                ctx.FillRectangle(SelWash, new Rect(0, sy, w, RowH(i)));
             }
 
             // Browser drag-over: glow the lane the drop would land on (future state).
             if (_o.DropTrackIndex >= 0 && _o.DropTrackIndex < _o._tracks.Count)
             {
-                double dy = _o.DropTrackIndex * ArrangementView.RowHeight;
-                var r = new Rect(0, dy, w, ArrangementView.RowHeight);
+                double dy = RowTop(_o.DropTrackIndex);
+                var r = new Rect(0, dy, w, RowH(_o.DropTrackIndex));
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, new Pen(DropEdge, 1.5), r);
             }
@@ -1039,18 +1042,19 @@ public sealed partial class ArrangementView
                 else if (showBeats) ctx.DrawLine(BeatPen, new Point(x, 0), new Point(x, h));
             }
 
-            // Clips (fill + border + 14px name strip, all in the track colour). A clip
-            // being dragged to another track is hidden here and shown as a translucent
-            // preview on the destination lane (below).
+            // Clips: a tinted body under a 2px colour band, with the name drawn only where a
+            // run of clips starts (design 1a) so a repeating pattern reads as one block instead
+            // of the same word printed twenty times. A clip being dragged to another track is
+            // hidden here and shown as a translucent preview on the destination lane (below).
             for (int i = rLo; i <= rHi; i++)
             {
-                double y = i * ArrangementView.RowHeight;
+                double y = RowTop(i), rh = RowH(i);
                 int tid = _o._tracks[i].Id;
                 // Group rows carry no clips of their own: preview their descendants instead
                 // (stacked mini-clips collapsed, a thin colour strip expanded).
                 if (_o._tracks[i].IsGroup)
                 {
-                    DrawGroupLane(ctx, _o._tracks[i], y, w, _o.IsGroupCollapsed(tid));
+                    DrawGroupLane(ctx, _o._tracks[i], y, rh, w, _o.IsGroupCollapsed(tid));
                     continue;
                 }
                 foreach (var c in _o._tracks[i].Clips)
@@ -1060,7 +1064,7 @@ public sealed partial class ArrangementView
                     var edgeHi = Drag.None;
                     if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
                     else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
-                    DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, _o.IsSelected(tid, c.ClipIndex), edgeHi);
+                    DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi);
                 }
             }
 
@@ -1074,7 +1078,7 @@ public sealed partial class ArrangementView
                     for (int i = rLo; i <= rHi; i++)
                     {
                         if (_o._tracks[i].Id != rt) continue;
-                        double ry = i * ArrangementView.RowHeight;
+                        double ry = RowTop(i), rh = RowH(i);
                         // Loop recording punches the loop region → draw a stable box over it.
                         // Otherwise the box grows by the actual captured length (monotonic),
                         // not the playhead.
@@ -1089,7 +1093,7 @@ public sealed partial class ArrangementView
                             rx0 = _o.BeatToX(re.AudioRecordStartBeat);
                             rx1 = Math.Max(rx0, _o.BeatToX(re.AudioRecordStartBeat + re.AudioRecordLengthBeats));
                         }
-                        var rr = new Rect(rx0, ry + 2, Math.Max(2, rx1 - rx0), ArrangementView.RowHeight - 4);
+                        var rr = new Rect(rx0, ry + 2, Math.Max(2, rx1 - rx0), rh - 4);
                         ctx.DrawRectangle(RecFill, RecBorder, rr, 4, 4);
                         // Live waveform of what's being captured, so the take shows real
                         // signal rather than an empty box (clips only materialise on stop).
@@ -1116,7 +1120,7 @@ public sealed partial class ArrangementView
                         int destRow = m.origRow + _moveRowDelta;
                         if (destRow < 0 || destRow >= _o._tracks.Count) continue;
                         var dest = _o._tracks[destRow];
-                        DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, destRow * ArrangementView.RowHeight, true);
+                        DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, RowTop(destRow), RowH(destRow), true);
                     }
 
             // Clip marquee (plain drag on empty space).
@@ -1126,8 +1130,8 @@ public sealed partial class ArrangementView
             if (_o.HasTimeSelection)
             {
                 double sx = _o.BeatToX(_o._timeSelStart), ex = _o.BeatToX(_o._timeSelEnd);
-                double ty = _o._timeSelRowLo * ArrangementView.RowHeight;
-                double th = (_o._timeSelRowHi - _o._timeSelRowLo + 1) * ArrangementView.RowHeight;
+                double ty = RowTop(_o._timeSelRowLo);
+                double th = RowTop(_o._timeSelRowHi + 1) - ty;
                 double cx0 = Math.Max(0, sx), cx1 = Math.Min(w, ex);
                 if (cx1 > cx0) ctx.FillRectangle(MarqueeFill, new Rect(cx0, ty, cx1 - cx0, th));
                 if (sx >= 0 && sx <= w) ctx.DrawLine(MarqueePen, new Point(sx, ty), new Point(sx, ty + th));
@@ -1235,23 +1239,37 @@ public sealed partial class ArrangementView
         // Group lane preview: collapsed → each descendant clip as a mini-clip stacked into its
         // own sub-lane (child colour), so starts/ends read at a glance; expanded → a thin strip
         // in the group colour over each descendant clip's span, marking content boundaries.
-        private void DrawGroupLane(DrawingContext ctx, ArrangementView.TrackVM g, double y, double w, bool collapsed)
+        private void DrawGroupLane(DrawingContext ctx, ArrangementView.TrackVM g, double y, double rowH, double w, bool collapsed)
         {
             if (g.GroupMini.Count == 0) return;
             if (collapsed)
             {
+                // Collapsed: the hidden children still have to read, so each takes a sub-lane
+                // of the (slim) row. Below ~3px a sub-lane stops being legible — past that the
+                // stack degrades to one merged span strip.
                 int slots = Math.Max(1, g.GroupSlotCount);
-                const double padTop = 7, padBot = 7;
-                double innerH = ArrangementView.RowHeight - padTop - padBot;
+                const double padTop = 5, padBot = 5;
+                double innerH = rowH - padTop - padBot;
                 double laneH = innerH / slots;
-                double barH = Math.Max(3, laneH - 2);
+                if (laneH >= 2.5)
+                {
+                    double barH = Math.Max(2, laneH - 1);
+                    foreach (var m in g.GroupMini)
+                    {
+                        double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
+                        if (x1 < 0 || x0 > w || m.Length <= 0) continue;
+                        var (fill, border, _, _) = ClipColors(m.ColorIndex);
+                        var r = new Rect(x0, y + padTop + m.Slot * laneH, Math.Max(2, x1 - x0), barH);
+                        ctx.DrawRectangle(fill, border, r, 1.5, 1.5);
+                    }
+                    return;
+                }
                 foreach (var m in g.GroupMini)
                 {
                     double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
                     if (x1 < 0 || x0 > w || m.Length <= 0) continue;
                     var (fill, border, _, _) = ClipColors(m.ColorIndex);
-                    var r = new Rect(x0, y + padTop + m.Slot * laneH, Math.Max(2, x1 - x0), barH);
-                    ctx.DrawRectangle(fill, border, r, 2, 2);
+                    ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), 1.5, 1.5);
                 }
             }
             else
@@ -1259,8 +1277,8 @@ public sealed partial class ArrangementView
                 var col = TrackColorForIndex(g.ColorIndex);
                 var fill = Alpha(col, 0.55);
                 var border = new Pen(Alpha(col, 0.85), 1);
-                const double stripH = 6;
-                double sy = y + (ArrangementView.RowHeight - stripH) / 2;
+                double stripH = Math.Min(6, Math.Max(3, rowH - 12));
+                double sy = y + (rowH - stripH) / 2;
                 foreach (var m in g.GroupMini)
                 {
                     double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
@@ -1271,14 +1289,15 @@ public sealed partial class ArrangementView
             }
         }
 
-        private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y, bool selected, Drag edgeHi = Drag.None)
+        private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y,
+                                  double rowH, bool selected, Drag edgeHi = Drag.None)
         {
             double w = Bounds.Width;
             double x0 = _o.BeatToX(c.StartBeat);
             double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
-            var (fill, border, strip, content) = ClipColors(colorIndex);
-            var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), ArrangementView.RowHeight - 4);
+            var (fill, border, _, content) = ClipColors(colorIndex);
+            var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
             ctx.DrawRectangle(fill, selected ? ClipSelBorder : border, rect, 4, 4);
 
             // Resize-edge affordance: a bright bar on the edge a drag would trim.
@@ -1288,30 +1307,49 @@ public sealed partial class ArrangementView
                 ctx.FillRectangle(EdgeHighlight, new Rect(ex, rect.Y, 2.5, rect.Height));
             }
 
-            double stripH = Math.Min(14, rect.Height);
-            if (rect.Width > 3)
-            {
-                var stripRect = new Rect(rect.X + 1, rect.Y + 1, rect.Width - 2, stripH);
-                ctx.FillRectangle(strip, stripRect);
-                if (rect.Width > 16)
-                {
-                    // The clip's own name (set via its menu) wins; otherwise the track name.
-                    var ft = new FormattedText(string.IsNullOrEmpty(c.Name) ? label : c.Name, CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight, Typeface.Default, 9, content);
-                    using (ctx.PushClip(stripRect))
-                        ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + 2));
-                }
-            }
-
-            var contentRect = new Rect(rect.X, rect.Y + stripH, rect.Width, Math.Max(0, rect.Height - stripH));
+            // The name is a label on the clip, not a strip that eats a fifth of the row's
+            // height. Content first, then the band and the name over it. Both DrawNotes and
+            // DrawWaveform already clip themselves to the rect they are handed.
+            var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content);
             else DrawWaveform(ctx, c, contentRect, content);
+
+            // 2px band in the track colour along the top edge: the clip's family marker.
+            if (rect.Width > 3)
+                ctx.FillRectangle(content, new Rect(rect.X + 1, rect.Y + 1, rect.Width - 2, BandH));
+
+            if (rect.Width > 24 && rect.Height > 14 && ShowsLabel(c))
+            {
+                // The clip's own name (set via its menu) wins; otherwise the track name.
+                string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
+                var ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, Typeface.Default, 9, content)
+                { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+                var plate = new Rect(rect.X + 1, rect.Y + BandH + 1,
+                                     Math.Min(rect.Width - 2, ft.Width + 8), ft.Height + 2);
+                using var _ = ctx.PushClip(rect);
+                // A soft plate keeps the name readable over a dense waveform without
+                // reintroducing a full-width strip.
+                ctx.FillRectangle(LabelPlate, plate);
+                ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + BandH + 2));
+            }
 
             // Deactivated clip (key 0): grey it out with a dark scrim so it reads as "off"
             // while still showing its content/geometry. Inset so the (selection) border stays.
             if (!c.Active)
                 ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), 3, 3);
         }
+
+        private const double BandH = 2;   // clip colour band along the top edge
+
+        // Which clips carry their name (design 1a's "labels" choice). A clip that was named by
+        // hand always shows it — that name was authored to be read.
+        private bool ShowsLabel(ClipVM c) => _o.ClipLabels switch
+        {
+            ClipLabelMode.Every => true,
+            ClipLabelMode.None => !string.IsNullOrEmpty(c.Name),
+            _ => c.RunStart || !string.IsNullOrEmpty(c.Name),
+        };
 
         // Capture full-material peaks + the committed play window for a live resize preview
         // (point 2). Unwarped: peaks over the whole sample, window = source frames. Warped:
@@ -1409,7 +1447,8 @@ public sealed partial class ArrangementView
             {
                 var t = _o._tracks[i];
                 double y = RowTop(i);
-                ctx.FillRectangle(AutoScrim, new Rect(0, y, w, ArrangementView.RowHeight));
+                ctx.FillRectangle(AutoScrim, new Rect(0, y, w, RowH(i)));
+                if (_o.IsSlimRowAt(i)) continue;   // a slim group bar has no room for an envelope
 
                 var (fill, _, strip, content) = ClipColors(t.ColorIndex);
                 var pen = new Pen(content, 1.6);
@@ -1463,9 +1502,10 @@ public sealed partial class ArrangementView
                     double cx0 = Math.Max(0, sx), cx1 = Math.Min(w, ex);
                     if (cx1 > cx0)
                     {
-                        ctx.FillRectangle(AutoSelBand, new Rect(cx0, y, cx1 - cx0, ArrangementView.RowHeight));
-                        if (sx >= 0) ctx.DrawLine(AutoSelEdge, new Point(sx, y), new Point(sx, y + ArrangementView.RowHeight));
-                        if (ex <= w) ctx.DrawLine(AutoSelEdge, new Point(ex, y), new Point(ex, y + ArrangementView.RowHeight));
+                        double arh = RowH(i);
+                        ctx.FillRectangle(AutoSelBand, new Rect(cx0, y, cx1 - cx0, arh));
+                        if (sx >= 0) ctx.DrawLine(AutoSelEdge, new Point(sx, y), new Point(sx, y + arh));
+                        if (ex <= w) ctx.DrawLine(AutoSelEdge, new Point(ex, y), new Point(ex, y + arh));
                     }
                 }
 

@@ -203,6 +203,7 @@ public partial class MainWindow
         _vm.Transport.TimeSigDenominator = 4;
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
+        Timeline.ClearSections();   // …and a clean song structure
         RefreshAfterLoad();
         UpdateWindowTitle();
         _vm.StatusText = "New project.";
@@ -256,6 +257,7 @@ public partial class MainWindow
             _projectPath = dir;
             _learn?.LoadMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.LoadLayout(dir);   // modular-editor node/island positions (sidecar)
+            Timeline.LoadSections(dir);  // arrangement song sections (sidecar)
             LoadFreezeLinks(dir);        // live-freeze links (v1.1) — re-sleep linked sources
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             RefreshAfterLoad();
@@ -331,6 +333,7 @@ public partial class MainWindow
             var warnings = _projects.Save(Engine, TransportSnapshot(), dir);
             _learn?.SaveMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
+            Timeline.SaveSections(dir);  // arrangement song sections (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _projectPath = dir;
             RecordRecentProject(dir);    // surface it on the welcome screen next launch

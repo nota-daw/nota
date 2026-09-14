@@ -159,7 +159,8 @@ public sealed partial class ArrangementView
     private void HandleHeaderDrop(int id, double y)
     {
         if (_engine is null || _tracks.Count == 0) { Select(id, -1); return; }
-        int row = System.Math.Clamp((int)System.Math.Floor(y / RowHeight), 0, _tracks.Count - 1);
+        int row = RowAtYClamped(y);
+        if (row < 0) { Select(id, -1); return; }
         var target = _tracks[row];
         var dragged = _tracks.FirstOrDefault(t => t.Id == id);
         if (dragged is null || target.Id == id) { Select(id, -1); return; }

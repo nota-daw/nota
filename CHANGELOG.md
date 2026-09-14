@@ -19,6 +19,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Song sections.** A lane over the ruler holds named spans — Intro, Verse, Drop — so the
+  timeline says where you are in the song rather than only which bar you are on. Drag on
+  the empty lane to mark one, click it to jump the playhead there, double-click to rename,
+  drag its body or edges to move and resize it (always on whole bars). Its menu loops the
+  section, selects it as a time range across every track, duplicates it or deletes it.
+  Sections travel with the project and can be hidden from View ▸ Toggle sections.
+- **View ▸ Clip names** cycles how much of the arrangement prints clip names: every clip,
+  the first clip of each run (the default), or none. A clip named by hand always shows it.
 - **A gamepad can be mapped like a MIDI controller** (macOS). Arm MIDI Learn, click a
   control, then press a button or move a stick — that control is now driven by the pad.
   A mapped button stops playing its note while every unmapped one keeps the built-in
@@ -38,6 +46,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **The arrangement and the modular canvas are islands, and groups stop weighing as much as
+  their tracks.** Both now float on the app ground as rounded panels, matching the browser —
+  the modular view keeps its toolbar, track rail and status line inside those corners. A group
+  row collapses to a 26px titled bar carrying its disclosure, mute/solo and level, and
+  opens to the full control set when you select it — so a session of ten tracks under
+  three groups reads as three families instead of thirteen equal rows.
+- **One hue per group.** A track that has not been given a colour of its own takes its
+  group's, varied by shade so siblings stay apart inside the family. An explicitly coloured
+  track keeps its colour, and every view — arrangement, mixer, clip editor — agrees.
+- **Clips carry a colour band, not a name strip.** The 14px title strip is gone: a clip is
+  a 2px band in the track colour over the full-height waveform, and the name appears only
+  where a run of clips begins, so a repeated pattern reads as one block rather than the
+  same word printed twenty times.
 - **The browser is a compact index.** It is now an island panel — rounded, floating on the
   app ground — and its rows are single-line: sectioned into **BUILT-IN** and **PLUG-INS**
   with counts, the repeated "Nota" prefix dropped to tertiary ink so names scan on their

@@ -952,7 +952,7 @@ footer {
     <section id="tracks">
       <p class="eyebrow">07 — Track palette</p>
       <h2>Eight tracks, then it wraps</h2>
-      <p>Track colours are assigned round-robin from <code>Brush.Track1..8</code>. They are muted and equal-weight on purpose: no track should look more important than another, and none competes with the brass accent.</p>
+      <p>Track colours are assigned round-robin from <code>Brush.Track1..8</code>. They are muted and equal-weight on purpose: no track should look more important than another, and none competes with the brass accent. A track inside a group takes its group's hue instead, varied across the three shades so siblings stay apart inside one family; an explicitly coloured track keeps its own colour.</p>
 
       <div class="tracks">
         <div class="track"><div class="track__bar" style="background:var(--track-1)"></div><div class="track__body"><div class="track__name">Track 1 · rust</div><div class="track__hex">#C4756A</div></div></div>
@@ -1266,7 +1266,8 @@ footer {
       <div class="rules">
         <div class="rule rule--do">
           <h4><span class="rule__glyph">+</span> Layout skeleton</h4>
-          <p>Transport bar → toolbar → track area (scrolls, on <code>Brush.BgApp</code>) → 26px status bar. Panels are <code>Brush.SurfaceCard</code> with a 1px bottom border. Track rows are cards: radius 10, 1px border, 10px pad.</p>
+          <p>Transport bar → toolbar → body (on <code>Brush.BgApp</code>) → 26px status bar. Panels are <code>Brush.SurfaceCard</code> with a 1px bottom border. The body holds <strong>islands</strong>: the browser, the arrangement and the modular canvas are <code>Radius.Md</code> cards with a 1px <code>Brush.BorderDefault</code> edge, clipped to their bounds, floating on the app ground with an 8px gutter; the splitter between two islands is a 2px transparent grab strip inside that gutter and carries no line of its own.</p>
+          <p>Arrangement rows are not one pitch. A <strong>track</strong> row is 64px and its header carries every control (name + kind · mute/solo/arm + input · fader + dB + pan, with a level rail on the right edge). A <strong>group</strong> row is a 26px titled bar — disclosure, name, mute/solo, a 4px level rail, kind tag — and opens to a full 64px row only while it is the selected track. Header column 228px. A <strong>clip</strong> is a tinted body (<code>Radius.Clip</code>) under a 2px band in the track colour, with the waveform or notes across its full height; the name is drawn over the body, only where a run of clips begins.</p>
         </div>
         <div class="rule rule--do">
           <h4><span class="rule__glyph">+</span> Scrollbars recede</h4>
