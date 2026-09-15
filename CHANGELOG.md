@@ -19,6 +19,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Pattern tab for the Drum Rack.** Select a MIDI clip on a Drum Rack track and the
+  detail panel offers **Pattern** between Devices and Clip: a drum-machine step grid with
+  one row per loaded pad. Click a step to place a hit, shift-click it for an accent, drag
+  across the grid to paint a run, and ride the velocity lane under the selected row; click
+  a pad name to hear it. The grid runs from 1/4 to 1/32, follows the clip's length (long
+  clips page in bar windows), and lights the step being played. The pattern is not a copy —
+  the grid *is* the clip, so what you step shows up in the piano roll and notes drawn there
+  show up as steps. Tab now cycles Devices → Pattern → Clip.
 - **Song sections.** A lane over the ruler holds named spans — Intro, Verse, Drop — so the
   timeline says where you are in the song rather than only which bar you are on. Drag on
   the empty lane to mark one, click it to jump the playhead there, double-click to rename,

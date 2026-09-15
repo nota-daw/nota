@@ -57,6 +57,15 @@ public partial class MainWindow : Window
     private int _audioEditorTrackId = -1;
     private int _audioEditorClipIndex = -1;
     private PianoRollView? _editorRoll;
+    // Detail · Pattern (Drum Rack step grid) — targets the same clip as the Clip tab, or the
+    // open Session slot (scene >= 0, clip index unused).
+    private DrumPatternView? _patternView;
+    private int _patternTrackId = -1;
+    private int _patternClipIndex = -1;
+    private int _patternScene = -1;
+    // The Session slot whose editor is open, so the Pattern tab can target it too.
+    private int _sessionSlotTrack = -1;
+    private int _sessionSlotScene = -1;
 
     // Remembered detail-panel height once the user drags the splitter, so reopening the
     // panel keeps their size instead of snapping back to the per-mode default. 0 = unset.
@@ -216,6 +225,10 @@ public partial class MainWindow : Window
             if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null
                 && _editorTrackId > 0 && Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
                 _editorRoll.SetPlayhead(beats - pci.StartBeat, vm.Engine.IsPlaying);
+            // Same for the Drum Rack step grid (Session slots run their own clock → skipped).
+            if (_patternView is { IsEffectivelyVisible: true } && _patternTrackId > 0 && _patternScene < 0
+                && Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var ppi) && ppi.IsMidi)
+                _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
             CpuFill.Width = load * 56;
@@ -243,7 +256,8 @@ public partial class MainWindow : Window
         Browser.EditTagsRequested += OnBrowserEditTags;
 
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>());
-        _deviceChain.Changed += () => { Timeline.Refresh(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
+        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
@@ -293,14 +307,14 @@ public partial class MainWindow : Window
         // ignored; only a real drag differs).
         DetailPanel.SizeChanged += (_, e) =>
         {
-            bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView;
+            bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
             if (clipActive && DetailPanel.IsVisible && e.NewSize.Height > 120
                 && Math.Abs(e.NewSize.Height - _lastSetDetailHeight) > 1.0)
                 _detailHeight = e.NewSize.Height;
         };
 
         // Track whether the detail panel was the last area the user clicked into, so Tab
-        // can toggle its Devices/Clip tabs (see OnKeyDown). Tunnel + handledEventsToo so it
+        // can cycle its Devices/Pattern/Clip tabs (see OnKeyDown). Tunnel + handledEventsToo so it
         // sees every press regardless of what consumes it.
         AddHandler(PointerPressedEvent, (_, e) =>
         {

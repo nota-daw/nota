@@ -135,6 +135,14 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
+- **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
+  tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
+  step to place a hit, shift-click for an accent, drag across the grid to paint, and use
+  the velocity lane under the selected row. The grid is 1/4 to 1/32, it follows the clip's
+  length (paging in 64-step windows on long clips), the playing step lights up, and the
+  pads audition by name. It is not a second copy of the pattern: the grid **is** the MIDI
+  clip, so steps written here appear in the piano roll and notes drawn there light up as
+  steps.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
@@ -359,7 +367,8 @@ and user presets, automation, persistence and cloning.
   with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
   a zone map, rack output (Volume/Glide), Fold/Save.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads and Mixer views, per-pad
-  Volume/Pan/Tune/Decay, choke groups (monophonic cut), Swing/Humanize, hot-swap.
+  Volume/Pan/Tune/Decay, choke groups (monophonic cut), Swing/Humanize, hot-swap. Its clips
+  can be stepped in the detail panel's **Pattern** tab (see below).
 - **Nota Audio Effect Rack** — **Parallel / Series / Select** modes (by input level),
   Dry/Wet + Gain, PDC, Fold, Save; chains with gain/meter/M·S; named macros and mappings;
   the "+ Device" menu lists built-in effects and a Plug-ins submenu.

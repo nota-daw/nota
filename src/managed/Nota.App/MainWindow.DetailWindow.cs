@@ -46,7 +46,7 @@ public partial class MainWindow
 
         // Move current content across: device chain → bottom pane, current clip editor → top.
         if (_deviceChain is not null) SetHost(win.ChainHost, _deviceChain);
-        Control? clip = DetailBody.Content is ClipEditorView or AudioClipEditorView
+        Control? clip = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView
             ? (Control)DetailBody.Content! : _lastClipEditor;
         if (clip is not null) SetHost(win.ClipHost, clip);
         else win.ClipHost.Content = ClipPlaceholder();

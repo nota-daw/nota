@@ -575,7 +575,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("⌘Z   ⌘⇧Z", "Undo / redo"),
             ("⌘A", "Toggle automation mode"),
             ("⌘M", "Toggle the Mixer view"),
-            ("Tab", "Switch Devices / Clip in the detail panel"),
+            ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clip (or automation range)"),

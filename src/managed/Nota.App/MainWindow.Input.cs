@@ -85,7 +85,7 @@ public partial class MainWindow
         // sound a note. Bare letters still play via the KeyToPitch map below.
         bool mod = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control | KeyModifiers.Alt)) != 0;
 
-        // Tab toggles the detail panel's Devices/Clip tabs when it was the last area used.
+        // Tab cycles the detail panel's Devices/Pattern/Clip tabs when it was the last area used.
         if (!mod && e.Key == Key.Tab && DetailPanel.IsVisible && _detailWasLastFocused)
         {
             ToggleDetailTab();

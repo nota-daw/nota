@@ -89,13 +89,17 @@ public partial class MainWindow
         // the Clip tab over to Devices, so refresh the chain underneath and re-point the Clip
         // tab at the newly selected clip. With no clip to show, Devices takes the panel as before.
         bool keepClipTab = !DetailFloating && DetailPanel.IsVisible
-                           && DetailBody.Content is ClipEditorView or AudioClipEditorView
+                           && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView
                            && SelectedClip(out _, out _, out _);
+        bool wasPattern = keepClipTab && DetailBody.Content is DrumPatternView;
 
         ShowDevices(trackId, takeOverPanel: !keepClipTab);
         if (_modular?.IsVisible == true) _modular.Show(trackId);   // keep the graph on the selected track
         SyncClipTab();
-        if (keepClipTab) OnDetailClip(this, new RoutedEventArgs());
+        // The new clip may be on a track with no Drum Rack, so a pattern user falls back to
+        // the piano roll rather than to Devices.
+        if (wasPattern && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
+        else if (keepClipTab) OnDetailClip(this, new RoutedEventArgs());
     }
 
     // Clear all clip-editor state and blank the clip pane (placeholder while floating, so the
@@ -110,6 +114,12 @@ public partial class MainWindow
         _editorClipIndex = -1;
         _audioEditorTrackId = -1;
         _audioEditorClipIndex = -1;
+        _patternView = null;
+        _patternTrackId = -1;
+        _patternClipIndex = -1;
+        _patternScene = -1;
+        _sessionSlotTrack = -1;
+        _sessionSlotScene = -1;
         if (DetailFloating) _detailWindow!.ClipHost.Content = ClipPlaceholder();
     }
 
@@ -126,11 +136,124 @@ public partial class MainWindow
     }
 
     // Enable the Clip tab for the current context: in the arrangement, whenever a
-    // clip is selected; in Session, when a slot editor has been opened.
+    // clip is selected; in Session, when a slot editor has been opened. The Pattern tab
+    // rides along on the same target, narrowed to Drum Rack MIDI.
     internal void SyncClipTab()
-        => DetailClipBtn.IsEnabled = _session?.IsVisible == true
+    {
+        DetailClipBtn.IsEnabled = _session?.IsVisible == true
             ? _clipEditor is not null
             : SelectedClip(out _, out _, out _);
+        DetailPatternBtn.IsEnabled = PatternTarget(out _, out _, out _);
+    }
+
+    // --- Detail · Pattern (Drum Rack step grid) -----------------------------
+
+    // The Pattern tab edits the same notes as the Clip tab, so it targets the same clip —
+    // but only when those notes drive a Drum Rack, since the rows are its pads.
+    private bool PatternTarget(out int trackId, out int clipIndex, out int scene)
+    {
+        trackId = -1; clipIndex = -1; scene = -1;
+        if (_session?.IsVisible == true)
+        {
+            if (_sessionSlotTrack <= 0 || _sessionSlotScene < 0 || !IsDrumRackTrack(_sessionSlotTrack)) return false;
+            trackId = _sessionSlotTrack; scene = _sessionSlotScene;
+            return true;
+        }
+        if (!SelectedClip(out int tid, out int ci, out bool isMidi) || !isMidi || !IsDrumRackTrack(tid)) return false;
+        trackId = tid; clipIndex = ci;
+        return true;
+    }
+
+    private bool IsDrumRackTrack(int trackId) => trackId > 0 && Engine.TrackInstrumentKind(trackId) == 4;
+
+    // Build the step grid over one clip (scene >= 0: a Session slot). Both note sources are
+    // wrapped here rather than inside the view, so the view stays a plain editor of "some
+    // notes over some beats" and the staleness guard lives with the other editors.
+    private void BuildPatternView(int trackId, int clipIndex, int scene)
+    {
+        Func<NotaNote[]> get;
+        Action<NotaNote[]> set;
+        Action<NotaNote[]>? setLive = null;
+        Func<double> length;
+        string title;
+        if (scene >= 0)
+        {
+            title = $"Track {trackId} · Scene {scene + 1}";
+            get = () => Engine.GetSessionNotes(trackId, scene);
+            set = notes => { Engine.SetSessionNotes(trackId, scene, notes); _session?.Refresh(); };
+            length = () => { double l = Engine.SessionSlotLength(trackId, scene); return l > 0 ? l : 4; };
+        }
+        else
+        {
+            title = $"Track {trackId} clip";
+            get = () => Engine.GetClipNotes(trackId, clipIndex);
+            // Same staleness guard as the piano roll: the clip can be deleted, undone or
+            // reloaded under an editor that is still on screen.
+            set = notes =>
+            {
+                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) { InvalidatePatternView(); return; }
+                Engine.SetClipNotes(trackId, clipIndex, notes);
+            };
+            // Painting a run of steps / sweeping the velocity lane streams through the
+            // no-checkpoint write, so the whole gesture is one undo step (as in the roll).
+            setLive = notes =>
+            {
+                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) { InvalidatePatternView(); return; }
+                Engine.SetClipNotesLive(trackId, clipIndex, notes);
+            };
+            length = () => Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
+        }
+
+        var view = new DrumPatternView(Engine, trackId, title, get, set, length, setLive);
+        // A step written here is a note written to the clip: show it on the timeline and in
+        // the piano roll straight away, the same way a roll edit shows up in the grid.
+        view.Changed += () => { Timeline.Refresh(rebuildHeaders: false); ReloadEditorNotes(); };
+        _patternView = view;
+        _patternTrackId = trackId;
+        _patternClipIndex = clipIndex;
+        _patternScene = scene;
+    }
+
+    private void ShowPatternPanel()
+    {
+        _lastClipEditor = _patternView;
+        SetHost(ClipDetailHost, _patternView);
+        SetDetailChip(_patternTrackId);
+        if (DetailFloating) return;   // floating: top pane only
+        DetailPatternBtn.IsEnabled = true;
+        DetailPatternBtn.IsChecked = true;
+        DetailDevicesBtn.IsChecked = false;
+        DetailClipBtn.IsChecked = false;
+        ShowDetail(260, honorPersist: true);
+    }
+
+    private void OnDetailPattern(object? sender, RoutedEventArgs e)
+    {
+        if (!PatternTarget(out int tid, out int ci, out int scene))
+        {
+            DetailPatternBtn.IsChecked = false;
+            if (_vm is not null) _vm.StatusText = "Select a MIDI clip on a Drum Rack track to step it.";
+            return;
+        }
+        if (_patternView is null || _patternTrackId != tid || _patternClipIndex != ci || _patternScene != scene)
+            BuildPatternView(tid, ci, scene);
+        else
+            _patternView.Reload();   // follow anything the piano roll / arrangement changed
+        ShowPatternPanel();
+    }
+
+    // Drop a pattern grid whose clip no longer exists, mirroring InvalidateClipEditor.
+    private void InvalidatePatternView()
+    {
+        bool onScreen = DetailBody.Content is DrumPatternView;
+        _patternView = null;
+        _patternTrackId = -1;
+        _patternClipIndex = -1;
+        _patternScene = -1;
+        DetailPatternBtn.IsEnabled = false;
+        DetailPatternBtn.IsChecked = false;
+        if (onScreen) DetailPanel.IsVisible = false;
+    }
 
     // takeOverPanel: false shows the chain without claiming the docked panel, for callers that
     // only follow the selection (see OnTrackSelected). Explicit "show me the devices" callers
@@ -157,6 +280,7 @@ public partial class MainWindow
         if (DetailFloating || takeOverPanel) SetHost(DeviceHost, _deviceChain);
         if (DetailFloating || !takeOverPanel) return;   // floating: bottom pane only, don't touch the docked row/tabs
         DetailDevicesBtn.IsChecked = true;
+        DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
         ShowDetail(320, honorPersist: false);   // Devices: natural card-fitting height
     }
@@ -192,6 +316,7 @@ public partial class MainWindow
         DetailClipBtn.IsEnabled = true;
         DetailClipBtn.IsChecked = true;
         DetailDevicesBtn.IsChecked = false;
+        DetailPatternBtn.IsChecked = false;
         ShowDetail(250, honorPersist: true);
     }
 
@@ -266,6 +391,7 @@ public partial class MainWindow
         DetailClipBtn.IsEnabled = true;
         DetailClipBtn.IsChecked = true;
         DetailDevicesBtn.IsChecked = false;
+        DetailPatternBtn.IsChecked = false;
         ShowDetail(250, honorPersist: true);
     }
 
@@ -276,6 +402,10 @@ public partial class MainWindow
     private void OnClipGeometryChanged(int trackId, int clipIndex)
     {
         if (trackId <= 0 || clipIndex < 0 || !Engine.TryGetClipInfo(trackId, clipIndex, out var ci)) return;
+
+        // The step grid snapshots the clip length too — a trim adds or drops steps.
+        if (_patternView is not null && _patternTrackId == trackId && _patternClipIndex == clipIndex && _patternScene < 0)
+            _patternView.Reload();
 
         if (_editorRoll is not null && _editorTrackId == trackId && _editorClipIndex == clipIndex)
         {
@@ -294,6 +424,7 @@ public partial class MainWindow
 
     private void ReloadEditorNotes()
     {
+        _patternView?.Reload();   // the step grid is a second view of the same notes
         if (_vm is null || _editorRoll is null || _editorTrackId < 0) return;
         double len = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
         _editorRoll.SetNotes(Engine.GetClipNotes(_editorTrackId, _editorClipIndex), len);
@@ -302,13 +433,21 @@ public partial class MainWindow
     // Tab (when the detail panel was last used) flips between Devices and Clip.
     private void ToggleDetailTab()
     {
+        var e = new RoutedEventArgs();
+        // Devices → Pattern → Clip → Devices, skipping tabs the current selection can't fill.
         if (DetailBody.Content is DeviceChainView)
         {
-            if (DetailClipBtn.IsEnabled) OnDetailClip(this, new RoutedEventArgs());
+            if (DetailPatternBtn.IsEnabled) OnDetailPattern(this, e);
+            else if (DetailClipBtn.IsEnabled) OnDetailClip(this, e);
+        }
+        else if (DetailBody.Content is DrumPatternView)
+        {
+            if (DetailClipBtn.IsEnabled) OnDetailClip(this, e);
+            else OnDetailDevices(this, e);
         }
         else
         {
-            OnDetailDevices(this, new RoutedEventArgs());
+            OnDetailDevices(this, e);
         }
     }
 
@@ -370,6 +509,8 @@ public partial class MainWindow
         // Audio slot → the compact audio-slot editor; MIDI slot → the piano roll.
         if (Engine.TryGetSessionAudioSlot(trackId, scene, out var _))
         {
+            _sessionSlotTrack = -1; _sessionSlotScene = -1;   // audio slot: no pattern to step
+            SyncClipTab();
             var audioEd = new SessionAudioSlotEditor(Engine, trackId, scene, new SolidColorBrush(TrackColor(trackId)));
             _editorRoll = null; _clipEditor = null;
             _editorTrackId = -1; _editorClipIndex = -1;
@@ -384,6 +525,9 @@ public partial class MainWindow
             return;
         }
 
+        _sessionSlotTrack = trackId;   // so the Pattern tab can target this slot
+        _sessionSlotScene = scene;
+        SyncClipTab();                 // a Drum Rack slot lights the Pattern tab up
         var roll = new PianoRollView
         {
             Commit = notes =>
@@ -392,6 +536,7 @@ public partial class MainWindow
                 for (int i = 0; i < notes.Count; i++) arr[i] = notes[i];
                 Engine.SetSessionNotes(trackId, scene, arr);
                 _session?.Refresh();
+                _patternView?.Reload();
             },
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
         };
@@ -411,6 +556,7 @@ public partial class MainWindow
         DetailClipBtn.IsEnabled = true;   // a clip is now available to edit
         DetailClipBtn.IsChecked = true;
         DetailDevicesBtn.IsChecked = false;
+        DetailPatternBtn.IsChecked = false;
         ShowDetail(250, honorPersist: true);
     }
 }
