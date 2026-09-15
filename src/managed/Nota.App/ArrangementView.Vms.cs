@@ -77,5 +77,9 @@ public sealed partial class ArrangementView
         public int PeakCount;
         public NotaNote[]? Notes;
         public string Name = "";
+        /// <summary>True when no clip on the same track ends where this one begins — the head
+        /// of a run. Only these carry a name on the lane (design 1a), so a repeated pattern
+        /// reads as one block. Computed in <c>Refresh</c>.</summary>
+        public bool RunStart = true;
     }
 }

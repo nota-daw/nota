@@ -614,6 +614,10 @@ public sealed class PreferencesWindow : NotaWindow
         ("MOUSE", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Drag sections lane", "Mark a new section over the dragged bars"),
+            ("Click section", "Jump the playhead to its start"),
+            ("Double-click section", "Rename it"),
+            ("Drag section · its edge", "Move / resize it, snapped to bars"),
             ("Drag overview strip", "Drag sideways to scroll · up / down to zoom out / in"),
             ("Drag overview edge", "Zoom by resizing the viewport window"),
             ("Double-click overview", "Fit the whole project on screen"),

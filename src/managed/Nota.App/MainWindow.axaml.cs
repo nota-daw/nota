@@ -232,6 +232,9 @@ public partial class MainWindow : Window
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
         Browser.SetSettings(vm.Settings);   // the ⋮ view options persist
+        // Arrangement view options (View menu) persist the same way.
+        Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
+        Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         Browser.SetViewModel(vm.Browser);
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.PreviewRequested += OnBrowserPreview;
@@ -261,7 +264,8 @@ public partial class MainWindow : Window
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
-        _modular = new ModularView(vm.Engine) { IsVisible = false };
+        // Same island gutter as the arrangement it replaces in MainContent.
+        _modular = new ModularView(vm.Engine) { IsVisible = false, Margin = new Thickness(0, 8, 8, 8) };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas

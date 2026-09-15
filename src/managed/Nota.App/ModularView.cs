@@ -164,11 +164,25 @@ public sealed class ModularView : UserControl
         Grid.SetColumn(_viewport, 1);
         body.Children.Add(_viewport);
 
-        Content = new Grid
+        var root = new Grid
         {
             RowDefinitions = new RowDefinitions("34,*,22"),
             Children = { Toolbar(), Row(body, 1), StatusBar() },
         };
+
+        // The island: like the browser and the arrangement, the modular canvas is a rounded
+        // card floating on the app ground. ClipToBounds keeps the toolbar, the track rail and
+        // the status line inside the rounded corners.
+        var island = new Border
+        {
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            Child = root,
+        };
+        island.BindResource(Border.CornerRadiusProperty, "Radius.Md");
+        island.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        Content = island;
 
         _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");

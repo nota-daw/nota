@@ -63,16 +63,30 @@ JUCE module; the engine core is JUCE-free.
 Three top-level views, switched from the toolbar (**Arrangement · Session · Modular**);
 the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
-- **Arrangement View** — a linear timeline: place, move, trim and duplicate clips; grid
-  and snap to bars/beats; scroll and zoom; recording into the arrangement (audio and
-  MIDI); split at the cursor or across a selection (Cmd/Ctrl+E cuts every track in the
-  selection); clip scrubbing on the ruler. An **Overview** strip above the ruler shows
-  the whole project in miniature with the visible span as a window over it — drag it to
-  scroll, drag its edges (or drag vertically) to zoom, double-click to fit the project.
+- **Arrangement View** — a linear timeline, floating on the app ground as its own island:
+  place, move, trim and duplicate clips; grid and snap to bars/beats; scroll and zoom;
+  recording into the arrangement (audio and MIDI); split at the cursor or across a
+  selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
+  An **Overview** strip above the ruler shows the whole project in miniature with the
+  visible span as a window over it — drag it to scroll, drag its edges (or drag vertically)
+  to zoom, double-click to fit the project.
+  - **Sections** — a lane between the Overview and the ruler names spans of the song
+    (Intro, Verse, Drop). Drag the empty lane to mark one, click it to jump the playhead
+    there, double-click to rename, drag its body or edges to move and resize it (always on
+    whole bars). Its menu loops the section, selects it as a time range across every track,
+    duplicates it or deletes it. Saved with the project; View ▸ Toggle sections hides it.
+  - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
+    mute/solo and level, and opens to the full control set when selected, so groups read as
+    families rather than as more tracks. A track without a colour of its own takes its
+    group's hue, shaded per sibling.
+  - **Clip names appear where a run begins** — a clip is a colour band over its waveform,
+    and the name prints only at the head of each run so a repeated pattern reads as one
+    block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
+    hand always shows its name.
 - **Session View** — a clip grid (tracks × scenes): launch and stop a clip, launch a whole
   scene, launch quantization, recording into a clip slot (MIDI or audio), loop clips with
   a configurable length, and moving material between Session and Arrangement.
-- **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
+- **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
   tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —

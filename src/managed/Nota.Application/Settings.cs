@@ -54,6 +54,13 @@ public sealed class Settings
     public bool BrowserGroupBySource { get; set; } = true;
     /// <summary>Float favorited devices to the top of their section.</summary>
     public bool BrowserFavoritesFirst { get; set; } = true;
+
+    // --- arrangement view options (View menu) --------------------------------
+    /// <summary>How many clips print their name on the lane: 0 every clip, 1 the head of each
+    /// run (default — a repeated pattern then reads as one block), 2 none.</summary>
+    public int ArrangementClipLabels { get; set; } = 1;
+    /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
+    public bool ArrangementShowSections { get; set; } = true;
 }
 
 public interface ISettingsService

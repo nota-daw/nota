@@ -152,7 +152,9 @@ controls match instead of shipping default blue.
 
 ### Track palette
 
-Assigned round-robin, muted and equal-weight so no track outranks another. Paper keeps
+Assigned round-robin, muted and equal-weight so no track outranks another. A track inside
+a group takes its group's hue instead, varied across the three shades so siblings stay
+apart inside one family; an explicitly coloured track keeps its own colour. Paper keeps
 the eight hues and darkens them, so a clip's full-strength content still reads over a 16%
 fill of itself:
 
@@ -272,9 +274,24 @@ takes — not a drawing that resembles one.
 
 ## Layout skeleton
 
-`Transport bar → toolbar → track area (scrolls, on Brush.BgApp) → 26px status bar.`
-Panels are `Brush.SurfaceCard` with a 1px bottom border. Track rows are cards: radius 10,
-1px border, 10px pad.
+`Transport bar → toolbar → body (on Brush.BgApp) → 26px status bar.`
+Panels are `Brush.SurfaceCard` with a 1px bottom border.
+
+The body holds **islands**: the browser, the arrangement and the modular canvas are
+`Radius.Md` cards with a 1px `Brush.BorderDefault` edge, clipped to their bounds, floating
+on `Brush.BgApp` with an 8px gutter. The splitter between two islands carries no line of
+its own — it is a 2px transparent grab strip inside that gutter.
+
+Arrangement rows are not one pitch. A **track** row is 64px and its header carries every
+control (name + kind · mute/solo/arm + input · fader + dB + pan, with a level rail on the
+right edge). A **group** row is a 26px titled bar — disclosure, name, mute/solo, a 4px
+level rail, kind tag — and opens to a full 64px row only while it is the selected track.
+Header column 228px. Every y↔row conversion goes through `ArrangementView.RowTop` /
+`RowAtY`; nothing multiplies by a row constant.
+
+A **clip** is a tinted body (`Radius.Clip`) under a 2px band in the track colour, with the
+waveform or notes across its full height. The name is drawn over the body — not in a strip
+of its own — and only where a run of clips begins.
 
 Transport buttons set `IsTabStop` and `Focusable` to false, so global hotkeys (Space, R,
 L, Return) always reach the window instead of a focused control.
