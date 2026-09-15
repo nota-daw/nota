@@ -21,6 +21,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Midi;
 
 namespace Nota.App;
 
@@ -64,14 +65,11 @@ public sealed class PianoRollView : UserControl
     // --- musical scale overlay ("Set Scale") ----------------
     // Session-global (static seed) so the chosen key/scale persists as you move
     // between clips, like a global scale setting. Off by default → chromatic, no
-    // dimming. Masks mirror the engine's Nota Scale device (src/MidiScale.h).
-    public static readonly string[] KeyNames =
-        { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    public static readonly string[] ScaleNames =
-        { "Major", "Natural Minor", "Harmonic Minor", "Dorian", "Phrygian",
-          "Lydian", "Mixolydian", "Pentatonic Major", "Pentatonic Minor", "Chromatic" };
-    private static readonly ushort[] ScaleMasks =
-        { 2741, 1453, 2477, 1709, 1451, 2773, 1717, 661, 1193, 4095 };
+    // dimming. The key/scale tables are shared with the clip tools and the engine's
+    // Nota Scale device (src/MidiScale.h) — see MidiScales.
+    public static string[] KeyNames => MidiScales.KeyNames;
+    public static string[] ScaleNames => MidiScales.Names;
+    private static ushort[] ScaleMasks => MidiScales.Masks;
 
     private static bool s_scaleOn;
     private static int  s_root;
@@ -307,6 +305,7 @@ public sealed class PianoRollView : UserControl
 
     public void SetNotes(IEnumerable<NotaNote> notes, double lengthBeats)
     {
+        _previewBackup = null;
         _notes.Clear();
         _notes.AddRange(notes);
         _lengthBeats = Math.Max(1, lengthBeats);
@@ -387,7 +386,7 @@ public sealed class PianoRollView : UserControl
         _selection.Clear();
         for (int k = 0; k < copies.Count; k++) _selection.Add(baseIdx + k);
         Invalidate();
-        Commit?.Invoke(_notes);
+        CommitNotes();
         Changed?.Invoke();
         return true;
     }
@@ -400,9 +399,97 @@ public sealed class PianoRollView : UserControl
             if (i >= 0 && i < _notes.Count) _notes.RemoveAt(i);
         _selection.Clear();
         Invalidate();
-        Commit?.Invoke(_notes);
+        CommitNotes();
         Changed?.Invoke();
         return true;
+    }
+
+    // --- clip-tool preview -------------------------------------------------------
+    // A tool's result is shown in the roll and streamed to the engine with no undo
+    // checkpoint, exactly like a note drag, so the knobs are audible while they move.
+    // The clip's own notes are held here until the preview is applied or dropped.
+    private List<NotaNote>? _previewBackup;
+
+    public bool Previewing => _previewBackup is not null;
+
+    /// <summary>The clip's notes ignoring any preview in flight — what a tool reads.</summary>
+    public IReadOnlyList<NotaNote> SourceNotes => _previewBackup ?? _notes;
+
+    /// <summary>Indices into <see cref="SourceNotes"/> that are selected. Only meaningful
+    /// while no preview is running, which is when a tool captures its working set.</summary>
+    public IReadOnlyCollection<int> SelectionIndices => _selection;
+
+    /// <summary>Puts a tool's result on screen and in the engine without touching undo.</summary>
+    public void ShowPreview(IReadOnlyList<NotaNote> notes)
+    {
+        _previewBackup ??= new List<NotaNote>(_notes);
+        _notes.Clear();
+        _notes.AddRange(notes);
+        _selection.Clear();
+        EnsureNotesVisible();
+        Invalidate();
+        CommitLive?.Invoke(_notes);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Centres the pitch range when not one note is on screen — which is what a
+    /// generator writing into a different register leaves behind. A preview you cannot see
+    /// is worse than no preview; scrolling only when nothing is visible keeps the view put
+    /// for every ordinary edit.</summary>
+    public void EnsureNotesVisible()
+    {
+        if (_notes.Count == 0) return;
+        double vh = _bodyScroll.Viewport.Height;
+        if (vh <= 0) { _pendingCenter = true; return; }
+        double top = _bodyScroll.Offset.Y, bottom = top + vh;
+        foreach (var n in _notes)
+        {
+            double y = (MaxPitch - n.Pitch) * RowH;
+            if (y >= top && y + RowH <= bottom) return;
+        }
+        _pendingVOffset = CenterOffsetForNotes();
+        ApplyPendingVOffset();
+    }
+
+    /// <summary>Drops the preview and puts the clip back, again without an undo entry —
+    /// so a tool the user backed out of leaves no trace in the history.</summary>
+    public void CancelPreview()
+    {
+        if (_previewBackup is null) return;
+        _notes.Clear();
+        _notes.AddRange(_previewBackup);
+        _previewBackup = null;
+        _selection.Clear();
+        Invalidate();
+        CommitLive?.Invoke(_notes);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Keeps the previewed notes as one undoable edit.</summary>
+    public void ApplyPreview()
+    {
+        if (_previewBackup is null) return;
+        var original = _previewBackup;
+        _selection.Clear();
+        Invalidate();
+        // A commit checkpoints whatever the engine currently holds — and the live stream
+        // has already put the preview there, so committing straight away would make undo
+        // land on the preview. Rewind the engine to the clip's own notes first (no undo
+        // step of its own), then commit, so the one entry points at the original.
+        CommitLive?.Invoke(original);
+        CommitNotes();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Pushes a note set as one undoable edit. Any clip-tool preview in flight is
+    /// superseded — the notes on screen become the clip's own and the tools rail re-reads
+    /// them on the next <see cref="Changed"/>. Without this, quantizing (or drawing a note)
+    /// while a generator previewed would leave the rail holding a baseline it could later
+    /// revert the clip to.</summary>
+    private void CommitNotes(IReadOnlyList<NotaNote>? notes = null)
+    {
+        _previewBackup = null;
+        Commit?.Invoke(notes ?? _notes);
     }
 
     public void Quantize(double strength)
@@ -415,7 +502,7 @@ public sealed class PianoRollView : UserControl
             _notes[i] = n;
         }
         Invalidate();
-        Commit?.Invoke(_notes);
+        CommitNotes();
         Changed?.Invoke();
     }
 
@@ -428,7 +515,7 @@ public sealed class PianoRollView : UserControl
             _notes[i] = n;
         }
         Invalidate();
-        Commit?.Invoke(_notes);
+        CommitNotes();
         Changed?.Invoke();
     }
 
@@ -478,7 +565,7 @@ public sealed class PianoRollView : UserControl
         if (_notes.Count == baseIdx) return false;
         _selection.Clear();
         for (int k = baseIdx; k < _notes.Count; k++) _selection.Add(k);
-        Invalidate(); Commit?.Invoke(_notes); Changed?.Invoke();
+        Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
     }
 
@@ -507,7 +594,7 @@ public sealed class PianoRollView : UserControl
         if (maxP + dp > MaxPitch) dp = MaxPitch - maxP;
         if (Math.Abs(db) < 1e-9 && dp == 0) return false;
         foreach (int i in sel) { var n = _notes[i]; n.StartBeat += db; n.Pitch += dp; _notes[i] = n; }
-        Invalidate(); Commit?.Invoke(_notes); Changed?.Invoke();
+        Invalidate(); CommitNotes(); Changed?.Invoke();
         if (dp != 0) EnsurePitchVisible(dp > 0 ? maxP + dp : minP + dp);
         return true;
     }
@@ -829,7 +916,7 @@ public sealed class PianoRollView : UserControl
                     _o._notes.Add(nt);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
                 }
-                _o.Invalidate(); _o.Commit?.Invoke(_o._notes); _o.Changed?.Invoke();
+                _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
                 e.Handled = true;
                 return;
             }
@@ -929,7 +1016,7 @@ public sealed class PianoRollView : UserControl
         private void PushLive()
         {
             if (_o.CommitLive is null) return;   // no live path wired (e.g. session) → commit on release
-            if (!_liveStarted) { _liveStarted = true; _o.Commit?.Invoke(_preDrag); }
+            if (!_liveStarted) { _liveStarted = true; _o.CommitNotes(_preDrag); }
             _o.CommitLive(_o._notes);
         }
 
@@ -977,7 +1064,7 @@ public sealed class PianoRollView : UserControl
                 // Live path: undo was seeded on the first move; push the final state (no undo).
                 // No live path (session): fall back to a single committing push.
                 if (_o.CommitLive is not null && _liveStarted) _o.CommitLive(_o._notes);
-                else _o.Commit?.Invoke(_o._notes);
+                else _o.CommitNotes();
             }
             _liveStarted = false;
             _cursorKind = 0; Cursor = ArrowCursor;   // re-evaluated on the next hover
@@ -1168,7 +1255,7 @@ public sealed class PianoRollView : UserControl
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (_drag) { _drag = false; _o.Commit?.Invoke(_o._notes); _o.Changed?.Invoke(); }
+            if (_drag) { _drag = false; _o.CommitNotes(); _o.Changed?.Invoke(); }
         }
 
         private void Apply(double y)

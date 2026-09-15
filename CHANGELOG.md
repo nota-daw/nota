@@ -19,6 +19,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Clip tools — generative writing and rewriting in the piano roll.** A **Tools** rail
+  opens beside the roll with fifteen tools. Six **generators** write notes: *Rhythm*
+  (a pattern weighted toward the strong beats, with density, variation and accent),
+  *Seed* (reads the clip's own intervals, note lengths and onset spacing, then writes a
+  fresh take in the same voice), *Stacks* (grows every note into a chord — 3rds, 4ths,
+  5ths, octaves or clusters, voiced close / open / drop 2 / spread / power), *Euclidean*
+  (hits spread as evenly as the steps allow, with rotation and a second Euclidean ride
+  picking the accents), *Melodic Steps* (a step sequencer in scale degrees with a contour)
+  and *Shape* (a curve traced across the clip). Nine **transformations** rewrite them:
+  *Arpeggiate*, *Connect* (runs that walk to the next pitch, carved out of the source note
+  when the part is legato), *Ornament* (grace notes, trills, mordents, turns, flams and
+  rolls), *Quantize* (with swing and humanize), *Recombine* (pulls pitch and rhythm apart
+  and puts them back together differently, in phrase-sized chunks), *Span*, *Strum*,
+  *Time Warp* and *Velocity Shaper*.
+- **Every change is previewed before you commit to it.** Turning a knob re-runs the tool,
+  shows the result in the roll and streams it to the engine, so a generator is audible
+  while you shape it. **Apply** keeps it as one undo step; **Revert** drops it without
+  leaving anything in the history. A selection scopes a tool to those notes and carries
+  the rest of the clip through untouched; output can replace what it was given or be added
+  on top. Every tool is seeded, so a result is repeatable and "New seed" re-rolls it — and
+  the ones that think in pitch follow the roll's **Set Scale** key, so what they write
+  stays in key.
 - **Ten factory kits for the Drum Rack.** *Volta* (warm analog boom), *Kompakt* (punchy
   analog house), *Micron* (small vintage rhythm box), *Linnwood* (80s PCM machine, gated
   snare), *Atelier* (acoustic studio kit), *Cellar* (dusty vinyl break), *Neon* (modern

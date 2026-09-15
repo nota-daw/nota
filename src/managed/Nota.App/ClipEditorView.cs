@@ -32,7 +32,8 @@ public sealed class ClipEditorView : UserControl
     private readonly ContentControl _rightHost;
     private readonly EnvPanel? _envPanel;
     private readonly ClipPropsView _props;
-    private Border _notesTab = null!, _envTab = null!;
+    private readonly MidiToolsView _tools;
+    private Border _notesTab = null!, _envTab = null!, _toolsChip = null!;
 
     public ClipEditorView(PianoRollView roll, string clipName, double startBeat,
                           IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4)
@@ -43,11 +44,16 @@ public sealed class ClipEditorView : UserControl
         if (engine is not null && trackId > 0 && clipIndex >= 0)
             _envPanel = new EnvPanel(engine, trackId, clipIndex, lengthBeats);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        // Props rail | editor | clip-tools rail. The tools rail is a toggle rather than a
+        // tab because its whole point is watching the roll change while you turn a knob.
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         _props = new ClipPropsView(roll, clipName, startBeat);
         grid.Children.Add(_props);
         Grid.SetColumn(_rightHost, 1);
         grid.Children.Add(_rightHost);
+        _tools = new MidiToolsView(roll) { IsVisible = false };
+        Grid.SetColumn(_tools, 2);
+        grid.Children.Add(_tools);
 
         var header = TabsHeader();
         DockPanel.SetDock(header, Dock.Top);
@@ -73,6 +79,18 @@ public sealed class ClipEditorView : UserControl
         _rightHost.Content = envelopes ? _envPanel : Roll;
         PaintTab(_notesTab, !envelopes);
         PaintTab(_envTab, envelopes);
+        if (envelopes && _tools.IsVisible) ToggleTools();
+    }
+
+    /// <summary>Shows or hides the clip-tools rail. Hiding drops the tool's preview, so
+    /// walking away from a half-tweaked generator leaves the clip as it was.</summary>
+    private void ToggleTools()
+    {
+        bool show = !_tools.IsVisible;
+        if (show && _rightHost.Content != Roll) ShowTab(false);
+        _tools.IsVisible = show;
+        SetChip(_toolsChip, "Tools", show);
+        _tools.SetActive(show);
     }
 
     private static void PaintTab(Border tab, bool active)
@@ -93,13 +111,20 @@ public sealed class ClipEditorView : UserControl
         PaintTab(_notesTab, true);
         PaintTab(_envTab, false);
         var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { _notesTab, _envTab } };
-        var scale = ScaleControls();
-        DockPanel.SetDock(scale, Dock.Right);
+        _toolsChip = Chip();
+        SetChip(_toolsChip, "Tools", false);
+        _toolsChip.PointerPressed += (_, e) => { e.Handled = true; ToggleTools(); };
+        var right = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
+            Children = { ScaleControls(), _toolsChip },
+        };
+        DockPanel.SetDock(right, Dock.Right);
         return new Border
         {
             Height = 30, Background = Panel, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(10, 0),
-            Child = new DockPanel { LastChildFill = true, Children = { scale, tabs } },
+            Child = new DockPanel { LastChildFill = true, Children = { right, tabs } },
         };
     }
 

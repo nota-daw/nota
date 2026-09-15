@@ -7062,5 +7062,75 @@ Console.WriteLine("-- MCP tools --");
     Check(e.IsTrackFrozen(t), "setFreezeState re-freezes the track from a saved blob");
 }
 
+// --- clip tools: every generator and transformation stays inside the clip ---------
+{
+    Console.WriteLine("-- clip tools (generate / transform) --");
+    var toolCtx = new Nota.Application.Midi.MidiToolContext
+    {
+        LengthBeats = 4, Grid = 0.25, ScaleOn = true, ScaleRoot = 0,
+        ScaleMask = Nota.Application.Midi.MidiScales.MaskAt(0), Seed = 11,
+    };
+    var toolSrc = new[]
+    {
+        new Nota.Application.NotaNote(60, 0.0, 2.0, 0.8f),
+        new Nota.Application.NotaNote(64, 0.0, 2.0, 0.8f),
+        new Nota.Application.NotaNote(67, 0.0, 2.0, 0.8f),
+        new Nota.Application.NotaNote(62, 2.0, 1.0, 0.7f),
+        new Nota.Application.NotaNote(71, 3.0, 1.0, 0.9f),
+    };
+
+    int bad = 0, empties = 0, nondet = 0;
+    foreach (var tool in Nota.Application.Midi.MidiToolCatalog.All)
+    {
+        // Each parameter pinned to each end of its range, plus the defaults.
+        var cases = new List<Nota.Application.Midi.MidiToolSettings> { tool.NewSettings() };
+        foreach (var prm in tool.Params)
+            foreach (double v in new[] { prm.Min, prm.Max })
+            {
+                var st = tool.NewSettings();
+                st.Set(prm.Id, v);
+                cases.Add(st);
+            }
+
+        foreach (var st in cases)
+        {
+            var r = Nota.Application.Midi.MidiToolRunner.Apply(tool, toolSrc, null, st, toolCtx);
+            foreach (var n in r)
+                if (n.Pitch is < 0 or > 127 || n.Velocity is <= 0 or > 1 || n.LengthBeats <= 0
+                    || n.StartBeat < -1e-9 || n.StartBeat + n.LengthBeats > toolCtx.LengthBeats + 1e-6)
+                { bad++; Console.WriteLine($"     {tool.Id}: illegal note {n.Pitch} @ {n.StartBeat}+{n.LengthBeats} v{n.Velocity}"); break; }
+        }
+
+        // A transformation with nothing to work on must not invent notes.
+        if (tool.Kind == Nota.Application.Midi.MidiToolKind.Transform &&
+            Nota.Application.Midi.MidiToolRunner.Apply(tool, Array.Empty<Nota.Application.NotaNote>(), null, tool.NewSettings(), toolCtx).Count != 0)
+            empties++;
+
+        // The seed is the only source of randomness, so a re-run must be identical.
+        var a = Nota.Application.Midi.MidiToolRunner.Apply(tool, toolSrc, null, tool.NewSettings(), toolCtx);
+        var b = Nota.Application.Midi.MidiToolRunner.Apply(tool, toolSrc, null, tool.NewSettings(), toolCtx);
+        if (a.Count != b.Count) { nondet++; continue; }
+        for (int i = 0; i < a.Count; i++)
+            if (a[i].Pitch != b[i].Pitch || Math.Abs(a[i].StartBeat - b[i].StartBeat) > 1e-9) { nondet++; break; }
+    }
+    Check(Nota.Application.Midi.MidiToolCatalog.All.Count == 15, $"catalog holds 15 tools (got {Nota.Application.Midi.MidiToolCatalog.All.Count})");
+    Check(bad == 0, $"every tool stays inside the clip at every parameter extreme ({bad} bad)");
+    Check(empties == 0, $"no transformation invents notes from an empty clip ({empties} did)");
+    Check(nondet == 0, $"every tool is deterministic for a given seed ({nondet} were not)");
+
+    // A generated result survives the round trip through the engine.
+    using var te = new NotaEngine();
+    int tt = te.AddInstrumentTrack();
+    int tc = te.AddMidiClip(tt, 0, 4);
+    te.SetClipNotes(tt, tc, toolSrc);
+    var arp = Nota.Application.Midi.MidiToolRunner.Apply(
+        Nota.Application.Midi.MidiTransforms.Arpeggiate, te.GetClipNotes(tt, tc), null,
+        Nota.Application.Midi.MidiTransforms.Arpeggiate.NewSettings(), toolCtx);
+    Check(arp.Count > toolSrc.Length, $"Arpeggiate breaks the chord up ({toolSrc.Length} -> {arp.Count} notes)");
+    te.SetClipNotes(tt, tc, arp.ToArray());
+    Check(te.GetClipNotes(tt, tc).Length == arp.Count, "the generated notes round-trip through the engine");
+    Check(te.Undo() && te.GetClipNotes(tt, tc).Length == toolSrc.Length, "applying a tool is one undo step");
+}
+
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

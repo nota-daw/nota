@@ -135,6 +135,21 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
+- **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
+  fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
+  leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
+  writes a new take in the same voice), *Stacks* (grows each note into a voiced chord),
+  *Euclidean*, *Melodic Steps* and *Shape* — and nine **transformations** — *Arpeggiate*,
+  *Connect*, *Ornament*, *Quantize*, *Recombine*, *Span*, *Strum*, *Time Warp* and
+  *Velocity Shaper*.
+  - Every knob move is **previewed in the roll and in the engine** — you hear the result
+    before deciding — and **Apply** keeps it as a single undo step. Backing out leaves no
+    trace in the history.
+  - A selection scopes the tool to those notes; with nothing selected it works the whole
+    clip. Output can **replace** what it was given or be **added** on top.
+  - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
+  - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
+    stays in key.
 - **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
   tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
   step to place a hit, shift-click for an accent, drag across the grid to paint, and use
