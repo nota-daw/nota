@@ -4,6 +4,8 @@
 // M4.1-A: transport as the first MVVM slice. Wraps the engine's transport +
 // master behind observable properties and commands; the clock calls Tick().
 
+using System;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Nota.Application;
@@ -23,10 +25,14 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private int _timeSigNumerator = 4;
     [ObservableProperty] private int _timeSigDenominator = 4;
     [ObservableProperty] private double _masterVolume = 1.0;
+    [ObservableProperty] private string _masterDbText = "0.0 dB";
     [ObservableProperty] private bool _metronomeOn;
     [ObservableProperty] private bool _loopOn;
     [ObservableProperty] private string _loopRangeText = "1.1 – 5.1";
     [ObservableProperty] private bool _recordOn;
+    /// <summary>Which clock the position readout is showing, printed under it so the
+    /// number is never ambiguous (transport console, mockup 1b).</summary>
+    [ObservableProperty] private string _positionUnitText = "bars";
 
     private bool _revertingRec;
 
@@ -45,7 +51,15 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     partial void OnBpmChanged(decimal value) => _engine.SetBpm((double)value);
     partial void OnTimeSigNumeratorChanged(int value) => _engine.SetTimeSignature(value, TimeSigDenominator);
     partial void OnTimeSigDenominatorChanged(int value) => _engine.SetTimeSignature(TimeSigNumerator, value);
-    partial void OnMasterVolumeChanged(double value) => _engine.SetMasterVolume((float)value);
+    partial void OnMasterVolumeChanged(double value)
+    {
+        _engine.SetMasterVolume((float)value);
+        // Show the gain the fader is actually applying. Silence has no dB value, so it
+        // gets the symbol rather than a very large negative number.
+        MasterDbText = value <= 1e-4
+            ? "-\u221e dB"
+            : (20.0 * Math.Log10(value)).ToString("0.0", CultureInfo.InvariantCulture) + " dB";
+    }
     partial void OnMetronomeOnChanged(bool value) => _engine.SetMetronome(value);
 
     partial void OnLoopOnChanged(bool value)
@@ -144,6 +158,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     public void ToggleTimeDisplay()
     {
         ShowTimeDisplay = !ShowTimeDisplay;
+        PositionUnitText = ShowTimeDisplay ? "time" : "bars";
         UpdatePositionText(_lastBeats);   // reflect immediately, don't wait for the next tick
     }
 

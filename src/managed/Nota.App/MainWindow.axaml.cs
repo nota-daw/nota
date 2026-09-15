@@ -168,22 +168,23 @@ public partial class MainWindow : Window
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);
 
-        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider.
+        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
+        // sits over the master meter inside the MST module, with the gain printed in dB.
         var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5);
         masterVol.ValueChanged += v => vm.Transport.MasterVolume = v;
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0");
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0", fontSize: 14);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
-        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0");
+        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: 14);
         tsNum.ValueChanged += v => vm.Transport.TimeSigNumerator = (int)Math.Round(v);
         TimeSigNumHost.Children.Add(tsNum);
-        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0");
+        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: 14);
         tsDen.ValueChanged += v =>
         {
             int d = NearestPow2(v);
@@ -195,6 +196,11 @@ public partial class MainWindow : Window
         vm.Transport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(vm.Transport.Bpm)) bpmField.Value = (double)vm.Transport.Bpm;
+            // Opening a project restores the master gain on the view model; move the fader
+            // with it so the handle and the dB readout beside it never disagree. Skipped
+            // mid-drag, where the fader is the one driving.
+            else if (e.PropertyName == nameof(vm.Transport.MasterVolume) && !masterVol.Dragging)
+                masterVol.Value = vm.Transport.MasterVolume;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
         };
@@ -231,9 +237,10 @@ public partial class MainWindow : Window
                 _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
-            CpuFill.Width = load * 56;
+            CpuFill.Width = load * 52;
             CpuFill.Background = load > 0.9 ? cpuRed : load > 0.7 ? cpuAmber : cpuGreen;
-            CpuText.Text = ((int)Math.Round(load * 100)) + "%";
+            CpuText.Text = "CPU " + (int)Math.Round(load * 100) + "%";
+            SyncMidiDot();
         };
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT
         // rebuilding the header cards — otherwise the input combobox and any open track/
@@ -452,6 +459,7 @@ public partial class MainWindow : Window
         SessionBtn.IsChecked = session;
         ModularBtn.IsChecked = modular;
         PlayBtn.Classes.Set("session", session);   // play button turns green in Session (1c)
+        LaunchQChip.IsVisible = session;           // launch quantize only applies to Session launches
         if (session) _session.Refresh();
         if (modular)
         {
@@ -506,11 +514,13 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    // Follow: keep the arrangement scrolling with the playhead during playback.
-    private void OnToggleFollow(object? sender, RoutedEventArgs e)
+    // Snap on/off. Separate from the GRID cell, which only picks the denomination:
+    // the latch is what you reach for to nudge something off-grid for a while.
+    private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)
     {
-        Timeline.FollowPlayhead = (sender as ToggleButton)?.IsChecked == true;
-        if (Timeline.FollowPlayhead) Timeline.RecenterOnPlayhead();   // jump to the cursor now
+        bool on = SnapToggle.IsChecked == true;
+        Timeline.SnapEnabled = on;
+        if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
     }
 
     // MIDI Learn: arm/disarm the overlay and reveal the mappings tab so the user
@@ -534,6 +544,22 @@ public partial class MainWindow : Window
     {
         _vm?.Engine.ReenableAutomation();
         SyncReenableAutomation();
+    }
+
+    // MIDI input activity: the dot on the MIDI button lights for ~250ms whenever the
+    // learn service drains a control event, so a controller that is connected but silent
+    // (wrong port, wrong channel) is visible without opening the mappings tab.
+    private long _midiSeenCount;
+    private DateTime _midiLastSeen = DateTime.MinValue;
+
+    private void SyncMidiDot()
+    {
+        if (_learn is null) return;
+        long n = _learn.EventCount;
+        if (n != _midiSeenCount) { _midiSeenCount = n; _midiLastSeen = DateTime.UtcNow; }
+        bool lit = (DateTime.UtcNow - _midiLastSeen).TotalMilliseconds < 250;
+        var want = lit ? NotaPalette.Success : NotaPalette.BorderStrong;
+        if (!ReferenceEquals(MidiDot.Fill, want)) MidiDot.Fill = want;
     }
 
     /// <summary>Show the "Re-enable Automation" chip while any lane is overridden. Called

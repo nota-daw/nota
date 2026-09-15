@@ -19,6 +19,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Snap latch in the transport.** Separate from the grid denomination, which only says
+  *how far apart*: switch Snap off to position clips freely for a while, instead of holding
+  ⌥ for every drag. The grid keeps its spacing, so switching back resumes where you were.
+- **A MIDI input light** on the MIDI Learn button, lit by incoming control events — a
+  controller that is plugged in but on the wrong port or channel is now visible without
+  opening the mappings tab.
 - **A Pattern tab for the Drum Rack.** Select a MIDI clip on a Drum Rack track and the
   detail panel offers **Pattern** between Devices and Clip: a drum-machine step grid with
   one row per loaded pad. Click a step to place a hit, shift-click it for an accent, drag
@@ -54,6 +60,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **The top chrome is one row instead of two.** The transport bar and the toolbar under it
+  were a 48px row and a 34px row mixing four unrelated jobs; they are now a single 60px
+  bar, handing 22px back to the arrangement. It reads left to right: which view you are
+  in · what plays · the numbers you set · the switches you flip · then, pinned right, what
+  the machine is doing. Transport, position and loop share one recessed console so
+  playback reads as a single object, and tempo, signature, grid and launch quantize use
+  one value-over-label cell so the row scans as a strip of readouts. The position readout
+  is now large enough to read across the room and says underneath which clock it is
+  showing. Nothing was dropped: the three add-track buttons collapse into a **+ Track**
+  menu, launch quantize appears in Session where it applies, and **Follow playhead** moved
+  to the View menu.
+- **Master shows the gain it is applying,** in dB, next to its fader and meter — the
+  handle position is no longer the only readout.
 - **The arrangement and the modular canvas are islands, and groups stop weighing as much as
   their tracks.** Both now float on the app ground as rounded panels, matching the browser —
   the modular view keeps its toolbar, track rail and status line inside those corners. A group

@@ -186,6 +186,11 @@ public sealed class MidiLearnService
         return list;
     }
 
+    /// <summary>Monotonic count of control events drained since start. The transport
+    /// bar's activity dot lights while this keeps moving, so a connected-but-silent
+    /// controller is diagnosable without opening the mappings tab.</summary>
+    public long EventCount { get; private set; }
+
     /// <summary>Forget the recorded controller activity (start a fresh discovery window).</summary>
     public void ClearRecentControls() => _seen.Clear();
 
@@ -194,6 +199,7 @@ public sealed class MidiLearnService
     public void Tick()
     {
         int n = _engine.PollMidiControlEvents(_buf);
+        EventCount += n;
         for (int i = 0; i < n; i++)
         {
             var kind = _buf[i * 4] == 0 ? MidiSourceKind.Cc : MidiSourceKind.Note;

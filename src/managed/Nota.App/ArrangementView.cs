@@ -36,6 +36,7 @@ public sealed partial class ArrangementView : UserControl
     private double _totalBeats = 64;
     private int _beatsPerBar = 4;
     private double _snapBeats = 1.0;               // snap grid (1 beat) — M4-2
+    private bool _snapEnabled = true;              // transport magnet toggle (off = free positioning)
     internal int SelTrackId = -1, SelClipIndex = -1;   // "primary" selection (Clip tab, effect target, trim)
     // Multi-selection of clips across tracks (marquee / group move + delete). The
     // primary (SelTrackId/SelClipIndex) is always one of these when non-empty.
@@ -393,8 +394,13 @@ public sealed partial class ArrangementView : UserControl
     public double ScrollBeats => _scrollBeats;
     public double PlayheadBeats => _playheadBeats;
     public int BeatsPerBar { get => _beatsPerBar; set { _beatsPerBar = value; Redraw(); } }
-    /// <summary>Clip-drag snap grid in beats (toolbar Snap chip, 1b).</summary>
+    /// <summary>Clip-drag snap grid in beats (transport GRID cell, 1b).</summary>
     public double SnapBeats { get => _snapBeats; set { _snapBeats = Math.Max(1.0 / 32, value); Redraw(); } }
+
+    /// <summary>Master snap on/off (the transport magnet). Off positions freely — the
+    /// same effect as holding Alt, but latched. The grid itself keeps its spacing, so
+    /// switching back resumes on the denomination the GRID cell shows.</summary>
+    public bool SnapEnabled { get => _snapEnabled; set { _snapEnabled = value; Redraw(); } }
 
     /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
     /// names only the head of each run, so a repeating pattern reads as one block.</summary>
@@ -937,7 +943,8 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Clipboard clip kind: -1 empty, else 0 (block clipboard has content).</summary>
     public int ClipboardClipKind() => HasClipClipboard ? 0 : -1;
 
-    internal double Snap(double beat) => _snapBeats > 0 ? Math.Round(beat / _snapBeats) * _snapBeats : beat;
+    internal double Snap(double beat)
+        => _snapEnabled && _snapBeats > 0 ? Math.Round(beat / _snapBeats) * _snapBeats : beat;
 
     /// <summary>Snap unless Alt is held (Alt = free/fine positioning). Reads the live
     /// modifier state so it can be toggled mid-drag (req 1.2.1/2.4/3.1/8.2.1, 7.10).</summary>

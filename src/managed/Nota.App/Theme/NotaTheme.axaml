@@ -42,6 +42,10 @@
 
         <ResourceDictionary x:Key="Dark">
           <!-- Surfaces -->
+          <!-- The deepest surface: a recess cut into the chrome, used by the transport
+               console so playback reads as one inset object (mockup 1b). Mirrors the
+               NotaPalette.SurfaceAbyss slot the custom-drawn meters already use. -->
+          <SolidColorBrush x:Key="Brush.SurfaceAbyss">#0A0908</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.BgSunken">#100F0D</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.BgApp">#171613</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.LaneB">#191814</SolidColorBrush>
@@ -104,6 +108,7 @@
 
         <ResourceDictionary x:Key="Light">
           <!-- Surfaces (warm paper; forward still means lighter, wells go darker) -->
+          <SolidColorBrush x:Key="Brush.SurfaceAbyss">#DCD6C5</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.BgSunken">#E4DFD1</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.BgApp">#EFEADE</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.LaneB">#E9E4D6</SolidColorBrush>
@@ -272,7 +277,7 @@
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
   <!-- Record engaged: translucent danger box, red glyph stays visible -->
-  <Style Selector="ToggleButton.tp-icon:checked /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="ToggleButton.tp-icon.rec:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.DangerSubtle}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}"/>
   </Style>
@@ -302,6 +307,20 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
     <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+
+  <!-- Engaged chip (Click / Snap / Auto). The .chip Foreground above is a class
+       selector declared after the generic ToggleButton:checked rule, so it wins on
+       a checked chip and the brass ink never lands — most visible on Ember Paper,
+       where secondary text on a brass wash is barely readable. State it here. -->
+  <Style Selector="ToggleButton.chip:checked">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.AccentBright}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <!-- Same reason as the seg switch below: Fluent's checked template paints the
+         presenter itself, which beats the control-level Foreground above. -->
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.AccentBright}"/>
   </Style>
 
   <!-- bg-sunken well (position / BPM / time-sig) -->
@@ -336,6 +355,45 @@
     <Setter Property="MinHeight" Value="0"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
+  </Style>
+
+  <!-- Transport console (mockup 1b): a recess cut into the chrome holding the
+       transport buttons, the position readout and the loop range, so playback reads
+       as one object instead of three neighbours. -->
+  <Style Selector="Border.console">
+    <Setter Property="Height" Value="42"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAbyss}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Md}"/>
+    <Setter Property="Padding" Value="11,0,13,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <!-- Value-over-label readout cell (tempo / signature / grid / loop). No chrome of
+       its own: the text carries the state, so the row scans as a strip of readouts
+       rather than a queue of pills. -->
+  <Style Selector="Button.cell, ToggleButton.cell">
+    <Setter Property="Height" Value="34"/>
+    <Setter Property="Padding" Value="7,0"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Sm}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button.cell:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                   ToggleButton.cell:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHover}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+  </Style>
+  <!-- Checked keeps the flat ground; only the ink changes. -->
+  <Style Selector="ToggleButton.cell:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+  </Style>
+  <Style Selector="ToggleButton.cell:checked">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.AccentBright}"/>
   </Style>
 
   <!-- Segmented control (Arrangement / Session view switch) -->
@@ -527,6 +585,15 @@
   <Style Selector="TextBlock.SectionLabel">
     <Setter Property="FontSize" Value="10"/>
     <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
+  </Style>
+  <!-- The tracked caption under a transport readout cell (BPM / SIG / GRID / LOOP).
+       Smaller and dimmer than SectionLabel so the value above it leads. -->
+  <Style Selector="TextBlock.CellLabel">
+    <Setter Property="FontSize" Value="8"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="LetterSpacing" Value="0.8"/>
+    <Setter Property="LineHeight" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
   <Style Selector="TextBlock.Mono">

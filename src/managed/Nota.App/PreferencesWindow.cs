@@ -622,6 +622,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Drag overview edge", "Zoom by resizing the viewport window"),
             ("Double-click overview", "Fit the whole project on screen"),
             ("Drag ⠿", "Reorder devices (◀ ▶)"),
+            ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),

@@ -180,7 +180,7 @@ internal static class NotaPalette
     // =======================================================================
 
     // ---- Surfaces (both themes: the further forward, the lighter) ---------
-    public static readonly SolidColorBrush SurfaceAbyss  = T("#0A0908", "#DCD6C5"); // deepest well (meter troughs)
+    public static readonly SolidColorBrush SurfaceAbyss  = T("#0A0908", "#DCD6C5"); // Brush.SurfaceAbyss — deepest well (meter troughs, transport console)
     public static readonly SolidColorBrush BgSunken      = T("#100F0D", "#E4DFD1"); // Brush.BgSunken / ChromeBg
     public static readonly SolidColorBrush SurfaceDeep   = T("#131210", "#E7E2D4"); // step-sequencer ground
     public static readonly SolidColorBrush CanvasBg      = T("#121110", "#E9E5D8"); // modular canvas
@@ -295,6 +295,7 @@ internal static class NotaPalette
     // are already live and should keep using the resource observable.)
     private static readonly Dictionary<string, SolidColorBrush> KeyMap = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["Brush.SurfaceAbyss"] = SurfaceAbyss,
         ["Brush.BgSunken"] = BgSunken,           ["Brush.ChromeBg"] = BgSunken,
         ["Brush.BgApp"] = BgApp,                 ["Brush.LaneB"] = LaneB,
         ["Brush.SurfaceCard"] = SurfaceCard,     ["Brush.SurfaceRaised"] = SurfaceRaised,

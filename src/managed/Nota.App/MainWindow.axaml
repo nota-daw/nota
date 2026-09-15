@@ -62,6 +62,8 @@
             <NativeMenuItem Header="Toggle overview" Click="OnMenuToggleOverview"/>
             <NativeMenuItem Header="Toggle sections" Click="OnMenuToggleSections"/>
             <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Follow playhead" Click="OnMenuToggleFollow" ToggleType="CheckBox"/>
+            <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Clip names" Click="OnMenuCycleClipNames"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
@@ -108,153 +110,208 @@
     <!-- In-window menu bar for Windows/Linux (empty on macOS: menus go to the system bar) -->
     <NativeMenuBar DockPanel.Dock="Top"/>
 
-    <!-- Transport (48): controls pinned left | CPU + master pinned right (1b) -->
-    <Border DockPanel.Dock="Top" Classes="Panel" Height="48" Padding="12,0">
-      <Grid ColumnDefinitions="*,Auto,*">
-        <!-- Left (pinned): position · BPM · time signature · quantize -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Left">
-          <!-- Position (click to toggle bars.beats ↔ minutes:seconds) -->
-          <Border Classes="well" Cursor="Hand" PointerPressed="OnTogglePositionDisplay"
-                  ToolTip.Tip="Click to switch between bars and time">
-            <TextBlock Classes="Mono" Text="{Binding Transport.PositionText}" FontSize="12" MinWidth="52"
-                       TextAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}" VerticalAlignment="Center"/>
-          </Border>
-          <!-- BPM (drag vertically or double-click to type) -->
-          <Border Classes="well" Padding="8,0" ToolTip.Tip="Drag ↕ or double-click to set tempo">
-            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-              <Panel x:Name="BpmHost" Width="40" VerticalAlignment="Stretch"/>
-              <TextBlock Classes="SectionLabel" Text="BPM" VerticalAlignment="Center"/>
+    <!-- Transport (60) — mockup 1b: one row instead of the old transport+toolbar pair,
+         handing 22px back to the arrangement. Reads left to right as: which view ·
+         what plays (a recessed console fusing transport, position and loop) · the
+         numbers you set · the switches you flip · then, pinned right, what the machine
+         is doing. Everything the two old rows carried is still here; Follow playhead
+         moved to View ▸ Follow playhead and launch quantize shows only in Session,
+         where it applies. -->
+    <Border DockPanel.Dock="Top" Classes="Panel" Height="60" Padding="14,0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+
+        <!-- View switch -->
+        <Border Grid.Column="0" Classes="segmented" Margin="0,0,12,0">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <ToggleButton x:Name="ArrangeBtn" Classes="seg" Content="Arrangement" IsChecked="True" Click="OnShowArrangement"/>
+            <ToggleButton x:Name="SessionBtn" Classes="seg" Content="Session" Click="OnShowSession"/>
+            <ToggleButton x:Name="ModularBtn" Classes="seg" Content="Modular" Click="OnShowModular"/>
+          </StackPanel>
+        </Border>
+
+        <!-- The console: transport · position · loop in one recess -->
+        <Border Grid.Column="1" Classes="console">
+          <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <Button x:Name="StopBtn" Classes="tp-icon" Content="■" ToolTip.Tip="Stop"
+                      Foreground="{DynamicResource Brush.TextSecondary}" Command="{Binding Transport.StopCommand}"/>
+              <Button x:Name="PlayBtn" Classes="tp-play" Content="▶" ToolTip.Tip="Play"
+                      Foreground="{DynamicResource Brush.TextOnAccent}" Command="{Binding Transport.PlayCommand}"/>
+              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" Content="●" ToolTip.Tip="Record"
+                            Foreground="{DynamicResource Brush.Danger}" IsChecked="{Binding Transport.RecordOn}"/>
             </StackPanel>
-          </Border>
-          <!-- Time signature (drag ↕ each field to change) -->
-          <Border Classes="well" Padding="8,0" ToolTip.Tip="Drag ↕ to set time signature">
-            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-              <Panel x:Name="TimeSigNumHost" Width="16" VerticalAlignment="Stretch"/>
-              <TextBlock Classes="Mono" Text="/" FontSize="12"
-                         Foreground="{DynamicResource Brush.TextTertiary}" VerticalAlignment="Center"/>
-              <Panel x:Name="TimeSigDenHost" Width="16" VerticalAlignment="Stretch"/>
+
+            <Border Width="1" Height="24" Background="{DynamicResource Brush.BorderDefault}"/>
+
+            <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit below says which -->
+            <StackPanel Spacing="1" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
+                        PointerPressed="OnTogglePositionDisplay"
+                        ToolTip.Tip="Click to switch between bars and time">
+              <TextBlock Classes="Mono" Text="{Binding Transport.PositionText}" FontSize="19" LineHeight="20"
+                         MinWidth="98" Foreground="{DynamicResource Brush.AccentBright}"/>
+              <TextBlock Classes="Mono CellLabel" Text="{Binding Transport.PositionUnitText}"/>
             </StackPanel>
-          </Border>
-          <!-- Launch quantize: click to cycle (None … 1/16 … 8 Bars). Applied to Session slot/scene launches. -->
-          <Button x:Name="LaunchQChip" Classes="chip" Click="OnCycleLaunchQ" ToolTip.Tip="Launch quantize (Session)">
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <TextBlock Classes="SectionLabel" Text="Q" VerticalAlignment="Center"/>
-              <TextBlock x:Name="LaunchQLabel" Classes="Mono" Text="1 Bar" FontSize="10"
-                         Foreground="{DynamicResource Brush.AccentBright}" VerticalAlignment="Center"/>
+
+            <Border Width="1" Height="24" Background="{DynamicResource Brush.BorderDefault}"/>
+
+            <!-- Loop: the range is the button -->
+            <ToggleButton Classes="cell" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
+              <StackPanel Spacing="2">
+                <TextBlock Classes="CellLabel" Text="LOOP" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+                <TextBlock Classes="Mono" FontSize="11" LineHeight="12" MinWidth="58"
+                           Text="{Binding Transport.LoopRangeText}"
+                           Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+              </StackPanel>
+            </ToggleButton>
+          </StackPanel>
+        </Border>
+
+        <!-- Readouts: value over label, one shape for all of them -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="12,0,0,0">
+          <!-- Tempo (drag ↕ or double-click to type) -->
+          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Drag ↕ or double-click to set tempo">
+            <Panel x:Name="BpmHost" Width="34" Height="18"/>
+            <TextBlock Classes="CellLabel" Text="BPM" HorizontalAlignment="Center"/>
+          </StackPanel>
+          <!-- Time signature (drag ↕ each field) -->
+          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Drag ↕ to set the time signature">
+            <StackPanel Orientation="Horizontal" Spacing="1" Height="18">
+              <Panel x:Name="TimeSigNumHost" Width="16"/>
+              <TextBlock Classes="Mono" Text="/" FontSize="14" VerticalAlignment="Center"
+                         Foreground="{DynamicResource Brush.TextTertiary}"/>
+              <Panel x:Name="TimeSigDenHost" Width="16"/>
+            </StackPanel>
+            <TextBlock Classes="CellLabel" Text="SIG" HorizontalAlignment="Center"/>
+          </StackPanel>
+          <!-- Clip snap grid: click to cycle -->
+          <Button x:Name="SnapChip" Classes="cell" Click="OnCycleSnap" ToolTip.Tip="Clip snap grid — click to cycle">
+            <StackPanel Spacing="2">
+              <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
+                         MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+              <TextBlock Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <!-- Launch quantize — a Session concept, so it only appears there -->
+          <Button x:Name="LaunchQChip" Classes="cell" Click="OnCycleLaunchQ" IsVisible="False"
+                  ToolTip.Tip="Launch quantize — when Session slots and scenes fire">
+            <StackPanel Spacing="2">
+              <TextBlock x:Name="LaunchQLabel" Classes="Mono" Text="1 Bar" FontSize="14" LineHeight="16"
+                         MinWidth="44" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+              <TextBlock Classes="CellLabel" Text="LAUNCH" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
 
-        <!-- Center: transport (play · stop · rec) | metronome · follow · loop -->
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <Button x:Name="PlayBtn" Classes="tp-play" Content="▶" ToolTip.Tip="Play"
-                    Foreground="{DynamicResource Brush.TextOnAccent}" Command="{Binding Transport.PlayCommand}"/>
-            <Button x:Name="StopBtn" Classes="tp-icon" Content="■" ToolTip.Tip="Stop"
-                    Foreground="{DynamicResource Brush.TextSecondary}" Command="{Binding Transport.StopCommand}"/>
-            <ToggleButton x:Name="RecordBtn" Classes="tp-icon" Content="●" ToolTip.Tip="Record"
-                          Foreground="{DynamicResource Brush.Danger}" IsChecked="{Binding Transport.RecordOn}"/>
-          </StackPanel>
-          <Border Width="1" Height="22" Background="{DynamicResource Brush.BorderDefault}" Margin="4,0"/>
-          <!-- Metronome (icon) -->
-          <ToggleButton Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}" ToolTip.Tip="Metronome">
+        <!-- Switches. Each draws the thing it does, so the row carries no prose: a
+             metronome, a magnet, a breakpoint envelope. None sets Foreground, so the
+             engaged state turns the glyph brass through the base ToggleButton:checked. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="12,0,0,0">
+          <!-- Metronome: body, pendulum rod, weight -->
+          <ToggleButton Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}" ToolTip.Tip="Metronome (M)">
             <Viewbox Width="15" Height="15">
               <Canvas Width="24" Height="24">
                 <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeJoin="Round" Data="M12 3 L18.5 20 L5.5 20 Z"/>
+                      StrokeJoin="Round" Data="M9.8 5.5 H14.2 L19 20 H5 Z"/>
                 <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeLineCap="Round" Data="M12 20 L14.5 8"/>
-                <Ellipse Canvas.Left="13" Canvas.Top="6.5" Width="3" Height="3"
+                      StrokeLineCap="Round" Data="M12 19 L13.9 3.2"/>
+                <Ellipse Canvas.Left="11.33" Canvas.Top="9.4" Width="3.2" Height="3.2"
                          Fill="{Binding $parent[ToggleButton].Foreground}"/>
               </Canvas>
             </Viewbox>
           </ToggleButton>
-          <!-- Follow playhead: keep the arrangement scrolling with the cursor -->
-          <ToggleButton x:Name="FollowBtn" Classes="tp-icon" Click="OnToggleFollow" ToolTip.Tip="Follow playhead">
+          <!-- Snapping on/off, independent of which grid the GRID cell shows. Off is the
+               same as holding Alt, but latched. A horseshoe magnet: the poles are banded
+               off the body by a transparent gap, so the shape reads on any button state. -->
+          <ToggleButton x:Name="SnapToggle" Classes="tp-icon" IsChecked="True" Click="OnToggleSnapEnabled"
+                        ToolTip.Tip="Snap to grid — off positions freely (hold Alt for one drag)">
             <Viewbox Width="15" Height="15">
               <Canvas Width="24" Height="24">
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.8"
-                      StrokeLineCap="Round" Data="M3 18 H21"/>
-                <Path Fill="{Binding $parent[ToggleButton].Foreground}" Data="M8 6 H16 L12 12 Z"/>
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.8"
-                      StrokeLineCap="Round" Data="M12 12 V18"/>
+                <Path Fill="{Binding $parent[ToggleButton].Foreground}"
+                      Data="M4 17 V12.5 A8 8 0 0 1 20 12.5 V17 H15.5 V12.5 A3.5 3.5 0 0 0 8.5 12.5 V17 Z"/>
+                <Rectangle Canvas.Left="4" Canvas.Top="19" Width="4.5" Height="2.5"
+                           Fill="{Binding $parent[ToggleButton].Foreground}"/>
+                <Rectangle Canvas.Left="15.5" Canvas.Top="19" Width="4.5" Height="2.5"
+                           Fill="{Binding $parent[ToggleButton].Foreground}"/>
               </Canvas>
             </Viewbox>
           </ToggleButton>
-          <!-- Loop (icon) + range readout -->
-          <ToggleButton Classes="chip" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop">
-            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-              <Viewbox Width="15" Height="15">
-                <Canvas Width="24" Height="24">
-                  <Path Fill="{Binding $parent[ToggleButton].Foreground}"
-                        Data="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                </Canvas>
-              </Viewbox>
-              <TextBlock Classes="Mono" Text="{Binding Transport.LoopRangeText}" FontSize="11" VerticalAlignment="Center"/>
-            </StackPanel>
+          <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
+          <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation"
+                        ToolTip.Tip="Show parameter-automation lanes (⌘A)">
+            <Viewbox Width="15" Height="15">
+              <Canvas Width="24" Height="24">
+                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.8"
+                      StrokeLineCap="Round" StrokeJoin="Round" Data="M3 17.5 H9 L14.5 7.5 H21"/>
+                <Ellipse Canvas.Left="7.1" Canvas.Top="15.6" Width="3.8" Height="3.8"
+                         Fill="{Binding $parent[ToggleButton].Foreground}"/>
+                <Ellipse Canvas.Left="12.6" Canvas.Top="5.6" Width="3.8" Height="3.8"
+                         Fill="{Binding $parent[ToggleButton].Foreground}"/>
+              </Canvas>
+            </Viewbox>
           </ToggleButton>
-        </StackPanel>
-
-        <!-- Right (pinned): MIDI-learn toggle + CPU (live DSP load) + master volume + stereo meter -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center" HorizontalAlignment="Right">
-          <ToggleButton x:Name="MidiLearnBtn" Classes="seg" Content="MIDI" VerticalAlignment="Center"
-                        Click="OnToggleMidiLearn"
-                        ToolTip.Tip="MIDI Learn — highlight mappable controls, click one, then move a knob on your controller"/>
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Classes="SectionLabel" Text="CPU" VerticalAlignment="Center"/>
-            <Border Width="56" Height="5" Background="{DynamicResource Brush.BgSunken}" CornerRadius="3" VerticalAlignment="Center" ClipToBounds="True">
-              <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="3"
-                      Background="{DynamicResource Brush.Success}"/>
-            </Border>
-            <TextBlock x:Name="CpuText" Classes="Mono" Text="0%" FontSize="10"
-                       Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" MinWidth="26"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="SectionLabel" Text="MASTER" VerticalAlignment="Center"/>
-            <StackPanel Spacing="4" VerticalAlignment="Center">
-              <Panel x:Name="MasterVolHost" Width="120" Height="12"/>
-              <Panel x:Name="MasterMeterHost" Width="120" Height="6"/>
-            </StackPanel>
-          </StackPanel>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <!-- Toolbar (34): view switch + track adds | right: snap / automation / follow -->
-    <Border DockPanel.Dock="Top" Classes="Panel" Height="34" Padding="12,0">
-      <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Border Classes="segmented">
-            <StackPanel Orientation="Horizontal" Spacing="2">
-              <ToggleButton x:Name="ArrangeBtn" Classes="seg" Content="Arrangement" IsChecked="True" Click="OnShowArrangement"/>
-              <ToggleButton x:Name="SessionBtn" Classes="seg" Content="Session" Click="OnShowSession"/>
-              <ToggleButton x:Name="ModularBtn" Classes="seg" Content="Modular" Click="OnShowModular"/>
-            </StackPanel>
-          </Border>
-          <Border Width="1" Height="18" Background="{DynamicResource Brush.BorderDefault}"/>
-          <Button Classes="chip" Content="+ Instrument" Click="OnAddInstrumentClicked"/>
-          <Button Classes="chip" Content="+ Audio" Click="OnAddAudioClicked"/>
-          <Button Classes="chip" Content="+ Return" Click="OnAddReturnClicked"/>
-        </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button x:Name="SnapChip" Classes="chip" Click="OnCycleSnap" ToolTip.Tip="Clip snap grid">
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <TextBlock Text="Snap" VerticalAlignment="Center"/>
-              <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="10"
-                         Foreground="{DynamicResource Brush.AccentBright}" VerticalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-          <Border Classes="segmented">
-            <ToggleButton x:Name="AutomationToggle" Classes="seg" Content="Automation"
-                          Click="OnToggleAutomation" ToolTip.Tip="Show parameter-automation lanes"/>
-          </Border>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->
-          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable Automation"
+          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable"
                   IsVisible="False" Click="OnReenableAutomation"
                   Foreground="{DynamicResource Brush.AccentBright}"
                   ToolTip.Tip="A control you moved is overriding its automation — click to hand it back"/>
         </StackPanel>
+
+        <!-- Add track: one menu instead of three chips -->
+        <Button Grid.Column="5" Classes="chip" Margin="12,0,0,0" ToolTip.Tip="Add a track">
+          <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+            <TextBlock Text="+ Track" VerticalAlignment="Center"/>
+            <Path Data="M0,0 L3.5,4 L7,0 Z" Fill="{DynamicResource Brush.TextTertiary}" VerticalAlignment="Center"/>
+          </StackPanel>
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="Instrument" Click="OnAddInstrumentClicked"/>
+              <MenuItem Header="Audio" Click="OnAddAudioClicked"/>
+              <MenuItem Header="Return" Click="OnAddReturnClicked"/>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+
+        <!-- MIDI learn + an input-activity dot, so a silent controller is diagnosable -->
+        <ToggleButton Grid.Column="6" x:Name="MidiLearnBtn" Classes="chip" Margin="8,0,0,0"
+                      Click="OnToggleMidiLearn"
+                      ToolTip.Tip="MIDI Learn — highlight mappable controls, click one, then move a knob on your controller">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="MIDI" VerticalAlignment="Center"
+                       Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+            <Ellipse x:Name="MidiDot" Width="5" Height="5" VerticalAlignment="Center"
+                     Fill="{DynamicResource Brush.BorderStrong}"/>
+          </StackPanel>
+        </ToggleButton>
+
+        <Border Grid.Column="7" Width="1" Height="26" Margin="14,0"
+                Background="{DynamicResource Brush.BorderDefault}"/>
+
+        <!-- CPU: live DSP load -->
+        <StackPanel Grid.Column="8" Spacing="3" VerticalAlignment="Center">
+          <Border Width="52" Height="4" Background="{DynamicResource Brush.SurfaceAbyss}"
+                  CornerRadius="2" ClipToBounds="True">
+            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="2"
+                    Background="{DynamicResource Brush.Success}"/>
+          </Border>
+          <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="CPU 0%" FontWeight="Normal"/>
+        </StackPanel>
+
+        <!-- Master: fader over its meter, with the gain in dB -->
+        <Border Grid.Column="9" Height="42" Margin="12,0,0,0" Padding="10,0"
+                Background="{DynamicResource Brush.BgApp}" CornerRadius="{StaticResource Radius.Sm}"
+                VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+            <TextBlock Classes="CellLabel" Text="MST" VerticalAlignment="Center"/>
+            <StackPanel Spacing="3" VerticalAlignment="Center">
+              <Panel x:Name="MasterVolHost" Width="88" Height="12"/>
+              <Panel x:Name="MasterMeterHost" Width="88" Height="5"/>
+            </StackPanel>
+            <TextBlock Classes="Mono" FontSize="10" MinWidth="46" TextAlignment="Right"
+                       VerticalAlignment="Center" Text="{Binding Transport.MasterDbText}"
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+          </StackPanel>
+        </Border>
       </Grid>
     </Border>
 

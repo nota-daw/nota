@@ -97,6 +97,7 @@ be dropped on `NotaPalette.Changed`.
 
 | Key | Graphite | Paper | Use |
 |---|---|---|---|
+| `Brush.SurfaceAbyss` | `#0A0908` | `#DCD6C5` | Deepest recess — meter troughs, transport console |
 | `Brush.BgSunken` | `#100F0D` | `#E4DFD1` | Wells, lanes, graph grounds, chrome |
 | `Brush.BgApp` | `#171613` | `#EFEADE` | App ground |
 | `Brush.LaneB` | `#191814` | `#E9E4D6` | Lane alternation |
@@ -274,8 +275,21 @@ takes — not a drawing that resembles one.
 
 ## Layout skeleton
 
-`Transport bar → toolbar → body (on Brush.BgApp) → 26px status bar.`
+`36px title bar → 60px transport → body (on Brush.BgApp) → 22px status bar.`
 Panels are `Brush.SurfaceCard` with a 1px bottom border.
+
+The transport is **one row**, not the transport + toolbar pair it used to be. It reads
+left to right as which view · what plays · the numbers you set · the switches you flip ·
+then, pinned right, what the machine is doing. Transport, position and loop share a
+single `Border.console` recess on `Brush.SurfaceAbyss` so playback reads as one object;
+tempo, signature, grid and launch quantize use one `.cell` shape — mono value over an 8px
+`.CellLabel` — so the row scans as a strip of readouts rather than a queue of pills.
+The three switches — metronome, snap, automation — are icon-only 28px `tp-icon` toggles
+that draw the thing they do (a metronome, a horseshoe magnet, a breakpoint envelope) and
+carry their name in a tooltip; none sets a Foreground, so the engaged state turns the
+glyph brass through the base `ToggleButton:checked`. Controls that belong to one context
+appear only there: launch quantize in Session, "Re-enable" only while a lane is
+overridden.
 
 The body holds **islands**: the browser, the arrangement and the modular canvas are
 `Radius.Md` cards with a 1px `Brush.BorderDefault` edge, clipped to their bounds, floating
@@ -310,8 +324,9 @@ Things that are true today and should not surprise you:
   `NotaPalette.InkOverrides` rather than reaching for a literal.
 - **Black stays black.** Drop shadows and the black-key row tint are alpha-over-black in
   both variants — that is correct, not drift.
-- **No custom title bar.** The OS title bar is still in use; the status bar carries the
-  chrome identity.
+- **The title bar is custom.** A 36px frameless bar (`Brush.ChromeBg`) with the macOS
+  traffic lights in a left inset and the document name centred; Windows reserves 180px on
+  the right for the native caption buttons.
 - **Font substitution.** Mockups specify Geist / Geist Mono; the app ships Inter and the
   Cascadia → Menlo → Consolas stack, so weights sit slightly differently.
 - **No `Space.*` tokens.** The 4px grid is honoured by convention only.

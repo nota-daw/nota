@@ -157,6 +157,17 @@ public partial class MainWindow
         _vm.Settings.Save();
         _vm.StatusText = Timeline.ShowSections ? "Sections lane shown" : "Sections lane hidden";
     }
+    // Follow: keep the arrangement scrolling with the playhead during playback. Lives in
+    // the View menu since the single-row transport (1b) has no room for a toolbar toggle.
+    private void OnMenuToggleFollow(object? sender, EventArgs e)
+    {
+        bool on = !Timeline.FollowPlayhead;
+        Timeline.FollowPlayhead = on;
+        if (sender is NativeMenuItem mi) mi.IsChecked = on;
+        if (on) Timeline.RecenterOnPlayhead();   // jump to the cursor now
+        if (_vm is not null) _vm.StatusText = on ? "Following the playhead" : "Follow playhead off";
+    }
+
     // Cycles how much of the arrangement prints clip names: every clip → the head of each run
     // (the default, so a repeated pattern reads as one block) → none.
     private void OnMenuCycleClipNames(object? sender, EventArgs e)
