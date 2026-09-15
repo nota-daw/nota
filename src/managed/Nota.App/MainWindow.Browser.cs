@@ -42,6 +42,7 @@ public partial class MainWindow
     // track (targetTrackId is ignored for them); effect presets target the track.
     private string ApplyPresetItem(BrowserItem item, int targetTrackId)
     {
+        if (IsKitRow(item)) return ApplyDrumKit(item, targetTrackId);
         bool factory = item.Path.StartsWith("factory:", StringComparison.Ordinal);
         string factoryId = factory ? item.Path["factory:".Length..] : "";
         // Apply doesn't say where the preset landed, so diff the chain around it: a new track
@@ -61,6 +62,33 @@ public partial class MainWindow
             _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Effect, fx - 1, item.Name, factoryId);
         else if (targetTrackId > 0 && Engine.TrackMidiEffectCount(targetTrackId) is var midi && midi > midiBefore)
             _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Midi, midi - 1, item.Name, factoryId);
+        return warn;
+    }
+
+    /// <summary>A factory drum-kit row (browser Path "kit:&lt;id&gt;").</summary>
+    private static bool IsKitRow(BrowserItem item)
+        => item.Kind == BrowserItemKind.Preset && item.Path.StartsWith("kit:", StringComparison.Ordinal);
+
+    // Loads a factory kit. Dropped on an existing Drum Rack it replaces that rack's pads;
+    // anywhere else it spawns its own Drum Rack track, the way an instrument preset does.
+    // The kit's samples are synthesized on first use, which is why this can be slow once.
+    private string ApplyDrumKit(BrowserItem item, int targetTrackId)
+    {
+        string id = item.Path["kit:".Length..];
+        if (targetTrackId > 0 && Engine.TrackInstrumentKind(targetTrackId) == 4)
+        {
+            _kits.LoadInto(Engine, targetTrackId, id, out string replaceWarn);
+            ShowDevices(targetTrackId);
+            return replaceWarn;
+        }
+        int track = _kits.CreateTrack(Engine, id, out string warn);
+        if (track > 0)
+        {
+            Engine.AddMidiClip(track, 0.0, 4.0);
+            _lastInstrumentTrackId = track;
+            Timeline.Refresh();
+            ShowDevices(track);
+        }
         return warn;
     }
 
@@ -162,10 +190,12 @@ public partial class MainWindow
                     return; // OpenProject rebuilds everything itself
                 case BrowserItemKind.Preset:
                 {
+                    bool kit = IsKitRow(item);
                     string warn = ApplyPresetItem(item, Timeline.SelectedTrackId);
                     Timeline.Refresh();
-                    if (Timeline.SelectedTrackId > 0) ShowDevices(Timeline.SelectedTrackId);
-                    _vm.StatusText = warn.Length == 0 ? $"Applied preset {item.Name}" : warn;
+                    if (!kit && Timeline.SelectedTrackId > 0) ShowDevices(Timeline.SelectedTrackId);
+                    _vm.StatusText = warn.Length > 0 ? warn
+                        : kit ? $"Loaded {item.Name} kit" : $"Applied preset {item.Name}";
                     break;
                 }
             }

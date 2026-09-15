@@ -14,6 +14,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
@@ -37,6 +38,7 @@ public partial class MainWindow : Window
     private IProjectStore _projects = default!;
     private IPresetStore _presets = default!;
     private IFactoryPresets _factory = default!;
+    private IDrumKits _kits = default!;
     private IRecoveryStore _recovery = default!;
     private IAudioExporter _exporter = default!;
 
@@ -114,6 +116,23 @@ public partial class MainWindow : Window
     }
 
     // Custom frameless title bar (Phase 2): drag the window by its top bar; a
+    // The factory drum kits ship as recipes, not audio: synthesize whatever is missing
+    // (first run, or after an update changed a kit) off the UI thread, then refresh the
+    // Files tab so the new folders appear. Cheap enough to do on every launch — when
+    // everything is current it is a handful of file-existence checks.
+    private void EnsureFactoryKits() => Task.Run(() =>
+    {
+        try
+        {
+            int n = _kits.EnsureRendered();
+            if (n > 0) Dispatcher.UIThread.Post(() => _vm?.Browser.RebuildSamples());
+        }
+        catch (Exception ex)
+        {
+            App.Services.GetRequiredService<ILogSink>().Error("Rendering the factory drum kits failed", ex);
+        }
+    });
+
     // double-click toggles maximise/restore (standard title-bar behaviour).
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -142,6 +161,8 @@ public partial class MainWindow : Window
         _projects = App.Services.GetRequiredService<IProjectStore>();
         _presets = App.Services.GetRequiredService<IPresetStore>();
         _factory = App.Services.GetRequiredService<IFactoryPresets>();
+        _kits = App.Services.GetRequiredService<IDrumKits>();
+        EnsureFactoryKits();
         _recovery = App.Services.GetRequiredService<IRecoveryStore>();
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 

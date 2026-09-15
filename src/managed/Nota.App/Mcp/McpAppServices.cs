@@ -69,7 +69,7 @@ public sealed class MidiLearnAccess(MidiLearnService svc) : IMidiLearnAccess
 public sealed class McpService(
     IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, ISettingsService settings, ILogSink log,
     IPluginCatalog pluginCatalog, IFactoryPresets factoryPresets, IPresetStore presetStore, IPresetLibrary presetLibrary,
-    IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn)
+    IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits)
 {
     private readonly NotaMcpServer _server = new();
 
@@ -82,6 +82,7 @@ public sealed class McpService(
         s.AddSingleton(settings);
         s.AddSingleton(pluginCatalog);
         s.AddSingleton(factoryPresets);
+        s.AddSingleton(drumKits);
         s.AddSingleton(presetStore);
         s.AddSingleton(presetLibrary);
         s.AddSingleton(exporter);

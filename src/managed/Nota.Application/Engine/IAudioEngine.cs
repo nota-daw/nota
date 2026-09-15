@@ -421,6 +421,10 @@ public interface IAudioEngine : IDisposable
     int RackAddPluginChainDevice(int trackId, int chain, int catalogIndex);
     int RackChainTriggerNote(int trackId, int chain);
     void RackSetChainTriggerNote(int trackId, int chain, int note);
+    /// <summary>The chain's display name — a Drum Rack pad label. Empty means "use the
+    /// chain instrument's own name" (every Sampler pad would otherwise read the same).</summary>
+    string RackChainName(int trackId, int chain);
+    void RackSetChainName(int trackId, int chain, string name);
     int RackChainCount(int trackId);
     int RackAddChain(int trackId, int instKind);                 // 0=Synth, 2=Physical
     bool RackRemoveChain(int trackId, int chain);

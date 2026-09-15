@@ -94,6 +94,13 @@ void Engine::rackSetChainTriggerNote(int32_t t, int32_t di, int32_t c, int32_t n
     if (auto* r = rackCoreAt(t, di)) r->setChainTriggerNote(c, note);
 }
 
+std::string Engine::rackChainName(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di); return r ? r->chainName(c) : std::string{};
+}
+void Engine::rackSetChainName(int32_t t, int32_t di, int32_t c, const std::string& name) {
+    if (auto* r = rackCoreAt(t, di)) r->setChainName(c, name);
+}
+
 int32_t Engine::rackAddSamplerChain(int32_t t, int32_t di, const std::string& path, int32_t rootNote, bool loop) {
     auto* r = rackCoreAt(t, di);
     if (!r) return -1;

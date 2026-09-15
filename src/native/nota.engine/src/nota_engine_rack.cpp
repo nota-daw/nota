@@ -35,6 +35,12 @@ int32_t nota_rackdev_add_plugin_chain_device(NotaEngine* e, int32_t t, int32_t d
 }
 int32_t nota_rack_chain_trigger_note(const NotaEngine* e, int32_t t, int32_t c) { return e ? CENG(e)->rackChainTriggerNote(t, -1, c) : -1; }
 void nota_rack_set_chain_trigger_note(NotaEngine* e, int32_t t, int32_t c, int32_t note) { if (e) ENG(e)->rackSetChainTriggerNote(t, -1, c, note); }
+const char* nota_rack_chain_name(const NotaEngine* e, int32_t t, int32_t c) {
+    static std::string s; s = e ? CENG(e)->rackChainName(t, -1, c) : std::string{}; return s.c_str();
+}
+void nota_rack_set_chain_name(NotaEngine* e, int32_t t, int32_t c, const char* name) {
+    if (e) ENG(e)->rackSetChainName(t, -1, c, name ? name : "");
+}
 int32_t nota_rackdev_chain_trigger_note(const NotaEngine* e, int32_t t, int32_t di, int32_t c) { return e ? CENG(e)->rackChainTriggerNote(t, di, c) : -1; }
 void nota_rackdev_set_chain_trigger_note(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t note) { if (e) ENG(e)->rackSetChainTriggerNote(t, di, c, note); }
 

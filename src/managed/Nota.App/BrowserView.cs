@@ -691,7 +691,8 @@ public sealed class BrowserView : UserControl
 
         // The row's full identity lives in the tooltip, where the tag has no room for it
         // (a plug-in's format, a sample's folder).
-        ToolTip.SetTip(row, item.Sub.Length > 0 ? $"{item.Name} · {item.Sub}" : item.Name);
+        string tip = item.Tip.Length > 0 ? item.Tip : item.Sub;
+        ToolTip.SetTip(row, tip.Length > 0 ? $"{item.Name} · {tip}" : item.Name);
         return row;
     }
 
@@ -1253,7 +1254,9 @@ public sealed class BrowserView : UserControl
         switch (item.Kind)
         {
             case BrowserItemKind.Sample:
-            case BrowserItemKind.Preset when item.Path.Length > 0 && !item.Path.StartsWith("factory:", StringComparison.Ordinal):   // saved preset file on disk
+            // A saved preset file on disk. Synthetic rows (factory presets, drum kits)
+            // carry a scheme instead of a path and have nothing to reveal.
+            case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):
             {
                 var reveal = new MenuItem { Header = "Reveal in Finder" };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);

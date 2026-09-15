@@ -1056,6 +1056,13 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         return new Border { Width = 314, Padding = new Thickness(8, 7), Child = uni };
     }
 
+    // A pad's display name: the chain name if set, else the chain instrument's.
+    private string PadName(IRackAccess a, int chain)
+    {
+        string n = E.RackChainName(T, chain);
+        return n.Length > 0 ? n : a.ChainInstrumentName(chain);
+    }
+
     private Control DrumPad(IRackAccess a, int note)
     {
         int chain = ChainForNote(a, note);
@@ -1063,7 +1070,9 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         bool selected = filled && chain == Sel;
         Color hue = filled ? PadHue(chain) : Colors.Black;
         int choke = filled ? E.RackChainChoke(T, chain) : 0;
-        string name = filled ? a.ChainInstrumentName(chain) : NoteName(note);
+        // The pad's own name when it has one (kit voice, dropped sample); otherwise the
+        // instrument's — which for a Sampler is the same word on every pad.
+        string name = filled ? PadName(a, chain) : NoteName(note);
 
         var nameTb = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = filled ? IrTxt : IrMuted, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Top };
         var noteTb = IrMono(NoteName(note), filled ? NotaPalette.TextSecondary : IrMuted, 7);
@@ -1136,7 +1145,7 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         var head = new DockPanel { LastChildFill = false, Children = {
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = {
                 new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = a.ChainInstrumentName(c), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = PadName(a, c), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
                 IrMono($"{NoteName(note)} · {(choke > 0 ? $"choke CH {choke}" : "no choke")} · {devs} dev", IrMuted) } },
             WithRight(DrumOpenChip(a, c)) } };
 
@@ -1244,7 +1253,7 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("96,26,*,40,44"), ColumnSpacing = 6, Height = 13 };
         var nameCell = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
             new Border { Width = 4, Height = 10, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = a.ChainInstrumentName(c), FontSize = 9, Foreground = c == Sel ? IrAmberLit : IrTxt, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } };
+            new TextBlock { Text = PadName(a, c), FontSize = 9, Foreground = c == Sel ? IrAmberLit : IrTxt, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } };
         nameCell.PointerPressed += (_, _) => SelectPad(c);
         Grid.SetColumn(nameCell, 0); g.Children.Add(nameCell);
         var noteTb = IrMono(NoteName(note), IrMuted); Grid.SetColumn(noteTb, 1); g.Children.Add(noteTb);
@@ -1869,7 +1878,13 @@ internal sealed class RackCardView(DeviceCardContext ctx)
             case Nota.Presentation.BrowserItemKind.Sample:
                 if (existing >= 0) a.RemoveChain(existing);
                 int cs = E.RackAddSamplerChain(T, item.Path, note, false);
-                if (cs >= 0) E.RackSetChainTriggerNote(T, cs, note);
+                if (cs >= 0)
+                {
+                    E.RackSetChainTriggerNote(T, cs, note);
+                    // Label the pad with the sample's name — 16 pads all reading
+                    // "Nota Sampler" tell the user nothing.
+                    E.RackSetChainName(T, cs, System.IO.Path.GetFileNameWithoutExtension(item.Path));
+                }
                 break;
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
                 if (existing >= 0) a.RemoveChain(existing);

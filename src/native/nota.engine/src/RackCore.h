@@ -97,6 +97,10 @@ public:
         std::shared_ptr<Instrument>          instrument;   // null for effect-rack chains
         std::vector<std::shared_ptr<Device>> devices;      // insert chain
         std::shared_ptr<ChainControls>       ctl = std::make_shared<ChainControls>();
+        // Display name (v8). Message thread only — the audio thread never reads it.
+        // Empty means "fall back to the chain instrument's name": a Drum Rack pad that
+        // holds a Sampler would otherwise read "Nota Sampler" on all 16 pads.
+        std::string                          name;
     };
 
     // A macro (0..1) drives one target param over [rangeMin, rangeMax] in the
@@ -157,6 +161,19 @@ public:
             if (c.instrument) c.instrument->setSampleRate(sampleRate_);
             for (auto& d : c.devices) if (d) d->setSampleRate(sampleRate_, maxBlock_);
         }
+    }
+
+    // ---- chain name (message thread; UI metadata) -------------------------
+    std::string chainName(int32_t c) const {
+        RackState* st = live();
+        return (st && c >= 0 && c < static_cast<int32_t>(st->chains.size())) ? st->chains[c].name : std::string{};
+    }
+    bool setChainName(int32_t c, const std::string& name) {
+        auto ns = copyState();
+        if (c < 0 || c >= static_cast<int32_t>(ns->chains.size())) return false;
+        ns->chains[c].name = name;
+        commit(ns);
+        return true;
     }
 
     // ---- structural editing (message thread) ------------------------------
@@ -474,6 +491,7 @@ public:
             putI32(b, c.ctl->chokeGroup.load(std::memory_order_relaxed));
             putI32(b, c.ctl->tune.load(std::memory_order_relaxed));
             putF32(b, c.ctl->decay.load(std::memory_order_relaxed));
+            putString(b, c.name);   // v8: pad/chain display name
             const int32_t ik = c.instrument ? c.instrument->kind() : -1;
             putI32(b, ik);
             // v4: kind -1 = hosted plugin instrument OR no instrument; the id (empty
@@ -562,6 +580,7 @@ public:
                 c.ctl->tune.store(getI32(cur), std::memory_order_relaxed);
                 c.ctl->decay.store(getF32(cur), std::memory_order_relaxed);
             }
+            if (ver >= 8) c.name = getString(cur);
             const int32_t ik = getI32(cur);
             std::string instPluginId;
             if (ik == -1 && ver >= 4) instPluginId = getString(cur);   // v4 plugin/none id
@@ -782,7 +801,7 @@ private:
     static float   clamp01(float v) { return std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f) : 0.0f; }
 
     static constexpr uint32_t kMagic       = 0x314B524E;  // 'NRK1'
-    static constexpr uint32_t kBlobVersion = 7;           // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select
+    static constexpr uint32_t kBlobVersion = 8;           // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name
 
     std::shared_ptr<RackState>              authoring_;
     std::vector<std::shared_ptr<RackState>> states_;

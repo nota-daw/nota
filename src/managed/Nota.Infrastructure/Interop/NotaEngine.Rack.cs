@@ -65,6 +65,12 @@ public sealed partial class NotaEngine
     public void RackSetChainTriggerNote(int trackId, int chain, int note)
     { ThrowIfDisposed(); NativeMethods.RackSetChainTriggerNote(_handle, trackId, chain, note); }
 
+    public string RackChainName(int trackId, int chain)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.RackChainName(_handle, trackId, chain)) ?? ""; }
+
+    public void RackSetChainName(int trackId, int chain, string name)
+    { ThrowIfDisposed(); NativeMethods.RackSetChainName(_handle, trackId, chain, name ?? ""); }
+
     public int RackChainCount(int trackId)
     { ThrowIfDisposed(); return NativeMethods.RackChainCount(_handle, trackId); }
 

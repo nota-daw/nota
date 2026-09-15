@@ -57,6 +57,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rack_set_chain_trigger_note")]
     internal static partial void RackSetChainTriggerNote(IntPtr engine, int trackId, int chain, int note);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_name")]
+    internal static partial IntPtr RackChainName(IntPtr engine, int trackId, int chain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_set_chain_name", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void RackSetChainName(IntPtr engine, int trackId, int chain, string name);
+
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_count")]
     internal static partial int RackChainCount(IntPtr engine, int trackId);
 

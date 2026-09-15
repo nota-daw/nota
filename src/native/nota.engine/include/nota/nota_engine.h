@@ -891,6 +891,10 @@ NOTA_API int32_t     nota_rack_add_plugin_chain_device(NotaEngine* engine, int32
 NOTA_API int32_t     nota_rackdev_add_plugin_chain_device(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t catalog_index);
 NOTA_API int32_t     nota_rack_chain_trigger_note(const NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API void        nota_rack_set_chain_trigger_note(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t note);
+/* Chain/pad display name. Empty means "use the chain instrument's own name"; a Drum
+ * Rack pad holding a Sampler sets it to the sample (or kit voice) it plays. */
+NOTA_API const char* nota_rack_chain_name(const NotaEngine* engine, int32_t track_id, int32_t chain);
+NOTA_API void        nota_rack_set_chain_name(NotaEngine* engine, int32_t track_id, int32_t chain, const char* name);
 NOTA_API int32_t     nota_rackdev_chain_trigger_note(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 NOTA_API void        nota_rackdev_set_chain_trigger_note(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t note);
 NOTA_API int32_t     nota_rack_chain_count(const NotaEngine* engine, int32_t track_id);

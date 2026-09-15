@@ -19,7 +19,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     : EngineTools(engine, dispatch, refresh)
 {
     public sealed record ChainInfo(int Index, int InstrumentKind, string InstrumentName, int TriggerNote,
-        float Gain, float Pan, bool Mute, bool Solo, int DeviceCount);
+        float Gain, float Pan, bool Mute, bool Solo, int DeviceCount, string Name);
     public sealed record RackSnapshot(float Volume, ChainInfo[] Chains);
     public sealed record Param(int Index, string Id, string Name, float Value);
     public sealed record MacroInfo(int Index, string Name, float Value);
@@ -37,7 +37,8 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
         for (int c = 0; c < n; c++)
             chains[c] = new ChainInfo(c, E.RackChainInstrumentKind(trackId, c), E.RackChainInstrumentName(trackId, c),
                 E.RackChainTriggerNote(trackId, c), E.RackChainGain(trackId, c), E.RackChainPan(trackId, c),
-                E.RackChainMute(trackId, c), E.RackChainSolo(trackId, c), E.RackChainDeviceCount(trackId, c));
+                E.RackChainMute(trackId, c), E.RackChainSolo(trackId, c), E.RackChainDeviceCount(trackId, c),
+                E.RackChainName(trackId, c));
         return new RackSnapshot(E.RackVolume(trackId), chains);
     });
 
@@ -155,4 +156,13 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
 
     [McpServerTool(Name = "set_kit_humanize"), Description("Drum Rack: set kit-wide humanize/timing randomisation (0..1).")]
     public Task SetKitHumanize(int trackId, float value) => Mutate(() => E.RackSetHumanize(trackId, Math.Clamp(value, 0f, 1f)));
+
+    [McpServerTool(Name = "set_chain_name"), Description(
+        "Name a rack chain / Drum Rack pad (\"Kick\", \"Snare\"…). An empty name falls back to the "
+        + "chain instrument's own name, which is the same word on every Sampler pad.")]
+    public Task<bool> SetChainName(int trackId, int chain, string name) => Mutate(() =>
+    {
+        E.RackSetChainName(trackId, chain, name ?? "");
+        return true;
+    });
 }

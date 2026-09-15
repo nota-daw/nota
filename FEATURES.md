@@ -367,8 +367,17 @@ and user presets, automation, persistence and cloning.
   with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
   a zone map, rack output (Volume/Glide), Fold/Save.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads and Mixer views, per-pad
-  Volume/Pan/Tune/Decay, choke groups (monophonic cut), Swing/Humanize, hot-swap. Its clips
-  can be stepped in the detail panel's **Pattern** tab (see below).
+  Volume/Pan/Tune/Decay, named pads, choke groups (monophonic cut), Swing/Humanize,
+  hot-swap. Its clips can be stepped in the detail panel's **Pattern** tab (see below).
+- **Ten factory kits** under Nota Drum Rack in the browser: *Volta* (warm analog boom),
+  *Kompakt* (punchy analog house), *Micron* (small vintage rhythm box), *Linnwood* (80s PCM
+  machine), *Atelier* (acoustic studio kit), *Cellar* (dusty vinyl break), *Neon* (modern
+  sub-forward, tuned 808 bass), *Foundry* (industrial metal), *Terra* (hand percussion),
+  *Aether* (ambient). 16 pads each on the General MIDI map (36–51), hats choked together,
+  with the kit's own swing and humanize. Load onto a new track or drop onto an existing
+  Drum Rack to replace its pads. The one-shots are synthesized on first launch rather than
+  shipped as audio (nothing added to the installer) and appear in the Files tab under
+  **Nota Kits**, ready to drag anywhere a sample goes.
 - **Nota Audio Effect Rack** — **Parallel / Series / Select** modes (by input level),
   Dry/Wet + Gain, PDC, Fold, Save; chains with gain/meter/M·S; named macros and mappings;
   the "+ Device" menu lists built-in effects and a Plug-ins submenu.

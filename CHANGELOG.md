@@ -19,6 +19,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Ten factory kits for the Drum Rack.** *Volta* (warm analog boom), *Kompakt* (punchy
+  analog house), *Micron* (small vintage rhythm box), *Linnwood* (80s PCM machine, gated
+  snare), *Atelier* (acoustic studio kit), *Cellar* (dusty vinyl break), *Neon* (modern
+  sub-forward, with tuned 808 bass hits), *Foundry* (industrial metal), *Terra* (hand
+  percussion) and *Aether* (ambient, long tails). Each is 16 pads laid out on the General
+  MIDI drum map (36–51), with the three hats sharing a choke group and the kit's own swing
+  and humanize. Load one from the browser — they sit under **Nota Drum Rack** in the
+  Instruments tab — onto a new track, or drop it on an existing Drum Rack to replace its
+  pads. The result is an ordinary Drum Rack: every pad is a Sampler you can retune,
+  reshape and add effects to.
+- **The kits are synthesized on your machine rather than bundled as audio**, so they cost
+  the installer nothing: Nota ships the recipes and renders the WAVs once, on first launch,
+  in well under a second. They land in Nota's data folder and appear in the browser's Files
+  tab under **Nota Kits**, so the individual one-shots can be dragged anywhere a sample
+  goes. The synthesis models the instruments rather than sampling them — rung resonators
+  for the analog voices, struck bodies with real mode spacing for the acoustic ones — and
+  runs at 4× the output rate through a zero-phase decimator, so nothing aliases.
+- **Drum Rack pads can be named.** Pads used to read "Nota Sampler" all sixteen times over;
+  now a pad carries its own name, shown on the pad, in the mixer view, and as the row label
+  in the Pattern grid. Kits name their pads, a dropped sample names its pad after the file,
+  and the name travels with the project.
 - **A Snap latch in the transport.** Separate from the grid denomination, which only says
   *how far apart*: switch Snap off to position clips freely for a while, instead of holding
   ⌥ for every drag. The grid keeps its spacing, so switching back resumes where you were.

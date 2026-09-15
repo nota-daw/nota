@@ -4998,6 +4998,12 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
     re.StopTransport();
     Check(Rms(dbuf, frames) > 1e-4f, $"drum-rack sampler pad is audible (rms={Rms(dbuf, frames):0.0000})");
 
+    // Pad names (blob v8): a Sampler pad reports the same instrument name on every pad,
+    // so the rack carries its own per-chain label.
+    Check(re.RackChainName(t, p2).Length == 0, "pad name starts empty (falls back to the instrument name)");
+    re.RackSetChainName(t, p0, "Kick"); re.RackSetChainName(t, p2, "Snare");
+    Check(re.RackChainName(t, p0) == "Kick" && re.RackChainName(t, p2) == "Snare", "pad names round-trip");
+
     // Per-pad shaping (choke / tune / decay) + kit-level swing/humanize (blob v6).
     re.RackSetChainChoke(t, p0, 1); re.RackSetChainChoke(t, p1, 1);
     re.RackSetChainTune(t, p2, 7); re.RackSetChainDecay(t, p2, 0.4f);
@@ -5031,11 +5037,80 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
         Check(dst.RackChainInstrumentKind(ft, 2) == 1 && dst.RackChainTriggerNote(ft, 2) == 40, "sampler pad + note restored (rack blob)");
         Check(dst.RackChainChoke(ft, 0) == 1 && dst.RackChainTune(ft, 2) == 7 && Math.Abs(dst.RackChainDecay(ft, 2) - 0.4f) < 1e-4, "pad choke/tune/decay restored (blob v6)");
         Check(Math.Abs(dst.RackSwing(ft) - 0.3f) < 1e-4 && Math.Abs(dst.RackHumanize(ft) - 0.15f) < 1e-4, "kit swing/humanize restored (blob v6)");
+        Check(dst.RackChainName(ft, 0) == "Kick" && dst.RackChainName(ft, 2) == "Snare", "pad names restored (blob v8)");
     }
     finally
     {
         try { if (System.IO.Directory.Exists(ddir)) System.IO.Directory.Delete(ddir, true); } catch { }
     }
+}
+
+// ================= Factory drum kits: recipes → samples → Drum Rack =========
+// The shipped kits are code, not audio: the catalog is checked for structure, the
+// renderer for determinism and level, and the service for assembling a playable rack.
+Console.WriteLine("-- Factory drum kits --");
+{
+    var kits = Nota.Infrastructure.Kits.KitCatalog.All;
+    Check(kits.Count == 10, $"ten factory kits ({kits.Count})");
+
+    var kitIds = new System.Collections.Generic.HashSet<string>();
+    bool padsOk = true, notesOk = true, namesOk = true;
+    foreach (var k in kits)
+    {
+        if (!kitIds.Add(k.Id)) padsOk = false;
+        if (k.Pads.Count != 16) padsOk = false;
+        var padNotes = new System.Collections.Generic.HashSet<int>();
+        foreach (var pad in k.Pads)
+        {
+            if (pad.Note < 36 || pad.Note > 51 || !padNotes.Add(pad.Note)) notesOk = false;
+            if (string.IsNullOrWhiteSpace(pad.Name)) namesOk = false;
+        }
+    }
+    Check(padsOk, "every kit has a unique id and 16 pads");
+    Check(notesOk, "pad notes are unique and inside the GM bank (36..51)");
+    Check(namesOk, "every pad is named");
+
+    // Rendering: deterministic, on target level, finite, and long enough to be a drum.
+    var kick = kits[0].Pads[0];
+    var r1 = Nota.Infrastructure.Kits.KitRenderer.Render(kick, 12345);
+    var r2 = Nota.Infrastructure.Kits.KitRenderer.Render(kick, 12345);
+    bool same = r1.Frames == r2.Frames && r1.Channels == r2.Channels;
+    if (same) for (int i = 0; i < r1.Interleaved.Length; i++) if (r1.Interleaved[i] != r2.Interleaved[i]) { same = false; break; }
+    Check(same, "the same seed renders the same audio");
+    Check(Nota.Infrastructure.Kits.KitRenderer.Render(kick, 999).Frames != 0, "a different seed still renders");
+
+    double peak = 0; bool finite = true;
+    foreach (var v in r1.Interleaved) { peak = Math.Max(peak, Math.Abs(v)); if (!float.IsFinite(v)) finite = false; }
+    Check(finite, "rendered audio is finite");
+    Check(peak <= 1.0 && Math.Abs(20 * Math.Log10(peak) - kick.PeakDb) < 0.6,
+          $"rendered peak hits the recipe's target ({20 * Math.Log10(peak):0.0} dBFS, want {kick.PeakDb:0.0})");
+    Check(r1.Frames > r1.SampleRate / 50, $"one-shot is longer than 20 ms ({r1.Frames * 1000 / r1.SampleRate} ms)");
+
+    // Building a rack from a kit: every pad loaded, named, choked and audible.
+    var svc = new DrumKitService();
+    Check(svc.All().Count == kits.Count, "the kit service lists the catalog");
+    using var ke = new NotaEngine();
+    int kt = svc.CreateTrack(ke, kits[0].Id, out string kitWarn);
+    Check(kt > 0 && kitWarn.Length == 0, $"kit loaded onto a new Drum Rack track ({(kitWarn.Length == 0 ? "no warnings" : kitWarn)})");
+    Check(ke.TrackInstrumentKind(kt) == 4, "the kit's track is a Drum Rack");
+    Check(ke.RackChainCount(kt) == 16, $"all 16 pads loaded ({ke.RackChainCount(kt)})");
+    Check(ke.RackChainName(kt, 0) == kits[0].Pads[0].Name, $"pad 1 is named '{ke.RackChainName(kt, 0)}'");
+    Check(ke.RackChainTriggerNote(kt, 0) == 36, "pad 1 triggers on C1");
+    int hats = 0;
+    for (int c = 0; c < ke.RackChainCount(kt); c++) if (ke.RackChainChoke(kt, c) == 1) hats++;
+    Check(hats == 3, $"the three hats share a choke group ({hats})");
+
+    int kclip = ke.AddMidiClip(kt, 0.0, 4.0);
+    ke.SetClipNotes(kt, kclip, new[] { new NotaNote(36, 0.0, 1.0, 1.0f), new NotaNote(38, 1.0, 1.0, 1.0f) });
+    ke.SetBpm(120); ke.Seek(0); ke.Play();
+    var kbuf = new float[frames * 2];
+    ke.RenderOffline(kbuf, frames);
+    ke.StopTransport();
+    Check(Rms(kbuf, frames) > 1e-4f && float.IsFinite(kbuf[0]), $"a kit pad plays from a clip (rms={Rms(kbuf, frames):0.0000})");
+
+    // Loading a second kit into the same rack replaces its pads rather than stacking.
+    Check(svc.LoadInto(ke, kt, kits[1].Id, out _) && ke.RackChainCount(kt) == 16, "loading another kit replaces the pads");
+    Check(ke.RackChainName(kt, 0) == kits[1].Pads[0].Name, "the replaced pads carry the new kit's names");
 }
 
 // ===================== M9-D: automation segment curves =====================

@@ -37,6 +37,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IProjectStore, ProjectStore>();
         services.AddSingleton<IPresetStore, PresetStore>();
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
+        services.AddSingleton<IDrumKits, DrumKitService>();
         services.AddSingleton<IBrowserLibrary, BrowserLibraryService>();
         services.AddSingleton<IAudioDeviceService, AudioDeviceService>();
         services.AddSingleton<IMidiDeviceService, MidiDeviceService>();

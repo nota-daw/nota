@@ -132,7 +132,13 @@ public sealed class DrumPatternView : UserControl
         for (int c = 0; c < n; c++)
         {
             int note = _e.RackChainTriggerNote(TrackId, c);
-            if (note >= 0) pads.Add(new Pad(c, note, _e.RackChainInstrumentName(TrackId, c)));
+            // Prefer the pad's own name (kit voice / dropped sample) — every Sampler pad
+            // reports the same instrument name, which makes the grid unreadable.
+            if (note >= 0)
+            {
+                string nm = _e.RackChainName(TrackId, c);
+                pads.Add(new Pad(c, note, nm.Length > 0 ? nm : _e.RackChainInstrumentName(TrackId, c)));
+            }
         }
         pads.Sort((x, y) => x.Note.CompareTo(y.Note));   // kick (lowest pad) on top, as on the pad grid
         return pads;

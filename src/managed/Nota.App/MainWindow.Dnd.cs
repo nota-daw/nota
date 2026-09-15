@@ -228,9 +228,11 @@ public partial class MainWindow
         // drop target; an effect preset reports "Select a track first." via Apply itself.
         if (item.Kind == BrowserItemKind.Preset)
         {
+            bool kit = IsKitRow(item);
             string warn = ApplyPresetItem(item, trackId);
-            if (trackId > 0) ShowDevices(trackId);
-            _vm.StatusText = warn.Length == 0 ? $"Applied preset {item.Name}" : warn;
+            if (!kit && trackId > 0) ShowDevices(trackId);
+            _vm.StatusText = warn.Length > 0 ? warn
+                : kit ? $"Loaded {item.Name} kit" : $"Applied preset {item.Name}";
             return;
         }
         if (trackId <= 0) { _vm.StatusText = "Drop onto a track."; return; }

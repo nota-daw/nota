@@ -642,6 +642,8 @@ public:
     // Drum Rack pad note per chain (-1 = all notes; instrument/effect racks ignore it).
     int32_t   rackChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void      rackSetChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t note);
+    std::string rackChainName(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void      rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t   rackChainCount(int32_t trackId, int32_t deviceIndex) const;
     int32_t   rackAddChain(int32_t trackId, int32_t deviceIndex, int32_t instKind);   // 0=Synth, 2=Physical, <0=none
     bool      rackRemoveChain(int32_t trackId, int32_t deviceIndex, int32_t chain);

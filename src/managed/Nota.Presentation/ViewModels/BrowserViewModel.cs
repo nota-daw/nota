@@ -33,6 +33,9 @@ public sealed class BrowserItem
     public string Sub { get; init; } = "";        // type / manufacturer / folder
     public string Format { get; init; } = "";     // plug-ins: "VST3" / "AU" (Sub carries the vendor)
     public string Path { get; init; } = "";       // file/bundle path for samples/projects/presets
+    /// <summary>Long-form description for the row's tooltip, where <see cref="Sub"/> (the
+    /// narrow tag column) has no room for it. Falls back to Sub when empty.</summary>
+    public string Tip { get; init; } = "";
 
     /// <summary>Section-header row (see <see cref="BrowserItemKind.Group"/>): Name is the
     /// caption and <see cref="GroupCount"/> how many rows it heads.</summary>
@@ -78,6 +81,7 @@ public sealed partial class BrowserViewModel : ObservableObject
     private readonly IPluginCatalog _catalog;
     private readonly IPresetLibrary _presets;
     private readonly IFactoryPresets _factory;
+    private readonly IDrumKits? _kits;
     private readonly ISettingsService? _settings;
     private readonly IBrowserLibrary? _library;
 
@@ -120,11 +124,13 @@ public sealed partial class BrowserViewModel : ObservableObject
     public ObservableCollection<BrowserItem> Presets { get; } = new();
 
     public BrowserViewModel(IPluginCatalog catalog, IPresetLibrary presets, IFactoryPresets factory,
-                            ISettingsService? settings = null, IBrowserLibrary? library = null)
+                            ISettingsService? settings = null, IBrowserLibrary? library = null,
+                            IDrumKits? kits = null)
     {
         _catalog = catalog;
         _presets = presets;
         _factory = factory;
+        _kits = kits;
         _settings = settings;
         _library = library;
         if (_library is not null) _library.Changed += OnLibraryChanged;
@@ -273,6 +279,24 @@ public sealed partial class BrowserViewModel : ObservableObject
                 Depth = 1,
             });
         }
+        // Factory drum kits hang under the Drum Rack alongside its presets — a kit is
+        // what a "preset" means for that device.
+        if (_kits is not null)
+        {
+            var rack = _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == 4);
+            if (rack is not null)
+                foreach (var kit in _kits.All())
+                    rack.Children.Add(new BrowserItem
+                    {
+                        Name = kit.Name,
+                        Kind = BrowserItemKind.Preset,
+                        Sub = "kit",
+                        Tip = $"{kit.Blurb} · {kit.PadCount} pads",
+                        Path = "kit:" + kit.Id,
+                        Depth = 1,
+                    });
+        }
+
         // Preset groups start collapsed; the user expands a device to reveal its presets.
         foreach (var tree in new[] { _instrTree, _fxTree, _midiTree })
             foreach (var d in tree) d.IsExpanded = false;
@@ -451,8 +475,56 @@ public sealed partial class BrowserViewModel : ObservableObject
                 Depth = depth,
             });
         }
+        AppendKitFolders();
         SortSampleTree(_sampleTree);
         RebuildSampleVisible();
+    }
+
+    // The rendered factory kits, as a browsable folder alongside the user's own samples.
+    // They live in Nota's data folder rather than the user's samples folder (they are
+    // regenerable, and they should not appear in a folder the user curates), so the tree
+    // gets them from the kit service instead of the folder scan above.
+    private void AppendKitFolders()
+    {
+        if (_kits is null) return;
+        var root = _kits.Root;
+        if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return;
+
+        var rootNode = new BrowserItem
+        {
+            Name = "Nota Kits",
+            Kind = BrowserItemKind.Folder,
+            Sub = "factory",
+            Path = root,
+            Depth = 0,
+            IsExpanded = _expandedTreeKeys.Contains(root),
+        };
+        foreach (var kit in _kits.All())
+        {
+            var dir = _kits.FolderOf(kit.Id);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+            var kitNode = new BrowserItem
+            {
+                Name = kit.Name,
+                Kind = BrowserItemKind.Folder,
+                Sub = "",
+                Tip = kit.Blurb,
+                Path = dir,
+                Depth = 1,
+                IsExpanded = _expandedTreeKeys.Contains(dir),
+            };
+            foreach (var f in Directory.EnumerateFiles(dir, "*.wav").OrderBy(f => f, StringComparer.Ordinal))
+                kitNode.Children.Add(new BrowserItem
+                {
+                    Name = Path.GetFileName(f),
+                    Kind = BrowserItemKind.Sample,
+                    Sub = "",
+                    Path = f,
+                    Depth = 2,
+                });
+            if (kitNode.Children.Count > 0) rootNode.Children.Add(kitNode);
+        }
+        if (rootNode.Children.Count > 0) _sampleTree.Add(rootNode);
     }
 
     // Ensures the folder chain from root down to `dir` exists, returning the child list the
