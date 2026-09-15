@@ -68,9 +68,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   playback reads as a single object, and tempo, signature, grid and launch quantize use
   one value-over-label cell so the row scans as a strip of readouts. The position readout
   is now large enough to read across the room and says underneath which clock it is
-  showing. Nothing was dropped: the three add-track buttons collapse into a **+ Track**
-  menu, launch quantize appears in Session where it applies, and **Follow playhead** moved
-  to the View menu.
+  showing. The four switches — metronome, follow playhead, snap and automation — are icons
+  now instead of words, each drawing the thing it does. Nothing was dropped: the three
+  add-track buttons collapse into a **+ Track** menu, launch quantize appears in Session
+  where it applies, and Follow playhead is both a button in the row and **View ▸ Follow
+  playhead**, which stay in step with each other.
 - **Master shows the gain it is applying,** in dB, next to its fader and meter — the
   handle position is no longer the only readout.
 - **The arrangement and the modular canvas are islands, and groups stop weighing as much as

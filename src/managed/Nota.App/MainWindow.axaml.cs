@@ -514,6 +514,36 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // Follow: keep the arrangement scrolling with the playhead during playback. The bar
+    // button and View ▸ Follow playhead are two faces of one state, so both land here.
+    private void OnToggleFollow(object? sender, RoutedEventArgs e) => SetFollowPlayhead(FollowBtn.IsChecked == true);
+
+    internal void SetFollowPlayhead(bool on)
+    {
+        Timeline.FollowPlayhead = on;
+        if (FollowBtn.IsChecked != on) FollowBtn.IsChecked = on;
+        // The View-menu twin lives in the native menu, which has no generated field —
+        // look it up once by the header declared in MainWindow.axaml.
+        _followMenuItem ??= FindMenuItem(NativeMenu.GetMenu(this), "Follow playhead");
+        if (_followMenuItem is not null) _followMenuItem.IsChecked = on;
+        if (on) Timeline.RecenterOnPlayhead();   // jump to the cursor now
+        if (_vm is not null) _vm.StatusText = on ? "Following the playhead" : "Follow playhead off";
+    }
+
+    private NativeMenuItem? _followMenuItem;
+
+    private static NativeMenuItem? FindMenuItem(NativeMenu? menu, string header)
+    {
+        if (menu is null) return null;
+        foreach (var item in menu.Items)
+        {
+            if (item is not NativeMenuItem mi) continue;
+            if (mi.Header == header) return mi;
+            if (FindMenuItem(mi.Menu, header) is { } found) return found;
+        }
+        return null;
+    }
+
     // Snap on/off. Separate from the GRID cell, which only picks the denomination:
     // the latch is what you reach for to nudge something off-grid for a while.
     private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)

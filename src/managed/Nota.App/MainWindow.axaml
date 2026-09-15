@@ -62,6 +62,8 @@
             <NativeMenuItem Header="Toggle overview" Click="OnMenuToggleOverview"/>
             <NativeMenuItem Header="Toggle sections" Click="OnMenuToggleSections"/>
             <NativeMenuItemSeparator/>
+            <!-- Header text is matched from code to keep this checkmark in step with the
+                 transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
             <NativeMenuItem Header="Follow playhead" Click="OnMenuToggleFollow" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Clip names" Click="OnMenuCycleClipNames"/>
@@ -114,9 +116,8 @@
          handing 22px back to the arrangement. Reads left to right as: which view ·
          what plays (a recessed console fusing transport, position and loop) · the
          numbers you set · the switches you flip · then, pinned right, what the machine
-         is doing. Everything the two old rows carried is still here; Follow playhead
-         moved to View ▸ Follow playhead and launch quantize shows only in Session,
-         where it applies. -->
+         is doing. Everything the two old rows carried is still here; launch quantize
+         shows only in Session, where it applies. -->
     <Border DockPanel.Dock="Top" Classes="Panel" Height="60" Padding="14,0">
       <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
@@ -216,6 +217,23 @@
                       StrokeLineCap="Round" Data="M12 19 L13.9 3.2"/>
                 <Ellipse Canvas.Left="11.33" Canvas.Top="9.4" Width="3.2" Height="3.2"
                          Fill="{Binding $parent[ToggleButton].Foreground}"/>
+              </Canvas>
+            </Viewbox>
+          </ToggleButton>
+          <!-- Follow playhead: keep the arrangement scrolling with the cursor. The
+               playhead marker standing on its ruler. A flag (block + point) rather than a
+               bare triangle: at 15px a flat triangle over a stem reads as "⊥". Viewport
+               brackets around it were tried too and collapse into noise at this size. Mirrored by View ▸ Follow playhead,
+               which shares one code path. -->
+          <ToggleButton x:Name="FollowBtn" Classes="tp-icon" Click="OnToggleFollow"
+                        ToolTip.Tip="Follow playhead — scroll the arrangement to keep the cursor in view">
+            <Viewbox Width="15" Height="15">
+              <Canvas Width="24" Height="24">
+                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
+                      StrokeLineCap="Round" Data="M3.5 17.8 H20.5"/>
+                <Path Fill="{Binding $parent[ToggleButton].Foreground}" Data="M6.5 5 H12.5 V9 L9.5 12.5 L6.5 9 Z"/>
+                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
+                      StrokeLineCap="Round" Data="M9.5 12.5 V17.8"/>
               </Canvas>
             </Viewbox>
           </ToggleButton>

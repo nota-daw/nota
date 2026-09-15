@@ -284,9 +284,9 @@ then, pinned right, what the machine is doing. Transport, position and loop shar
 single `Border.console` recess on `Brush.SurfaceAbyss` so playback reads as one object;
 tempo, signature, grid and launch quantize use one `.cell` shape — mono value over an 8px
 `.CellLabel` — so the row scans as a strip of readouts rather than a queue of pills.
-The three switches — metronome, snap, automation — are icon-only 28px `tp-icon` toggles
-that draw the thing they do (a metronome, a horseshoe magnet, a breakpoint envelope) and
-carry their name in a tooltip; none sets a Foreground, so the engaged state turns the
+The four switches — metronome, follow playhead, snap, automation — are icon-only 28px
+`tp-icon` toggles that draw the thing they do (a metronome, a playhead on its ruler, a
+horseshoe magnet, a breakpoint envelope) and carry their name in a tooltip; none sets a Foreground, so the engaged state turns the
 glyph brass through the base `ToggleButton:checked`. Controls that belong to one context
 appear only there: launch quantize in Session, "Re-enable" only while a lane is
 overridden.
