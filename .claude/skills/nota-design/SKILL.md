@@ -56,7 +56,7 @@ Most of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   transitions 120 ms ease-out; meters, playhead and spectra are never animated.
 - **Geist for words, Geist Mono for measurements.** Nothing under 7 px.
 - **Numbers are set, not printed.** The app installs a display culture (point decimal,
-  U+2212 minus). Put a thin space ` ` before units, keep precision fixed (dB one
+  U+2212 minus). Put a thin space (`\u2009` in source) before units, keep precision fixed (dB one
   decimal, tempo two, percent whole, Hz up to 999 then `3.2 k`) — use `NotaNum` helpers.
 - **Icons are geometry.** `Glyph` / `GlyphKind`; no unicode symbols (`■ ▶ ● ✓ ★ ▾`…) and
   no emoji as text. `·` separates meta; `→` in prose is fine.
@@ -67,8 +67,9 @@ Most of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 ## Device cards
 
 - **700 × 260** (`DeviceCardKit.CardH`; width exceptions are listed in `DESIGN.md`).
-- **Header 22:** name left; processing-type badge (mono caps) and bypass right — nothing
-  else. Presets, A/B, move, delete go in the header's right-click menu.
+- **Header 22:** name left; preset picker `‹ Name ⌄ ›` (when the device has presets),
+  processing-type badge (mono caps) and bypass right — nothing else. A/B, move and delete
+  go in the header's right-click menu.
 - **Body:** inset 6, sections radius 6 with gap 5; columns choice → work → output.
 - Brass for the audio path and active state; modulation shows its source chroma; graphs go
   through `NotaGraph` (Well, hairline, radius 4, corner axis labels, no fills under curves).

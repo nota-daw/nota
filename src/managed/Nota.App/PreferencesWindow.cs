@@ -622,7 +622,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Drag overview edge", "Zoom by resizing the viewport window"),
             ("Double-click overview", "Fit the whole project on screen"),
             ("Drag a device header", "Reorder devices (or right-click the header → Move left / right)"),
-            ("Right-click a device header", "Presets, A / B compare, move, copy, delete, save preset"),
+            ("Right-click a device header", "A / B compare, move, copy, delete, presets, save preset"),
             ("Delete (device selected)", "Remove the selected device — the header no longer carries a close button"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),

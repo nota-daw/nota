@@ -252,7 +252,7 @@ invariant with U+2212 as the negative sign — so every implicit `{v:0.0}` print
 with a point on any OS locale; typed input still accepts a hyphen. Project and preset
 files are JSON and never go through it.
 
-- The unit follows a **thin space**: `4.6 s`, `−3.3 dB`, `72 %` (` ` in source).
+- The unit follows a **thin space**: `4.6 s`, `−3.3 dB`, `72 %` (`\u2009` in source).
 - A plus only where the sign matters: `+0.8 dB`.
 - Fixed precision: dB one decimal · tempo two (`120.00`) · percent whole · Hz whole up to
   999, then `3.2 k`. Helpers: `NotaNum.Db`, `Hz`, `Pct`, `Bpm`, `Time`, `Unit`, `F`.
@@ -354,10 +354,12 @@ All live in one **graph window** (`Controls/NotaGraph.cs`):
 Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width from
 `IDeviceBody.Width`).
 
-- **Header 22** (`HeaderH`): device name (12/600) on the left; the processing-type badge
-  (mono caps; instruments add live voices, `SUBTRACTIVE · 3/16`) and the bypass switch on
-  the right. **Nothing else.** Presets, A/B, move and delete live in the header's
-  right-click menu; drag the card by its whole header; Delete removes it.
+- **Header 22** (`HeaderH`): device name (12/600) on the left; on the right the **preset
+  picker** `‹ Name ⌄ ›` (an 18 px sunken field, radius 4: the name opens the factory
+  presets, the chevrons step through them, wrapping), the processing-type badge (mono caps;
+  instruments add live voices, `SUBTRACTIVE · 3/16`) and the bypass switch. The picker
+  appears only when the device has factory presets. A/B, move and delete live in the
+  header's right-click menu; drag the card by its whole header; Delete removes it.
 - **Body 238**, inset 6 (`NotaSpace.DeviceInset`) unless the body is `FullBleed`.
   Sections radius 6, gap 5, section inset 6–8; a knob row is 52–54 tall.
 - **Three columns, left to right: choice → work → output** — source or preset on the left,
@@ -427,6 +429,8 @@ Decisions taken while aligning the app, kept on purpose:
   Division (8), Arp Rate (8) and Order (8), Aurora Warp (5) and Filter (5), Bass LFO wave (5),
   Monolith Glide range (6), Pendulum Division (5) and Wave (5).
 - **Wide instruments** — Rhythm, Flux, Bass, Physical (see § Device cards).
+- **Preset picker in the device header.** The almanac allows only name, badge and bypass
+  there; switching presets is frequent enough to stay one click away.
 - **Zoom 28 px per beat** by default, not a 16 px bar; the ruler labels every bar once a bar
   is wider than 40 px.
 - **`FREQ`, `RESO`, `THRESH`** as labels (see § Labels and copy).

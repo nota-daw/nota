@@ -204,6 +204,9 @@ td:first-child{{color:var(--text-primary)}}
 .card{{width:700px;height:260px;background:var(--bg-app);border:1px solid var(--border-default);border-radius:var(--r-body);overflow:hidden;display:grid;grid-template-rows:22px 1fr}}
 .card__head{{display:flex;align-items:center;gap:8px;padding:0 8px;border-bottom:1px solid var(--border-default);background:var(--panel)}}
 .card__name{{font:600 12px/1 var(--font-ui);color:var(--text-primary)}}
+.preset{{margin-left:auto;display:inline-flex;align-items:stretch;height:18px;border:1px solid var(--hairline);border-radius:var(--r-control);background:var(--bg-sunken);overflow:hidden;font-size:11px}}
+.preset i{{font-style:normal;width:18px;display:grid;place-items:center;color:var(--text-tertiary)}}
+.preset b{{font-weight:500;width:132px;padding:0 7px;border-left:1px solid var(--hairline);border-right:1px solid var(--hairline);display:flex;align-items:center;color:var(--text-primary)}}
 .card__badge{{margin-left:auto;font:500 9px/1 var(--font-mono);letter-spacing:.12em;color:var(--text-tertiary)}}
 .card__body{{display:grid;grid-template-columns:150px 1fr 150px;gap:5px;padding:6px}}
 .sect{{background:var(--surface-card);border:1px solid var(--border-default);border-radius:var(--r-panel);padding:6px 8px;display:flex;flex-direction:column;gap:6px;min-width:0}}
@@ -426,9 +429,9 @@ ul.plain{{margin:0;padding-left:18px;color:var(--text-secondary)}} ul.plain li{{
 <section id="cards">
   <p class="eyebrow">08 · Device cards</p>
   <h2>700 × 260, at true size</h2>
-  <p>Header 22: name left; processing-type badge and bypass right — nothing else (presets, A/B, move and delete are in the right-click menu). Body inset 6, sections radius 6 with gap 5. Three columns: choice → work → output.</p>
+  <p>Header 22: name left; preset picker, processing-type badge and bypass right (A/B, move and delete are in the right-click menu). Body inset 6, sections radius 6 with gap 5. Three columns: choice → work → output.</p>
   <div class="scroll"><div class="card">
-    <div class="card__head"><span class="card__name">Nota Chamber</span><span class="card__badge">CONVOLUTION</span><span class="switch on" style="margin-left:6px"><i></i></span></div>
+    <div class="card__head"><span class="card__name">Nota Chamber</span><span class="preset"><i>&lsaquo;</i><b>Stone Vault</b><i>&rsaquo;</i></span><span class="card__badge" style="margin-left:0">CONVOLUTION</span><span class="switch on" style="margin-left:6px"><i></i></span></div>
     <div class="card__body">
       <div class="sect"><h5>Choice</h5><div class="field" style="width:100%;height:22px;font-size:10px;color:var(--text-primary)">Concert Hall</div>
         <div class="seg seg--device" style="align-self:flex-start"><button aria-pressed="true">IR</button><button aria-pressed="false">Algo</button></div></div>
