@@ -518,9 +518,11 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             knobs.Children.Add(Col(K("lfopitch", "PITCH", LfoCents, true, 28, 44), 1));
             knobs.Children.Add(Col(K("lfocut", "CUTOFF", v => Pct(v), true, 28, 44), 2));
             knobs.Children.Add(Col(K("lfopwm", "PWM", v => Pct(v), true, 28, 44), 3));
-            var syncT = Toggle("lfosync", "Sync");
-            var syncLbl = (TextBlock)((StackPanel)syncT).Children[1];
-            cur.Add(() => syncLbl.Text = On("lfosync") ? $"Sync {SyncNames[Math.Clamp((int)Math.Round(G("lforate") * 13), 0, 13)]}" : "Sync");
+            // The switch word carries the synced division ("SYNC 1/4"), refreshed with the card.
+            var syncT = Switch("Sync", () => On("lfosync"), () => { SetP("lfosync", On("lfosync") ? 0f : 1f); Refresh(); }, out var syncPaint,
+                liveLabel: () => On("lfosync") ? $"Sync {SyncNames[Math.Clamp((int)Math.Round(G("lforate") * 13), 0, 13)]}" : "Sync");
+            cur.Add(syncPaint);
+            if (I("lfosync") is var psync and >= 0) MidiLearn.Bind(syncT, MidiTarget.PluginParam(track, -1, psync), "Sync");
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18 };
             bottom.Children.Add(syncT); bottom.Children.Add(Col(Chips("lfodest", new[] { "All osc", "2 + 4" }), 1));
             ToolTip.SetTip(bottom.Children[1], "LFO pitch → all oscillators, or only 2 and 4");
