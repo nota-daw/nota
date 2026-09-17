@@ -19,6 +19,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Synth grew an oscillator and a voice section, and its editor is now three tabs.**
+  The oscillator gains **pulse width** (on the square), **detune**, **octave** and a
+  **unison** stack of 1 / 2 / 4 / 7 voices with a stereo **spread**; the filter gains a
+  **type** (Off / LP / HP / BP) and an **Env → Cutoff** amount; the voice section gains
+  **Poly 16 / Mono / Legato**, **glide**, **pan** and **Vel → Vol**. The card lays them out
+  as **Osc · Env · Filter** tabs — each one showing its graph full size with its knobs under
+  it — over a rail that keeps voice mode, volume, pan, glide, spread, velocity tracking and
+  the track's meter in view on every tab, and a status strip that reads the patch back in
+  words. The envelope's breakpoints and the filter's curve are draggable. Projects saved
+  before this load unchanged: the original eight parameters keep their index, and the new
+  ones start at values that sound exactly as before.
+- **Nota Synth ships 25 factory presets** (was 4) — pads, basses, leads, keys and moving
+  patches, including the four that existed before under their old names.
 - **Clip tools — generative writing and rewriting in the piano roll.** A **Tools** rail
   opens beside the roll with fifteen tools. Six **generators** write notes: *Rhythm*
   (a pattern weighted toward the strong beats, with density, variation and accent),

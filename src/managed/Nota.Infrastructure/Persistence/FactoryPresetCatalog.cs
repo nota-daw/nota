@@ -21,11 +21,41 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     public FactoryPresetCatalog()
     {
-        // ---- Nota Synth (kind 0) — wave: Saw 0 / Square .33 / Triangle .66 / Sine 1
-        Inst("synth", 0, "Warm Pad",    ("wave", 0f),    ("attack", 0.55f), ("decay", 0.40f), ("sustain", 0.85f), ("release", 0.60f), ("cutoff", 0.42f), ("resonance", 0.10f), ("gain", 0.80f));
-        Inst("synth", 0, "Rubber Bass", ("wave", 0f),    ("attack", 0.01f), ("decay", 0.35f), ("sustain", 0.55f), ("release", 0.12f), ("cutoff", 0.34f), ("resonance", 0.22f), ("gain", 0.85f));
-        Inst("synth", 0, "Bright Lead", ("wave", 0f),    ("attack", 0.02f), ("decay", 0.22f), ("sustain", 0.72f), ("release", 0.22f), ("cutoff", 0.82f), ("resonance", 0.28f), ("gain", 0.78f));
-        Inst("synth", 0, "Soft Pluck",  ("wave", 0.33f), ("attack", 0.01f), ("decay", 0.42f), ("sustain", 0.00f), ("release", 0.22f), ("cutoff", 0.60f), ("resonance", 0.20f), ("gain", 0.80f));
+        // ---- Nota Synth (kind 0) — 25 patches across pads, basses, leads, keys and motion.
+        //      wave: Saw 0 / Square .333 / Triangle .667 / Sine 1 · filtype: Off 0 / LP .333 /
+        //      HP .667 / BP 1 · unison: 1 / 2 / 4 / 7 · voicemode: Poly 0 / Mono .5 / Legato 1.
+        //      Bipolar params (detune, octave, pan, filenv) are neutral at 0.5; anything a
+        //      preset does not name goes back to the instrument's default.
+        Inst("synth", 0, "Init Saw",       ("wave", 0f));
+        // Pads
+        Inst("synth", 0, "Warm Pad",       ("wave", 0f),     ("attack", 0.55f), ("decay", 0.55f), ("sustain", 0.85f), ("release", 0.78f), ("cutoff", 0.46f), ("resonance", 0.10f), ("filenv", 0.60f), ("unison", 0.667f), ("detune", 0.60f), ("spread", 0.60f), ("velamp", 0.50f), ("gain", 0.78f));
+        Inst("synth", 0, "Glass Pad",      ("wave", 0.667f), ("attack", 0.45f), ("decay", 0.60f), ("sustain", 0.70f), ("release", 0.82f), ("cutoff", 0.84f), ("resonance", 0.08f), ("unison", 0.667f), ("detune", 0.58f), ("spread", 0.70f), ("gain", 0.76f));
+        Inst("synth", 0, "String Ensemble",("wave", 0f),     ("attack", 0.42f), ("decay", 0.50f), ("sustain", 0.88f), ("release", 0.70f), ("cutoff", 0.62f), ("resonance", 0.12f), ("unison", 1f),     ("detune", 0.62f), ("spread", 0.80f), ("gain", 0.72f));
+        Inst("synth", 0, "Choir Pad",      ("wave", 0.667f), ("attack", 0.58f), ("decay", 0.55f), ("sustain", 0.90f), ("release", 0.85f), ("cutoff", 0.55f), ("resonance", 0.10f), ("unison", 0.667f), ("detune", 0.56f), ("spread", 0.75f), ("gain", 0.75f));
+        Inst("synth", 0, "Drone",          ("wave", 0f),     ("attack", 0.70f), ("decay", 0.80f), ("sustain", 1f),    ("release", 0.88f), ("cutoff", 0.50f), ("resonance", 0.20f), ("unison", 1f),     ("detune", 0.72f), ("spread", 1f),    ("octave", 0.25f), ("gain", 0.68f));
+        // Basses
+        Inst("synth", 0, "Rubber Bass",    ("wave", 0f),     ("attack", 0f),    ("decay", 0.50f), ("sustain", 0.45f), ("release", 0.37f), ("cutoff", 0.40f), ("resonance", 0.28f), ("filenv", 0.70f), ("octave", 0.25f), ("voicemode", 0.5f), ("gain", 0.85f));
+        Inst("synth", 0, "Sub Bass",       ("wave", 1f),     ("attack", 0f),    ("decay", 0.60f), ("sustain", 0.70f), ("release", 0.37f), ("cutoff", 0.34f), ("resonance", 0.05f), ("octave", 0.25f), ("voicemode", 0.5f), ("gain", 0.88f));
+        Inst("synth", 0, "Acid Bass",      ("wave", 0f),     ("attack", 0f),    ("decay", 0.42f), ("sustain", 0.15f), ("release", 0.37f), ("cutoff", 0.35f), ("resonance", 0.78f), ("filenv", 0.85f), ("octave", 0.25f), ("voicemode", 0.5f), ("glide", 0.18f), ("gain", 0.82f));
+        Inst("synth", 0, "Square Bass",    ("wave", 0.333f), ("attack", 0f),    ("decay", 0.55f), ("sustain", 0.55f), ("release", 0.37f), ("cutoff", 0.44f), ("resonance", 0.20f), ("filenv", 0.62f), ("octave", 0.25f), ("voicemode", 0.5f), ("gain", 0.85f));
+        Inst("synth", 0, "Growl Bass",     ("wave", 0f),     ("attack", 0f),    ("decay", 0.50f), ("sustain", 0.50f), ("release", 0.40f), ("cutoff", 0.38f), ("resonance", 0.55f), ("filenv", 0.72f), ("unison", 0.333f), ("detune", 0.58f), ("octave", 0.25f), ("voicemode", 0.5f), ("gain", 0.82f));
+        // Leads
+        Inst("synth", 0, "Bright Lead",    ("wave", 0f),     ("attack", 0.06f), ("decay", 0.55f), ("sustain", 0.75f), ("release", 0.45f), ("cutoff", 0.82f), ("resonance", 0.28f), ("filenv", 0.58f), ("unison", 0.333f), ("detune", 0.55f), ("voicemode", 0.5f), ("gain", 0.78f));
+        Inst("synth", 0, "Super Saw",      ("wave", 0f),     ("attack", 0.10f), ("decay", 0.60f), ("sustain", 0.85f), ("release", 0.60f), ("cutoff", 0.80f), ("resonance", 0.14f), ("unison", 1f),     ("detune", 0.68f), ("spread", 0.90f), ("gain", 0.70f));
+        Inst("synth", 0, "Solo Lead",      ("wave", 0f),     ("attack", 0.02f), ("decay", 0.50f), ("sustain", 0.80f), ("release", 0.40f), ("cutoff", 0.72f), ("resonance", 0.30f), ("voicemode", 0.5f), ("glide", 0.16f), ("gain", 0.78f));
+        Inst("synth", 0, "Slide Lead",     ("wave", 0.333f), ("pulsewidth", 0.35f), ("attack", 0.05f), ("decay", 0.55f), ("sustain", 0.80f), ("release", 0.45f), ("cutoff", 0.70f), ("resonance", 0.25f), ("voicemode", 1f), ("glide", 0.30f), ("gain", 0.78f));
+        Inst("synth", 0, "Whistle",        ("wave", 1f),     ("attack", 0.30f), ("decay", 0.50f), ("sustain", 0.85f), ("release", 0.50f), ("cutoff", 0.90f), ("resonance", 0.05f), ("octave", 0.75f), ("voicemode", 0.5f), ("glide", 0.12f), ("gain", 0.74f));
+        // Keys and plucks
+        Inst("synth", 0, "Soft Pluck",     ("wave", 0.667f), ("attack", 0f),    ("decay", 0.60f), ("sustain", 0f),    ("release", 0.45f), ("cutoff", 0.66f), ("resonance", 0.18f), ("filenv", 0.55f), ("gain", 0.80f));
+        Inst("synth", 0, "Glass Bell",     ("wave", 1f),     ("attack", 0f),    ("decay", 0.78f), ("sustain", 0f),    ("release", 0.70f), ("cutoff", 0.90f), ("resonance", 0.10f), ("octave", 0.75f), ("gain", 0.76f));
+        Inst("synth", 0, "Electric Piano", ("wave", 1f),     ("attack", 0f),    ("decay", 0.70f), ("sustain", 0.25f), ("release", 0.55f), ("cutoff", 0.74f), ("resonance", 0.10f), ("filenv", 0.45f), ("gain", 0.80f));
+        Inst("synth", 0, "Music Box",      ("wave", 1f),     ("attack", 0f),    ("decay", 0.62f), ("sustain", 0f),    ("release", 0.50f), ("cutoff", 0.88f), ("resonance", 0.06f), ("octave", 0.75f), ("gain", 0.74f));
+        Inst("synth", 0, "Hollow Keys",    ("wave", 0.333f), ("pulsewidth", 0.22f), ("attack", 0.02f), ("decay", 0.58f), ("sustain", 0.45f), ("release", 0.48f), ("cutoff", 0.64f), ("resonance", 0.18f), ("gain", 0.78f));
+        Inst("synth", 0, "Organ Tone",     ("wave", 0.333f), ("attack", 0f),    ("decay", 0f),    ("sustain", 1f),    ("release", 0.30f), ("filtype", 0f),   ("velamp", 0.20f), ("gain", 0.76f));
+        // Motion
+        Inst("synth", 0, "Air Sweep",      ("wave", 0f),     ("attack", 0.62f), ("decay", 0.65f), ("sustain", 0.80f), ("release", 0.80f), ("filtype", 0.667f), ("cutoff", 0.55f), ("resonance", 0.30f), ("filenv", 0.78f), ("unison", 0.667f), ("detune", 0.58f), ("spread", 0.80f), ("gain", 0.70f));
+        Inst("synth", 0, "Filter Sweep",   ("wave", 0f),     ("attack", 0.35f), ("decay", 0.70f), ("sustain", 0.75f), ("release", 0.70f), ("cutoff", 0.30f), ("resonance", 0.45f), ("filenv", 0.92f), ("unison", 0.333f), ("detune", 0.57f), ("gain", 0.74f));
+        Inst("synth", 0, "Band Motion",    ("wave", 0.333f), ("pulsewidth", 0.44f), ("attack", 0.28f), ("decay", 0.62f), ("sustain", 0.70f), ("release", 0.62f), ("filtype", 1f), ("cutoff", 0.58f), ("resonance", 0.50f), ("filenv", 0.74f), ("unison", 0.333f), ("detune", 0.60f), ("spread", 0.65f), ("gain", 0.74f));
 
         // ---- Nota Physical (kind 2) — modal percussion. Res1 Type: Beam 0 / Marimba .2 /
         //      String .4 / Membrane .6 / Plate .8 / Pipe 1. Tune/Ratio are neutral at 0.5.

@@ -252,7 +252,11 @@ voice count (on synths), move arrows, delete, and the ⠿ drag handle. All suppo
 and user presets, automation, persistence and cloning.
 
 ### Instruments
-- **Nota Synth** — subtractive synthesizer (the basic one).
+- **Nota Synth** — subtractive synthesizer (the basic one): one oscillator
+  (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
+  stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
+  Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
+  Osc · Env · Filter tabs with draggable envelope and filter graphs. 25 factory presets.
 - **Nota Sampler** — sampler (one-shot and loop), voice modes Poly 16 / Mono / Choke, loop
   crossfade, reverse loop, filter key-tracking, Vel→Vol; Sample · Pitch · Env · Filter
   tabs; an editable waveform.

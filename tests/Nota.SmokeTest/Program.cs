@@ -976,7 +976,7 @@ Console.WriteLine("-- Nota Synth --");
     Check(se.DeviceName(t, -1) == "Nota Synth", $"instrument is Nota Synth (got '{se.DeviceName(t, -1)}')");
 
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 8, $"Nota Synth exposes 8 params (got {pc})");
+    Check(pc == 19, $"Nota Synth exposes 19 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -984,6 +984,20 @@ Console.WriteLine("-- Nota Synth --");
         if (se.PluginParamId(t, -1, i) == "cutoff") cut = i;
     }
     Check(idsOk && cut >= 0, "params have ids + names; cutoff present");
+    int PIdx(int tr, string id)
+    { for (int i = 0; i < se.PluginParamCount(tr, -1); i++) if (se.PluginParamId(tr, -1, i) == id) return i; return -1; }
+
+    // The first eight keep their index and id — the persisted layout is append-only, so
+    // automation lanes and project states written before the oscillator/voice sections
+    // still address the same parameters.
+    string[] legacyIds = { "wave", "attack", "decay", "sustain", "release", "cutoff", "resonance", "gain" };
+    bool layoutOk = true;
+    for (int i = 0; i < legacyIds.Length; i++) if (se.PluginParamId(t, -1, i) != legacyIds[i]) layoutOk = false;
+    Check(layoutOk, "the original eight params keep their index and id");
+    string[] newIds = { "filtype", "filenv", "pulsewidth", "detune", "octave", "unison", "spread", "glide", "velamp", "pan", "voicemode" };
+    bool newOk = true;
+    foreach (var id in newIds) if (PIdx(t, id) < 8) newOk = false;
+    Check(newOk, "oscillator / filter / voice params are all present");
 
     se.PluginParamSet(t, -1, cut, 0.33f);
     Check(Math.Abs(se.PluginParamGet(t, -1, cut) - 0.33f) < 1e-4, "param set/get round-trips");
@@ -1020,6 +1034,62 @@ Console.WriteLine("-- Nota Synth --");
     var nbuf = new float[8192 * 2];
     se.Seek(0.0); se.Play(); se.RenderOffline(nbuf, 8192); se.StopTransport();
     Check(Rms(nbuf, 8192) > 0.005f, $"Nota Synth is audible (RMS {Rms(nbuf, 8192):F3})");
+
+    // A project written before the new sections carries only the first eight floats: it
+    // must still load, leaving the rest at their defaults (unison 1, poly, no glide).
+    int tl = se.AddInstrumentTrack();
+    var legacy = new byte[8 * 4];
+    for (int i = 0; i < 8; i++) BitConverter.GetBytes(i == 5 ? 0.42f : 0.5f).CopyTo(legacy, i * 4);
+    se.SetPluginState(tl, -1, legacy);
+    Check(Math.Abs(se.PluginParamGet(tl, -1, cut) - 0.42f) < 1e-4, "an eight-param state from an older project still loads");
+    Check(Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "unison")) - 0f) < 1e-4
+       && Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "voicemode")) - 0f) < 1e-4,
+        "params added since keep their defaults when an old state is loaded");
+
+    // Off / LP / HP / BP all pass signal, and each one sounds different from the others.
+    int tf = se.AddInstrumentTrack();
+    se.AddMidiClip(tf, 0.0, 4.0);
+    se.SetClipNotes(tf, 0, new[] { new NotaNote(48, 0.0, 2.0, 1.0f) });
+    int ftIdx = PIdx(tf, "filtype");
+    var levels = new float[4];
+    for (int k = 0; k < 4; k++)
+    {
+        se.PluginParamSet(tf, -1, ftIdx, k / 3f);
+        var fbuf = new float[8192 * 2];
+        se.Seek(0.0); se.Play(); se.RenderOffline(fbuf, 8192); se.StopTransport();
+        levels[k] = Rms(fbuf, 8192);
+    }
+    Check(levels[0] > 0.005f && levels[1] > 0.005f && levels[2] > 0.005f && levels[3] > 0.005f,
+        $"every filter type passes signal (off {levels[0]:F3}, lp {levels[1]:F3}, hp {levels[2]:F3}, bp {levels[3]:F3})");
+    Check(Math.Abs(levels[0] - levels[1]) > 1e-3 && Math.Abs(levels[1] - levels[2]) > 1e-3,
+        "the filter types do not render identically");
+
+    // Unison stacks voices: seven detuned copies are louder than one.
+    int tu = se.AddInstrumentTrack();
+    se.AddMidiClip(tu, 0.0, 4.0);
+    se.SetClipNotes(tu, 0, new[] { new NotaNote(60, 0.0, 2.0, 1.0f) });
+    se.PluginParamSet(tu, -1, PIdx(tu, "detune"), 0.7f);
+    var ubuf1 = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(ubuf1, 8192); se.StopTransport();
+    float one = Rms(ubuf1, 8192);
+    se.PluginParamSet(tu, -1, PIdx(tu, "unison"), 1f);
+    var ubuf7 = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(ubuf7, 8192); se.StopTransport();
+    float seven = Rms(ubuf7, 8192);
+    Check(seven > one * 1.05f, $"unison 7 thickens the tone (1 voice {one:F3} -> 7 voices {seven:F3})");
+
+    // Mono collapses a chord onto one voice; Legato does the same but does not retrigger.
+    int tm = se.AddInstrumentTrack();
+    se.AddMidiClip(tm, 0.0, 4.0);
+    se.SetClipNotes(tm, 0, new[] { new NotaNote(60, 0.0, 2.0, 1.0f), new NotaNote(64, 0.0, 2.0, 1.0f), new NotaNote(67, 0.0, 2.0, 1.0f) });
+    var pbuf = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(pbuf, 8192); se.StopTransport();
+    float poly = Rms(pbuf, 8192);
+    se.PluginParamSet(tm, -1, PIdx(tm, "voicemode"), 0.5f);
+    var mbuf = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(mbuf, 8192); se.StopTransport();
+    float mono = Rms(mbuf, 8192);
+    Check(mono > 0.005f && mono < poly, $"Mono collapses a three-note chord onto one voice (poly {poly:F3} -> mono {mono:F3})");
 }
 
 // ============================ Nota Physical ===============================
