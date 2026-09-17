@@ -20,8 +20,8 @@ internal sealed class VintageViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush Grid = NotaGraph.Grid;
+    private static readonly Typeface Face = NotaFonts.Mono;
     private static readonly string[] ModeNames = { "VINYL", "CASSETTE", "REEL", "VHS", "TUBE", "ANALOG" };
     // Mirrors Vintage.h kMode: shape, driveMul, bias, bandHz.
     private static readonly int[] Shape = { 0, 2, 2, 0, 1, 0 };
@@ -60,7 +60,7 @@ internal sealed class VintageViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double pad = 7, x0 = pad, x1 = w - pad, top = pad + 10, bot = h - pad - 13;
 
         var gridPen = new Pen(Grid, 1);

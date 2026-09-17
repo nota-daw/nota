@@ -78,7 +78,7 @@ public sealed class MidiToolsView : UserControl
         body.Children.Add(KindTabs());
         body.Children.Add(new Border
         {
-            Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+            Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
             Padding = new Thickness(3), MaxHeight = 236,
             Child = new ScrollViewer { Content = _toolList, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
         });
@@ -159,7 +159,7 @@ public sealed class MidiToolsView : UserControl
         _roll.ShowPreview(result);
         _suppressResync = false;
         int delta = result.Count - _source.Count;
-        _resultText.Text = $"{result.Count} notes ({delta:+0;-0;\u00b10})";
+        _resultText.Text = $"{result.Count} notes ({delta:+0;−0;\u00b10})";
         _resultText.Foreground = delta == 0 ? TextTertiary : AccentBright;
         PaintApply();
     }
@@ -193,7 +193,7 @@ public sealed class MidiToolsView : UserControl
     {
         if (_applyButton is null) return;
         bool pending = _roll.Previewing;
-        _applyButton.Opacity = pending ? 1 : 0.45;
+        Inactive.Set(_applyButton, !pending, interactive: true);
         _applyButton.Cursor = new Cursor(pending ? StandardCursorType.Hand : StandardCursorType.Arrow);
     }
 
@@ -226,7 +226,7 @@ public sealed class MidiToolsView : UserControl
         var t = new TextBlock { Text = label, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border
         {
-            Height = 24, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1),
+            Height = 24, CornerRadius = NotaRadius.Tile, BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), Child = t, Tag = kind,
         };
         b.PointerPressed += (_, e) =>
@@ -265,7 +265,7 @@ public sealed class MidiToolsView : UserControl
             };
             var row = new Border
             {
-                Height = 24, CornerRadius = new CornerRadius(4),
+                Height = 24, CornerRadius = NotaRadius.Control,
                 Background = active ? AccentSubtle : Brushes.Transparent,
                 BorderBrush = active ? Brass : Brushes.Transparent, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = text,
@@ -448,7 +448,7 @@ public sealed class MidiToolsView : UserControl
     {
         var apply = new Border
         {
-            Height = 26, Background = AccentSubtle, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+            Height = 26, Background = AccentSubtle, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = "Apply", FontSize = 11, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
@@ -513,18 +513,18 @@ public sealed class MidiToolsView : UserControl
 
     private static Border FieldBox(double h) => new()
     {
-        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
     };
 
     private static Border Chip(Control child) => new()
     {
-        Height = 20, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = 20, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
         Cursor = new Cursor(StandardCursorType.Hand), Child = child, Padding = new Thickness(0, 0, 6, 0),
     };
 
     private static Border TextChip(string text) => new()
     {
-        Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
         Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(8, 0),
         Child = new TextBlock { Text = text, FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
     };

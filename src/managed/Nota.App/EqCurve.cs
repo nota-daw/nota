@@ -31,10 +31,10 @@ public sealed class EqCurve : Control
     private const int FftN = 2048, Bins = FftN / 2;
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IPen GridPen = new Pen(NotaPalette.WellGrid, 1);
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IPen GridPenFaint = new Pen(NotaPalette.Wash(NotaPalette.WellGrid, 0x60), 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.BorderStrong, 1);
-    private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.6);
+    private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth);
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
     private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.Ink("#8AA6C0"), 0x30);
     private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x70), 1);
@@ -44,8 +44,8 @@ public sealed class EqCurve : Control
     private static readonly IBrush LabelDim = NotaPalette.TextTertiary;
     private static readonly IBrush LabelBright = NotaPalette.TextSecondary;
     private static readonly IBrush OnAccentText = NotaPalette.TextOnAccent;
-    private static readonly Typeface Mono = new("monospace");
-    private static readonly Typeface DotFont = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface DotFont = NotaFonts.SansBold;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -143,14 +143,13 @@ public sealed class EqCurve : Control
         {
             double mag = Math.Sqrt(_re[k] * _re[k] + _im[k] * _im[k]);
             double db = 20 * Math.Log10(mag / refMag + 1e-9);
-            // Fast attack, slow release for a lively-but-readable trace.
-            _specDb[k] = db > _specDb[k] ? db : Math.Max(db, _specDb[k] - 2.5);
+            _specDb[k] = db;   // no release ballistics: the spectrum shows this frame (almanac § no meter animation)
         }
         _sr = sr;
         InvalidateVisual();
     }
     private double _sr = 48000;
-    private void Decay() { for (int k = 1; k < Bins; k++) _specDb[k] = Math.Max(-120, _specDb[k] - 2.5); }
+    private void Decay() { for (int k = 1; k < Bins; k++) _specDb[k] = -120; }
 
     // In-place iterative radix-2 Cooley–Tukey FFT.
     private static void Fft(double[] re, double[] im)
@@ -276,7 +275,7 @@ public sealed class EqCurve : Control
         for (int t = 0; t < TypeNames.Length; t++)
         {
             int tt = t;
-            var mi = new MenuItem { Header = (t == cur ? "● " : "   ") + TypeNames[t] };
+            var mi = new MenuItem { Header = TypeNames[t], ToggleType = MenuItemToggleType.Radio, IsChecked = t == cur };
             mi.Click += (_, _) => { SetP(b, TypeF, tt); InvalidateVisual(); };
             flyout.Items.Add(mi);
         }
@@ -303,7 +302,7 @@ public sealed class EqCurve : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         double sr = _sr;
-        ctx.FillRectangle(Bg, new Rect(0, 0, w, h), 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         // --- grid: vertical decade lines + minor ticks, horizontal dB lines ---
         double[] majors = { 100, 1000, 10000 };
@@ -313,14 +312,15 @@ public sealed class EqCurve : Control
         {
             double x = FreqToX(f, w);
             ctx.DrawLine(GridPen, new Point(x, 0), new Point(x, h));
-            Label(ctx, f >= 1000 ? $"{f / 1000:0}k" : $"{f:0}", x + 2, h - 11, LabelDim);
         }
         for (int db = -12; db <= 12; db += 6)
         {
             double y = GainToY(db, h);
             ctx.DrawLine(db == 0 ? ZeroPen : GridPen, new Point(0, y), new Point(w, y));
-            if (db != 0) Label(ctx, $"{(db > 0 ? "+" : "")}{db}", 2, y - 9, LabelDim);
         }
+        // The range is labelled in the bottom corners and nowhere else — no full axes.
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomLeft, "20");
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomRight, "20k Hz");
 
         // --- spectrum analyzer (behind the curve) ---
         var spec = new StreamGeometry();
@@ -338,7 +338,7 @@ public sealed class EqCurve : Control
             g.LineTo(new Point(w, h));
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(SpecFill, SpecPen, spec);
+        ctx.DrawGeometry(null, SpecPen, spec);
 
         // --- combined EQ magnitude curve + fill ---
         const int n = 128;
@@ -359,7 +359,6 @@ public sealed class EqCurve : Control
             gf.LineTo(new Point(w, h / 2));
             gf.EndFigure(true);
         }
-        ctx.DrawGeometry(CurveFill, null, fill);
         ctx.DrawGeometry(null, CurvePen, curve);
 
         // --- band dots (numbered) ---
@@ -369,10 +368,9 @@ public sealed class EqCurve : Control
             int type = BandType(b);
             double x = FreqToX(P(b, FreqF), w);
             double y = GainToY(HasGain(type) ? P(b, GainF) : 0, h);
-            bool sel = b == _selected;
-            double r = sel ? 8 : 6.5;
-            ctx.DrawEllipse(sel ? DotSel : DotOn, new Pen(DotRing, 1.5), new Point(x, y), r, r);
-            DotLabel(ctx, (b + 1).ToString(), x, y, OnAccentText, 9.5);
+            // Almanac node: 7px, ringed in the ground; the selected band brass, the rest Ink 3.
+            // The band number lives in the readout below, not on the node.
+            NotaGraph.Node(ctx, new Point(x, y), b == _selected);
         }
 
         // --- readout: selected band (or a hint) ---
@@ -380,9 +378,9 @@ public sealed class EqCurve : Control
         if (_selected >= 0 && BandOn(_selected))
         {
             int b = _selected, type = BandType(b);
-            txt = string.Format(CultureInfo.InvariantCulture, "B{0} {1}  {2:0} Hz{3}  Q {4:0.00}",
+            txt = string.Format(NotaNum.Culture, "B{0} {1}  {2:0} Hz{3}  Q {4:0.00}",
                 b + 1, TypeNames[type], P(b, FreqF),
-                HasGain(type) ? string.Format(CultureInfo.InvariantCulture, "  {0:+0.0;-0.0} dB", P(b, GainF)) : "",
+                HasGain(type) ? string.Format(NotaNum.Culture, "  {0:+0.0;−0.0}\u2009dB", P(b, GainF)) : "",
                 P(b, QF));
         }
         else
@@ -390,6 +388,6 @@ public sealed class EqCurve : Control
             int active = 0; for (int b = 0; b < Bands; b++) if (BandOn(b)) active++;
             txt = $"{active}/8 bands · double-click to add · right-click a dot for type · wheel = Q";
         }
-        Label(ctx, txt, 6, h - 11, LabelBright);
+        Label(ctx, txt, 6, 4, LabelBright);   // readout at the top: the bottom corners carry the range
     }
 }

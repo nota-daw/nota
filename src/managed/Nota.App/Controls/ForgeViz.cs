@@ -68,14 +68,14 @@ internal sealed class ForgeTransferCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen Grid = new Pen(NotaPalette.Wash(NotaPalette.SurfaceCard, 0x30), 1);
+    private static readonly IPen Grid = NotaGraph.GridPen;
     private static readonly IPen Diag = new Pen(NotaPalette.Wash(NotaPalette.SurfaceRaised, 0x40), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8);
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x14);
     private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.3) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -94,7 +94,7 @@ internal sealed class ForgeTransferCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double pad = 6, gx = pad, gy = 14, gw = w - pad * 2, gh = h - gy - 12;
         if (gw <= 0 || gh <= 0) return;
 
@@ -125,7 +125,6 @@ internal sealed class ForgeTransferCurve : Control
                     g.LineTo(new Point(gx + gw, gy + gh));
                     g.EndFigure(true);
                 }
-                ctx.DrawGeometry(CurveFill, null, geo);
             }
             for (int i = 1; i < n; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
         }
@@ -138,10 +137,9 @@ internal sealed class ForgeTransferCurve : Control
 
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("TRANSFER", gx, 2, Muted);
-        Lbl("─ static", gx + gw - 78, 2, NotaPalette.Accent);
-        Lbl("┄ modulated", gx + gw - 44, 2, NotaPalette.Teal);
+        NotaGraph.Legend(ctx, gx + gw - 2, 2, ("static", NotaPalette.Accent, NotaGraph.Mark.Line), ("modulated", NotaPalette.Teal, NotaGraph.Mark.Dashed));
         Lbl("in −60", gx, gy + gh + 1, AxisB);
-        Lbl("0 dB", gx + gw - 22, gy + gh + 1, AxisB);
+        Lbl("0\u2009dB", gx + gw - 22, gy + gh + 1, AxisB);
     }
 }
 
@@ -154,7 +152,7 @@ internal sealed class ForgeHarmonics : Control
     private static readonly IBrush EvenB = NotaPalette.Wash(NotaPalette.Accent, 0x73); // 45%
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush LabelC = NotaPalette.TextSecondary;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -200,10 +198,10 @@ internal sealed class ForgeHarmonics : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("HARMONICS", 6, 3, Muted);
-        Lbl($"THD {_thd:0.0} % · {(_oddHeavy ? "odd-heavy" : "even-heavy")}", w - 116, 3, LabelC);
+        Lbl($"THD {_thd:0}\u2009% · {(_oddHeavy ? "odd-heavy" : "even-heavy")}", w - 116, 3, LabelC);
 
         double gx = 6, gy = 15, gw = w - 12, gh = h - gy - 4;
         if (gh <= 0) return;

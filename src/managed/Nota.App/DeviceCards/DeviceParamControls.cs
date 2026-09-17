@@ -21,7 +21,7 @@ namespace Nota.App;
 
 internal static class DeviceParamControls
 {
-    internal static string Fmt(float v) => Math.Abs(v) >= 100 ? v.ToString("0", CultureInfo.InvariantCulture) : v.ToString("0.0", CultureInfo.InvariantCulture);
+    internal static string Fmt(float v) => Math.Abs(v) >= 100 ? v.ToString("0", NotaNum.Culture) : v.ToString("0.0", NotaNum.Culture);
 
     internal static Control ParamBars(DeviceCardContext ctx, int index)
     {
@@ -77,7 +77,7 @@ internal static class DeviceParamControls
 
         // Source: "None" first, then every track except this one.
         var ids = new List<int> { -1 };
-        var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, FontSize = 10 };
+        var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, FontSize = 9 };
         combo.Items.Add("None");
         int n = engine.TrackCount;
         for (int i = 0; i < n; i++)
@@ -103,7 +103,7 @@ internal static class DeviceParamControls
         var tap = new Border
         {
             Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 3), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Tile, Padding = new Thickness(6, 3), Cursor = new Cursor(StandardCursorType.Hand),
             HorizontalAlignment = HorizontalAlignment.Stretch, Child = tapText,
         };
         tap.PointerPressed += (_, _) =>
@@ -114,10 +114,10 @@ internal static class DeviceParamControls
 
         // Gain (−24..+24 dB) and Mix (0..100%) sliders.
         var gain = ScFaderRow("GAIN", (engine.DeviceSidechainGain(track, di) + 24f) / 48f,
-            g => $"{g * 48f - 24f:+0.0;-0.0;0.0} dB",
+            g => $"{g * 48f - 24f:+0.0;−0.0;0.0}\u2009dB",
             g => engine.SetDeviceSidechainGain(track, di, (float)(g * 48.0 - 24.0)));
         var mix = ScFaderRow("MIX", engine.DeviceSidechainMix(track, di),
-            m => $"{m * 100f:0} %",
+            m => $"{m * 100f:0}\u2009%",
             m => engine.SetDeviceSidechainMix(track, di, (float)m));
 
         return new StackPanel { Spacing = 5, Children = { label, combo, tap, gain, mix } };

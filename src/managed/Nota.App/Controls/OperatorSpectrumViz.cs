@@ -18,11 +18,11 @@ internal sealed class OperatorSpectrumViz : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly Color Brass = ((SolidColorBrush)NotaPalette.Accent).Color;
-    private static readonly Color BrassLit = ((SolidColorBrush)NotaPalette.AccentBright).Color;
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
+    private static Color Brass => NotaPalette.Accent.Color;
+    private static Color BrassLit => NotaPalette.AccentBright.Color;
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Amber = NotaPalette.AccentBright;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private float[] _bins = Array.Empty<float>();
     private int _n;
@@ -40,7 +40,7 @@ internal sealed class OperatorSpectrumViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         double padX = 5, padTop = 4, padBot = 13;
         double x0 = padX, x1 = w - padX, top = padTop, bot = h - padBot;
@@ -58,7 +58,7 @@ internal sealed class OperatorSpectrumViz : Control
                 (byte)(Brass.R + (BrassLit.R - Brass.R) * v),
                 (byte)(Brass.G + (BrassLit.G - Brass.G) * v),
                 (byte)(Brass.B + (BrassLit.B - Brass.B) * v));
-            ctx.DrawRectangle(new SolidColorBrush(col, 0.35 + 0.65 * v), null, rect, 1, 1);
+            ctx.DrawRectangle(new SolidColorBrush(col), null, rect, NotaRadius.BarValue, NotaRadius.BarValue);
         }
 
         // Baseline + fundamental-relative axis ticks (f · 10f · 20f · 30f).

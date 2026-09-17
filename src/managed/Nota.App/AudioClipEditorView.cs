@@ -100,18 +100,18 @@ public sealed class AudioClipEditorView : UserControl
             _onChanged();
         };
         _envToggleText = new TextBlock { Text = "Edit envelope: Off", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        _envTargetText = new TextBlock { Text = "Volume ▾", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _envTargetText = new TextBlock { Text = "Volume", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
 
         _lengthText = Mono("—");
-        _pitchText = Mono("0 st");
-        _gainText = Mono("0.0 dB"); _gainText.Foreground = TextSecondary;
+        _pitchText = Mono("0\u2009st");
+        _gainText = Mono("0.0\u2009dB"); _gainText.Foreground = TextSecondary;
         _fileText = new TextBlock { Text = "—", FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
         _gain = new MiniFader(1.0, 2.0) { VerticalAlignment = VerticalAlignment.Center };
         _gain.ValueChanged += v => { _engine.SetClipGain(TrackId, ClipIndex, (float)v); ShowGain(v); _wave.SetGain(v); _onChanged(); };
         _reverseToggleText = new TextBlock { Text = "Reverse: Off", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _snapToggleText = new TextBlock { Text = "Grid snap: On", FontSize = 10, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _warpToggleText = new TextBlock { Text = "Warp: Off", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        _warpModeText = new TextBlock { Text = "Complex ▾", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _warpModeText = new TextBlock { Text = "Complex", FontSize = 10, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _autoText = new TextBlock { Text = "Auto-warp to tempo", FontSize = 10, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _transientText = new TextBlock { Text = "Warp to transients", FontSize = 10, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _detectedText = new TextBlock { Text = "Detected: —", FontSize = 9, Foreground = TextTertiary };
@@ -168,7 +168,7 @@ public sealed class AudioClipEditorView : UserControl
         // Warp: on/off + mode (time-stretch to project tempo, Signalsmith Stretch).
         var warpToggle = Chip(_warpToggleText);
         warpToggle.PointerPressed += (_, e) => { e.Handled = true; ToggleWarp(); };
-        var warpModeChip = Chip(_warpModeText);
+        var warpModeChip = Chip(Glyph.WithChevron(_warpModeText));
         warpModeChip.PointerPressed += (_, e) => { e.Handled = true; CycleWarpMode(); };
         var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
         warpToggle.MinWidth = 74;
@@ -184,7 +184,7 @@ public sealed class AudioClipEditorView : UserControl
         // Clip envelopes: toggle edit mode on the waveform + pick Volume / Pan target.
         var envToggle = Chip(_envToggleText);
         envToggle.PointerPressed += (_, e) => { e.Handled = true; ToggleEnvMode(); };
-        var envTargetChip = Chip(_envTargetText);
+        var envTargetChip = Chip(Glyph.WithChevron(_envTargetText));
         envTargetChip.PointerPressed += (_, e) => { e.Handled = true; CycleEnvTarget(); };
         var envRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
         envToggle.MinWidth = 96;
@@ -273,7 +273,7 @@ public sealed class AudioClipEditorView : UserControl
     private void ShowBpmEditor(int seg, double bpm, double xCenter, double yTop)
     {
         _bpmSeg = seg;
-        _bpmBox.Text = bpm.ToString("0.##", CultureInfo.InvariantCulture);
+        _bpmBox.Text = bpm.ToString("0.##", NotaNum.Culture);
         Canvas.SetLeft(_bpmBox, Math.Max(0, xCenter - _bpmBox.Width / 2));
         Canvas.SetTop(_bpmBox, Math.Max(0, yTop - 2));
         _bpmBox.IsVisible = true;
@@ -292,7 +292,7 @@ public sealed class AudioClipEditorView : UserControl
         if (!_bpmBox.IsVisible) return;
         int seg = _bpmSeg;
         HideBpm();
-        if (seg >= 0 && double.TryParse(_bpmBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) && v > 0)
+        if (seg >= 0 && double.TryParse(_bpmBox.Text, NumberStyles.Any, NotaNum.Culture, out var v) && v > 0)
             _wave.SetSegmentBpm(seg, v);   // → MarkersCommitted → engine + Reload
     }
 
@@ -321,7 +321,7 @@ public sealed class AudioClipEditorView : UserControl
         if (_engine.TryGetAudioClipInfo(TrackId, ClipIndex, out var ai))
         {
             _pitch = (int)Math.Round(ai.PitchSemitones);
-            _pitchText.Text = $"{_pitch} st";
+            _pitchText.Text = $"{_pitch}\u2009st";
             _gain.Value = ai.Gain;
             ShowGain(ai.Gain);
             _wave.SetGain(ai.Gain);
@@ -333,13 +333,13 @@ public sealed class AudioClipEditorView : UserControl
             _warpMode = Math.Clamp(ai.WarpMode, 0, WarpModes.Length - 1);
             _warpToggleText.Text = _warpEnabled ? "Warp: On" : "Warp: Off";
             _warpToggleText.Foreground = _warpEnabled ? AccentBright : TextSecondary;
-            _warpModeText.Text = WarpModes[_warpMode] + " ▾";
+            _warpModeText.Text = WarpModes[_warpMode];
             if (ai.SampleId != 0 && _engine.TryGetSampleInfo(ai.SampleId, out var si) && si.SampleRate > 0)
             {
                 double secs = si.Frames / si.SampleRate;
                 string ch = si.Channels == 1 ? "Mono" : si.Channels == 2 ? "Stereo" : $"{si.Channels}ch";
-                _fileText.Text = string.Format(CultureInfo.InvariantCulture,
-                    "{0} · {1:0.0} kHz · {2:0.00} s", ch, si.SampleRate / 1000.0, secs);
+                _fileText.Text = string.Format(NotaNum.Culture,
+                    "{0} · {1:0.0}\u2009kHz · {2:0.00}\u2009s", ch, si.SampleRate / 1000.0, secs);
             }
             else _fileText.Text = "—";
         }
@@ -460,7 +460,7 @@ public sealed class AudioClipEditorView : UserControl
 
     private void ShowDetected()
         => _detectedText.Text = _detectedBpm > 0
-            ? string.Format(CultureInfo.InvariantCulture, "Detected: {0:0.0} BPM", _detectedBpm)
+            ? string.Format(NotaNum.Culture, "Detected: {0:0.0}\u2009BPM", _detectedBpm)
             : "Detected: —";
 
     private void ToggleEnvMode()
@@ -474,7 +474,7 @@ public sealed class AudioClipEditorView : UserControl
     private void CycleEnvTarget()
     {
         _envTarget = _envTarget == 0 ? 1 : 0;
-        _envTargetText.Text = (_envTarget == 1 ? "Pan" : "Volume") + " ▾";
+        _envTargetText.Text = _envTarget == 1 ? "Pan" : "Volume";
         LoadEnvelope();
     }
 
@@ -498,7 +498,7 @@ public sealed class AudioClipEditorView : UserControl
         _onChanged();
     }
 
-    private void ShowGain(double v) => _gainText.Text = v <= 0.0011 ? "-∞" : $"{AudioMath.LinToDb(v):+0.0;-0.0} dB";
+    private void ShowGain(double v) => _gainText.Text = v <= 0.0011 ? "−∞" : $"{AudioMath.LinToDb(v):+0.0;−0.0}\u2009dB";
 
     // --- helpers (mirror ClipPropsView) -----------------------------------
 
@@ -507,7 +507,7 @@ public sealed class AudioClipEditorView : UserControl
         var tab = new Border
         {
             Height = 22, Background = AccentSubtle, BorderBrush = Brass, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = NotaRadius.Tile, Padding = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = "Audio", FontSize = 11, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center },
         };
         return new Border
@@ -538,7 +538,7 @@ public sealed class AudioClipEditorView : UserControl
 
     private static Border FieldBox(double h) => new()
     {
-        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
     };
 
     private static Border ReadoutBox(string text, IBrush fg, double h, double fs, bool mono)
@@ -556,7 +556,7 @@ public sealed class AudioClipEditorView : UserControl
     private static Border Chip(Control child) => new()
     {
         Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(5), Cursor = new Cursor(StandardCursorType.Hand), Child = child,
+        CornerRadius = NotaRadius.Tile, Cursor = new Cursor(StandardCursorType.Hand), Child = child,
     };
 
     private static Border StepBtn(string glyph, Action onClick)
@@ -564,7 +564,7 @@ public sealed class AudioClipEditorView : UserControl
         var b = new Border
         {
             Width = 22, Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Tile, Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = glyph, FontSize = 11, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
@@ -574,13 +574,13 @@ public sealed class AudioClipEditorView : UserControl
     private static string Position(double beat)
     {
         int bar = (int)(beat / 4) + 1, be = (int)(beat % 4) + 1, six = (int)Math.Round(beat % 1 * 4) + 1;
-        return string.Format(CultureInfo.InvariantCulture, "{0}. {1}. {2}", bar, be, six);
+        return string.Format(NotaNum.Culture, "{0}. {1}. {2}", bar, be, six);
     }
 
     private static string Duration(double beats)
     {
         int bars = (int)(beats / 4), be = (int)(beats % 4), six = (int)Math.Round(beats % 1 * 4);
-        return string.Format(CultureInfo.InvariantCulture, "{0}. {1}. {2}", bars, be, six);
+        return string.Format(NotaNum.Culture, "{0}. {1}. {2}", bars, be, six);
     }
 
     // ---- waveform + playback cursor + warp markers -----------------------
@@ -591,18 +591,18 @@ public sealed class AudioClipEditorView : UserControl
     {
         private static readonly IBrush Bg = NotaPalette.BgSunken;
         private static readonly IBrush Mid = NotaPalette.Wash(NotaPalette.TextSecondary, 0x40);
-        private static readonly IBrush PlayheadCursor = NotaPalette.AccentBright;
+        private static readonly IBrush PlayheadCursor = NotaPalette.Accent;
         private static readonly IBrush Marker = NotaPalette.Marker;
         private static readonly IBrush GridBeat = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
         private static readonly IBrush GridBar = NotaPalette.Wash(NotaPalette.BorderStrong, 0xC0);
         private static readonly IBrush GridLabel = NotaPalette.TextTertiary;
-        private static readonly Typeface GridFace = new(FontFamily.Default);
+        private static readonly Typeface GridFace = NotaFonts.Sans;
         // BPM chip on the warp bar (drag to scrub the segment tempo).
         private static readonly IBrush BpmChipBg = NotaPalette.Wash(NotaPalette.Ink("#12181B"), 0xDE);
         private static readonly IBrush BpmChipBgHot = NotaPalette.Wash(NotaPalette.Ink("#1A2B31"), 0xF2);
         private static readonly IBrush BpmSuffix = NotaPalette.Wash(NotaPalette.Marker, 0x99);
         private const int BeatsPerBar = 4;   // matches the props-rail bar.beat readouts
-        private IBrush _wave = new SolidColorBrush(NotaPalette.TrackColors[1]);
+        private IBrush _wave = NotaPalette.TrackBrushes[1];
         private float[]? _peaks;
         private int _count;
         private double _frac = -1;
@@ -1177,7 +1177,7 @@ public sealed class AudioClipEditorView : UserControl
                     bool hotChip = i == _bpmHoverSeg || i == _bpmScrubSeg;
                     var txtBrush = hotChip ? BracketHot : Marker;
                     var num = new FormattedText($"{bpm:0.0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, GridFace, 10, txtBrush);
-                    var suf = new FormattedText("BPM", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, GridFace, 6.5, BpmSuffix);
+                    var suf = new FormattedText("BPM", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, GridFace, NotaType.Floor, BpmSuffix);
                     double padX = 6, padY = 2.5, gap = 3;
                     double cw = num.Width + gap + suf.Width + 2 * padX, chH = num.Height + 2 * padY;
                     double cx = Math.Clamp((x0 + x1) / 2, cw / 2 + 2, w - cw / 2 - 2);
@@ -1253,7 +1253,7 @@ public sealed class AudioClipEditorView : UserControl
                 double x = (_srcMode && _srcTotal > 0) ? SrcToX(_srcOff + pf * _srcLen, w)
                          : (_trimMode && _trimTotal > 0) ? BeatToX(_trimStart + pf * (_trimEnd - _trimStart), w)
                          : FracToX(pf, w);
-                ctx.DrawLine(new Pen(PlayheadCursor, 1.5), new Point(x, 0), new Point(x, h));
+                ctx.DrawLine(new Pen(PlayheadCursor, 1), new Point(x, 0), new Point(x, h));
             }
         }
 

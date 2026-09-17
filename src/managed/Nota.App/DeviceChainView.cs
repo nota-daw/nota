@@ -64,7 +64,7 @@ public sealed partial class DeviceChainView : UserControl
     private readonly Border _dropGlow = new()
     {
         IsVisible = false, IsHitTestVisible = false,
-        BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(7),
+        BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Body,
         BorderBrush = NotaPalette.AccentBright,
         Background = NotaPalette.Wash(NotaPalette.AccentBright, 0x14),
         Margin = new Thickness(2),
@@ -180,7 +180,7 @@ public sealed partial class DeviceChainView : UserControl
         double width;
         bool fullBleed = false;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
-        if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no 8px inset
+        if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
         }
@@ -192,12 +192,12 @@ public sealed partial class DeviceChainView : UserControl
             fullBleed = strategy.FullBleed;
             if (strategy.Subtitle is { } sub) tag = sub;
         }
-        // Effects share the same shell as instruments (bypass + reorder + remove + preset,
-        // and the rich chrome when wide enough). Non-full-bleed bodies get an 8px inset.
+        // Effects share the same shell as instruments. Non-full-bleed bodies get the
+        // almanac body inset (6).
         var spec = new ShellSpec(
             Name: name, Subtitle: tag, DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
             CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect);
-        return BuildCardShell(spec, fullBleed ? body : new Border { Padding = new Thickness(8), Child = body });
+        return BuildCardShell(spec, fullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }
 
     // A fresh seam over this view's engine/track + live-refresh registry + orchestration
@@ -246,8 +246,8 @@ public sealed partial class DeviceChainView : UserControl
             Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = "+", FontSize = 16, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
-                new TextBlock { Text = "Add device", FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary },
+                new TextBlock { Text = "Add device", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
                 new TextBlock { Text = "double-click in browser\nor drop here", FontSize = 8, Foreground = TextDisabled, TextAlignment = TextAlignment.Center },
             },
         };

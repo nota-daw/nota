@@ -109,7 +109,7 @@ public sealed partial class ArrangementView
     {
         for (int i = 1; ; i++)
         {
-            string candidate = "Section " + i.ToString(CultureInfo.InvariantCulture);
+            string candidate = "Section " + i.ToString(NotaNum.Culture);
             if (!_sections.Any(s => string.Equals(s.Name, candidate, StringComparison.Ordinal))) return candidate;
         }
     }

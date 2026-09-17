@@ -31,6 +31,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
     private static readonly string[] TypeAbbr = { "HP", "LS", "Bell", "Notch", "HS", "LP" };
 
     public double Width => 700;
+
+    public string? Subtitle => "DYNAMIC EQ";   // the processing type, shown as the header badge
     public bool FullBleed => true;   // manage our own padding so the tall band table fits the card
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -76,14 +78,14 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             return cell;
         }
 
-        static string HzF(double v) => v >= 1000 ? $"{v / 1000:0.0}k" : $"{v:0} Hz";
-        static string QF2(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
-        static string DbF(double v) => $"{v:+0.0;-0.0;0} dB";
-        static string MsF(double v) => v >= 100 ? $"{v:0} ms" : $"{v:0.0} ms";
+        static string HzF(double v) => v >= 1000 ? $"{v / 1000:0.0}k" : $"{v:0}\u2009Hz";
+        static string QF2(double v) => v.ToString("0.00", NotaNum.Culture);
+        static string DbF(double v) => $"{v:+0.0;−0.0;0}\u2009dB";
+        static string MsF(double v) => v >= 100 ? $"{v:0}\u2009ms" : $"{v:0.0}\u2009ms";
 
         var kFreq = DevKnob("FREQ", FreqF, HzF, true, Brass);
         var kQ = DevKnob("Q", QF, QF2, false, Brass);
-        var kThr = DevKnob("THRESH", ThrF, v => $"{v:0} dB", false, Teal);
+        var kThr = DevKnob("THRESH", ThrF, v => $"{v:0.0}\u2009dB", false, Teal);
         var kRange = DevKnob("RANGE", RangeF, DbF, false, Teal);
         var kAtk = DevKnob("ATTACK", AtkF, MsF, true, Teal);
         var kRel = DevKnob("RELEASE", RelF, MsF, true, Teal);
@@ -99,11 +101,11 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             {
                 bool onc = i == cur;
                 modeChips[i].Background = onc ? (i == 0 ? Brass : Teal) : Card2;
-                modeChips[i].Opacity = (canDyn || i == 0) ? 1 : 0.4;
                 ((TextBlock)modeChips[i].Child!).Foreground = onc ? OnAccent : TextSecondary;
+                Inactive.Set(modeChips[i], !(canDyn || i == 0));
             }
-            double dynOp = IsDyn(Cur()) ? 1 : 0.5;
-            kThr.Opacity = kRange.Opacity = kAtk.Opacity = kRel.Opacity = dynOp;
+            bool dyn = IsDyn(Cur());
+            foreach (var k in new[] { kThr, kRange, kAtk, kRel }) Inactive.Set(k, !dyn, interactive: true);
         }
         var modeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
         for (int i = 0; i < 3; i++)
@@ -111,7 +113,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             int vi = i;
             var chip = new Border
             {
-                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
+                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
                 Padding = new Thickness(7, 3), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = modeLbl[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary },
             };
@@ -128,7 +130,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         // Sidechain + Solo toggles
         Border Toggle(string text, Func<bool> get, Action<bool> set)
         {
-            var b = new Border { BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 4), Cursor = new Cursor(StandardCursorType.Hand),
+            var b = new Border { BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 4), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold } };
             void Sync() { bool on = get(); b.Background = on ? Teal : Card2; ((TextBlock)b.Child!).Foreground = on ? OnAccent : TextSecondary; }
             b.PointerPressed += (_, e) => { e.Handled = true; set(!get()); Sync(); };
@@ -151,7 +153,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         scCombo.SelectedIndex = Math.Max(0, scIds.IndexOf(engine.DeviceSidechainSource(track, di)));
         scCombo.SelectionChanged += (_, _) => { int s = scCombo.SelectedIndex; if (s >= 0 && s < scIds.Count) { engine.SetDeviceSidechainSource(track, di, scIds[s]); ctx.NotifyChanged(); } };
 
-        var bandTitle = new TextBlock { FontSize = 10, FontWeight = FontWeight.Bold, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center, MinWidth = 96 };
+        var bandTitle = new TextBlock { FontSize = 9, FontWeight = FontWeight.Bold, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center, MinWidth = 96 };
         void SyncTitle() { int b = Cur(); int ty = (int)Math.Round(P(b * PerBand + TypeF)); bandTitle.Text = $"BAND {b + 1} · {TypeAbbr[Math.Clamp(ty, 0, 5)]}"; }
         ctx.AddDeviceRefresher(SyncTitle); ctx.AddDeviceRefresher(SyncMode);
         curve.SelectionChanged += () => { SyncTitle(); SyncMode(); };
@@ -159,7 +161,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         Border VSep() => new() { Width = 1, Background = BorderDef, Margin = new Thickness(3, 4) };
         var liveStrip = new Border
         {
-            Height = 60, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            Height = 60, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
             Padding = new Thickness(9, 3), Margin = new Thickness(0, 0, 0, 4),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children =
             {
@@ -183,8 +185,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             var type = new TextBlock { FontSize = 9 };
             var hz = new TextBlock { FontSize = 9 }; hz.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var dyn = new TextBlock { FontSize = 9 }; dyn.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            var grBar = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BorderDefault, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var grFill = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = Teal, HorizontalAlignment = HorizontalAlignment.Left };
+            var grBar = new Border { Height = 6, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BorderDefault, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var grFill = new Border { Height = 6, CornerRadius = NotaRadius.Badge, Background = Teal, HorizontalAlignment = HorizontalAlignment.Left };
             var grWrap = new Grid { Margin = new Thickness(0, 0, 4, 0) }; grWrap.Children.Add(grBar); grWrap.Children.Add(grFill);
 
             void SyncRow()
@@ -196,7 +198,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 num.Foreground = on ? (dynB ? Teal : Brass) : TextDisabled;
                 type.Text = TypeAbbr[ty]; type.Foreground = tc;
                 hz.Text = HzF(P(bb * PerBand + FreqF)); hz.Foreground = tc;
-                if (dynB) { int m = (int)Math.Round(P(bb * PerBand + ModeF)); dyn.Text = $"{(m == 1 ? "↓" : "↑")}{P(bb * PerBand + RangeF):+0;-0;0}"; dyn.Foreground = Teal; }
+                if (dynB) { int m = (int)Math.Round(P(bb * PerBand + ModeF)); dyn.Text = $"{(m == 1 ? "↓" : "↑")}{P(bb * PerBand + RangeF):+0;−0;0}"; dyn.Foreground = Teal; }
                 else if (HasGain(bb)) { dyn.Text = "—"; dyn.Foreground = TextTertiary; }
                 else { dyn.Text = ""; }
                 double gr = Math.Min(1, Math.Abs(curve.Gr(bb)) / 12);
@@ -209,7 +211,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             Grid.SetColumn(num, 0); Grid.SetColumn(type, 1); Grid.SetColumn(hz, 2); Grid.SetColumn(dyn, 3); Grid.SetColumn(grWrap, 4);
             var rowGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("16,30,44,44,*"), Height = 11 };
             rowGrid.Children.Add(num); rowGrid.Children.Add(type); rowGrid.Children.Add(hz); rowGrid.Children.Add(dyn); rowGrid.Children.Add(grWrap);
-            var rb = new Border { Child = rowGrid, CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(2, 0) };
+            var rb = new Border { Child = rowGrid, CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(2, 0) };
             rb.PointerPressed += (_, e) => { e.Handled = true; curve.Select(bb); };
             rowBorders[b] = rb;
             Grid.SetRow(rb, b); table.Children.Add(rb);
@@ -223,12 +225,12 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         {
             new TextBlock { Text = "BANDS", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary },
             table,
-            new TextBlock { Text = "GR HISTORY · 2 s", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, Margin = new Thickness(0, 1, 0, 0) },
+            new TextBlock { Text = "GR HISTORY · 2\u2009s", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, Margin = new Thickness(0, 1, 0, 0) },
             hist,
         } };
 
-        var graphPanel = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(6), Child = curve, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var tablePanel = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 6), Child = rightCol };
+        var graphPanel = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6), Child = curve, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var tablePanel = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(8, 6), Child = rightCol };
 
         var mainRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, Height = 154 };
         Grid.SetColumn(graphPanel, 0); Grid.SetColumn(tablePanel, 1);

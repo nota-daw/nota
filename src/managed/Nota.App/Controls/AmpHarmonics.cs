@@ -20,7 +20,7 @@ internal sealed class AmpHarmonics : Control
     private static Color Amber => NotaPalette.Accent.Color;
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private float _drive = 1, _bias;
     private int _stages = 1;
@@ -66,10 +66,10 @@ internal sealed class AmpHarmonics : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, new Pen(BorderIn, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double padX = 8, top = 13, bot = h - 11;
-        ctx.DrawText(new FormattedText("HARMONICS", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold), 8, Muted), new Point(padX, 2));
-        var thd = new FormattedText($"THD {_thd * 100:0.0} %", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Sub);
+        ctx.DrawText(new FormattedText("HARMONICS", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, 8, Muted), new Point(padX, 2));
+        var thd = new FormattedText($"THD {_thd * 100:0}\u2009%", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Sub);
         ctx.DrawText(thd, new Point(w - padX - thd.Width, 2));
 
         // Bars for harmonics 2..7, normalised to the fundamental.
@@ -80,7 +80,7 @@ internal sealed class AmpHarmonics : Control
             double rel = Math.Clamp(_h[i + 1] / f, 0, 1);
             double bh = Math.Max(1, rel * (bot - top));
             double cx = padX + i * bw + bw / 2;
-            ctx.DrawRectangle(new SolidColorBrush(Amber, 0.4 + 0.6 * rel), null, new Rect(cx - 4, bot - bh, 8, bh), 1, 1);
+            ctx.DrawRectangle(NotaPalette.Accent, null, new Rect(cx - 4, bot - bh, 8, bh), NotaRadius.BarValue, NotaRadius.BarValue);   // height is the magnitude; no opacity ramp
             var lbl = new FormattedText((i + 2).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, Muted);
             ctx.DrawText(lbl, new Point(cx - lbl.Width / 2, bot + 1));
         }

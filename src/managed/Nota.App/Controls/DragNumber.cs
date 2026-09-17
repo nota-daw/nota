@@ -57,7 +57,7 @@ public sealed class DragNumber : UserControl
         set { _value = Math.Clamp(value, _min, _max); Refresh(); }
     }
 
-    private void Refresh() => _display.Text = _value.ToString(_format, CultureInfo.InvariantCulture);
+    private void Refresh() => _display.Text = _value.ToString(_format, NotaNum.Culture);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -88,7 +88,7 @@ public sealed class DragNumber : UserControl
     private void BeginEditor()
     {
         _editing = true;
-        _editor.Text = _value.ToString(_format, CultureInfo.InvariantCulture);
+        _editor.Text = _value.ToString(_format, NotaNum.Culture);
         _editor.IsVisible = true;
         _display.IsVisible = false;
         _editor.Focus();
@@ -101,7 +101,7 @@ public sealed class DragNumber : UserControl
         _editing = false;
         _editor.IsVisible = false;
         _display.IsVisible = true;
-        if (double.TryParse(_editor.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+        if (double.TryParse(_editor.Text, NumberStyles.Any, NotaNum.Culture, out var v))
         {
             _value = Math.Clamp(v, _min, _max);
             Refresh();

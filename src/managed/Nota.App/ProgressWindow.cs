@@ -91,5 +91,5 @@ public sealed class ProgressWindow : NotaWindow
         finally { win.Close(); await dialog; }
     }
 
-    private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? Brushes.Gray;
+    private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextTertiary;
 }

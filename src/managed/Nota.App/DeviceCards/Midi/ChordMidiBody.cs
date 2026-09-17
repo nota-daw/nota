@@ -81,11 +81,11 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         Control RawSlider(int p, double min, double max, Func<double, string> fmt, double w, bool bipolar = false, double valW = 40)
         {
             var val = Mono(fmt(G(p)), Txt); val.Width = valW; val.TextAlignment = TextAlignment.Right;
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var fill = new Border { Height = 3, Background = Amber, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
             if (w > 0) slot.Width = w;
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center });
+            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center });
             if (bipolar) slot.Children.Add(new Border { Width = 1, Background = Bd, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) });
             slot.Children.Add(fill); slot.Children.Add(handle);
             double Norm(double v) => (v - min) / (max - min);
@@ -115,8 +115,8 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         }
         Control Toggle(int p, string label)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
-            void Sync() { bool on = G(p) >= 0.5f; b.Background = on ? AmberSubtle : Card; b.BorderBrush = on ? Amber : Bd; ((TextBlock)b.Child!).Foreground = on ? AmberLit : Sub; }
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
+            void Sync() { bool on = G(p) >= 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Card; b.BorderBrush = on ? NotaPalette.BorderBrass : Bd; ((TextBlock)b.Child!).Foreground = on ? NotaPalette.AccentHover : Sub; }
             b.PointerPressed += (_, _) => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); };
             readouts.Add(Sync); Sync();
             MidiLearn.Bind(b, MidiTarget.MidiDeviceParam(track, mi, p), label);
@@ -138,7 +138,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             for (int i = 0; i < names.Length; i++)
             {
                 int iv = i;
-                var c = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Muted } };
+                var c = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Muted } };
                 c.PointerPressed += (_, _) =>
                 {
                     if (iv < Templates.Length) { var t = Templates[iv].semis; for (int v = 0; v < Voices; v++) S(Voice1 + v, v < t.Length ? t[v] : 0); }
@@ -147,11 +147,11 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 arr[i] = c; row.Children.Add(c);
             }
             readouts.Add(Hi); Hi();
-            return new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            return new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
         }
 
         // ---- LIVE strip ----
-        var strumBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("STRUM"), RawSlider(Strum, 0, 120, v => $"{v:0} ms", 52, false, 40) } };
+        var strumBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("STRUM"), RawSlider(Strum, 0, 120, v => $"{v:0}\u2009ms", 52, false, 40) } };
         var liveL = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("CHORD"), ChordChips(), strumBlock } };
         var liveR = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Children = { Toggle(KeepRoot, "Keep root"), Toggle(Fold, "Fold in scale") } };
         var liveGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -169,7 +169,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 7, VerticalAlignment = VerticalAlignment.Center };
             var cells = new Control[] { dot, lbl, semi, vel };
             for (int c = 0; c < cells.Length; c++) { Grid.SetColumn(cells[c], c); g.Children.Add(cells[c]); }
-            return new Border { Background = NotaPalette.BgApp, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 0), Height = 26, Child = g };
+            return new Border { Background = NotaPalette.BgApp, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 0), Height = 26, Child = g };
         }
         var shiftHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
         var sh1 = Cap("semitones · velocity"); sh1.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(sh1, 1);
@@ -185,12 +185,12 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         Grid.SetColumn(noteText, 1); resHead.Children.Add(Cap("RESULT")); resHead.Children.Add(noteText);
         var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children =
         {
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = AmberLit, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center }, Cap("played", Sub) } },
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = Amber, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center }, Cap("added", Sub) } },
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = AmberLit, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, Cap("played", Sub) } },
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = Amber, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, Cap("added", Sub) } },
         } };
         var voicesText = Mono("", Txt);
         var voicesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("VOICES"), voicesText } };
-        var spreadRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("SPREAD"), RawSlider(Spread, 0, 100, v => $"{v:0} %", 0, false, 34) } };
+        var spreadRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("SPREAD"), RawSlider(Spread, 0, 100, v => $"{v:0}\u2009%", 0, false, 34) } };
         var resBottom = new StackPanel { Spacing = 4, Children = { voicesRow, spreadRow } };
         var resDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(resHead, Dock.Top); DockPanel.SetDock(legend, Dock.Top);

@@ -78,7 +78,7 @@ public sealed class PreferencesWindow : NotaWindow
         for (int i = 0; i < Sections.Length; i++)
         {
             int idx = i;
-            var item = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 6), Cursor = new Cursor(StandardCursorType.Hand) };
+            var item = new Border { CornerRadius = NotaRadius.Tile, Padding = new Thickness(10, 6), Cursor = new Cursor(StandardCursorType.Hand) };
             item.Child = new TextBlock { Text = Sections[i], FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
             item.PointerPressed += (_, _) => Select(idx);
             _navItems.Add(item);
@@ -146,7 +146,7 @@ public sealed class PreferencesWindow : NotaWindow
         inputCombo.SelectionChanged += (_, _) => { int i = inputCombo.SelectedIndex; if (i >= 0 && i < _inputUids.Count) { engine.SetAudioInputDevice(_inputUids[i]); Apply(); } };
 
         var srCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? "Device default" : $"{sr:0} Hz");
+        foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? "Device default" : $"{sr:0}\u2009Hz");
         srCombo.SelectedIndex = IndexOf(SampleRates, cfg.SampleRate);
         srCombo.SelectionChanged += (_, _) => { int i = srCombo.SelectedIndex; if (i >= 0) { engine.SetAudioSampleRate(SampleRates[i]); Apply(); } };
 
@@ -219,7 +219,7 @@ public sealed class PreferencesWindow : NotaWindow
         string mode = OperatingSystem.IsWindows() && _main.Engine.AudioExclusiveFallback
             ? " · exclusive refused → shared"
             : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · exclusive" : "";
-        return buf > 0 ? $"{sr:0} Hz · {buf} frames{mode}" : $"{sr:0} Hz{mode}";
+        return buf > 0 ? $"{sr:0}\u2009Hz · {buf} frames{mode}" : $"{sr:0} Hz{mode}";
     }
 
     // ---- MIDI -------------------------------------------------------------
@@ -328,7 +328,7 @@ public sealed class PreferencesWindow : NotaWindow
                 row.Children.Add(last);
                 padList.Children.Add(new Border
                 {
-                    Background = Sunken, CornerRadius = new CornerRadius(6),
+                    Background = Sunken, CornerRadius = NotaRadius.Panel,
                     Padding = new Thickness(10, 6), Child = row,
                 });
             }
@@ -621,7 +621,9 @@ public sealed class PreferencesWindow : NotaWindow
             ("Drag overview strip", "Drag sideways to scroll · up / down to zoom out / in"),
             ("Drag overview edge", "Zoom by resizing the viewport window"),
             ("Double-click overview", "Fit the whole project on screen"),
-            ("Drag ⠿", "Reorder devices (◀ ▶)"),
+            ("Drag a device header", "Reorder devices (or right-click the header → Move left / right)"),
+            ("Right-click a device header", "Presets, A / B compare, move, copy, delete, save preset"),
+            ("Delete (device selected)", "Remove the selected device — the header no longer carries a close button"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
@@ -647,7 +649,7 @@ public sealed class PreferencesWindow : NotaWindow
         var cap = new Border
         {
             Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 2),
+            CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 2),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
         };
         var kt = new TextBlock { Text = key, FontSize = 10, Foreground = TextPrimary };
@@ -665,9 +667,10 @@ public sealed class PreferencesWindow : NotaWindow
 
     private Border DisabledChip(string text) => new()
     {
-        Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
-        Padding = new Thickness(12, 4), Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = text, FontSize = 11, Foreground = TextPrimary },
+        // Disabled (almanac § States): panel ground, hairline edge, Ink 6 — no opacity.
+        Background = NotaPalette.Panel, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
+        Padding = new Thickness(12, 4), VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = text, FontSize = 11, Foreground = NotaPalette.TextDisabled },
     };
 
     private static TextBlock SectionLabel(string text) => new()

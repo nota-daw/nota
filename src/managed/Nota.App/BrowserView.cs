@@ -150,7 +150,7 @@ public sealed class BrowserView : UserControl
     private const int TabCount = 7;   // Instr / FX / MIDI / Files / Preset / Proj / Map
     private const int FilesTab = 3;   // the only tab with a sample auditioner
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
-    private const double RowH = 24;   // single-line index row
+    private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
 
     private readonly ListBox[] _pages;
@@ -198,7 +198,7 @@ public sealed class BrowserView : UserControl
     /// and assign it to that device.</summary>
     public event Action<BrowserItem?>? EditTagsRequested;
 
-    // Header filter chips (★ Favorites + one per tag); rebuilt from the VM's tags.
+    // Header filter chips (Favorites + one per tag); rebuilt from the VM's tags.
     private readonly Border _chipsHost;
     private readonly ChipStrip _chipsPanel;
     private readonly Border _overflowChip;
@@ -268,13 +268,14 @@ public sealed class BrowserView : UserControl
         _searchWrap = new Border
         {
             Height = 26,
-            CornerRadius = new CornerRadius(5),
+            CornerRadius = NotaRadius.Tile,
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8, 0),
             Child = searchGrid,
         };
         _searchWrap.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         _searchWrap.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _searchWrap.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
 
         // Sort & view options — the row's shape, sectioning and tag management.
         _optionsBtn = BuildOptionsButton();
@@ -288,7 +289,7 @@ public sealed class BrowserView : UserControl
         Grid.SetColumn(_optionsBtn, 1);
         headerRow.Children.Add(_optionsBtn);
 
-        // Filter chips (★ Favorites + tags). Populated from the VM in SetViewModel and
+        // Filter chips (Favorites + tags). Populated from the VM in SetViewModel and
         // shown only on the device tabs (Instr / FX / MIDI). One line: the chips that
         // don't fit collapse into a "+N" that opens the rest.
         _overflowText = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
@@ -296,11 +297,12 @@ public sealed class BrowserView : UserControl
         _overflowText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _overflowChip = new Border
         {
-            Height = 20,
-            Padding = new Thickness(4, 0),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
+            BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = _overflowText,
         };
+        _overflowChip.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _overflowChip.PointerPressed += (_, e) => { ShowOverflowChips(); e.Handled = true; };
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
@@ -319,7 +321,7 @@ public sealed class BrowserView : UserControl
             BorderThickness = new Thickness(0, 1, 0, 0),
             Child = _statusText,
         };
-        _statusBar.BindResource(Border.BackgroundProperty, "Brush.BgApp");
+        _statusBar.BindResource(Border.BackgroundProperty, "Brush.Panel");
         _statusBar.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         // Empty-state message, centered over the list when a tab has nothing to show.
@@ -330,7 +332,7 @@ public sealed class BrowserView : UserControl
         _emptyText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _emptyWrap = new Border
         {
-            IsHitTestVisible = false,
+            IsHitTestVisible = true,   // so the one-line empty state can offer its how-to as a tooltip
             IsVisible = false,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -353,7 +355,7 @@ public sealed class BrowserView : UserControl
         right.Children.Add(contentHost);
 
         var railDivider = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
-        railDivider.BindResource(Border.BackgroundProperty, "Brush.BgApp");
+        railDivider.BindResource(Border.BackgroundProperty, "Brush.Panel");
         railDivider.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -370,7 +372,7 @@ public sealed class BrowserView : UserControl
             ClipToBounds = true,
             Child = grid,
         };
-        outer.BindResource(Border.CornerRadiusProperty, "Radius.Md");
+        outer.BindResource(Border.CornerRadiusProperty, "Radius.Panel");
         outer.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         outer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = outer;
@@ -498,22 +500,24 @@ public sealed class BrowserView : UserControl
         if (_active < 0) return;
         bool empty = VisibleCount(_active) == 0;
         _emptyWrap.IsVisible = empty;
-        if (empty) _emptyText.Text = EmptyMessage(_active);
+        if (empty) { var (line, detail) = EmptyMessage(_active); _emptyText.Text = line; ToolTip.SetTip(_emptyText, detail); }
     }
 
-    private string EmptyMessage(int tab)
+    // Empty state (almanac § States): one line in Ink 5, centred, no illustration and no
+    // call to action. The how-to that used to follow it lives in the tooltip.
+    private (string Line, string Detail) EmptyMessage(int tab)
     {
         bool searching = !string.IsNullOrEmpty(_search.Text?.Trim());
         bool filtering = tab is 0 or 1 or 2 && _vm is not null && _vm.FilterMode != BrowserFilter.None;
-        if (searching || filtering) return "No matches — try a different search or clear the filters.";
+        if (searching || filtering) return ("No matches", "Try a different search or clear the filters.");
         return tab switch
         {
-            0 => "Instruments live here — Nota's built-in synths plus your VST/AU plug-ins.\n\nScan your plug-ins in Settings ▸ Plug-ins to add more.",
-            1 => "Audio effects live here — Nota's built-in effects plus your VST/AU plug-ins.\n\nScan your plug-ins in Settings ▸ Plug-ins to add more.",
-            2 => "MIDI effects live here — arpeggiator, chord, scale and more.\n\nThey process notes before an instrument; drop one to the left of an instrument in a track.",
-            3 => "No samples yet.\n\nAdd audio files to your Samples folder (set it in Settings ▸ Folders), then browse them here as a folder tree. You can also drag files in from Finder.",
-            4 => "No presets yet.\n\nSave a preset from any instrument or effect (the Save button on the device), and it appears here grouped by category and device.",
-            _ => "No projects yet.\n\nSave a project (⌘S) into your Projects folder (set it in Settings ▸ Folders) and it shows up here.",
+            0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
+            1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
+            2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
+            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Folders), then browse them here as a folder tree. You can also drag files in from Finder."),
+            4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
+            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Folders) and it shows up here."),
         };
     }
 
@@ -824,7 +828,7 @@ public sealed class BrowserView : UserControl
         // A tag colour comes from the library, not the palette — Ink() re-tints it for the
         // active theme instead of painting a graphite-tuned hue onto paper.
         try { return NotaPalette.Ink(hex); }
-        catch { return Brushes.Gray; }
+        catch { return NotaPalette.TextTertiary; }
     }
 
     // --- view options ---------------------------------------------------------
@@ -838,14 +842,14 @@ public sealed class BrowserView : UserControl
         {
             Width = 26, Height = 26,
             Margin = new Thickness(6, 0, 0, 0),
-            CornerRadius = new CornerRadius(5),
+            CornerRadius = NotaRadius.Tile,
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = icon,
         };
         btn.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         btn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        ToolTip.SetTip(btn, "Sort & view options");
+        ToolTip.SetTip(btn, "Sort and view");
         btn.PointerPressed += (_, e) => { ShowOptionsMenu(btn); e.Handled = true; };
         return btn;
     }
@@ -883,7 +887,7 @@ public sealed class BrowserView : UserControl
     // its width in blanks) so the two menus read alike.
     private static MenuItem CheckItem(string label, bool on, Action<bool> set)
     {
-        var mi = new MenuItem { Header = (on ? "✓  " : "     ") + label };
+        var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.CheckBox, IsChecked = on };
         mi.Click += (_, _) => set(!on);
         return mi;
     }
@@ -901,10 +905,11 @@ public sealed class BrowserView : UserControl
         sub.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         var infoRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6), Children = { name, sub } };
 
-        // Row 2: solid brass play button + waveform strip.
+        // Row 2: play button + waveform strip.
         playIcon = new Path { Data = Geometry.Parse(IconPlay), Stretch = Stretch.Uniform, Width = 10, Height = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        playIcon.BindResource(Shape.FillProperty, "Brush.TextOnAccent");
-        playBtn = new Button { Content = playIcon, Classes = { "primary" }, Width = 26, Height = 26, Padding = new Thickness(0), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
+        // A raised button with a brass glyph: the transport's Play is the main window's one solid brass action.
+        playIcon.BindResource(Shape.FillProperty, "Brush.AccentBright");
+        playBtn = new Button { Content = playIcon, Width = 26, Height = 26, Padding = new Thickness(0), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
         var pb = playBtn;
         pb.Click += (_, _) => { if (_footerItem is { } it && it.Kind == BrowserItemKind.Sample) PreviewRequested?.Invoke(it); };
         wave = new PreviewWaveform { Height = 30, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -916,13 +921,13 @@ public sealed class BrowserView : UserControl
 
         // Row 3: Auto-audition chip + preview volume bar (decorative — not wired).
         auto = new ToggleButton { Content = "Auto-audition", FontSize = 9, Padding = new Thickness(6, 0), Height = 18, VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(auto, "Auto-audition the selected sample on selection");
-        var volFillOuter = new Border { Width = 50, Height = 3, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(auto, "Audition a sample when it is selected");
+        var volFillOuter = new Border { Width = 50, Height = 3, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
         volFillOuter.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        var volFill = new Border { Width = 32, Height = 3, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left };
+        var volFill = new Border { Width = 32, Height = 3, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left };
         volFill.BindResource(Border.BackgroundProperty, "Brush.BorderStrong");
         volFillOuter.Child = volFill;
-        ToolTip.SetTip(volFillOuter, "Preview volume — not wired yet");
+        ToolTip.SetTip(volFillOuter, "Set the preview volume (not available yet)");
         var row3 = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0),
@@ -935,7 +940,7 @@ public sealed class BrowserView : UserControl
             Padding = new Thickness(10, 8),
             Child = new StackPanel { Children = { infoRow, playRow, row3 } },
         };
-        footer.BindResource(Border.BackgroundProperty, "Brush.BgApp");
+        footer.BindResource(Border.BackgroundProperty, "Brush.Panel");
         footer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         return footer;
     }
@@ -1041,7 +1046,7 @@ public sealed class BrowserView : UserControl
     {
         _chipsPanel.ClearChips();   // the "+N" is a permanent child, not one of the chips
         if (_vm is null) return;
-        _chipsPanel.Children.Add(MakeChip("★ Favorites", null,
+        _chipsPanel.Children.Add(MakeChip("Favorites", null,
             _vm.FilterMode == BrowserFilter.Favorites, () => ToggleFilter(BrowserFilter.Favorites, "")));
         foreach (var t in _vm.Tags)
         {
@@ -1060,7 +1065,7 @@ public sealed class BrowserView : UserControl
         foreach (var item in _chipsPanel.Hidden)
         {
             var chip = item;
-            var mi = new MenuItem { Header = (chip.Active ? "✓  " : "     ") + chip.Label };
+            var mi = new MenuItem { Header = chip.Label, ToggleType = MenuItemToggleType.CheckBox, IsChecked = chip.Active };
             if (chip.ColorHex is not null)
                 mi.Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(chip.ColorHex) };
             mi.Click += (_, _) => chip.OnClick();
@@ -1078,25 +1083,32 @@ public sealed class BrowserView : UserControl
         RefreshCounts();
     }
 
+    // A filter chip (almanac § Controls): 20 tall, pill, 9px sides, one line. A dot carries
+    // the category colour in place of an icon. Engaged is a brass edge and brass text on the
+    // brass wash — solid brass belongs to the one primary action in a context, not a filter.
     private ChipBorder MakeChip(string text, string? colorHex, bool active, Action onClick)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (colorHex is not null)
-            content.Children.Add(new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, Fill = BrushFromHex(colorHex) });
-        var tb = new TextBlock { Text = text, FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.TextOnAccent" : "Brush.TextSecondary");
+            content.Children.Add(new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Fill = BrushFromHex(colorHex) });
+        var tb = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.AccentHover" : "Brush.TextStrong");
         content.Children.Add(tb);
 
         var chip = new ChipBorder
         {
             Label = text, ColorHex = colorHex, Active = active, OnClick = onClick,
-            Height = 20, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 0),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), Child = content,
         };
-        chip.BindResource(Border.BackgroundProperty, active ? "Brush.Accent" : "Brush.BgSunken");
-        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.Accent" : "Brush.BorderDefault");
-        chip.PointerPressed += (_, e) => { onClick(); e.Handled = true; };
+        chip.BindResource(Border.BackgroundProperty, active ? "Brush.AccentSubtle" : "Brush.SurfaceRaised");
+        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.BorderBrass" : "Brush.BorderDefault");
+        chip.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+            onClick(); e.Handled = true;
+        };
         return chip;
     }
 
@@ -1234,7 +1246,7 @@ public sealed class BrowserView : UserControl
                 bool assigned = _vm.IsTagAssigned(item, tag.Id);
                 var mi = new MenuItem
                 {
-                    Header = (assigned ? "✓  " : "     ") + tag.Title,
+                    Header = tag.Title, ToggleType = MenuItemToggleType.CheckBox, IsChecked = assigned,
                     Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(tag.Color) },
                 };
                 mi.Click += (_, _) => _vm.AssignTag(item, tag.Id, !assigned);

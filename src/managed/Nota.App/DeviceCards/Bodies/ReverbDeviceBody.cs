@@ -48,6 +48,8 @@ internal sealed class ReverbDeviceBody : IDeviceBody
     private static readonly IBrush SliderHandleBg = NotaPalette.TextSecondary;
 
     public double Width => 700;
+
+    public string? Subtitle => "REVERB";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -70,16 +72,16 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(tail.Tick);
 
         // ── Value formatters ─────────────────────────────────────────────────
-        string Sec(double v) => $"{Exp(v, DecayMinSec, DecayMaxSec):0.00} s";
-        string Pct(double v) => $"{v * 100:0}%";
+        string Sec(double v) => $"{Exp(v, DecayMinSec, DecayMaxSec):0.00}\u2009s";
+        string Pct(double v) => $"{v * 100:0}\u2009%";
         string Hz(double v)
         {
             double f = Exp(v, FreqMinHz, FreqMaxHz);
             return f >= 1000 ? $"{f / 1000:0.0}k" : $"{f:0}";
         }
-        string PreMs(double v) => $"{v * PreDelayMaxMs:0} ms";
-        string RateF(double v) => $"{Exp(v, RateMinHz, RateMaxHz):0.00} Hz";
-        string DbF(double v) => v <= 0.001 ? "−∞" : $"{20 * Math.Log10(v * 2):+0.0;-0.0;0.0}";
+        string PreMs(double v) => $"{v * PreDelayMaxMs:0}\u2009ms";
+        string RateF(double v) => $"{Exp(v, RateMinHz, RateMaxHz):0.00}\u2009Hz";
+        string DbF(double v) => v <= 0.001 ? "−∞" : $"{20 * Math.Log10(v * 2):+0.0;−0.0;0.0}";
 
         // ── Widget factories ─────────────────────────────────────────────────
 
@@ -147,7 +149,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             Background = Card2,
             BorderBrush = BorderDef,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = NotaRadius.Panel,
             Padding = new Thickness(7, 5),
             Child = new StackPanel { Children = { BandHeader(title), Row(knobs) } },
         };
@@ -182,7 +184,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 Background = Card2,
                 BorderBrush = BorderDef,
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
+                CornerRadius = NotaRadius.Panel,
                 Padding = new Thickness(7, 5),
                 VerticalAlignment = VerticalAlignment.Stretch,
                 Child = grid,
@@ -192,146 +194,19 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         // Compact horizontal slider for the LIVE strip.
         Control Slider(int p, string name, Func<double, string> fmt, double w)
         {
-            var bg = new Border { Width = w, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
-            var fill = new Border { Height = 3, Background = Brass, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = SliderHandleBg, CornerRadius = new CornerRadius(2) };
-
-            var canvas = new Canvas
-            {
-                Width = w,
-                Height = 9,
-                Background = Brushes.Transparent,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            Canvas.SetTop(bg, 3);
-            Canvas.SetTop(fill, 3);
-            Canvas.SetTop(handle, 0);
-            canvas.Children.Add(bg);
-            canvas.Children.Add(fill);
-            canvas.Children.Add(handle);
-
-            var val = new TextBlock
-            {
-                FontSize = 9,
-                Foreground = TextPrimary,
-                Width = 46,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-
-            bool drag = false;
-
-            void UpdateVisual(double v)
-            {
-                fill.Width = Math.Max(0, v * w);
-                Canvas.SetLeft(handle, v * w - handle.Width / 2);
-                val.Text = fmt(v);
-            }
-
-            void ApplyPointer(PointerEventArgs e)
-            {
-                double v = Math.Clamp(e.GetPosition(canvas).X / w, 0, 1);
-                SetP(p, (float)v);
-                UpdateVisual(v);
-                tail.Tick();
-            }
-
-            void EndDrag()
-            {
-                if (!drag) return;
-                drag = false;
-                EndWrite(p);
-            }
-
-            canvas.PointerPressed += (_, e) =>
-            {
-                drag = true;
-                BeginWrite(p);
-                e.Pointer.Capture(canvas);
-                ApplyPointer(e);
-            };
-            canvas.PointerMoved += (_, e) => { if (drag) ApplyPointer(e); };
-            canvas.PointerReleased += (_, e) => { EndDrag(); e.Pointer.Capture(null); };
-            canvas.PointerCaptureLost += (_, _) => EndDrag(); // don't leave a dangling automation session
-
-            ctx.AddDeviceRefresher(() => { if (!drag) UpdateVisual(P(p)); });
-            UpdateVisual(P(p));
-
-            var root = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = name,
-                        FontSize = 8,
-                        FontWeight = FontWeight.Bold,
-                        Foreground = TextTertiary,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    },
-                    canvas,
-                    val,
-                },
-            };
-            MidiLearn.Bind(root, MidiTarget.DeviceParam(track, di, p), name);
-            return root;
+            var row = DeviceCardKit.SliderRow(name, () => P(p), n => { SetP(p, (float)n); tail.Tick(); }, () => fmt(P(p)), out var sync,
+                begin: () => BeginWrite(p), end: () => EndWrite(p), trackWidth: w, valueWidth: 46);
+            ctx.AddDeviceRefresher(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), name);
+            return row;
         }
 
         // Discrete selector rendered as a chip row (Algorithm).
         Control Chips(int p, string[] names)
         {
             int n = names.Length;
-            var chips = new Border[n];
-
-            void SyncVisual()
-            {
-                int cur = Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1);
-                for (int i = 0; i < n; i++)
-                {
-                    bool on = i == cur;
-                    chips[i].Background = on ? AccentSubtleB : Brushes.Transparent;
-                    ((TextBlock)chips[i].Child!).Foreground = on ? AccentBright : TextTertiary;
-                }
-            }
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++)
-            {
-                int iv = i;
-                var chip = new Border
-                {
-                    CornerRadius = new CornerRadius(3),
-                    Padding = new Thickness(6, 1),
-                    Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = names[i], FontSize = 9, Foreground = TextTertiary },
-                };
-                chip.PointerPressed += (_, _) =>
-                {
-                    BeginWrite(p);
-                    SetP(p, iv / (float)(n - 1));
-                    EndWrite(p);
-                    SyncVisual();
-                };
-                chips[i] = chip;
-                row.Children.Add(chip);
-            }
-
-            ctx.AddDeviceRefresher(SyncVisual);
-            SyncVisual();
-
-            var host = new Border
-            {
-                Background = Sunken,
-                BorderBrush = BorderDef,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = row,
-            };
+            var host = DeviceCardKit.Segments(names, () => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1), iv => { BeginWrite(p); SetP(p, iv / (float)(n - 1)); EndWrite(p); }, out var sync);
+            ctx.AddDeviceRefresher(sync);
             MidiLearn.Bind(host, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return host;
         }
@@ -340,7 +215,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         {
             var b = new Border
             {
-                CornerRadius = new CornerRadius(4),
+                CornerRadius = NotaRadius.Control,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(8, 2),
                 Cursor = new Cursor(StandardCursorType.Hand),

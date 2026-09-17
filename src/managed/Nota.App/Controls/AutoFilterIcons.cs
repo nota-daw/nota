@@ -95,25 +95,26 @@ internal sealed class EnvGlyph : Control
     }
 }
 
-// A pill on/off switch (teal when on). Fires Changed with the new state.
+// An on/off switch that owns its state and fires Changed — the same 18×10 brass pill as
+// SwitchTrack (almanac § Controls), for call sites that want a self-toggling control.
 internal sealed class ToggleSwitch : Control
 {
-    private static readonly IBrush On = NotaPalette.Teal;
-    private static readonly IBrush OffBg = NotaPalette.SurfaceRaised;
-    private static readonly IBrush OffBorder = NotaPalette.BorderStrong;
-    private static readonly IBrush Dot = NotaPalette.BgSunken;
-    private static readonly IBrush DotOff = NotaPalette.TextTertiary;
-    private bool _on;
+    private readonly SwitchTrack _track = new();
     public event Action<bool>? Changed;
-    public ToggleSwitch(bool on) { _on = on; Width = 22; Height = 12; Cursor = new Cursor(StandardCursorType.Hand); }
-    public bool IsOn { get => _on; set { _on = value; InvalidateVisual(); } }
-    protected override void OnPointerPressed(PointerPressedEventArgs e) { _on = !_on; Changed?.Invoke(_on); InvalidateVisual(); e.Handled = true; }
-    public override void Render(DrawingContext ctx)
+    public ToggleSwitch(bool on)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        ctx.DrawRectangle(_on ? On : OffBg, _on ? null : new Pen(OffBorder, 1), new Rect(0, 0, w, h), h / 2, h / 2);
-        double r = h / 2 - 2;
-        double cx = _on ? w - r - 2 : r + 2;
-        ctx.DrawEllipse(_on ? Dot : DotOff, null, new Point(cx, h / 2), r, r);
+        _track.IsOn = on;
+        Width = SwitchTrack.W; Height = SwitchTrack.H;
+        Cursor = new Cursor(StandardCursorType.Hand);
+        LogicalChildren.Add(_track); VisualChildren.Add(_track);
     }
+    public bool IsOn { get => _track.IsOn; set => _track.IsOn = value; }
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        // Left button only — right-click bubbles to the CV-modulate / MIDI Learn menu.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _track.IsOn = !_track.IsOn; Changed?.Invoke(_track.IsOn); e.Handled = true;
+    }
+    protected override Size ArrangeOverride(Size finalSize) { _track.Arrange(new Rect(finalSize)); return finalSize; }
+    protected override Size MeasureOverride(Size availableSize) { _track.Measure(availableSize); return new Size(SwitchTrack.W, SwitchTrack.H); }
 }

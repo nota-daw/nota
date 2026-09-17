@@ -51,6 +51,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
     internal static readonly IBrush NyqLine = NotaPalette.Wash(NotaPalette.AccentBright, 0x73);
 
     public double Width => 700;
+
+    public string? Subtitle => "BITCRUSHER";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -66,11 +68,11 @@ internal sealed class CrushDeviceBody : IDeviceBody
         var readouts = new List<Action>();
 
         // ---- formatters ----
-        string BitsF(double v) => $"{1 + v * 23:0.0} bit";
-        string RateF(double v) { double hz = Exp(v, 500, 44100 * 0.48); return hz >= 1000 ? $"{hz / 1000:0.0} kHz" : $"{(int)Math.Round(hz)} Hz"; }
-        static string PctF(double v) => $"{v * 100:0}%";
-        static string DriveF(double v) { double db = -12 + v * 36; return $"{(db >= 0 ? "+" : "")}{db:0.0} dB"; }
-        static string GainF(double v) { double db = (v - 0.5) * 24; return $"{(db >= 0 ? "+" : "")}{db:0.0} dB"; }
+        string BitsF(double v) => $"{1 + v * 23:0.0}\u2009bit";
+        string RateF(double v) { double hz = Exp(v, 500, 44100 * 0.48); return hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{(int)Math.Round(hz)}\u2009Hz"; }
+        static string PctF(double v) => $"{v * 100:0}\u2009%";
+        static string DriveF(double v) { double db = -12 + v * 36; return $"{(db >= 0 ? "+" : "")}{db:0.0}\u2009dB"; }
+        static string GainF(double v) { double db = (v - 0.5) * 24; return $"{(db >= 0 ? "+" : "")}{db:0.0}\u2009dB"; }
 
         // ---- quantiser viz ----
         var quantViz = new CrushQuantiserViz { VerticalAlignment = VerticalAlignment.Stretch };
@@ -87,62 +89,35 @@ internal sealed class CrushDeviceBody : IDeviceBody
         // ---- horizontal param slider (LIVE strip + rails) ----
         Control HSlider(int p, string label, Func<double, string> fmt, double lw, double vw, bool bipolar = false)
         {
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 11, MinWidth = 40 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
-            var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (vw > 0) { val.Width = vw; val.TextAlignment = TextAlignment.Right; }
-            bool drag = false;
-            void Upd() { double v = P(p); double W = slot.Bounds.Width; double hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); if (bipolar) { double c = W * 0.5; double a = Math.Min(c, hx), b = Math.Max(c, hx); fill.Margin = new Thickness(a, 0, 0, 0); fill.Width = Math.Max(0, b - a); } else fill.Width = hx; val.Text = fmt(v); }
-            void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); SetP(p, (float)v); SyncQuant(); SyncSpec(); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); Begin(p); SetFromX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            MidiLearn.Bind(slot, MidiTarget.DeviceParam(track, di, p), label);
-            readouts.Add(() => { if (!drag) Upd(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            if (lw > 0) { var lbl = Cap(label); ((TextBlock)lbl).Width = lw; g.Children.Add(lbl); }
-            Grid.SetColumn(slot, 1); g.Children.Add(slot); Grid.SetColumn(val, 2); g.Children.Add(val);
-            return g;
+            var row = DeviceCardKit.SliderRow(lw > 0 ? label : "", () => P(p), n => { SetP(p, (float)n); SyncQuant(); SyncSpec(); }, () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), bipolar: bipolar, labelWidth: lw, valueWidth: vw);
+            readouts.Add(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), label);
+            return row;
         }
 
         // ---- rail slider (teal for GRIT) ----
         Control RailSlider(int p, string label, Func<double, string> fmt, IBrush? color = null)
         {
-            var c = color ?? Amber;
-            var fill = new Border { Height = 3, Background = c, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 10, MinWidth = 40, Children = { track2, fill, handle } };
-            var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, Width = 48, TextAlignment = TextAlignment.Right };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            bool drag = false;
-            void Upd() { double v = P(p); double W = slot.Bounds.Width; double hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); fill.Width = hx; val.Text = fmt(v); }
-            void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); SetP(p, (float)v); SyncQuant(); SyncSpec(); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); Begin(p); SetFromX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            MidiLearn.Bind(slot, MidiTarget.DeviceParam(track, di, p), label);
-            readouts.Add(() => { if (!drag) Upd(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, Width = 38, VerticalAlignment = VerticalAlignment.Center });
-            Grid.SetColumn(slot, 1); g.Children.Add(slot); Grid.SetColumn(val, 2); g.Children.Add(val);
-            return g;
+            var row = DeviceCardKit.SliderRow(label, () => P(p), n => { SetP(p, (float)n); SyncQuant(); SyncSpec(); }, () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), labelWidth: 38, valueWidth: 48);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), label);
+            readouts.Add(sync);
+            return row;
         }
 
         // ---- mode selector chips ----
         Control ModeSelector()
         {
             var chips = new Border[Modes.Length]; var texts = new TextBlock[Modes.Length]; var subs = new TextBlock[Modes.Length];
-            void Sync() { int cur = (int)Math.Round(P(Mode) * 2); for (int i = 0; i < Modes.Length; i++) { bool on = i == cur; chips[i].Background = on ? AmberSubtle : Inset; chips[i].BorderBrush = on ? Amber : Border2; texts[i].Foreground = on ? AmberLit : MutedC; subs[i].Foreground = on ? AmberLit : MutedC; } }
+            void Sync() { int cur = (int)Math.Round(P(Mode) * 2); for (int i = 0; i < Modes.Length; i++) { bool on = i == cur; chips[i].Background = on ? Amber : Inset; chips[i].BorderBrush = on ? Amber : Border2; texts[i].Foreground = on ? NotaPalette.TextOnAccent : MutedC; subs[i].Foreground = on ? NotaPalette.TextOnAccent : MutedC; } }
             var col = new StackPanel { Spacing = 2 };
             for (int i = 0; i < Modes.Length; i++)
             {
                 int iv = i;
                 var tb = new TextBlock { Text = Modes[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = MutedC };
                 var sub = new TextBlock { Text = ModeSubs[i], FontSize = 8, Foreground = MutedC };
-                var c = new Border { Height = 15, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { tb, new TextBlock { Text = ModeSubs[i], FontSize = 8, Foreground = MutedC, [DockPanel.DockProperty] = Dock.Right } } } };
+                var c = new Border { Height = 15, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { tb, new TextBlock { Text = ModeSubs[i], FontSize = 8, Foreground = MutedC, [DockPanel.DockProperty] = Dock.Right } } } };
                 c.PointerPressed += (_, e) => { e.Handled = true; SetP(Mode, iv / 2f); SyncQuant(); SyncSpec(); RefreshAll(); };
                 chips[i] = c; texts[i] = tb; subs[i] = sub; col.Children.Add(c);
             }
@@ -165,7 +140,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         // ---- rail button (Init / Bypass) ----
         Control RailBtn(string label, Action onClick)
         {
-            var b = new Border { Background = RowLit, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(0, 2), HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = new Cursor(StandardCursorType.Hand),
+            var b = new Border { Background = RowLit, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 2), HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = label, FontSize = 9, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } };
             b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
             return b;
@@ -186,30 +161,32 @@ internal sealed class CrushDeviceBody : IDeviceBody
         static TextBlock Tiny(string t, IBrush c) => new() { Text = t, FontSize = 8, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         TextBlock TinyMono(string t, IBrush c) { var b = Tiny(t, c); b.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return b; }
 
-        var quantSpec = TinyMono("", Amber);   // "6.0-bit @ 11.0 kHz"
+        var quantSpec = TinyMono("", Amber);   // "6.0-bit @ 11.0\u2009kHz"
         var quantHdr = new DockPanel { LastChildFill = false, Height = 11, Children = {
             WithDock(new TextBlock { Text = "QUANTISER", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, Dock.Left),
             WithDock(quantSpec, Dock.Right),
-            WithDock(new TextBlock { Text = "┄ source ", FontSize = 8, Foreground = Dim, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,6,0) }, Dock.Right) } };
+            WithDock(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Children = {
+                new Avalonia.Controls.Shapes.Line { StartPoint = new Point(0, 0), EndPoint = new Point(10, 0), Stroke = Dim, StrokeThickness = 1.2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2, 2 }, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "source", FontSize = 8, Foreground = Dim, VerticalAlignment = VerticalAlignment.Center } } }, Dock.Right) } };
         var quantLevels = TinyMono("", Dim);   // "64 levels"
-        var quantHold = TinyMono("", Dim);     // "hold 3 smp"
+        var quantHold = TinyMono("", Dim);     // "hold 3\u2009smp"
         var quantFooter = new DockPanel { LastChildFill = false, Height = 10, Children = {
             WithDock(quantLevels, Dock.Left), WithDock(quantHold, Dock.Right) } };
         readouts.Add(() => {
             double bits = 1 + P(Bits) * 23; double lv = Math.Pow(2, bits);
             string lvS = lv >= 1e6 ? $"{lv / 1e6:0.0} M" : lv >= 1e3 ? $"{lv / 1e3:0.0} k" : $"{(long)Math.Round(lv)}";
             double hz = Exp(P(Rate), 500, 44100 * 0.48); int hold = Math.Max(1, (int)Math.Round(44100.0 / hz));
-            quantSpec.Text = $"▮ {bits:0.0}-bit @ {(hz >= 1000 ? $"{hz / 1000:0.0} kHz" : $"{(int)hz} Hz")}";
-            quantLevels.Text = $"{lvS} levels"; quantHold.Text = $"hold {hold} smp";
+            quantSpec.Text = $"▮ {bits:0.0}-bit @ {(hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{(int)hz}\u2009Hz")}";
+            quantLevels.Text = $"{lvS} levels"; quantHold.Text = $"hold {hold}\u2009smp";
         });
-        var quantPanel = new Border { Padding = new Thickness(8, 4), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Child = new DockPanel { LastChildFill = true, Children = { WithDock(quantHdr, Dock.Top), WithDock(quantFooter, Dock.Bottom), quantViz } } } };
+        var quantPanel = new Border { Padding = new Thickness(8, 4), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(8, 4), Child = new DockPanel { LastChildFill = true, Children = { WithDock(quantHdr, Dock.Top), WithDock(quantFooter, Dock.Bottom), quantViz } } } };
 
         // ================= spectrum panel =================
         var specHdr = new DockPanel { LastChildFill = false, Height = 10, Children = {
             WithDock(new TextBlock { Text = "SPECTRUM", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, Dock.Left),
             WithDock(Tiny("▮ aliased images", TealC), Dock.Right),
             WithDock(new TextBlock { Text = "▮ signal ", FontSize = 8, Foreground = Amber, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,6,0) }, Dock.Right) } };
-        var specPanel = new Border { Height = 66, Padding = new Thickness(8, 0, 8, 4), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Child = new DockPanel { LastChildFill = true, Children = { WithDock(specHdr, Dock.Top), specViz } } } };
+        var specPanel = new Border { Height = 66, Padding = new Thickness(8, 0, 8, 4), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(8, 4), Child = new DockPanel { LastChildFill = true, Children = { WithDock(specHdr, Dock.Top), specViz } } } };
 
         // ================= left column (quantiser fills, spectrum fixed at bottom) =================
         var leftCol = new DockPanel { LastChildFill = true, Children = { WithDock(specPanel, Dock.Bottom), quantPanel } };

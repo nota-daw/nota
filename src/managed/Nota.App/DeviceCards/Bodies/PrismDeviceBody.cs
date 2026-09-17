@@ -37,7 +37,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
     private const int TraceLen = 256;
 
     private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush Panel = NotaPalette.BgApp;
+    private static readonly IBrush Panel = NotaPalette.TextOnAccent; // dark ink over an engaged fill
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = PrismInk.InnerBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
@@ -98,21 +98,21 @@ internal sealed class PrismDeviceBody : IDeviceBody
         static double ThrB(double v) => -80 + 80 * v;
         static double RatioB(double v) => Math.Pow(4, (v - 0.5) * 2);
         static double XHz(double v) => Exp(v, 20, 20000);
-        static string Inv(FormattableString f) => FormattableString.Invariant(f);
-        static string DbF(double db) => Math.Abs(db) < 0.05 ? "0.0 dB" : Inv($"{db:+0.0;−0.0} dB");
+        static string Inv(FormattableString f) => NotaNum.F(f);
+        static string DbF(double db) => Math.Abs(db) < 0.05 ? "0.0\u2009dB" : Inv($"{db:+0.0;−0.0}\u2009dB");
         static string DbShort(double db) => Math.Abs(db) < 0.05 ? "0.0" : Inv($"{db:+0.0;−0.0}");
-        static string ThrF(double db) => Inv($"{db:0;−0} dB");
+        static string ThrF(double db) => Inv($"{db:0.0}\u2009dB");
         static string RatioAF(double v) { if (v >= 0.999) return "∞ : 1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.0#} : 1") : Inv($"{r:0} : 1"); }
         static string RatioAShort(double v) { if (v >= 0.999) return "∞:1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.#}:1") : Inv($"{r:0}:1"); }
         static string RatioBF(double v) { double r = RatioB(v); return Math.Abs(r - 1) < 0.01 ? "1 : 1" : r > 1 ? Inv($"{r:0.0#} : 1") : Inv($"↑ {1 / r:0.0#} : 1"); }
         static string RatioBShort(double v) { double r = RatioB(v); return Math.Abs(r - 1) < 0.01 ? "1:1" : r > 1 ? Inv($"{r:0.0#}") : Inv($"↑{1 / r:0.0}"); }
-        static string Ms(double ms) => ms >= 1000 ? Inv($"{ms / 1000:0.00} s") : ms >= 10 ? Inv($"{ms:0} ms") : Inv($"{ms:0.0} ms");
+        static string Ms(double ms) => ms >= 1000 ? Inv($"{ms / 1000:0.00}\u2009s") : ms >= 10 ? Inv($"{ms:0}\u2009ms") : Inv($"{ms:0.0}\u2009ms");
         static string AtkF(double v) => Ms(Exp(v, 0.1, 300));
         static string RelF(double v) => Ms(Exp(v, 5, 3000));
         static string GainF(double v) => DbF((v - 0.5) * 48);
-        static string HzF(double hz) => hz >= 1000 ? Inv($"{hz / 1000:0.0#} kHz") : Inv($"{hz:0} Hz");
-        static string Pct(double v) => Inv($"{v * 100:0} %");
-        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0} dB") : Inv($"−{P(BP(b, Floor)) * 48:0} dB");
+        static string HzF(double hz) => hz >= 1000 ? Inv($"{hz / 1000:0.0}\u2009k") : Inv($"{hz:0}\u2009Hz");
+        static string Pct(double v) => Inv($"{v * 100:0}\u2009%");
+        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0.0}\u2009dB") : Inv($"−{P(BP(b, Floor)) * 48:0.0}\u2009dB");
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? MutedC, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
@@ -140,21 +140,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // On/off pill bound to a param (> 0.5 = on).
         Control Toggle(int p, string label, Func<string>? dynLabel = null)
         {
-            var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
-            var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4) };
-            var host = new Canvas { Width = 18, Height = 10 }; Canvas.SetTop(dot, 1.5); host.Children.Add(dot); pill.Child = host;
-            var txt = new TextBlock { Text = label, FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
-            void Hi()
-            {
-                bool on = On(p);
-                pill.Background = on ? Amber : OffPill; dot.Background = on ? Panel : MutedC;
-                Canvas.SetLeft(dot, on ? 9.5 : 1.5); txt.Foreground = on ? TxtC : Txt2;
-                if (dynLabel != null) txt.Text = dynLabel();
-            }
-            var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { pill } };
-            if (label.Length > 0 || dynLabel != null) wrap.Children.Add(txt);
-            wrap.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(wrap).Properties.IsLeftButtonPressed) return; SetP(p, On(p) ? 0f : 1f); Hi(); e.Handled = true; };
-            readouts.Add(Hi); Hi();
+            var wrap = Switch(label, () => On(p), () => SetP(p, On(p) ? 0f : 1f), out var sync, liveLabel: dynLabel);
+            readouts.Add(sync);
             Learn(wrap, p);
             return wrap;
         }
@@ -162,27 +149,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // Segmented chips over a discrete param (n options spread over 0..1).
         Control Seg(int p, string[] names, Action? changed = null)
         {
-            int n = names.Length; var cells = new Border[n];
-            void Hi()
-            {
-                int cur = Sel(p, n);
-                for (int i = 0; i < n; i++)
-                {
-                    bool on = i == cur;
-                    cells[i].Background = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)cells[i].Child!; tb.Foreground = on ? Panel : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++)
-            {
-                int iv = i;
-                var c = new Border { CornerRadius = new CornerRadius(2), Padding = new Thickness(4, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 7, Foreground = MutedC } };
-                c.PointerPressed += (_, e) => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); Hi(); changed?.Invoke(); e.Handled = true; };
-                cells[i] = c; row.Children.Add(c);
-            }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = row };
+            int n = names.Length;
+            var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync);
+            readouts.Add(sync);
             Learn(seg, p);
             return seg;
         }
@@ -190,37 +159,12 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // Horizontal bar slider over a param, with a mono readout on the right.
         Control Bar(int p, Func<double, string> fmt, Func<IBrush> fillC, Func<bool>? dim = null, double valW = 30, Func<IBrush>? valC = null)
         {
-            var fill = new Border { Height = 3, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 6, Height = 7, CornerRadius = new CornerRadius(2) };
-            var lay = new Canvas { Height = 9 };
-            lay.Children.Add(handle); Canvas.SetTop(handle, 1);
-            var canvas = new Avalonia.Controls.Panel { Height = 11, MinWidth = 20, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = {
-                new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center }, fill, lay } };
-            var val = Mono("", 8, TxtC); val.Width = valW; val.TextAlignment = TextAlignment.Right; val.TextTrimming = TextTrimming.None;
-            bool drag = false;
-            void Vis()
-            {
-                double v = Math.Clamp(P(p), 0, 1), w = canvas.Bounds.Width; if (w <= 0) w = 60;
-                fill.Width = Math.Max(0, v * w); Canvas.SetLeft(handle, v * w - 3); val.Text = fmt(v);
-                bool d = dim?.Invoke() ?? false;
-                fill.Background = d ? NotaPalette.BorderStrong : fillC(); handle.Background = d ? MutedC : Txt2;
-                val.Foreground = d ? MutedC : valC?.Invoke() ?? TxtC;
-            }
-            void From(PointerEventArgs e) { double w = canvas.Bounds.Width; Raw(p, (float)(w > 0 ? Math.Clamp(e.GetPosition(canvas).X / w, 0, 1) : 0)); Vis(); }
-            canvas.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2) { SetP(p, Def(p)); Vis(); e.Handled = true; return; }
-                drag = true; Begin(p); e.Pointer.Capture(canvas); From(e); e.Handled = true;
-            };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; End(p); e.Pointer.Capture(null); } };
-            canvas.SizeChanged += (_, _) => Vis();
-            readouts.Add(() => { if (!drag && canvas.IsEffectivelyVisible) Vis(); });
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            grid.Children.Add(canvas); grid.Children.Add(Col(val, 1));
-            Learn(grid, p);
-            return grid;
+            var row = DeviceCardKit.SliderRow("", () => Math.Clamp(P(p), 0, 1), n => Raw(p, (float)n), () => fmt(Math.Clamp(P(p), 0, 1)), out var sync,
+                begin: () => Begin(p), end: () => End(p), reset: () => SetP(p, Def(p)),
+                dim: dim, valueWidth: valW);
+            readouts.Add(() => { if (row.IsEffectivelyVisible) sync(); });
+            Learn(row, p);
+            return row;
         }
         Control SliderRow(string label, int p, Func<double, string> fmt, double labW = 50, double valW = 30)
         {
@@ -254,7 +198,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var name = new TextBlock { Text = PrismInk.Names[b], FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => { bool s = band == b; name.Foreground = s ? PrismInk.BandLit[b] : TxtC; name.FontWeight = s ? FontWeight.SemiBold : FontWeight.Normal; });
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 3, Height = barH, CornerRadius = new CornerRadius(2), Background = PrismInk.Band[b] }, name } };
+                new Border { Width = 3, Height = barH, CornerRadius = NotaRadius.Clip, Background = PrismInk.Band[b] }, name } };
         }
 
         // A clickable table row for band b: selects the band; dimmed + inert when the band is off.
@@ -267,7 +211,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             {
                 bool act = BandActive(b);
                 row.Background = band == b && act ? RowSel : Brushes.Transparent;
-                row.Opacity = act ? 1 : 0.32; row.IsHitTestVisible = act;
+                Inactive.Set(row, !act);
             });
             return row;
         }
@@ -292,9 +236,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         readouts.Add(() => { amtTxt.Text = Pct(P(Amount)); outTxt.Text = DbShort((P(Output) - 0.5) * 48); });
         var globTitle = Caps("GLOBAL"); globTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(Fader(Amount, "AMT", "Amount — scales every band's compression and expansion (0 % = none). Double-click: 100 %"));
-        faders.Children.Add(Col(Fader(Output, "OUT", "Output gain ±24 dB — double-click: 0 dB"), 1));
-        var globCol = new Border { Width = 56, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(0, 5, 0, 4),
+        faders.Children.Add(Fader(Amount, "AMOUNT", "Amount — scales every band's compression and expansion (0\u2009% = none). Double-click: 100\u2009%"));
+        faders.Children.Add(Col(Fader(Output, "OUT", "Output gain ±24\u2009dB — double-click: 0\u2009dB"), 1));
+        var globCol = new Border { Width = 56, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(globTitle, Dock.Top), Docked(outTxt, Dock.Bottom), Docked(amtTxt, Dock.Bottom), faders } } };
         DockPanel.SetDock(globCol, Dock.Left);
 
@@ -339,9 +283,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 ToolTip.SetTip(below, "Expansion / upward-compression threshold · ratio — click the readout to switch it on or off");
                 g.Children.Add(Col(below, 2));
                 var gain = DragVal(BP(bb, Gain), v => DbShort((v - 0.5) * 48), () => Math.Abs(P(BP(bb, Gain)) - 0.5f) < 0.001f ? Txt2 : TxtC);
-                ToolTip.SetTip(gain, "Band gain ±24 dB — drag up / down, double-click resets");
+                ToolTip.SetTip(gain, "Band gain ±24\u2009dB — drag up / down, double-click resets");
                 g.Children.Add(Col(gain, 3));
-                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = new CornerRadius(2), Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Clip, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
                 var grFill = new Border { Background = PrismInk.Band[bb], HorizontalAlignment = HorizontalAlignment.Right };
                 grTrack.Child = grFill;
                 readouts.Add(() => grFill.Width = 32 * Math.Clamp(Sc(S_Gr0 + bb) / 12, 0, 1));
@@ -391,14 +335,14 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var trCap = Caps("TRANSFER · " + PrismInk.Names[b].ToUpperInvariant());
             var kneeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("32,*"), Margin = new Thickness(0, 4, 0, 0) };
             kneeRow.Children.Add(Caps("KNEE"));
-            kneeRow.Children.Add(Col(Bar(BP(b, Knee), v => Inv($"{v * 24:0.#} dB"), () => PrismInk.Band[b], null, 32), 1));
+            kneeRow.Children.Add(Col(Bar(BP(b, Knee), v => Inv($"{v * 24:0.0}\u2009dB"), () => PrismInk.Band[b], null, 32), 1));
             var left = new Border { Width = 150, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 5),
                 Child = new DockPanel { Children = { Docked(trCap, Dock.Top), Docked(kneeRow, Dock.Bottom), new Border { Margin = new Thickness(0, 4, 0, 0), Child = tr } } } };
 
             // ABOVE — compression
             var aCap = Caps("ABOVE — COMPRESSION", PrismInk.BandLit[b]);
             var aGr = Mono("", 7, Txt2); aGr.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => { double gr = Sc(S_Gr0 + b); aGr.Text = gr > 0.05 ? Inv($"GR −{gr:0.0} dB") : "GR 0.0 dB"; });
+            readouts.Add(() => { double gr = Sc(S_Gr0 + b); aGr.Text = gr > 0.05 ? Inv($"GR −{gr:0.0}\u2009dB") : "GR 0.0\u2009dB"; });
             var aHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 11 };
             aHead.Children.Add(aCap); aHead.Children.Add(Col(aGr, 1));
             var aKnobs = new UniformGrid { Rows = 1, VerticalAlignment = VerticalAlignment.Center };
@@ -421,7 +365,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             bKnobs.Children.Add(K(BP(b, BelowAttack), "ATTACK", AtkF, 36, 52, Mauve));
             bKnobs.Children.Add(K(BP(b, BelowRelease), "RELEASE", RelF, 36, 52, Mauve));
             bKnobs.Children.Add(K(BP(b, Floor), "FLOOR", _ => FloorF(b), 36, 52, Mauve));
-            readouts.Add(() => bKnobs.Opacity = On(BP(b, BelowOn)) ? 1 : 0.45);
+            readouts.Add(() => Inactive.Set(bKnobs, !On(BP(b, BelowOn)), interactive: true));
             ToolTip.SetTip(bKnobs, "Ratio above 1 : 1 expands (quiet parts get quieter); below 1 : 1 (↑) compresses upward (quiet parts are lifted). Floor limits either to ± that many dB.");
             var bSec = Divider(new DockPanel { Children = { Docked(bHead, Dock.Top), bKnobs } }, 4);
 
@@ -455,7 +399,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 int m = engine.DeviceLayerWave(track, di, 3 + band * 2, tDet, TraceLen);
                 trace.Set(tIn, tDet, Math.Min(n, m), band, ThrA(P(BP(band, AboveThresh))), On(BP(band, BelowOn)), ThrB(P(BP(band, BelowThresh))));
             });
-            ToolTip.SetTip(trace, "The selected band's input peaks (grey) and what its compressor's detector makes of them (the last ~1.5 s), against the threshold.");
+            ToolTip.SetTip(trace, "The selected band's input peaks (grey) and what its compressor's detector makes of them (the last ~1.5\u2009s), against the threshold.");
             const string cols = "50,*,*,40";
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions(cols), Height = 11 };
             var hA = Caps("ATTACK", DimC); hA.HorizontalAlignment = HorizontalAlignment.Center;
@@ -504,7 +448,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                     val.Text = !act ? "—" : bo > gr + 0.05 ? Inv($"+{bo:0.0}") : gr > 0.05 ? Inv($"−{gr:0.0}") : "0.0";
                     val.Foreground = band == bb ? PrismInk.BandLit[bb] : PrismInk.Band[bb];
                     nm.Foreground = band == bb ? PrismInk.BandLit[bb] : MutedC;
-                    m.Opacity = act ? 1 : 0.3;
+                    Inactive.Set(m, !act, interactive: true);
                 });
                 var col = new DockPanel { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { Docked(nm, Dock.Bottom), Docked(val, Dock.Bottom), m } };
                 ((Control)val).Margin = new Thickness(0, 3, 0, 1);
@@ -524,8 +468,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 for (int i = 0; i < 3; i++)
                 {
                     bool on = s == i, act = BandActive(i);
-                    soloCells[i].Background = on ? AmberSubtle : OffPill; soloCells[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var t = (TextBlock)soloCells[i].Child!; t.Foreground = on ? AmberLit : act ? Txt2 : DimC; t.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    soloCells[i].Background = on ? Amber : OffPill; soloCells[i].BorderBrush = on ? Amber : Brushes.Transparent;
+                    var t = (TextBlock)soloCells[i].Child!; t.Foreground = on ? NotaPalette.TextOnAccent : act ? Txt2 : DimC; t.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
                 soloTxt.Text = s >= 0 && BandActive(s) ? PrismInk.Names[s].ToLowerInvariant() : "none"; soloTxt.Foreground = s >= 0 ? AmberLit : MutedC;
             }
@@ -534,7 +478,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = sl[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) =>
                 {
@@ -580,9 +524,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "None — own input" : SrcName(src);
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
-            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 0),
+            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
-                Child = new DockPanel { Children = { Docked(new TextBlock { Text = "▾", FontSize = 8, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), scName } } };
+                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), scName } } };
             ToolTip.SetTip(scBox, "Sidechain — key every band's detector from another track (split into the same bands)");
             scBox.PointerPressed += (_, e) =>
             {
@@ -608,23 +552,23 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var listen = Toggle(ScListen, "Listen");
             ToolTip.SetTip(listen, "Listen — hear the detector's key signal (the sidechain, or the input), per solo band");
             var mk = Toggle(AutoMakeup, "Auto makeup");
-            ToolTip.SetTip(mk, "Auto makeup — each band gets back about half of its compression at 0 dBFS");
+            ToolTip.SetTip(mk, "Auto makeup — each band gets back about half of its compression at 0\u2009dBFS");
             var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
             toggles.Children.Add(listen); toggles.Children.Add(Col(mk, 1));
             var mid = new StackPanel { Spacing = 5, Children = {
-                SliderRow("LOOKAHEAD", Lookahead, v => Inv($"{v * 10:0.0} ms")),
+                SliderRow("LOOKAHEAD", Lookahead, v => Inv($"{v * 10:0.0}\u2009ms")),
                 SliderRow("MIX", Mix, Pct), scRow, toggles } };
 
             var clipTxt = Mono("", 7, TxtC); clipTxt.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() =>
             {
                 double c = Sc(S_ClipDb);
-                clipTxt.Text = On(SoftClip) && c > 0.05 ? Inv($"−0.3 dBFS · {c:0.0}") : "−0.3 dBFS";
+                clipTxt.Text = On(SoftClip) && c > 0.05 ? Inv($"−0.3\u2009dBFS · {c:0.0}") : "−0.3\u2009dBFS";
                 clipTxt.Foreground = On(SoftClip) ? (c > 0.05 ? NotaPalette.Warning : TxtC) : MutedC;
             });
             var clipRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
             var clipSeg = Seg(SoftClip, new[] { "Off", "On" });
-            ToolTip.SetTip(clipSeg, "Soft clip — a smooth ceiling at −0.3 dBFS after the output gain");
+            ToolTip.SetTip(clipSeg, "Soft clip — a smooth ceiling at −0.3\u2009dBFS after the output gain");
             clipRow.Children.Add(Caps("SOFT CLIP")); clipRow.Children.Add(Col(clipSeg, 1)); clipRow.Children.Add(Col(clipTxt, 2));
             var midB = Divider(mid); midB.Margin = new Thickness(0, 4, 0, 0);
             return new DockPanel { LastChildFill = false, Margin = new Thickness(8, 5, 8, 5), Children = {
@@ -641,7 +585,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Control ModeExtras()
         {
             var seg = Seg(BandsP, new[] { "3", "2", "1" }, () => { if (!BandActive(band)) SelectBand(1); foreach (var a in readouts) a(); });
-            ToolTip.SetTip(seg, "Bands — 3: Low / Mid / High · 2: Low + Mid (Mid runs to 20 kHz) · 1: Mid, full band");
+            ToolTip.SetTip(seg, "Bands — 3: Low / Mid / High · 2: Low + Mid (Mid runs to 20\u2009kHz) · 1: Mid, full band");
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("MODE"), seg } };
         }
         Control BandChips()
@@ -661,7 +605,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = PrismInk.Names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) => { SelectBand(iv); e.Handled = true; };
                 cells[i] = c; chips.Children.Add(c);
@@ -672,7 +616,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Control DetectExtras()
         {
             var seg = Seg(Detect, new[] { "Peak", "RMS" });
-            ToolTip.SetTip(seg, "Detector — Peak follows every transient; RMS (10 ms) follows loudness, smoother");
+            ToolTip.SetTip(seg, "Detector — Peak follows every transient; RMS (10\u2009ms) follows loudness, smoother");
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("DETECT"), seg } };
         }
         var extrasBodies = new Control?[3];
@@ -688,9 +632,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         {
             view = (band, view.Centre, t); ViewState[(track, di)] = view; foreach (var a in readouts) a();
         }, null);
-        var right = new Border { Width = 186, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), ClipToBounds = true, Child = rightFrame };
+        var right = new Border { Width = 186, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
 
         // ======================================================================
         // Status strip
@@ -708,8 +652,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 {
                     int b = band;
                     string head = solo == b ? Inv($"{PrismInk.Names[b]} solo") : PrismInk.Names[b];
-                    string below = On(BP(b, BelowOn)) ? Inv($"below {ThrB(P(BP(b, BelowThresh))):0;−0} dB {RatioBF(P(BP(b, BelowRatio))).Replace(" ", "")}") : "below off";
-                    return Inv($"{head} · above {ThrA(P(BP(b, AboveThresh))):0;−0} dB {RatioAF(P(BP(b, AboveRatio))).Replace(" ", "")} · {below} · knee {P(BP(b, Knee)) * 24:0.#} dB");
+                    string below = On(BP(b, BelowOn)) ? Inv($"below {ThrB(P(BP(b, BelowThresh))):0;−0}\u2009dB {RatioBF(P(BP(b, BelowRatio))).Replace(" ", "")}") : "below off";
+                    return Inv($"{head} · above {ThrA(P(BP(b, AboveThresh))):0;−0}\u2009dB {RatioAF(P(BP(b, AboveRatio))).Replace(" ", "")} · {below} · knee {P(BP(b, Knee)) * 24:0.#}\u2009dB");
                 }
                 case 2:
                 {
@@ -728,9 +672,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
             statusLeft.Text = StatusText();
             statusLeft.Foreground = (centreTab == 1 && Sel(Solo, 4) - 1 == band) || On(ScListen) ? AmberLit : Txt2;
             double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#} ms") : "no lookahead";
+            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : "no lookahead";
             string sc = Sc(S_ScActive) > 0.5 ? " · SC" : "";
-            statusRight.Text = sr > 0 ? Inv($"{sr / 1000:0.#} kHz · {la}{sc} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
+            statusRight.Text = sr > 0 ? Inv($"{sr / 1000:0.#}\u2009kHz · {la}{sc} · CPU {Sc(S_Cpu) * 100:0}\u2009%") : "";
         });
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
         statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));

@@ -38,10 +38,10 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
     // Engine's perceptual map (Synth.h): lo * (hi/lo)^v.
     private static double ExpMap(float v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0f, 1f));
     private static string Secs(float v, double lo, double hi)
-    { double s = ExpMap(v, lo, hi); return s < 1.0 ? $"{(s * 1000).ToString("0", Inv)} ms" : $"{s.ToString("0.00", Inv)} s"; }
-    private static string Db(float v) => v <= 1e-4f ? "−∞ dB" : $"{(20.0 * Math.Log10(v)).ToString("0.0", Inv).Replace("-", "−")} dB";
+    { double s = ExpMap(v, lo, hi); return s < 1.0 ? $"{(s * 1000).ToString("0", Inv)}\u2009ms" : $"{s.ToString("0.00", Inv)}\u2009s"; }
+    private static string Db(float v) => v <= 1e-4f ? "−∞\u2009dB" : $"{(20.0 * Math.Log10(v)).ToString("0.0", Inv).Replace("-", "−")}\u2009dB";
     private static string KHz(float v)
-    { double hz = ExpMap(v, 20, 18000); return hz >= 1000 ? $"{(hz / 1000).ToString("0.00", Inv)} kHz" : $"{hz.ToString("0", Inv)} Hz"; }
+    { double hz = ExpMap(v, 20, 18000); return hz >= 1000 ? $"{(hz / 1000).ToString("0.0", Inv)}\u2009k" : $"{hz.ToString("0", Inv)}\u2009Hz"; }
 
     public Control Build(DeviceCardContext ctx)
     {
@@ -93,7 +93,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             };
             var box = new Border
             {
-                Height = 28, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
+                Height = 28, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = inner,
             };
             box.PointerPressed += (_, _) => { if (idx.TryGetValue("wave", out var wi)) { engine.PluginParamSet(track, -1, wi, wv / 3f); SyncWave(); } };
@@ -114,7 +114,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
 
         var fltRow = SpreadRow(
             Knob("cutoff", "Cutoff", KHz),
-            Knob("resonance", "Reso", v => v.ToString("0.00", CultureInfo.InvariantCulture)),
+            Knob("resonance", "Reso", v => v.ToString("0.00", NotaNum.Culture)),
             Knob("gain", "Gain", Db));
 
         var left = new StackPanel { Width = 358, Spacing = 5, Children =

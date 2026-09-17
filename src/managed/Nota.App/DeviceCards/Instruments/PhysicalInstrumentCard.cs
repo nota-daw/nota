@@ -64,24 +64,24 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             }
             return col;
         }
-        Control Arrow() => new TextBlock { Text = "▸", FontSize = 12, Foreground = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0) };
+        Control Arrow() => new Glyph(GlyphKind.ChevronRight, 9) { Foreground = NotaPalette.BorderStrong, Margin = new Thickness(1, 0) };
         Control Cap(string t, IBrush? c = null) => new TextBlock { Text = t, FontSize = 9, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         Control Head(string title, params Control[] extras)
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            sp.Children.Add(new TextBlock { Text = title, FontSize = 10, FontWeight = FontWeight.Bold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = title, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
             foreach (var e in extras) sp.Children.Add(e);
             return sp;
         }
         Border Panel(double width, Control header, Control body)
-            => new Border { Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8),
+            => new Border { Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8),
                 Child = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { header, body } } };
         // A panel whose body fills the remaining height (for graphs / viz).
         Border GraphPanel(double width, Control header, Control body)
         {
             DockPanel.SetDock(header, Dock.Top);
             header.Margin = new Thickness(0, 0, 0, 8);
-            return new Border { Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8),
+            return new Border { Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8),
                 Child = new DockPanel { LastChildFill = true, Children = { header, body } } };
         }
 
@@ -89,16 +89,16 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         Control TextChips(string id, string[] names)
         {
             int n = names.Length; var arr = new Border[n];
-            void Hi() { int cur = Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? AccentSubtleB : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AccentBright : TextSecondary; } }
+            void Hi() { int cur = Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? NotaPalette.TextOnAccent : TextSecondary; } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
             for (int i = 0; i < n; i++)
             {
                 int iv = i;
-                var chip = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, Foreground = TextSecondary } };
+                var chip = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, Foreground = TextSecondary } };
                 chip.PointerPressed += (_, _) => { if (I(id) is var ci and >= 0 && n > 1) { engine.PluginParamSet(track, -1, ci, iv / (float)(n - 1)); Hi(); Refresh(); } };
                 arr[i] = chip; row.Children.Add(chip);
             }
-            var container = new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2), Child = row };
+            var container = new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(2), Child = row };
             Hi(); readouts.Add(Hi);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(container, MidiTarget.PluginParam(track, -1, pi), id);
             return container;
@@ -107,34 +107,24 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         // Local (non-param) segmented toggle.
         Control Seg(string[] names, int initial, Action<int> onPick, double fs = 10)
         {
-            var arr = new Border[names.Length]; int cur = initial;
-            void Hi() { for (int i = 0; i < arr.Length; i++) { bool on = i == cur; arr[i].Background = on ? AccentSubtleB : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AccentBright : TextTertiary; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-            for (int i = 0; i < names.Length; i++)
-            {
-                int iv = i;
-                var chip = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(9, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = TextTertiary } };
-                chip.PointerPressed += (_, _) => { cur = iv; Hi(); onPick(iv); };
-                arr[i] = chip; row.Children.Add(chip);
-            }
-            var container = new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2), Child = row };
-            Hi(); return container;
+            int cur = initial;
+            return DeviceCardKit.Segments(names, () => cur, iv => { cur = iv; onPick(iv); }, out _);
         }
 
         // ===== EXCITER tab: Mallet → Noise ==================================
         var malletBox = Panel(132, Head("MALLET"),
-            KnobGrid(2, K("malletvol", "VOL"), K("malletstiff", "STIFF"), K("malletnoise", "NOISE"), K("malletcolor", "COLOR")));
+            KnobGrid(2, K("malletvol", "VOLUME"), K("malletstiff", "STIFF"), K("malletnoise", "NOISE"), K("malletcolor", "COLOR")));
 
         noiseEnv.VerticalAlignment = VerticalAlignment.Stretch; noiseEnv.MinHeight = 96;
         var noiseCap = new TextBlock { FontSize = 9, Foreground = Teal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         noiseCap.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        readouts.Add(() => { int en = (int)Math.Round((G("noiseenv") - 0.5) * 200); noiseCap.Text = "env " + en.ToString("+0;-0;0"); });
+        readouts.Add(() => { int en = (int)Math.Round((G("noiseenv") - 0.5) * 200); noiseCap.Text = "env " + en.ToString("+0;−0;0"); });
         var noiseHeadLeft = Head("NOISE", TextChips("noisetype", new[] { "LP", "BP", "HP" }));
         DockPanel.SetDock(noiseCap, Dock.Right);
         var noiseHeader = new DockPanel { Children = { noiseCap, noiseHeadLeft } };
         var noiseBody = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Stretch };
         noiseBody.Children.Add(noiseEnv);
-        var noiseKnobs = KnobGrid(2, K("noisevol", "VOL"), K("noiseenv", "ENV", true), K("noisefreq", "FREQ"), K("noisereso", "RESO"));
+        var noiseKnobs = KnobGrid(2, K("noisevol", "VOLUME"), K("noiseenv", "ENV", true), K("noisefreq", "FREQ"), K("noisereso", "RESO"));
         Grid.SetColumn(noiseKnobs, 1); noiseBody.Children.Add(noiseKnobs);
         var noiseBox = GraphPanel(356, noiseHeader, noiseBody);
 
@@ -167,7 +157,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         var onChips = TextChips("r2on", new[] { "Off", "On" });
         var resHeadLeft = Head("RESONATOR", Seg(new[] { "1", "2" }, 0, i => { rsel = i; ApplyResSel(); }), onChips);
-        var structChips = TextChips("structure", new[] { "1▸2", "1+2" });
+        var structChips = TextChips("structure", new[] { "1→2", "1+2" });
         var structWrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Children = { Cap("STRUCTURE"), structChips } };
         DockPanel.SetDock(structWrap, Dock.Right);

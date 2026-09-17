@@ -23,7 +23,7 @@ public sealed class PanBar : Control
     private static readonly IBrush Fill = NotaPalette.Accent;         // brass
     private static readonly IBrush CentreTick = NotaPalette.BorderStrong;
     private static readonly IBrush TextBrush = NotaPalette.TextSecondary;
-    private static readonly Typeface Mono = new("monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private double _pan;   // -1 (full left) .. +1 (full right), 0 = centre
     private bool _drag;
@@ -46,22 +46,32 @@ public sealed class PanBar : Control
         _pan = Math.Clamp(pan, -1, 1);
         Height = 13;
         MinWidth = 34;
-        Cursor = new Cursor(StandardCursorType.SizeWestEast);
+        Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
+
+    private double _lastY, _raw;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click bubbles
         if (e.ClickCount == 2) { Apply(0); e.Handled = true; return; }   // reset to centre
         _drag = true;
+        _lastY = e.GetPosition(this).Y;
+        _raw = _pan;
         e.Pointer.Capture(this);
         GestureBegin?.Invoke();
-        SetFromX(e.GetPosition(this).X);
         e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (_drag) SetFromX(e.GetPosition(this).X);
+        if (!_drag) return;
+        double y = e.GetPosition(this).Y, dy = _lastY - y;   // up = pan right; full sweep over ~140px
+        _lastY = y;
+        if (dy == 0) return;
+        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        _raw = Math.Clamp(_raw + dy / (fine ? 700.0 : 70.0), -1, 1);   // accumulate, so the centre detent cannot trap the drag
+        Apply(_raw);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -69,13 +79,6 @@ public sealed class PanBar : Control
         if (_drag) GestureEnd?.Invoke();
         _drag = false;
         e.Pointer.Capture(null);
-    }
-
-    private void SetFromX(double x)
-    {
-        double w = Bounds.Width;
-        if (w <= 0) return;
-        Apply(Math.Clamp(x / w, 0, 1) * 2 - 1);
     }
 
     private void Apply(double p)

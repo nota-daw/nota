@@ -21,11 +21,11 @@ internal interface IDeviceBody
     bool AutoWidth => false;
 
     /// <summary>When true, the body manages its own padding (e.g. a full-width LIVE strip)
-    /// and the shell wraps it with no inset. Default false = the shell pads the body 8px.</summary>
+    /// and the shell wraps it with no inset. Default false = the shell pads the body 6px (NotaSpace.DeviceInset).</summary>
     bool FullBleed => false;
 
-    /// <summary>Tag shown after the device name in the shared header (e.g. "HYBRID");
-    /// null = the default "BUILT-IN".</summary>
+    /// <summary>The processing type, shown as the mono caps badge on the right of the header
+    /// (e.g. "HYBRID", "DYNAMICS"); null shows no badge.</summary>
     string? Subtitle => null;
 
     Control Build(DeviceCardContext ctx, int deviceIndex);

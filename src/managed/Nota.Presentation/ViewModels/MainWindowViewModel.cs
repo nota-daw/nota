@@ -66,8 +66,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Engine.SetBpm(120);
         Engine.SetTimeSignature(4, 4);
         // EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0} Hz";
-        EngineInfo = $"{Engine.SampleRate:0} Hz";
-        _log.Info($"Engine started · {Engine.SampleRate:0} Hz");
+        EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
+        _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");
 
         Transport.Message += m => { if (m.Length > 0) StatusText = m; };
 
@@ -138,9 +138,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SuspendEnginePolling = false;
         }
 
-        EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0} Hz";
+        EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0}\u2009Hz";
         int buf = Engine.NegotiatedBufferFrames;
-        _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0} Hz · {buf} frames");
+        _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
         bool fallback = Engine.AudioExclusiveFallback;
         if (fallback)
         {
@@ -149,8 +149,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return StatusText;
         }
         StatusText = buf > 0
-            ? $"Audio: {Engine.NegotiatedSampleRate:0} Hz · {buf} frames"
-            : $"Audio: {Engine.NegotiatedSampleRate:0} Hz";
+            ? $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames"
+            : $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz";
         return StatusText;
     }
 

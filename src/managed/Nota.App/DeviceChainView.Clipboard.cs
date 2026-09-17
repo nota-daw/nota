@@ -152,10 +152,11 @@ public sealed partial class DeviceChainView
 
     // ---- context menu (header right-click) --------------------------------
     // Adds Copy / Cut / Paste / Delete above the existing "Save preset" item.
-    private void ShowDeviceContextMenu(Control anchor, ChainKind kind, int di)
+    private void ShowDeviceContextMenu(Control anchor, ChainKind kind, int di, Action<MenuFlyout>? header = null)
     {
         SelectDevice(kind, di);
         var flyout = new MenuFlyout();
+        header?.Invoke(flyout);
         void Add(string header, bool enabled, Action act)
         {
             var mi = new MenuItem { Header = header, IsEnabled = enabled };
@@ -172,7 +173,7 @@ public sealed partial class DeviceChainView
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
-    // ---- drag-reorder (grab a card's ⠿ handle) ----------------------------
+    // ---- drag-reorder (grab a card by its header) ---------------------------
     // Tag stamped on each device card so a drag can find its same-domain siblings in _row.
     private sealed record DevTag(ChainKind Kind, int Index);
 
@@ -183,7 +184,7 @@ public sealed partial class DeviceChainView
     private Control? _devDragCard;
     private readonly Border _devDropBar = new()
     {
-        Width = 3, Background = AccentBright, CornerRadius = new CornerRadius(2),
+        Width = 3, Background = AccentBright, CornerRadius = NotaRadius.Clip,
         Margin = new Thickness(-4, 6, 1, 6), IsHitTestVisible = false,
     };
 

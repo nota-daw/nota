@@ -42,7 +42,7 @@ internal sealed class ChordKeysViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, null, new Rect(0, 0, w, h), 3, 3);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double bw = w / Span;
         for (int s = 0; s < Span; s++)
         {

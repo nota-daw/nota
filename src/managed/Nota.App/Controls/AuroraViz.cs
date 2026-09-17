@@ -21,8 +21,8 @@ namespace Nota.App;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush TextSecondary = NotaPalette.TextSecondary;
         public enum K { Wave, Filter }
-        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly Typeface Face = new(FontFamily.Default);
+        private static readonly IBrush Grid = NotaGraph.Grid;
+        private static readonly Typeface Face = NotaFonts.Mono;
         private readonly K _k;
         private int _bank;
         private double _pos, _warp, _cut, _res;
@@ -71,7 +71,7 @@ namespace Nota.App;
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 0) return;
-            ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
             double pad = 6, x0 = pad, x1 = w - pad, top = pad + 11, bot = h - pad - 9;
 
             if (_k == K.Wave)
@@ -108,7 +108,7 @@ namespace Nota.App;
                         gc.LineTo(new Point(x0 + span * j / (samples - 1), mid - cur[j] * amp));
                 }
                 ctx.DrawGeometry(null, pen, fig);
-                Label(ctx, $"pos {(int)Math.Round(_pos * 100)}%", x0, bot + 1, TextSecondary);
+                Label(ctx, $"pos {(int)Math.Round(_pos * 100)}\u2009%", x0, bot + 1, TextSecondary);
             }
             else
             {

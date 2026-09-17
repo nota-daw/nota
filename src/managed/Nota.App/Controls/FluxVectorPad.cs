@@ -86,10 +86,6 @@ internal sealed class FluxVectorPad : Control
         var r = new Rect(Bounds.Size);
         // base + four-corner radial glows.
         ctx.FillRectangle(new SolidColorBrush(Inset), r, 8);
-        Corner(ctx, r, 0, 0, Warm);
-        Corner(ctx, r, 1, 0, Glass);
-        Corner(ctx, r, 0, 1, Moog);
-        Corner(ctx, r, 1, 1, Grain);
 
         // crosshair grid.
         var grid = new Pen(new SolidColorBrush(GridCol), 1);
@@ -115,30 +111,17 @@ internal sealed class FluxVectorPad : Control
 
         // current vector dot (glow + bright core).
         ctx.DrawEllipse(new SolidColorBrush(DotCol, 0.28), null, new Point(bx, by), 11, 11);
-        ctx.DrawEllipse(new SolidColorBrush(DotCol), new Pen(NotaPalette.BgApp, 1), new Point(bx, by), 6, 6);
+        ctx.DrawEllipse(new SolidColorBrush(DotCol), new Pen(NotaPalette.BgSunken, 1), new Point(bx, by), 6, 6);
 
         // 1px inner border to match the mockup pad frame.
         ctx.DrawRectangle(null, new Pen(new SolidColorBrush(BorderCol), 1), r, 8, 8);
     }
 
-    private static void Corner(DrawingContext ctx, Rect r, double cx, double cy, Color col)
-    {
-        var glow = new RadialGradientBrush
-        {
-            Center = new RelativePoint(cx, cy, RelativeUnit.Relative),
-            GradientOrigin = new RelativePoint(cx, cy, RelativeUnit.Relative),
-            RadiusX = new RelativeScalar(0.62, RelativeUnit.Relative),
-            RadiusY = new RelativeScalar(0.72, RelativeUnit.Relative),
-        };
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x2A, col.R, col.G, col.B), 0));
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, col.R, col.G, col.B), 1));
-        ctx.FillRectangle(glow, r);
-    }
 
     private void Label(DrawingContext ctx, string text, Color col, double x, double y, bool rightAlign)
     {
         var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold), 9, new SolidColorBrush(col));
+            NotaFonts.SansBold, 9, new SolidColorBrush(col));
         double ox = rightAlign ? x - ft.Width : x;
         ctx.DrawText(ft, new Point(ox, y));
     }

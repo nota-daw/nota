@@ -22,11 +22,11 @@ internal sealed class ReverbTail : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.AccentBright;
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
+    private static readonly IBrush GridB = NotaGraph.Grid;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x20);
     private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x1E);
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private readonly IAudioEngine _e;
     private readonly int _t, _di, _decayP, _preP;
@@ -70,7 +70,7 @@ internal sealed class ReverbTail : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         var (x0, x1, top, bot) = Geo();
         for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(new Pen(GridB, 1), new Point(x0, gy), new Point(x1, gy)); }
 
@@ -93,7 +93,6 @@ internal sealed class ReverbTail : Control
             }
             g.LineTo(new Point(x1, bot)); g.EndFigure(true);
         }
-        ctx.DrawGeometry(Fill, null, geo);
         var pen = new Pen(Accent, 1.6, lineJoin: PenLineJoin.Round);
         Point? prev = null;
         for (double x = gapX; x <= x1; x += 3)
@@ -107,8 +106,8 @@ internal sealed class ReverbTail : Control
         }
 
         Txt(ctx, $"DECAY TAIL", x0 + 2, top - 1, Axis);
-        Txt(ctx, $"RT60 {rt60:0.00} s", x1 - 66, top - 1, Accent);
-        Txt(ctx, $"pre {P(_preP) * MaxPreMs:0} ms", gapX + 3, bot - 10, Teal);
-        Txt(ctx, "4 s", x1 - 16, bot + 2, Axis);
+        Txt(ctx, $"RT60 {rt60:0.00}\u2009s", x1 - 66, top - 1, Accent);
+        Txt(ctx, $"pre {P(_preP) * MaxPreMs:0}\u2009ms", gapX + 3, bot - 10, Teal);
+        Txt(ctx, "4\u2009s", x1 - 16, bot + 2, Axis);
     }
 }

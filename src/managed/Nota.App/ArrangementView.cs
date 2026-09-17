@@ -67,7 +67,7 @@ public sealed partial class ArrangementView : UserControl
     private readonly Dictionary<int, TextBlock> _volDb = new();
     // Per-track header card + its name label, so a selection change repaints just those two
     // properties instead of tearing down and rebuilding every header control (click latency).
-    private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup)> _headerCards = new();
+    private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup, Border spine, IBrush spineIdle)> _headerCards = new();
     // Per-track chosen automation target, kept across Refresh (which rebuilds VMs).
     private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId)> _autoTargets = new();
 
@@ -372,7 +372,7 @@ public sealed partial class ArrangementView : UserControl
             ClipToBounds = true,
             Child = root,
         };
-        island.BindResource(Border.CornerRadiusProperty, "Radius.Md");
+        island.BindResource(Border.CornerRadiusProperty, "Radius.Panel");
         island.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
@@ -575,7 +575,7 @@ public sealed partial class ArrangementView : UserControl
             {
                 f.Value = ti.Volume;
                 if (_volDb.TryGetValue(ti.Id, out var db))
-                    db.Text = ti.Volume <= 0.0011 ? "-∞" : AudioMath.LinToDb(ti.Volume).ToString("0.0");
+                    db.Text = ti.Volume <= 0.0011 ? "−∞" : AudioMath.LinToDb(ti.Volume).ToString("0.0");
             }
             if (_panBars.TryGetValue(ti.Id, out var p) && !p.Dragging && Math.Abs(p.Pan - ti.Pan) > 1e-3)
                 p.Pan = ti.Pan;
@@ -1373,10 +1373,12 @@ public sealed partial class ArrangementView : UserControl
     {
         foreach (var (id, h) in _headerCards)
         {
+            // Selected row (almanac § States): brass wash, the left stripe turns brass, name in Ink 1.
             bool selected = IsTrackMultiSelected(id);
             h.card.Background = selected ? SelHeaderBg
                 : h.isGroup ? Brush("Brush.SurfaceRaised") : Brush("Brush.SurfaceCard");
-            h.name.Foreground = Brush(selected ? "Brush.AccentBright" : "Brush.TextPrimary");
+            h.name.Foreground = Brush("Brush.TextPrimary");
+            h.spine.Background = selected ? NotaPalette.Accent : h.spineIdle;
         }
     }
 
@@ -1413,19 +1415,18 @@ public sealed partial class ArrangementView : UserControl
         bool selected = IsTrackMultiSelected(t.Id);
         var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
 
-        var tri = new TextBlock
+        var tri = new Border
         {
-            Text = _collapsed.Contains(t.Id) ? "▸" : "▾", FontSize = 9,
-            Foreground = Brush("Brush.TextSecondary"), VerticalAlignment = VerticalAlignment.Center,
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Background = Brushes.Transparent, Padding = new Thickness(2, 0),
+            Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
         };
         tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
 
         var name = new TextBlock
         {
             Text = t.Name, FontSize = 11, FontWeight = FontWeight.SemiBold,
-            Foreground = Brush(selected ? "Brush.AccentBright" : "Brush.TextPrimary"),
+            Foreground = Brush("Brush.TextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(4, 0, 0, 0),
@@ -1477,7 +1478,8 @@ public sealed partial class ArrangementView : UserControl
             BorderThickness = new Thickness(0, 0, 1, 1),
             Child = grid,
         };
-        _headerCards[t.Id] = (card, name, true);
+        _headerCards[t.Id] = (card, name, true, spine, spineBrush);
+        if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);
         return card;
     }
@@ -1491,7 +1493,7 @@ public sealed partial class ArrangementView : UserControl
         var name = new TextBlock
         {
             Text = t.Name, FontSize = 11, FontWeight = FontWeight.SemiBold,
-            Foreground = Brush(selected ? "Brush.AccentBright" : "Brush.TextPrimary"),
+            Foreground = Brush("Brush.TextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -1500,12 +1502,11 @@ public sealed partial class ArrangementView : UserControl
         if (t.IsGroup)
         {
             // Collapse triangle — hides/shows the group's child rows.
-            var tri = new TextBlock
+            var tri = new Border
             {
-                Text = _collapsed.Contains(t.Id) ? "▸" : "▾", FontSize = 9,
-                Foreground = Brush("Brush.TextSecondary"), VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 4, 0), Cursor = new Cursor(StandardCursorType.Hand),
-                Background = Brushes.Transparent, Padding = new Thickness(2, 0),
+                Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 4, 0),
+                Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+                Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
             };
             tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
             Grid.SetColumn(tri, 0);
@@ -1514,7 +1515,7 @@ public sealed partial class ArrangementView : UserControl
         else if (t.Frozen || t.LiveRole != 0)
         {
             // Freeze badge: a drawn chain-link for a sleeping live-freeze source (1);
-            // a ❄ snowflake for an in-place frozen track or a linked frozen track (2).
+            // a drawn snowflake for an in-place frozen track or a linked frozen track (2).
             Control badge = t.LiveRole == 1
                 ? new Avalonia.Controls.Shapes.Path
                 {
@@ -1523,11 +1524,7 @@ public sealed partial class ArrangementView : UserControl
                     Width = 14, Height = 14,
                     VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0),
                 }
-                : new TextBlock
-                {
-                    Text = "❄", FontSize = 11, Foreground = FrozenAccent,
-                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0),
-                };
+                : new Glyph(GlyphKind.Freeze, 10) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 4, 0) };
             Grid.SetColumn(badge, 0);
             nameRow.Children.Add(badge);
         }
@@ -1543,7 +1540,7 @@ public sealed partial class ArrangementView : UserControl
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
-            btnRow.Children.Add(ChipToggle("●", t.Armed, danger: true, v => _engine?.SetTrackArmed(t.Id, v)));
+            btnRow.Children.Add(ArmToggle(t.Armed, v => _engine?.SetTrackArmed(t.Id, v)));
 
         // A compact routing selector sits with the arm button (the 64px row leaves no room
         // for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".
@@ -1571,8 +1568,8 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        void ShowDb(double v) => db.Text = v <= 0.0011 ? "-∞"
-            : AudioMath.LinToDb(v).ToString("0.0", CultureInfo.InvariantCulture);
+        void ShowDb(double v) => db.Text = v <= 0.0011 ? "−∞"
+            : AudioMath.LinToDb(v).ToString("0.0", NotaNum.Culture);
         ShowDb(t.Volume);
         fader.ValueChanged += v => { _engine?.SetTrackVolume(volTrackId, (float)v); ShowDb(v); };
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
@@ -1623,7 +1620,8 @@ public sealed partial class ArrangementView : UserControl
             BorderThickness = new Thickness(0, 0, 1, 1),
             Child = grid,
         };
-        _headerCards[t.Id] = (card, name, t.IsGroup);   // for in-place selection repaint
+        _headerCards[t.Id] = (card, name, t.IsGroup, spine, spineBrush);   // for in-place selection repaint
+        if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);
         return card;
     }
@@ -1697,7 +1695,7 @@ public sealed partial class ArrangementView : UserControl
 
     // Track context menu (Duplicate / Delete). Both go through the engine's
     // snapshot ops, so undo/redo covers them; the whole view refreshes after.
-    private static readonly string[] TrackColorNames = { "Rust", "Amber", "Olive", "Sage", "Teal", "Slate", "Mauve", "Rose" };
+    private static readonly string[] TrackColorNames = { "Drums", "Perc", "Bass", "Keys", "Texture", "FX", "Brass", "Vox", "Return" };
     private static readonly string[] ShadeNames = { "", " (light)", " (dark)" };
 
     // "Add …" entries shared by the arrangement's track-level menus. Return is left enabled
@@ -1756,7 +1754,7 @@ public sealed partial class ArrangementView : UserControl
             recInput = new MenuItem { Header = "Record input" };
             MenuItem Src(string label, int source)
             {
-                var mi = new MenuItem { Header = (cur == source ? "✓ " : "   ") + label };
+                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = cur == source };
                 mi.Click += (_, _) => _engine.SetTrackRecordInput(trackId, source);
                 return mi;
             }
@@ -1780,7 +1778,7 @@ public sealed partial class ArrangementView : UserControl
             midiFrom = new MenuItem { Header = "MIDI from" };
             MenuItem Src(string label, int src)
             {
-                var mi = new MenuItem { Header = (curSrc == src ? "✓ " : "   ") + label };
+                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = curSrc == src };
                 mi.Click += (_, _) => _engine.SetTrackMidiSource(trackId, src);
                 return mi;
             }
@@ -1884,7 +1882,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
         void Add(string value, int src)
         {
-            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextTertiary"), Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
+            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -1928,7 +1926,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right.
         void Add(string value, int src)
         {
-            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextTertiary"), Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
+            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -1979,8 +1977,8 @@ public sealed partial class ArrangementView : UserControl
 
     // A small rounded colour swatch for the given palette index (menu icon).
     private static Control Swatch(int colorIndex)
-        => new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(3),
-                        Background = new SolidColorBrush(TrackColorForIndex(colorIndex)) };
+        => new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Badge,
+                        Background = TrackBrush(colorIndex) };
 
     // Inline rename popup for a track header (Enter commits, Esc cancels).
     private void PromptRenameTrack(Control anchor, int trackId)
@@ -2011,6 +2009,28 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // A small 18×16 stateful chip toggle (M/S/●). Danger variant reds when active.
+    // Record-arm, drawn to the almanac's record rule: at rest a neutral chip with a red
+    // disc; armed, solid record red with a pale disc.
+    private Control ArmToggle(bool initial, Action<bool> onChanged)
+    {
+        bool state = initial;
+        var disc = new Glyph(GlyphKind.Record, 7);
+        var chip = new Border { Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc, Cursor = new Cursor(StandardCursorType.Hand) };
+        void Paint()
+        {
+            chip.Background = state ? NotaPalette.Record : NotaPalette.SurfaceRaised;
+            chip.BorderBrush = state ? NotaPalette.Record : NotaPalette.BorderDefault;
+            disc.Foreground = state ? NotaPalette.RecordInk : NotaPalette.Record;
+        }
+        Paint();
+        chip.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+            e.Handled = true; state = !state; Paint(); onChanged(state);
+        };
+        return chip;
+    }
+
     private Control ChipToggle(string text, bool initial, bool danger, Action<bool> onChanged)
     {
         bool state = initial;
@@ -2021,22 +2041,23 @@ public sealed partial class ArrangementView : UserControl
         };
         var chip = new Border
         {
-            Width = 18, Height = 16, CornerRadius = new CornerRadius(4),
+            Width = 18, Height = 16, CornerRadius = NotaRadius.Control,
             BorderThickness = new Thickness(1), Child = tb,
         };
         void Paint()
         {
             if (state)
             {
-                chip.Background = Brush(danger ? "Brush.Danger" : "Brush.AccentSubtle");
-                chip.BorderBrush = Brush(danger ? "Brush.Danger" : "Brush.Accent");
-                tb.Foreground = Brush(danger ? "Brush.TextOnAccent" : "Brush.AccentBright");
+                // Engaged (mute / solo): brass edge and brass ink on the wash.
+                chip.Background = Brush(danger ? "Brush.Record" : "Brush.AccentSubtle");
+                chip.BorderBrush = Brush(danger ? "Brush.Record" : "Brush.BorderBrass");
+                tb.Foreground = Brush(danger ? "Brush.RecordInk" : "Brush.AccentHover");
             }
             else
             {
                 chip.Background = Brush("Brush.SurfaceRaised");
-                chip.BorderBrush = Brush("Brush.BorderStrong");
-                tb.Foreground = Brush("Brush.TextSecondary");
+                chip.BorderBrush = Brush("Brush.BorderDefault");
+                tb.Foreground = Brush("Brush.TextStrong");
             }
         }
         Paint();
@@ -2070,7 +2091,7 @@ public sealed partial class ArrangementView : UserControl
     {
         var spineBrush = masterSpine ? NotaPalette.Accent : ClipColors(colorIndex).content;
         var name = new TextBlock { Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"), VerticalAlignment = VerticalAlignment.Center };
-        var db = new TextBlock { Text = masterSpine ? "0.0" : "-inf", FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center };
+        var db = new TextBlock { Text = masterSpine ? "0.0" : "−∞", FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center };
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(name, 0);
         Grid.SetColumn(db, 1);
@@ -2086,7 +2107,7 @@ public sealed partial class ArrangementView : UserControl
         grid.Children.Add(content);
 
         bool sel = trackId > 0 && trackId == SelTrackId;
-        if (sel) name.Foreground = Brush("Brush.AccentBright");
+        if (sel) spine.Background = NotaPalette.Accent;   // selected: brass stripe, name stays Ink 1
         var card = new Border
         {
             Width = HeaderW, Height = FooterRowH, ClipToBounds = true,
@@ -2117,7 +2138,7 @@ public sealed partial class ArrangementView : UserControl
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
-    private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? Brushes.Magenta;
+    private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextPrimary;
 
     // Small bordered "−"/"+" zoom chip (HANDOFF 1b ruler: 11px, bordered, radius 4).
     private static Button ZoomChip(string text) => new()
@@ -2142,16 +2163,18 @@ public sealed partial class ArrangementView : UserControl
         => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
 
     // ---- data colours (mirror the "Ember Graphite" tokens in NotaTheme.axaml) --
-    private static readonly IBrush LaneBgA = NotaPalette.BgApp; // Brush.BgApp
+    private static readonly IBrush LaneBgA = NotaPalette.BgSunken; // the canvas is sunken, not the app ground
     private static readonly IBrush LaneBgB = NotaPalette.LaneB; // Brush.LaneB
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
-    private static readonly Color PlayheadColor = NotaPalette.AccentBrightColor;                 // Brush.AccentBright
-    private static readonly IBrush PlayheadBrush = new SolidColorBrush(PlayheadColor);
-    private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1.5);
-    private static readonly IPen PlayheadGlow = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 4);
-    private static readonly IPen ClipSelBorder = new Pen(PlayheadBrush, 2);
+    // Playhead: a 1px brass line with a 7×5 flag on the ruler, no glow (almanac § timeline).
+    // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
+    // playhead in one theme.
+    private static readonly IBrush PlayheadBrush = NotaPalette.Accent;
+    private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1);
+    // Selection edges a clip with 1px brass — a state never thickens a border to 2px.
+    private static readonly IPen ClipSelBorder = new Pen(NotaPalette.AccentBright, 1);
     private static readonly IBrush EdgeHighlight = NotaPalette.MarkerHot; // resize-edge affordance
     private static readonly IBrush InactiveVeil = NotaPalette.Wash(NotaPalette.Veil, 0xB0); // deactivated-clip scrim
     private static readonly IBrush RulerText = NotaPalette.TextSecondary; // Brush.TextSecondary
@@ -2171,12 +2194,12 @@ public sealed partial class ArrangementView : UserControl
     internal int DropTrackIndex = -1;   // -1 = no drag over; set by OnLaneDragOver, drawn by LaneControl
     // In-progress audio take (M-fix): audio clips only materialise on stop, so a
     // translucent red region grows from the take start to the playhead as feedback.
-    private static readonly IBrush RecFill = NotaPalette.Wash(NotaPalette.Danger, 0x33);
-    private static readonly IPen   RecBorder = new Pen(NotaPalette.Wash(NotaPalette.Danger, 0xC0), 1.5);
-    private static readonly IBrush RecText = NotaPalette.DangerPale;
+    private static readonly IBrush RecFill = NotaPalette.Wash(NotaPalette.Record, 0x33);
+    private static readonly IPen   RecBorder = new Pen(NotaPalette.Wash(NotaPalette.Record, 0xC0), 1.5);
+    private static readonly IBrush RecText = NotaPalette.Record;   // a take being recorded: the record red
     // Live capture waveform inside the growing take region — a brighter red so it
     // reads clearly against the translucent RecFill.
-    private static readonly IBrush RecWave = NotaPalette.Wash(NotaPalette.DangerPale, 0xE0);
+    private static readonly IBrush RecWave = NotaPalette.Wash(NotaPalette.Record, 0xE0);
     // Marquee rubber-band (multi-select): accent wash + accent border.
     private static readonly IBrush MarqueeFill = NotaPalette.Wash(NotaPalette.Marker, 0x28);
     private static readonly IPen   MarqueePen = new Pen(NotaPalette.Wash(NotaPalette.Marker, 0xC0), 1);
@@ -2294,6 +2317,11 @@ public sealed partial class ArrangementView : UserControl
         _clipColors[idx] = v;
         return v;
     }
+    /// <summary>The theme-following brush for a palette index. A view that wants a track's
+    /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
+    /// in the variant that was active when the view was built.</summary>
+    public static SolidColorBrush TrackBrush(int idx) => (SolidColorBrush)ClipColors(idx).content;
+
     /// <summary>A cached, theme-following tint of a palette index. Registers a derivation,
     /// so only call it behind a per-index cache — never per frame; <see cref="Alpha"/> is the
     /// throwaway form for a Render pass.</summary>

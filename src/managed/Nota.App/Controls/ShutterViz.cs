@@ -36,7 +36,7 @@ internal sealed class ShutterSignal : Control
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush ThrC = NotaPalette.Threshold;
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -72,7 +72,7 @@ internal sealed class ShutterSignal : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double gx = 6, gy = 14, gw = w - 12, gh = h - gy - 12;
         if (gw <= 0 || gh <= 0) return;
 
@@ -90,7 +90,7 @@ internal sealed class ShutterSignal : Control
                 for (int i = 0; i < N; i++) g.LineTo(new Point(X(i), YDb(_in[Idx(i)], gy, gh)));
                 g.LineTo(new Point(gx + gw, gy + gh)); g.EndFigure(true);
             }
-            ctx.DrawGeometry(InFill, InPen, area);
+            ctx.DrawGeometry(null, InPen, area);
         }
 
         // threshold + return lines
@@ -107,18 +107,16 @@ internal sealed class ShutterSignal : Control
                 for (int i = 0; i < N; i++) g.LineTo(new Point(X(i), GateY(_gate[Idx(i)])));
                 g.LineTo(new Point(gx + gw, gy + gh)); g.EndFigure(true);
             }
-            ctx.DrawGeometry(GateFill, null, fill);
             Point gp = default; bool has = false;
             for (int i = 0; i < N; i++) { var p = new Point(X(i), GateY(_gate[Idx(i)])); if (has) ctx.DrawLine(GatePen, gp, p); gp = p; has = true; }
         }
 
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("SIGNAL", gx, 2, Muted);
-        Lbl("▩ input", gx + gw - 154, 2, NotaPalette.SignalIn);
-        Lbl("─ gate gain", gx + gw - 108, 2, NotaPalette.Accent);
-        Lbl("┄ threshold", gx + gw - 48, 2, ThrC);
+        NotaGraph.Legend(ctx, gx + gw - 2, 2, ("input", NotaPalette.SignalIn, NotaGraph.Mark.Area),
+            ("gate gain", NotaPalette.Accent, NotaGraph.Mark.Line), ("threshold", ThrC, NotaGraph.Mark.Dashed));
         Lbl($"THRESHOLD {_thrDb:0}", gx + 2, YDb(_thrDb, gy, gh) - 10, ThrC);
-        Lbl("−250 ms", gx, gy + gh + 1, AxisB);
+        Lbl("−250\u2009ms", gx, gy + gh + 1, AxisB);
         Lbl("now", gx + gw - 18, gy + gh + 1, AxisB);
     }
 }
@@ -134,8 +132,8 @@ internal sealed class ShutterDetectorEQ : Control
     private static readonly IPen CurvePen = new Pen(NotaPalette.Teal, 1.4);
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Teal, 0x14);
     private static readonly IBrush Handle = NotaPalette.TealBright;
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private double _hp = 0.301, _lp = 0.548;   // normalized DetHP / DetLP
     private int _drag;   // 0 none, 1 hp, 2 lp
@@ -173,7 +171,7 @@ internal sealed class ShutterDetectorEQ : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double hpF = Exp(_hp, HpLo, HpHi), lpF = Exp(_lp, LpLo, LpHi);
         ctx.DrawLine(new Pen(NotaPalette.SurfaceCard, 1), new Point(0, h * 0.75), new Point(w, h * 0.75));
 
@@ -196,7 +194,6 @@ internal sealed class ShutterDetectorEQ : Control
             foreach (var p in pts) g.LineTo(p);
             g.LineTo(new Point(w, h)); g.EndFigure(true);
         }
-        ctx.DrawGeometry(CurveFill, null, geo);
         for (int i = 1; i < n; i++) ctx.DrawLine(CurvePen, pts[i - 1], pts[i]);
 
         double hx = XOf(hpF, w), lx = XOf(lpF, w);
@@ -213,14 +210,14 @@ internal sealed class AHRGlyph : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.GraphBorder;
-    private static readonly IPen Line = new Pen(NotaPalette.Accent, 1.6) { LineJoin = PenLineJoin.Round };
+    private static readonly IPen Line = new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth) { LineJoin = PenLineJoin.Round };
     private static readonly IPen Dash = new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) };
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double x0 = 5, x1 = w * 0.28, x2 = w * 0.6, x3 = w - 5, top = 5, bot = h - 6;
         ctx.DrawLine(Line, new Point(x0, bot), new Point(x1, top));
         ctx.DrawLine(Line, new Point(x1, top), new Point(x2, top));

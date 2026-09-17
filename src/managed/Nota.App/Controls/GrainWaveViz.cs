@@ -21,13 +21,13 @@ internal sealed class GrainWaveViz : Control
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Wave = NotaPalette.Accent;
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x55), 1);
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IBrush SprayFill = NotaPalette.Wash(NotaPalette.Accent, 0x16);
     private static readonly IPen SprayEdge = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x55), 1);
     private static readonly IPen PosPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x9A), 1) { DashStyle = DashStyle.Dash };
     private static readonly IBrush PlayCol = NotaPalette.Success;
     private static readonly IBrush GridText = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = new("monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private float[] _peaks = Array.Empty<float>();
     private double _dur, _pos, _spray, _grPerSec;
@@ -45,7 +45,7 @@ internal sealed class GrainWaveViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, null, new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double cy = h / 2;
 
         // Time grid + labels behind the waveform.
@@ -56,7 +56,7 @@ internal sealed class GrainWaveViz : Control
             {
                 double x = tt / _dur * w;
                 ctx.DrawLine(GridPen, new Point(x, 0), new Point(x, h));
-                string lbl = _dur >= 1 ? $"{tt:0.##}s" : $"{(int)Math.Round(tt * 1000)}";
+                string lbl = _dur >= 1 ? $"{tt:0.##}\u2009s" : $"{(int)Math.Round(tt * 1000)}";
                 ctx.DrawText(new FormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, GridText), new Point(x + 2, h - 11));
             }
         }

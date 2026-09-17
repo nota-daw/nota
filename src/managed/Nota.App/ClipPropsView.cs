@@ -62,8 +62,8 @@ public sealed class ClipPropsView : UserControl
         _loopText = Mono($"{roll.LengthBeats:0.#}b");
         _loopText.Foreground = AccentBright;
         _selInfo = new TextBlock { Text = roll.SelectionInfo, FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
-        _transposeText = Mono("0 st");
-        _gridText = new TextBlock { Text = GridLabels[_gridIndex] + " ▾", FontSize = 10, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _transposeText = Mono("0\u2009st");
+        _gridText = new TextBlock { Text = GridLabels[_gridIndex], FontSize = 10, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
 
         var body = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
         body.Children.Add(Section("CLIP", ReadoutBox(clipName, TextPrimary, 24, 11, false)));
@@ -80,7 +80,7 @@ public sealed class ClipPropsView : UserControl
         // Loop chip (clips loop by default in this model).
         body.Children.Add(new Border
         {
-            Height = 26, Background = AccentSubtle, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+            Height = 26, Background = AccentSubtle, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
@@ -89,7 +89,7 @@ public sealed class ClipPropsView : UserControl
         });
 
         // Grid + quantize.
-        var gridChip = Chip(_gridText);
+        var gridChip = Chip(Glyph.WithChevron(_gridText));
         gridChip.PointerPressed += (_, e) =>
         {
             e.Handled = true;
@@ -102,7 +102,7 @@ public sealed class ClipPropsView : UserControl
                 mi.Click += (_, _) =>
                 {
                     _gridIndex = idx;
-                    _gridText.Text = GridLabels[idx] + " ▾";
+                    _gridText.Text = GridLabels[idx];
                     _roll.Grid = GridValues[idx];
                 };
                 f.Items.Add(mi);
@@ -117,7 +117,7 @@ public sealed class ClipPropsView : UserControl
 
         var strengthVal = Mono("80%"); strengthVal.Foreground = TextSecondary;
         var strengthBar = new MiniFader(_strength, 1.0) { VerticalAlignment = VerticalAlignment.Center };
-        strengthBar.ValueChanged += v => { _strength = v; strengthVal.Text = $"{v * 100:0}%"; };
+        strengthBar.ValueChanged += v => { _strength = v; strengthVal.Text = $"{v * 100:0}\u2009%"; };
         var strengthRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 2, 0, 0) };
         strengthRow.Children.Add(new TextBlock { Text = "STRENGTH", FontSize = 9, Foreground = TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(strengthBar, 1); strengthRow.Children.Add(strengthBar);
@@ -163,7 +163,7 @@ public sealed class ClipPropsView : UserControl
     private void Transpose(int d)
     {
         _transpose += d;
-        _transposeText.Text = $"{_transpose} st";
+        _transposeText.Text = $"{_transpose}\u2009st";
         _roll.TransposeBy(d);
     }
 
@@ -194,7 +194,7 @@ public sealed class ClipPropsView : UserControl
 
     private static Border FieldBox(double h) => new()
     {
-        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = h, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
     };
 
     private static Border ReadoutBox(string text, IBrush fg, double h, double fs, bool mono)
@@ -208,7 +208,7 @@ public sealed class ClipPropsView : UserControl
 
     private static Border Chip(Control child) => new()
     {
-        Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
         Cursor = new Cursor(StandardCursorType.Hand), Child = child,
     };
 
@@ -216,7 +216,7 @@ public sealed class ClipPropsView : UserControl
     {
         var b = new Border
         {
-            Width = 22, Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+            Width = 22, Height = 22, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = glyph, FontSize = 11, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
@@ -228,13 +228,13 @@ public sealed class ClipPropsView : UserControl
     private static string Position(double beat)
     {
         int bar = (int)(beat / 4) + 1, be = (int)(beat % 4) + 1, six = (int)Math.Round(beat % 1 * 4) + 1;
-        return string.Format(CultureInfo.InvariantCulture, "{0}. {1}. {2}", bar, be, six);
+        return string.Format(NotaNum.Culture, "{0}. {1}. {2}", bar, be, six);
     }
 
     // bars.beats.16ths as a duration (0-based).
     private static string Duration(double beats)
     {
         int bars = (int)(beats / 4), be = (int)(beats % 4), six = (int)Math.Round(beats % 1 * 4);
-        return string.Format(CultureInfo.InvariantCulture, "{0}. {1}. {2}", bars, be, six);
+        return string.Format(NotaNum.Culture, "{0}. {1}. {2}", bars, be, six);
     }
 }

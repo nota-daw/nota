@@ -19,7 +19,7 @@ namespace Nota.App;
 internal sealed class MonolithWaveIcon : Control
 {
     private readonly int _w; private readonly bool _osc3;
-    public IBrush Stroke { get; set; } = Brushes.Gray;
+    public IBrush Stroke { get; set; } = NotaPalette.TextTertiary;
     public MonolithWaveIcon(int wave, bool osc3) { _w = wave; _osc3 = osc3; Width = 14; Height = 8; }
 
     public override void Render(DrawingContext ctx)
@@ -72,9 +72,9 @@ internal sealed class MonolithFilterCurve : Control
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
-    private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+    private static readonly IBrush Grid = NotaGraph.Grid;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
-    private static readonly Typeface Mono = new("ui-monospace, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private double _cut = 0.5, _reso;
     private bool _drag;
 
@@ -132,12 +132,11 @@ internal sealed class MonolithFilterCurve : Control
             for (double x = 0; x <= w; x += 2) { var p = new Point(x, Y(x, w, h)); lc.LineTo(p); fc.LineTo(p); }
             fc.LineTo(new Point(w, h));
         }
-        ctx.DrawGeometry(Fill, null, fill);
-        ctx.DrawGeometry(null, new Pen(Amber, 1.5), line);
+        ctx.DrawGeometry(null, new Pen(Amber, NotaGraph.PrimaryWidth), line);
 
         // freq · Q readout (top-right)
         double hz = 16 * Math.Pow(1250, _cut), q = _reso * 10;
-        string txt = (hz >= 1000 ? $"{hz / 1000:0.0} kHz" : $"{hz:0} Hz") + $" · Q {q:0.0}";
+        string txt = (hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz") + $" · Q {q:0.0}";
         var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, AmberLit);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
@@ -175,7 +174,6 @@ internal sealed class MonolithEnvCurve : Control
             fc.LineTo(new Point(xa, top)); fc.LineTo(new Point(xd, ys)); fc.LineTo(new Point(xs, ys)); fc.LineTo(new Point(w, bot));
         }
         var col = ((SolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x22, col.R, col.G, col.B)), null, fill);
         ctx.DrawGeometry(null, new Pen(Accent, 1.5), line);
     }
 }

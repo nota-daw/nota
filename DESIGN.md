@@ -3,333 +3,453 @@
 
 # Nota design guideline — Ember
 
-Nota's UI runs on **Ember**, one system in two variants:
+Nota's UI runs on **Ember**: warm neutrals (hue ~40°) lit by exactly one accent, brass.
+It comes in two variants of one system:
 
-- **Ember Graphite** (dark, the default) — warm graphite neutrals (hue ~40°) lit by a
-  single brass accent. A DAW is used in dark rooms for long sessions, so this is what
-  the app ships with.
-- **Ember Paper** (light) — the same hue family and the same roles on a warm paper
-  ground. Brass darkens to bronze: against paper a mark needs *less* lightness, not
-  more, to carry the emphasis it had against graphite.
+- **Ember Graphite** (dark, the default) — a DAW is used in dark rooms for long sessions.
+- **Ember Paper** (light) — the same roles on a warm paper ground. Brass darkens to
+  bronze: against paper a mark needs *less* lightness to carry the emphasis it had
+  against graphite.
 
-Preferences → Appearance offers Ember Graphite / Ember Paper / System. The choice applies
-live — no restart — and System follows the OS appearance as it changes.
+Preferences → Appearance offers Graphite / Paper / System; the switch is live.
 
-**[→ Open `DESIGN.html`](DESIGN.html) for the visual reference.** That page renders every
-swatch, control specimen and card layout at true size in the real palette, and is the
-faster way to answer "what should this look like". This file is the text version: the
-rules, the token values, and what to do when they disagree.
+The system comes from the **Nota Design Almanac** (`Nota.html` in the sibling
+`nota-design` folder, next to the mockups — it stays a design artifact there, not a second
+requirement in this repo), which was distilled from the accepted designs — Consort, Pentad, Chamber, and
+the Browser / Arrangement / Transport shell. The almanac describes Graphite only; this
+file is the guideline the app is held to: the almanac's rules as implemented, the Paper
+values, and the few places where the app deliberately departs from the almanac
+(§ Accepted departures).
+
+**[→ Open `DESIGN.html`](DESIGN.html)** for the visual reference — every swatch, the
+control specimens and the card anatomy at true size, with a Graphite / Paper toggle.
 
 ## Source of truth, in order
 
 | Rank | File | Authority |
 |---|---|---|
-| 1 | `src/managed/Nota.App/Theme/NotaTheme.axaml` | **Definitive.** Colour, geometry and control styles. |
-| 2 | `src/managed/Nota.App/Theme/NotaPalette.cs` | Mirror of (1) for custom-drawn views that cannot resolve XAML resources cheaply. Must stay in sync by hand. |
-| 3 | `src/managed/Nota.App/Theme/NotaThemeService.cs` | Applies a variant to both layers and repaints. |
-| 4 | `src/managed/Nota.App/DeviceCardKit.cs` | Palette aliases and the atomic builders for device cards. |
+| 1 | `src/managed/Nota.App/Theme/NotaTheme.axaml` | **Definitive.** Colour (both variants), geometry, type classes, control styles. |
+| 2 | `Theme/NotaPalette.cs` · `NotaGeometry.cs` · `NotaFonts.cs` · `NotaNum.cs` | The C# side for custom-drawn views: colour slots, radii/sizes/spacing, typefaces and type scale, number setting. |
+| 3 | `DeviceCardKit.cs`, `Controls/` | The shared controls and card builders. |
+| 4 | `tests/Nota.SmokeTest/DesignTokenCheck.cs` | Enforces (1) ↔ (2) sync and the bans below. |
 | 5 | `DESIGN.html` / this file | Documentation. If these disagree with 1–4, **these are wrong** — fix them. |
-
-**Never hardcode a colour or size in a view.** In XAML use `{DynamicResource Brush.*}` /
-`{StaticResource Radius.*}`. In custom-drawn C# read from `NotaPalette` or `DeviceCardKit`.
-A literal is not just off-palette — it is stuck in one variant.
 
 ## How theming works
 
-The colour tokens in `NotaTheme.axaml` live in `ResourceDictionary.ThemeDictionaries`
-under `Dark` and `Light`, so **`{DynamicResource Brush.*}` is mandatory** — a
-`StaticResource` cannot follow the variant. Geometry, fonts and control heights are
-variant-independent and stay in the shared dictionary as `StaticResource`.
+Colour tokens live in `NotaTheme.axaml` under `ThemeDictionaries` → `Dark` / `Light`, so
+XAML **must** use `{DynamicResource Brush.*}`; a `StaticResource` cannot follow the
+variant. Geometry, fonts and sizes are variant-independent (`StaticResource`).
 
-`NotaPalette` serves the custom-drawn layer. Each token is a **slot**: one long-lived
-`SolidColorBrush` whose `Color` is re-pointed on a variant change. Views (and the private
-`static readonly` fields that alias them) keep the same brush object, so nothing has to be
-rebuilt. Three ways to get a colour:
+`NotaPalette` serves the custom-drawn layer. Every token is a **slot**: one long-lived
+`SolidColorBrush` whose `Color` is re-pointed when the variant changes, so views keep the
+same brush object and nothing is rebuilt. Ways to get a colour:
 
-| Call | For | Light value |
-|---|---|---|
-| `NotaPalette.SurfaceCard` | a named token | authored by hand |
-| `NotaPalette.Wash(slot, 0x24)` | a translucent tint of a token | tracks its source slot |
-| `NotaPalette.Ink("#D06FB0")` | the identity hue of one visualiser, band or stored tag | derived (same hue, lightness reflected), or pinned in `InkOverrides` |
+| Call | For |
+|---|---|
+| `NotaPalette.Accent` (any named slot) | a token |
+| `NotaPalette.Wash(slot, 0x28)` | a translucent tint of a token; cached, follows its slot |
+| `NotaPalette.Ink("#6D8FB5")` | a one-off device hue or stored tag colour. A hex equal to a role token returns that token; any other gets a derived Paper value, or one pinned in `InkOverrides` |
+| `NotaPalette.Derived(() => …)` | a colour a view computes from slots; register once and cache it |
+| `ArrangementView.TrackBrush(index)` | a track colour |
 
-Two shapes cannot ride a slot and need care:
+**Nothing may snapshot a colour.** `new SolidColorBrush(slot.Color)`, a
+`static readonly Color` taken from the palette, or a static array of palette colours all
+freeze a view in the variant it was built in. Use the slot, a `Wash`, a property
+(`static Color X => NotaPalette.Accent.Color;`), or read `.Color` inside `Render`.
 
-- **`Color` values.** A `static readonly Color` snapshots the variant. Declare it as an
-  expression-bodied property (`static Color X => NotaPalette.Accent.Color;`).
-- **Gradients.** `LinearGradientBrush` copies its stop colours. Build one with
-  `NotaPalette.VGradient(...)`, and only ever into a `static` field — the registration
-  that re-tints it is permanent.
+### Changing a token
 
-Anything a view derives itself — per-index clip brushes, alpha-blended track fills — must
-be dropped on `NotaPalette.Changed`.
+1. Edit **both** branches in `NotaTheme.axaml` — `Dark` and `Light`.
+2. Mirror the pair into the `NotaPalette` slot (the smoke test fails until you do).
+3. Run `python3 scripts/design-html.py` to regenerate `DESIGN.html`, and update the table here.
+4. Look at it in both variants — the app (Preferences → Appearance) and `DESIGN.html`
+   (the toggle in its masthead, or `DESIGN.html?variant=paper`).
 
 ## The rules
 
-- **Colour.** Warm graphite neutrals plus one accent, brass. The accent is spent on
-  primary actions, selection, focus, active state, and the time-domain data that is the
-  point of a DAW — playhead, MIDI notes, waveform. Rec and destructive are danger red.
-  Green / amber / red are for status only. Flat solid fills: **no gradients, no textures,
-  no background images.**
-- **Type.** `Font.UI` (Inter, standing in for Geist) for everything a person reads;
-  `Font.Mono` for anything numeric that is compared or aligned — transport position, BPM,
-  sample counts, latency. Sentence case everywhere. No emoji.
-- **Spacing.** 4px grid. Panels pad 16; cards and track rows pad 10. There are no
-  `Space.*` resources — this is convention only.
-- **Geometry.** Radii scale with the element: clips 4, chips/wells/checkboxes 5, buttons
-  and menus 7, pills 8, cards and panels 10, dialogs 14.
-- **Structure over shadows.** Panels separate with 1px `Brush.BorderDefault` lines.
-  Shadows belong only to floating layers — menus and dialogs.
-- **States.** Hover `Brush.SurfaceHover`; pressed `Brush.SurfaceActive`; checked
-  `Brush.AccentSubtle` fill + `Brush.Accent` border + `Brush.AccentBright` text; selected
-  `Brush.SurfaceSelected`; focus a 1px `Brush.AccentBright` ring. **No scale or bounce
-  transforms.**
-- **Motion.** 100–240ms, ease-out, opacity plus ≤6px translate. Motion that delays a click
-  is a bug.
-- **Copy.** Calm, technical, precise. Imperative for actions, declarative for status
-  (`Playing · 128 BPM`). Middle dot `·` as the meta separator. Empty states get one short
-  line and one primary action.
-- **Icons.** Lucide geometry, stroke ~1.75. No emoji, no unicode-as-icons except `·` and
-  the transport glyphs already in use.
+1. **One accent.** Brass means exactly "active, selected, changed". Everything else is a
+   surface, text or semantics. There is no second accent.
+2. **Semantics only where they apply.** Red belongs to *active recording* (`Record`) and to
+   overload (`Danger`/Alert). Green and yellow are meter zones and live signal.
+3. **Role chromas live only inside graphs** — never on buttons, never as state.
+4. **Flat material.** No gradients, no glow, no textures, no skeuomorphism. Depth is
+   lightness plus a hairline; three levels at most.
+5. **Two typefaces, one split.** Geist for names and words; Geist Mono for anything that is
+   a measurement. Nothing smaller than 7 px.
+6. **One implementation per control**, differing only in size. A control's value is
+   always visible next to it — never only in a tooltip.
+7. **State changes colour, never size, border width or position.** Nothing moves on hover.
+8. **Real time is not animated.** Meters, playhead and spectra jump to the value.
+9. **Muted is the next Ink step, not opacity.** Opacity is not a state.
+10. **Numbers are set, not printed:** point decimal, U+2212 minus, thin space before the
+    unit, fixed precision.
 
 ## Tokens
 
-### Surfaces
+Values are Graphite / Paper. Paper values were derived from Graphite by lightness
+reflection and pinned by hand where the reflection read poorly.
 
-| Key | Graphite | Paper | Use |
-|---|---|---|---|
-| `Brush.SurfaceAbyss` | `#0A0908` | `#DCD6C5` | Deepest recess — meter troughs, transport console |
-| `Brush.BgSunken` | `#100F0D` | `#E4DFD1` | Wells, lanes, graph grounds, chrome |
-| `Brush.BgApp` | `#171613` | `#EFEADE` | App ground |
-| `Brush.LaneB` | `#191814` | `#E9E4D6` | Lane alternation |
-| `Brush.SurfaceCard` | `#1E1C18` | `#F8F5EC` | Panels, cards |
-| `Brush.SurfaceRaised` | `#26231E` | `#FFFEF8` | Transport, chips, device cards |
-| `Brush.SurfaceHover` | `#2E2B24` | `#E7E1D0` | Hover |
-| `Brush.SurfaceActive` | `#332F27` | `#DBD4C0` | Pressed |
-| `Brush.SurfaceSelected` | `#24D8A03D` | `#2EA87415` | Selection (accent wash) |
+### Surfaces — nine steps, far to near
 
-Forward still means lighter in both variants, and a well is still darker than the surface
-it sits in. Hover is the one role that flips direction: it lifts on graphite and settles
-on paper.
+| Key | Almanac | Graphite | Paper | Use |
+|---|---|---|---|---|
+| `Brush.SurfaceAbyss` | Void | `#0A0908` | `#D8D1BE` | Deepest recess — the transport strip |
+| `Brush.BgApp` | App | `#0B0A09` | `#DCD6C5` | Window ground, plugin body |
+| `Brush.Gutter` | Gutter | `#0C0B09` | `#E0DAC9` | The gaps panels float in |
+| `Brush.BgSunken` | Well | `#100F0D` | `#E4DFD1` | Graph windows, fields, slider tracks (`ChromeBg`, `SurfaceActive` alias it) |
+| `Brush.Panel` | Panel | `#141310` | `#EAE5D7` | Browser, headers, inspector; disabled button |
+| `Brush.SurfaceCard` | Card | `#171613` | `#EFEADE` | A section inside a device |
+| `Brush.SurfaceRaised` | Raised | `#1C1A16` | `#F8F5EC` | Button at rest |
+| `Brush.SurfaceHover` | Hover | `#252219` | `#E7E1D0` | Hovered button or row |
+| `Brush.TrackOff` | Track off | `#26231E` | `#DBD4C0` | Track of an off switch |
+| `Brush.LaneB` | — | `#131210` | `#E7E2D4` | Alternate arrangement lane |
+| `Brush.SurfaceSelected` / `AccentSubtle` | Brass Wash | `#241F17` | `#F2E4C4` | Selected row, engaged button ground |
 
-### Text and borders
+### Lines
 
-| Key | Graphite | Paper | Use |
-|---|---|---|---|
-| `Brush.TextPrimary` | `#E9E4D8` | `#241F17` | Warm off-white / warm near-black |
-| `Brush.TextSecondary` | `#A39D8F` | `#5E5849` | Labels, captions |
-| `Brush.TextTertiary` | `#6E6A5E` | `#8A8474` | Section labels |
-| `Brush.TextDisabled` | `#4A463D` | `#ADA694` | Disabled |
-| `Brush.TextOnAccent` | `#171613` | `#FFFBF2` | Ink on the accent fill |
-| `Brush.BorderDefault` | `#2C2923` | `#D5CEBB` | Panel separation |
-| `Brush.BorderStrong` | `#3A362D` | `#BDB5A0` | Control outlines |
-| `Brush.GridBeat` | `#1F1D18` | `#DED8C8` | Beat lines |
-| `Brush.GridBar` | `#2A2721` | `#CFC8B4` | Bar lines |
+| Key | Almanac | Graphite | Paper | Use |
+|---|---|---|---|---|
+| `Brush.Hairline` (`NotaPalette.GraphBorder`) | Hairline | `#221F1A` | `#D5CFBE` | Row dividers, graph frame |
+| `Brush.BorderDefault` | Border | `#2C2923` | `#D5CEBB` | Panel, button, field |
+| `Brush.BorderStrong` | Border strong | `#3A362D` | `#BDB5A0` | Knob cap, hovered border, inactive fill |
+| `Brush.BorderBrass` | Border brass | `#6B5326` | `#C9A254` | Engaged button, focus |
+| `Brush.GridBeat` | Grid | `#1E1C18` | `#DED8C8` | Grid inside graphs, zero axis |
+| `Brush.GridBar` | — | `#2A2721` | `#CFC8B4` | Bar lines |
 
-### Accent and semantic
+### Ink — eight steps, strictly by importance
 
-| Key | Graphite | Paper | Use |
-|---|---|---|---|
-| `Brush.Accent` | `#D8A03D` | `#A87415` | Brass / bronze — the audio path |
-| `Brush.AccentHover` | `#E8B24C` | `#8F6110` | Hover on solid fills |
-| `Brush.AccentBright` | `#F0C060` | `#744D07` | Focus ring, playhead, selected note |
-| `Brush.AccentSubtle` | `#24D8A03D` | `#24A87415` | Toggle-on wash |
-| `Brush.Success` | `#58B368` | `#2C7A3E` | Signal present, Session play |
-| `Brush.Warning` | `#D9C34C` | `#837010` | Meter caution zone |
-| `Brush.Danger` | `#D95F4C` | `#B03A28` | Record, destructive |
-| `Brush.DangerHover` | `#E4715F` | `#C64A36` | Hover |
+| Key | Step | Graphite | Paper | Use |
+|---|---|---|---|---|
+| `Brush.TextHeading` | Ink 0 | `#F2EDE1` | `#1A150E` | Page title, project name. Rare. |
+| `Brush.TextPrimary` | Ink 1 | `#E9E4D8` | `#241F17` | Device, track, preset names; values |
+| `Brush.TextStrong` | Ink 2 | `#C7C0B0` | `#3E382C` | Button text, transport readouts |
+| `Brush.TextSecondary` | Ink 3 | `#A39D8F` | `#5E5849` | Inactive but readable, metadata |
+| `Brush.TextMuted` | Ink 4 | `#8D8779` | `#746D5C` | Explanations, units, hints |
+| `Brush.TextTertiary` | Ink 5 | `#6E6A5E` | `#8A8474` | Caps labels over parameters; empty states |
+| `Brush.TextDisabled` | Ink 6 | `#55514A` | `#9E9786` | Placeholder, disabled action |
+| `Brush.TextAxis` | Ink 7 | `#4A463D` | `#ADA694` | Axis labels inside graphs only |
+| `Brush.TextOnAccent` | — | `#171613` | `#FFFBF2` | Text on solid brass |
 
-The accent ramp reads "more prominent" downward on paper and upward on graphite:
-`AccentBright` is the hottest mark in both, which means the *lightest* on graphite and the
-*darkest* on paper.
+### Brass
 
-Fluent's `SystemAccentColor` and its six ramps are retinted to brass, so stock Avalonia
-controls match instead of shipping default blue.
+| Key | Almanac | Graphite | Paper | Use |
+|---|---|---|---|---|
+| `Brush.Accent` | Brass | `#D8A03D` | `#A87415` | Arc, fill, playhead, the one solid button |
+| `Brush.AccentBright` | Brass Light | `#F0C060` | `#744D07` | Knob pointer, modified label, handle |
+| `Brush.AccentHover` | Brass Hover | `#E9BE6A` | `#8F6110` | Engaged text, brass link hover |
+| `Brush.AccentDeep` | Brass Deep | `#B08536` | `#7A5008` | Pressed |
+| `Brush.AccentDim` | Brass Dim | `#8A6B2E` | `#9C8034` | Eyebrows, mono section marks |
+| `Brush.AccentEdge` | Brass Edge | `#5E4A22` | `#D3B173` | Brass chip border |
+
+`AccentBright` is the hottest mark in both variants — the lightest on graphite, the darkest
+on paper. Fluent's `SystemAccentColor` ramps are retinted to brass.
+
+### Semantics
+
+| Key | Almanac | Graphite | Paper | Use |
+|---|---|---|---|---|
+| `Brush.Record` | Record | `#C25B44` | `#B54A32` | Active recording — the only claim on red |
+| `Brush.RecordInk` | — | `#F4E3DC` | `#FFF4EE` | The disc on an engaged record button |
+| `Brush.Danger` | Alert | `#C2554A` | `#B13E33` | Overload, clipping |
+| `Brush.DangerBright` | Alert Light | `#E08A72` | `#A3391B` | Overload readout text |
+| `Brush.Warning` | Caution | `#D9C34C` | `#837010` | Meter −6…0 dB |
+| `Brush.Success` | Signal | `#58B368` | `#2C7A3E` | Working meter zone, live signal |
+| `Brush.SuccessDim` | Signal Dim | `#7FB069` | `#609548` | Transport input, metronome |
+
+### Role chromas — inside graphs only
+
+When two to four sources share a graph, each takes a chroma in this fixed order
+(`NotaGraph.Chroma(n)`): **Brass** (primary: left channel, mid band, main signal) ·
+**Teal** `#5B9E9C` / `#2F7472` (lows, early reflections, input, modulation) · **Rose**
+`#B57286` / `#86465B` (right channel, highs, tail) · **Steel** `#6D8FB5` / `#3E6288` (rare).
+Light pairs for text: `ChromaTealLight` `#7FC0BE`, `ChromaRoseLight` `#D79BAB`.
+
+A modulated knob's arc takes the chroma of its source; its label stays neutral.
+
+### Track palette — nine roles
+
+| Drums | Perc | Bass | Keys | Texture | FX | Brass | Vox | Return |
+|---|---|---|---|---|---|---|---|---|
+| `#58B368` | `#4E9E7A` | `#3E8E8E` | `#5AA0B8` | `#C77F55` | `#7A6FB0` | `#B05A7A` | `#9AA64A` | `#7FA88E` |
+| `#328140` | `#306F53` | `#256464` | `#317187` | `#985127` | `#4B4082` | `#7F3450` | `#6C752C` | `#4D7A5D` |
+
+One lightness for all, so no track is louder than another. Each role has three shades
+(base · light · dark) that tracks inside a group step through. Return buses draw from the
+ninth role (`ReturnA/B`); master is brass. Old projects keep their stored index, which
+now points at the new hue.
 
 ### Geometry
 
-`Radius.Clip` 4 · `Radius.Sm` 5 · `Radius.Md` 7 · `Radius.Pill` 8 · `Radius.Lg` 10 ·
-`Radius.Xl` 14
-`Control.Sm` 22 · `Control.Md` 26 · `Control.Lg` 28
-
-### Track palette
-
-Assigned round-robin, muted and equal-weight so no track outranks another. A track inside
-a group takes its group's hue instead, varied across the three shades so siblings stay
-apart inside one family; an explicitly coloured track keeps its own colour. Paper keeps
-the eight hues and darkens them, so a clip's full-strength content still reads over a 16%
-fill of itself:
-
-| | rust | amber | olive | sage | teal | slate | mauve | rose |
-|---|---|---|---|---|---|---|---|---|
-| Graphite | `#C4756A` | `#C99C55` | `#9BA65D` | `#6FA383` | `#5B9E9C` | `#6D8FB5` | `#9B7FA6` | `#B57286` |
-| Paper | `#9A4A3E` | `#97682A` | `#646E32` | `#42765A` | `#2F7472` | `#3E6288` | `#6A5176` | `#86465B` |
-
-Returns `#7C88A0` / `#A08A7C` (paper `#4D5972` / `#705B4E`); master reuses the accent.
-
-Track 5 (teal, `#5B9E9C`) doubles as the **modulation accent** — see below.
-
-## Text roles
-
-| Class | Spec | Colour |
+| Radius (`Radius.*` / `NotaRadius`) | px | For |
 |---|---|---|
-| `TextBlock.Heading` | 13px SemiBold | TextPrimary |
-| default control text | 11px Medium | TextPrimary |
-| `TextBlock.Caption` | 10px | TextSecondary |
-| `TextBlock.SectionLabel` | 10px Bold | TextTertiary |
-| `TextBlock.Mono` | `Font.Mono` | — |
+| `Bar` | 1 | Spectrum bars, stop square |
+| `Clip` | 2 | Clip, meter, slider track |
+| `Badge` | 3 | Small segment, badge in a device |
+| `Control` | 4 | Graph window, button, dropdown |
+| `Tile` | 5 | Transport button, search, tile |
+| `Panel` | 6 | Panel, device section, transport module |
+| `Body` | 8 | Device body, window frame |
+| `Pill` | ½ height | Filter chip, switch |
 
-Inside device cards the scale is tighter: knob captions 8px uppercase tertiary, knob
-values 8px mono, card titles 11px SemiBold.
+| Size (`Control.*` / `NotaSize`) | px |
+|---|---|
+| Device card | 700 × 260 |
+| Transport strip (`Console`) | 42 · buttons 34 · Play 46 |
+| Shell button / field (`Shell`) | 26 |
+| Tab segment (`Seg`) in container (`SegGroup`) | 24 in 30 |
+| Filter chip (`Chip`) | 20 |
+| Switch | 18 × 10, knob 7, inset 1.5 |
+| Knob (`KnobSecondary` / `KnobRegular` / `KnobMain`) | 34 / 36 / 44 |
+| Parameter cell (`ParamCell`) | 53 tall |
+| Slider track | 3, handle 6 × 7 |
+| Meter | 11 wide, 5 between channels |
+| List row | 26 |
 
-## Device cards
+| Spacing (`Space.*` / `NotaSpace`) | px |
+|---|---|
+| In a device: hair · gap · inset · section inset | 2 · 5 · 6 · 8 |
+| In the shell: tile · gutter between panels · inside a panel | 8 · 12 · 20 |
 
-Every built-in device and instrument editor is a card of fixed height **260px**
-(`DeviceCardKit.CardH`). Width is declared per kind by the body strategy.
+**Depth, exactly three levels:** sunken — Well, Hairline, `Shadow.Sunken` (inner top line
+`#80000000`) · flat — Card, Border, no shadow · raised — Raised, Border, `Shadow.Raised`
+(inner top line `#08FFFFFF`). No drop shadows except a floating plugin window.
 
-**Vertical budget:** header 26 · LIVE strip 34 · body 200.
+## Type
 
-- **Header (26px)** — power dot, device name (11px SemiBold), type tag (9px bold
-  tertiary, .08em tracking), preset selector, A/B toggle, then right-aligned CPU %,
-  stereo meter, peak dB, close and drag glyphs.
-- **LIVE strip (34px)** — the two or three parameters worth reaching for mid-take, as
-  inline 3px sliders with an 8×9 cap and a mono value.
-- **Body (200px)** — optional 80px tab rail, main area, optional 100–150px output rail.
+`Font.UI` = **Geist** 400/500/600/700, `Font.Mono` = **Geist Mono** 400/500, both bundled
+(`assets/fonts`, SIL OFL). `NotaFonts` holds the typefaces for custom drawing — never name
+a font family in a view. Geist lacks the thin space; it falls back to the system font.
 
-**Frame:** `Brush.SurfaceRaised` fill, 1px `Brush.BorderDefault`, radius 7, clipped.
-Header has a 1px bottom border and 8px horizontal pad. Body inset is 10px unless the
-strategy sets `FullBleed`.
+**Shell scale** (`NotaType`, `TextBlock.*` classes)
 
-### The two-colour rule
+| Class | Spec | For |
+|---|---|---|
+| `Title` | 600 · 26 | Section title |
+| `Heading` | 600 · 13 | Project name in the header |
+| `Name` | 500 · 12 | Track, preset, file name |
+| default | 500 · 11 | Buttons, tabs, chips |
+| `Caption` | 400 · 11, Ink 4 | Explanation, hint |
+| `SectionLabel` / `GroupLabel` | 700 · 10 caps, .14em | Panel group header |
+| `Readout` | Mono 500 · 13 | Position and tempo |
+| `Value` | Mono 400 · 10 | Row values, metadata |
+| `Eyebrow` | Mono 500 · 9 caps, .18em | Eyebrow, format badge |
 
-This carries the most meaning and is the easiest to get wrong:
+**Device scale**
 
-- **Brass `Brush.Accent` = the audio path.** Anything the signal passes through — gain,
-  frequency, drive, mix. On a knob: `Accent = true`.
-- **Teal `NotaPalette.Teal` = modulation and detection.** Anything that *controls* rather than
-  carries the signal — LFOs, envelopes, sidechain detectors, followers. Pass it as the
-  knob's `ArcColor`, and group those parameters behind a 2px teal left border with a teal
-  section label.
-- **Output rail stays muted.** End-of-chain trim and pan fill with `Brush.BorderStrong`,
-  not brass — housekeeping, not the sound.
-- **Active tab takes a 2px left border** — brass for signal pages, teal for modulation
-  pages.
+| Class | Spec | For |
+|---|---|---|
+| `DeviceName` | 600 · 12 | Device name in the header |
+| `DeviceSection` | 700 · 9 caps, .12em | Section title |
+| `RowLabel` | 700 · 8 caps, .1em | Slider-row label |
+| `KnobLabel` | 700 · 7 caps, .08em | Label under a knob |
+| `KnobValue` | Mono 400 · 7 | Parameter value |
+| `Axis` | Mono 400 · 7 | Axis label inside a graph |
 
-## Control kit
+### Numbers
 
-Avalonia's stock controls are too chunky at this density, so the card layer is
-custom-drawn. Builders live in `DeviceCardKit`; controls in `Controls/`.
+`NotaNum.Install()` (called in `App.Initialize`) makes the display culture the default:
+invariant with U+2212 as the negative sign — so every implicit `{v:0.0}` prints `−3.3`
+with a point on any OS locale; typed input still accepts a hyphen. Project and preset
+files are JSON and never go through it.
+
+- The unit follows a **thin space**: `4.6 s`, `−3.3 dB`, `72 %` (` ` in source).
+- A plus only where the sign matters: `+0.8 dB`.
+- Fixed precision: dB one decimal · tempo two (`120.00`) · percent whole · Hz whole up to
+  999, then `3.2 k`. Helpers: `NotaNum.Db`, `Hz`, `Pct`, `Bpm`, `Time`, `Unit`, `F`.
+- Width must not jump across 10 or 100 — mono plus fixed precision.
+- Axis labels in graphs and clip lengths in beats may use variable precision.
+
+### Labels and copy
+
+- Parameter labels: English caps, one word — `DECAY`, `PRE-DELAY`, `FEEDBACK`. No colons,
+  no "Value", no vowel-dropped contractions (`FDBK`, `ATK`, `LVL`). The established
+  truncations `FREQ`, `RESO`, `THRESH` are allowed: the full words do not fit a 53 px cell.
+- Shell tooltips: short and verb-first — "Snap clips to the grid (hold Alt to drag
+  freely)", "Clear the peak hold". Not "Click to…". The value stays on the control;
+  a tooltip may add the unit or range.
+- Browser category tags lowercase (`bass`, `analog`; acronyms stay `EQ`, `LFO`); the
+  processing-type badge is mono caps (`CONVOLUTION`, `DYNAMICS`).
+- Preset names describe a place or material (`Stone Vault`, `Tape Glue`), not an emotion.
+  Device names are one word from the musical vocabulary (`Chamber`, `Prism`).
+- Middle dot `·` separates meta. Sentence case. No emoji, no exclamation marks.
+
+## Controls
+
+Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing anything.
 
 ### Interaction contract
 
-Every value control behaves identically — match this exactly when adding one:
-
-- **Vertical drag**, up increases; full range over ~140px.
-- **Double-click** restores `Default` (`NaN` disables).
-- **Left button only** — right-click bubbles so the CV-modulate menu still opens.
-- **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`,
-  so a move made while playing is recorded.
+- **Vertical drag**, up increases, full range over ~140 px; Shift (or Ctrl/⌘) is fine.
+  Cursor `ns-resize`. A click never jumps the value. No horizontal drag anywhere.
+- **Double-click** restores the default where one is supplied.
+- **Left button only** — right-click bubbles to the CV-modulate / MIDI Learn menu.
+- **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`.
 - **`MidiLearn.Bind`** registers the control with its display name.
-- **Live follow** re-reads engine state each UI tick and **skips while `Dragging`**, so
-  automation never fights the hand.
-- **Numeric readouts are mono**, so width does not jump as digits change.
+- **Live follow** re-reads engine state each tick and skips while dragging.
 
 ### Inventory
 
-| Control | Size | Role |
-|---|---|---|
-| `Knob` | 38×38, 270° from 135° | The workhorse. Sunken groove, value arc, pointer at 0.66 r. |
-| `KnobCell` | 58 wide | Knob + 8px mono value + 8px uppercase caption. Under 52 wide both drop to 7px. |
-| `ValueBar` | h 18, min-w 46 | Sunken field, value text over a horizontal fill. |
-| `MiniFader` | h 12, min-w 40 | 3px track, 8×9 cap. For the 64px track header. |
-| `VFader` | w 30, 0–1.5 | Mixer strip fader. |
-| `PanKnob` | 26×26, −1…1 | Radial pan, 1.5px ring, 2px indicator. |
-| `PanBar` | bipolar | Track-header pan, fills centre-out, reads `50L … C … 50R`. |
-| `DragNumber` | mono | Drag to nudge, double-click to type, commits on Enter/blur. |
-| `MeterBar` | v w10 / h 12×80 | Peak+RMS, ~30 Hz, −60…0 dB, green/amber/red, peak-hold tick. |
-| `StereoMeter` | two 3px bars | L over R, output rail and card header. |
-| `GrMeter` | hangs from top | Gain reduction — more compression reads as more bar. |
-| `MixBar` | h 6 | Proportional source levels as amber segments. |
-| `ChipRow` | radius 4, 9px | Single-select; on = brass fill + `TextOnAccent`. |
-| `Labeled` | 8px uppercase | Centred caption above any control. |
-| `TextButton` | radius 5, 11px | In-card action. |
-| `BypassTag` | 8px bold | The `BYPASSED` marker. |
-| `NaBadge` | h 16, radius 8 | `N/A` / `M7+` — feature not built. The control stays visible but disabled so nothing shifts later. |
-| `Glyph` / `Hint` | 10px / 11px | Clickable text glyph; quiet inline hint. |
+| Control | Spec |
+|---|---|
+| `Knob` | 52-grid: groove r21 stroke 5, 270° from −135°, cap r14, pointer 2.4 Brass Light. Sizes snap to 34 / 36 / 44. `IsModified`, `IsDim`, `ArcColor` for a modulation source. |
+| `DeviceCardKit.KnobCell` | Knob → label 7/700 caps → value mono 7, no gap; 53 tall under a 34 knob. Label and value go Brass Light when modified or `emphasised`. |
+| `SwitchTrack` / `DeviceCardKit.Switch` | 18 × 10, knob 7, inset 1.5; on = brass + panel-coloured knob right, off = Track off + Ink 5 knob left. Word to the right, caps 7 in a device, 11 in the shell. |
+| `DeviceCardKit.Segments` | Sunken container; selected = solid brass with dark text. 9 px in a device, 11 in the shell (`ToggleButton.seg` in `Border.segmented`). |
+| `SliderTrack` / `DeviceCardKit.SliderRow` | Label · 3 px well track · 6 × 7 handle · fixed-width mono value right. Bipolar fills from centre. Inactive loses brass, keeps the number. |
+| `MiniFader`, `PanBar`, `VFader` | Track-header gain and pan, mixer fader — same drag contract. |
+| `DragNumber` | Mono field: drag, or double-click to type. |
+| Buttons (`Button`, `.primary`, `.ghost`, `.cell`, `.chip`, `.tp-icon`, `.tp-play`) | 26 tall; raised at rest. **One** solid-brass action per context; every other engaged button is Brass Wash + `BorderBrass` + `AccentHover` text. |
+| Fields (`TextBox.field`, `.search`) | 26, sunken; focus = `BorderBrass`, no ring. |
+| Filter chips | 20, pill, 9 side pad, a category-colour dot instead of an icon; one line, overflow folds into `+N`. |
+| `Glyph` | Icons drawn as geometry: stop 10 r1, record 11 disc, play 11 × 14 triangle; the rest a round stroke of ~15 % of the size (min 1.2). No icon font, no unicode glyphs. |
+| `MeterBar`, `StereoMeter`, `GrMeter` | 11 wide, 5 apart, radius 2 on Well; Signal → −6 dB Caution → 0 Alert; −60…+6; peak hold stays until clicked. |
+| `Inactive.Set(root, on, interactive)` | Puts a subtree into the disabled look by colour (Ink 6, brass → Border strong, controls `IsDim`). |
+| `NaBadge` | Feature not built yet; the control stays so nothing shifts later. |
+
+**Record:** at rest a neutral button with a red disc; engaged, solid `Record` with a
+`RecordInk` disc. The same rule arms tracks in the arrangement, mixer and Session.
+
+### States
+
+| State | Ground · border · text |
+|---|---|
+| Rest | Raised · Border · Ink 2 |
+| Hover | Hover · Border strong · Ink 1 (120 ms) |
+| Pressed | Well · Brass Deep — no 1 px shift |
+| Engaged | Brass Wash · Border brass · Brass Hover |
+| Selected | Brass Wash + 2 px brass bar on the left; name Ink 1 |
+| Focus | Border brass, no outline |
+| Disabled | Panel · Hairline · Ink 6 — no opacity |
+| Modified | label and value → Brass Light; no dot |
+
+**Motion:** hover and colour 120 ms ease-out (`BrushTransition`); nothing real-time is
+animated. **Empty state:** one line of Ink 5, centred, no illustration or call-to-action
+button; details go in a tooltip; the area keeps its size and frame.
 
 ## Visualisers
 
-~40 custom-drawn views in `Controls/`. The rule: **a device draws the thing it does**, not
-a generic graph. Shared ground is `Brush.BgSunken` with a `NotaPalette.GraphBorder` inner border.
+About 45 custom-drawn views in `Controls/`. A device draws **the thing it does**, and where
+possible draws it for real (the reverb tail is an actual impulse response; the amp
+harmonics push a sine through the real waveshaper).
 
-Families: transfer curves (`AmpCurve`, `CompTransfer`, `VintageViz`) · frequency response
-(`AutoFilterCurve`, `DynamicEqCurve`, `EqCurve`) · spectra (`AmpHarmonics`,
-`OperatorSpectrumViz`) · scrolling history (`AutoGainViz`, `CompGrHistory`,
-`CeilingScope`) · waveform (`GrainWaveViz`, `StrataWave`, `AuroraStack`) · grids
-(`ArpGrid`, `VoltMatrix`, `DelayTaps`) · envelopes (`SynthViz`, `ReverbTail`) ·
-instrument-as-itself (`PendulumViz`, `FluxVectorPad`, `ChordKeysViz`) · icons
-(`WaveIcon`, `GrainShapeIcon`).
+All live in one **graph window** (`Controls/NotaGraph.cs`):
 
-Where possible these are **real**: the reverb tail is an actual decaying impulse response,
-and the amp harmonics come from pushing a unit sine through the same waveshaper the audio
-takes — not a drawing that resembles one.
+- Well ground, 1 px Hairline frame, radius 4, grid in `GridBeat`.
+- Axis labels mono 7–8 in Ink 7, **in the corners** — never full axes with ticks. A
+  frequency graph is labelled only in its bottom corners (`20` · `20k Hz`).
+- Title caps 8 top-left; the legend lives **inside** the window, a drawn sample next to a
+  value (`NotaGraph.Legend`).
+- Primary curve 1.8 px brass; secondary 1.2–1.6 px in their chroma. **No fills under
+  curves, no gradients.**
+- Nodes 7 px with a 2 px ground-coloured ring; active brass, the rest Ink 3.
+- Waveforms: second channel at 70 %; the trimmed part darkened by 72 %, not hidden; the
+  boundary a 1 px brass line with its value.
+- Bars: 1–2 px gaps, radius 1, no outline; brass only for a selected range, else Border
+  strong; updates are discrete.
+- Timeline: a clip is a flat rectangle in its track colour, radius 2, no outline; the
+  playhead is 1 px brass with a 7 × 5 flag and no glow.
 
-## Layout skeleton
+## Device cards
 
-`36px title bar → 60px transport → body (on Brush.BgApp) → 22px status bar.`
-Panels are `Brush.SurfaceCard` with a 1px bottom border.
+Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width from
+`IDeviceBody.Width`).
 
-The transport is **one row**, not the transport + toolbar pair it used to be. It reads
-left to right as which view · what plays · the numbers you set · the switches you flip ·
-then, pinned right, what the machine is doing. Transport, position and loop share a
-single `Border.console` recess on `Brush.SurfaceAbyss` so playback reads as one object;
-tempo, signature, grid and launch quantize use one `.cell` shape — mono value over an 8px
-`.CellLabel` — so the row scans as a strip of readouts rather than a queue of pills.
-The four switches — metronome, follow playhead, snap, automation — are icon-only 28px
-`tp-icon` toggles that draw the thing they do (a metronome, a playhead on its ruler, a
-horseshoe magnet, a breakpoint envelope) and carry their name in a tooltip; none sets a Foreground, so the engaged state turns the
-glyph brass through the base `ToggleButton:checked`. Controls that belong to one context
-appear only there: launch quantize in Session, "Re-enable" only while a lane is
-overridden.
+- **Header 22** (`HeaderH`): device name (12/600) on the left; the processing-type badge
+  (mono caps; instruments add live voices, `SUBTRACTIVE · 3/16`) and the bypass switch on
+  the right. **Nothing else.** Presets, A/B, move and delete live in the header's
+  right-click menu; drag the card by its whole header; Delete removes it.
+- **Body 238**, inset 6 (`NotaSpace.DeviceInset`) unless the body is `FullBleed`.
+  Sections radius 6, gap 5, section inset 6–8; a knob row is 52–54 tall.
+- **Three columns, left to right: choice → work → output** — source or preset on the left,
+  graph and parameters in the middle, levels and mix on the right.
+- **Brass** marks the audio path and active state; modulation shows its source chroma
+  (teal for LFOs and envelopes) on the arc; end-of-chain trim fills with Border strong.
+- A bypassed card keeps its layout and turns to the disabled look via `Inactive`.
 
-The body holds **islands**: the browser, the arrangement and the modular canvas are
-`Radius.Md` cards with a 1px `Brush.BorderDefault` edge, clipped to their bounds, floating
-on `Brush.BgApp` with an 8px gutter. The splitter between two islands carries no line of
-its own — it is a 2px transparent grab strip inside that gutter.
+Width exceptions, by decision: **Rhythm 900, Flux 900, Bass 1060, Physical 720** (squeezing
+them would be a redesign) and the host-plugin / parameter-list stubs (230, 190).
 
-Arrangement rows are not one pitch. A **track** row is 64px and its header carries every
-control (name + kind · mute/solo/arm + input · fader + dB + pan, with a level rail on the
-right edge). A **group** row is a 26px titled bar — disclosure, name, mute/solo, a 4px
-level rail, kind tag — and opens to a full 64px row only while it is the selected track.
-Header column 228px. Every y↔row conversion goes through `ArrangementView.RowTop` /
-`RowAtY`; nothing multiplies by a row constant.
+## Shell
 
-A **clip** is a tinted body (`Radius.Clip`) under a 2px band in the track colour, with the
-waveform or notes across its full height. The name is drawn over the body — not in a strip
-of its own — and only where a run of clips begins.
+```
+┌ header 36 ─ project name, centred ─────────────────────────────────────┐
+│ transport 42 ─ view switch · console · tempo · signature · grid · …  CPU│
+├─────────────┬──────────────────────────────────────────────────────────┤
+│ browser     │ canvas (arrangement · session · modular)                 │
+├─────────────┴──────────────────────────────────────────────────────────┤
+└ status 22 ─────────────────────────────────────────────────────────────┘
+```
 
-Transport buttons set `IsTabStop` and `Focusable` to false, so global hotkeys (Space, R,
-L, Return) always reach the window instead of a focused control.
+- **Header 36** — frameless; macOS traffic lights in a left inset, the project name
+  (`Heading`) centred; Windows reserves 180 px for the caption buttons.
+- **Transport 42, under the header** (`Border.transport` on Void, hairline below). It reads
+  left to right: view switch (Arrangement · Session · Modular) · the console (stop / play /
+  record, position, loop) · tempo `120.00`, signature, grid · the switches (metronome,
+  follow, snap, automation) · `+ Track` — then, pinned right, MIDI, CPU and master. Launch
+  quantize appears only in Session. Transport buttons are not focusable, so Space / R / L /
+  Return always reach the window.
+- **Body** — the browser on the left and the canvas float as panels on `Gutter` with 12 px
+  gaps; the canvas is always sunken relative to panels. The splitter is a transparent grab
+  strip inside the gap.
+- **List rows** are 26 and one line: a colour dot or bar, the name, mono metadata right.
+- **Arrangement:** track rows 64 (the header carries every control), group rows 26 (open to
+  64 while selected), header column 228, default zoom 28 px per beat. Every y ↔ row
+  conversion goes through `ArrangementView.RowTop` / `RowAtY`.
+
+## Enforced by tests
+
+`tests/Nota.SmokeTest/DesignTokenCheck.cs` runs in the smoke test and fails the build on:
+
+| Check | Holds |
+|---|---|
+| `Run` | Dark/Light key parity; every `NotaPalette` slot matches its XAML pair; `KeyMap` keys exist |
+| `RunGeometry` | XAML ↔ `NotaGeometry` values; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views |
+| `RunType` | Fonts bundled and matched; no font names in views; nothing under 7 px |
+| `RunControls` | No unicode icons typed as text; Knob / Switch / Slider sizes |
+| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter ballistics; meter 11/5; playhead without glow |
+| `RunLayout` | Header 22; cards 700 except the listed exceptions; transport 42 at the top; rows 26–28 |
+| `RunNumbers` | Display culture installed; no hyphen minus; no invariant culture on readouts; thin space before units; no vowel-dropped labels |
+| `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |
+
+When a check fails, fix the view — or, for a genuine exception, add it to the check's
+allow-list with a comment saying why.
+
+## Accepted departures from the almanac
+
+Decisions taken while aligning the app, kept on purpose:
+
+- **Transport at the top, view switch inside it.** The almanac puts the transport at the
+  bottom and the modes in the header.
+- **Shell language is English.** The almanac asks for Russian infinitive tooltips; the app
+  is English throughout, so the rule became "short, verb-first".
+- **Segments with more than four options** stay segments where the choice is frequent:
+  Amp Model (7) and Cabinet (5), Compressor Character (5), Vintage Character (6), Delay
+  Division (8), Arp Rate (8) and Order (8), Aurora Warp (5) and Filter (5), Bass LFO wave (5),
+  Monolith Glide range (6), Pendulum Division (5) and Wave (5).
+- **Wide instruments** — Rhythm, Flux, Bass, Physical (see § Device cards).
+- **Zoom 28 px per beat** by default, not a 16 px bar; the ruler labels every bar once a bar
+  is wider than 40 px.
+- **`FREQ`, `RESO`, `THRESH`** as labels (see § Labels and copy).
+- **Hero readouts** larger than the device scale — Strata bar number, Shutter OPEN/SHUT,
+  Auto Shift note, Level value.
+- **Play turns green in Session** (`tp-play.session`) while clips run.
+- **Data hues close to a chroma** — Strata layer `#C99C55`, tag swatch `#C8A24B`, Random
+  `#D0603F`, Rhythm dot `#7FC9C6` — are data colours, not accents.
 
 ## Known drift
 
-Things that are true today and should not surprise you:
+True today, not yet fixed:
 
-- **The hex literals are gone.** The custom-drawn layer used to carry ~970 of them; they
-  now route through `NotaPalette` (`#1B1916` → `SurfaceInset`, `#221F1A` → `GraphBorder`,
-  and so on). What remains as a literal is *data*: the tag-colour swatches in
-  `TagEditorWindow`, the layer hues in `StrataDeviceBody`, the kit-voice dots in
-  `RhythmInstrumentCard` — each resolved through `NotaPalette.Ink()` at use.
-- **Ink light values are derived, not authored.** A one-off device hue gets its paper
-  counterpart from a lightness reflection. Most land well; pin the ones that don't in
-  `NotaPalette.InkOverrides` rather than reaching for a literal.
-- **Black stays black.** Drop shadows and the black-key row tint are alpha-over-black in
-  both variants — that is correct, not drift.
-- **The title bar is custom.** A 36px frameless bar (`Brush.ChromeBg`) with the macOS
-  traffic lights in a left inset and the document name centred; Windows reserves 180px on
-  the right for the native caption buttons.
-- **Font substitution.** Mockups specify Geist / Geist Mono; the app ships Inter and the
-  Cascadia → Menlo → Consolas stack, so weights sit slightly differently.
-- **No `Space.*` tokens.** The 4px grid is honoured by convention only.
-- **Two palette files** must be edited together and nothing enforces it — and each token
-  now carries two values, so a change is four edits (`NotaTheme.axaml` Dark + Light,
-  `NotaPalette.cs`, this file).
+- **Column order** choice → work → output is applied in Utility; the other cards have not
+  been audited card by card.
+- **Panel expand** is not animated (the almanac asks for 180 ms).
+- **`LOOKAHEAD`** in Compressor truncates with an ellipsis.
+- **Slider reset** on double-click works only where the card passes a default.
+- **Names:** presets with emotional names (Screaming Lead, VHS Fever, Gentle Master,
+  Transparent Safety, Dive Bomb, Laser Zap…) and multi-word device names (Auto Filter,
+  Beat Repeat, Dynamic EQ-8, EQ-3, the "Nota " prefix) remain; renaming touches MCP names,
+  the browser and saved projects.
+- **Paper values are derived**, not designed by the almanac; pin any that read poorly in
+  `NotaPalette.InkOverrides` or the theme.
+- **The "Add device" tile** at the end of a chain keeps a plus and two lines — it is a drop
+  target rather than an empty state.

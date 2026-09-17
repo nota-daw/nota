@@ -29,7 +29,7 @@ public sealed class SessionView : UserControl
     private const double HeaderH = 38;
     private const double StopNubH = 24;
     private const double Gap = 2;
-    private const double Radius = 5;
+    private const double Radius = NotaRadius.TileValue;
 
     // Ember Graphite palette (static so cells can repaint without resource lookups).
     private static readonly IBrush Lane = NotaPalette.SurfaceInset;
@@ -42,6 +42,7 @@ public sealed class SessionView : UserControl
     private static readonly IBrush Warning = NotaPalette.Warning;
     private static readonly IBrush Warning40 = NotaPalette.Wash(NotaPalette.Warning, 0x66); // queued blink dim (HANDOFF §4)
     private static readonly IBrush Danger = NotaPalette.Danger;
+    private static readonly IBrush Record = NotaPalette.Record;   // red belongs to recording
     private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextPrimary = NotaPalette.TextPrimary;
@@ -50,11 +51,11 @@ public sealed class SessionView : UserControl
     private static readonly IBrush TextDisabled = NotaPalette.TextDisabled;
     private static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
     private static readonly IBrush GreenFill = NotaPalette.Wash(NotaPalette.Success, 0x21);
-    private static readonly IBrush RedFill = NotaPalette.Wash(NotaPalette.Danger, 0x28);
+    private static readonly IBrush RedFill = NotaPalette.Wash(NotaPalette.Record, 0x28);
     private static readonly IBrush AmberFill = NotaPalette.Wash(NotaPalette.Warning, 0x1F);
 
     // Track palette — mirrors ArrangementView.TrackBase (Brush.Track1..8 + Return A/B).
-    private static readonly Color[] TrackBase = NotaPalette.TrackColors;
+    private static Color[] TrackBase => NotaPalette.TrackColors;
 
     private readonly IAudioEngine _engine;
     // Three horizontally-aligned strips (same column widths + spacing) so a column's
@@ -125,7 +126,7 @@ public sealed class SessionView : UserControl
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = "+ Scene", FontSize = 11, Foreground = TextSecondary },
         };
-        ToolTip.SetTip(addScene, "Add a scene row");
+        ToolTip.SetTip(addScene, "Add a scene");
         addScene.PointerPressed += (_, _) => { _engine.AddScene(); Refresh(); };
         AddHoverPress(addScene);
 
@@ -143,9 +144,9 @@ public sealed class SessionView : UserControl
         var backToArr = new Border
         {
             Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(9, 3), Opacity = 0.5,
+            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(9, 3),
             IsHitTestVisible = false,
-            Child = new TextBlock { Text = "Back to Arrangement", FontSize = 11, Foreground = TextSecondary },
+            Child = new TextBlock { Text = "Back to Arrangement", FontSize = 11, Foreground = NotaPalette.TextDisabled },
         };
         ToolTip.SetTip(backToArr, "Stop session clips and return all tracks to the Arrangement");
         backToArr.PointerPressed += (_, _) => { _engine.BackToArrangement(); UpdateStates(); };
@@ -213,10 +214,9 @@ public sealed class SessionView : UserControl
         // "Back to Arrangement" lights up (and becomes clickable) only while session overrides.
         if (_backToArr is not null)
         {
-            _backToArr.Opacity = sessionOverride ? 1.0 : 0.5;
             _backToArr.IsHitTestVisible = sessionOverride;
             _backToArr.BorderBrush = sessionOverride ? Brass : BorderStrong;
-            ((TextBlock)_backToArr.Child!).Foreground = sessionOverride ? AccentBright : TextSecondary;
+            ((TextBlock)_backToArr.Child!).Foreground = sessionOverride ? AccentBright : NotaPalette.TextDisabled;
         }
     }
 
@@ -245,7 +245,7 @@ public sealed class SessionView : UserControl
 
     private Control SceneRow(int scene)
     {
-        var launch = IconButton("▶", AccentBright, 22, 22);
+        var launch = IconButton(GlyphKind.Play, AccentBright, 22, 22, 9);
         launch.PointerPressed += (_, _) => { _engine.LaunchScene(scene); UpdateStates(); };
         ToolTip.SetTip(launch, $"Launch scene {scene + 1}");
 
@@ -259,7 +259,7 @@ public sealed class SessionView : UserControl
             },
         };
 
-        var stop = IconButton("■", TextTertiary, 14, 14, 6);
+        var stop = IconButton(GlyphKind.Stop, TextTertiary, 14, 14, 6);
         stop.PointerPressed += (_, _) => { _engine.StopScene(scene); UpdateStates(); };
         ToolTip.SetTip(stop, $"Stop scene {scene + 1}");
 
@@ -311,7 +311,7 @@ public sealed class SessionView : UserControl
         {
             Height = StopNubH, Background = Lane, BorderBrush = Raised,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-            Child = new TextBlock { Text = "■", FontSize = 8, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new Glyph(GlyphKind.Stop, 7) { Foreground = TextTertiary },
         };
         ToolTip.SetTip(stop, "Stop this track");
         stop.PointerPressed += (_, _) => { _engine.StopSlot(ti.Id); UpdateStates(); };
@@ -349,7 +349,7 @@ public sealed class SessionView : UserControl
         pan.ValueChanged += v => _engine.SetTrackPan(id, (float)(v * 2 - 1));
 
         var db = new MonoText("", 8, TextTertiary);
-        void RefreshDb() { double d = AudioMath.LinToDb(Math.Max(1e-4, vol.Value)); db.Text = vol.Value <= 1e-4 ? "-inf" : $"{d:+0.0;-0.0}"; }
+        void RefreshDb() { double d = AudioMath.LinToDb(Math.Max(1e-4, vol.Value)); db.Text = vol.Value <= 1e-4 ? "−∞" : $"{d:+0.0;−0.0}"; }
         vol.ValueChanged += _ => RefreshDb();
         RefreshDb();
 
@@ -360,7 +360,7 @@ public sealed class SessionView : UserControl
         var mute = MixToggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v));
         var solo = MixToggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v));
         if (ti.Armed != 0) _armed.Add(id);
-        var arm = MixToggle("●", true, ti.Armed != 0, v =>
+        var arm = ArmToggle(ti.Armed != 0, v =>
         {
             _engine.SetTrackArmed(id, v);
             if (v) _armed.Add(id); else _armed.Remove(id);
@@ -371,7 +371,7 @@ public sealed class SessionView : UserControl
         btnRow.Children.Add(mute);
         Grid.SetColumn(solo, 1); btnRow.Children.Add(solo);
         Grid.SetColumn(arm, 2); btnRow.Children.Add(arm);
-        var meterWrap = new Border { Height = 4, Background = Sunken, CornerRadius = new CornerRadius(2), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = meter };
+        var meterWrap = new Border { Height = 4, Background = Sunken, CornerRadius = NotaRadius.Clip, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = meter };
         Grid.SetColumn(meterWrap, 3); meterWrap.Margin = new Thickness(2, 0, 0, 0);
         btnRow.Children.Add(meterWrap);
 
@@ -386,7 +386,7 @@ public sealed class SessionView : UserControl
             send.ValueChanged += v => _engine.SetTrackSend(id, bus, (float)v);
             body.Children.Add(FaderRow(((char)('A' + bus)).ToString(), send, null));
         }
-        body.Children.Add(FaderRow("VOL", vol, db));
+        body.Children.Add(FaderRow("VOLUME", vol, db));
         body.Children.Add(btnRow);
         return new Border
         {
@@ -399,7 +399,7 @@ public sealed class SessionView : UserControl
     {
         fader.VerticalAlignment = VerticalAlignment.Center;
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        grid.Children.Add(new TextBlock { Text = label, FontSize = 8, Foreground = TextTertiary, Width = 20, VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(new TextBlock { Text = label, FontSize = 8, Foreground = TextTertiary, Width = 32, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(fader, 1);
         grid.Children.Add(fader);
         if (trailing is not null)
@@ -412,11 +412,28 @@ public sealed class SessionView : UserControl
         return grid;
     }
 
+    // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
+    private Border ArmToggle(bool initial, Action<bool> set)
+    {
+        bool on = initial;
+        var disc = new Glyph(GlyphKind.Record, 6);
+        var b = new Border { Width = 17, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = disc };
+        void Paint()
+        {
+            b.Background = on ? Record : Raised;
+            b.BorderBrush = on ? Record : BorderStrong;
+            disc.Foreground = on ? NotaPalette.RecordInk : Record;
+        }
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on); Paint(); };
+        Paint();
+        return b;
+    }
+
     private Border MixToggle(string label, bool danger, bool initial, Action<bool> set)
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 17, Height = 15, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Child = t };
+        var b = new Border { Width = 17, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {
             var accent = danger ? Danger : Brass;
@@ -446,7 +463,7 @@ public sealed class SessionView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock { Text = "▶", FontSize = 10, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center },
+                    new Glyph(GlyphKind.Play, 9) { Foreground = AccentBright },
                     new TextBlock { Text = $"Scene {scene + 1}", FontSize = 10, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
                 },
             };
@@ -470,7 +487,7 @@ public sealed class SessionView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock { Text = "■", FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                    new Glyph(GlyphKind.Stop, 7) { Foreground = TextSecondary },
                     new TextBlock { Text = "Stop All", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
                 },
             },
@@ -483,28 +500,30 @@ public sealed class SessionView : UserControl
 
     // ---- helpers ----------------------------------------------------------
 
-    private static Border IconButton(string glyph, IBrush fg, double w, double h, double fs = 11)
+    private static Border IconButton(GlyphKind glyph, IBrush fg, double w, double h, double glyphSize = 9)
     {
         var b = new Border
         {
             Width = w, Height = h, Background = Raised, BorderBrush = BorderStrong,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-            Child = new TextBlock { Text = glyph, FontSize = fs, Foreground = fg, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new Glyph(glyph, glyphSize) { Foreground = fg },
         };
         AddHoverPress(b);
         return b;
     }
 
     // Manual hover/press feedback for the hand-built Border "buttons" (these aren't themed
-    // Buttons, so they'd otherwise be visually inert): brass outline on hover, a dim on press.
+    // Buttons, so they'd otherwise be visually inert): brass outline on hover, recess on press.
     private static void AddHoverPress(Border b)
     {
         var restBorder = b.BorderBrush;
         b.Cursor = new Cursor(StandardCursorType.Hand);
         b.PointerEntered  += (_, _) => { b.BorderBrush = Brass; };
-        b.PointerExited   += (_, _) => { b.BorderBrush = restBorder; b.Opacity = 1.0; };
-        b.PointerPressed  += (_, _) => { b.Opacity = 0.6; };
-        b.PointerReleased += (_, _) => { b.Opacity = 1.0; };
+        var restBg = b.Background;
+        b.PointerExited   += (_, _) => { b.BorderBrush = restBorder; b.Background = restBg; };
+        // Pressed goes into the recess (almanac § States) — the ground changes, nothing fades.
+        b.PointerPressed  += (_, _) => { b.Background = NotaPalette.BgSunken; };
+        b.PointerReleased += (_, _) => { b.Background = restBg; };
     }
 
     private sealed class MonoText : TextBlock
@@ -549,7 +568,7 @@ public sealed class SessionView : UserControl
         private readonly bool _instrument;
         private readonly IBrush _trackColor;
         private readonly IBrush _trackBorder;   // track colour @ ~45%
-        private readonly TextBlock _icon;
+        private readonly Glyph _icon;
         private readonly TextBlock _label;
         private readonly MonoText _badge;
         private readonly Rectangle _progress;
@@ -568,7 +587,7 @@ public sealed class SessionView : UserControl
                 ? NotaPalette.Wash(slot, 0x73)
                 : new SolidColorBrush(Color.FromArgb(0x73, trackColor.Color.R, trackColor.Color.G, trackColor.Color.B));
 
-            _icon = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
+            _icon = new Glyph(GlyphKind.Play, 9);
             _label = new TextBlock { FontSize = 10, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             _badge = new MonoText("", 8, TextTertiary) { VerticalAlignment = VerticalAlignment.Center };
 
@@ -708,24 +727,24 @@ public sealed class SessionView : UserControl
             switch (state)
             {
                 case 4: // recording
-                    Border.Background = RedFill; Border.BorderBrush = Danger;
-                    _icon.Text = "●"; _icon.Foreground = Danger;
-                    _label.Text = "rec"; _label.Foreground = Danger;
+                    Border.Background = RedFill; Border.BorderBrush = Record;
+                    _icon.Kind = GlyphKind.Record; _icon.IsVisible = true; _icon.Foreground = Record;
+                    _label.Text = "rec"; _label.Foreground = Record;
                     break;
                 case 3: // playing
                     Border.Background = GreenFill; Border.BorderBrush = Success;
-                    _icon.Text = "▶"; _icon.Foreground = Success;
+                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = Success;
                     _label.Text = "Clip"; _label.Foreground = TextPrimary;
                     break;
                 case 2: // queued — border blinks 100%↔40% at ~2Hz (HANDOFF §4)
                     Border.Background = AmberFill;
                     Border.BorderBrush = blinkOn ? Warning : Warning40;
-                    _icon.Text = "▶"; _icon.Foreground = Warning;
+                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = Warning;
                     _label.Text = "Clip"; _label.Foreground = Warning;
                     break;
                 case 1: // filled
                     Border.Background = Raised; Border.BorderBrush = _trackBorder;
-                    _icon.Text = "▶"; _icon.Foreground = _trackColor;
+                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = _trackColor;
                     _label.Text = "Clip"; _label.Foreground = TextPrimary;
                     break;
                 default: // empty
@@ -733,19 +752,19 @@ public sealed class SessionView : UserControl
                     if (_instrument)
                     {
                         // Instrument: "+" to create a MIDI clip.
-                        _icon.Text = "";
+                        _icon.IsVisible = false;
                         _label.Text = "+"; _label.Foreground = TextDisabled;
                     }
                     else if (armed)
                     {
                         // Armed audio track: a red record dot — click to capture input here.
-                        _icon.Text = "●"; _icon.Foreground = Danger;
-                        _label.Text = "Rec"; _label.Foreground = Danger;
+                        _icon.Kind = GlyphKind.Record; _icon.IsVisible = true; _icon.Foreground = Record;
+                        _label.Text = "Rec"; _label.Foreground = Record;
                     }
                     else
                     {
                         // Idle audio slot: a faint hollow ring hints it's a record / drop target.
-                        _icon.Text = "○"; _icon.Foreground = TextDisabled;
+                        _icon.Kind = GlyphKind.RecordRing; _icon.IsVisible = true; _icon.Foreground = TextDisabled;
                         _label.Text = ""; _label.Foreground = TextDisabled;
                     }
                     break;

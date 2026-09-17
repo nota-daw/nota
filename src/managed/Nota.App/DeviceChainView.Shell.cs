@@ -99,61 +99,125 @@ public sealed partial class DeviceChainView
     {
         int di = s.DeviceIndex;
         var extra = Extra(s.Kind, di);
-        // Rich chrome (preset picker · A/B · meter) needs room; narrow effect cards get
-        // the essential chrome only. Instruments (≥700) and wide effects show everything.
-        bool full = !double.IsNaN(s.Width) && s.Width >= 520;
 
-        // ---- power dot: bypass toggle (effects) or a static status light (instruments) ----
-        var dot = new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, Fill = s.Bypassed ? Brushes.Transparent : Success, Stroke = s.Bypassed ? TextSecondary : null, StrokeThickness = 1 };
-        var dotBtn = new Border { Child = dot, Padding = new Thickness(2), VerticalAlignment = VerticalAlignment.Center };
-        if (s.Bypassable) { dotBtn.Cursor = new Cursor(StandardCursorType.Hand); ToolTip.SetTip(dotBtn, s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass"); dotBtn.PointerPressed += (_, _) => { if (s.Kind == ChainKind.Midi) _engine.SetMidiEffectBypassed(_trackId, di, !s.Bypassed); else _engine.SetDeviceBypassed(_trackId, di, !s.Bypassed); Rebuild(); Changed?.Invoke(); }; }
+        // ---- header (22): the almanac's device header — name on the left; the processing
+        // type as a mono badge and the bypass switch on the right; nothing else. Presets,
+        // A/B, move and delete live in the header's context menu; the whole header drags the
+        // card to a new slot; Delete removes the selected card.
+        var name = new TextBlock
+        {
+            Text = s.Name, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
 
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
-        left.Children.Add(dotBtn);
-        left.Children.Add(new TextBlock { Text = s.Name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
-        if (!string.IsNullOrEmpty(s.Subtitle)) left.Children.Add(new TextBlock { Text = s.Subtitle, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
-        if (full) left.Children.Add(PresetPicker(s, extra));
-
-        // ---- right group ----
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
 
-        // Voice count (instruments that report it).
+        // Type badge (mono caps). An instrument that reports its voices shows them here, live,
+        // as the badge's value — e.g. "SYNTH · 3/16".
+        string type = (s.Subtitle ?? "").ToUpperInvariant();
+        var badge = new TextBlock
+        {
+            Text = type, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Eyebrow, FontWeight = FontWeight.Medium,
+            LetterSpacing = 1.2, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+        };
         if (s.IsInstrument && _engine.InstrumentVoiceCount(_trackId) >= 0)
         {
-            var vt = Mono("0/16", 30); vt.Foreground = Teal; vt.TextAlignment = TextAlignment.Left;
-            if (s.VoiceLabel != null) { vt.Width = double.NaN; vt.MinWidth = 30; }   // e.g. "PARA 3/4" — size to the text
-            _deviceLiveRefreshers.Add(() => { int v = _engine.InstrumentVoiceCount(_trackId); vt.Text = s.VoiceLabel?.Invoke(_engine, _trackId, v) ?? (_engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? "MONO" : $"{Math.Max(0, v)}/16"); });
-            right.Children.Add(vt);
+            _deviceLiveRefreshers.Add(() =>
+            {
+                int v = _engine.InstrumentVoiceCount(_trackId);
+                string voices = s.VoiceLabel?.Invoke(_engine, _trackId, v)
+                    ?? (_engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? "MONO" : $"{Math.Max(0, v)}/16");
+                badge.Text = type.Length > 0 ? $"{type} · {voices}" : voices;
+            });
+        }
+        if (badge.Text.Length > 0 || s.IsInstrument) right.Children.Add(badge);
+
+        if (s.Bypassable)
+        {
+            var bypass = new SwitchTrack { IsOn = !s.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
+            ToolTip.SetTip(bypass, s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass");
+            bypass.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;   // not a drag, not a selection click
+                if (s.Kind == ChainKind.Midi) _engine.SetMidiEffectBypassed(_trackId, di, !s.Bypassed);
+                else _engine.SetDeviceBypassed(_trackId, di, !s.Bypassed);
+                Rebuild(); Changed?.Invoke();
+            };
+            right.Children.Add(bypass);
         }
 
-        if (full) { right.Children.Add(ABControl(s, extra)); right.Children.Add(MeterBadge()); }
+        var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
+        headerGrid.Children.Add(name);
+        Grid.SetColumn(right, 1); headerGrid.Children.Add(right);
+        var headerBar = new Border
+        {
+            Height = DeviceCardKit.HeaderH, Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(NotaSpace.DeviceInsetWide, 0), Child = headerGrid,
+            Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
+        };
+        ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · right-click for presets, A/B, move and delete" : "Right-click for presets and more");
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
-        if (s.CanMove)
-        {
-            right.Children.Add(Glyph("◀", di > 0, () => Move(di - 1)));
-            right.Children.Add(Glyph("▶", di < s.Count - 1, () => Move(di + 1)));
-        }
-        if (s.CanDelete) right.Children.Add(Glyph("✕", true, () => { if (s.Kind == ChainKind.Midi) _engine.RemoveMidiEffect(_trackId, di); else _engine.RemoveDevice(_trackId, di); ExtrasRemoved(s.Kind, di); Rebuild(); Changed?.Invoke(); }));
-        var handle = new TextBlock
-        {
-            Text = "⠿", FontSize = 11, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
-            Background = Brushes.Transparent, Padding = new Thickness(2, 0),
-            Cursor = s.CanMove ? new Cursor(StandardCursorType.SizeAll) : null,
-        };
-        ToolTip.SetTip(handle, "Drag to reorder");
-        right.Children.Add(handle);
 
-        var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        headerGrid.Children.Add(left);
-        Grid.SetColumn(right, 1); headerGrid.Children.Add(right);
-        var headerBar = new Border { Height = 26, Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(9, 0), Child = headerGrid };
-        // Click selects the device (accent border + keyboard target); right-click opens the
-        // context menu (copy/cut/paste/delete/save preset).
+        // What the header used to carry, now in its context menu.
+        void HeaderMenu(MenuFlyout flyout)
+        {
+            if (s.PresetKind >= 0 || s.IsInstrument || s.Kind == ChainKind.Midi)
+            {
+                var presets = _factory.All().Where(p => p.BuiltinKind == s.PresetKind
+                    && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect))).ToList();
+                if (presets.Count > 0)
+                {
+                    int cur = presets.FindIndex(p => p.Id == extra.PresetId);
+                    void Apply(FactoryPresetInfo p) { _factory.ApplyInPlace(_engine, p.Id, _trackId, di); extra.PresetId = p.Id; extra.Preset = p.DisplayName; Rebuild(); }
+                    var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}" };
+                    int n = presets.Count;
+                    var prev = new MenuItem { Header = "Previous preset" }; prev.Click += (_, _) => Apply(presets[cur < 0 ? n - 1 : ((cur - 1) % n + n) % n]);
+                    var next = new MenuItem { Header = "Next preset" }; next.Click += (_, _) => Apply(presets[cur < 0 ? 0 : (cur + 1) % n]);
+                    menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
+                    for (int i = 0; i < n; i++)
+                    {
+                        var info = presets[i];
+                        var mi = new MenuItem { Header = info.DisplayName, ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                        mi.Click += (_, _) => Apply(info);
+                        menu.Items.Add(mi);
+                    }
+                    flyout.Items.Add(menu);
+                }
+            }
+            // A / B compare of two full-parameter snapshots.
+            float[] Capture() => CaptureParams(s.Kind, di);
+            if (extra.A == null) { extra.A = Capture(); extra.B = (float[])extra.A.Clone(); extra.Active = 0; }
+            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}" };
+            void Switch(int slot)
+            {
+                if (slot == extra.Active) return;
+                if (extra.Active == 0) extra.A = Capture(); else extra.B = Capture();
+                extra.Active = slot;
+                ApplyParams(s.Kind, di, slot == 0 ? extra.A! : extra.B!);
+                Rebuild();
+            }
+            var toA = new MenuItem { Header = "A", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 0 }; toA.Click += (_, _) => Switch(0);
+            var toB = new MenuItem { Header = "B", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 1 }; toB.Click += (_, _) => Switch(1);
+            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A" };
+            copy.Click += (_, _) => { var c = Capture(); if (extra.Active == 0) extra.B = (float[])c.Clone(); else extra.A = (float[])c.Clone(); };
+            ab.Items.Add(toA); ab.Items.Add(toB); ab.Items.Add(new Separator()); ab.Items.Add(copy);
+            flyout.Items.Add(ab);
+            if (s.CanMove)
+            {
+                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0 }; left.Click += (_, _) => Move(di - 1);
+                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1 }; rightMi.Click += (_, _) => Move(di + 1);
+                flyout.Items.Add(left); flyout.Items.Add(rightMi);
+            }
+            flyout.Items.Add(new Separator());
+        }
+
+        // Click selects the device (accent ring + keyboard target); right-click opens the menu.
         headerBar.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(headerBar).Properties;
-            if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(headerBar, s.Kind, di); return; }
+            if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(headerBar, s.Kind, di, HeaderMenu); return; }
             if (pt.IsLeftButtonPressed) SelectDevice(s.Kind, di);
         };
 
@@ -167,139 +231,24 @@ public sealed partial class DeviceChainView
         // inside the clip so its rounded corners render cleanly.
         var selRing = new Border
         {
-            BorderBrush = AccentBright, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(7), Margin = new Thickness(0.5),
+            BorderBrush = AccentBright, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Body, Margin = new Thickness(0.5),
             IsHitTestVisible = false, IsVisible = sel,
         };
         var card = new Border
         {
             Width = s.Width, Height = CardH, Background = ShellBg, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), ClipToBounds = true,
-            Opacity = s.Bypassed ? 0.7 : 1.0,
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
             Child = new Panel { Children = { root, selRing } },
         };
-        // The ⠿ handle drags the card to a new slot within its domain (audio FX / MIDI FX).
-        if (s.CanMove && SelectableKind(s.Kind)) HookDeviceDrag(handle, card, s.Kind, di);
+        // Bypassed: the body loses its brass but stays playable (almanac: no opacity for state).
+        if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);
+        // The whole header drags the card to a new slot within its domain (audio FX / MIDI FX).
+        if (s.CanMove && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);
         return card;
     }
 
     private int IndexOfId(string id)
     { int n = _engine.PluginParamCount(_trackId, -1); for (int i = 0; i < n; i++) if (_engine.PluginParamId(_trackId, -1, i) == id) return i; return -1; }
 
-    // Preset picker "‹ Name ▾ ›": the name opens a flyout of factory presets for this kind
-    // (current one checked); ‹ › step to the previous / next preset, wrapping. From Init,
-    // › goes to the first preset and ‹ to the last. Always applied in place.
-    private Control PresetPicker(ShellSpec s, CardExtra extra)
-    {
-        var presets = _factory.All().Where(p => p.BuiltinKind == s.PresetKind
-            && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect))).ToList();
-        int cur = presets.FindIndex(p => p.Id == extra.PresetId);
-        void Apply(FactoryPresetInfo p)
-        {
-            _factory.ApplyInPlace(_engine, p.Id, _trackId, s.DeviceIndex);
-            extra.PresetId = p.Id; extra.Preset = p.DisplayName;
-            Rebuild();
-        }
-
-        var label = new TextBlock { Text = string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset, FontSize = 10, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 90 };
-        var box = new Border
-        {
-            MinWidth = 96, Background = Brushes.Transparent, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new DockPanel { Children = { new TextBlock { Text = "▾", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right }, label } },
-        };
-        box.PointerPressed += (_, _) =>
-        {
-            var flyout = new MenuFlyout();
-            if (presets.Count == 0) flyout.Items.Add(new MenuItem { Header = "No presets", IsEnabled = false });
-            for (int i = 0; i < presets.Count; i++)
-            {
-                var info = presets[i];
-                var mi = new MenuItem { Header = info.DisplayName, ToggleType = MenuItemToggleType.CheckBox, IsChecked = i == cur };
-                mi.Click += (_, _) => Apply(info);
-                flyout.Items.Add(mi);
-            }
-            flyout.ShowAt(box, showAtPointer: true);
-        };
-
-        Border Step(int dir)
-        {
-            bool on = presets.Count > 0;
-            var chevron = new Path
-            {
-                Data = Geometry.Parse(dir < 0 ? "M3.5,0 L0,3.5 L3.5,7" : "M0,0 L3.5,3.5 L0,7"),
-                Stroke = on ? TextTertiary : TextDisabled, StrokeThickness = 1.2,
-                StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            };
-            var b = new Border { Width = 16, Background = Brushes.Transparent, Child = chevron };
-            if (!on) return b;
-            b.Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
-            b.PointerEntered += (_, _) => chevron.Stroke = TextPrimary;
-            b.PointerExited += (_, _) => chevron.Stroke = TextTertiary;
-            b.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                e.Handled = true;
-                int n = presets.Count;
-                Apply(presets[cur < 0 ? (dir > 0 ? 0 : n - 1) : ((cur + dir) % n + n) % n]);
-            };
-            return b;
-        }
-        Border Divider() => new() { Width = 1, Background = BorderDef };
-
-        return new Border
-        {
-            Height = 18, Background = ShellInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
-            ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1), Divider(), box, Divider(), Step(+1) } },
-        };
-    }
-
-    // A | B compare of two full-param snapshots + copy-active-to-other.
-    private Control ABControl(ShellSpec s, CardExtra extra)
-    {
-        int di = s.DeviceIndex; var kind = s.Kind;
-        float[] Capture() => CaptureParams(kind, di);
-        void Apply(float[] p) => ApplyParams(kind, di, p);
-        if (extra.A == null) { extra.A = Capture(); extra.B = (float[])extra.A.Clone(); extra.Active = 0; }
-        Border? bA = null, bB = null;
-        void Hi() { if (bA == null || bB == null) return; bA.Background = extra.Active == 0 ? AccentSubtleB : Brushes.Transparent; ((TextBlock)bA.Child!).Foreground = extra.Active == 0 ? AccentBright : TextTertiary; bB.Background = extra.Active == 1 ? AccentSubtleB : Brushes.Transparent; ((TextBlock)bB.Child!).Foreground = extra.Active == 1 ? AccentBright : TextTertiary; }
-        Border Slot(string t, int slot)
-        {
-            var b = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = TextTertiary } };
-            b.PointerPressed += (_, _) =>
-            {
-                if (slot == extra.Active) return;
-                if (extra.Active == 0) extra.A = Capture(); else extra.B = Capture();   // save current into active
-                extra.Active = slot;
-                Apply(slot == 0 ? extra.A! : extra.B!);
-                Rebuild();
-            };
-            return b;
-        }
-        bA = Slot("A", 0); bB = Slot("B", 1);
-        var copy = new TextBlock { Text = "→", FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
-        ToolTip.SetTip(copy, "Copy active slot to the other");
-        copy.PointerPressed += (_, _) => { var cur = Capture(); if (extra.Active == 0) extra.B = (float[])cur.Clone(); else extra.A = (float[])cur.Clone(); };
-        Hi();
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { bA, bB, copy } };
-        return new Border { Background = ShellInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2, 1), VerticalAlignment = VerticalAlignment.Center, Child = row };
-    }
-
-    // Small stereo meter + a pinned dB readout (fixed width so neighbours don't shift).
-    // Fed from the track meter (per-device metering is deferred).
-    private Control MeterBadge()
-    {
-        var meter = new StereoMeter { Width = 44, Height = 8, VerticalAlignment = VerticalAlignment.Center };
-        var db = Mono("−∞", 30);
-        _deviceLiveRefreshers.Add(() =>
-        {
-            bool ok = _engine.TryGetTrackMeter(_trackId, out var mt);
-            meter.Set(ok ? mt.PeakL : 0f, ok ? mt.PeakR : 0f);
-            float peak = ok ? mt.Peak : 0f; double d = peak > 1e-4f ? 20 * Math.Log10(peak) : -80;
-            db.Text = d <= -79 ? "−∞" : $"{d:0.0}";
-        });
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { meter, db } };
-    }
 }

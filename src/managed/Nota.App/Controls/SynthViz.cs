@@ -22,17 +22,15 @@ internal sealed class SynthViz : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static Color TealColor => NotaPalette.Teal.Color;
-    private static Color BrassColor => NotaPalette.Accent.Color;
-    private static readonly IBrush Teal = new SolidColorBrush(TealColor);
-    private static readonly IBrush TealFill = new SolidColorBrush(TealColor, 0.10);
-    private static readonly IBrush Brass = new SolidColorBrush(BrassColor);
-    private static readonly IBrush BrassFill = new SolidColorBrush(BrassColor, 0.09);
+    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x1A);
+    private static readonly IBrush Brass = NotaPalette.Accent;
+    private static readonly IBrush BrassFill = NotaPalette.Wash(NotaPalette.Accent, 0x17);
     private static readonly IBrush Handle = NotaPalette.AccentBright;
-    private static readonly IBrush DimMono = NotaPalette.TextDisabled;
-    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xFF);
-    private static readonly IBrush GridDash = NotaPalette.Wash(NotaPalette.SurfaceRaised, 0xFF);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush DimMono = NotaPalette.TextAxis;
+    private static readonly IBrush Grid = NotaGraph.Grid;
+    private static readonly IBrush GridDash = NotaGraph.Grid;
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private const double Pad = 8;
 
@@ -47,18 +45,18 @@ internal sealed class SynthViz : Control
     // Engine's perceptual map (Synth.h): lo * (hi/lo)^v.
     private static double ExpMap(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
     private static string Secs(double s) => s < 1.0
-        ? $"{(s * 1000).ToString("0", CultureInfo.InvariantCulture)} ms"
-        : $"{s.ToString("0.00", CultureInfo.InvariantCulture)} s";
+        ? $"{(s * 1000).ToString("0", NotaNum.Culture)}\u2009ms"
+        : $"{s.ToString("0.00", NotaNum.Culture)}\u2009s";
 
     private void Text(DrawingContext ctx, string t, double x, double y, IBrush brush, double size = 8, bool mono = false)
         => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? new Typeface("Geist Mono, Consolas, monospace") : Face, size, brush), new Point(x, y));
+            mono ? NotaFonts.Mono : Face, size, brush), new Point(x, y));
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         double x0 = Pad, x1 = w - Pad, top = Pad + 12, bot = h - Pad - 9;
         if (_k == K.Adsr) RenderEnvelope(ctx, x0, x1, top, bot);
@@ -75,7 +73,7 @@ internal sealed class SynthViz : Control
         double sy = top + (1 - _s) * (bot - top);
         double xa = x0 + aw, xd = Math.Min(x1, xa + dw), xh = Math.Min(x1, xd + hold), xr = Math.Min(x1, xh + rw);
 
-        // Filled area under the envelope, then the stroked curve on top.
+        // The envelope as a stroked curve (almanac: no fills under curves).
         var fill = new StreamGeometry();
         using (var g = fill.Open())
         {
@@ -83,7 +81,6 @@ internal sealed class SynthViz : Control
             g.LineTo(new Point(xa, top)); g.LineTo(new Point(xd, sy)); g.LineTo(new Point(xh, sy)); g.LineTo(new Point(xr, bot));
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(TealFill, null, fill);
         var pen = new Pen(Teal, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         ctx.DrawLine(pen, new Point(x0, bot), new Point(xa, top));
         ctx.DrawLine(pen, new Point(xa, top), new Point(xd, sy));
@@ -130,20 +127,19 @@ internal sealed class SynthViz : Control
             g.LineTo(new Point(x1, bot)); g.LineTo(new Point(x0, bot));
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(BrassFill, null, fill);
         var pen = new Pen(Brass, 1.8, lineJoin: PenLineJoin.Round);
         ctx.DrawLine(pen, new Point(x0, flatY), new Point(kx, flatY));
         ctx.DrawLine(pen, new Point(kx, flatY), new Point(cx, bumpY));
         ctx.DrawLine(pen, new Point(cx, bumpY), new Point(x1, bot));
 
         // Cutoff handle + guide line.
-        ctx.DrawLine(new Pen(new SolidColorBrush(NotaPalette.AccentBright.Color, 0.22), 1), new Point(cx, top - 6), new Point(cx, bot));
-        ctx.DrawEllipse(Handle, new Pen(Sunken, 2), new Point(cx, bumpY), 5.5, 5.5);
+        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x38), 1), new Point(cx, top - 6), new Point(cx, bot));
+        NotaGraph.Node(ctx, new Point(cx, bumpY), active: true);
 
         // Labels: title, cutoff/Q readout, evenly-spaced Hz axis captions.
         Text(ctx, "FILTER", x0, Pad - 2, TextTertiary);
         var inv = CultureInfo.InvariantCulture;
-        string hzTxt = cutHz >= 1000 ? $"{(cutHz / 1000).ToString("0.00", inv)} kHz" : $"{cutHz.ToString("0", inv)} Hz";
+        string hzTxt = cutHz >= 1000 ? $"{(cutHz / 1000).ToString("0.0", inv)}\u2009k" : $"{cutHz.ToString("0", inv)}\u2009Hz";
         string readout = $"{hzTxt}  Q {_res.ToString("0.00", inv)}";
         Text(ctx, readout, x1 - MeasureW(readout, 9, true), Pad - 2, Handle, 9, true);
         string[] ticks = { "20", "100", "1 k", "10 k", "20 k" };
@@ -161,5 +157,5 @@ internal sealed class SynthViz : Control
 
     private static double MeasureW(string t, double size, bool mono)
         => new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? new Typeface("Geist Mono, Consolas, monospace") : Face, size, Brushes.White).Width;
+            mono ? NotaFonts.Mono : Face, size, NotaPalette.TextPrimary).Width;
 }

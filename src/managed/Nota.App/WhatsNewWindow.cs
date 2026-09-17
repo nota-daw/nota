@@ -137,5 +137,5 @@ public sealed class WhatsNewWindow : NotaWindow
     }
 
     private IBrush Brush(string key)
-        => (IBrush?)NotaPalette.ByKey(key) ?? Brushes.Magenta;
+        => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextPrimary;
 }

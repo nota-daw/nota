@@ -57,9 +57,9 @@ internal sealed class PentadWaveIcon : Control
 // CEM-style passband loss at high resonance (unless bass compensation is on). Drag to edit.
 internal sealed class PentadFilterCurve : Control
 {
-    private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+    private static readonly IBrush Grid = NotaGraph.Grid;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
-    private static readonly Typeface Mono = new("ui-monospace, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private double _cut = 0.5, _reso, _comp;
     private bool _drag;
 
@@ -121,11 +121,10 @@ internal sealed class PentadFilterCurve : Control
             for (double x = 1; x <= w; x += 1.5) { var p = new Point(x, Y(Db(x / w))); lc.LineTo(p); fc.LineTo(p); }
             fc.LineTo(new Point(w, h));
         }
-        ctx.DrawGeometry(Fill, null, fill);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, 1.5), line);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth), line);
 
         double hz0 = 20 * Math.Pow(1000, _cut);
-        string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.00} kHz" : $"{hz0:0} Hz") + $" · Q {_reso * 10:0.0}";
+        string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.0}\u2009k" : $"{hz0:0}\u2009Hz") + $" · Q {_reso * 10:0.0}";
         var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.AccentBright);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
@@ -166,7 +165,6 @@ internal sealed class PentadEnvCurve : Control
         using (var lc = line.Open()) Path(lc, false);
         using (var fc = fill.Open()) Path(fc, true);
         var col = ((ISolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x1F, col.R, col.G, col.B)), null, fill);
         ctx.DrawGeometry(null, new Pen(Accent, 1.4), line);
     }
 }
@@ -174,7 +172,7 @@ internal sealed class PentadEnvCurve : Control
 // N voice cells, lit (brass) while a voice sounds, brightness following its level.
 internal sealed class PentadVoiceStrip : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private readonly float[] _lv = new float[16];
     private int _n = 5;
 
@@ -204,7 +202,7 @@ internal sealed class PentadVoiceStrip : Control
             ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, 3, 3);
             if (cw >= 12)
             {
-                var ft = new FormattedText((i + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
+                var ft = new FormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
                 ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
             }
         }
@@ -222,7 +220,7 @@ internal sealed class PentadLevelBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 2 || h < 2) return;
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, new Rect(0, 0, w, h), 2, 2);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         static double Frac(double db) => Math.Clamp((db + 48) / 51.0, 0, 1);
         double f = Frac(_db), fw = Frac(-6);
         if (f <= 0) return;

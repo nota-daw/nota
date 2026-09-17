@@ -29,7 +29,7 @@ namespace Nota.App;
 internal sealed class ConsortInstrumentCard : IInstrumentCard
 {
     private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush Panel = NotaPalette.BgApp;
+    private static readonly IBrush Panel = NotaPalette.TextOnAccent; // dark ink over an engaged fill
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
@@ -147,20 +147,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // On/off pill toggle backed by a param (> 0.5 = on).
         Control Toggle(string id, string label, Func<bool>? dim = null)
         {
-            var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
-            var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4) };
-            var host = new Canvas { Width = 18, Height = 10 }; Canvas.SetTop(dot, 1.5); host.Children.Add(dot); pill.Child = host;
-            var txt = new TextBlock { Text = label, FontSize = 8, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
-            void Hi()
-            {
-                bool on = On(id), d = dim?.Invoke() ?? false;
-                pill.Background = on ? (d ? NotaPalette.BorderStrong : Amber) : OffPill; dot.Background = on ? Panel : MutedC; Canvas.SetLeft(dot, on ? 9.5 : 1.5);
-                txt.Foreground = d ? DimC : on ? TxtC : Txt2;
-            }
-            var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { pill } };
-            if (label.Length > 0) wrap.Children.Add(txt);
-            wrap.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(wrap).Properties.IsLeftButtonPressed) return; SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
-            cur.Add(Hi); Hi();
+            var wrap = Switch(label, () => On(id), () => { SetP(id, On(id) ? 0f : 1f); Refresh(); }, out var sync, dim);
+            cur.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(wrap, MidiTarget.PluginParam(track, -1, pi), label.Length > 0 ? label : id);
             return wrap;
         }
@@ -168,31 +156,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // Segmented chips. values[i] is written on click; the lit chip is the nearest value.
         Control Chips(string id, string[] names, float[]? values = null, double fs = 7, Func<bool>? dim = null)
         {
-            int n = names.Length;
-            values ??= BuildValues(n);
-            var arr = new Border[n];
-            void Hi()
-            {
-                float c0 = G(id); int best = 0;
-                for (int i = 1; i < n; i++) if (Math.Abs(values[i] - c0) < Math.Abs(values[best] - c0)) best = i;
-                bool exact = Math.Abs(values[best] - c0) < 0.02f, d = dim?.Invoke() ?? false;
-                for (int i = 0; i < n; i++)
-                {
-                    bool on = i == best && exact;
-                    arr[i].Background = on ? (d ? NotaPalette.BorderStrong : Amber) : Brushes.Transparent;
-                    var tb = (TextBlock)arr[i].Child!; tb.Foreground = on ? Panel : d ? DimC : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++)
-            {
-                int iv = i;
-                var c = new Border { CornerRadius = new CornerRadius(2), Padding = new Thickness(4, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = MutedC } };
-                c.PointerPressed += (_, e) => { SetP(id, values[iv]); Refresh(); e.Handled = true; };
-                arr[i] = c; row.Children.Add(c);
-            }
-            cur.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = row };
+            var vals = values ?? BuildValues(names.Length);
+            var seg = DeviceCardKit.Segments(names, () => DeviceCardKit.NearestExact(G(id), vals), iv => { SetP(id, vals[iv]); Refresh(); }, out var sync, dim: dim);
+            cur.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), id);
             return seg;
         }
@@ -207,50 +173,25 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int i = 0; i < names.Length; i++)
             {
                 int iv = i;
-                var c = new Border { CornerRadius = new CornerRadius(2), Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 7.5 } };
+                var c = new Border { CornerRadius = NotaRadius.Clip, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 8 } };
                 c.PointerPressed += (_, e) => { set(iv); Hi(); e.Handled = true; };
                 arr[i] = c; row.Children.Add(c);
             }
             Hi();
-            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
         }
 
         // Horizontal fill slider bound to a param; `dim` greys it out.
         Control HSlider(string id, Func<double, string> fmt, double valW = 24, Func<bool>? dim = null, bool bipolar = false)
         {
             int pi = I(id);
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 6, Height = 7, Background = Handle, CornerRadius = new CornerRadius(2) };
-            var lay = new Canvas { Height = 9 };
-            lay.Children.Add(handle); Canvas.SetTop(handle, 1);
-            var canvas = new Panel { Height = 11, MinWidth = 24, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = {
-                new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center }, fill, lay } };
-            var val = MonoText("", 8, TxtC); val.MinWidth = valW; val.TextAlignment = TextAlignment.Right;
-            bool drag = false;
-            void Vis(double v)
-            {
-                double w = canvas.Bounds.Width; if (w <= 0) w = 80;
-                double a = bipolar ? Math.Min(v, 0.5) : 0, b = bipolar ? Math.Max(v, 0.5) : v;
-                fill.Margin = new Thickness(a * w, 0, 0, 0); fill.Width = Math.Max(0, (b - a) * w);
-                Canvas.SetLeft(handle, v * w - 3); val.Text = fmt(v);
-                bool d = dim?.Invoke() ?? false;
-                fill.Background = d ? NotaPalette.BorderStrong : Amber; handle.Background = d ? MutedC : Handle; val.Foreground = d ? Txt2 : TxtC;
-            }
-            void From(PointerEventArgs e) { double w = canvas.Bounds.Width; double v = w > 0 ? Math.Clamp(e.GetPosition(canvas).X / w, 0, 1) : 0; if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)v); Vis(v); Refresh(); }
-            canvas.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2 && pi >= 0) { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); e.Handled = true; return; }
-                drag = true; if (pi >= 0) Begin(id); e.Pointer.Capture(canvas); From(e); e.Handled = true;
-            };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) End(id); e.Pointer.Capture(null); } };
-            canvas.SizeChanged += (_, _) => Vis(G(id));
-            cur.Add(() => { if (!drag) Vis(G(id)); });
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            grid.Children.Add(canvas); grid.Children.Add(Col(val, 1));
-            if (pi >= 0) MidiLearn.Bind(grid, MidiTarget.PluginParam(track, -1, pi), id);
-            return grid;
+            var row = DeviceCardKit.SliderRow("", () => G(id), n => { if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)n); Refresh(); }, () => fmt(G(id)), out var sync,
+                begin: () => { if (pi >= 0) Begin(id); }, end: () => { if (pi >= 0) End(id); },
+                reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
+                bipolar: bipolar, dim: dim, valueWidth: valW);
+            cur.Add(sync);
+            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), id);
+            return row;
         }
         Control SliderRow(string label, string id, Func<double, string> fmt, double labW = 40, double valW = 26, Func<bool>? dim = null, bool bipolar = false)
         {
@@ -263,10 +204,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control VWheel(string id, string name, IBrush lit, bool spring)
         {
             int pi = I(id);
-            var grad = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(NotaPalette.SurfaceRaised.Color, 0), new GradientStop(NotaPalette.BgSunken.Color, 0.5), new GradientStop(NotaPalette.SurfaceRaised.Color, 1) } };
-            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Stretch };
-            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = new CornerRadius(1) };
+            IBrush grad = NotaPalette.BgSunken;
+            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Bar };
             var lay = new Canvas { Width = 16 };
             lay.Children.Add(mark); Canvas.SetLeft(mark, 2);
             var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Children = { bar, lay } };
@@ -300,30 +240,30 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
 
         // ---- formatters -------------------------------------------------------------
         static double Exp(double lo, double hi, double v) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
-        static string Time(double s) => s >= 1 ? $"{s:0.0} s" : s >= 0.0995 ? $"{s * 1000:0} ms" : $"{s * 1000:0.#} ms";
-        static string ShortTime(double s) => s >= 1 ? $"{s:0.0}s" : $"{s * 1000:0}ms";
-        static string Pct(double v) => $"{v * 100:0} %";
+        static string Time(double s) => s >= 1 ? $"{s:0.0}\u2009s" : s >= 0.0995 ? $"{s * 1000:0}\u2009ms" : $"{s * 1000:0.#}\u2009ms";
+        static string ShortTime(double s) => s >= 1 ? $"{s:0.0}\u2009s" : $"{s * 1000:0}\u2009ms";
+        static string Pct(double v) => $"{v * 100:0}\u2009%";
         static string Tenths(double v) => $"{v * 10:0.0}";
-        static string HzFmt(double hz) => hz >= 1000 ? $"{hz / 1000:0.00} kHz" : $"{hz:0} Hz";
+        static string HzFmt(double hz) => hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz";
         static string Signed(double v, string f) => Math.Abs(v) < 0.005 ? (0.0).ToString(f) : v.ToString("+" + f + ";-" + f);
         string Foot(float v) => Feet[Math.Clamp((int)Math.Round(v * 4), 0, 4)];
         string Freq(float v) => Signed((v - 0.5) * 14, "0.00");
         string Cut(float v) => HzFmt(20 * Math.Pow(1000, v));
-        string Space(float v) => Signed((v - 0.5) * 6, "0.0") + " oct";
+        string Space(float v) => Signed((v - 0.5) * 6, "0.0") + "\u2009oct";
         string EnvAmt(float v) => Signed((v - 0.5) * 20, "0.0");
         string Atk(float v) => ShortTime(Exp(0.001, 10, v));
         string Dec(float v) => ShortTime(Exp(0.003, 15, v));
         string GlideF(double v) => v < 0.002 ? "off" : Time(Exp(0.005, 5, v));
-        string LfoRate(float v) => On("lfosync") ? SyncNames[Math.Clamp((int)Math.Round(v * 13), 0, 13)] : $"{Exp(0.05, 30, v):0.0#} Hz";
+        string LfoRate(float v) => On("lfosync") ? SyncNames[Math.Clamp((int)Math.Round(v * 13), 0, 13)] : $"{Exp(0.05, 30, v):0.0#}\u2009Hz";
         static double LfoCentsOf(double v) { double b = (v - 0.5) * 2; return b * Math.Abs(b) * 1200; }
-        string LfoCents(float v) { double c = LfoCentsOf(v); return Math.Abs(c) < 0.5 ? "0 c" : $"{c:+0;-0} c"; }
+        string LfoCents(float v) { double c = LfoCentsOf(v); return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }
         static double DlySec(double v) => Exp(0.02, 1.5, v);
-        string DlyMs(float v) => $"{DlySec(v) * 1000:0} ms";
-        string DlySpc(float v) => $"{(v - 0.5) * 1000:+0;-0;0} ms";
-        string VolDb(float v) { double g = 2 * v * v; return g <= 1e-4 ? "−∞" : $"{20 * Math.Log10(g):0.0} dB"; }
-        string Tune(double v) => Signed((v - 0.5) * 4, "0.0") + " st";
+        string DlyMs(float v) => $"{DlySec(v) * 1000:0}\u2009ms";
+        string DlySpc(float v) => $"{(v - 0.5) * 1000:+0;−0;0}\u2009ms";
+        string VolDb(float v) { double g = 2 * v * v; return g <= 1e-4 ? "−∞" : $"{20 * Math.Log10(g):0.0}\u2009dB"; }
+        string Tune(double v) => Signed((v - 0.5) * 4, "0.0") + "\u2009st";
         int BendSt() => 1 + Math.Clamp((int)Math.Round(G("bendrange") * 11), 0, 11);
-        string Depth(double v) => $"{(v - 0.5) * 200:+0;-0;0}";
+        string Depth(double v) => $"{(v - 0.5) * 200:+0;−0;0}";
 
         // ======================================================================
         // Patch-bay model: 12 cable slots of (source, destination, depth) params
@@ -377,7 +317,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var mine = CableList().Where(c => j.Out ? c.Src == j.Index : c.Dst == j.Index).ToList();
             foreach (var c in mine)
             {
-                var mi = new MenuItem { Header = $"Remove {CableName(c)}  {c.Depth * 100:+0;-0;0}" };
+                var mi = new MenuItem { Header = $"Remove {CableName(c)}  {c.Depth * 100:+0;−0;0}" };
                 int slot = c.Slot; mi.Click += (_, _) => RemoveSlot(slot);
                 f.Items.Add(mi);
             }
@@ -399,16 +339,16 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // ======================================================================
         var bendTxt = MonoText("", 7, AmberLit); var modTxt = MonoText("", 7, MutedC);
         bendTxt.HorizontalAlignment = HorizontalAlignment.Center; modTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        common.Add(() => { bendTxt.Text = $"±{BendSt()} st"; modTxt.Text = $"{G("modwheel") * 100:0} %"; modTxt.Foreground = G("modwheel") > 0.01f ? AmberLit : MutedC; });
+        common.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? AmberLit : MutedC; });
         var wheelsBody = new DockPanel { LastChildFill = true };
         var wTitle = Caps("WHEELS"); wTitle.HorizontalAlignment = HorizontalAlignment.Center; wTitle.Margin = new Thickness(0, 0, 0, 4);
         wheelsBody.Children.Add(Docked(wTitle, Avalonia.Controls.Dock.Top));
         wheelsBody.Children.Add(Docked(modTxt, Avalonia.Controls.Dock.Bottom));
         wheelsBody.Children.Add(Docked(bendTxt, Avalonia.Controls.Dock.Bottom));
         wheelsBody.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 3), Children = {
-            VWheel("bend", "PIT", Amber, spring: true),
+            VWheel("bend", "PITCH", Amber, spring: true),
             VWheel("modwheel", "MOD", AmberLit, spring: false) } });
-        var wheels = new Border { Width = 52, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(0, 5), Child = wheelsBody };
+        var wheels = new Border { Width = 52, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5), Child = wheelsBody };
         DockPanel.SetDock(wheels, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
@@ -426,7 +366,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             {
                 int wv = w;
                 var ic = new PentadWaveIcon(icon[w]) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Width = 24, Height = 16, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+                var b = new Border { Width = 24, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
                 ToolTip.SetTip(b, tip[w]);
                 b.PointerPressed += (_, e) => { SetP(id, wv / 3f); Refresh(); e.Handled = true; };
                 chips[w] = b; icons[w] = ic; row.Children.Add(b);
@@ -434,7 +374,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             cur.Add(() =>
             {
                 int s = Sel(id, 4);
-                for (int w = 0; w < 4; w++) { bool on = w == s; chips[w].Background = on ? AmberSubtle : Brushes.Transparent; chips[w].BorderBrush = on ? Amber : NotaPalette.BorderStrong; icons[w].Stroke = on ? AmberLit : MutedC; icons[w].InvalidateVisual(); }
+                for (int w = 0; w < 4; w++) { bool on = w == s; chips[w].Background = on ? Amber : Brushes.Transparent; chips[w].BorderBrush = on ? Amber : NotaPalette.BorderStrong; icons[w].Stroke = on ? NotaPalette.TextOnAccent : MutedC; icons[w].InvalidateVisual(); }
             });
             if (I(id) is var pi and >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), id);
             return row;
@@ -442,10 +382,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control SyncChip(string id, string text)
         {
             var tb = MonoText(text, 8, MutedC);
-            var b = new Border { Padding = new Thickness(4, 1), CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var b = new Border { Padding = new Thickness(4, 1), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             ToolTip.SetTip(b, "Hard sync");
             b.PointerPressed += (_, e) => { SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
-            cur.Add(() => { bool on = On(id); tb.Foreground = on ? AmberLit : DimC; b.BorderBrush = on ? NotaPalette.AccentSubtle : Brushes.Transparent; b.Background = on ? AmberSubtle : Brushes.Transparent; });
+            cur.Add(() => { bool on = On(id); tb.Foreground = on ? NotaPalette.AccentHover : DimC; b.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent; b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; });
             if (I(id) is var pi and >= 0) MidiLearn.Bind(b, MidiTarget.PluginParam(track, -1, pi), id);
             return b;
         }
@@ -506,18 +446,18 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             curve.DragStarted += () => { Begin("cutoff"); Begin("reso"); };
             curve.DragEnded += () => { End("cutoff"); End("reso"); };
             cur.Add(() => curve.Set(G("cutoff"), G("reso"), (G("spacing") - 0.5) * 6, Sel("filtmode", 3), On("basscomp")));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 3, 0, 2), Child = curve };
-            var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24 dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 2), Child = curve };
+            var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
             knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, 28, 50));
-            knobs.Children.Add(Col(K("reso", "RESON", v => Tenths(v), false, 28, 46), 1));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, 28, 46), 1));
             knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, 28, 50), 2));
-            knobs.Children.Add(Col(K("fenvamt", "ENV AMT", EnvAmt, true, 28, 46), 3));
+            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, 28, 46), 3));
             var j1 = new ConsortJackDot(11); var j2 = new ConsortJackDot(11);
             ToolTip.SetTip(j1, "Filt 1 cutoff input"); ToolTip.SetTip(j2, "Filt 2 cutoff input");
             cur.Add(() => { j1.Set(PatchedAt(false, 10)); j2.Set(PatchedAt(false, 11)); });
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 8, Height = 18 };
-            bottom.Children.Add(Row(5, Caps("KBD TRK"), Chips("kbdtrk", new[] { "0", "½", "1" })));
+            bottom.Children.Add(Row(5, Caps("KEYTRACK"), Chips("kbdtrk", new[] { "0", "½", "1" })));
             bottom.Children.Add(Col(Toggle("basscomp", "Bass comp"), 1));
             bottom.Children.Add(Col(Row(4, j1, j2), 3));
             var body = new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(bottom, Avalonia.Controls.Dock.Bottom), Docked(knobs, Avalonia.Controls.Dock.Bottom), graph } };
@@ -530,12 +470,12 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             cur.Add(() =>
             {
                 curve.Set(G(pre + "attack"), G(pre + "decay"), G(pre + "sustain"), G(pre + "release")); curve.InvalidateVisual();
-                times.Text = $"{Atk(G(pre + "attack"))} · {Dec(G(pre + "decay"))} · {G(pre + "sustain") * 100:0}% · {Dec(G(pre + "release"))}";
+                times.Text = $"{Atk(G(pre + "attack"))} · {Dec(G(pre + "decay"))} · {G(pre + "sustain") * 100:0}\u2009% · {Dec(G(pre + "release"))}";
             });
             var head = new DockPanel { Height = 12, LastChildFill = false, Margin = new Thickness(0, 0, 0, 2) };
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
             head.Children.Add(Docked(times, Avalonia.Controls.Dock.Right));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
             var knobs = Row(0, K(pre + "attack", "A", Atk, amp, 22, 27), K(pre + "decay", "D", Dec, amp, 22, 27), K(pre + "sustain", "S", v => Pct(v), amp, 22, 27), K(pre + "release", "R", Dec, amp, 22, 27));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
@@ -562,12 +502,12 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             {
                 int sv = s;
                 var ic = new ConsortLfoIcon(s) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Width = 26, Height = 17, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+                var b = new Border { Width = 26, Height = 17, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
                 ToolTip.SetTip(b, LfoNames[s]);
                 b.PointerPressed += (_, e) => { SetP("lfowave", sv / 5f); Refresh(); e.Handled = true; };
                 chips[s] = b; icons[s] = ic; shapes.Children.Add(b);
             }
-            cur.Add(() => { int s = Sel("lfowave", 6); for (int i = 0; i < 6; i++) { bool on = i == s; chips[i].Background = on ? AmberSubtle : Brushes.Transparent; chips[i].BorderBrush = on ? Amber : NotaPalette.BorderStrong; icons[i].Stroke = on ? AmberLit : MutedC; icons[i].InvalidateVisual(); } });
+            cur.Add(() => { int s = Sel("lfowave", 6); for (int i = 0; i < 6; i++) { bool on = i == s; chips[i].Background = on ? Amber : Brushes.Transparent; chips[i].BorderBrush = on ? Amber : NotaPalette.BorderStrong; icons[i].Stroke = on ? NotaPalette.TextOnAccent : MutedC; icons[i].InvalidateVisual(); } });
             if (I("lfowave") is var pw and >= 0) MidiLearn.Bind(shapes, MidiTarget.PluginParam(track, -1, pw), "lfowave");
             var jo = new ConsortJackDot(12); var jr = new ConsortJackDot(12);
             ToolTip.SetTip(jo, "LFO out (patch bay)"); ToolTip.SetTip(jr, "LFO rate input (patch bay)");
@@ -595,12 +535,12 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             {
                 double tl = DlySec(G("dlytime")), tr = Math.Clamp(tl + (G("dlyspacing") - 0.5), 0.005, 2.0);
                 view.Set(tl, tr, G("dlyfb"), G("dlymix"), On("dlyping"), On("dlydigital"));
-                times.Text = $"L {tl * 1000:0} · R {tr * 1000:0} ms";
+                times.Text = $"L {tl * 1000:0} · R {tr * 1000:0}\u2009ms";
             });
             var head = new DockPanel { Height = 14, LastChildFill = false, Children = { Docked(Caps(""), Avalonia.Controls.Dock.Left), Docked(times, Avalonia.Controls.Dock.Right) } };
             var title = (TextBlock)head.Children[0];
             cur.Add(() => title.Text = On("dlydigital") ? "DELAY · DIGITAL" : "ANALOG DELAY · BBD");
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 2, 0, 3), Child = view };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 2, 0, 3), Child = view };
             var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, 28, 44), K("dlyspacing", "SPACING", DlySpc, false, 28, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, 28, 46), K("dlymix", "MIX", v => Pct(v), false, 28, 40));
             var opts = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Chips("dlyping", new[] { "Ping", "Stereo" }, new[] { 1f, 0f }), Toggle("dlydigital", "Digital") } };
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -641,8 +581,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int b = 0; b < 4; b++)
             {
                 int bv = b;
-                var sw = new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(2), BorderBrush = cols[b], BorderThickness = new Thickness(1), Background = b == 3 ? Inset : new SolidColorBrush(((ISolidColorBrush)cols[b]).Color, 0.35) };
-                var it = new Border { Background = Brushes.Transparent, Padding = new Thickness(3, 1), CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = Row(3, sw, new TextBlock { Text = names[b], FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center }) };
+                var sw = new Border { Width = 9, Height = 9, CornerRadius = NotaRadius.Clip, BorderBrush = cols[b], BorderThickness = new Thickness(1), Background = b == 3 ? Inset : new SolidColorBrush(((ISolidColorBrush)cols[b]).Color, 0.35) };
+                var it = new Border { Background = Brushes.Transparent, Padding = new Thickness(3, 1), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = Row(3, sw, new TextBlock { Text = names[b], FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center }) };
                 ToolTip.SetTip(it, $"Paint {names[b]} steps (Alt-click a step: rest)");
                 it.PointerPressed += (_, e) => { vs.Brush = bv; Refresh(); e.Handled = true; };
                 legItems[b] = it; legend.Children.Add(it);
@@ -676,16 +616,16 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 grid.Set(types, SeqLen(), PlayStep(), Ratchet());
                 lane.Set(StepPitches(), types, SeqLen(), PlayStep(), Sel("seqmode", 3) == 2);
             });
-            var laneBox = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = lane };
+            var laneBox = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = lane };
 
             var clkDot = new ConsortJackDot(12); var gateDot = new ConsortJackDot(12);
             ToolTip.SetTip(clkDot, "Clock out (patch bay)"); ToolTip.SetTip(gateDot, "Seq gate out (patch bay)");
             tabReadouts[3].Add(() => { clkDot.Set(PatchedAt(true, 12)); gateDot.Set(PatchedAt(true, 11, 10)); });
-            var swingSl = HSlider("seqswing", v => $"{50 + v * 25:0} %", 28); swingSl.Width = 84;
+            var swingSl = HSlider("seqswing", v => $"{50 + v * 25:0}\u2009%", 28); swingSl.Width = 84;
             var rateTxt = MonoText("", 9, AmberLit);
-            var rateBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = rateTxt };
+            var rateBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(rateTxt, 7) };
             ToolTip.SetTip(rateBox, "Step rate (synced to the host tempo)");
-            tabReadouts[3].Add(() => rateTxt.Text = SeqRates[Sel("seqrate", SeqRates.Length)] + " ▾");
+            tabReadouts[3].Add(() => rateTxt.Text = SeqRates[Sel("seqrate", SeqRates.Length)]);
             rateBox.PointerPressed += (_, e) =>
             {
                 var f = new MenuFlyout();
@@ -775,10 +715,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 foreach (var c in cs)
                 {
                     int slot = c.Slot;
-                    var dot = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center };
-                    var x = new TextBlock { Text = "✕", FontSize = 8, Foreground = MutedC, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center };
+                    var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center };
+                    var x = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new Glyph(GlyphKind.Close, 8) { Foreground = MutedC } };
                     x.PointerPressed += (_, e) => { RemoveSlot(slot); e.Handled = true; };
-                    var name = new TextBlock { Text = $"{ConsortJacks.ShortName(ConsortJacks.Src(c.Src).Name)} → {ConsortJacks.ShortName(ConsortJacks.Dst(c.Dst).Name)}", FontSize = 8.5, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                    var name = new TextBlock { Text = $"{ConsortJacks.ShortName(ConsortJacks.Src(c.Src).Name)} → {ConsortJacks.ShortName(ConsortJacks.Dst(c.Dst).Name)}", FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
                     var hdr = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5 };
                     hdr.Children.Add(dot); hdr.Children.Add(Col(name, 1)); hdr.Children.Add(Col(x, 2));
                     List<Action> saved = cur; cur = rowReadouts;
@@ -818,7 +758,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var field = StripField();
             tabReadouts[4].Add(() => field.SetCables(CableList()));
             var list = CableListView(tabReadouts[4]);
-            var hint = new TextBlock { Text = "Drag jack to jack · Alt-click to pull · right-click for a list", FontSize = 7.5, Foreground = DimC, TextWrapping = TextWrapping.Wrap };
+            var hint = new TextBlock { Text = "Drag jack to jack · Alt-click to pull · right-click for a list", FontSize = 8, Foreground = DimC, TextWrapping = TextWrapping.Wrap };
             var side = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 0, 0, 3), Child = Caps("CABLES") }, Avalonia.Controls.Dock.Top), Docked(hint, Avalonia.Controls.Dock.Bottom), list } };
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,144") };
             g.Children.Add(new Border { Padding = new Thickness(2, 2, 4, 0), Child = field });
@@ -846,7 +786,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int i = 0; i < 4; i++)
             {
                 txt[i] = MonoText("—", 8, DimC); txt[i].HorizontalAlignment = HorizontalAlignment.Center;
-                cells[i] = new Border { Height = 18, Margin = new Thickness(1.5, 0), CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Child = txt[i] };
+                cells[i] = new Border { Height = 18, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = txt[i] };
                 ToolTip.SetTip(cells[i], $"Oscillator {i + 1}'s note (paraphonic) · the latest voices in true poly");
                 cellRow.Children.Add(cells[i]);
             }
@@ -900,7 +840,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 Docked(top, Avalonia.Controls.Dock.Top),
                 Docked(Divider(new StackPanel { Spacing = 4, Children = {
                     SliderRow("TUNE", "tune", v => Tune(v), 40, 34, null, true),
-                    SliderRow("BEND", "bendrange", v => $"±{1 + Math.Clamp((int)Math.Round(v * 11), 0, 11)} st", 40, 34),
+                    SliderRow("BEND", "bendrange", v => $"±{1 + Math.Clamp((int)Math.Round(v * 11), 0, 11)}\u2009st", 40, 34),
                     Toggle("velvca", "Velocity → VCA"),
                     Toggle("atcut", "Aftertouch → cut") } }), Avalonia.Controls.Dock.Top),
                 Docked(Divider(Row(8, Caps("OVERSAMPLE"), Chips("oversample", new[] { "×1", "×2", "×4" }))), Avalonia.Controls.Dock.Bottom) } };
@@ -922,7 +862,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             cur = tabReadouts[0];
             var pwSl = HSlider("pw", v => Pct(v), 26); pwSl.Width = 84;
             extras[0] = Row(6, Caps("PWM"), pwSl);
-            ToolTip.SetTip(extras[0], "Pulse width of the pulse wave (square stays 50 %)");
+            ToolTip.SetTip(extras[0], "Pulse width of the pulse wave (square stays 50\u2009%)");
             cur = tabReadouts[1];
             extras[1] = Chips("filtmode", new[] { "HP/LP ser", "LP/LP st", "HP/LP st" });
             cur = tabReadouts[2];
@@ -956,9 +896,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var (centre, selectCentre) = TabFrame(new[] { "Osc · Mix", "Filters · Env", "LFO · Delay", "Seq", "Patch" }, centreHost, CentreBody, false, vs.Centre,
             t => { vs.Centre = t; if (t != 4) vs.LastNonPatch = t; extrasHost.Content = extras[t]; Refresh(); }, extrasHost);
         var (rightFrame, _) = TabFrame(new[] { "Voices", "Output" }, rightHost, RightBody, true, vs.Right, t => { vs.Right = t; Refresh(); }, null);
-        var right = new Border { Width = 172, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Child = rightFrame };
+        var right = new Border { Width = 172, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Child = rightFrame };
         DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
-        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Margin = new Thickness(5, 0), Child = centre };
+        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Patch-bay row (collapsed) + overlay
@@ -968,7 +908,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var chipsHost = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
         var countTxt = MonoText("", 8, AmberLit);
         var openTxt = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
-        var openBtn = new Border { Height = 13, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(3), Background = OffPill, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = openTxt };
+        var openBtn = new Border { Height = 13, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = openTxt };
         ToolTip.SetTip(openBtn, "Open the full patch bay (all 42 points) · on the Patch tab: back to the last panel");
         openBtn.PointerPressed += (_, e) =>
         {
@@ -987,10 +927,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 chipsHost.Children.Clear();
                 foreach (var c in cs)
                 {
-                    var chip = Row(3, new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center },
+                    var chip = Row(3, new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center },
                                       MonoText(CableChip(c), 8, Txt2));
                     chip.Background = Brushes.Transparent; chip.Cursor = new Cursor(StandardCursorType.Hand);
-                    ToolTip.SetTip(chip, $"{CableName(c)} · depth {c.Depth * 100:+0;-0;0}");
+                    ToolTip.SetTip(chip, $"{CableName(c)} · depth {c.Depth * 100:+0;−0;0}");
                     chip.PointerPressed += (_, e) => { selectCentre(4); e.Handled = true; };
                     chipsHost.Children.Add(chip);
                 }
@@ -1027,7 +967,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             overlayReadouts.Add(() => info.Text = $"{CableList().Count} cables · {ConsortJacks.Points} points");
             Border Btn(string t, Action a)
             {
-                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = new CornerRadius(3), Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = t, FontSize = 8.5, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center } };
+                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = t, FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center } };
                 b.PointerPressed += (_, e) => { a(); e.Handled = true; };
                 return b;
             }
@@ -1035,7 +975,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var topGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 10 };
             topGrid.Children.Add(Lbl("Patch bay", 10, AmberLit, FontWeight.SemiBold));
             topGrid.Children.Add(Col(info, 1)); topGrid.Children.Add(Col(view, 2));
-            topGrid.Children.Add(Col(Btn("Clear all", ClearAll), 4)); topGrid.Children.Add(Col(Btn("Esc ✕", () => OpenOverlay(false)), 5));
+            topGrid.Children.Add(Col(Btn("Clear all", ClearAll), 4)); topGrid.Children.Add(Col(Btn("Close", () => OpenOverlay(false)), 5));
             var top = new Border { Height = 26, BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Child = topGrid };
             // bottom: cable list with draggable depths
             var bottomHost = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -1050,7 +990,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 {
                     int slot = c.Slot;
                     var tone = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone);
-                    var dep = MonoText($"{c.Depth * 100:+0;-0;0}", 8, tone);
+                    var dep = MonoText($"{c.Depth * 100:+0;−0;0}", 8, tone);
                     var depBox = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = dep };
                     ToolTip.SetTip(depBox, "Depth — drag up / down (double-click: +50)");
                     bool drag = false; double y0 = 0; float v0 = 0;
@@ -1060,13 +1000,13 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                         if (e.ClickCount == 2) { SetP(AmtId(slot), 0.75f); Refresh(); e.Handled = true; return; }
                         drag = true; y0 = e.GetPosition(depBox).Y; v0 = G(AmtId(slot)); Begin(AmtId(slot)); e.Pointer.Capture(depBox); e.Handled = true;
                     };
-                    depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;-0;0}"; };
+                    depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;−0;0}"; };
                     depBox.PointerReleased += (_, e) => { if (drag) { drag = false; End(AmtId(slot)); e.Pointer.Capture(null); Refresh(); } };
-                    bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4), Background = tone, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = CableName(c), FontSize = 8.5, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, depBox));
+                    bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Control, Background = tone, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = CableName(c), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, depBox));
                 }
             });
-            var note = new TextBlock { Text = "A cable breaks the normal at Gate / Filt in / VCA in / Ext in · loops run with a one-sample delay", FontSize = 7.5, Foreground = DimC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var note = new TextBlock { Text = "A cable breaks the normal at Gate / Filt in / VCA in / Ext in · loops run with a one-sample delay", FontSize = 8, Foreground = DimC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var botGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") , ColumnSpacing = 12 };
             botGrid.Children.Add(new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, MaxWidth = 470, Content = bottomHost });
             botGrid.Children.Add(Col(Right(note), 1));
@@ -1091,7 +1031,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 {
                     string rate = On("lfosync") ? $"sync {LfoRate(G("lforate"))}" : LfoRate(G("lforate"));
                     string dest = On("lfodest") ? "osc 2 + 4" : "all osc";
-                    return $"LFO {LfoNames[Sel("lfowave", 6)]} {rate} → {dest} · {(On("dlydigital") ? "digital delay" : "BBD")} {(On("dlyping") ? "ping-pong" : "stereo")}, mix {G("dlymix") * 100:0} %";
+                    return $"LFO {LfoNames[Sel("lfowave", 6)]} {rate} → {dest} · {(On("dlydigital") ? "digital delay" : "BBD")} {(On("dlyping") ? "ping-pong" : "stereo")}, mix {G("dlymix") * 100:0}\u2009%";
                 }
                 case 3:
                 {
@@ -1099,10 +1039,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     if (m == 0) return "Sequencer off · pick SEQ or ARP, then hold a key";
                     var types = StepTypes(); int len = SeqLen();
                     int rat = types.Take(len).Count(t => t == 1), ties = types.Take(len).Count(t => t == 2);
-                    string swing = $"swing {50 + G("seqswing") * 25:0} %";
+                    string swing = $"swing {50 + G("seqswing") * 25:0}\u2009%";
                     return m == 1
                         ? $"{len} steps · {rat} ratchet{(rat == 1 ? "" : "s")} ×{Ratchet()} · {ties} tie{(ties == 1 ? "" : "s")} · {swing} · transposed from the keyboard"
-                        : $"Arp {new[] { "up", "down", "random" }[Sel("seqorder", 3)]} over {1 + Sel("arpoct", 3)} oct · {SeqRates[Sel("seqrate", 6)]} · {swing}{(On("seqlatch") ? " · latched" : "")}";
+                        : $"Arp {new[] { "up", "down", "random" }[Sel("seqorder", 3)]} over {1 + Sel("arpoct", 3)}\u2009oct · {SeqRates[Sel("seqrate", 6)]} · {swing}{(On("seqlatch") ? " · latched" : "")}";
                 }
                 case 4:
                 {
@@ -1114,7 +1054,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 {
                     var sync = new List<string>();
                     if (On("o2sync")) sync.Add("osc 2 sync → 1"); if (On("o4sync")) sync.Add("osc 4 sync → 3");
-                    return $"{ModeName()} · {busy} {(Poly() ? "voice" : "note")}{(busy == 1 ? "" : "s")}{(sync.Count > 0 ? " · " + string.Join(", ", sync) : "")} · drift {G("drift") * 100:0} %";
+                    return $"{ModeName()} · {busy} {(Poly() ? "voice" : "note")}{(busy == 1 ? "" : "s")}{(sync.Count > 0 ? " · " + string.Join(", ", sync) : "")} · drift {G("drift") * 100:0}\u2009%";
                 }
             }
         }
@@ -1125,9 +1065,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             statusLeft.Text = StatusText();
             if (scN > 8)
             {
-                string rate = $"{scope[6] / 1000:0.#} kHz";
-                statusRight.Text = vs.Centre == 3 ? $"{rate} · sync to host {scope[8]:0} BPM · CPU {scope[4] * 100:0.0} %"
-                                                  : $"{rate} · ×{(int)scope[5]} OS · 0 smp · CPU {scope[4] * 100:0.0} %";
+                string rate = $"{scope[6] / 1000:0.#}\u2009kHz";
+                statusRight.Text = vs.Centre == 3 ? $"{rate} · sync to host {scope[8]:0}\u2009BPM · CPU {scope[4] * 100:0}\u2009%"
+                                                  : $"{rate} · ×{(int)scope[5]} OS · 0 smp · CPU {scope[4] * 100:0}\u2009%";
             }
         });
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };

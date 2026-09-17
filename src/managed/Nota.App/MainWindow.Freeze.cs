@@ -68,8 +68,7 @@ public partial class MainWindow
         bool inPlace = IsFreezable(trackId) && Engine.IsTrackFrozen(trackId);
         bool sleeping = LinkForSource(trackId) is { State: LinkState.Frozen };
         bool dim = inPlace || sleeping;
-        _deviceChain.Opacity = dim ? 0.5 : 1.0;
-        _deviceChain.IsHitTestVisible = !dim;
+        Inactive.Set(_deviceChain, dim);
     }
 
     private void EnsureFreezeMenu()
@@ -112,7 +111,7 @@ public partial class MainWindow
             bool ok = false;
             await RunBlockingAsync("Freeze", "Freezing track…", async prog =>
             {
-                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Freezing track… {f * 100:0}%")));
+                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Freezing track… {f * 100:0}\u2009%")));
                 ok = await Task.Run(() => _freezer.Freeze(Engine, trackId, endBeats,
                     _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac));
             });
@@ -154,14 +153,14 @@ public partial class MainWindow
             int src = link.SourceId;
             if (link.State == LinkState.Editing)
             {
-                items.Add(FreezeMenuItem("Done — re-freeze", GlyphIcon("✓", accent: true),
+                items.Add(FreezeMenuItem("Done — re-freeze", GlyphIcon(GlyphKind.Check, accent: true),
                     async () => { Timeline.Select(trackId, -1); await CommitEditSessionAsync(src); }));
-                items.Add(FreezeMenuItem("Discard edits", GlyphIcon("✗", accent: false),
+                items.Add(FreezeMenuItem("Discard edits", GlyphIcon(GlyphKind.Cross, accent: false),
                     () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }));
             }
             else
                 // Editing changes the source's notes/devices, so land on the source track.
-                items.Add(FreezeMenuItem("Edit source", GlyphIcon("✎", accent: true),
+                items.Add(FreezeMenuItem("Edit source", GlyphIcon(GlyphKind.Edit, accent: true),
                     () => { Timeline.Select(src, -1); BeginEditSession(src); }));
             items.Add(FreezeMenuItem("Unfreeze (wake source)", null, () => UnfreezeLink(src)));
             items.Add(FreezeMenuItem("Flatten (remove source)", null, () => FlattenLinkAsync(src)));
@@ -205,7 +204,7 @@ public partial class MainWindow
     private static readonly IBrush IceBrush = NotaPalette.Frozen;
 
     private static Control SnowflakeIcon()
-        => new TextBlock { Text = "❄", FontSize = 12, Foreground = IceBrush, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        => new Glyph(GlyphKind.Freeze, 11) { Foreground = IceBrush };
 
     private static Control ChainLinkIcon()
         => new Avalonia.Controls.Shapes.Path
@@ -214,12 +213,8 @@ public partial class MainWindow
             Width = 14, Height = 14, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
 
-    private Control GlyphIcon(string glyph, bool accent)
-        => new TextBlock
-        {
-            Text = glyph, FontSize = 12, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            Foreground = accent ? NotaPalette.AccentBright : NotaPalette.TextTertiary,
-        };
+    private Control GlyphIcon(GlyphKind glyph, bool accent)
+        => new Glyph(glyph, 11) { Foreground = accent ? NotaPalette.AccentBright : NotaPalette.TextTertiary };
 
     // --- Flatten -----------------------------------------------------------
 

@@ -197,8 +197,9 @@ public partial class MainWindow : Window
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0", fontSize: 14);
-        bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v);
+        // Tempo reads with two decimals (almanac § Numbers); a drag moves in half-BPM steps.
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14);
+        bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
@@ -307,7 +308,7 @@ public partial class MainWindow : Window
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
         // Same island gutter as the arrangement it replaces in MainContent.
-        _modular = new ModularView(vm.Engine) { IsVisible = false, Margin = new Thickness(0, 8, 8, 8) };
+        _modular = new ModularView(vm.Engine) { IsVisible = false, Margin = new Thickness(0, NotaSpace.Gutter, NotaSpace.Gutter, NotaSpace.Gutter) };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas

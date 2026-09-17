@@ -34,7 +34,7 @@ internal sealed class PendulumViz : Control
     private static readonly IBrush RailDn = NotaPalette.Wash(NotaPalette.Teal, 0x8C); // ∨ dimmed
     private static readonly Pen TriggerPen = new(NotaPalette.Wash(NotaPalette.AccentBright, 0x47), 1) { DashStyle = DashStyle.Dash };
     private static readonly Pen ApexPen = new(NotaPalette.Wash(NotaPalette.AccentBright, 0x59), 1);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private const int MaxBalls = 6;
     private const int TrailLen = 14;
@@ -112,7 +112,7 @@ internal sealed class PendulumViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(FieldBorder, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         double labelH = _mini ? 2 : 14, capH = _mini ? 2 : 12;
         double pad = 8, x0 = pad, x1 = w - pad;

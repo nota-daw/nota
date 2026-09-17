@@ -58,7 +58,7 @@ public sealed class MidiMapView : UserControl
         };
         var del = new Button
         {
-            Content = "✕", FontSize = 11, Padding = new Avalonia.Thickness(6, 1),
+            Content = new Glyph(GlyphKind.Close, 10), Padding = new Avalonia.Thickness(6, 1),
             Background = Brushes.Transparent, BorderThickness = new Avalonia.Thickness(0),
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };

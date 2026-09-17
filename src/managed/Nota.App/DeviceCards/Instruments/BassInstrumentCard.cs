@@ -76,18 +76,14 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         { var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = spacing, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) sp.Children.Add(c); return sp; }
         Control Lbl(string t, double fs, IBrush c) => new TextBlock { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         Control Cap(string t, IBrush? c = null) => new TextBlock { Text = t, FontSize = 9, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
-        Control Arrow() => new TextBlock { Text = "▸", FontSize = 12, Foreground = ArrowC, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0) };
+        Control Arrow() => new Glyph(GlyphKind.ChevronRight, 9) { Foreground = ArrowC, Margin = new Thickness(1, 0) };
 
         // Param-backed chip strip.
         Control Chips(string id, string[] names, double fs = 9)
         {
-            int n = names.Length; var arr = new Border[n];
-            void Hi() { int cur = Sel(id, n); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Brushes.Transparent; arr[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++)
-            { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = MutedC } }; c.PointerPressed += (_, _) => { SetP(id, iv / (float)(n - 1)); Hi(); Refresh(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            int n = names.Length;
+            var seg = DeviceCardKit.Segments(names, () => Sel(id, n), iv => { SetP(id, iv / (float)(n - 1)); Refresh(); }, out var sync);
+            readouts.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), id);
             return seg;
         }
@@ -96,10 +92,10 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         Control SubWaveChips()
         {
             int[] waveIcon = { 3, 1, 2 }; int n = 3; var arr = new Border[n]; var ic = new WaveIcon[n];
-            void Hi() { int cur = Sel("subwave", 3); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Inset; arr[i].BorderBrush = on ? Amber : Border2; ic[i].Stroke = on ? AmberLit : MutedC; ic[i].InvalidateVisual(); } }
+            void Hi() { int cur = Sel("subwave", 3); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? Amber : Inset; arr[i].BorderBrush = on ? Amber : Border2; ic[i].Stroke = on ? NotaPalette.TextOnAccent : MutedC; ic[i].InvalidateVisual(); } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             for (int i = 0; i < n; i++)
-            { int iv = i; var wi = new WaveIcon(waveIcon[i]) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; var b = new Border { Width = 30, Height = 22, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand), Child = wi }; b.PointerPressed += (_, _) => { SetP("subwave", iv / 2f); Hi(); Refresh(); }; arr[i] = b; ic[i] = wi; row.Children.Add(b); }
+            { int iv = i; var wi = new WaveIcon(waveIcon[i]) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; var b = new Border { Width = 30, Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand), Child = wi }; b.PointerPressed += (_, _) => { SetP("subwave", iv / 2f); Hi(); Refresh(); }; arr[i] = b; ic[i] = wi; row.Children.Add(b); }
             readouts.Add(Hi); Hi();
             if (I("subwave") is var pi and >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), "subwave");
             return row;
@@ -108,13 +104,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         // Local (non-param) segmented toggle.
         Control Seg(string[] names, int initial, Action<int> onPick, double fs = 9)
         {
-            var arr = new Border[names.Length]; int cur = initial;
-            void Hi() { for (int i = 0; i < arr.Length; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++)
-            { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = MutedC } }; c.PointerPressed += (_, _) => { cur = iv; Hi(); onPick(iv); }; arr[i] = c; row.Children.Add(c); }
-            Hi();
-            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            int cur = initial;
+            return DeviceCardKit.Segments(names, () => cur, iv => { cur = iv; onPick(iv); }, out _);
         }
 
         // Panel frame: header + body in a bordered box. Set stretchBody=true when the
@@ -126,19 +117,19 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             var host = new Border { Child = body };
             if (!stretchBody) { host.VerticalAlignment = VerticalAlignment.Center; host.HorizontalAlignment = HorizontalAlignment.Center; }
             Grid.SetRow(host, 1); grid.Children.Add(host);
-            return new Border { Width = width, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = grid };
+            return new Border { Width = width, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = grid };
         }
 
         // ---- readout formatters ----
         string ShapeName(float s) => s < 0.17f ? "sine" : s < 0.42f ? "tri" : s < 0.75f ? "saw" : "pulse";
-        string OctLabel(float v) { int o = (int)Math.Round((v - 0.5f) * 4f); return o.ToString("+0;-0;0"); }
-        string ModLabel(float v) { int m = (int)Math.Round((v - 0.5f) * 200f); return m.ToString("+0;-0;0"); }
+        string OctLabel(float v) { int o = (int)Math.Round((v - 0.5f) * 4f); return o.ToString("+0;−0;0"); }
+        string ModLabel(float v) { int m = (int)Math.Round((v - 0.5f) * 200f); return m.ToString("+0;−0;0"); }
 
         // ---- SIGNAL PATH tab ----
         // OSC: continuous Shape + PW + tuning + level.
         var oscCap = new TextBlock { FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         oscCap.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        readouts.Add(() => oscCap.Text = ShapeName(G("oscshape")) + " · " + OctLabel(G("oscoctave")) + " oct");
+        readouts.Add(() => oscCap.Text = ShapeName(G("oscshape")) + " · " + OctLabel(G("oscoctave")) + "\u2009oct");
         var oscHead = new DockPanel { Children = { oscCap, Lbl("OSC", 10, TxtC) } };
         DockPanel.SetDock(oscCap, Dock.Right);
         var oscBody = Row(2, K("oscshape", "SHAPE"), K("oscpw", "PW"), K("oscoctave", "OCTAVE"), K("oscsemi", "SEMI"), K("osclevel", "LEVEL"));
@@ -169,11 +160,11 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         DockPanel.SetDock(filtCap, Dock.Right);
         var filterHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 6), Children = { filtCap, filtHeadLeft } };
         DockPanel.SetDock(filterHeader, Dock.Top);
-        var filterBox = new Border { Width = 404, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = new DockPanel { LastChildFill = true, Children = { filterHeader, filterBody } } };
+        var filterBox = new Border { Width = 404, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = new DockPanel { LastChildFill = true, Children = { filterHeader, filterBody } } };
 
         // OUTPUT: drive + volume.
         var outBody = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { K("drive", "DRIVE"), K("volume", "VOLUME") } };
-        var outBox = Panel(90, new TextBlock { Text = "OUTPUT", FontSize = 10, FontWeight = FontWeight.Bold, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center }, outBody);
+        var outBox = Panel(90, new TextBlock { Text = "OUTPUT", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center }, outBody);
 
         var signalPath = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Stretch,
             Children = { oscBox, Arrow(), subBox, Arrow(), filterBox, Arrow(), outBox } };
@@ -192,7 +183,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
                 var v = new TextBlock { Text = Pct(G(ids[k])), FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center };
                 v.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
                 string pid = ids[k]; var tv = v; readouts.Add(() => tv.Text = Pct(G(pid)));
-                var cell = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(2, 2),
+                var cell = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(2, 2),
                     Child = new StackPanel { Children = { new TextBlock { Text = lbl[k], FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center }, v } } };
                 Grid.SetColumn(cell, k); grid.Children.Add(cell);
             }
@@ -200,7 +191,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Lbl(title, 10, TxtC), new TextBlock { Text = route, FontSize = 9, Foreground = TealC, VerticalAlignment = VerticalAlignment.Center } } };
             DockPanel.SetDock(head, Dock.Top);
             var body = new DockPanel { LastChildFill = true, Children = { head, grid, gView } };
-            return new Border { Width = 300, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = body };
+            return new Border { Width = 300, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = body };
         }
 
         var ampEnvBox = EnvPanel("AMP ENV", "→ Level", ampEnv, new[] { "attack", "decay", "sustain", "release" }, AmberLit);

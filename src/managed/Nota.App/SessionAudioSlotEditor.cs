@@ -41,14 +41,14 @@ public sealed class SessionAudioSlotEditor : UserControl
         var waveBox = new Border
         {
             Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Child = wave, ClipToBounds = true,
+            CornerRadius = NotaRadius.Tile, Child = wave, ClipToBounds = true,
         };
 
         // Gain: fader maps 0..1 -> 0..2 linear (unity at 0.5), with a dB readout.
         float gain = _engine.SessionSlotGain(trackId, scene);
         var gainFader = new MiniFader(Math.Clamp(gain / 2.0, 0, 1), 1.0) { Default = 0.5, Width = 180 };
         var gainDb = new TextBlock { FontSize = 10, Classes = { "Mono" }, Foreground = Text3, Width = 48, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        void ShowGain(double f) { double g = f * 2.0; gainDb.Text = g <= 1e-4 ? "-inf" : $"{AudioMath.LinToDb(g):+0.0;-0.0} dB"; }
+        void ShowGain(double f) { double g = f * 2.0; gainDb.Text = g <= 1e-4 ? "−∞" : $"{AudioMath.LinToDb(g):+0.0;−0.0}\u2009dB"; }
         gainFader.ValueChanged += f => { _engine.SetSessionSlotGain(trackId, scene, (float)(f * 2.0)); ShowGain(f); };
         ShowGain(gainFader.Value);
         var gainRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { Label("GAIN"), gainFader, gainDb } };
@@ -90,8 +90,8 @@ public sealed class SessionAudioSlotEditor : UserControl
     {
         var b = new Border
         {
-            Height = 22, MinWidth = 34, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 0), Tag = double.Parse(t, System.Globalization.CultureInfo.InvariantCulture),
+            Height = 22, MinWidth = 34, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 0), Tag = double.Parse(t, NotaNum.Culture),
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             Child = new TextBlock { Text = t + "b", FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };

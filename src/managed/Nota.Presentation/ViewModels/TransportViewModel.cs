@@ -25,7 +25,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private int _timeSigNumerator = 4;
     [ObservableProperty] private int _timeSigDenominator = 4;
     [ObservableProperty] private double _masterVolume = 1.0;
-    [ObservableProperty] private string _masterDbText = "0.0 dB";
+    [ObservableProperty] private string _masterDbText = "0.0\u2009dB";
     [ObservableProperty] private bool _metronomeOn;
     [ObservableProperty] private bool _loopOn;
     [ObservableProperty] private string _loopRangeText = "1.1 – 5.1";
@@ -57,8 +57,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         // Show the gain the fader is actually applying. Silence has no dB value, so it
         // gets the symbol rather than a very large negative number.
         MasterDbText = value <= 1e-4
-            ? "-\u221e dB"
-            : (20.0 * Math.Log10(value)).ToString("0.0", CultureInfo.InvariantCulture) + " dB";
+            ? "\u2212\u221e\u2009dB"
+            : (20.0 * Math.Log10(value)).ToString("0.0", CultureInfo.CurrentCulture) + "\u2009dB";
     }
     partial void OnMetronomeOnChanged(bool value) => _engine.SetMetronome(value);
 
@@ -179,8 +179,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             double sec = Bpm > 0 ? beats * 60.0 / (double)Bpm : 0.0;
             int m = (int)(sec / 60.0);
             double s = sec - m * 60.0;
-            // Invariant so the readout keeps a "." separator regardless of locale.
-            PositionText = m + ":" + s.ToString("00.000", System.Globalization.CultureInfo.InvariantCulture);
+            // The app installs a display culture (point separator, U+2212 minus) at start-up.
+            PositionText = m + ":" + s.ToString("00.000", CultureInfo.CurrentCulture);
         }
         else
         {

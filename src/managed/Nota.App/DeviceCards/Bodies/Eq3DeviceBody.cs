@@ -37,19 +37,21 @@ internal sealed class Eq3DeviceBody : IDeviceBody
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush LabelC = NotaPalette.TextSecondary;
-    private static readonly IBrush KillC = NotaPalette.Danger;
-    private static readonly IBrush KillSubtle = NotaPalette.Wash(NotaPalette.Danger, 0x2E);
+    private static readonly IBrush KillC = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
+    private static readonly IBrush KillSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush DetentC = NotaPalette.BorderStrong;
     private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     private static readonly (string name, string span, IBrush hue)[] Bands =
     {
-        ("LOW",  "20 – 250 Hz",    NotaPalette.Ink("#C4756A")),
-        ("MID",  "250 Hz – 2.5 k", NotaPalette.Ink("#C99C55")),
-        ("HIGH", "2.5 – 20 kHz",   NotaPalette.Ink("#6D8FB5")),
+        ("LOW",  "20 – 250\u2009Hz",    NotaPalette.Ink("#C4756A")),
+        ("MID",  "250\u2009Hz – 2.5 k", NotaPalette.Ink("#C99C55")),
+        ("HIGH", "2.5 – 20\u2009kHz",   NotaPalette.Ink("#6D8FB5")),
     };
 
     public double Width => 700;
+
+    public string? Subtitle => "EQ";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -72,17 +74,17 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(curve.Tick);
 
         // ---- formatters ----
-        static string BandDb(double v) => $"{(v - 0.5) * 30:+0.0;-0.0;0.0}";
-        string HzLo(double v) { double f = Exp(v, 50, 2000); return f >= 1000 ? $"{f / 1000:0.00} kHz" : $"{(int)Math.Round(f)} Hz"; }
-        string HzHi(double v) { double f = Exp(v, 500, 18000); return f >= 1000 ? $"{f / 1000:0.00} kHz" : $"{(int)Math.Round(f)} Hz"; }
+        static string BandDb(double v) => $"{(v - 0.5) * 30:+0.0;−0.0;0.0}";
+        string HzLo(double v) { double f = Exp(v, 50, 2000); return f >= 1000 ? $"{f / 1000:0.0}\u2009k" : $"{(int)Math.Round(f)}\u2009Hz"; }
+        string HzHi(double v) { double f = Exp(v, 500, 18000); return f >= 1000 ? $"{f / 1000:0.0}\u2009k" : $"{(int)Math.Round(f)}\u2009Hz"; }
 
         // ---- vertical band fader with a centre (0 dB) detent ----
         Control VFader(int p, IBrush hue)
         {
-            var trackBar = new Border { Width = 4, Background = Inset, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
+            var trackBar = new Border { Width = 4, Background = Inset, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
             var detent = new Border { Height = 1, Background = DetentC, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 22, Height = 9, Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.TextDisabled, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-                Child = new Border { Height = 2, Background = hue, CornerRadius = new CornerRadius(1), Margin = new Thickness(3, 2.5, 3, 0), VerticalAlignment = VerticalAlignment.Top } };
+            var handle = new Border { Width = 22, Height = 9, Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.TextDisabled, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
+                Child = new Border { Height = 2, Background = hue, CornerRadius = NotaRadius.Bar, Margin = new Thickness(3, 2.5, 3, 0), VerticalAlignment = VerticalAlignment.Top } };
             var slot = new Panel { Width = 26, Children = { trackBar, detent, handle } };
             bool drag = false;
             void Upd() { double v = P(p); double H = slot.Bounds.Height; double y = (1 - v) * (H - 9); handle.Margin = new Thickness(0, Math.Clamp(y, 0, Math.Max(0, H - 9)), 0, 0); }
@@ -99,8 +101,8 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         Control KillBtn(int p)
         {
             var tb = new TextBlock { Text = "KILL", FontSize = 8, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(0, 1), HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-            void Sync() { bool on = P(p) >= 0.5f; b.Background = on ? KillSubtle : Brushes.Transparent; b.BorderBrush = on ? KillC : DetentC; tb.Foreground = on ? KillC : MutedC; }
+            var b = new Border { BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 1), HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            void Sync() { bool on = P(p) >= 0.5f; b.Background = on ? KillSubtle : Brushes.Transparent; b.BorderBrush = on ? NotaPalette.BorderBrass : DetentC; tb.Foreground = on ? KillC : MutedC; }
             b.PointerPressed += (_, e) => { e.Handled = true; Begin(p); SetP(p, P(p) >= 0.5f ? 0f : 1f); End(p); Sync(); SyncCurve(); };
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), "KILL");
             readouts.Add(Sync);
@@ -111,7 +113,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         Control BandStrip(int idx, int gainP, int killP)
         {
             var (name, span, hue) = Bands[idx];
-            var db = new TextBlock { Text = BandDb(P(gainP)), FontSize = 10, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center };
+            var db = new TextBlock { Text = BandDb(P(gainP)), FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center };
             db.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             readouts.Add(() => db.Text = BandDb(P(gainP)));
             var span2 = new TextBlock { Text = span, FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
@@ -122,41 +124,25 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             col.AddDock(KillBtn(killP), Dock.Bottom);
             col.AddDock(db, Dock.Bottom);
             col.Children.Add(new Border { Child = VFader(gainP, hue), Margin = new Thickness(0, 4) });
-            return new Border { Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Width = 84,
-                Child = new Border { BorderBrush = hue, BorderThickness = new Thickness(0, 2, 0, 0), CornerRadius = new CornerRadius(6, 6, 0, 0), Child = col } };
+            return new Border { Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Width = 84,
+                Child = new Border { BorderBrush = hue, BorderThickness = new Thickness(0, 2, 0, 0), CornerRadius = NotaRadius.Top(NotaRadius.PanelValue), Child = col } };
         }
 
         // Crossover slider (label + slider + Hz) for the CROSSOVER strip.
         Control Xover(int p, string label, IBrush hue, Func<double, string> fmt)
         {
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 9, Background = HandleC, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 11, Width = 64, Children = { track2, fill, handle } };
-            var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, Width = 52, TextAlignment = TextAlignment.Right };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            bool drag = false;
-            void Upd() { double v = P(p); double W = slot.Bounds.Width; double hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); fill.Width = hx; val.Text = fmt(v); }
-            void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); SetP(p, (float)v); SyncCurve(); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); Begin(p); SetFromX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            readouts.Add(() => { if (!drag) Upd(); });
-            var lab = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = hue, VerticalAlignment = VerticalAlignment.Center };
-            var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { lab, slot, val } };
-            MidiLearn.Bind(host, MidiTarget.DeviceParam(track, di, p), label);
-            return host;
+            var row = DeviceCardKit.SliderRow(label, () => P(p), n => { SetP(p, (float)n); SyncCurve(); }, () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), trackWidth: 64, valueWidth: 52);
+            readouts.Add(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), label);
+            return row;
         }
 
         // Slope segmented toggle (24 / 48 dB).
         Control SlopeSeg()
         {
-            var opts = new[] { "24 dB", "48 dB" }; var cells = new Border[2]; var texts = new TextBlock[2];
-            void Sync() { bool hi = P(Slope) >= 0.5f; for (int i = 0; i < 2; i++) { bool on = (i == 1) == hi; cells[i].Background = on ? AmberSubtle : Brushes.Transparent; cells[i].BorderBrush = on ? Amber : Brushes.Transparent; texts[i].Foreground = on ? AmberLit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < 2; i++) { int iv = i; var tb = new TextBlock { Text = opts[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = MutedC }; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(Slope, iv == 1 ? 1f : 0f); SyncCurve(); Sync(); }; cells[i] = c; texts[i] = tb; row.Children.Add(c); }
-            readouts.Add(Sync);
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var seg = DeviceCardKit.Segments(new[] { "24\u2009dB", "48\u2009dB" }, () => P(Slope) >= 0.5f ? 1 : 0, i => { SetP(Slope, i == 1 ? 1f : 0f); SyncCurve(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, Slope), engine.DeviceParamName(track, di, Slope));
             return seg;
         }
@@ -178,7 +164,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         var stripsPanel = new Border { Width = 276, Child = strips };
 
         // ================= graph =================
-        var graph = new Border { Padding = new Thickness(0, 7, 8, 7), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Child = curve, ClipToBounds = true } };
+        var graph = new Border { Padding = new Thickness(0, 7, 8, 7), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Child = curve, ClipToBounds = true } };
 
         // ================= assemble =================
         DockPanel.SetDock(stripsPanel, Dock.Left);

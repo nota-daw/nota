@@ -60,7 +60,8 @@ public sealed class PianoRollView : UserControl
     private double _lengthBeats = 4;
     private double _grid = 0.25;
     private readonly HashSet<int> _selection = new();   // indices into _notes
-    private Color _trackColor = NotaPalette.TrackColors[3];
+    private ISolidColorBrush _trackBrush = NotaPalette.TrackBrushes[3];   // read .Color at draw time: it follows the theme
+    private Color _trackColor => _trackBrush.Color;
 
     // --- musical scale overlay ("Set Scale") ----------------
     // Session-global (static seed) so the chosen key/scale persists as you move
@@ -165,7 +166,7 @@ public sealed class PianoRollView : UserControl
         _hScroll.IsVisible = _hScroll.Maximum > 1e-6;
     }
 
-    private static readonly IBrush Bg = NotaPalette.BgApp;
+    private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush KeysBg = NotaPalette.BgSunken;
     private static readonly IBrush VelBg = NotaPalette.GridRow;
     private static readonly IBrush KeyWhite = NotaPalette.KeyWhite;
@@ -176,12 +177,12 @@ public sealed class PianoRollView : UserControl
     private static readonly IBrush OutScaleWash = NotaPalette.Wash(NotaPalette.BgSunken, 0xB4);
     private static readonly IBrush InScaleTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x1E);
     private static readonly IBrush RootTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x40);
-    private static readonly IPen PlayheadPen = new Pen(NotaPalette.AccentBright, 1.5);
+    private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // almanac playhead: 1px brass
     private static readonly IBrush KeyHover = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     // Played-key highlight (currently-pressed keyboard / MIDI note): a solid key tint + a faint row wash.
     private static readonly IBrush HeldKeyFill = NotaPalette.AccentBright;
     private static readonly IBrush HeldRowTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x30);
-    private static readonly IPen KeyLine = new Pen(NotaPalette.BgApp, 1);
+    private static readonly IPen KeyLine = new Pen(NotaPalette.GraphBorder, 1);
     private static readonly IPen RowLine = new Pen(NotaPalette.GridRow, 1);
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);
@@ -193,7 +194,7 @@ public sealed class PianoRollView : UserControl
     private static readonly IBrush LabelText = NotaPalette.TextTertiary;
     private static readonly IBrush KeyLabel = NotaPalette.BgSunken;
     private static readonly IBrush Divider = NotaPalette.BorderDefault;
-    private static readonly Typeface Mono = new("monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private static double RangeH => (MaxPitch - MinPitch + 1) * RowH;
 
@@ -301,7 +302,7 @@ public sealed class PianoRollView : UserControl
     public double LengthBeats => _lengthBeats;
     public double Grid { get => _grid; set { _grid = Math.Max(1.0 / 32, value); Invalidate(); } }
 
-    public void SetTrackColor(Color c) { _trackColor = c; Invalidate(); }
+    public void SetTrackColor(ISolidColorBrush b) { _trackBrush = b; Invalidate(); }
 
     public void SetNotes(IEnumerable<NotaNote> notes, double lengthBeats)
     {

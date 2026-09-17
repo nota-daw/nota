@@ -20,8 +20,8 @@ internal sealed class CollisionViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush Grid = NotaGraph.Grid;
+    private static readonly Typeface Face = NotaFonts.Mono;
     private static readonly string[] TypeNames = { "BEAM", "MARIMBA", "STRING", "MEMBRANE", "PLATE", "PIPE" };
 
     private const int Modes = 16;
@@ -63,7 +63,7 @@ internal sealed class CollisionViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         Label(ctx, "PARTIALS · " + TypeNames[_type], 6, 3, TextTertiary);
 
         double pad = 6, x0 = pad, x1 = w - pad, top = pad + 12, bot = h - pad - 8;
@@ -101,7 +101,8 @@ internal sealed class CollisionViz : Control
             if (x < x0 || x > x1) continue;
             double barH = (amp[m] / maxAmp) * (bot - top);
             byte a = (byte)Math.Clamp(90 + 165 * Math.Pow(matRoll, m), 40, 255);
-            var brush = new SolidColorBrush(Color.FromArgb(a, 0xF0, 0xC0, 0x60));
+            var ab = NotaPalette.AccentBright.Color;
+            var brush = new SolidColorBrush(Color.FromArgb(a, ab.R, ab.G, ab.B));
             ctx.DrawRectangle(brush, null, new Rect(x - 1.4, bot - barH, 2.8, barH), 1, 1);
             if (m == 0) ctx.DrawEllipse(AccentBright, null, new Point(x, bot - barH - 2.5), 1.6, 1.6);
         }

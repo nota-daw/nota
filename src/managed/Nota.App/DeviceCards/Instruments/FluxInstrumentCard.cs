@@ -114,22 +114,22 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var scopeDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(scopeHead, Dock.Top); scopeDock.Children.Add(scopeHead);
         scopeDock.Children.Add(new Border { Margin = new Thickness(0, 3, 0, 0), Child = scope });
-        var scopeBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 4), Child = scopeDock };
+        var scopeBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6, 4), Child = scopeDock };
 
         // LISTEN knob + TARGET segmented.
-        var listen = InstrumentControls.InstKnob(ctx, idx, "listen", "LISTEN", DoRefresh, v => $"{v * 100:0} %", 40, 56, TealB);
+        var listen = InstrumentControls.InstKnob(ctx, idx, "listen", "LISTEN", DoRefresh, v => $"{v * 100:0}\u2009%", 40, 56, TealB);
         var targetChips = new Border[4];
         var targetRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         void SyncTarget() { int cur = TargetIdx(); for (int i = 0; i < 4; i++) { bool on = i == cur; targetChips[i].Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x28) : Brushes.Transparent; targetChips[i].BorderBrush = on ? TealB : Brushes.Transparent; ((TextBlock)targetChips[i].Child!).Foreground = on ? TealBright : Muted; } }
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
-            var chip = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = Targets[i], FontSize = 9, Foreground = Muted, HorizontalAlignment = HorizontalAlignment.Center } };
+            var chip = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = Targets[i], FontSize = 9, Foreground = Muted, HorizontalAlignment = HorizontalAlignment.Center } };
             chip.PointerPressed += (_, _) => { Begin("target"); SetId("target", iv / 3f); End("target"); SyncTarget(); };
             targetChips[i] = chip; targetRow.Children.Add(chip);
         }
         readouts.Add(SyncTarget);
-        var targetBox = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2), Child = targetRow };
+        var targetBox = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(2), Child = targetRow };
         var targetStack = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children =
         {
             Sec("TARGET — what the reaction drives"), targetBox,
@@ -165,10 +165,10 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var macroRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children =
         {
             Macro("age", "AGE", v => AgeWord(v)),
-            Macro("motion", "MOTION", v => $"{RateNames[RateIdx()]} · {v * 100:0}%", MakeRateCycler),
-            Macro("filter", "FILTER", v => $"{60 * Math.Pow(300, v):0} Hz"),
+            Macro("motion", "MOTION", v => $"{RateNames[RateIdx()]} · {v * 100:0}\u2009%", MakeRateCycler),
+            Macro("filter", "FILTER", v => $"{60 * Math.Pow(300, v):0}\u2009Hz"),
             Macro("env", "ENV", v => v < 0.4f ? "pad" : v < 0.6f ? "pad⇢pluck" : "pluck"),
-            Macro("space", "SPACE", v => $"{v * 100:0} %"),
+            Macro("space", "SPACE", v => $"{v * 100:0}\u2009%"),
         } };
         var macroHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 12 };
         macroHead.Children.Add(Sec("MACROS"));

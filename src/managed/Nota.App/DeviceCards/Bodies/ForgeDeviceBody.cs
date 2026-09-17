@@ -45,6 +45,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
     private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     public double Width => 700;
+
+    public string? Subtitle => "SATURATION";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -66,24 +68,24 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(transfer.Tick);
 
         // ---- formatters ----
-        static string AmtF(double v) => $"+{v * 30:0.0} dB";
-        static string ToneF(double v) => $"{(v - 0.5) * 24:+0.0;-0.0;0.0} dB";
-        static string WetF(double v) => $"{v * 100:0} %";
-        static string BiasF(double v) => $"{(v - 0.5) * 200:+0;-0;0} %";
-        static string WidthF(double v) => $"{v * 200:0} %";
-        static string OutF(double v) => $"{(v - 0.5) * 24:+0.0;-0.0;0.0}";
-        static string PctF(double v) => $"{v * 100:0} %";
-        static string FbF(double v) => v < 0.005 ? "—" : $"{v * 100:0} %";
-        string RateF(double v) => P(LfoSync) >= 0.5f ? DivNames[Math.Clamp((int)Math.Round(v * 7), 0, 7)] + " sync" : $"{0.05 * Math.Pow(20 / 0.05, v):0.0} Hz";
+        static string AmtF(double v) => $"+{v * 30:0.0}\u2009dB";
+        static string ToneF(double v) => $"{(v - 0.5) * 24:+0.0;−0.0;0.0}\u2009dB";
+        static string WetF(double v) => $"{v * 100:0}\u2009%";
+        static string BiasF(double v) => $"{(v - 0.5) * 200:+0;−0;0}\u2009%";
+        static string WidthF(double v) => $"{v * 200:0}\u2009%";
+        static string OutF(double v) => $"{(v - 0.5) * 24:+0.0;−0.0;0.0}";
+        static string PctF(double v) => $"{v * 100:0}\u2009%";
+        static string FbF(double v) => v < 0.005 ? "—" : $"{v * 100:0}\u2009%";
+        string RateF(double v) => P(LfoSync) >= 0.5f ? DivNames[Math.Clamp((int)Math.Round(v * 7), 0, 7)] + " sync" : $"{0.05 * Math.Pow(20 / 0.05, v):0.0}\u2009Hz";
 
         // ---- horizontal slider (label | slot | value) ----
         Control HRow(int p, string label, Func<double, string> fmt, double labW, double valW, bool teal = false, bool bipolar = false)
         {
             var accent = teal ? TealC : Amber;
-            var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
+            var fill = new Border { Height = 3, Background = accent, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
             var center = bipolar ? new Border { Width = 1, Background = Dim, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 9, Background = HandleC, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var handle = new Border { Width = 8, Height = 9, Background = HandleC, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 11, MinWidth = 30 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
             var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (valW > 0) { val.Width = valW; val.TextAlignment = TextAlignment.Right; }
             bool drag = false;
@@ -104,9 +106,9 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         Control RoutingChips()
         {
             var cells = new Border[4]; var icons = new RoutingIcon[4]; var texts = new TextBlock[4];
-            void Sync() { int cur = Math.Clamp((int)Math.Round(P(Routing) * 3), 0, 3); for (int i = 0; i < 4; i++) { bool on = i == cur; cells[i].Background = on ? AmberSubtle : Brushes.Transparent; cells[i].BorderBrush = on ? Amber : Dim; icons[i].Color = on ? AmberLit : LabelC; texts[i].Foreground = on ? AmberLit : LabelC; } }
+            void Sync() { int cur = Math.Clamp((int)Math.Round(P(Routing) * 3), 0, 3); for (int i = 0; i < 4; i++) { bool on = i == cur; cells[i].Background = on ? Amber : Brushes.Transparent; cells[i].BorderBrush = on ? Amber : Dim; icons[i].Color = on ? NotaPalette.TextOnAccent : LabelC; texts[i].Foreground = on ? NotaPalette.TextOnAccent : LabelC; } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-            for (int i = 0; i < 4; i++) { int iv = i; var ic = new RoutingIcon(i) { Width = 18, Height = 13, VerticalAlignment = VerticalAlignment.Center }; var tb = new TextBlock { Text = RouteNames[i], FontSize = 9, Foreground = LabelC, VerticalAlignment = VerticalAlignment.Center }; var c = new Border { Height = 22, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { ic, tb } } }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(Routing, iv / 3f); SyncViz(); Sync(); }; cells[i] = c; icons[i] = ic; texts[i] = tb; row.Children.Add(c); }
+            for (int i = 0; i < 4; i++) { int iv = i; var ic = new RoutingIcon(i) { Width = 18, Height = 13, VerticalAlignment = VerticalAlignment.Center }; var tb = new TextBlock { Text = RouteNames[i], FontSize = 9, Foreground = LabelC, VerticalAlignment = VerticalAlignment.Center }; var c = new Border { Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { ic, tb } } }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(Routing, iv / 3f); SyncViz(); Sync(); }; cells[i] = c; icons[i] = ic; texts[i] = tb; row.Children.Add(c); }
             readouts.Add(Sync);
             MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, Routing), engine.DeviceParamName(track, di, Routing));
             return row;
@@ -115,27 +117,17 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         // ---- oversampling quality selector (Off / 2× / 4× / 8×) ----
         Control OsChips()
         {
-            var cells = new Border[4]; var texts = new TextBlock[4];
-            void Sync() { int cur = Math.Clamp((int)Math.Round(P(OS) * 3), 0, 3); for (int i = 0; i < 4; i++) { bool on = i == cur; cells[i].Background = on ? AmberSubtle : Brushes.Transparent; cells[i].BorderBrush = on ? Amber : Dim; texts[i].Foreground = on ? AmberLit : LabelC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-            for (int i = 0; i < 4; i++)
-            {
-                int iv = i;
-                var tb = new TextBlock { Text = OsNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = LabelC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var c = new Border { Height = 20, MinWidth = 34, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-                c.PointerPressed += (_, e) => { e.Handled = true; Begin(OS); SetP(OS, iv / 3f); End(OS); Sync(); };
-                cells[i] = c; texts[i] = tb; row.Children.Add(c);
-            }
-            readouts.Add(Sync);
-            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, OS), engine.DeviceParamName(track, di, OS));
-            return row;
+            var seg = DeviceCardKit.Segments(OsNames, () => Math.Clamp((int)Math.Round(P(OS) * 3), 0, 3), i => { Begin(OS); SetP(OS, i / 3f); End(OS); }, out var sync, minSegWidth: 30);
+            readouts.Add(sync);
+            MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, OS), engine.DeviceParamName(track, di, OS));
+            return seg;
         }
 
         // ---- one stage row ----
         Control StageRow(int s)
         {
             int baseP = S1Type + s * 5, typeP = baseP, driveP = baseP + 1, outP = baseP + 2, fbP = baseP + 3, onP = baseP + 4;
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
             var idx = new TextBlock { Text = (s + 1).ToString(), FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }; idx.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
             var outVal = new TextBlock { FontSize = 9, Foreground = LabelC, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Right, Width = 34 }; outVal.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -147,19 +139,19 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 
             var line2 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
                 Cap("DRIVE", MutedC, 30),
-                new Border { Child = HRow(driveP, "", PctF, 0, 0), Width = 78, VerticalAlignment = VerticalAlignment.Center },
-                Cap("FB", TealC, 14),
-                new Border { Child = HRow(fbP, "", FbF, 0, 0, teal: true), Width = 40, VerticalAlignment = VerticalAlignment.Center },
+                new Border { Child = HRow(driveP, "", PctF, 0, 0), Width = 58, VerticalAlignment = VerticalAlignment.Center },
+                Cap("FEEDBACK", TealC, 42),
+                new Border { Child = HRow(fbP, "", FbF, 0, 0, teal: true), Width = 32, VerticalAlignment = VerticalAlignment.Center },
                 fbVal } };
 
-            var border = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(7, 4), Background = RailBg, BorderBrush = Border2,
+            var border = new Border { BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(7, 4), Background = RailBg, BorderBrush = Border2,
                 Child = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { headRow, line2 } } };
 
             // out trim: drag on the out value (vertical) — quick, keeps line1 compact.
             bool od = false; double oy = 0;
             outVal.Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
             outVal.PointerPressed += (_, e) => { od = true; oy = e.GetPosition(outVal).Y; Begin(outP); e.Pointer.Capture(outVal); e.Handled = true; };
-            outVal.PointerMoved += (_, e) => { if (od) { double dy = oy - e.GetPosition(outVal).Y; oy = e.GetPosition(outVal).Y; SetP(outP, (float)Math.Clamp(P(outP) + dy * 0.01, 0, 1)); SyncViz(); outVal.Text = OutF(P(outP)) + " dB"; } };
+            outVal.PointerMoved += (_, e) => { if (od) { double dy = oy - e.GetPosition(outVal).Y; oy = e.GetPosition(outVal).Y; SetP(outP, (float)Math.Clamp(P(outP) + dy * 0.01, 0, 1)); SyncViz(); outVal.Text = OutF(P(outP)) + "\u2009dB"; } };
             outVal.PointerReleased += (_, e) => { if (od) { od = false; End(outP); e.Pointer.Capture(null); } };
 
             dot.PointerPressed += (_, e) => { e.Handled = true; Begin(onP); SetP(onP, P(onP) >= 0.5f ? 0f : 1f); End(onP); SyncViz(); };
@@ -168,11 +160,11 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 bool on = P(onP) >= 0.5f;
-                border.Opacity = on ? 1.0 : 0.5;
                 dot.Background = on ? Amber : Dim;
+                Inactive.Set(border, !on, interactive: true);
                 int t = Math.Clamp((int)Math.Round(P(typeP) * (ForgeMath.Algos - 1)), 0, ForgeMath.Algos - 1);
                 name.Text = ForgeMath.AlgoNames[t]; name.Foreground = on ? TxtC : MutedC;
-                outVal.Text = OutF(P(outP)) + " dB";
+                outVal.Text = OutF(P(outP)) + "\u2009dB";
                 fbVal.Text = FbF(P(fbP));
             });
             // Stage algorithm (click the name to cycle) and on/off dot are discrete params too.
@@ -183,13 +175,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 
         Control MiniToggle(int p, string label)
         {
-            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = HdrBg, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 1.5, 0) };
-            var sw = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Cursor = new Cursor(StandardCursorType.Hand), Child = knob };
-            var tb = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TealC, VerticalAlignment = VerticalAlignment.Center };
-            void Sync() { bool on = P(p) >= 0.5f; sw.Background = on ? TealC : Dim; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; knob.Margin = on ? new Thickness(0, 0, 1.5, 0) : new Thickness(1.5, 0, 0, 0); tb.Text = P(LfoSync) >= 0.5f ? "SYNC" : "FREE"; }
-            sw.PointerPressed += (_, e) => { e.Handled = true; SetP(p, P(p) >= 0.5f ? 0f : 1f); Sync(); };
-            readouts.Add(Sync);
-            var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { sw, tb } };
+            var host = Switch(label, () => P(p) >= 0.5f, () => SetP(p, P(p) >= 0.5f ? 0f : 1f), out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(host, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return host;
         }
@@ -229,8 +216,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var mod = new Border { BorderBrush = TealC, BorderThickness = new Thickness(2, 0, 0, 0), Padding = new Thickness(6, 0, 0, 0), Margin = new Thickness(0, 2, 0, 0),
             Child = new StackPanel { Spacing = 4, Children = {
                 Cap("MODULATION", TealC),
-                HRow(LfoDrive, "LFO → DRV", PctF, 52, 40, teal: true),
-                HRow(EnvTone, "ENV → TONE", PctF, 52, 40, teal: true),
+                HRow(LfoDrive, "LFO → DRIVE", PctF, 60, 32, teal: true),
+                HRow(EnvTone, "ENV → TONE", PctF, 60, 32, teal: true),
                 HRow(LfoRate, "RATE", RateF, 34, 52, teal: true),
                 MiniToggle(LfoSync, "SYNC") } } };
         var quality = new StackPanel { Spacing = 4, Children = {
@@ -261,7 +248,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 internal sealed class RoutingIcon : Control
 {
     private readonly int _kind;
-    private IBrush _color = Brushes.Gray;
+    private IBrush _color = NotaPalette.TextTertiary;
     public IBrush Color { get => _color; set { _color = value; InvalidateVisual(); } }
     public RoutingIcon(int kind) { _kind = kind; }
 

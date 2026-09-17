@@ -27,7 +27,7 @@ internal sealed class ArpGrid : Control
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush Txt = NotaPalette.TextSecondary;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
     private const int Vel = 13, Ratchet = 61, On = 93, Loop = 11, kSteps = 16, NumH = 15;
 
     private readonly IAudioEngine _e; private readonly int _t, _mi;
@@ -78,7 +78,7 @@ internal sealed class ArpGrid : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, null, new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double cw = w / kSteps, barH = BarH(), numY = h - NumH + 2;
         int loop = LoopLen();
         double zero = _min < 0 ? barH * (_max / (_max - _min)) : barH;   // baseline for signed lanes
@@ -100,7 +100,8 @@ internal sealed class ArpGrid : Control
             {
                 double v = Get(_base + s), norm = (v - _min) / (_max - _min);
                 byte a = (byte)(active ? (_vel ? 70 + norm * 175 : 210) : 70);
-                var brush = new SolidColorBrush(Color.FromArgb(a, 0xD8, 0xA0, 0x3D));
+                var ac = NotaPalette.Accent.Color;   // the live accent, so the light variant gets bronze
+                var brush = new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B));
                 if (_min < 0)
                 {
                     double top = barH - norm * barH, y0 = Math.Min(top, zero), y1 = Math.Max(top, zero);

@@ -47,6 +47,28 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
         "Presentation references neither Avalonia nor Infrastructure");
 }
 
+// --- design tokens: the two palette files must agree -------------------------
+// NotaTheme.axaml and NotaPalette.cs carry the same palette for two different
+// consumers and nothing but discipline kept them in step. See DESIGN.md § Enforced by tests.
+{
+    Console.WriteLine("-- design: palette mirror --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.Run()) Check(ok, label);
+    Console.WriteLine("-- design: geometry --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunGeometry()) Check(ok, label);
+    Console.WriteLine("-- design: type --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunType()) Check(ok, label);
+    Console.WriteLine("-- design: controls --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunControls()) Check(ok, label);
+    Console.WriteLine("-- design: visualisers --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunVisualisers()) Check(ok, label);
+    Console.WriteLine("-- design: layout --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLayout()) Check(ok, label);
+    Console.WriteLine("-- design: numbers --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunNumbers()) Check(ok, label);
+    Console.WriteLine("-- design: bans --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBans()) Check(ok, label);
+}
+
 // Opt-in plugin-scan check (M3-1): `--scan <path-to-nota-scanworker>`. Kept out
 // of the default run because results depend on which plugins are installed.
 if (args.Length >= 2 && args[0] == "--scan")

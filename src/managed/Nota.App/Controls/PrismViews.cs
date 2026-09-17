@@ -25,21 +25,22 @@ namespace Nota.App;
 
 internal static class PrismInk
 {
-    public static readonly Color[] BandColor = { NotaPalette.TrackColors[7], NotaPalette.AccentColor, NotaPalette.TrackColors[4] };
-    public static readonly IBrush[] Band = { new SolidColorBrush(BandColor[0]), NotaPalette.Accent, NotaPalette.Teal };
+    // Read per use: the colours follow the theme, so they must not be captured in a static array.
+    public static Color[] BandColor => new[] { NotaPalette.TrackColors[7], NotaPalette.AccentColor, NotaPalette.TrackColors[4] };
+    public static readonly IBrush[] Band = { NotaPalette.TrackBrushes[7], NotaPalette.Accent, NotaPalette.Teal };
     // Text / handle tint for the selected band (the brass band lights up to AccentBright).
     public static readonly IBrush[] BandLit = { Band[0], NotaPalette.AccentBright, Band[2] };
     public static readonly string[] Names = { "Low", "Mid", "High" };
     public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
-    private static readonly Typeface Sans = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Sans = NotaFonts.SansBold;
 
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
     public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
     public static FormattedText Caps(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static double Db(double lin) => lin > 1e-6 ? 20 * Math.Log10(lin) : -120;
-    public static string HzShort(double hz) => hz >= 1000 ? (hz >= 10000 ? FormattableString.Invariant($"{hz / 1000:0}k") : FormattableString.Invariant($"{hz / 1000:0.0}k")) : FormattableString.Invariant($"{hz:0}");
+    public static string HzShort(double hz) => hz >= 1000 ? (hz >= 10000 ? NotaNum.F($"{hz / 1000:0}k") : NotaNum.F($"{hz / 1000:0.0}k")) : NotaNum.F($"{hz:0}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -198,7 +199,7 @@ internal sealed class PrismSpectrum : Control
             g.LineTo(new Point(w, h));
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(InFill, new Pen(NotaPalette.BorderStrong, 1), fill);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.BorderStrong, 1), fill);
         var line = new StreamGeometry();
         using (var g = line.Open())
         {
@@ -362,9 +363,9 @@ internal sealed class PrismTransfer : Control
         if (_below || _hover == 2) ctx.DrawEllipse(_below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, _hover == 2 ? new Pen(NotaPalette.TextPrimary, 1) : null, below, 3, 3);
         ctx.DrawEllipse(PrismInk.BandLit[_band], _hover == 1 ? new Pen(NotaPalette.TextPrimary, 1) : null, Pt(_thrA, Out(_thrA)), 3.5, 3.5);
 
-        var ta = PrismInk.Text(FormattableString.Invariant($"above {_thrA:0}"), 7, PrismInk.BandLit[_band]);
+        var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), 7, PrismInk.BandLit[_band]);
         ctx.DrawText(ta, new Point(4, 3));
-        var tb = PrismInk.Text(_below ? FormattableString.Invariant($"below {_thrB:0}") : "below off", 7, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
+        var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", 7, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
         ctx.DrawText(tb, new Point(4, h - tb.Height - 2));
         ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
     }

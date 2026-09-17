@@ -54,7 +54,7 @@ internal sealed class AuroraStack : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         int active = Math.Clamp((int)Math.Round(_pos * (Frames - 1)), 0, Frames - 1);
 
         // Skewed stack sized so every frame (centre ± amplitude) stays inside the bounds:

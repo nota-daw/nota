@@ -95,9 +95,9 @@ public sealed class MidiLearnOverlay : Control
             bool mapped = _service.MappingFor(binding.Target) is not null;
 
             var outline = pending ? NotaPalette.Accent : mapped ? NotaPalette.Success : NotaPalette.Accent;
-            var fill = pending ? new SolidColorBrush(NotaPalette.AccentColor, 0.30)
-                     : mapped ? new SolidColorBrush(NotaPalette.SuccessColor, 0.18)
-                     : new SolidColorBrush(NotaPalette.AccentColor, 0.15);
+            var fill = pending ? NotaPalette.Wash(NotaPalette.Accent, 0x4D)
+                     : mapped ? NotaPalette.Wash(NotaPalette.Success, 0x2E)
+                     : NotaPalette.Wash(NotaPalette.Accent, 0x26);
             var pad = rect.Inflate(2);
             ctx.DrawRectangle(fill, new Pen(outline, pending ? 2.5 : 1.5), pad, 4, 4);
         }

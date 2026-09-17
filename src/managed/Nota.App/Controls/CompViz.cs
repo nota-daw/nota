@@ -17,8 +17,8 @@ namespace Nota.App;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly Typeface Face = new(FontFamily.Default);
+        private static readonly IBrush Grid = NotaGraph.Grid;
+        private static readonly Typeface Face = NotaFonts.Mono;
         private float _thr = -18f, _ratio = 3f, _makeup;
         public CompViz() { MinWidth = 120; MinHeight = 70; }
         public void Set(float thr, float ratio, float makeup)
@@ -28,7 +28,7 @@ namespace Nota.App;
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 0 || h <= 0) return;
-            ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
             double pad = 7, x0 = pad, x1 = w - pad, top = pad + 10, bot = h - pad - 9;
             const double lo = -60, hi = 0;   // dB range on both axes
             double X(double db) => x0 + (db - lo) / (hi - lo) * (x1 - x0);

@@ -37,7 +37,7 @@ public sealed class NaBadge : Border
 
     public NaBadge()
     {
-        CornerRadius = new CornerRadius(8);      // Radius.Pill
+        CornerRadius = NotaRadius.Pill;
         Padding = new Thickness(6, 1);
         Height = 16;
         VerticalAlignment = VerticalAlignment.Center;
@@ -57,16 +57,17 @@ public sealed class NaBadge : Border
         if (Kind == NaBadgeKind.Future)
         {
             _label.Text = "N/A";
-            this.BindResource(BackgroundProperty, "Brush.AccentSubtle");
-            _label.BindResource(TextBlock.ForegroundProperty, "Brush.Warning");
-            ToolTip.SetTip(this, "Coming in future");
+            // Neutral: "not built yet" is not active, selected or changed, so it takes no brass.
+            this.BindResource(BackgroundProperty, "Brush.SurfaceRaised");
+            _label.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+            ToolTip.SetTip(this, "Not available yet");
         }
         else
         {
             _label.Text = "N/A";
             this.BindResource(BackgroundProperty, "Brush.SurfaceRaised");
             _label.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-            ToolTip.SetTip(this, "Not implemented yet");
+            ToolTip.SetTip(this, "Not available yet");
         }
     }
 }

@@ -74,7 +74,7 @@ public sealed class MixerView : UserControl
         for (int i = 0; i < n; i++)
         {
             if (!_engine.TryGetTrackInfo(i, out var ti)) continue;
-            Color c = ArrangementView.TrackColorForIndex(ArrangementView.EffectiveColorIndex(_engine, ti.Id));
+            var c = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id));
             _row.Children.Add(Strip(ti, c, returns));
         }
         _row.Children.Add(MasterStrip());
@@ -92,7 +92,7 @@ public sealed class MixerView : UserControl
 
     // ---- strips -----------------------------------------------------------
 
-    private Control Strip(NotaTrackInfo ti, Color color, int returns)
+    private Control Strip(NotaTrackInfo ti, IBrush color, int returns)
     {
         int id = ti.Id;
         bool isReturn = ti.IsReturn;
@@ -125,21 +125,21 @@ public sealed class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
         };
     }
 
     private Control MasterStrip()
     {
         var col = new StackPanel();
-        col.Children.Add(Header("Master", NotaPalette.AccentColor, MasterBg));
+        col.Children.Add(Header("Master", NotaPalette.Accent, MasterBg));
         var ioRow = IoRow("Sum bus", "→ Output");
         ioRow.IsVisible = _ioVisible;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
         Control db;
-        var faderRow = FaderRow(-1, _masterVolume, NotaPalette.AccentColor, out db, out var meter);
+        var faderRow = FaderRow(-1, _masterVolume, NotaPalette.Accent, out db, out var meter);
         _meters.Add((-1, meter));
         col.Children.Add(faderRow);
         col.Children.Add(db);
@@ -150,7 +150,7 @@ public sealed class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
         };
     }
 
@@ -178,8 +178,9 @@ public sealed class MixerView : UserControl
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 20, Padding = new Thickness(8, 0), CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        void Paint() { b.Background = on ? Brass : MasterBg; b.BorderBrush = on ? Brass : BorderStrong; t.Foreground = on ? OnAccent : TextSecondary; }
+        var b = new Border { Height = 20, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Tile, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        // Engaged, not the primary action: Brass Wash + brass border + Brass Hover text (solid brass is for one action only).
+        void Paint() { b.Background = on ? NotaPalette.AccentSubtle : MasterBg; b.BorderBrush = on ? NotaPalette.BorderBrass : BorderStrong; t.Foreground = on ? NotaPalette.AccentHover : TextSecondary; }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
         Paint();
         return b;
@@ -188,12 +189,12 @@ public sealed class MixerView : UserControl
     // Crossfader is not in the engine yet — a disabled A/B track with an M7+ badge.
     private Control Crossfader()
     {
-        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var host = new Panel { Width = 120, Children = { track, knob } };
         var row = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7, IsEnabled = false,
+            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, IsEnabled = false,
             Children =
             {
                 new TextBlock { Text = "A", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
@@ -212,10 +213,10 @@ public sealed class MixerView : UserControl
         => ti.IsReturn ? $"Return {_engine.TrackReturnIndex(ti.Id) + 1}"
                        : (ti.IsInstrument ? "Inst " : "Audio ") + ti.Id;
 
-    private Control Header(string name, Color topColor, IBrush bg)
+    private Control Header(string name, IBrush topColor, IBrush bg)
     {
         var grid = new Grid { RowDefinitions = new RowDefinitions("2,*") };
-        grid.Children.Add(new Border { Background = new SolidColorBrush(topColor), Height = 2, VerticalAlignment = VerticalAlignment.Top });
+        grid.Children.Add(new Border { Background = topColor, Height = 2, VerticalAlignment = VerticalAlignment.Top });
         var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetRow(label, 1);
         grid.Children.Add(label);
@@ -296,7 +297,7 @@ public sealed class MixerView : UserControl
             }
             else
             {
-                var flat = new Border { Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.5 };
+                var flat = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(flat, 1); grid.Children.Add(flat);
             }
             body.Children.Add(grid);
@@ -327,14 +328,14 @@ public sealed class MixerView : UserControl
     private static double LinToDb(double v) => v <= 1e-4 ? MinDb : Math.Clamp(AudioMath.LinToDb(v), MinDb, MaxDb);
     private static double DbToLin(double db) => db <= MinDb + 1e-6 ? 0.0 : Math.Clamp(AudioMath.DbToLin(db), 0, MaxLin);
 
-    private Control FaderRow(int id, float vol, Color color, out Control db, out MeterBar meter)
+    private Control FaderRow(int id, float vol, IBrush color, out Control db, out MeterBar meter)
     {
         var fader = new VFader(vol, color);
-        var dbNum = new DragNumber(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;-0.0;0.0", 8)
+        var dbNum = new DragNumber(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8)
         {
             Width = 52, HorizontalAlignment = HorizontalAlignment.Center,
         };
-        ToolTip.SetTip(dbNum, "Drag or double-click to set gain (dB)");
+        ToolTip.SetTip(dbNum, "Set the gain — drag, or double-click to type");
         void SetVolume(double v) { if (id < 0) { _masterVolume = (float)v; _engine.SetMasterVolume(_masterVolume); } else _engine.SetTrackVolume(id, (float)v); }
         fader.ValueChanged += v => { SetVolume(v); dbNum.Value = LinToDb(v); };
         dbNum.ValueChanged += d => { double v = DbToLin(d); SetVolume(v); fader.SetValueExternal(v); };
@@ -346,7 +347,7 @@ public sealed class MixerView : UserControl
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
         db = dbNum;
 
-        meter = new MeterBar { Width = 12 };
+        meter = new MeterBar();   // the almanac stereo meter: 11 + 5 + 11
         var scaleGrid = new Grid { Width = 16, RowDefinitions = new RowDefinitions("*,*,*,*") };
         string[] marks = { "+6", "0", "-12", "-48" };
         for (int i = 0; i < 4; i++)
@@ -360,7 +361,16 @@ public sealed class MixerView : UserControl
         var grid = new Grid { Height = 190, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(7, 8) };
         grid.Children.Add(scaleGrid);
         Grid.SetColumn(fader, 1); grid.Children.Add(fader);
-        Grid.SetColumn(meter, 2); meter.Margin = new Thickness(4, 0, 0, 0); grid.Children.Add(meter);
+        // Channels lettered under the meter (almanac § level meters), one letter per 11px column.
+        var letters = new Grid { ColumnDefinitions = new ColumnDefinitions($"{MeterScale.ChannelW},{MeterScale.Step},{MeterScale.ChannelW}"), Margin = new Thickness(0, 3, 0, 0) };
+        foreach (var (txt, col) in new[] { ("L", 0), ("R", 2) })
+        {
+            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
+            Grid.SetColumn(t, col); letters.Children.Add(t);
+        }
+        DockPanel.SetDock(letters, Dock.Bottom);
+        var meterCol = new DockPanel { Margin = new Thickness(4, 0, 0, 0), Children = { letters, meter } };
+        Grid.SetColumn(meterCol, 2); grid.Children.Add(meterCol);
         return grid;
     }
 
@@ -373,15 +383,32 @@ public sealed class MixerView : UserControl
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
-        if (!isReturn) row.Children.Add(Toggle("●", true, ti.Armed != 0, v => _engine.SetTrackArmed(id, v)));
+        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, v => _engine.SetTrackArmed(id, v)));
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
+    }
+
+    // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
+    private Border ArmToggle(bool initial, Action<bool> set)
+    {
+        bool on = initial;
+        var disc = new Glyph(GlyphKind.Record, 7);
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc };
+        void Paint()
+        {
+            b.Background = on ? NotaPalette.Record : MasterBg;
+            b.BorderBrush = on ? NotaPalette.Record : BorderStrong;
+            disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
+        }
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on); Paint(); };
+        Paint();
+        return b;
     }
 
     private Border Toggle(string label, bool danger, bool initial, Action<bool> set)
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 20, Height = 17, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Child = t };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {
             var accent = danger ? Danger : Brass;

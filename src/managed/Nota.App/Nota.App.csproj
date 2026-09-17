@@ -16,7 +16,6 @@
     <PackageReference Include="Avalonia" Version="12.0.3" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
@@ -35,6 +34,9 @@
     <!-- Ship the changelog inside the app so the "What's New" window can parse the
          entries for the current version at runtime (avares://Nota.App/Assets/CHANGELOG.md). -->
     <AvaloniaResource Include="..\..\..\CHANGELOG.md" Link="Assets/CHANGELOG.md" />
+    <!-- Geist + Geist Mono (SIL OFL 1.1, LICENSES/OFL-1.1-Geist.txt): the UI and numeric
+         typefaces, served as avares://Nota.App/Assets/Fonts#Geist and #Geist Mono. -->
+    <AvaloniaResource Include="..\..\..\assets\fonts\*.ttf" Link="Assets/Fonts/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

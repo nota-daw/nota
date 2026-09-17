@@ -24,7 +24,7 @@ internal sealed class AutoGainHistory : Control
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen Grid = new Pen(NotaPalette.Wash(NotaPalette.SurfaceCard, 0x40), 1);
+    private static readonly IPen Grid = NotaGraph.GridPen;
     private static readonly IBrush InFill = NotaPalette.Wash(NotaPalette.SignalInFill, 0x8C);
     private static readonly IPen InPen = new Pen(NotaPalette.Wash(NotaPalette.SignalIn, 0xB0), 1);
     private static readonly IPen OutPen = new Pen(NotaPalette.Accent, 1.8);
@@ -33,7 +33,7 @@ internal sealed class AutoGainHistory : Control
     private static readonly IBrush Correcting = NotaPalette.Ink("#C48A6A");
     private static readonly IBrush TealBright = NotaPalette.TealBright;
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -67,7 +67,7 @@ internal sealed class AutoGainHistory : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double gx = 6, gy = 14, gw = w - 12, gh = h - gy - 12;
         if (gw <= 0 || gh <= 0) return;
 
@@ -86,7 +86,7 @@ internal sealed class AutoGainHistory : Control
                 for (int i = 0; i < N; i++) g.LineTo(new Point(X(i), gy + Y(_in[Idx(i)], gh)));
                 g.LineTo(new Point(gx + gw, gy + gh)); g.EndFigure(true);
             }
-            ctx.DrawGeometry(InFill, InPen, area);
+            ctx.DrawGeometry(null, InPen, area);
 
             // target dashed teal (follows the reference when sidechained)
             Point tp = default; bool has = false;
@@ -99,14 +99,13 @@ internal sealed class AutoGainHistory : Control
 
         void Lbl(string s, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Lbl("LOUDNESS", gx, 2, Muted);
-        Lbl("▩ input", gx + gw - 150, 2, NotaPalette.SignalIn);
-        Lbl("─ output", gx + gw - 96, 2, NotaPalette.Accent);
-        Lbl("┄ target", gx + gw - 44, 2, NotaPalette.Teal);
+        NotaGraph.Legend(ctx, gx + gw - 2, 2, ("input", NotaPalette.SignalIn, NotaGraph.Mark.Area),
+            ("output", NotaPalette.Accent, NotaGraph.Mark.Line), ("target", NotaPalette.Teal, NotaGraph.Mark.Dashed));
         if (_primed && Math.Abs(_desired - _applied) > 0.15f)
-            Lbl($"correcting {_desired:+0.0;-0.0;0.0} → {_applied:+0.0;-0.0;0.0} dB", gx + 2, gy + 1, Correcting);
+            Lbl($"correcting {_desired:+0.0;−0.0;0.0} → {_applied:+0.0;−0.0;0.0}\u2009dB", gx + 2, gy + 1, Correcting);
         else if (_primed)
             Lbl(Math.Abs(_applied) < 0.05f ? "matched" : "locked", gx + gw - 44, gy + 1, TealBright);
-        Lbl("−8 s", gx, gy + gh + 1, AxisB);
+        Lbl("−8\u2009s", gx, gy + gh + 1, AxisB);
         Lbl("now", gx + gw - 18, gy + gh + 1, AxisB);
     }
 }

@@ -38,7 +38,7 @@ public sealed class ModularView : UserControl
     private static readonly IBrush BorderDef   = NotaPalette.BorderDefault;
     private static readonly IBrush BorderInner = NotaPalette.SurfaceRaised;
     private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;
-    private static readonly IBrush BorderHover = NotaPalette.BorderHover;
+    private static readonly IBrush BorderHover = NotaPalette.BorderStrong;
     private static readonly IBrush Text1      = NotaPalette.TextPrimary;
     private static readonly IBrush Text2      = NotaPalette.TextSecondary;
     private static readonly IBrush Text3      = NotaPalette.TextTertiary;
@@ -61,7 +61,7 @@ public sealed class ModularView : UserControl
     // toolbar / status widgets
     private readonly ToggleButton _trackBtn = Seg("Track", true);
     private readonly ToggleButton _globalBtn = Seg("Global", false);
-    private readonly TextBlock _zoomLabel = new() { Text = "100 %", FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _zoomLabel = new() { Text = "100\u2009%", FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _statusRight = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
 
@@ -75,7 +75,7 @@ public sealed class ModularView : UserControl
     public int TrackId => _trackId;
     private readonly Border _dropGlow = new()
     {
-        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(4),
+        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Control,
         Background = NotaPalette.AccentSubtle, IsVisible = false, IsHitTestVisible = false,
     };
 
@@ -179,7 +179,7 @@ public sealed class ModularView : UserControl
             ClipToBounds = true,
             Child = root,
         };
-        island.BindResource(Border.CornerRadiusProperty, "Radius.Md");
+        island.BindResource(Border.CornerRadiusProperty, "Radius.Panel");
         island.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
@@ -255,7 +255,7 @@ public sealed class ModularView : UserControl
         bool active = trackId == _trackId;
         string name = _engine.GetTrackName(trackId);
         if (string.IsNullOrEmpty(name)) name = (ti.IsReturn ? "Return " : ti.IsInstrument ? "Inst " : "Audio ") + trackId;
-        var color = new SolidColorBrush(ArrangementView.TrackColorForIndex(ArrangementView.EffectiveColorIndex(_engine, trackId)));
+        var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
         var row = new Border
         {
             Height = 34, Background = active ? NotaPalette.AccentSubtle : Brushes.Transparent,
@@ -499,7 +499,7 @@ public sealed class ModularView : UserControl
         _status.Text = $"{trackName} · {_nodes.Count} nodes · {edges} edge{(edges == 1 ? "" : "s")}";
         var cfg = _engine.GetAudioConfig();
         double ms = cfg.BufferFrames > 0 && cfg.SampleRate > 0 ? cfg.BufferFrames / cfg.SampleRate * 1000.0 : 0;
-        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0} kHz · {cfg.BufferFrames} · {ms:0.0} ms";
+        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0}\u2009kHz · {cfg.BufferFrames} · {ms:0.0}\u2009ms";
 
         // Re-apply selection to the surviving node (structural edits rebuild the nodes).
         if (_selId != null)
@@ -562,7 +562,7 @@ public sealed class ModularView : UserControl
             + (xlinks > 0 ? $" · {xlinks} cross-track CV link{(xlinks == 1 ? "" : "s")}" : "");
         var cfg = _engine.GetAudioConfig();
         double ms = cfg.BufferFrames > 0 && cfg.SampleRate > 0 ? cfg.BufferFrames / cfg.SampleRate * 1000.0 : 0;
-        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0} kHz · {cfg.BufferFrames} · {ms:0.0} ms";
+        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0}\u2009kHz · {cfg.BufferFrames} · {ms:0.0}\u2009ms";
         if (_selId != null) { var s = _nodes.FirstOrDefault(x => x.Id == _selId); if (s != null) SelectNode(s); }
         _grid.InvalidateVisual();
         _edges.InvalidateVisual();
@@ -575,7 +575,7 @@ public sealed class ModularView : UserControl
     {
         string name = _engine.GetTrackName(trackId);
         if (string.IsNullOrEmpty(name)) name = "Track " + trackId;
-        var color = new SolidColorBrush(ArrangementView.TrackColorForIndex(ArrangementView.EffectiveColorIndex(_engine, trackId)));
+        var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
         int mfx = ti.IsInstrument ? _engine.TrackMidiEffectCount(trackId) : 0;
         int dev = _engine.TrackDeviceCount(trackId);
         int mods = _engine.ModulatorCount(trackId);
@@ -595,7 +595,7 @@ public sealed class ModularView : UserControl
         n.IslandHeight = h;
 
         var col = new Grid { RowDefinitions = new RowDefinitions(hasMods ? "2,30,54,34" : "2,30,54") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = new CornerRadius(9, 9, 0, 0) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.BodyValue) }, 0));
 
         // header
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 0) };
@@ -620,7 +620,7 @@ public sealed class ModularView : UserControl
         if (dev > 0)
         {
             pipe.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto");
-            var pill = IslandPill($"{dev} device{(dev == 1 ? "" : "s")} ▸");
+            var pill = IslandPill($"{dev} device{(dev == 1 ? "" : "s")} →");
             pill.PointerPressed += (_, e) => { OpenTrack(trackId); e.Handled = true; };
             Grid.SetColumn(pill, 2);
             pipe.Children.Add(IslandChip(srcName, n.Stripe, 0));
@@ -655,10 +655,10 @@ public sealed class ModularView : UserControl
         var frame = new Border
         {
             Width = IslandW, Height = h, Background = Rail,
-            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
+            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body,
             Child = col,
-            BoxShadow = new BoxShadows(new BoxShadow { OffsetX = 0, OffsetY = 10, Blur = 28, Color = Color.FromArgb(115, 0, 0, 0) }),
         };
+        if (n.Bypassed) frame.AttachedToVisualTree += (_, _) => Inactive.Set(col, true, interactive: true);
         n.View = frame;
         frame.PointerEntered += (_, _) => { if (!n.Selected) frame.BorderBrush = BorderHover; };
         frame.PointerExited += (_, _) => { if (!n.Selected) frame.BorderBrush = BorderDef; };
@@ -674,7 +674,7 @@ public sealed class ModularView : UserControl
         var b = new Border
         {
             Height = 30, Background = Card, BorderBrush = topColor, BorderThickness = new Thickness(1, 2, 1, 1),
-            CornerRadius = new CornerRadius(5), Padding = new Thickness(9, 0),
+            CornerRadius = NotaRadius.Tile, Padding = new Thickness(9, 0),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -687,7 +687,7 @@ public sealed class ModularView : UserControl
         var b = new Border
         {
             Height = 22, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11), Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
         };
@@ -696,7 +696,7 @@ public sealed class ModularView : UserControl
 
     private static Border Pipe(int column)
     {
-        var b = new Border { Height = 6, Background = Sage, Opacity = 0.55, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = 6, Background = NotaPalette.Wash(NotaPalette.Sage, 0x8C), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(b, column);
         return b;
     }
@@ -792,8 +792,8 @@ public sealed class ModularView : UserControl
     // ---- param → knob cell (device/midi raw floats, instrument normalized) ----
 
     private static string Fmt(float v) => Math.Abs(v) >= 100
-        ? v.ToString("0", CultureInfo.InvariantCulture)
-        : v.ToString("0.0", CultureInfo.InvariantCulture);
+        ? v.ToString("0", NotaNum.Culture)
+        : v.ToString("0.0", NotaNum.Culture);
 
     private Control DeviceParam(int device, int param)
     {
@@ -850,9 +850,9 @@ public sealed class ModularView : UserControl
         string pid = e.PluginParamId(t, -1, pp);
         float val = e.PluginParamGet(t, -1, pp);   // normalized 0..1
         bool modulated = e.ParamModulated(1, t, -1, pp);
-        var value = MonoValue(val.ToString("0.00", CultureInfo.InvariantCulture));
+        var value = MonoValue(val.ToString("0.00", NotaNum.Culture));
         var knob = new Knob(val, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = e.InstrumentParamDefault(t, pp) };
-        knob.ValueChanged += frac => { e.PluginParamSet(t, -1, pp, (float)frac); value.Text = frac.ToString("0.00", CultureInfo.InvariantCulture); };
+        knob.ValueChanged += frac => { e.PluginParamSet(t, -1, pp, (float)frac); value.Text = frac.ToString("0.00", NotaNum.Culture); };
         knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
         knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
         // Instrument params are modulated by dragging a CV cable onto the node (no right-click menu).
@@ -860,7 +860,7 @@ public sealed class ModularView : UserControl
         {
             if (knob.Dragging) return;
             float cur = e.PluginParamGet(t, -1, pp);
-            if (Math.Abs(cur - knob.Value) > 1e-3) { knob.Value = cur; value.Text = cur.ToString("0.00", CultureInfo.InvariantCulture); }
+            if (Math.Abs(cur - knob.Value) > 1e-3) { knob.Value = cur; value.Text = cur.ToString("0.00", NotaNum.Culture); }
         });
         return KnobCell(name, knob, value, modulated ? Teal : null);
     }
@@ -910,7 +910,7 @@ public sealed class ModularView : UserControl
         // A top "select" row (waveform for LFO, MIDI source for MIDI→CV) then a knob grid.
         bool hasTopRow = kind == 0 || kind == 2;
         var col = new Grid { RowDefinitions = hasTopRow ? new RowDefinitions("3,32,34,Auto,Auto") : new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = new CornerRadius(5, 5, 0, 0) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
@@ -918,38 +918,38 @@ public sealed class ModularView : UserControl
         Grid grid;
         if (kind == 4)   // Macro: one manual knob (its value is the CV output)
         {
-            grid = KnobGrid(ModFieldCell("MACRO", modId, 4, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"));
+            grid = KnobGrid(ModFieldCell("MACRO", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else if (kind == 3)   // ADSR: Attack / Decay / Sustain / Release (+ Depth)
         {
             grid = KnobGrid(
-                ModFieldCell("ATTACK", modId, 6, 0.1f, 2000f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("DECAY", modId, 8, 1f, 2000f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("SUSTAIN", modId, 9, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"),
-                ModFieldCell("RELEASE", modId, 7, 1f, 4000f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"));
+                ModFieldCell("ATTACK", modId, 6, 0.1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("DECAY", modId, 8, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("SUSTAIN", modId, 9, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
+                ModFieldCell("RELEASE", modId, 7, 1f, 4000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else if (kind == 1)   // envelope follower: Attack / Release / Depth
         {
             grid = KnobGrid(
-                ModFieldCell("ATTACK", modId, 6, 0.1f, 500f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("RELEASE", modId, 7, 1f, 2000f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"));
+                ModFieldCell("ATTACK", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("RELEASE", modId, 7, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else if (kind == 2)   // MIDI→CV: source select + Smooth / Depth
         {
             col.Children.Add(Row(MidiSourceRow(modId), 2));
             grid = KnobGrid(
-                ModFieldCell("SMOOTH", modId, 6, 0.1f, 500f, v => v.ToString("0", CultureInfo.InvariantCulture) + " ms"),
-                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"));
+                ModFieldCell("SMOOTH", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
+                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else   // LFO: waveform + sync, then Rate / Depth / Phase
         {
             col.Children.Add(Row(WaveSyncRow(modId), 2));
             grid = KnobGrid(
                 ModRateCell(modId),
-                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", CultureInfo.InvariantCulture) + " %"),
-                ModFieldCell("PHASE", modId, 5, 0f, 1f, v => (v * 360).ToString("0", CultureInfo.InvariantCulture) + "°"));
+                ModFieldCell("DEPTH", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
+                ModFieldCell("PHASE", modId, 5, 0f, 1f, v => (v * 360).ToString("0", NotaNum.Culture) + "°"));
         }
         col.Children.Add(Row(grid, gridRow));
         col.Children.Add(Row(PortsBlock(n), gridRow + 1));
@@ -961,15 +961,15 @@ public sealed class ModularView : UserControl
     private void BuildMathView(GNode n, int modId)
     {
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = new CornerRadius(5, 5, 0, 0) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
         var body = new StackPanel { Spacing = 4, Margin = new Thickness(9, 6) };
         body.Children.Add(MathLabeledRow("OP", MathOpCombo(modId)));
         body.Children.Add(KnobGrid(
-            ModFieldCell("GAIN", modId, 4, 0f, 2f, v => v.ToString("0.00", CultureInfo.InvariantCulture)),
-            ModFieldCell("OFFSET", modId, 12, -1f, 1f, v => v.ToString("0.00", CultureInfo.InvariantCulture))));
+            ModFieldCell("GAIN", modId, 4, 0f, 2f, v => v.ToString("0.00", NotaNum.Culture)),
+            ModFieldCell("OFFSET", modId, 12, -1f, 1f, v => v.ToString("0.00", NotaNum.Culture))));
         col.Children.Add(Row(body, 2));
         col.Children.Add(Row(MathPortsBlock(n), 3));   // A/B CV inputs (drag a cable in) + CV out
         WrapFrame(n, col, headBorder);
@@ -989,7 +989,7 @@ public sealed class ModularView : UserControl
     private void BuildScopeView(GNode n, int modId)
     {
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = new CornerRadius(5, 5, 0, 0) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
@@ -1083,7 +1083,7 @@ public sealed class ModularView : UserControl
     {
         var b = new Border
         {
-            Height = 13, CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0),
+            Height = 13, CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0),
             Background = NotaPalette.AccentSubtle, BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = synced ? "SYNC" : "FREE", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = BrassBright, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
@@ -1096,7 +1096,7 @@ public sealed class ModularView : UserControl
     {
         var b = new Border
         {
-            Height = 20, MinWidth = 30, CornerRadius = new CornerRadius(3),
+            Height = 20, MinWidth = 30, CornerRadius = NotaRadius.Badge,
             BorderBrush = active ? NotaPalette.Accent : BorderStrong, BorderThickness = new Thickness(1),
             Background = active ? NotaPalette.AccentSubtle : Brushes.Transparent,
             Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
@@ -1132,7 +1132,7 @@ public sealed class ModularView : UserControl
         bool synced = e.ModulatorGet(t, modId, 1) > 0.5f;
         int field = synced ? 3 : 2;
         float min = synced ? 0.0625f : 0.01f, max = synced ? 4f : 20f;
-        Func<double, string> fmt = synced ? DivisionLabel : v => v.ToString("0.00", CultureInfo.InvariantCulture) + " Hz";
+        Func<double, string> fmt = synced ? DivisionLabel : v => v.ToString("0.00", NotaNum.Culture) + "\u2009Hz";
         double span = Math.Max(1e-6, max - min);
         float v0 = e.ModulatorGet(t, modId, field);
         var value = MonoValue(fmt(v0));
@@ -1307,8 +1307,8 @@ public sealed class ModularView : UserControl
         var title = new TextBlock { Text = $"CV LINK · LFO {modId}", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = Text3 };
 
         var depth = new Slider { Minimum = -1, Maximum = 1, Value = e.CvLinkDepth(t, linkIndex), Width = 180, SmallChange = 0.05, LargeChange = 0.2 };
-        var depthVal = MonoValue(((int)Math.Round(e.CvLinkDepth(t, linkIndex) * 100)) + " %");
-        depth.PropertyChanged += (_, ev) => { if (ev.Property == Slider.ValueProperty) { e.SetCvLinkDepth(t, linkIndex, (float)depth.Value); depthVal.Text = ((int)Math.Round(depth.Value * 100)) + " %"; } };
+        var depthVal = MonoValue(((int)Math.Round(e.CvLinkDepth(t, linkIndex) * 100)) + "\u2009%");
+        depth.PropertyChanged += (_, ev) => { if (ev.Property == Slider.ValueProperty) { e.SetCvLinkDepth(t, linkIndex, (float)depth.Value); depthVal.Text = ((int)Math.Round(depth.Value * 100)) + "\u2009%"; } };
         var depthRow = new DockPanel { LastChildFill = true };
         var dl = new TextBlock { Text = "DEPTH", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         DockPanel.SetDock(dl, Dock.Left); DockPanel.SetDock(depthVal, Dock.Right);
@@ -1318,7 +1318,7 @@ public sealed class ModularView : UserControl
         var modeNames = new[] { "Add", "Multiply", "Override" };
         int curMode = e.CvLinkMode(t, linkIndex);
         var chips = new Border[3];
-        void SyncModes(int sel) { for (int i = 0; i < 3; i++) { bool on = i == sel; chips[i].Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; chips[i].BorderBrush = on ? NotaPalette.Accent : BorderStrong; ((TextBlock)chips[i].Child!).Foreground = on ? BrassBright : Text2; } }
+        void SyncModes(int sel) { for (int i = 0; i < 3; i++) { bool on = i == sel; chips[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; chips[i].BorderBrush = on ? NotaPalette.Accent : BorderStrong; ((TextBlock)chips[i].Child!).Foreground = on ? BrassBright : Text2; } }
         for (int i = 0; i < 3; i++)
         {
             int mode = i;
@@ -1344,16 +1344,13 @@ public sealed class ModularView : UserControl
 
     private static Control KnobCell(string name, Knob knob, TextBlock value, IBrush? labelColor = null)
     {
-        knob.Width = 30; knob.Height = 30;
-        return new StackPanel
-        {
-            Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = name.ToUpperInvariant(), FontSize = 8, FontWeight = FontWeight.Bold, Foreground = labelColor ?? Text3, HorizontalAlignment = HorizontalAlignment.Center },
-                knob, value,
-            },
-        };
+        // Same cell as a device card (DeviceCardKit.KnobCell): secondary knob, caps label
+        // over a mono value. A node passes its own label tint for modulation targets.
+        knob.Width = Knob.SizeSecondary; knob.Height = Knob.SizeSecondary;
+        var cell = (StackPanel)DeviceCardKit.KnobCell(name, knob, value, 50, labelInk: labelColor);
+        cell.HorizontalAlignment = HorizontalAlignment.Center;
+        cell.VerticalAlignment = VerticalAlignment.Center;
+        return cell;
     }
 
     // ---- node visual ----------------------------------------------------
@@ -1365,7 +1362,7 @@ public sealed class ModularView : UserControl
         var title = new TextBlock { Text = n.Title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center };
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(9, 0) };
         var stripeDot = n.Slot == Slot.Modulator ? (IBrush)Brass : (n.Bypassed ? BorderStrong : Success);
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = stripeDot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = stripeDot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         DockPanel.SetDock(dot, Dock.Left);
         head.Children.Add(dot);
         // Right cluster: chain devices get bypass / expand / delete; modulators get a
@@ -1373,12 +1370,12 @@ public sealed class ModularView : UserControl
         if (n.IsChainDevice)
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-            actions.Children.Add(HeaderGlyph("⊘", n.Bypassed ? BrassBright : Text3, "Bypass (B)", () => ToggleBypass(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Bypass, n.Bypassed ? BrassBright : Text3, "Bypass (B)", () => ToggleBypass(n)));
             // Only offer expand when there are more params than the headline row shows,
             // otherwise the button reveals nothing (e.g. a plugin exposing few params).
             if (CanExpand(n))
-                actions.Children.Add(HeaderGlyph("↕", _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
-            actions.Children.Add(HeaderGlyph("✕", Text3, "Delete", () => DeleteNode(n)));
+                actions.Children.Add(HeaderGlyph(_expanded.Contains(n.Id) ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Close, Text3, "Delete", () => DeleteNode(n)));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
@@ -1386,7 +1383,7 @@ public sealed class ModularView : UserControl
         {
             // The instrument can't be bypassed/removed, but its params are expandable too.
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-            actions.Children.Add(HeaderGlyph("↕", _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
+            actions.Children.Add(HeaderGlyph(_expanded.Contains(n.Id) ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
@@ -1394,7 +1391,7 @@ public sealed class ModularView : UserControl
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             actions.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(n.Badge) ? "LFO" : n.Badge, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
-            actions.Children.Add(HeaderGlyph("✕", Text3, "Delete", () => RemoveModulatorNode(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Close, Text3, "Delete", () => RemoveModulatorNode(n)));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
@@ -1417,9 +1414,8 @@ public sealed class ModularView : UserControl
         {
             Width = NodeW, Background = Card,
             BorderBrush = n.Bypassed ? BorderStrong : BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
-            Opacity = n.Bypassed ? 0.6 : 1.0, Child = col,
-            BoxShadow = new BoxShadows(new BoxShadow { OffsetX = 0, OffsetY = 8, Blur = 22, Color = Color.FromArgb(128, 0, 0, 0) }),
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+            Child = col,
         };
         n.View = frame;
         frame.PointerEntered += (_, _) => { if (!n.Selected && !n.Bypassed) frame.BorderBrush = BorderHover; };
@@ -1435,7 +1431,7 @@ public sealed class ModularView : UserControl
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
 
         // type stripe
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = new CornerRadius(5, 5, 0, 0) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
 
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
@@ -1563,7 +1559,7 @@ public sealed class ModularView : UserControl
     private Point _nodeOrigin;
     private readonly Border _dropBar = new()
     {
-        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = new CornerRadius(2), IsHitTestVisible = false,
+        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Clip, IsHitTestVisible = false,
     };
 
     private void BeginNodeDrag(GNode n, Control captureTarget, PointerPressedEventArgs e)
@@ -1794,9 +1790,8 @@ public sealed class ModularView : UserControl
     private readonly Border _edgeTip = new()
     {
         Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
+        CornerRadius = NotaRadius.Tile, Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
-        BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 8, Blur = 20, Color = Color.FromArgb(153, 0, 0, 0) }),
     };
     private readonly TextBlock _edgeTipText = new() { FontSize = 9, Foreground = NotaPalette.TextPrimary };
 
@@ -1832,12 +1827,12 @@ public sealed class ModularView : UserControl
     /// so the host can refresh the arrangement + detail panel.</summary>
     public event Action? Changed;
 
-    private static Control HeaderGlyph(string glyph, IBrush color, string tip, Action act)
+    private static Control HeaderGlyph(GlyphKind glyph, IBrush color, string tip, Action act)
     {
-        var tb = new TextBlock { Text = glyph, FontSize = 11, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var tb = new Glyph(glyph, 9) { Foreground = color };
         var b = new Border
         {
-            Width = 16, Height = 16, CornerRadius = new CornerRadius(3), Background = Brushes.Transparent,
+            Width = 16, Height = 16, CornerRadius = NotaRadius.Badge, Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand), Child = tb, VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTip.SetTip(b, tip);
@@ -1977,7 +1972,7 @@ public sealed class ModularView : UserControl
             Children = { new ScaleTransform(_scale, _scale), new TranslateTransform(_pan.X, _pan.Y) },
         };
         _world.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
-        _zoomLabel.Text = $"{_scale * 100:0} %";
+        _zoomLabel.Text = $"{_scale * 100:0}\u2009%";
         _grid.InvalidateVisual();
         _edges.InvalidateVisual();
         _mini.InvalidateVisual();
@@ -2056,7 +2051,7 @@ public sealed class ModularView : UserControl
         _globalBtn.Click += (_, _) => SetGlobal(true);
         var seg = new Border
         {
-            Background = Sunken, CornerRadius = new CornerRadius(5), Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { _trackBtn, _globalBtn } },
         };
         // All the modulator sources collapse into one "+ Add" dropdown (a normal chip
@@ -2075,7 +2070,7 @@ public sealed class ModularView : UserControl
         AddItem("Macro", 4);
         AddItem("Math", 5);
         AddItem("Scope", 6);
-        var addBtn = Chip("+ Add  ▾");
+        var addBtn = Chip("+ Add"); addBtn.Content = Glyph.Labeled("+ Add", GlyphKind.ChevronDown);
         addBtn.Flyout = addMenu;
         left.Children.Add(seg);
         left.Children.Add(addBtn);
@@ -2085,7 +2080,7 @@ public sealed class ModularView : UserControl
         var zoomIn = ZoomBtn("+"); zoomIn.Click += (_, _) => ZoomAround(Center(), 1.15);
         var zoomSeg = new Border
         {
-            Background = Sunken, CornerRadius = new CornerRadius(5), Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { zoomOut, zoomIn } },
         };
         var fit = Chip("Fit"); fit.Click += (_, _) => FitNow();
@@ -2474,7 +2469,8 @@ public sealed class ModularView : UserControl
             {
                 var p = M(n.World.X, n.World.Y);
                 double bw = n.NodeWidth * s, bh = (n.View.Bounds.Height > 0 ? n.View.Bounds.Height : 120) * s;
-                var b = new SolidColorBrush(((SolidColorBrush)n.Stripe).Color, 0.7);
+                var sc = ((ISolidColorBrush)n.Stripe).Color;
+                var b = new SolidColorBrush(Color.FromArgb(0xB3, sc.R, sc.G, sc.B));
                 ctx.DrawRectangle(b, null, new Rect(p.X, p.Y, bw, bh), 2, 2);
             }
 

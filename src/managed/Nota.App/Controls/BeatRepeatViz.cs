@@ -21,13 +21,13 @@ internal sealed class BeatRepeatViz : Control
     private static readonly IBrush Well = NotaPalette.SurfaceInset;
     private static readonly IBrush WellBd = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
-    private static readonly IBrush Faint = NotaPalette.TextDisabled;
+    private static readonly IBrush Faint = NotaPalette.TextAxis;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
-    private static readonly IBrush BarLine = NotaPalette.TextDisabled;
+    private static readonly IBrush BarLine = NotaPalette.TextAxis;
     private static Color Brass => NotaPalette.Accent.Color;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
-    private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Bold = NotaFonts.SansBold;
 
     private float[] _slots = Array.Empty<float>();
     private int _n;
@@ -44,7 +44,7 @@ internal sealed class BeatRepeatViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        g.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(g, new Rect(0, 0, w, h));
 
         double pad = 6;
         double headY = pad, x0 = pad, x1 = w - pad;
@@ -57,7 +57,7 @@ internal sealed class BeatRepeatViz : Control
         double bars = _intervalBeats / 4.0;
         string capBar = bars >= 1 ? $"{bars:0.#} bar" : $"1/{4.0 / _intervalBeats:0}";
         g.DrawText(new FormattedText($"capture {capBar} → {onsets} rep", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, AmberLit), new Point(x0 + 62, headY));
-        var bpm = new FormattedText($"{_bpm:0} BPM", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Muted);
+        var bpm = new FormattedText($"{_bpm:0}\u2009BPM", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Muted);
         g.DrawText(bpm, new Point(x1 - bpm.Width, headY));
 
         // Slots.

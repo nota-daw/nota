@@ -71,11 +71,11 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
         Control RawSlider(int p, double min, double max, Func<double, string> fmt, double w, IBrush fill, double valW = 42)
         {
             var val = Mono(fmt(G(p)), Txt); val.MinWidth = valW; val.TextAlignment = TextAlignment.Right;
-            var fillB = new Border { Height = 3, Background = fill, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var fillB = new Border { Height = 3, Background = fill, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
             if (w > 0) slot.Width = w;
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center });
+            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center });
             slot.Children.Add(fillB); slot.Children.Add(handle);
             void Vis(double v) { double W = slot.Bounds.Width, n = (v - min) / (max - min); fillB.Width = n * W; handle.Margin = new Thickness(Math.Clamp(n * W - 3.5, 0, Math.Max(0, W - 7)), 0, 0, 0); }
             bool drag = false;
@@ -92,49 +92,33 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
         }
         Control Seg(int p, string[] names, Action<int>? extra = null, double padX = 7)
         {
-            var arr = new Border[names.Length];
-            void Hi() { int cur = Math.Clamp(Gi(p), 0, names.Length - 1); for (int i = 0; i < names.Length; i++) { bool on = i == cur; arr[i].Background = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? Ink : Muted; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(padX, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Muted } }; c.PointerPressed += (_, _) => { S(p, iv); extra?.Invoke(iv); Refresh(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp(Gi(p), 0, names.Length - 1), iv => { S(p, iv); extra?.Invoke(iv); Refresh(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
         // Outlined pill buttons (radio-style) bound to a 0/1 param — for the trigger choice.
         Control TrigSeg()
         {
-            var opts = new[] { "On note-on", "On note-off" }; var arr = new Border[2];
-            void Hi() { int cur = G(PTrigger) >= 0.5f ? 1 : 0; for (int i = 0; i < 2; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Card; arr[i].BorderBrush = on ? Amber : Bd; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : Sub; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            for (int i = 0; i < 2; i++) { int iv = i; var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = opts[i], FontSize = 9, Foreground = Sub } }; b.PointerPressed += (_, _) => { S(PTrigger, iv); Refresh(); }; arr[i] = b; row.Children.Add(b); }
-            readouts.Add(Hi); Hi();
-            MidiLearn.Bind(row, MidiTarget.MidiDeviceParam(track, mi, PTrigger), engine.MidiEffectParamName(track, mi, PTrigger));
-            return row;
+            var seg = DeviceCardKit.Segments(new[] { "On note-on", "On note-off" }, () => G(PTrigger) >= 0.5f ? 1 : 0, i => { S(PTrigger, i); Refresh(); }, out var sync);
+            readouts.Add(sync);
+            MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, PTrigger), engine.MidiEffectParamName(track, mi, PTrigger));
+            return seg;
         }
         Control Toggle(int p, string label, IBrush accent)
         {
-            var trk = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = Inset };
-            var knob = new Ellipse { Width = 6, Height = 6, Fill = Muted, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            trk.Child = knob;
-            var lbl = Cap(label, accent);
-            void Sync() { bool on = G(p) >= 0.5f; trk.Background = on ? accent : Inset; knob.Fill = on ? Ink : Muted; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; knob.Margin = new Thickness(on ? 0 : 2, 0, on ? 2 : 0, 0); lbl.Foreground = on ? Sub : Muted; }
-            var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { trk, lbl } };
-            host.PointerPressed += (_, _) => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); };
-            readouts.Add(Sync); Sync();
+            var host = DeviceCardKit.Switch(label, () => G(p) >= 0.5f, () => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(host, MidiTarget.MidiDeviceParam(track, mi, p), label);
             return host;
         }
         // Sync-mode rate chips.
         Control RateChips()
         {
-            var arr = new Border[RateLbl.Length];
-            void Hi() { int cur = Math.Clamp(Gi(PRate), 0, 3); for (int i = 0; i < RateLbl.Length; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Card; arr[i].BorderBrush = on ? Amber : Bd; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : Sub; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-            for (int i = 0; i < RateLbl.Length; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(6, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = Mono(RateLbl[i], Sub, 9) }; c.PointerPressed += (_, _) => { S(PRate, iv); Refresh(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            MidiLearn.Bind(row, MidiTarget.MidiDeviceParam(track, mi, PRate), engine.MidiEffectParamName(track, mi, PRate));
-            return row;
+            var seg = DeviceCardKit.Segments(RateLbl, () => Math.Clamp(Gi(PRate), 0, RateLbl.Length - 1), i => { S(PRate, i); Refresh(); }, out var sync);
+            readouts.Add(sync);
+            MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, PRate), engine.MidiEffectParamName(track, mi, PRate));
+            return seg;
         }
 
         // ---- LIVE strip (Mode + contextual length + Trigger) ----
@@ -145,13 +129,13 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             int mode = Gi(PMode);
             lenHost.Children.Add(Cap("LENGTH"));
             if (mode == 1)
-                lenHost.Children.Add(RawSlider(PMs, 10, 2000, v => $"{v:0} ms", 64, Amber));
+                lenHost.Children.Add(RawSlider(PMs, 10, 2000, v => $"{v:0}\u2009ms", 64, Amber));
             else if (mode == 2)
-                lenHost.Children.Add(RawSlider(PPercent, 5, 200, v => $"{v:0} %", 64, Amber));
+                lenHost.Children.Add(RawSlider(PPercent, 5, 200, v => $"{v:0}\u2009%", 64, Amber));
             else
             {
                 lenHost.Children.Insert(0, RateChips());   // rate chips before LENGTH (Sync only)
-                lenHost.Children.Add(RawSlider(PGate, 0.05, 2.0, v => $"{Div[Math.Clamp(Gi(PRate), 0, 3)] * v * (60000.0 / Bpm()):0} ms", 64, Amber));
+                lenHost.Children.Add(RawSlider(PGate, 0.05, 2.0, v => $"{Div[Math.Clamp(Gi(PRate), 0, 3)] * v * (60000.0 / Bpm()):0}\u2009ms", 64, Amber));
             }
         }
         var modeSeg = Seg(PMode, Modes, _ => BuildLen());
@@ -188,9 +172,9 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
         var modStack = new StackPanel { Spacing = 6, Children =
         {
             Cap("MODIFIERS"),
-            ModRow("VEL → LEN", PVelToLen, v => $"{v * 100:0} %"),
-            ModRow("KEY → LEN", PKeyToLen, v => $"{v * 100:0} %"),
-            ModRow("RANDOM", PRandom, v => $"±{v * 100:0} %"),
+            ModRow("VEL → LEN", PVelToLen, v => $"{v * 100:0}\u2009%"),
+            ModRow("KEY → LEN", PKeyToLen, v => $"{v * 100:0}\u2009%"),
+            ModRow("RANDOM", PRandom, v => $"±{v * 100:0}\u2009%"),
             new Border { Height = 1, Background = Card, Margin = new Thickness(0, 2) },
             Toggle(PLegato, "Legato · retrigger held", Amber),
             Toggle(PClipLimit, "Clip length limit", Amber),

@@ -75,7 +75,7 @@ internal sealed class OperatorAlgoMini : Control
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private readonly int _algo;
     private bool _active;
@@ -128,8 +128,8 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x2E);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Bold = NotaFonts.SansBold;
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private int _algo;
     private double[] _x = new double[4], _y = new double[4];
@@ -190,7 +190,7 @@ internal sealed class OperatorRoutingViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         var tgt = OperatorTopo.Algo[_algo];
 
         double padX = 10, padT = 14, padB = 4;
@@ -213,10 +213,10 @@ internal sealed class OperatorRoutingViz : Control
         {
             var a = Ctr(o);
             if (tgt[o] < 4) { var b = Ctr(tgt[o]); ctx.DrawLine(new Pen(Teal, 1.4), a, b); }
-            else ctx.DrawLine(new Pen(Brass, 1.5), new Point(a.X, a.Y + bh / 2), new Point(a.X, outY));
+            else ctx.DrawLine(new Pen(Brass, NotaGraph.PrimaryWidth), new Point(a.X, a.Y + bh / 2), new Point(a.X, outY));
         }
         // OUT bus.
-        ctx.DrawLine(new Pen(Brass, 1.4), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
+        ctx.DrawLine(new Pen(Brass, NotaGraph.PrimaryWidth), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
         ctx.DrawText(new FormattedText("OUT", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, TextTertiary), new Point(gx1 - 22, outY + 1));
 
         // Boxes.

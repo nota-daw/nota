@@ -23,13 +23,13 @@ internal sealed class AutoShiftViz : Control
     private static readonly IBrush Teal = NotaPalette.Teal;
     private static readonly IBrush TealDim = NotaPalette.Wash(NotaPalette.Teal, 0x8C);
     private static readonly IBrush Muted = NotaPalette.TextTertiary;
-    private static readonly IBrush Faint = NotaPalette.TextDisabled;
+    private static readonly IBrush Faint = NotaPalette.TextAxis;
     private static readonly IBrush LaneLine = NotaPalette.Wash(NotaPalette.BorderStrong, 0x2A);
     private static readonly IBrush WhiteLane = NotaPalette.Wash(NotaPalette.BorderStrong, 0x44);
     private static readonly IBrush TargetLine = NotaPalette.Wash(NotaPalette.AccentBright, 0x55);
     private static readonly IBrush TargetLabel = NotaPalette.AccentBright;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
-    private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Bold = NotaFonts.SansBold;
     private static readonly string[] Names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     private static bool IsWhite(int pc) => pc is 0 or 2 or 4 or 5 or 7 or 9 or 11;
 
@@ -53,7 +53,7 @@ internal sealed class AutoShiftViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        g.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(g, new Rect(0, 0, w, h));
 
         double pad = 6;
         double headY = pad + 1, plotTop = pad + 14, plotBot = h - pad - 11;
@@ -61,10 +61,7 @@ internal sealed class AutoShiftViz : Control
 
         // Header + legend.
         g.DrawText(new FormattedText("PITCH TRACE", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Bold, 8, Muted), new Point(pad, headY));
-        var det = new FormattedText("┄ detected", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Teal);
-        var cor = new FormattedText("— corrected", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Brass);
-        g.DrawText(cor, new Point(x1 - cor.Width, headY));
-        g.DrawText(det, new Point(x1 - cor.Width - det.Width - 8, headY));
+        NotaGraph.Legend(g, x1, headY, ("detected", Teal, NotaGraph.Mark.Dashed), ("corrected", Brass, NotaGraph.Mark.Line));
 
         // One-octave window centred on the (smoothed) corrected pitch.
         int lowMidi = (int)Math.Round(_center) - 6;
@@ -100,7 +97,7 @@ internal sealed class AutoShiftViz : Control
             float dv = _det[k];
             if (dv > 1e-4f) g.DrawEllipse(TealDim, null, new Point(X(k), Y(dv * 127.0)), 1.4, 1.4);
         }
-        var pen = new Pen(Brass, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(Brass, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         StreamGeometry? geo = null; StreamGeometryContext? gc = null; bool open = false;
         void Flush() { if (gc != null) { gc.Dispose(); g.DrawGeometry(null, pen, geo!); gc = null; geo = null; } open = false; }
         for (int k = 0; k < n; k++)
@@ -115,7 +112,7 @@ internal sealed class AutoShiftViz : Control
         Flush();
 
         // Time axis.
-        g.DrawText(new FormattedText("−2 s", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Faint), new Point(x0, plotBot + 2));
+        g.DrawText(new FormattedText("−2\u2009s", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, Faint), new Point(x0, plotBot + 2));
         if (targetNote != int.MinValue)
         {
             int pc = ((targetNote % 12) + 12) % 12;

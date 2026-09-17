@@ -14,7 +14,7 @@ namespace Nota.App;
 internal sealed class GrainShapeIcon : Control
 {
     private readonly int _shape;
-    public IBrush Stroke { get; set; } = Brushes.Gray;
+    public IBrush Stroke { get; set; } = NotaPalette.TextTertiary;
     public GrainShapeIcon(int shape) { _shape = shape; Width = 19; Height = 13; }
 
     private static double Win(int shape, double x) => shape switch

@@ -21,8 +21,8 @@ namespace Nota.App;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-        private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly Typeface Face = new(FontFamily.Default);
+        private static readonly IBrush GridB = NotaGraph.Grid;
+        private static readonly Typeface Face = NotaFonts.Mono;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _a, _d, _s, _r;
@@ -97,7 +97,7 @@ namespace Nota.App;
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-            ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
             var (x0, x1, top, bot) = Geo();
             var gp = new Pen(GridB, 1);
             for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(gp, new Point(x0, gy), new Point(x1, gy)); }

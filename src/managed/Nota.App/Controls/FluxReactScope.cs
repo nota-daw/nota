@@ -105,13 +105,6 @@ internal sealed class FluxReactScope : Control
         double bx = w - barW;
         ctx.FillRectangle(NotaPalette.SurfaceAbyss, new Rect(bx, 3, barW, h - 6), 3);
         double fillH = (h - 6) * _tilt;
-        var grad = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        };
-        grad.GradientStops.Add(new GradientStop(Teal, 0));
-        grad.GradientStops.Add(new GradientStop(TealBright, 1));
-        ctx.FillRectangle(grad, new Rect(bx, 3 + (h - 6 - fillH), barW, fillH), 3);
+        ctx.FillRectangle(NotaPalette.Teal, new Rect(bx, 3 + (h - 6 - fillH), barW, fillH), (float)NotaRadius.ClipValue);
     }
 }

@@ -24,7 +24,7 @@ internal sealed class VFader : Control
     public event Action? GestureBegin;   // M9-C automation write
     public event Action? GestureEnd;
 
-    public VFader(double value, Color capLine) { _value = Math.Clamp(value, 0, Max); _capLine = new SolidColorBrush(capLine); Width = 30; }
+    public VFader(double value, IBrush capLine) { _value = Math.Clamp(value, 0, Max); _capLine = capLine; Width = 30; }
 
     /// <summary>Sets the value without raising ValueChanged (external sync, e.g. dB field).</summary>
     public void SetValueExternal(double v) { _value = Math.Clamp(v, 0, Max); InvalidateVisual(); }
