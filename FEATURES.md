@@ -260,7 +260,13 @@ and user presets, automation, persistence and cloning.
 - **Nota Sampler** — sampler (one-shot and loop), voice modes Poly 16 / Mono / Choke, loop
   crossfade, reverse loop, filter key-tracking, Vel→Vol; Sample · Pitch · Env · Filter
   tabs; an editable waveform.
-- **Nota Grain** — granular synthesizer.
+- **Nota Grain** — granular sampler: a read Position that Scans through the file, Freezes
+  or follows the keyboard, grains of a chosen size, density and window shape (Hann /
+  Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
+  pan variation, stereo spread, **Dry/Wet** against the sample itself, an LP/HP/BP filter
+  and an amp envelope. The card draws the sample with the live grain cloud on it (drag to
+  move Position). Drop a sample from the browser to replace the built-in pad. 25 factory
+  presets.
 - **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
   one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
   its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a

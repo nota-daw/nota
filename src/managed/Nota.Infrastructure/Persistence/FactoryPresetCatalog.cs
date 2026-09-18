@@ -573,14 +573,43 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                                              ("dcoarse", 0f), ("dlevel", 1f), ("ddec", 0.3f), ("dsus", 0f), ("drel", 0.22f),
                                              ("veltofm", 0.6f), ("filfreq", 0.55f), ("volume", 0.85f));
 
-        // ---- Nota Grain (kind 10) — granular. Scan Mode 0 Scan/.5 Freeze/1 Key; Coarse 0.5 = 0 st
-        //      (±24); presets shape the built-in default sample (drop your own to replace).
+        // ---- Nota Grain (kind 10) — granular, 25 presets. Scan Mode 0 Scan · .5 Freeze · 1 Key;
+        //      Scan 0.5 = still (±4×, 0.625 = 1×); Coarse 0.5 = 0 st (±24, 0.75 = +12); window
+        //      0 Hann · 1/3 Gauss · 2/3 Tukey · 1 Tri; filter 0 LP · .5 HP · 1 BP; Dry/Wet 1 = the
+        //      cloud alone, 0 = the sample played straight. Presets shape whatever sample is
+        //      loaded (the built-in pad until you drop your own).
+        // The first six.
         Inst("grain", 10, "Frozen Choir", ("scanmode", 0.5f), ("position", 0.3f), ("spray", 0.2f), ("grainsize", 0.5f), ("density", 0.8f), ("spread", 0.6f), ("posrand", 0.15f), ("attack", 0.3f), ("release", 0.6f), ("filfreq", 0.9f), ("volume", 0.8f));
         Inst("grain", 10, "Drift Cloud",  ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.6f), ("density", 0.7f), ("spread", 0.7f), ("posrand", 0.3f), ("panrand", 0.5f), ("attack", 0.2f), ("release", 0.7f), ("volume", 0.78f));
         Inst("grain", 10, "Glitch Spray", ("scanmode", 0.5f), ("grainsize", 0.15f), ("density", 0.9f), ("spray", 0.6f), ("posrand", 0.5f), ("pitchrand", 0.3f), ("attack", 0.02f), ("release", 0.2f), ("volume", 0.8f));
         Inst("grain", 10, "Key Scan",     ("scanmode", 1f), ("grainsize", 0.4f), ("density", 0.6f), ("spread", 0.4f), ("attack", 0.05f), ("release", 0.4f), ("volume", 0.82f));
         Inst("grain", 10, "Shimmer",      ("scanmode", 0.5f), ("coarse", 0.75f), ("grainsize", 0.5f), ("density", 0.8f), ("pitchrand", 0.1f), ("spread", 0.6f), ("filfreq", 1f), ("release", 0.6f), ("volume", 0.76f));
         Inst("grain", 10, "Sub Grain",    ("scanmode", 0.5f), ("coarse", 0.25f), ("grainsize", 0.6f), ("density", 0.7f), ("filfreq", 0.4f), ("filreso", 0.2f), ("volume", 0.85f));
+        // Clouds and pads.
+        Inst("grain", 10, "Slow Bloom",   ("scanmode", 0.5f), ("grainshape", 1f / 3f), ("grainsize", 0.8f), ("density", 0.9f), ("spread", 0.7f), ("posrand", 0.2f), ("attack", 0.85f), ("release", 0.9f), ("filfreq", 0.75f), ("volume", 0.78f));
+        Inst("grain", 10, "Glass Halo",   ("scanmode", 0.5f), ("coarse", 0.75f), ("fine", 0.52f), ("grainsize", 0.55f), ("density", 0.85f), ("pitchrand", 0.05f), ("spread", 0.8f), ("panrand", 0.6f), ("filtype", 0.5f), ("filfreq", 0.35f), ("attack", 0.7f), ("release", 0.85f), ("volume", 0.74f));
+        Inst("grain", 10, "Dust Cloud",   ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.2f), ("density", 0.95f), ("spray", 0.5f), ("posrand", 0.6f), ("panrand", 0.8f), ("spread", 0.9f), ("filtype", 1f), ("filfreq", 0.42f), ("filreso", 0.35f), ("attack", 0.5f), ("release", 0.75f), ("volume", 0.8f));
+        Inst("grain", 10, "Detuned Swarm",("scanmode", 0.5f), ("fine", 0.52f), ("pitchrand", 0.03f), ("grainsize", 0.55f), ("density", 1f), ("spread", 1f), ("panrand", 0.7f), ("attack", 0.6f), ("release", 0.7f), ("volume", 0.76f));
+        // Moving through the file.
+        Inst("grain", 10, "Tape Stretch", ("scanmode", 0f), ("scan", 0.52f), ("grainshape", 2f / 3f), ("grainsize", 0.75f), ("density", 0.8f), ("posrand", 0.05f), ("spread", 0.3f), ("attack", 0.6f), ("release", 0.7f), ("volume", 0.8f));
+        Inst("grain", 10, "Reverse Tide", ("scanmode", 0f), ("scan", 0.4f), ("grainsize", 0.6f), ("density", 0.75f), ("spread", 0.6f), ("panrand", 0.4f), ("attack", 0.65f), ("release", 0.8f), ("volume", 0.8f));
+        Inst("grain", 10, "Wide Scan",    ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.5f), ("density", 0.8f), ("spread", 1f), ("panrand", 1f), ("posrand", 0.15f), ("drywet", 0.8f), ("attack", 0.4f), ("release", 0.7f), ("volume", 0.78f));
+        Inst("grain", 10, "Key Morph",    ("scanmode", 1f), ("grainshape", 1f / 3f), ("grainsize", 0.55f), ("density", 0.75f), ("spread", 0.5f), ("posrand", 0.08f), ("attack", 0.4f), ("release", 0.6f), ("volume", 0.8f));
+        // Keys and plucks — Dry/Wet puts the sample's own attack under the cloud.
+        Inst("grain", 10, "Grain Keys",   ("scanmode", 0.5f), ("grainsize", 0.6f), ("density", 0.7f), ("spray", 0.05f), ("posrand", 0.03f), ("attack", 0.2f), ("decay", 0.5f), ("sustain", 0.4f), ("release", 0.55f), ("drywet", 0.55f), ("volume", 0.82f));
+        Inst("grain", 10, "Soft Pluck",   ("scanmode", 0.5f), ("grainsize", 0.5f), ("density", 0.6f), ("attack", 0.1f), ("decay", 0.45f), ("sustain", 0f), ("release", 0.45f), ("filfreq", 0.7f), ("drywet", 0.5f), ("volume", 0.85f));
+        Inst("grain", 10, "Granular Perc",("scanmode", 0.5f), ("grainsize", 0.3f), ("density", 0.6f), ("posrand", 0.2f), ("attack", 0f), ("decay", 0.35f), ("sustain", 0f), ("release", 0.3f), ("filfreq", 0.8f), ("filreso", 0.3f), ("volume", 0.85f));
+        // Rhythm and damage.
+        Inst("grain", 10, "Stutter",      ("scanmode", 0.5f), ("grainshape", 2f / 3f), ("grainsize", 0.35f), ("density", 0f), ("spray", 0.3f), ("posrand", 0.2f), ("attack", 0.02f), ("release", 0.3f), ("volume", 0.82f));
+        Inst("grain", 10, "Bit Rain",     ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.05f), ("density", 0.35f), ("spray", 0.8f), ("posrand", 0.8f), ("pitchrand", 0.5f), ("panrand", 1f), ("filtype", 0.5f), ("filfreq", 0.45f), ("attack", 0.05f), ("release", 0.4f), ("volume", 0.78f));
+        Inst("grain", 10, "Broken Radio", ("scanmode", 0f), ("scan", 0.7f), ("grainsize", 0.25f), ("density", 0.5f), ("spray", 0.4f), ("pitchrand", 0.15f), ("filtype", 1f), ("filfreq", 0.6f), ("filreso", 0.6f), ("volume", 0.8f));
+        // Low end.
+        Inst("grain", 10, "Grain Bass",   ("scanmode", 0.5f), ("coarse", 0.25f), ("grainsize", 0.7f), ("density", 0.65f), ("spread", 0.1f), ("panrand", 0f), ("posrand", 0.02f), ("filfreq", 0.45f), ("filreso", 0.25f), ("attack", 0.1f), ("decay", 0.45f), ("sustain", 0.7f), ("release", 0.35f), ("drywet", 0.4f), ("volume", 0.85f));
+        Inst("grain", 10, "Deep Drone",   ("scanmode", 0f), ("scan", 0.52f), ("coarse", 0.25f), ("grainsize", 0.9f), ("density", 0.9f), ("spread", 0.5f), ("filfreq", 0.5f), ("attack", 0.8f), ("release", 0.9f), ("volume", 0.84f));
+        // The sample itself, blended.
+        Inst("grain", 10, "Half Frozen",  ("scanmode", 0.5f), ("grainsize", 0.7f), ("density", 0.8f), ("spread", 0.6f), ("posrand", 0.1f), ("drywet", 0.5f), ("attack", 0.5f), ("release", 0.7f), ("volume", 0.8f));
+        Inst("grain", 10, "Sample Plus",  ("scanmode", 0.5f), ("grainsize", 0.45f), ("density", 0.7f), ("spread", 0.8f), ("panrand", 0.6f), ("pitchrand", 0.02f), ("drywet", 0.25f), ("attack", 0.1f), ("release", 0.5f), ("volume", 0.8f));
+        Inst("grain", 10, "Plain Sampler",("drywet", 0f), ("filfreq", 1f), ("attack", 0.05f), ("release", 0.45f), ("volume", 0.8f));
 
         // ---- Nota Flux (kind 11) — vector-morph synth, 25 presets. Vector (X,Y) blends the
         //      corners WARM (0,0) · GLASS (1,0) · MOOG (0,1) · GRAIN (1,1); target: 0 Filter,

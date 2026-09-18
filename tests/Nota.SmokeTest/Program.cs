@@ -2433,7 +2433,7 @@ Console.WriteLine("-- Nota Grain --");
     Check(ge.TrackInstrumentKind(t) == 10, $"instrument kind is 10 (got {ge.TrackInstrumentKind(t)})");
     Check(ge.DeviceName(t, -1) == "Nota Grain", $"instrument is Nota Grain (got '{ge.DeviceName(t, -1)}')");
     int pc = ge.PluginParamCount(t, -1);
-    Check(pc == 22, $"Nota Grain exposes 22 params (got {pc})");
+    Check(pc == 23, $"Nota Grain exposes 23 params (got {pc})");
     int posI = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++) { if (ge.PluginParamId(t, -1, i).Length == 0) idsOk = false; if (ge.PluginParamId(t, -1, i) == "position") posI = i; }
     Check(idsOk && posI >= 0, "params have ids; position present");
@@ -2477,6 +2477,126 @@ Console.WriteLine("-- Nota Grain --");
         Check(rt > 0 && Math.Abs(gdst.PluginParamGet(rt, -1, posI) - 0.4f) < 1e-3, "reloaded Grain restores its params");
     }
     finally { try { System.IO.Directory.Delete(gdir, true); } catch { } try { System.IO.File.Delete(gpath); } catch { } }
+
+    // From here on: a fresh Grain on the built-in pad, rendered alone.
+    using var gx = new NotaEngine();
+    gx.SetBpm(120);
+    int g = gx.AddGrainSynthTrack();
+    int gpc = gx.PluginParamCount(g, -1);
+    var gIds = new System.Collections.Generic.HashSet<string>();
+    int GI(string id) { for (int i = 0; i < gpc; i++) if (gx.PluginParamId(g, -1, i) == id) return i; return -1; }
+    for (int i = 0; i < gpc; i++) gIds.Add(gx.PluginParamId(g, -1, i));
+    int wetI = GI("drywet");
+    Check(wetI == 22 && gx.PluginParamName(g, -1, wetI) == "Dry/Wet", "Dry/Wet is appended as param 22");
+    Check(Math.Abs(gx.InstrumentParamDefault(g, wetI) - 1f) < 1e-6, "Dry/Wet defaults fully wet (older projects sound as before)");
+    // A state saved before Dry/Wet existed (22 floats) loads fully wet, as it sounded.
+    {
+        var st = gx.GetPluginState(g, -1);
+        int g2 = gx.AddGrainSynthTrack();
+        gx.SetPluginState(g2, -1, st[..(22 * 4)]);
+        Check(Math.Abs(gx.PluginParamGet(g2, -1, wetI) - 1f) < 1e-6, "a 22-param state loads fully wet");
+        gx.RemoveTrack(g2);
+    }
+    int GrainFrames(double beats) => (int)Math.Round(beats * 60.0 / 120.0 * (gx.SampleRate > 0 ? gx.SampleRate : 48000.0));
+    void GrainStop() { gx.StopTransport(); gx.RenderOffline(new float[64 * 2], 64); }
+    void GrainRender(float[] buf, Action? perBlock = null)
+    {
+        var blk = new float[1024 * 2];
+        for (int at = 0; at < buf.Length / 2; at += 1024)
+        {
+            int n = Math.Min(1024, buf.Length / 2 - at);
+            gx.RenderOffline(blk, n);
+            Array.Copy(blk, 0, buf, at * 2, n * 2);
+            perBlock?.Invoke();
+        }
+    }
+    gx.AddMidiClip(g, 0.0, 4.0);
+    gx.SetClipNotes(g, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
+
+    // Dry, half and wet are each audible and finite.
+    foreach (var (wv, word) in new[] { (0f, "dry"), (0.5f, "half"), (1f, "wet") })
+    {
+        gx.PluginParamSet(g, -1, wetI, wv);
+        var wbuf = new float[GrainFrames(2.0) * 2];
+        gx.Seek(0.0); gx.Play(); GrainRender(wbuf); GrainStop();
+        float r = Rms(wbuf, wbuf.Length / 2); bool fin = true;
+        foreach (var x in wbuf) if (!float.IsFinite(x) || Math.Abs(x) > 4f) { fin = false; break; }
+        Check(r > 0.005f && fin, $"Grain {word} (Dry/Wet {wv:0.0}) is audible + finite (RMS {r:F3})");
+    }
+    gx.PluginParamSet(g, -1, wetI, 1f);
+
+    // The scope publishes the voices and the live grain cloud; Position is live — a held
+    // note's read head follows it (Freeze).
+    {
+        int posJ = GI("position");
+        gx.PluginParamSet(g, -1, GI("scanmode"), 0.5f);
+        gx.PluginParamSet(g, -1, posJ, 0.2f);
+        var sc = new float[2 + 8 * 12 * 3];
+        var heads = new float[8];
+        int maxGrains = 0, scN = 0; bool inRange = true;
+        float headBefore = -1, headAfter = -1;
+        gx.Seek(0.0); gx.Play();
+        var blk = new float[1024 * 2];
+        for (int b = 0; b < 40; b++)
+        {
+            if (b == 20) { headBefore = gx.GrainPlayPositions(g, heads) > 0 ? heads[0] : -1; gx.PluginParamSet(g, -1, posJ, 0.7f); }
+            gx.RenderOffline(blk, 1024);
+            scN = gx.InstrumentScope(g, sc);
+            if (scN >= 2)
+            {
+                int n = (int)sc[1];
+                maxGrains = Math.Max(maxGrains, n);
+                for (int k = 0; k < n; k++)
+                    for (int c = 0; c < 3; c++) { float v = sc[2 + k * 3 + c]; if (!(v >= 0f && v <= 1.0001f)) inRange = false; }
+            }
+        }
+        headAfter = gx.GrainPlayPositions(g, heads) > 0 ? heads[0] : -1;
+        GrainStop();
+        Check(scN >= 2 && sc[0] >= 0, $"Grain scope publishes voices + grains ({scN} values)");
+        Check(maxGrains >= 2 && inRange, $"Grain scope carries the live cloud in range ({maxGrains} grains)");
+        Check(Math.Abs(headBefore - 0.2f) < 0.02f && Math.Abs(headAfter - 0.7f) < 0.02f,
+            $"a held note follows Position live (read head {headBefore:F2} → {headAfter:F2})");
+        gx.PluginParamSet(g, -1, posJ, gx.InstrumentParamDefault(g, posJ));
+    }
+
+    // A repeated note that starts a hair before the previous one ends keeps sounding.
+    {
+        gx.PluginParamSet(g, -1, GI("attack"), 0f); gx.PluginParamSet(g, -1, GI("release"), 0f);
+        float WindowRms(NotaNote[] notes)
+        {
+            gx.SetClipNotes(g, 0, notes);
+            var obuf = new float[GrainFrames(2.2) * 2];
+            gx.Seek(0.0); gx.Play(); GrainRender(obuf); GrainStop();
+            int from = GrainFrames(1.4), len = GrainFrames(0.4);
+            double acc = 0; for (int i = from; i < from + len; i++) acc += obuf[i * 2] * obuf[i * 2];
+            return (float)Math.Sqrt(acc / len);
+        }
+        float alone = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f) });
+        float held = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f), new NotaNote(60, 1.0, 1.5, 0.9f) });
+        Check(held > 0.01f && held > alone * 5, $"Grain: an overlapping repeat of a note keeps sounding (RMS {held:F3} vs {alone:F4} released)");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Grain id, each applies in place
+    // and renders audible and finite.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 10).ToList();
+        Check(mine.Count == 25, $"Nota Grain ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !gIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Grain preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        gx.SetClipNotes(g, 0, new[] { new NotaNote(48, 0.0, 1.5, 0.9f), new NotaNote(60, 0.0, 1.5, 0.9f), new NotaNote(67, 0.5, 1.0, 0.9f) });
+        var off = new System.Collections.Generic.List<string>();
+        var pbuf = new float[GrainFrames(2.0) * 2];
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(gx, p.Id, g, -1).Length != 0) { off.Add($"{p.DisplayName} (apply)"); continue; }
+            gx.Seek(0.0); gx.Play(); GrainRender(pbuf); GrainStop();
+            bool ok = true; foreach (var x in pbuf) if (!float.IsFinite(x) || Math.Abs(x) > 1.01f) { ok = false; break; }
+            float r = Rms(pbuf, pbuf.Length / 2);
+            if (!ok || r < 0.005f) off.Add($"{p.DisplayName} (RMS {r:F3})");
+        }
+        Check(off.Count == 0, $"every Grain preset is audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+    }
 }
 
 // ============================ Nota Flux ====================================

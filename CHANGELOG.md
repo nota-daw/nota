@@ -19,6 +19,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Grain's editor is now the almanac's card, with a Dry/Wet knob and a live grain
+  cloud.** The vertical tab rail and the separate playhead strip give way to one layout:
+  the sample fills the centre as a graph — the Spray band around the dashed read Position,
+  each held voice's read head and, new, **every grain the engine is playing** as a teal dot
+  at its read position (high for left, low for right, larger the louder its window) — with
+  the five tabs (Grain · Pitch · Variation · Filter · Amp) along its top and each tab's
+  controls beneath it. **Drag across the sample to move Position**; double-click puts it
+  back. The 186 px rail on the right keeps **READ** (Scan / Freeze / Key, Position, Scan
+  speed, Spray) and the output — volume, **Dry/Wet** and the track's meter — on screen on
+  every tab, and a status strip reads the tab back in words beside the sample, voices and
+  live grain count. Knobs now read in the engine's units (grain size in ms, density as an
+  overlap, coarse in semitones, fine in cents, cutoff in Hz, envelope times), the header
+  shows grains per second, and the built-in pad draws its waveform too.
+- **Nota Grain: Dry/Wet.** A new parameter blends the grain cloud with the sample itself,
+  played straight from the read position at the note's pitch, before the filter and amp.
+  It is appended to the parameter list and defaults fully wet, so older projects and
+  presets sound as they did.
+- **Nota Grain ships 25 factory presets** (was 6) — clouds and pads, patches that move
+  through the file, keys and plucks that put the sample's own attack under the cloud,
+  glitch and stutter textures, basses, and Dry/Wet blends down to the plain sample,
+  including the six that existed before.
 - **Nota Flux's editor is now the almanac's card, and the vector's worlds carry their own
   unison.** The card shrinks from 900 to **700 × 260** and reads left to right: the
   **Vector** field (the four worlds in their graph colours, the vector as a brass dot, and a
@@ -295,6 +316,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tokens its own comments named.
 
 ### Fixed
+- **Nota Grain: Position is live.** A held note used to read from wherever Position was
+  when it started, so moving the knob or automating it did nothing until the next note.
+  Held notes now follow it — Scan adds its moving offset to it, Freeze sits on it and Key
+  offsets it by the note.
+- **Nota Grain: a repeated note no longer cuts itself off.** A note-off released every
+  voice of its pitch, so a note that started a hair before the previous one of the same
+  pitch ended went silent with it. A note-off now releases only the oldest held one.
 - **Nota Flux: with no source assigned, React is off.** It used to listen to Flux's own
   output instead, so a patch aimed at the filter or the vector wobbled with its own chords.
   The React followers now also run on time constants rather than once per audio block at a
