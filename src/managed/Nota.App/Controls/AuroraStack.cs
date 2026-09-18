@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Aurora wavetable display (mockup 2j): the 16 single-cycle frames drawn as a
-// skewed 3-D stack, the position-selected frame lit accent-bright and the rest faint —
-// "position is a place in a stack, not a number". Reconstructs each frame's waveform
-// from the same additive recipe as WavetableSynth::harmAmp (low harmonic count → a
-// representative shape, not sample-exact).
+// Nota Aurora's wavetable window: the 16 single-cycle frames drawn as a skewed 3-D stack,
+// the frame Position sits on lit brass and the rest fading back into the well — "position
+// is a place in a stack, not a number". The shapes come from the same additive recipe as
+// WavetableSynth::harmAmp (a low harmonic count → representative, not sample-exact).
+//
+// The recipe is fixed per bank, so all four banks' frames are computed ONCE per process
+// and shared by every card: rebuilding them inside Render cost thirty thousand sines and
+// a thousand line segments on every one of the thirty ticks a second the device panel
+// runs, which is what made switching to an Aurora track stutter. Render now draws each
+// frame as a single geometry, and Set only invalidates when the picture actually changes.
 
 using System;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -16,18 +22,57 @@ namespace Nota.App;
 
 internal sealed class AuroraStack : Control
 {
-    private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush Accent = NotaPalette.AccentBright;
-    private static readonly IBrush Faint = NotaPalette.Wash(NotaPalette.Accent, 0x42);
-    private const int Frames = 16, N = 72, HarmMax = 28;
+    private const int Banks = 4, Frames = 16, N = 96, HarmMax = 28;
 
-    private int _bank;
-    private double _pos;
+    private static readonly IBrush Lit = NotaPalette.AccentBright;
+    private static readonly IBrush Dim = NotaPalette.TextDisabled;
+    // Four depth steps from the back of the stack to the front, so the stack reads as
+    // depth rather than as sixteen equal lines.
+    private static readonly IBrush[] Depth =
+    {
+        NotaPalette.Wash(NotaPalette.Accent, 0x38), NotaPalette.Wash(NotaPalette.Accent, 0x58),
+        NotaPalette.Wash(NotaPalette.Accent, 0x80), NotaPalette.Wash(NotaPalette.Accent, 0xB0),
+    };
+
+    private static readonly Pen[] DepthPens = MakePens(Depth);
+    private static readonly Pen[] DimPens = MakePens(new[] { Dim, Dim, Dim, Dim });
+    private static readonly Pen HotPen = new(Lit, 1.7, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+    private static Pen[] MakePens(IBrush[] brushes)
+    {
+        var p = new Pen[brushes.Length];
+        for (int i = 0; i < brushes.Length; i++) p[i] = new Pen(brushes[i], 1, lineJoin: PenLineJoin.Round);
+        return p;
+    }
+
+    // [bank][frame][sample] — built on first use, read-only afterwards.
+    private static readonly double[][][] Shapes = new double[Banks][][];
+    private static readonly object ShapeLock = new();
+
+    private int _bank = -1, _active = -1;
+    private bool _dim;
+
+    /// <summary>Space kept clear at the top of the window for a caption drawn over it.</summary>
+    public double TopInset { get; set; }
+
+    /// <summary>Greys the whole stack (the oscillator it belongs to is switched off).</summary>
+    public bool Dimmed
+    {
+        get => _dim;
+        set { if (_dim == value) return; _dim = value; InvalidateVisual(); }
+    }
 
     public AuroraStack() { ClipToBounds = true; }
 
-    public void Set(int bank, double pos) { _bank = Math.Clamp(bank, 0, 3); _pos = Math.Clamp(pos, 0, 1); InvalidateVisual(); }
+    /// <summary>Point the window at a bank and a position. Only a change of bank or of the
+    /// frame the position lands on redraws — a knob moving inside one frame does not.</summary>
+    public void Set(int bank, double pos)
+    {
+        int b = Math.Clamp(bank, 0, Banks - 1);
+        int a = Math.Clamp((int)Math.Round(Math.Clamp(pos, 0, 1) * (Frames - 1)), 0, Frames - 1);
+        if (b == _bank && a == _active) return;
+        _bank = b; _active = a;
+        InvalidateVisual();
+    }
 
     private static double HarmAmp(int bank, double t, int n) => bank switch
     {
@@ -38,48 +83,72 @@ internal sealed class AuroraStack : Control
     };
     private static double Sq(double x) => x * x;
 
-    private static double[] Frame(int bank, double t)
+    private static double[][] Bank(int bank)
     {
-        var buf = new double[N]; double peak = 1e-6;
-        for (int j = 0; j < N; j++)
+        var got = Volatile.Read(ref Shapes[bank]);
+        if (got is not null) return got;
+        lock (ShapeLock)
         {
-            double ph = (double)j / N, acc = 0;
-            for (int n = 1; n <= HarmMax; n++) { double a = HarmAmp(bank, t, n); if (a > 1e-4) acc += a * Math.Sin(2 * Math.PI * n * ph); }
-            buf[j] = acc; peak = Math.Max(peak, Math.Abs(acc));
+            if (Shapes[bank] is { } already) return already;
+            var frames = new double[Frames][];
+            Span<double> amp = stackalloc double[HarmMax + 1];
+            for (int f = 0; f < Frames; f++)
+            {
+                double t = (double)f / (Frames - 1);
+                // The recipe depends on (bank, frame), not on the sample: evaluate the
+                // harmonic amplitudes once and only sum the ones that carry anything.
+                for (int n = 1; n <= HarmMax; n++) amp[n] = HarmAmp(bank, t, n);
+                var buf = new double[N];
+                double peak = 1e-6;
+                for (int j = 0; j < N; j++)
+                {
+                    double ph = 2 * Math.PI * j / N, acc = 0;
+                    for (int n = 1; n <= HarmMax; n++) if (amp[n] > 1e-4) acc += amp[n] * Math.Sin(n * ph);
+                    buf[j] = acc;
+                    peak = Math.Max(peak, Math.Abs(acc));
+                }
+                for (int j = 0; j < N; j++) buf[j] /= peak;
+                frames[f] = buf;
+            }
+            Volatile.Write(ref Shapes[bank], frames);
+            return frames;
         }
-        for (int j = 0; j < N; j++) buf[j] /= peak;
-        return buf;
     }
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
+        double w = Bounds.Width, h = Bounds.Height;
+        if (w <= 2 || h <= 2 || _bank < 0) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
-        int active = Math.Clamp((int)Math.Round(_pos * (Frames - 1)), 0, Frames - 1);
 
-        // Skewed stack sized so every frame (centre ± amplitude) stays inside the bounds:
-        // frame 0 bottom-front, frame 15 top-back; each shifted up-right.
-        const double padX = 10, padY = 8;
+        var frames = Bank(_bank);
+        // The stack is skewed up-and-right: frame 0 sits bottom-front, frame 15 top-back,
+        // sized so every frame's centre ± amplitude stays inside the window.
+        const double padX = 9, padY = 7;
+        double top = padY + TopInset;
         double waveW = (w - padX * 2) * 0.70, skewX = (w - padX * 2) * 0.30 / (Frames - 1);
-        double amp = (h - padY * 2) * 0.16;
-        double cyBottom = h - padY - amp, cyTop = padY + amp;
+        double amp = (h - top - padY) * 0.15;
+        double cyBottom = h - padY - amp, cyTop = top + amp;
+        if (cyBottom <= cyTop) return;
 
-        // Draw back-to-front so nearer frames overlap farther ones.
+        var pens = _dim ? DimPens : DepthPens;
+        var hot = _dim ? DimPens[^1] : HotPen;
+
+        // Back to front, so a nearer frame overlaps the one behind it.
         for (int f = Frames - 1; f >= 0; f--)
         {
-            bool on = f == active;
-            var pen = new Pen(on ? Accent : Faint, on ? 1.7 : 1.0, lineJoin: PenLineJoin.Round);
-            var buf = Frame(_bank, (double)f / (Frames - 1));
+            bool on = f == _active;
+            var buf = frames[f];
             double ox = padX + f * skewX;
             double cy = cyBottom - (cyBottom - cyTop) * f / (Frames - 1);
-            Point? prev = null;
-            for (int j = 0; j <= N; j++)
+            var geo = new StreamGeometry();
+            using (var g = geo.Open())
             {
-                double s = buf[j % N];
-                var p = new Point(ox + (double)j / N * waveW, cy - s * amp);
-                if (prev is { } pp) ctx.DrawLine(pen, pp, p);
-                prev = p;
+                g.BeginFigure(new Point(ox, cy - buf[0] * amp), false);
+                for (int j = 1; j <= N; j++)
+                    g.LineTo(new Point(ox + (double)j / N * waveW, cy - buf[j % N] * amp));
             }
+            ctx.DrawGeometry(null, on ? hot : pens[f * Depth.Length / Frames], geo);
         }
     }
 }

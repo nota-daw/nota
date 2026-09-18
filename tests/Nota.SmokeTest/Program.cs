@@ -1170,7 +1170,7 @@ Console.WriteLine("-- Nota Aurora --");
     Check(ae.DeviceName(t, -1) == "Nota Aurora", $"instrument is Nota Aurora (got '{ae.DeviceName(t, -1)}')");
 
     int pc = ae.PluginParamCount(t, -1);
-    Check(pc == 132, $"Nota Aurora exposes 132 params (got {pc})");
+    Check(pc == 156, $"Nota Aurora exposes 156 params (got {pc})");
     int pos = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1185,7 +1185,7 @@ Console.WriteLine("-- Nota Aurora --");
     // State round-trips to another track (project save/load path).
     ae.PluginParamSet(t, -1, pos, 0.88f);
     var state = ae.GetPluginState(t, -1);
-    Check(state.Length >= 132 * 4, $"aurora state serialized ({state.Length} bytes)");
+    Check(state.Length >= 156 * 4, $"aurora state serialized ({state.Length} bytes)");
     int t2 = ae.AddWavetableSynthTrack();
     ae.SetPluginState(t2, -1, state);
     Check(Math.Abs(ae.PluginParamGet(t2, -1, pos) - 0.88f) < 1e-4, "aurora state restores params on another track");
@@ -1220,6 +1220,130 @@ Console.WriteLine("-- Nota Aurora --");
         ae.AddMidiClip(ta, 0.0, 4.0); ae.SetClipNotes(ta, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
         var b2 = new float[8192 * 2]; ae.Seek(0.0); ae.Play(); ae.RenderOffline(b2, 8192); ae.StopTransport();
         Check(Rms(b2, 8192) > 0.001f, $"Aurora osc2-only patch is audible (RMS {Rms(b2, 8192):F3})");
+    }
+
+    // v3 (almanac rework): the wheels, the output pan, LFO 2's sync and the three FX
+    // blocks' switches and characters all exist and all act.
+    Check(AId("bend") >= 0 && AId("bendrange") >= 0 && AId("outpan") >= 0 && AId("lfo2sync") >= 0
+          && AId("fxdriveon") >= 0 && AId("fxdrivemode") >= 0 && AId("fxtone") >= 0
+          && AId("fxchoruson") >= 0 && AId("fxchorusvoices") >= 0
+          && AId("fxreverbon") >= 0 && AId("fxreverbmode") >= 0 && AId("fxreverbsize") >= 0
+          && AId("mac7val") >= 0,
+        "Aurora v3 params present (wheels / out pan / LFO 2 sync / FX blocks / macro 8)");
+    {
+        // Each case gets its own engine so a voice left sounding by one render cannot leak
+        // into the next, and each renders the same note for the same length.
+        float[] RenderWith(params (string Id, float Value)[] ps)
+        {
+            using var we = new NotaEngine();
+            we.SetBpm(120); we.SetTimeSignature(4, 4);
+            int tw = we.AddWavetableSynthTrack();
+            foreach (var (id, value) in ps)
+                for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                    if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+            we.AddMidiClip(tw, 0.0, 4.0);
+            we.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            we.Seek(0.0); we.Play(); we.RenderOffline(b, 8192); we.StopTransport();
+            return b;
+        }
+        float Diff(float[] a, float[] b) { float d = 0; for (int i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        int Crossings(float[] b, int n)
+        { int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++; return c; }
+        float Side(float[] b, int n)
+        { float d = 0; for (int i = 0; i < n; i++) d += Math.Abs(b[i * 2] - b[i * 2 + 1]); return d / n; }
+
+        // Zero crossings stand in for pitch: bending up an octave roughly doubles them.
+        var flat = RenderWith(("fil1freq", 0.9f));
+        var bent = RenderWith(("bend", 1f), ("bendrange", 1f));
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        bool bfin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { bfin = false; break; }
+        Check(bfin && cb > cf * 1.5, $"Aurora pitch bend +12 st raises the pitch ({cf} -> {cb} crossings)");
+
+        // Output pan is equal-power: hard right silences the left channel.
+        var right = RenderWith(("outpan", 1f));
+        float lSum = 0, rSum = 0;
+        for (int i = 0; i < 8192; i++) { lSum += Math.Abs(right[i * 2]); rSum += Math.Abs(right[i * 2 + 1]); }
+        Check(lSum < 1e-4f && rSum > 0.001f, $"Aurora out pan hard right silences the left (L {lSum:F4} / R {rSum:F4})");
+
+        // Unison spread is what makes the stack stereo — and with it at zero the voice is
+        // exactly the mono one it always was.
+        var narrow = RenderWith(("unison", 0.5f), ("unidetune", 0.4f), ("unispread", 0f));
+        var wide = RenderWith(("unison", 0.5f), ("unidetune", 0.4f), ("unispread", 1f));
+        Check(Side(narrow, 8192) < 1e-6f, "Aurora unison at zero spread stays mono");
+        Check(Side(wide, 8192) > 1e-3f, $"Aurora unison spread opens the stereo field ({Side(wide, 8192):F4})");
+
+        // Each FX block answers its switch, and each character is its own sound.
+        var dryFx = RenderWith(("fxdrive", 0.7f), ("fxdriveon", 0f));
+        var clean = RenderWith();
+        Check(Diff(dryFx, clean) < 1e-6f, "Aurora drive switched off is the dry signal");
+        var tube = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 0f));
+        var tape = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 0.5f));
+        var fold = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 1f));
+        Check(Diff(tube, clean) > 1e-3f && Diff(tube, tape) > 1e-3f && Diff(tube, fold) > 1e-3f,
+            "Aurora drive Tube / Tape / Fold are three different curves");
+        var revOff = RenderWith(("fxreverb", 0.7f), ("fxreverbon", 0f));
+        var revRoom = RenderWith(("fxreverb", 0.7f), ("fxreverbmode", 0f));
+        var revHall = RenderWith(("fxreverb", 0.7f), ("fxreverbmode", 0.5f));
+        Check(Diff(revOff, clean) < 1e-6f, "Aurora reverb switched off is the dry signal");
+        Check(Diff(revRoom, clean) > 1e-4f && Diff(revRoom, revHall) > 1e-5f, "Aurora reverb Room and Hall differ, and both are wet");
+        var chOff = RenderWith(("fxchorus", 0.8f), ("fxchoruson", 0f));
+        var ch2 = RenderWith(("fxchorus", 0.8f), ("fxchorusvoices", 0.5f));
+        var ch4 = RenderWith(("fxchorus", 0.8f), ("fxchorusvoices", 1f));
+        Check(Diff(chOff, clean) < 1e-6f, "Aurora chorus switched off is the dry signal");
+        Check(Diff(ch2, ch4) > 1e-4f, "Aurora chorus 2x and 4x differ");
+
+        // LFO 2 can lock to the grid now, like LFO 1.
+        var lfoFree = RenderWith(("lfo2depth", 1f), ("mtx3_3", 1f), ("lfo2sync", 0f), ("lfo2rate", 0.9f));
+        var lfoSync = RenderWith(("lfo2depth", 1f), ("mtx3_3", 1f), ("lfo2sync", 4f / 7f));
+        Check(Diff(lfoFree, lfoSync) > 1e-4f, "Aurora LFO 2 tempo sync changes its rate");
+    }
+
+    // v3: macros reach twelve destinations, five of which act on the block snapshot. The
+    // seven older ones keep the normalized value an old project saved for them.
+    {
+        float MacroRms(params (string Id, float Value)[] ps)
+        {
+            using var me2 = new NotaEngine();
+            me2.SetBpm(120); me2.SetTimeSignature(4, 4);
+            int tmm = me2.AddWavetableSynthTrack();
+            void Put(string id, float v)
+            {
+                for (int i = 0; i < me2.PluginParamCount(tmm, -1); i++)
+                    if (me2.PluginParamId(tmm, -1, i) == id) { me2.PluginParamSet(tmm, -1, i, v); return; }
+            }
+            foreach (var (id, value) in ps) Put(id, value);
+            me2.AddMidiClip(tmm, 0.0, 4.0);
+            me2.SetClipNotes(tmm, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            me2.Seek(0.0); me2.Play(); me2.RenderOffline(b, 8192); me2.StopTransport();
+            return Rms(b, 8192);
+        }
+        // Macro 1 → Sub level (target 5 of 12), full amount: the sub comes up.
+        float plain = MacroRms();
+        float lifted = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 11f), ("mac0amt", 1f));
+        Check(lifted > plain * 1.1f, $"an Aurora macro on Sub level is audible ({plain:F3} -> {lifted:F3})");
+        // The legacy seven: 5/6 used to mean "Level" and still does.
+        float neutral = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 6f), ("mac0amt", 0.5f));
+        float louder = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 6f), ("mac0amt", 1f));
+        Check(louder > neutral * 1.1f, $"an old Aurora macro pointing at Level still lands there ({neutral:F3} -> {louder:F3})");
+        // Macro 8 exists and works too.
+        float m8 = MacroRms(("mac7val", 1f), ("mac7dest", 5f / 11f), ("mac7amt", 1f));
+        Check(m8 > plain * 1.1f, $"Aurora macro 8 reaches its target ({plain:F3} -> {m8:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Aurora id, each applies in place.
+    {
+        var auroraIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) auroraIds.Add(ae.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 5).ToList();
+        Check(mine.Count == 25, $"Nota Aurora ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !auroraIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Aurora preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = ae.AddWavetableSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(ae, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Aurora preset applies in place ({fails} failed)");
     }
 }
 

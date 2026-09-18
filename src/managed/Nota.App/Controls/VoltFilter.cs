@@ -95,6 +95,8 @@ namespace Nota.App;
                     p.Add(new(x0, bot)); p.Add(new(kx, mid)); p.Add(new(cx, peakY)); p.Add(new(rx, mid)); p.Add(new(x1, bot)); break;
                 case 3: // Notch: flat with a dip
                     p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, bot)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
+                case 4: // Morph (Aurora): flat either side with a bell at the cutoff
+                    p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
                 default: // LP: flat to cutoff, resonance peak, roll off
                     p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new((cx + x1) / 2, mid)); p.Add(new(x1, bot)); break;
             }

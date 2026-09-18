@@ -66,24 +66,179 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("physical", 2, "Wood Block",  ("malletvol", 0.9f),  ("malletstiff", 0.7f),  ("r1type", 0.0f), ("r1decay", 0.14f), ("r1material", 0.82f), ("r1bright", 0.5f),  ("r1hit", 0.3f),  ("volume", 0.82f));
         Inst("physical", 2, "Membrane",    ("malletvol", 0.85f), ("malletstiff", 0.5f),  ("r1type", 0.6f), ("r1decay", 0.32f), ("r1material", 0.62f), ("r1bright", 0.5f),  ("r1inharm", 0.1f), ("r1hit", 0.4f), ("volume", 0.8f));
 
-        // ---- Nota Aurora (kind 5) — table: Analog 0 / Pulse .33 / Formant .66 / Chroma 1
-        Inst("aurora", 5, "Warm Pad",    ("table", 0f),    ("position", 0.30f), ("warp", 0.50f), ("unison", 0.60f), ("attack", 0.50f), ("decay", 0.40f), ("sustain", 0.85f), ("release", 0.60f), ("cutoff", 0.50f), ("resonance", 0.10f), ("gain", 0.80f));
-        Inst("aurora", 5, "Glass Bells", ("table", 0.66f), ("position", 0.70f), ("warp", 0.55f), ("unison", 0.20f), ("attack", 0.02f), ("decay", 0.50f), ("sustain", 0.20f), ("release", 0.42f), ("cutoff", 0.80f), ("resonance", 0.16f), ("gain", 0.80f));
-        Inst("aurora", 5, "Detuned Lead",("table", 0.33f), ("position", 0.40f), ("warp", 0.60f), ("unison", 0.90f), ("attack", 0.02f), ("decay", 0.30f), ("sustain", 0.75f), ("release", 0.25f), ("cutoff", 0.76f), ("resonance", 0.20f), ("gain", 0.78f));
-        Inst("aurora", 5, "Motion Keys", ("table", 1f),    ("position", 0.50f), ("warp", 0.70f), ("unison", 0.50f), ("attack", 0.05f), ("decay", 0.42f), ("sustain", 0.60f), ("release", 0.40f), ("cutoff", 0.66f), ("resonance", 0.20f), ("gain", 0.80f));
-        // v2: two oscillators + sub + FX + Env2/LFO modulation. Warp mode: Off 0 / Sync .25 / Bend .5 / PWM .75 / Fold 1.
-        Inst("aurora", 5, "Glass Choir", ("table", 0.66f), ("position", 0.55f), ("osc2on", 1f), ("osc2table", 0.0f), ("osc2level", 0.55f), ("osc2oct", 0.667f), ("osc2detune", 0.56f),
-                                         ("unison", 0.5f), ("unidetune", 0.4f), ("cutoff", 0.72f), ("resonance", 0.12f), ("fil1env", 0.62f),
-                                         ("attack", 0.35f), ("decay", 0.5f), ("sustain", 0.8f), ("release", 0.6f), ("env2attack", 0.4f), ("env2sustain", 0.6f),
-                                         ("mtx1_2", 0.78f), ("fxchorus", 0.4f), ("fxreverb", 0.4f), ("gain", 0.78f));
-        Inst("aurora", 5, "Super Saw",   ("table", 0.0f), ("position", 0.9f), ("osc2on", 1f), ("osc2table", 0.0f), ("osc2position", 0.9f), ("osc2level", 0.8f), ("osc2detune", 0.62f),
-                                         ("unison", 1f), ("unidetune", 0.7f), ("unispread", 0.9f), ("cutoff", 0.8f), ("resonance", 0.14f), ("fil1env", 0.55f),
-                                         ("attack", 0.0f), ("decay", 0.4f), ("sustain", 0.85f), ("release", 0.28f), ("fxdrive", 0.2f), ("gain", 0.72f));
-        Inst("aurora", 5, "Sub Bass",    ("table", 0.0f), ("position", 0.6f), ("osc1oct", 0.333f), ("sublevel", 0.85f), ("suboct", 0.5f),
-                                         ("cutoff", 0.42f), ("resonance", 0.2f), ("fil1env", 0.72f), ("fil1slope", 1f),
-                                         ("attack", 0.0f), ("decay", 0.3f), ("sustain", 0.6f), ("release", 0.18f), ("mono", 1f), ("gain", 0.85f));
-        Inst("aurora", 5, "Fold Lead",   ("table", 0.33f), ("position", 0.5f), ("osc1warpmode", 1f), ("warp", 0.6f), ("cutoff", 0.82f), ("resonance", 0.22f),
-                                         ("attack", 0.01f), ("decay", 0.3f), ("sustain", 0.7f), ("release", 0.22f), ("lfo1depth", 0.6f), ("mtx2_3", 0.35f), ("fxdrive", 0.3f), ("gain", 0.72f));
+        // ---- Nota Aurora (kind 5) — 25 patches: pads, keys, leads, basses, plucks and
+        //      motion. Table: Analog 0 / Pulse .333 / Formant .667 / Chroma 1 · warp mode
+        //      Off 0 / Sync .25 / Bend .5 / PWM .75 / Fold 1 · filter type LP 0 / HP .25 /
+        //      BP .5 / Notch .75 / Morph 1 · slope 12 dB 0 / 24 dB 1 · route F1 0 / F2
+        //      .333 / Both .667 / Dry 1 · sub wave sin 0 / sqr .5 / tri 1 · LFO shape sin
+        //      0 / tri .333 / sqr .667 / S&H 1 · LFO sync free 0 then 1 bar … 1/64 at n/7
+        //      (1/4 = .4286, 1/8 = .5714, 1/16 = .7143) · drive Tube 0 / Tape .5 / Fold 1 ·
+        //      chorus 1× 0 / 2× .5 / 4× 1 · reverb Room 0 / Hall .5 / Plate 1.
+        //      Bipolar knobs (oct/semi/fine/env/lfo/pan/tone/macro amount) are neutral at
+        //      .5; octave spans ±3 (.333 = −1 oct), semi ±12 (.5 + n/24), fine ±50 cents.
+        //      unison = voices (1 + n×6, so .333 = 3), unidetune = cents / 50.
+        //      Matrix cells are mtx{src}_{dst}: src 0 env 1 · 1 env 2 · 2 LFO 1 · 3 LFO 2 ·
+        //      4 velocity · 5 key · 6 mod wheel · 7 random; dst 0 pitch · 1 osc 2 pitch ·
+        //      2 position · 3 cutoff · 4 reso · 5 level · 6 pan. A macro's dest is n/11 over
+        //      the twelve targets (1 warp, 4 position, 6 cutoff, 8 unison, 11 pan).
+
+        // Pads
+        Inst("aurora", 5, "Warm Pad",     ("table", 0f), ("position", 0.30f), ("warp", 0.50f),
+                                          ("unison", 0.333f), ("unidetune", 0.26f), ("unispread", 0.55f),
+                                          ("attack", 0.50f), ("decay", 0.40f), ("sustain", 0.85f), ("release", 0.60f),
+                                          ("cutoff", 0.50f), ("resonance", 0.10f), ("fil1env", 0.60f), ("gain", 0.80f));
+        Inst("aurora", 5, "Glacier Pad",  ("table", 0.667f), ("position", 0.18f), ("warp", 0.5f),
+                                          ("osc2on", 1f), ("osc2table", 0f), ("osc2position", 0.34f), ("osc2level", 0.58f), ("osc2detune", 0.57f),
+                                          ("unison", 0.333f), ("unidetune", 0.30f), ("unispread", 0.60f),
+                                          ("attack", 0.42f), ("decay", 0.5f), ("sustain", 0.8f), ("release", 0.66f),
+                                          ("env2attack", 0.35f), ("env2decay", 0.5f), ("env2sustain", 0.55f),
+                                          ("cutoff", 0.62f), ("resonance", 0.10f), ("fil1env", 0.60f),
+                                          ("mtx1_2", 0.74f), ("lfo2sync", 0.5714f), ("lfo2depth", 0.35f), ("mtx3_2", 0.60f),
+                                          ("fxchorus", 0.44f), ("fxchorusvoices", 0.5f), ("fxreverb", 0.42f), ("fxreverbmode", 0.5f), ("fxreverbsize", 0.7f),
+                                          ("mac0val", 0.58f), ("mac0dest", 4f / 11f), ("mac0amt", 0.78f),
+                                          ("mac2val", 0.72f), ("mac2dest", 6f / 11f), ("mac2amt", 0.68f), ("gain", 0.78f));
+        Inst("aurora", 5, "Glass Choir",  ("table", 0.667f), ("position", 0.55f),
+                                          ("osc2on", 1f), ("osc2table", 0f), ("osc2level", 0.55f), ("osc2oct", 0.667f), ("osc2detune", 0.56f),
+                                          ("unison", 0.333f), ("unidetune", 0.34f), ("unispread", 0.7f),
+                                          ("cutoff", 0.72f), ("resonance", 0.12f), ("fil1env", 0.62f),
+                                          ("attack", 0.35f), ("decay", 0.5f), ("sustain", 0.8f), ("release", 0.6f),
+                                          ("env2attack", 0.4f), ("env2sustain", 0.6f), ("mtx1_2", 0.78f),
+                                          ("fxchorus", 0.4f), ("fxchorusvoices", 1f), ("fxreverb", 0.4f), ("fxreverbmode", 0.5f), ("gain", 0.78f));
+        Inst("aurora", 5, "Formant Pad",  ("table", 0.667f), ("position", 0.42f), ("osc1warpmode", 0.5f), ("warp", 0.62f),
+                                          ("unison", 0.667f), ("unidetune", 0.22f), ("unispread", 0.8f),
+                                          ("attack", 0.46f), ("decay", 0.5f), ("sustain", 0.82f), ("release", 0.7f),
+                                          ("cutoff", 0.58f), ("resonance", 0.24f), ("fil1type", 1f), ("fil1env", 0.56f),
+                                          ("lfo1rate", 0.16f), ("lfo1depth", 0.5f), ("mtx2_2", 0.70f),
+                                          ("fxreverb", 0.46f), ("fxreverbmode", 0.5f), ("fxreverbsize", 0.8f), ("gain", 0.76f));
+        Inst("aurora", 5, "Deep Drone",   ("table", 0f), ("position", 0.24f), ("osc1oct", 0.333f),
+                                          ("sublevel", 0.6f), ("suboct", 0.5f), ("routesub", 1f),
+                                          ("unison", 0.667f), ("unidetune", 0.18f), ("unispread", 0.9f),
+                                          ("attack", 0.62f), ("decay", 0.6f), ("sustain", 0.9f), ("release", 0.78f),
+                                          ("cutoff", 0.36f), ("resonance", 0.16f), ("fil1slope", 1f), ("fil1env", 0.56f),
+                                          ("lfo1rate", 0.08f), ("lfo1depth", 0.6f), ("mtx2_3", 0.66f),
+                                          ("fxreverb", 0.5f), ("fxreverbmode", 0.5f), ("fxreverbsize", 0.9f), ("gain", 0.74f));
+        Inst("aurora", 5, "Aurora Sweep", ("table", 1f), ("position", 0.1f), ("osc1warpmode", 0.25f), ("warp", 0.55f),
+                                          ("unison", 0.5f), ("unidetune", 0.3f), ("unispread", 0.75f),
+                                          ("attack", 0.3f), ("decay", 0.55f), ("sustain", 0.8f), ("release", 0.7f),
+                                          ("env2attack", 0.7f), ("env2decay", 0.7f), ("env2sustain", 0.9f), ("env2release", 0.8f),
+                                          ("cutoff", 0.5f), ("resonance", 0.2f), ("fil1env", 0.72f), ("mtx1_2", 0.92f),
+                                          ("fxchorus", 0.3f), ("fxreverb", 0.5f), ("fxreverbmode", 0.5f),
+                                          ("mac0val", 1f), ("mac0dest", 4f / 11f), ("mac0amt", 0.9f), ("gain", 0.74f));
+
+        // Keys, bells and plucks
+        Inst("aurora", 5, "Glass Bells",  ("table", 0.667f), ("position", 0.70f), ("warp", 0.55f),
+                                          ("unison", 0f), ("attack", 0.02f), ("decay", 0.50f), ("sustain", 0.20f), ("release", 0.42f),
+                                          ("cutoff", 0.80f), ("resonance", 0.16f), ("fil1env", 0.66f),
+                                          ("fxreverb", 0.34f), ("fxreverbmode", 1f), ("gain", 0.80f));
+        Inst("aurora", 5, "Motion Keys",  ("table", 1f), ("position", 0.50f), ("warp", 0.70f),
+                                          ("unison", 0.333f), ("unidetune", 0.24f), ("unispread", 0.5f),
+                                          ("attack", 0.05f), ("decay", 0.42f), ("sustain", 0.60f), ("release", 0.40f),
+                                          ("cutoff", 0.66f), ("resonance", 0.20f), ("fil1env", 0.62f),
+                                          ("lfo2rate", 0.22f), ("lfo2depth", 0.6f), ("mtx3_2", 0.66f),
+                                          ("fxchorus", 0.3f), ("gain", 0.80f));
+        Inst("aurora", 5, "Digital Bell", ("table", 1f), ("position", 0.82f), ("osc1warpmode", 0.25f), ("warp", 0.66f),
+                                          ("osc2on", 1f), ("osc2table", 1f), ("osc2position", 0.6f), ("osc2level", 0.42f), ("osc2semi", 0.7917f),
+                                          ("attack", 0f), ("decay", 0.46f), ("sustain", 0.08f), ("release", 0.4f),
+                                          ("cutoff", 0.86f), ("resonance", 0.1f), ("fil1env", 0.72f),
+                                          ("mtx4_3", 0.7f), ("fxreverb", 0.4f), ("fxreverbmode", 1f), ("gain", 0.74f));
+        Inst("aurora", 5, "Bright Pluck", ("table", 0.333f), ("position", 0.6f), ("osc1warpmode", 0.75f), ("warp", 0.4f),
+                                          ("unison", 0.333f), ("unidetune", 0.2f), ("unispread", 0.4f),
+                                          ("attack", 0f), ("decay", 0.34f), ("sustain", 0f), ("release", 0.24f),
+                                          ("env2attack", 0f), ("env2decay", 0.26f), ("env2sustain", 0f), ("env2release", 0.2f),
+                                          ("cutoff", 0.52f), ("resonance", 0.3f), ("fil1env", 0.86f),
+                                          ("fxdrive", 0.16f), ("fxreverb", 0.24f), ("gain", 0.8f));
+        Inst("aurora", 5, "Nylon Keys",   ("table", 0f), ("position", 0.34f), ("warp", 0.5f),
+                                          ("sublevel", 0.3f), ("suboct", 0.5f),
+                                          ("attack", 0f), ("decay", 0.42f), ("sustain", 0.18f), ("release", 0.32f),
+                                          ("cutoff", 0.56f), ("resonance", 0.12f), ("fil1env", 0.7f), ("fil1key", 0.5f),
+                                          ("mtx4_3", 0.66f), ("fxdrive", 0.1f), ("fxdrivemode", 0.5f), ("fxreverb", 0.22f), ("gain", 0.82f));
+        Inst("aurora", 5, "Tape Keys",    ("table", 0.333f), ("position", 0.4f), ("warp", 0.5f),
+                                          ("osc2on", 1f), ("osc2table", 0f), ("osc2level", 0.42f), ("osc2detune", 0.545f),
+                                          ("attack", 0.04f), ("decay", 0.44f), ("sustain", 0.5f), ("release", 0.38f),
+                                          ("cutoff", 0.54f), ("resonance", 0.14f), ("fil1env", 0.6f),
+                                          ("fxdrive", 0.3f), ("fxdrivemode", 0.5f), ("fxtone", 0.38f),
+                                          ("fxchorus", 0.34f), ("fxchorusrate", 0.2f), ("fxreverb", 0.2f), ("gain", 0.78f));
+        Inst("aurora", 5, "Chime Sequence",("table", 0.667f), ("position", 0.5f),
+                                          ("attack", 0f), ("decay", 0.3f), ("sustain", 0.05f), ("release", 0.3f),
+                                          ("cutoff", 0.82f), ("resonance", 0.18f), ("fil1env", 0.6f),
+                                          ("lfo2shape", 1f), ("lfo2sync", 0.7143f), ("lfo2depth", 0.7f), ("mtx3_2", 0.78f),
+                                          ("fxreverb", 0.44f), ("fxreverbmode", 1f), ("fxreverbsize", 0.7f), ("gain", 0.74f));
+
+        // Leads
+        Inst("aurora", 5, "Detuned Lead", ("table", 0.333f), ("position", 0.40f), ("warp", 0.60f),
+                                          ("unison", 0.667f), ("unidetune", 0.3f), ("unispread", 0.5f),
+                                          ("attack", 0.02f), ("decay", 0.30f), ("sustain", 0.75f), ("release", 0.25f),
+                                          ("cutoff", 0.76f), ("resonance", 0.20f), ("fil1env", 0.6f),
+                                          ("bendrange", 4f / 11f), ("gain", 0.78f));
+        Inst("aurora", 5, "Super Saw",    ("table", 0f), ("position", 0.9f),
+                                          ("osc2on", 1f), ("osc2table", 0f), ("osc2position", 0.9f), ("osc2level", 0.8f), ("osc2detune", 0.62f),
+                                          ("unison", 1f), ("unidetune", 0.4f), ("unispread", 0.9f),
+                                          ("cutoff", 0.8f), ("resonance", 0.14f), ("fil1env", 0.55f),
+                                          ("attack", 0f), ("decay", 0.4f), ("sustain", 0.85f), ("release", 0.28f),
+                                          ("fxdrive", 0.2f), ("fxchorus", 0.26f), ("fxreverb", 0.24f), ("gain", 0.72f));
+        Inst("aurora", 5, "Fold Lead",    ("table", 0.333f), ("position", 0.5f), ("osc1warpmode", 1f), ("warp", 0.6f),
+                                          ("cutoff", 0.82f), ("resonance", 0.22f), ("fil1env", 0.6f),
+                                          ("attack", 0.01f), ("decay", 0.3f), ("sustain", 0.7f), ("release", 0.22f),
+                                          ("lfo1depth", 0.6f), ("mtx2_3", 0.68f), ("mtx6_0", 0.54f),
+                                          ("fxdrive", 0.3f), ("fxdrivemode", 1f), ("bendrange", 4f / 11f), ("gain", 0.72f));
+        Inst("aurora", 5, "Hollow Lead",  ("table", 0.333f), ("position", 0.28f), ("osc1warpmode", 0.75f), ("warp", 0.72f),
+                                          ("mono", 1f), ("unison", 0.333f), ("unidetune", 0.16f),
+                                          ("attack", 0.03f), ("decay", 0.3f), ("sustain", 0.78f), ("release", 0.2f),
+                                          ("cutoff", 0.64f), ("resonance", 0.34f), ("fil1slope", 1f), ("fil1env", 0.64f),
+                                          ("lfo1rate", 0.4f), ("lfo1depth", 0.3f), ("mtx6_0", 0.56f),
+                                          ("fxdrive", 0.22f), ("bendrange", 1f), ("gain", 0.76f));
+        Inst("aurora", 5, "Shimmer Arp",  ("table", 1f), ("position", 0.44f), ("warp", 0.58f),
+                                          ("attack", 0f), ("decay", 0.26f), ("sustain", 0.2f), ("release", 0.22f),
+                                          ("cutoff", 0.7f), ("resonance", 0.24f), ("fil1env", 0.74f),
+                                          ("lfo1shape", 0.333f), ("lfo1sync", 0.7143f), ("lfo1depth", 0.8f), ("mtx2_2", 0.84f),
+                                          ("fxchorus", 0.3f), ("fxchorusvoices", 1f), ("fxreverb", 0.4f), ("fxreverbmode", 1f),
+                                          ("mac0val", 0.5f), ("mac0dest", 1f / 11f), ("mac0amt", 0.74f), ("gain", 0.74f));
+
+        // Basses
+        Inst("aurora", 5, "Sub Bass",     ("table", 0f), ("position", 0.6f), ("osc1oct", 0.333f),
+                                          ("sublevel", 0.85f), ("suboct", 0.5f),
+                                          ("cutoff", 0.42f), ("resonance", 0.2f), ("fil1env", 0.72f), ("fil1slope", 1f),
+                                          ("attack", 0f), ("decay", 0.3f), ("sustain", 0.6f), ("release", 0.18f),
+                                          ("mono", 1f), ("unison", 0f), ("gain", 0.85f));
+        Inst("aurora", 5, "Reese Bass",   ("table", 0f), ("position", 0.8f), ("osc1oct", 0.333f),
+                                          ("osc2on", 1f), ("osc2table", 0f), ("osc2position", 0.8f), ("osc2level", 0.85f), ("osc2oct", 0.333f), ("osc2detune", 0.62f),
+                                          ("unison", 0.333f), ("unidetune", 0.22f), ("unispread", 0.4f),
+                                          ("cutoff", 0.34f), ("resonance", 0.26f), ("fil1slope", 1f), ("fil1env", 0.64f),
+                                          ("attack", 0f), ("decay", 0.32f), ("sustain", 0.7f), ("release", 0.16f),
+                                          ("mono", 1f), ("fxdrive", 0.24f), ("fxdrivemode", 0.5f), ("gain", 0.82f));
+        Inst("aurora", 5, "Acid Table",   ("table", 0.333f), ("position", 0.46f), ("osc1oct", 0.333f), ("osc1warpmode", 0.75f), ("warp", 0.4f),
+                                          ("cutoff", 0.30f), ("resonance", 0.72f), ("fil1slope", 1f), ("fil1env", 0.9f),
+                                          ("env2attack", 0f), ("env2decay", 0.26f), ("env2sustain", 0.04f), ("env2release", 0.16f),
+                                          ("attack", 0f), ("decay", 0.3f), ("sustain", 0.45f), ("release", 0.14f),
+                                          ("mono", 1f), ("mtx4_3", 0.7f), ("fxdrive", 0.32f), ("gain", 0.84f));
+        Inst("aurora", 5, "Wobble Wave",  ("table", 0.333f), ("position", 0.55f), ("osc1oct", 0.333f),
+                                          ("sublevel", 0.5f), ("suboct", 0.5f),
+                                          ("cutoff", 0.34f), ("resonance", 0.44f), ("fil1slope", 1f),
+                                          ("lfo1sync", 0.5714f), ("lfo1shape", 0f), ("lfo1depth", 0.85f), ("mtx2_3", 0.92f),
+                                          ("attack", 0f), ("decay", 0.3f), ("sustain", 0.62f), ("release", 0.16f),
+                                          ("mono", 1f), ("fxdrive", 0.3f), ("gain", 0.84f));
+        Inst("aurora", 5, "Rubber Bass",  ("table", 0f), ("position", 0.36f), ("osc1oct", 0.333f), ("osc1warpmode", 0.5f), ("warp", 0.62f),
+                                          ("sublevel", 0.42f), ("suboct", 0.5f), ("routesub", 1f),
+                                          ("cutoff", 0.38f), ("resonance", 0.36f), ("fil1env", 0.82f), ("fil1key", 0.55f),
+                                          ("env2attack", 0f), ("env2decay", 0.3f), ("env2sustain", 0.1f),
+                                          ("attack", 0f), ("decay", 0.3f), ("sustain", 0.55f), ("release", 0.18f),
+                                          ("mono", 1f), ("fxdrive", 0.2f), ("fxdrivemode", 0.5f), ("gain", 0.84f));
+
+        // Motion and texture
+        Inst("aurora", 5, "Split Filter", ("table", 0f), ("position", 0.5f), ("routeosc1", 0f),
+                                          ("osc2on", 1f), ("osc2table", 0.667f), ("osc2position", 0.6f), ("osc2level", 0.7f), ("osc2detune", 0.57f), ("routeosc2", 0.333f),
+                                          ("fil1type", 0f), ("cutoff", 0.44f), ("fil2type", 0.25f), ("fil2freq", 0.56f),
+                                          ("attack", 0.2f), ("decay", 0.45f), ("sustain", 0.75f), ("release", 0.45f),
+                                          ("unison", 0.333f), ("unidetune", 0.24f), ("unispread", 0.85f),
+                                          ("lfo2rate", 0.14f), ("lfo2depth", 0.6f), ("mtx3_6", 0.72f), ("gain", 0.76f));
+        Inst("aurora", 5, "Air Strings",  ("table", 0.667f), ("position", 0.3f), ("warp", 0.5f),
+                                          ("osc2on", 1f), ("osc2table", 0.667f), ("osc2position", 0.38f), ("osc2level", 0.52f), ("osc2oct", 0.667f), ("osc2detune", 0.56f),
+                                          ("unison", 0.667f), ("unidetune", 0.2f), ("unispread", 0.95f),
+                                          ("attack", 0.34f), ("decay", 0.5f), ("sustain", 0.88f), ("release", 0.58f),
+                                          ("cutoff", 0.66f), ("resonance", 0.1f), ("fil1env", 0.56f),
+                                          ("lfo1rate", 0.3f), ("lfo1depth", 0.22f), ("mtx2_0", 0.53f),
+                                          ("fxreverb", 0.44f), ("fxreverbmode", 0.5f), ("fxreverbsize", 0.8f),
+                                          ("mac0val", 0.34f), ("mac0dest", 8f / 11f), ("mac0amt", 0.68f), ("gain", 0.74f));
 
         // ---- Nota Volt (kind 6) — 25 patches across basses, leads, pads, keys and motion.
         //      Bipolar knobs (octave/semi/detune/env/lfo/pan/macro amount) are neutral at

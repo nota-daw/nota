@@ -268,9 +268,12 @@ and user presets, automation, persistence and cloning.
   destinations, unison, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
   modulation wheels, VEL→AMP, VEL→FILTER, Mono/Poly. 25 factory presets.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
-  Off/Sync/Bend/PWM/Fold) plus a sub oscillator and unison, two filters with routing, two
-  envelopes, two LFOs, an 8×7 mod matrix, 4 macros, built-in drive/chorus/reverb,
-  Mono/Poly.
+  Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
+  in cents, spread), two filters (LP/HP/BP/Notch/Morph, 12/24 dB) with per-source routing,
+  two envelopes, two tempo-syncable LFOs, an 8×7 mod matrix, 8 macros over 12
+  destinations, pitch-bend (±2/±5/±12) and modulation wheels, output pan, a switchable FX
+  chain (drive Tube/Tape/Fold with tone · chorus 1×/2×/4× · reverb Room/Hall/Plate with
+  size), Mono/Poly. 25 factory presets.
 - **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, fine detune, level and
   their own ADSR each), 11 algorithms with interactive diagrams and drag-to-reroute,
   feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard tracking, pitch-bend

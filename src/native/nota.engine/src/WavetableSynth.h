@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Aurora — the built-in wavetable synth (kind 5), reworked to mockup 2j. Each voice
-// runs TWO wavetable oscillators (independent bank / position / warp / level / pitch) plus
-// a sub oscillator, a unison stack (voices / detune / spread), two state-variable filters
-// with per-source routing (F1 / F2 / Both / Dry) in parallel or series, two envelopes
-// (Env 1 = amp, Env 2 = free), two LFOs (one tempo-syncable), a generic 8×7 modulation
-// matrix, four macros, and a built-in FX block (drive · chorus · reverb). Four spectral
+// Nota Aurora — the built-in wavetable synth (kind 5), reworked to the almanac's card.
+// Each voice runs TWO wavetable oscillators (independent bank / position / warp / level /
+// pitch) plus a sub oscillator, a unison stack (voices / detune / stereo spread), two
+// state-variable filters with per-source routing (F1 / F2 / Both / Dry) in parallel or
+// series, two envelopes (Env 1 = amp, Env 2 = free), two tempo-syncable LFOs, a generic
+// 8×7 modulation matrix, EIGHT macros over twelve destinations, two performance wheels
+// (pitch bend with a selectable range, mod wheel) and a built-in FX chain — drive
+// (Tube / Tape / Fold, with a tone tilt), chorus (1× / 2× / 4×) and reverb
+// (Room / Hall / Plate, with size) — each block switchable on its own. Four spectral
 // banks (Analog / Pulse / Formant / Chroma); five warp modes (Off / Sync / Bend / PWM /
 // Fold). All params ride the plugin-param interface → automation / persist / clone.
 //
-// Header-only; allocation-free after construction (tables + FX buffers built up front).
+// Header-only; allocation-free after construction. The 512 KB wavetable set is built ONCE
+// per process and shared by every instance — it is read-only data, and rebuilding it per
+// voice-bank cost every new track (and every clone) eight million sines.
 // Order of params is the persisted state layout — APPEND ONLY.
 
 #pragma once
@@ -23,6 +28,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace nota {
@@ -31,7 +37,14 @@ class WavetableSynth final : public Instrument {
 public:
     static constexpr int kSources = 8;   // Env1, Env2, LFO1, LFO2, Vel, Key, ModWhl, Rand
     static constexpr int kDests   = 7;   // Pitch, Osc2 Pitch, Position, Cutoff, Reso, Level, Pan
-    static constexpr int kMacros  = 4;
+    static constexpr int kMacros  = 8;
+    // Macros reach further than the matrix: the seven voice-bus destinations above sit at
+    // indices 0, 2, 4, 6, 7, 9 and 11 of this twelve-entry list, exactly where a
+    // seven-entry normalized value rounds to — so a patch saved against the old list still
+    // points at the same destination. The other five act on the block snapshot instead.
+    //   0 Pitch · 1 Warp · 2 Osc 2 Pitch · 3 Osc 2 Level · 4 Position · 5 Sub Level
+    //   6 Cutoff · 7 Reso · 8 Unison · 9 Level · 10 Drive · 11 Pan
+    static constexpr int kMacroDests = 12;
 
     enum Param {
         // ---- original 11 (v1): Osc1 table/pos/warp, Env1 ADSR, Fil1 cutoff/reso, gain ----
@@ -50,8 +63,14 @@ public:
         FxDrive, FxChorus, FxChorusRate, FxReverb,                            // 58..61
         ModWheel, MonoMode,                                                   // 62,63
         MatrixBase,                                                           // 64 (56 entries)
-        MacroBase = MatrixBase + kSources * kDests,                           // 120 (12 entries)
-        kNumParams = MacroBase + kMacros * 3                                  // 132
+        MacroBase = MatrixBase + kSources * kDests,                           // 120 (24 entries)
+        // ---- appended (v3, almanac rework): wheels, output pan, LFO 2 sync, FX blocks ----
+        ExtraBase = MacroBase + kMacros * 3,                                  // 144
+        Bend = ExtraBase, BendRange, OutPan, Lfo2Sync,                        // 144..147
+        FxDriveOn, FxDriveMode, FxTone,                                       // 148..150
+        FxChorusOn, FxChorusVoices,                                           // 151,152
+        FxReverbOn, FxReverbMode, FxReverbSize,                               // 153..155
+        kNumParams                                                            // 156
     };
     static int matrixIdx(int s, int d) { return MatrixBase + s * kDests + d; }
     static int macroIdx(int m, int f) { return MacroBase + m * 3 + f; }
@@ -74,7 +93,14 @@ public:
         set(ModWheel, 0.0f); set(MonoMode, 0.0f);
         for (int s = 0; s < kSources; ++s) for (int d = 0; d < kDests; ++d) set((Param)matrixIdx(s, d), 0.5f);
         for (int m = 0; m < kMacros; ++m) { set((Param)macroIdx(m, 0), 0.0f); set((Param)macroIdx(m, 1), 0.0f); set((Param)macroIdx(m, 2), 0.5f); }
-        buildTables();
+        set(Bend, 0.5f); set(BendRange, 1.0f / 11.0f);   // centred, ±2 semitones
+        set(OutPan, 0.5f); set(Lfo2Sync, 0.0f);
+        // The three FX blocks start switched ON with their amount at zero, so a patch saved
+        // before they had switches sounds exactly as it did.
+        set(FxDriveOn, 1.0f); set(FxDriveMode, 0.0f); set(FxTone, 0.5f);
+        set(FxChorusOn, 1.0f); set(FxChorusVoices, 0.5f);
+        set(FxReverbOn, 1.0f); set(FxReverbMode, 0.0f); set(FxReverbSize, 0.5f);
+        tables_ = sharedTables();
         chorusBuf_.assign(4096, 0.0f);
         for (auto& c : revC_) c.buf.assign(1, 0.0f);
     }
@@ -89,6 +115,7 @@ public:
         for (int c = 0; c < kRevCombs; ++c) { revC_[c].buf.assign((size_t)(ct[c] * sampleRate_ / 44100.0) + 1, 0.0f); revC_[c].idx = 0; revC_[c].store = 0; }
         static const int at[kRevAll] = {556, 441};
         for (int a = 0; a < kRevAll; ++a) { revA_[a].buf.assign((size_t)(at[a] * sampleRate_ / 44100.0) + 1, 0.0f); revA_[a].idx = 0; }
+        toneL_ = toneR_ = 0.0f;
     }
     void setTransport(double, double samplesPerBeat, bool) override { if (samplesPerBeat > 0.0) spb_ = samplesPerBeat; }
     int32_t activeVoiceCount() const override { return activeVoices_.load(std::memory_order_relaxed); }
@@ -112,6 +139,13 @@ public:
             return std::string(ids[i]);
         }
         if (i < MacroBase) { int j = i - MatrixBase; return "mtx" + std::to_string(j / kDests) + "_" + std::to_string(j % kDests); }
+        if (i >= ExtraBase) {
+            static const char* ex[] = { "bend", "bendrange", "outpan", "lfo2sync",
+                                        "fxdriveon", "fxdrivemode", "fxtone",
+                                        "fxchoruson", "fxchorusvoices",
+                                        "fxreverbon", "fxreverbmode", "fxreverbsize" };
+            return std::string(ex[i - ExtraBase]);
+        }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "mac" + std::to_string(m) + (f == 0 ? "val" : f == 1 ? "dest" : "amt");
     }
@@ -134,14 +168,30 @@ public:
         static const char* sn[] = { "Env 1", "Env 2", "LFO 1", "LFO 2", "Velocity", "Key", "Mod Whl", "Random" };
         static const char* dn[] = { "Pitch", "Osc2 Pitch", "Position", "Cutoff", "Reso", "Level", "Pan" };
         if (i < MacroBase) { int j = i - MatrixBase; return std::string(sn[j / kDests]) + " → " + dn[j % kDests]; }
+        if (i >= ExtraBase) {
+            static const char* exNm[] = { "Pitch Bend", "Bend Range", "Out Pan", "LFO2 Sync",
+                                          "Drive On", "Drive Mode", "Drive Tone",
+                                          "Chorus On", "Chorus Voices",
+                                          "Reverb On", "Reverb Mode", "Reverb Size" };
+            return std::string(exNm[i - ExtraBase]);
+        }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "Macro " + std::to_string(m + 1) + (f == 0 ? "" : f == 1 ? " Dest" : " Amount");
     }
     float pluginParamGet(int32_t i) const override { return (i >= 0 && i < kNumParams) ? pn_[i].load(std::memory_order_relaxed) : 0.0f; }
     void  pluginParamSet(int32_t i, float v) override { if (i >= 0 && i < kNumParams) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
+    // The id → index table is the same for every instance, so build it once: a preset
+    // apply looks up every one of its parameters, and the linear scan used to rebuild
+    // each id's string on the way past it.
     int32_t pluginParamIndexOfId(const std::string& id) const override {
-        for (int32_t i = 0; i < kNumParams; ++i) if (pluginParamId(i) == id) return i;
-        return -1;
+        static const std::unordered_map<std::string, int32_t> map = [this] {
+            std::unordered_map<std::string, int32_t> m;
+            m.reserve(kNumParams * 2);
+            for (int32_t i = 0; i < kNumParams; ++i) m.emplace(pluginParamId(i), i);
+            return m;
+        }();
+        auto it = map.find(id);
+        return it == map.end() ? -1 : it->second;
     }
 
     std::vector<uint8_t> getState() const override {
@@ -186,18 +236,46 @@ public:
     void allNotesOff() override { for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
+        // ---- macros first: seven of the twelve destinations ride the per-voice bus
+        //      below, the other five move this block's snapshot ----
+        double macroDst[kDests] = {0, 0, 0, 0, 0, 0, 0};
+        double macroBlk[5] = {0, 0, 0, 0, 0};   // warp · osc2 level · sub level · unison · drive
+        for (int m = 0; m < kMacros; ++m) {
+            const double x = get((Param)macroIdx(m, 0)) * (get((Param)macroIdx(m, 2)) - 0.5) * 2.0;
+            if (std::fabs(x) <= 1e-4) continue;
+            switch (macroDestOf(get((Param)macroIdx(m, 1)))) {
+                case 0:  macroDst[0] += x; break;   // Pitch
+                case 2:  macroDst[1] += x; break;   // Osc 2 Pitch
+                case 4:  macroDst[2] += x; break;   // Position
+                case 6:  macroDst[3] += x; break;   // Cutoff
+                case 7:  macroDst[4] += x; break;   // Reso
+                case 9:  macroDst[5] += x; break;   // Level
+                case 11: macroDst[6] += x; break;   // Pan
+                case 1:  macroBlk[0] += x; break;   // Warp
+                case 3:  macroBlk[1] += x; break;   // Osc 2 Level
+                case 5:  macroBlk[2] += x; break;   // Sub Level
+                case 8:  macroBlk[3] += x; break;   // Unison detune
+                default: macroBlk[4] += x; break;   // Drive
+            }
+        }
+
         // ---- block snapshot ----
         const int b1 = bankOf(Table), b2 = bankOf(Osc2Table);
         const int wm1 = warpModeOf(Osc1WarpMode), wm2 = warpModeOf(Osc2WarpMode);
         const float basePos1 = get(Position), basePos2 = get(Osc2Position);
-        const double warp1 = get(Warp), warp2 = get(Osc2Warp);
+        const double warp1 = std::clamp(get(Warp) + macroBlk[0], 0.0, 1.0);
+        const double warp2 = std::clamp(get(Osc2Warp) + macroBlk[0], 0.0, 1.0);
         const float lvl1 = get(Osc1On) > 0.5f ? get(Osc1Level) : 0.0f;
-        const float lvl2 = get(Osc2On) > 0.5f ? get(Osc2Level) : 0.0f;
-        const float subLvl = get(SubLevel); const int subWave = (int)std::lround(get(SubWave) * 2.0f);
+        const float lvl2 = get(Osc2On) > 0.5f ? (float)std::clamp(get(Osc2Level) + macroBlk[1], 0.0, 2.0) : 0.0f;
+        const float subLvl = (float)std::clamp(get(SubLevel) + macroBlk[2], 0.0, 2.0);
+        const int subWave = (int)std::lround(get(SubWave) * 2.0f);
         const double m1 = pitchMul(Osc1Oct, Osc1Semi, Osc1Detune), m2 = pitchMul(Osc2Oct, Osc2Semi, Osc2Detune);
         const double subMul = std::exp2(std::lround((get(SubOct) - 0.5f) * 4.0f) - 1.0);   // default one octave down
-        const float uni = get(Unison), uniDet = get(UniDetune), uniSpread = get(UniSpread);
-        const int uniN = std::clamp(1 + (int)std::lround(uni * 6.0f), 1, kUnison);
+        // Unison: the count, the detune in cents and the stereo spread are three separate
+        // dials — the detune no longer rides the count, so the readout says what you hear.
+        const int uniN = std::clamp(1 + (int)std::lround(get(Unison) * 6.0f), 1, kUnison);
+        const double uniDet = std::clamp(get(UniDetune) + macroBlk[3], 0.0, 1.0) * 50.0;   // ± cents
+        const float uniSpread = get(UniSpread);
 
         const float atk = rateOf(Attack, 0.001, 2.0), dec = rateOf(Decay, 0.002, 3.0), rel = rateOf(Release, 0.002, 4.0), sus = get(Sustain);
         const float atk2 = rateOf(Env2Attack, 0.001, 2.0), dec2 = rateOf(Env2Decay, 0.002, 3.0), rel2 = rateOf(Env2Release, 0.002, 4.0), sus2 = get(Env2Sustain);
@@ -212,15 +290,35 @@ public:
         const bool series = get(FilSeries) > 0.5f;
 
         const int ls1 = shapeOf(Lfo1Shape), ls2 = shapeOf(Lfo2Shape);
-        const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync), lfo2Inc = expMap(get(Lfo2Rate), 0.05, 20.0) / sampleRate_;
+        const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync), lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync);
         const float lfo1Depth = get(Lfo1Depth), lfo2Depth = get(Lfo2Depth);
         const float gain = get(Gain), modWheel = get(ModWheel);
 
-        // Matrix active list + macro offsets.
+        // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
+        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0) / 12.0);
+        // Output pan, equal power.
+        const float outPan = (get(OutPan) - 0.5f) * 2.0f;
+        const float opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi);
+        const float opR = std::sin((outPan + 1.0f) * 0.25f * (float)kPi);
+
+        // FX chain snapshot: each block has a switch, a character and its amounts.
+        const bool driveOn = get(FxDriveOn) > 0.5f, chorusOn = get(FxChorusOn) > 0.5f, reverbOn = get(FxReverbOn) > 0.5f;
+        const float drive = (float)std::clamp(get(FxDrive) + macroBlk[4], 0.0, 1.0);
+        const int driveMode = std::clamp((int)std::lround(get(FxDriveMode) * 2.0f), 0, 2);
+        // Tone is a tilt: below the middle a one-pole darkens, above it lifts the top.
+        const float toneCoef = (float)std::clamp((get(FxTone) - 0.5) * 2.0, -1.0, 1.0);
+        const float chAmt = get(FxChorus);
+        const int chVoices = 1 << std::clamp((int)std::lround(get(FxChorusVoices) * 2.0f), 0, 2);   // 1 / 2 / 4
+        const float rvAmt = get(FxReverb);
+        const int revMode = std::clamp((int)std::lround(get(FxReverbMode) * 2.0f), 0, 2);
+        // Room is short and dry-ish, Hall long and dark, Plate long and bright.
+        static const float fbBase[3] = {0.76f, 0.86f, 0.83f}, dampBase[3] = {0.45f, 0.72f, 0.18f};
+        const float revFb = std::clamp(fbBase[revMode] + (get(FxReverbSize) - 0.5f) * 0.16f, 0.5f, 0.96f);
+        const float revDamp = dampBase[revMode];
+
+        // Matrix active list.
         int amS[kSources * kDests], amD[kSources * kDests], amN = 0; double amA[kSources * kDests];
-        double macroDst[kDests] = {0,0,0,0,0,0,0};
         for (int s = 0; s < kSources; ++s) for (int d = 0; d < kDests; ++d) { double a = (get((Param)matrixIdx(s, d)) - 0.5) * 2.0; if (std::fabs(a) > 1e-4) { amS[amN] = s; amD[amN] = d; amA[amN] = a; ++amN; } }
-        for (int m = 0; m < kMacros; ++m) { double val = get((Param)macroIdx(m, 0)), amt = (get((Param)macroIdx(m, 2)) - 0.5) * 2.0; if (std::fabs(val * amt) > 1e-4) macroDst[destOf(get((Param)macroIdx(m, 1)))] += val * amt; }
 
         const double invSr = 1.0 / sampleRate_;
 
@@ -246,12 +344,14 @@ public:
                 const double pMul = std::exp2(dst[0] * 2.0);
                 const float pos1 = std::clamp(basePos1 + (float)dst[2], 0.0f, 1.0f);
                 const float pos2 = std::clamp(basePos2 + (float)dst[2], 0.0f, 1.0f);
-                const double base = v.freq * invSr * pMul;
+                const double base = v.freq * invSr * pMul * bendMul;
 
                 // --- oscillators (unison stack on Osc1/Osc2, mono sub) ---
-                float o1 = 0.0f, o2 = 0.0f;
-                if (lvl1 > 1e-5f) o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uni * uniDet);
-                if (lvl2 > 1e-5f) o2 = oscStack(v.ph2, base * m2 * std::exp2(dst[1] * 2.0), b2, pos2, wm2, warp2, uniN, uni * uniDet);
+                // A spread unison stack is stereo: the mid goes through the filters, the
+                // side rides around them, so spread widens without doubling filter state.
+                float o1 = 0.0f, o2 = 0.0f, side = 0.0f;
+                if (lvl1 > 1e-5f) { float sd; o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDet, uniSpread, sd); side += sd * lvl1; }
+                if (lvl2 > 1e-5f) { float sd; o2 = oscStack(v.ph2, base * m2 * std::exp2(dst[1] * 2.0), b2, pos2, wm2, warp2, uniN, uniDet, uniSpread, sd); side += sd * lvl2; }
                 float sub = 0.0f;
                 if (subLvl > 1e-5f) { sub = subOsc(subWave, v.subPh); v.subPh += base * m1 * subMul; if (v.subPh >= 1.0) v.subPh -= 1.0; }
                 o1 *= lvl1; o2 *= lvl2; sub *= subLvl;
@@ -275,24 +375,22 @@ public:
                 double s = wet + dryS;
 
                 float amp = v.env * v.velocity * (1.0f + (float)dst[5]);
-                float sig = (float)s * amp;
+                float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
                 const float pan = (float)std::clamp(dst[6], -1.0, 1.0);
-                mixL += sig * (pan <= 0 ? 1.0f : 1.0f - pan);
-                mixR += sig * (pan >= 0 ? 1.0f : 1.0f + pan);
+                mixL += sigL * (pan <= 0 ? 1.0f : 1.0f - pan);
+                mixR += sigR * (pan >= 0 ? 1.0f : 1.0f + pan);
             }
             activeVoices_.store(live, std::memory_order_relaxed);
 
-            // --- global FX: drive → chorus → reverb ---
+            // --- global FX: drive → chorus → reverb, each on its own switch ---
             float l = mixL * 0.4f, r = mixR * 0.4f;
-            const float drive = get(FxDrive);
-            if (drive > 1e-4f) { float d = 1.0f + drive * 8.0f; l = std::tanh(l * d) / std::tanh(d * 0.7f + 1.0f); r = std::tanh(r * d) / std::tanh(d * 0.7f + 1.0f); }
-            const float chAmt = get(FxChorus);
-            if (chAmt > 1e-4f) { float cl, cr; chorus(l, r, chAmt, cl, cr); l = cl; r = cr; }
-            const float rvAmt = get(FxReverb);
-            if (rvAmt > 1e-4f) { float rl, rr; reverb(l, r, rl, rr); l += rl * rvAmt; r += rr * rvAmt; }
+            if (driveOn && drive > 1e-4f) { l = driveSample(driveMode, l, drive); r = driveSample(driveMode, r, drive); }
+            if (driveOn && toneCoef != 0.0f) { l = tone(toneL_, l, toneCoef); r = tone(toneR_, r, toneCoef); }
+            if (chorusOn && chAmt > 1e-4f) { float cl, cr; chorus(l, r, chAmt, chVoices, cl, cr); l = cl; r = cr; }
+            if (reverbOn && rvAmt > 1e-4f) { float rl, rr; reverb(l, r, revFb, revDamp, rl, rr); l += rl * rvAmt; r += rr * rvAmt; }
 
-            out[i * 2]     += l * gain;
-            out[i * 2 + 1] += r * gain;
+            out[i * 2]     += (l * opL) * gain;
+            out[i * 2 + 1] += (r * opR) * gain;
         }
     }
 
@@ -321,7 +419,7 @@ private:
     int filtType(int p) const { return std::clamp((int)std::lround(get(p) * 4.0f), 0, 4); }
     int shapeOf(int p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
     int routeOf(int p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
-    static int destOf(float v) { return std::clamp((int)std::lround(v * (kDests - 1)), 0, kDests - 1); }
+    static int macroDestOf(float v) { return std::clamp((int)std::lround(v * (kMacroDests - 1)), 0, kMacroDests - 1); }
     static double resoToK(double r) { return std::clamp(2.0 - 1.94 * std::clamp(r, 0.0, 1.0), 0.06, 2.0); }
     double pitchMul(int oct, int semi, int det) const { int o = (int)std::lround((get(oct) - 0.5) * 6); int s = (int)std::lround((get(semi) - 0.5) * 24); double c = (get(det) - 0.5) * 100; return std::exp2(o + s / 12.0 + c / 1200.0); }
 
@@ -352,29 +450,37 @@ private:
     }
     static float foldOut(float s, double amt) { float g = 1.0f + (float)amt * 3.0f; return std::sin((float)kHalfPi * g * s); }   // smooth wavefolder
 
-    // One oscillator: a unison stack of wavetable reads with detune + equal-power spread.
-    float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN, float detCents) {
+    // One oscillator: a unison stack of wavetable reads, detuned in cents and spread
+    // across the stereo field with equal power. Returns the mid (which the filters see)
+    // and, through `sideOut`, the half-difference the spread opens up.
+    float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
+                   int uniN, double detCents, float spread, float& sideOut) {
         const float posF = pos * (kFrames - 1); const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1); const float ff = posF - f0;
         const float* t0 = frame(bank, f0); const float* t1 = frame(bank, f1);
-        float acc = 0.0f; const float norm = 1.0f / std::sqrt((float)uniN);
-        const float spread = get(UniSpread);
+        float accL = 0.0f, accR = 0.0f;
+        // √2 undoes the equal-power law's 0.707 at centre, so a spread of 0 is bit-for-bit
+        // the mono stack this used to be.
+        const float norm = 1.41421356f / std::sqrt((float)uniN);
         for (int u = 0; u < uniN; ++u) {
             const double d = (uniN > 1) ? ((double)u / (uniN - 1) - 0.5) * 2.0 : 0.0;
-            const double det = std::pow(2.0, d * detCents * 30.0 / 1200.0);
+            const double det = std::exp2(d * detCents / 1200.0);
             double rp = warpRead(mode, ph[u], warpAmt);
             float s = readMorph(t0, t1, ff, rp);
             if (mode == 4) s = foldOut(s, warpAmt);
-            acc += s;   // (kept mono; spread handled at voice pan for simplicity)
+            const float pan = (float)d * spread;
+            accL += s * std::cos((pan + 1.0f) * 0.25f * (float)kPi);
+            accR += s * std::sin((pan + 1.0f) * 0.25f * (float)kPi);
             ph[u] += inc * det; if (ph[u] >= 1.0) ph[u] -= 1.0;
         }
-        (void)spread;
-        return acc * norm;
+        accL *= norm; accR *= norm;
+        sideOut = (accL - accR) * 0.5f;
+        return (accL + accR) * 0.5f;
     }
     static float subOsc(int wave, double ph) {
         switch (wave) { case 1: return ph < 0.5 ? 1.0f : -1.0f; case 2: return (float)(4.0 * std::fabs(ph - 0.5) - 1.0); default: return (float)std::sin(kTwoPi * ph); }
     }
 
-    const float* frame(int bank, int f) const { return &tables_[((bank * kFrames) + f) * kTableSize]; }
+    const float* frame(int bank, int f) const { return tables_ + (size_t)((bank * kFrames) + f) * kTableSize; }
     static float readMorph(const float* t0, const float* t1, float ff, double phase) {
         const double x = phase * kTableSize; int i0 = (int)x & (kTableSize - 1); int i1 = (i0 + 1) & (kTableSize - 1);
         const float xf = (float)(x - std::floor(x)); const float a = t0[i0] + (t0[i1] - t0[i0]) * xf; const float b = t1[i0] + (t1[i1] - t1[i0]) * xf; return a + (b - a) * ff;
@@ -387,32 +493,70 @@ private:
             default: return (1.0f / n) * std::fabs(std::cos((float)kPi * n * (0.25f + 0.75f * t)));
         }
     }
-    void buildTables() {
-        tables_.assign((size_t)kBanks * kFrames * kTableSize, 0.0f);
-        const int nMax = std::min(kTableSize / 2, 64);
-        for (int b = 0; b < kBanks; ++b) for (int f = 0; f < kFrames; ++f) {
-            const float t = (float)f / (kFrames - 1); float* tab = &tables_[((b * kFrames) + f) * kTableSize]; float peak = 1e-6f;
-            for (int j = 0; j < kTableSize; ++j) { const double ph = (double)j / kTableSize; double acc = 0; for (int n = 1; n <= nMax; ++n) { const float a = harmAmp(b, t, n); if (a > 1e-5f) acc += a * std::sin(2.0 * kPi * n * ph); } tab[j] = (float)acc; peak = std::max(peak, std::fabs(tab[j])); }
-            const float inv = 1.0f / peak; for (int j = 0; j < kTableSize; ++j) tab[j] *= inv;
-        }
+    // The four banks × sixteen frames are the same read-only 512 KB for every instance and
+    // every clone, so they are built once, on first use, and handed out as a pointer.
+    static const float* sharedTables() {
+        static const std::vector<float> t = [] {
+            std::vector<float> tab((size_t)kBanks * kFrames * kTableSize, 0.0f);
+            const int nMax = std::min(kTableSize / 2, 64);
+            for (int b = 0; b < kBanks; ++b) for (int f = 0; f < kFrames; ++f) {
+                const float tt = (float)f / (kFrames - 1); float* p = &tab[((b * kFrames) + f) * kTableSize]; float peak = 1e-6f;
+                // The recipe is fixed per (bank, frame): evaluate it once, not per sample.
+                float amp[65];
+                for (int n = 1; n <= nMax; ++n) amp[n] = harmAmp(b, tt, n);
+                for (int j = 0; j < kTableSize; ++j) {
+                    const double ph = (double)j / kTableSize; double acc = 0;
+                    for (int n = 1; n <= nMax; ++n) if (amp[n] > 1e-5f) acc += amp[n] * std::sin(2.0 * kPi * n * ph);
+                    p[j] = (float)acc; peak = std::max(peak, std::fabs(p[j]));
+                }
+                const float inv = 1.0f / peak; for (int j = 0; j < kTableSize; ++j) p[j] *= inv;
+            }
+            return tab;
+        }();
+        return t.data();
     }
 
     static double lfoValue(int shape, double ph, float sh) { switch (shape) { case 1: return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph; case 2: return ph < 0.5 ? 1 : -1; case 3: return sh; default: return std::sin(kTwoPi * ph); } }
     double lfoInc(int rate, int sync) const { int d = std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7); if (d > 0 && spb_ > 0.0) { static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625}; return 1.0 / (beats[d] * spb_); } return expMap(get(rate), 0.05, 20.0) / sampleRate_; }
 
-    // FX: a simple stereo chorus (two modulated taps) and a compact Freeverb.
-    void chorus(float l, float r, float amt, float& outL, float& outR) {
+    // FX · drive. Tube is the soft symmetric tanh this always had; Tape adds the second
+    // harmonic a tape stage leans on; Fold turns the curve back on itself past the top.
+    static float driveSample(int mode, float x, float amt) {
+        const float d = 1.0f + amt * 8.0f;
+        switch (mode) {
+            // Tape: a rational curve that bends earlier and saturates more slowly than tanh,
+            // with a second-harmonic term for the asymmetry a tape stage has.
+            case 1: { float u = x * d + 0.35f * x * x * d; float y = u / (1.0f + std::fabs(u)); return y / (1.0f - 1.0f / (d * 0.7f + 2.0f)); }
+            case 2: { float y = std::sin((float)kHalfPi * std::clamp(x * d, -3.0f, 3.0f)); return y * 0.8f; }     // Fold
+            default: return std::tanh(x * d) / std::tanh(d * 0.7f + 1.0f);                                        // Tube
+        }
+    }
+    // A tilt around the middle: negative darkens (one-pole low-pass), positive lifts the
+    // top (the signal plus what the low-pass throws away).
+    static float tone(float& z, float x, float coef) {
+        const float a = 0.12f + 0.55f * (1.0f - std::fabs(coef));
+        z += (x - z) * a;
+        return coef < 0 ? z + (x - z) * (1.0f + coef) : x + (x - z) * coef * 1.4f;
+    }
+
+    // FX · a stereo chorus of 1, 2 or 4 modulated taps, and a compact Freeverb whose
+    // feedback and damping the mode + size choose.
+    void chorus(float l, float r, float amt, int voices, float& outL, float& outR) {
         const int sz = (int)chorusBuf_.size(); if (sz < 4) { outL = l; outR = r; return; }
         chorusBuf_[chorusW_] = (l + r) * 0.5f;
         const double rate = expMap(get(FxChorusRate), 0.1, 6.0); chorusPh_ += rate / sampleRate_; if (chorusPh_ >= 1.0) chorusPh_ -= 1.0;
-        auto tap = [&](double phase) { double d = (0.008 + 0.006 * std::sin(kTwoPi * phase)) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; int i1 = (i0 + 1) % sz; float f = (float)(rp - i0); return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
-        float a = tap(chorusPh_), b = tap(chorusPh_ + 0.5);
+        auto tap = [&](double phase) { double d = (0.008 + 0.006 * std::sin(kTwoPi * (phase - std::floor(phase)))) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; int i1 = (i0 + 1) % sz; float f = (float)(rp - i0); return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
+        float a = 0.0f, b = 0.0f;
+        // Taps sit evenly around the LFO cycle; odd ones go left, even ones right.
+        for (int k = 0; k < voices; ++k) { float t = tap(chorusPh_ + (double)k / voices); if (k % 2 == 0) a += t; else b += t; }
+        const float na = 1.0f / std::max(1, (voices + 1) / 2), nb = voices > 1 ? 1.0f / (voices / 2) : 1.0f;
+        a *= na; b = voices > 1 ? b * nb : a;
         if (++chorusW_ >= sz) chorusW_ = 0;
         outL = l * (1 - amt * 0.5f) + a * amt; outR = r * (1 - amt * 0.5f) + b * amt;
     }
-    void reverb(float l, float r, float& outL, float& outR) {
+    void reverb(float l, float r, float fb, float damp, float& outL, float& outR) {
         const float in = (l + r) * 0.015f; float o = 0.0f;
-        for (auto& c : revC_) { float out = c.buf[c.idx]; c.store = out * 0.8f + c.store * 0.2f; c.buf[c.idx] = in + c.store * 0.84f; if (++c.idx >= (int)c.buf.size()) c.idx = 0; o += out; }
+        for (auto& c : revC_) { float out = c.buf[c.idx]; c.store = out * (1.0f - damp) + c.store * damp; c.buf[c.idx] = in + c.store * fb; if (++c.idx >= (int)c.buf.size()) c.idx = 0; o += out; }
         for (auto& a : revA_) { float bo = a.buf[a.idx]; float out = -o + bo; a.buf[a.idx] = o + bo * 0.5f; if (++a.idx >= (int)a.buf.size()) a.idx = 0; o = out; }
         outL = o; outR = o;
     }
@@ -430,7 +574,9 @@ private:
     double lfoPhase1_ = 0, lfoPhase2_ = 0, chorusPh_ = 0;
     float lfoSh1_ = 0, lfoSh2_ = 0;
     uint32_t rng_ = 0x51ed270bu;
-    std::vector<float> tables_, chorusBuf_; int chorusW_ = 0;
+    const float* tables_ = nullptr;   // shared, read-only (sharedTables)
+    std::vector<float> chorusBuf_; int chorusW_ = 0;
+    float toneL_ = 0, toneR_ = 0;
     Comb revC_[kRevCombs]; Allp revA_[kRevAll];
     std::atomic<int32_t> activeVoices_{0};
     std::atomic<float> pn_[kNumParams];

@@ -19,6 +19,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Aurora grew performance wheels, eight macros and a switchable FX chain, and its
+  editor is now the almanac's card.** A **pitch-bend** wheel with a selectable **range**
+  (±2 / ±5 / ±12 semitones) joins the mod wheel in a rail that stays on screen on every
+  tab. There are now **eight macros** instead of four, reaching **twelve** destinations
+  (warp, osc 2 level, sub level, unison detune and drive on top of the old seven), each
+  named after what it drives. **LFO 2** can lock to the tempo like LFO 1. The **unison**
+  stack is stereo: detune is its own dial in cents and **spread** widens the stack across
+  the field. The FX block became a chain of three switchable blocks: **drive** (Tube / Tape
+  / Fold, with a tone tilt), **chorus** (1× / 2× / 4×) and **reverb** (Room / Hall / Plate,
+  with size). The output also gets a **pan** control. The card lays the synth out as
+  **Osc · Filter · Env · LFO · Mod · FX** tabs over a 186 px rail that switches between
+  **Global** and **Macros**, with a status strip that reads the patch back in words.
+  Projects saved before this load: the existing parameters keep their index, the new
+  ones start at values that sound as before, and a macro saved against the old seven
+  destinations still points at the same one. The one exception is unison (see Changed).
+- **Nota Aurora ships 25 factory presets** (was 8): pads, keys, bells and plucks, leads,
+  basses and motion patches, including the eight that existed before under their old
+  names.
 - **Nota Volt grew performance wheels and wider macros, and its editor is now the
   almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
   semitones) joins the mod wheel in a rail that stays on screen on every tab, and the
@@ -150,6 +168,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **Nota Aurora's unison dials now do what they say.** **Detune** is in cents (0–50) and
+  no longer scales with the voice count, and **spread**, which the engine used to ignore,
+  now pans the stack across the stereo field. Patches that use unison, including the
+  default one, therefore sound wider and more detuned than before. Turn spread down to
+  zero to get the old mono stack back.
 - **The top chrome is one row instead of two.** The transport bar and the toolbar under it
   were a 48px row and a 34px row mixing four unrelated jobs; they are now a single 60px
   bar, handing 22px back to the arrangement. It reads left to right: which view you are
