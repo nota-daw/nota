@@ -32,6 +32,10 @@ namespace Nota.App;
         // Curve accent (Nota Operator tints modulator envelopes teal); defaults to brass.
         public IBrush Accent { get; set; } = AccentBright;
 
+        // Draw the title in the plot's corner. Off when the card already names the graph
+        // in a header above it (Nota Bass).
+        public bool ShowTitle { get; set; } = true;
+
         public VoltEnv(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
         public void Target(string title, (int, string) a, (int, string) d, (int, string) s, (int, string) r)
         { _title = title; _a = a; _d = d; _s = s; _r = r; InvalidateVisual(); }
@@ -109,6 +113,7 @@ namespace Nota.App;
             ctx.DrawLine(pen, new Point(xh, sy), new Point(xr, bot));
             foreach (var pt in new[] { new Point(xa, top), new Point(xd, sy), new Point(xr, bot) })
                 ctx.DrawEllipse(Accent, null, pt, 3.2, 3.2);
-            ctx.DrawText(new FormattedText(_title, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
+            if (ShowTitle)
+                ctx.DrawText(new FormattedText(_title, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
         }
     }

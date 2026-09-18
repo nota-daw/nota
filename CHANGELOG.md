@@ -19,6 +19,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Bass grew performance wheels, a Legato switch and an output pan, and its editor
+  is now the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5
+  / ±12 semitones) and a **mod wheel** that opens the LFO onto the cutoff — a wobble you
+  play by hand — sit in a rail that stays on screen on both tabs. **Legato** decides what
+  a note played over a held one does in mono: slide into it without a new attack (the
+  303 way), or — the default — attack afresh with the glide still sliding the pitch. The
+  card shrinks from the full window width to **700 × 260** and lays the synth out as
+  **Signal** (Osc, Sub and Filter as three rows: wave chips, shape, pulse width, tuning and
+  level; the sub's wave, octave and level with the mix sum; the filter's type and slope,
+  its response as a drag pad and cutoff, resonance, drive, env and key amounts) and
+  **Mod** (both envelopes drawn and draggable, the LFO with its destinations and the
+  velocity amounts), beside a **Global** rail — voice mode, glide, unison, drive, bend
+  range, legato, volume, pan and the track's meter — and a status strip that reads the
+  patch back in words. Projects saved before this load unchanged: the existing parameters
+  keep their index and the new ones start neutral.
+- **Nota Bass ships 25 factory presets** (was 6) — subs, plucks, acid lines, wobbles,
+  reeses, stabs and slides, including the six that existed before under their old names.
 - **Nota Aurora grew performance wheels, eight macros and a switchable FX chain, and its
   editor is now the almanac's card.** A **pitch-bend** wheel with a selectable **range**
   (±2 / ±5 / ±12 semitones) joins the mod wheel in a rail that stays on screen on every
@@ -242,6 +259,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tokens its own comments named.
 
 ### Fixed
+- **Nota Bass: back-to-back notes no longer drop out.** Two things silenced the next note of
+  a tight line. A note-off released *every* note of its pitch, so when a repeated note
+  started a sample before the previous one ended (float rounding, a Note Length or arp
+  device, notes drawn overlapping) the new note was cut off the moment the old one ended —
+  in mono and poly alike. And in mono with glide on, any overlap was taken as legato and
+  skipped the attack, so on a plucky patch whose envelope had already decayed the next
+  note never sounded. A note-off now releases only the oldest held instance of its pitch,
+  and an overlapping note attacks afresh unless the new **Legato** switch is on. A
+  retrigger of a still-sounding voice starts from where its envelopes are, so it never
+  clicks. Switching Poly → Mono while chords are held no longer leaves those voices
+  hanging.
 - A MIDI mapping onto a switch (mute, solo, a transport button) fired on every incoming
   message past the half-way point, so sweeping a mapped CC across it made the target
   flutter instead of toggling once. It now fires on the crossing only — which is also what

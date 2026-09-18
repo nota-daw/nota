@@ -363,9 +363,12 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                                       ("amp1level", 0.0f), ("amp2level", 0.9f),
                                       ("attack", 0.0f), ("decay", 0.4f), ("sustain", 0.7f), ("release", 0.25f), ("volume", 0.82f));
 
-        // ---- Nota Bass (kind 7) — bass synth. Osc Shape morphs sine 0 → tri → saw → pulse 1.
-        //      Bipolar knobs (octave/semi/env/lfo-amt/pitch) are neutral at 0.5. Filter type:
-        //      LP 0 / HP .33 / BP .66 / Notch 1; slope 12 = 0 / 24 = 1; mono Poly 0 / Mono 1.
+        // ---- Nota Bass (kind 7) — bass synth. Osc Shape morphs sine 0 → tri .333 → saw .667 →
+        //      pulse 1. Bipolar knobs (octave/semi/env/lfo-amt/pitch) are neutral at 0.5; octave
+        //      −2 0 / −1 .25 / 0 .5 / +1 .75. Sub wave sine 0 / square .5 / tri 1; sub octave
+        //      −1 0 / −2 1. Filter type LP 0 / HP .333 / BP .667 / Notch 1; slope 12 = 0 / 24 = 1.
+        //      LFO wave Sin 0 / Tri .25 / Saw .5 / Sqr .75 / S&H 1. Mono: Poly 0 / Mono 1; Legato
+        //      1 = a note played over a held one slides in without a new attack.
         Inst("bass", 7, "Sub Rumble",  ("oscshape", 0.0f), ("osclevel", 0.5f), ("subwave", 0.0f), ("sublevel", 0.95f),
                                        ("filfreq", 0.3f), ("filreso", 0.1f), ("filenv", 0.55f), ("fildrive", 0.1f),
                                        ("attack", 0.0f), ("decay", 0.5f), ("sustain", 0.9f), ("release", 0.2f), ("drive", 0.1f), ("volume", 0.9f), ("mono", 1.0f));
@@ -375,7 +378,7 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("bass", 7, "Acid 303",    ("oscshape", 0.66f), ("osclevel", 0.9f), ("sublevel", 0.2f),
                                        ("filslope", 1.0f), ("filfreq", 0.32f), ("filreso", 0.75f), ("fildrive", 0.4f), ("filenv", 0.86f), ("filkey", 0.4f),
                                        ("fdecay", 0.25f), ("fsustain", 0.1f), ("attack", 0.0f), ("decay", 0.35f), ("sustain", 0.6f), ("release", 0.12f),
-                                       ("glide", 0.2f), ("drive", 0.4f), ("volume", 0.82f), ("mono", 1.0f));
+                                       ("glide", 0.2f), ("legato", 1.0f), ("drive", 0.4f), ("volume", 0.82f), ("mono", 1.0f));
         Inst("bass", 7, "Growl Bass",  ("oscshape", 0.88f), ("oscpw", 0.35f), ("osclevel", 0.85f), ("sublevel", 0.5f),
                                        ("filfreq", 0.4f), ("filreso", 0.5f), ("fildrive", 0.5f), ("fillfo", 0.72f), ("lforate", 0.45f), ("lfowave", 0.25f),
                                        ("drive", 0.55f), ("volume", 0.8f), ("mono", 1.0f));
@@ -385,6 +388,72 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("bass", 7, "Wobble Bass", ("oscshape", 0.7f), ("osclevel", 0.85f), ("sublevel", 0.4f),
                                        ("filslope", 1.0f), ("filfreq", 0.35f), ("filreso", 0.55f), ("fillfo", 0.85f), ("lforate", 0.6f), ("lfowave", 0.0f),
                                        ("drive", 0.35f), ("volume", 0.8f), ("mono", 1.0f));
+        // Sine an octave down with a long pluck and a slide between notes — the 808 shape.
+        Inst("bass", 7, "808 Sub",     ("oscshape", 0.0f), ("oscoctave", 0.25f), ("osclevel", 0.95f), ("sublevel", 0.0f),
+                                       ("filfreq", 0.8f), ("filenv", 0.5f), ("filkey", 0.0f), ("fildrive", 0.15f),
+                                       ("attack", 0.0f), ("decay", 0.78f), ("sustain", 0.0f), ("release", 0.35f),
+                                       ("glide", 0.25f), ("drive", 0.35f), ("volume", 0.85f));
+        Inst("bass", 7, "Classic Mono", ("oscshape", 0.667f), ("subwave", 0.5f), ("sublevel", 0.6f),
+                                       ("filfreq", 0.33f), ("filreso", 0.3f), ("filenv", 0.75f), ("fdecay", 0.4f), ("fsustain", 0.2f),
+                                       ("decay", 0.45f), ("sustain", 0.8f), ("glide", 0.1f), ("volume", 0.82f));
+        Inst("bass", 7, "Pulse Bass",  ("oscshape", 1.0f), ("oscpw", 0.3f), ("osclevel", 0.8f), ("sublevel", 0.55f),
+                                       ("filfreq", 0.42f), ("filreso", 0.2f), ("filenv", 0.65f), ("fdecay", 0.3f), ("fsustain", 0.2f),
+                                       ("sustain", 0.75f), ("volume", 0.8f));
+        Inst("bass", 7, "Finger Bass", ("oscshape", 0.4f), ("osclevel", 0.85f), ("sublevel", 0.5f),
+                                       ("filslope", 0.0f), ("filfreq", 0.3f), ("filreso", 0.1f), ("filenv", 0.66f), ("fdecay", 0.3f), ("fsustain", 0.25f),
+                                       ("attack", 0.08f), ("decay", 0.5f), ("sustain", 0.35f), ("release", 0.2f),
+                                       ("velamp", 0.6f), ("velfilter", 0.5f), ("glide", 0.0f), ("volume", 0.86f));
+        Inst("bass", 7, "Picked Bass", ("oscshape", 0.667f), ("sublevel", 0.45f),
+                                       ("filfreq", 0.36f), ("filreso", 0.25f), ("filenv", 0.82f), ("fdecay", 0.22f), ("fsustain", 0.05f),
+                                       ("decay", 0.45f), ("sustain", 0.3f), ("release", 0.15f), ("velfilter", 0.6f), ("glide", 0.0f), ("volume", 0.82f));
+        Inst("bass", 7, "Rubber Bass", ("oscshape", 0.333f), ("osclevel", 0.9f), ("sublevel", 0.5f),
+                                       ("filfreq", 0.28f), ("filreso", 0.55f), ("filenv", 0.78f), ("fdecay", 0.38f), ("fsustain", 0.1f),
+                                       ("decay", 0.5f), ("sustain", 0.5f), ("glide", 0.3f), ("legato", 1.0f), ("volume", 0.84f));
+        Inst("bass", 7, "Funk Slap",   ("oscshape", 0.85f), ("oscpw", 0.4f), ("sublevel", 0.35f),
+                                       ("filfreq", 0.45f), ("filreso", 0.6f), ("filenv", 0.85f), ("fdecay", 0.15f), ("fsustain", 0.0f),
+                                       ("decay", 0.35f), ("sustain", 0.35f), ("release", 0.12f),
+                                       ("velamp", 0.7f), ("velfilter", 0.8f), ("glide", 0.0f), ("volume", 0.8f));
+        Inst("bass", 7, "Hoover Bass", ("oscshape", 0.667f), ("osclevel", 0.9f), ("sublevel", 0.3f),
+                                       ("filfreq", 0.6f), ("filreso", 0.15f), ("filenv", 0.55f),
+                                       ("unison", 1.0f), ("lfopitch", 0.53f), ("lforate", 0.55f),
+                                       ("glide", 0.45f), ("legato", 1.0f), ("drive", 0.35f), ("volume", 0.72f));
+        Inst("bass", 7, "Dub Sub",     ("oscshape", 0.2f), ("osclevel", 0.7f), ("sublevel", 0.8f),
+                                       ("filslope", 0.0f), ("filfreq", 0.25f), ("filreso", 0.15f), ("filenv", 0.55f), ("fillfo", 0.56f), ("lforate", 0.3f),
+                                       ("decay", 0.5f), ("sustain", 0.9f), ("release", 0.3f), ("glide", 0.12f), ("volume", 0.88f));
+        Inst("bass", 7, "Techno Rumble", ("oscshape", 0.667f), ("subwave", 0.5f), ("sublevel", 0.7f),
+                                       ("filfreq", 0.22f), ("filreso", 0.35f), ("fildrive", 0.75f), ("filenv", 0.8f), ("fdecay", 0.25f), ("fsustain", 0.0f),
+                                       ("decay", 0.4f), ("sustain", 0.2f), ("release", 0.15f), ("drive", 0.45f), ("glide", 0.0f), ("volume", 0.76f));
+        Inst("bass", 7, "Fuzz Bass",   ("oscshape", 1.0f), ("oscpw", 0.45f), ("subwave", 0.5f), ("sublevel", 0.5f),
+                                       ("filfreq", 0.5f), ("filreso", 0.2f), ("fildrive", 0.8f), ("filenv", 0.6f),
+                                       ("drive", 0.8f), ("volume", 0.66f));
+        // A square 303 line: notes that overlap slide into each other without a new attack.
+        Inst("bass", 7, "Acid Slide",  ("oscshape", 1.0f), ("oscpw", 0.5f), ("osclevel", 0.9f), ("sublevel", 0.0f),
+                                       ("filfreq", 0.28f), ("filreso", 0.85f), ("fildrive", 0.5f), ("filenv", 0.9f), ("filkey", 0.3f),
+                                       ("fdecay", 0.3f), ("fsustain", 0.0f), ("decay", 0.4f), ("sustain", 0.55f), ("release", 0.1f),
+                                       ("glide", 0.35f), ("legato", 1.0f), ("drive", 0.45f), ("velfilter", 0.6f), ("volume", 0.78f));
+        Inst("bass", 7, "Vowel Bass",  ("oscshape", 0.667f), ("sublevel", 0.55f),
+                                       ("filtype", 0.667f), ("filslope", 0.0f), ("filfreq", 0.45f), ("filreso", 0.6f), ("filenv", 0.5f),
+                                       ("fillfo", 0.75f), ("lforate", 0.42f), ("lfowave", 0.25f), ("drive", 0.3f), ("volume", 0.86f));
+        // The wobble is on the mod wheel — ride it.
+        Inst("bass", 7, "Wheel Wobble", ("oscshape", 0.7f), ("sublevel", 0.5f),
+                                       ("filfreq", 0.3f), ("filreso", 0.5f), ("fildrive", 0.35f), ("filenv", 0.55f), ("fillfo", 0.5f),
+                                       ("lforate", 0.6f), ("lfowave", 0.25f), ("modwheel", 0.6f), ("drive", 0.3f), ("volume", 0.8f));
+        Inst("bass", 7, "Stab Bass",   ("mono", 0.0f), ("oscshape", 0.667f), ("unison", 0.35f), ("sublevel", 0.35f),
+                                       ("filfreq", 0.38f), ("filreso", 0.3f), ("filenv", 0.8f), ("fdecay", 0.25f), ("fsustain", 0.0f),
+                                       ("decay", 0.35f), ("sustain", 0.0f), ("release", 0.2f), ("glide", 0.0f), ("volume", 0.72f));
+        Inst("bass", 7, "Octave Bass", ("oscshape", 0.667f), ("oscoctave", 0.75f), ("osclevel", 0.55f),
+                                       ("subwave", 0.0f), ("suboctave", 1.0f), ("sublevel", 0.9f),
+                                       ("filfreq", 0.4f), ("filreso", 0.2f), ("filenv", 0.65f), ("volume", 0.82f));
+        Inst("bass", 7, "Soft Round",  ("oscshape", 0.333f), ("osclevel", 0.8f), ("sublevel", 0.6f),
+                                       ("filslope", 0.0f), ("filfreq", 0.3f), ("filreso", 0.1f), ("filenv", 0.58f),
+                                       ("attack", 0.35f), ("decay", 0.5f), ("sustain", 0.9f), ("release", 0.4f),
+                                       ("glide", 0.35f), ("legato", 1.0f), ("velamp", 0.2f), ("drive", 0.05f), ("volume", 0.88f));
+        Inst("bass", 7, "Drift Bass",  ("oscshape", 0.667f), ("unison", 0.45f), ("sublevel", 0.55f),
+                                       ("filfreq", 0.38f), ("filreso", 0.25f), ("filenv", 0.66f),
+                                       ("lfopitch", 0.515f), ("lforate", 0.3f), ("fillfo", 0.55f), ("glide", 0.15f), ("volume", 0.82f));
+        Inst("bass", 7, "S&H Bass",    ("oscshape", 0.8f), ("sublevel", 0.45f),
+                                       ("filfreq", 0.38f), ("filreso", 0.55f), ("fildrive", 0.4f), ("filenv", 0.55f),
+                                       ("fillfo", 0.8f), ("lforate", 0.62f), ("lfowave", 1.0f), ("drive", 0.3f), ("volume", 0.8f));
 
         // ---- Nota Pendulum (kind 8) — generative keys. Sync Free 0 / Sync 1; Division 0 1/1..
         //      1 1/16; Rate 0.5 = stop, <0.5 reverse; Motion 0 Linear/.33 Pendulum/.67 Ease/

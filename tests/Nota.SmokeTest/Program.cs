@@ -1539,7 +1539,7 @@ Console.WriteLine("-- Nota Bass --");
     Check(be.DeviceName(t, -1) == "Nota Bass", $"instrument is Nota Bass (got '{be.DeviceName(t, -1)}')");
 
     int pc = be.PluginParamCount(t, -1);
-    Check(pc == 34, $"Nota Bass exposes 34 params (got {pc})");
+    Check(pc == 39, $"Nota Bass exposes 39 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1551,7 +1551,7 @@ Console.WriteLine("-- Nota Bass --");
     // State round-trips to another track (project save/load path).
     be.PluginParamSet(t, -1, cut, 0.77f);
     var state = be.GetPluginState(t, -1);
-    Check(state.Length >= 34 * 4, $"bass state serialized ({state.Length} bytes)");
+    Check(state.Length >= 39 * 4, $"bass state serialized ({state.Length} bytes)");
     int t2 = be.AddBassSynthTrack();
     be.SetPluginState(t2, -1, state);
     Check(Math.Abs(be.PluginParamGet(t2, -1, cut) - 0.77f) < 1e-4, "bass state restores params on another track");
@@ -1588,6 +1588,131 @@ Console.WriteLine("-- Nota Bass --");
         be.Seek(1.99); be.Play(); be.RenderOffline(abuf, 4096); be.StopTransport();
         float after = be.PluginParamGet(ta, -1, fi);
         Check(after > 0.7f, $"automation drives Bass cutoff (filfreq = {after:F2})");
+    }
+
+    // A project saved before v2 (34 floats) loads: the old params keep their values and
+    // the five appended ones start at their defaults.
+    {
+        int told = be.AddBassSynthTrack();
+        be.SetPluginState(told, -1, state.AsSpan(0, 34 * 4).ToArray());
+        int ci = -1, pi = -1, li = -1;
+        for (int i = 0; i < be.PluginParamCount(told, -1); i++)
+        {
+            string id = be.PluginParamId(told, -1, i);
+            if (id == "filfreq") ci = i; else if (id == "outpan") pi = i; else if (id == "legato") li = i;
+        }
+        Check(Math.Abs(be.PluginParamGet(told, -1, ci) - 0.77f) < 1e-4
+              && Math.Abs(be.PluginParamGet(told, -1, pi) - 0.5f) < 1e-4 && be.PluginParamGet(told, -1, li) < 0.5f,
+            "a 34-param Bass state loads; the appended params stay at their defaults");
+    }
+
+    // Each case renders on its own engine so nothing sounding in one leaks into the next.
+    float[] BassRender(NotaNote[] notes, int frames, params (string Id, float Value)[] ps)
+    {
+        using var we = new NotaEngine();
+        we.SetBpm(120); we.SetTimeSignature(4, 4);
+        int tw = we.AddBassSynthTrack();
+        foreach (var (id, value) in ps)
+            for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+        we.AddMidiClip(tw, 0.0, 4.0);
+        we.SetClipNotes(tw, 0, notes);
+        var b = new float[frames * 2];
+        we.Seek(0.0); we.Play(); we.RenderOffline(b, frames); we.StopTransport();
+        return b;
+    }
+    static float BassRms(float[] b, int from, int to, int ch = -1)
+    {
+        double sum = 0; int n = 0;
+        for (int i = from; i < to; i++)
+        {
+            if (ch != 1) { sum += b[i * 2] * (double)b[i * 2]; n++; }
+            if (ch != 0) { sum += b[i * 2 + 1] * (double)b[i * 2 + 1]; n++; }
+        }
+        return (float)Math.Sqrt(sum / Math.Max(1, n));
+    }
+    double bassSpb = (be.SampleRate > 0 ? be.SampleRate : 48000.0) * 60.0 / 120.0;   // 120 BPM
+    int BF(double beats) => (int)Math.Round(beats * bassSpb);
+
+    // Regression: back-to-back notes of the same pitch where the next note starts a hair
+    // before the previous one ends. The previous note's off used to release every note of
+    // that pitch — the new one too — so the line went silent. Mono (with glide, the
+    // default) and poly alike; the second note must still sound in the middle of its span.
+    for (int m = 0; m < 2; m++)
+    {
+        var b = BassRender(new[] { new NotaNote(36, 0.0, 0.52, 0.9f), new NotaNote(36, 0.5, 0.5, 0.9f) }, BF(1.2),
+            ("mono", m), ("release", 0f));
+        float mid = BassRms(b, BF(0.7), BF(0.95));
+        Check(mid > 0.01f, $"Nota Bass {(m == 1 ? "mono" : "poly")}: an overlapping repeat of the same note keeps sounding (RMS {mid:F3})");
+    }
+
+    // Mono, overlapping different pitches on a plucky patch (sustain 0, glide on): every
+    // note is a new attack unless Legato is on — before, the overlap skipped the attack and
+    // the second note of a tight line was silent.
+    {
+        var line = new[] { new NotaNote(36, 0.0, 0.55, 0.9f), new NotaNote(43, 0.5, 0.5, 0.9f) };
+        (string, float)[] pluck = { ("mono", 1f), ("glide", 0.3f), ("decay", 0.55f), ("sustain", 0f) };
+        var retrig = BassRender(line, BF(1.0), pluck);
+        var legato = BassRender(line, BF(1.0), pluck.Append(("legato", 1f)).ToArray());
+        float rAtt = BassRms(retrig, BF(0.5), BF(0.6)), lAtt = BassRms(legato, BF(0.5), BF(0.6));
+        Check(rAtt > 0.02f, $"Nota Bass mono: an overlapping note attacks afresh (RMS {rAtt:F3})");
+        Check(rAtt > lAtt * 2f, $"Nota Bass legato: an overlapping note slides without a new attack ({rAtt:F3} vs {lAtt:F3})");
+    }
+
+    // v2: the pitch-bend wheel and the output pan.
+    {
+        int Crossings(float[] b, int n)
+        {
+            int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++;
+            return c;
+        }
+        var note = new[] { new NotaNote(45, 0.0, 2.0, 0.9f) };
+        (string, float)[] sine = { ("oscshape", 0f), ("sublevel", 0f), ("filfreq", 1f), ("filenv", 0.5f) };
+        var flat = BassRender(note, 8192, sine);
+        var bent = BassRender(note, 8192, sine.Append(("bend", 1f)).Append(("bendrange", 1f)).ToArray());
+        bool fin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { fin = false; break; }
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        Check(fin && cb > cf * 1.5, $"Nota Bass: pitch bend +12 st raises the pitch ({cf} → {cb} crossings)");
+
+        var left = BassRender(note, 8192, ("outpan", 0f));
+        float l = BassRms(left, 0, 8192, 0), r = BassRms(left, 0, 8192, 1);
+        Check(l > 0.01f && r < l * 0.01f, $"Nota Bass: pan hard left silences the right channel (L {l:F3} / R {r:F3})");
+        var centre = BassRender(note, 8192);
+        float cl = BassRms(centre, 0, 8192, 0), cr = BassRms(centre, 0, 8192, 1);
+        Check(Math.Abs(cl - cr) < 1e-5f && Math.Abs(cl - l) < l * 0.05f, $"Nota Bass: centred pan keeps unity level on both sides ({cl:F3} / {cr:F3})");
+
+        // The mod wheel opens the LFO onto the cutoff: silent at 0, audible when up.
+        (string, float)[] wob = { ("filfreq", 0.35f), ("fillfo", 0.5f), ("lforate", 0.6f), ("filenv", 0.5f) };
+        var down = BassRender(note, 8192, wob);
+        var up = BassRender(note, 8192, wob.Append(("modwheel", 1f)).ToArray());
+        float d = 0; for (int i = 0; i < down.Length; i++) d += Math.Abs(down[i] - up[i]);
+        Check(d / down.Length > 1e-3f, "Nota Bass: the mod wheel moves the cutoff through the LFO");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Bass id, each applies in place.
+    {
+        var bassIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) bassIds.Add(be.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 7).ToList();
+        Check(mine.Count == 25, $"Nota Bass ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !bassIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Bass preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = be.AddBassSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(be, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Bass preset applies in place ({fails} failed)");
+        // Each preset is audible and finite on a short bass line.
+        var quiet = new System.Collections.Generic.List<string>();
+        foreach (var p in mine)
+        {
+            var doc = cat.Document(p.Id)!;
+            var b = BassRender(new[] { new NotaNote(36, 0.0, 0.5, 0.9f), new NotaNote(43, 0.5, 0.5, 0.9f), new NotaNote(36, 1.0, 0.5, 0.9f) },
+                BF(1.6), doc.NamedParams!.Select(kv => (kv.Key, kv.Value)).ToArray());
+            bool ok = true; foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 4f) { ok = false; break; }
+            float rms = BassRms(b, 0, BF(1.6));
+            if (!ok || rms < 0.01f || rms > 0.9f) quiet.Add($"{p.DisplayName} ({rms:F3})");
+        }
+        Check(quiet.Count == 0, $"every Bass preset renders audible and finite{(quiet.Count > 0 ? " — off: " + string.Join(", ", quiet) : "")}");
     }
 }
 

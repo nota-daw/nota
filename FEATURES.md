@@ -281,7 +281,12 @@ and user presets, automation, persistence and cloning.
 - **Nota Pendulum** — a "pendulum" sequencer: swinging balls generate notes, with swing
   curves (Linear/Pendulum/Ease/Bounce), bipolar Rate, a held chord, Scale, Hold, First
   Note, Reset, Humanize and Pan Spread.
-- **Nota Bass** — bass synth, mono (legato with glide) and poly modes.
+- **Nota Bass** — mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
+  pulse width), a sub oscillator (sine/square/tri, −1/−2 oct), a filter (LP/HP/BP/Notch,
+  12/24 dB) with pre-drive, its own envelope, key tracking and LFO, amp envelope, LFO to
+  cutoff and pitch, unison, output drive and pan, glide, Legato, pitch-bend (±2/±5/±12)
+  and mod wheels (the wheel opens the LFO onto the cutoff), VEL→AMP, VEL→FILTER,
+  Mono/Poly. 25 factory presets.
 - **Nota Physical** — physical modelling.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
   (WARM/GLASS/MOOG/GRAIN), **React** (sidechain modulation from another track:

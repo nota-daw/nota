@@ -4,7 +4,9 @@
 // The horizontal slider from the almanac's slider row: a 3px track in the well colour, a
 // brass fill, and a 6×7 Brass Light handle. Bipolar sliders fill from the centre and show
 // a 1px centre mark. An inactive slider (IsDim) loses brass — fill Border strong, handle
-// Ink 5 — but keeps its position, so the number next to it stays meaningful.
+// Ink 5 — but keeps its position, so the number next to it stays meaningful. A
+// modulation-depth slider (Modulation) draws in teal instead of brass, like the teal
+// arc of a modulation knob.
 //
 // It works in normalised 0..1; the caller maps to the parameter (linear, log, stepped).
 // Interaction follows the almanac (§ States · cursors): ns-resize, a vertical drag — up
@@ -28,6 +30,8 @@ internal sealed class SliderTrack : Control
     private static readonly IBrush Fill = NotaPalette.Accent;
     private static readonly IBrush FillDim = NotaPalette.BorderStrong;
     private static readonly IBrush Handle = NotaPalette.AccentBright;
+    private static readonly IBrush ModFill = NotaPalette.Teal;
+    private static readonly IBrush ModHandle = NotaPalette.TealBright;
     private static readonly IBrush HandleDim = NotaPalette.TextTertiary;
     private static readonly IBrush Centre = NotaPalette.BorderStrong;
 
@@ -38,6 +42,9 @@ internal sealed class SliderTrack : Control
     private double _lastY;
 
     public bool Bipolar { get; init; }
+
+    /// <summary>A modulation depth: teal fill and handle instead of brass.</summary>
+    public bool Modulation { get; init; }
 
     /// <summary>Double-click handler (restore the default). Null disables double-click.</summary>
     public Action? Reset { get; init; }
@@ -121,12 +128,12 @@ internal sealed class SliderTrack : Control
         double x = _norm * w;
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
         if (b - a > 0.5)
-            ctx.DrawRectangle(_dim ? FillDim : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+            ctx.DrawRectangle(_dim ? FillDim : Modulation ? ModFill : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
         if (Bipolar)
             ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, cy - 3, 1, 6));
 
         double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
-        ctx.DrawRectangle(_dim ? HandleDim : Handle, null,
+        ctx.DrawRectangle(_dim ? HandleDim : Modulation ? ModHandle : Handle, null,
             new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.ClipValue));
     }
 }

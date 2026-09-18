@@ -113,10 +113,11 @@ internal static class DeviceCardKit
     // Segments, as the almanac draws them: a recessed container, and the chosen segment in
     // solid brass with dark text — a fill, not an outline. 9px inside a device. Two to four
     // choices; more than four is a dropdown. `current` returns the lit index, or −1 when
-    // the value sits between choices. `fill` spreads the segments over the full width.
+    // the value sits between choices. `fill` spreads the segments over the full width;
+    // `padX` narrows each segment's side padding where a strip must fit a tight column.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
     internal static Border Segments(string[] names, Func<int> current, Action<int> pick, out Action sync,
-        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null)
+        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6)
     {
         int n = names.Length;
         var cells = new Border[n];
@@ -132,7 +133,7 @@ internal static class DeviceCardKit
             };
             var c = new Border
             {
-                CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 1), MinWidth = minSegWidth,
+                CornerRadius = NotaRadius.Badge, Padding = new Thickness(padX, 1), MinWidth = minSegWidth,
                 Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = tb,
             };
             c.PointerPressed += (_, e) =>
@@ -188,13 +189,14 @@ internal static class DeviceCardKit
     // Works in normalised 0..1: `norm` reads, `setNorm` writes (the caller maps to the
     // parameter and does its own follow-up); `text` formats the value for display.
     // `trackWidth` fixes the track, otherwise it stretches. An empty label drops the
-    // label column. `sync` repaints from `norm` and skips while the hand is on the slider.
+    // label column. `modulation` draws a modulation depth in teal. `sync` repaints from
+    // `norm` and skips while the hand is on the slider.
     internal static Grid SliderRow(string label, Func<double> norm, Action<double> setNorm, Func<string> text, out Action sync,
         Action? begin = null, Action? end = null, Action? reset = null, bool bipolar = false, Func<bool>? dim = null,
-        double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42)
+        double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42, bool modulation = false)
     {
         Action repaint = () => { };
-        var track = new SliderTrack { Bipolar = bipolar, Reset = reset is null ? null : () => { reset(); repaint(); } };
+        var track = new SliderTrack { Bipolar = bipolar, Modulation = modulation, Reset = reset is null ? null : () => { reset(); repaint(); } };
         if (!double.IsNaN(trackWidth)) track.Width = trackWidth;
         var val = new TextBlock
         {
