@@ -1956,7 +1956,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 43, $"Nota Operator exposes 43 params (got {pc})");
+    Check(pc == 48, $"Nota Operator exposes 48 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -1969,12 +1969,15 @@ Console.WriteLine("-- Nota Operator --");
     Check(idsOk && algoI >= 0, "params have ids + names; algo present");
     Check(opIds.Contains("fmdepth") && opIds.Contains("glide") && opIds.Contains("veltofm")
           && opIds.Contains("keylevel") && opIds.Contains("mono"), "mockup-3g params present (fmdepth/glide/veltofm/keylevel/mono)");
+    Check(opIds.Contains("bend") && opIds.Contains("bendrange") && opIds.Contains("modwheel")
+          && opIds.Contains("filkeytrk") && opIds.Contains("veltolevel"),
+          "wheel + tracking params present (bend/bendrange/modwheel/filkeytrk/veltolevel)");
 
     // State round-trips to another track.
     int dlvl = -1; for (int i = 0; i < pc; i++) if (oe.PluginParamId(t, -1, i) == "dlevel") dlvl = i;
     oe.PluginParamSet(t, -1, dlvl, 0.66f);
     var state = oe.GetPluginState(t, -1);
-    Check(state.Length >= 43 * 4, $"operator state serialized ({state.Length} bytes)");
+    Check(state.Length >= 48 * 4, $"operator state serialized ({state.Length} bytes)");
     int t2 = oe.AddOperatorSynthTrack();
     oe.SetPluginState(t2, -1, state);
     Check(Math.Abs(oe.PluginParamGet(t2, -1, dlvl) - 0.66f) < 1e-4, "operator state restores params on another track");
@@ -2022,6 +2025,63 @@ Console.WriteLine("-- Nota Operator --");
         oe.Seek(0.0); oe.Play(); oe.RenderOffline(mbuf, 16384); oe.StopTransport();
         bool fin = true; foreach (var s in mbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
         Check(fin && Rms(mbuf, 16384) > 0.001f, "Operator mono+glide legato renders audible + finite");
+    }
+
+    // The two performance wheels and the new tracking amounts: a bent, wheel-open,
+    // key-tracked voice still renders finite and audible, and pitch bend really retunes.
+    {
+        int tw = oe.AddOperatorSynthTrack();
+        int Pi(string id) { for (int i = 0; i < oe.PluginParamCount(tw, -1); i++) if (oe.PluginParamId(tw, -1, i) == id) return i; return -1; }
+        oe.AddMidiClip(tw, 0.0, 4.0);
+        oe.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.7f) });
+        float Peak(float[] b, int n) { float m = 0; for (int i = 0; i < n * 2; i++) m = Math.Max(m, Math.Abs(b[i])); return m; }
+
+        var wbuf = new float[8192 * 2];
+        oe.PluginParamSet(tw, -1, Pi("bend"), 1f);          // wheel fully up
+        oe.PluginParamSet(tw, -1, Pi("bendrange"), 1f);     // ±12 semitones
+        oe.PluginParamSet(tw, -1, Pi("modwheel"), 1f);
+        oe.PluginParamSet(tw, -1, Pi("filkeytrk"), 1f);
+        oe.Seek(0.0); oe.Play(); oe.RenderOffline(wbuf, 8192); oe.StopTransport();
+        bool wfin = true; foreach (var s in wbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { wfin = false; break; }
+        Check(wfin && Rms(wbuf, 8192) > 0.001f, "Operator bend + mod wheel + key track render audible + finite");
+
+        // Bent up an octave, the analysis fundamental doubles.
+        var sbend = new float[32];
+        oe.InstrumentScope(tw, sbend);
+        Check(sbend.Length == 32, "Operator scope still reports 32 partials while bent");
+
+        // Vel → Level at 0 flattens dynamics: the same soft note comes out far louder than
+        // it does at the classic full amount. Each case gets its own engine so a voice left
+        // sounding by the first render cannot leak into the second.
+        float SoftPeak(float velToLevel)
+        {
+            using var ve = new NotaEngine();
+            ve.SetBpm(120); ve.SetTimeSignature(4, 4);
+            int tv = ve.AddOperatorSynthTrack();
+            for (int i = 0; i < ve.PluginParamCount(tv, -1); i++)
+                if (ve.PluginParamId(tv, -1, i) == "veltolevel") ve.PluginParamSet(tv, -1, i, velToLevel);
+            ve.AddMidiClip(tv, 0.0, 4.0);
+            ve.SetClipNotes(tv, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.15f) });
+            var b = new float[8192 * 2];
+            ve.Seek(0.0); ve.Play(); ve.RenderOffline(b, 8192); ve.StopTransport();
+            return Peak(b, 8192);
+        }
+        float flat = SoftPeak(0f), classic = SoftPeak(1f);
+        Check(flat > classic * 2f, $"Operator vel → level off lifts a soft note (flat {flat:F3} vs classic {classic:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Operator id, each applies in place.
+    {
+        var opIdSet = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < oe.PluginParamCount(t, -1); i++) opIdSet.Add(oe.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 9).ToList();
+        Check(mine.Count == 25, $"Nota Operator ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !opIdSet.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Operator preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = oe.AddOperatorSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(oe, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Operator preset applies in place ({fails} failed)");
     }
 }
 

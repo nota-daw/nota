@@ -267,8 +267,10 @@ and user presets, automation, persistence and cloning.
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and unison, two filters with routing, two
   envelopes, two LFOs, an 8×7 mod matrix, 4 macros, built-in drive/chorus/reverb,
   Mono/Poly.
-- **Nota Operator** — FM synth, 4 operators, 11 algorithms (with interactive diagrams and
-  drag-to-reroute), spectrum display, VEL→FM, Glide, Mono.
+- **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, fine detune, level and
+  their own ADSR each), 11 algorithms with interactive diagrams and drag-to-reroute,
+  feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard tracking, pitch-bend
+  (±2/±5/±12) and modulation wheels, VEL→FM, VEL→LEVEL, KEY→LEVEL, Glide, Mono.
 - **Nota Pendulum** — a "pendulum" sequencer: swinging balls generate notes, with swing
   curves (Linear/Pendulum/Ease/Bounce), bipolar Rate, a held chord, Scale, Hold, First
   Note, Reset, Humanize and Pan Spread.

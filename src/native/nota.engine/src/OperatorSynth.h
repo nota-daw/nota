@@ -6,7 +6,9 @@
 // coarse/fine frequency ratio, output level, waveform and ADSR envelope. Eight feed-
 // forward algorithms route who modulates whom (chains, stacks, parallel/additive), with
 // self-feedback on operator A. The summed carriers pass a subtractive TPT filter
-// (LP/HP/BP) before the master volume — FM timbre + classic filter sculpting in one.
+// (LP/HP/BP, with optional keyboard tracking) before the master volume — FM timbre +
+// classic filter sculpting in one. Two performance wheels ride on top: pitch bend (range
+// 1..12 semitones) and a mod wheel on the modulation index.
 //
 //   A ─┐            (per algorithm) modulators bend the phase of their target;
 //   B ─┼─▶ [algo] ─▶ carriers ─▶ filter ─▶ volume ─▶ out
@@ -49,6 +51,12 @@ public:
         VelToFm,    // velocity → FM depth amount (0 = off, classic FM dynamics)
         KeyLevel,   // keyboard tracking of modulator level (0 = off; higher notes → less FM)
         Mono,       // voice mode: <0.5 poly, ≥0.5 monophonic (legato with glide)
+        // --- appended for the almanac rework (old projects default these to neutral) ---
+        Bend,       // pitch-bend wheel, 0.5 = centre (the card's left Wheels rail)
+        BendRange,  // bend range in semitones: 1 + v*11, rounded (default ±2 st)
+        ModWheel,   // mod wheel 0..1 — the classic FM hand control: more modulation index
+        FilKeyTrk,  // filter cutoff keyboard tracking: 0 / ½ / 1 octave per octave
+        VelToLevel, // velocity → output level (1 = the classic behaviour, 0 = flat)
         kNumParams
     };
     static constexpr int kNumAlgos = 11;
@@ -73,6 +81,10 @@ public:
         set(Volume, 0.8f);
         set(FmDepth, 0.5f);   // ×1 — identical to the pre-macro fixed depth
         set(Glide, 0.0f); set(VelToFm, 0.0f); set(KeyLevel, 0.0f); set(Mono, 0.0f);
+        set(Bend, 0.5f);                 // centred
+        set(BendRange, 1.0f / 11.0f);    // ±2 semitones
+        set(ModWheel, 0.0f); set(FilKeyTrk, 0.0f);
+        set(VelToLevel, 1.0f);           // velocity scales the voice, as it always did
     }
 
     int32_t kind() const override { return 9; }
@@ -93,7 +105,8 @@ public:
             "ccoarse", "cfine", "clevel", "cwave", "catk", "cdec", "csus", "crel",
             "dcoarse", "dfine", "dlevel", "dwave", "datk", "ddec", "dsus", "drel",
             "filtype", "filfreq", "filreso", "volume",
-            "fmdepth", "glide", "veltofm", "keylevel", "mono" };
+            "fmdepth", "glide", "veltofm", "keylevel", "mono",
+            "bend", "bendrange", "modwheel", "filkeytrk", "veltolevel" };
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
@@ -104,7 +117,8 @@ public:
             "C Coarse", "C Fine", "C Level", "C Wave", "C Attack", "C Decay", "C Sustain", "C Release",
             "D Coarse", "D Fine", "D Level", "D Wave", "D Attack", "D Decay", "D Sustain", "D Release",
             "Filter Type", "Filter Freq", "Filter Reso", "Volume",
-            "FM Depth", "Glide", "Vel to FM", "Key to Level", "Mono" };
+            "FM Depth", "Glide", "Vel to FM", "Key to Level", "Mono",
+            "Pitch Bend", "Bend Range", "Mod Wheel", "Filter Key Track", "Vel to Level" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override {
@@ -170,9 +184,15 @@ public:
         const int   algo = std::clamp((int)std::lround(get(Algo) * (kNumAlgos - 1.0f)), 0, kNumAlgos - 1);
         const int8_t* tgt = kAlgo[algo];
         const double fb  = get(Feedback) * 0.9;
-        const double fmMul  = get(FmDepth) * 2.0;   // 0.5 ⇒ ×1 (neutral, matches the old fixed depth)
+        // Mod wheel is the player's hand on the modulation index: fully up doubles it.
+        const double fmMul  = get(FmDepth) * 2.0 * (1.0 + get(ModWheel));   // 0.5, wheel down ⇒ ×1
         const double velToFm = get(VelToFm);
         const double keyLevel = get(KeyLevel);
+        const double velToLevel = get(VelToLevel);
+        // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
+        const double bendSemis = (get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0);
+        const double bendMul = std::exp2(bendSemis / 12.0);
+        const double keyTrk = get(FilKeyTrk);
         double ratio[4], fineMul[4], level[4], atk[4], dec[4], sus[4], rel[4]; int wave[4];
         for (int o = 0; o < 4; ++o) {
             const int base = ACoarse + o * 8;
@@ -194,17 +214,25 @@ public:
         const double glideT = get(Glide) > 0.0f ? expMap(get(Glide), 0.005, 1.2) : 0.0;
         const double gCoef = glideT > 0.0 ? (1.0 - std::exp(-1.0 / (glideT * sampleRate_))) : 1.0;
 
-        // Filter coeffs (shared L/R per voice — recomputed per block, static cutoff).
-        const double fg = std::tan(kPi * std::min(fbase, sampleRate_ * 0.49) * invSr);
-        const double fa1 = 1.0 / (1.0 + fg * (fg + fk));
+        // Filter coeffs, recomputed per block. With key tracking the cutoff follows the
+        // note, so each voice gets its own pair; without it they all land on the same one.
+        double fgV[kVoices], fa1V[kVoices];
+        for (int vi = 0; vi < kVoices; ++vi) {
+            const double cut = keyTrk > 0.0 ? fbase * std::exp2(keyTrk * (voices_[vi].pitch - 60) / 12.0) : fbase;
+            fgV[vi] = std::tan(kPi * std::clamp(cut, 20.0, sampleRate_ * 0.49) * invSr);
+            fa1V[vi] = 1.0 / (1.0 + fgV[vi] * (fgV[vi] + fk));
+        }
 
         double f0 = 0.0;   // frequency of the freshest active voice → spectrum base + label
         for (int32_t i = 0; i < frames; ++i) {
             float mono = 0.0f;
-            for (auto& v : voices_) {
+            for (int vi = 0; vi < kVoices; ++vi) {
+                Voice& v = voices_[vi];
                 if (!v.active) continue;
+                const double fg = fgV[vi], fa1 = fa1V[vi];
                 // Advance glide toward the target pitch.
                 v.curFreq += (v.freq - v.curFreq) * gCoef;
+                const double pitchHz = v.curFreq * bendMul;
                 // Velocity → FM depth and keyboard → modulator level (timbre controls).
                 const double velFac = 1.0 - velToFm * (1.0 - (double)v.vel);
                 const double keyFac = keyLevel > 0.0 ? std::exp2(-keyLevel * (v.pitch - 60) / 24.0) : 1.0;
@@ -218,7 +246,7 @@ public:
                     if (o == 0 && fb > 0.0) pmod += fb * v.fbLast;
                     const double s = waveform(wave[o], v.phase[o] + pmod) * level[o] * v.env[o];
                     opOut[o] = s;
-                    v.phase[o] += v.curFreq * ratio[o] * fineMul[o] * invSr;
+                    v.phase[o] += pitchHz * ratio[o] * fineMul[o] * invSr;
                     if (v.phase[o] >= 1.0) v.phase[o] -= std::floor(v.phase[o]);
                     const int t = tgt[o];
                     if (t < 4) modIn[t] += s * modScale;
@@ -226,7 +254,7 @@ public:
                 }
                 v.fbLast = opOut[0];
                 if (!anyOn) { v.active = false; continue; }
-                if (f0 <= 0.0) f0 = v.curFreq;
+                if (f0 <= 0.0) f0 = pitchHz;
                 double y = nc > 0 ? carrier / std::sqrt((double)nc) : 0.0;
                 // Subtractive filter (TPT SVF).
                 const double v3 = y - v.s2;
@@ -234,7 +262,7 @@ public:
                 const double v2 = v.s2 + fg * v1;
                 v.s1 = 2.0 * v1 - v.s1; v.s2 = 2.0 * v2 - v.s2;
                 double fout = ftype == 1 ? (y - fk * v1 - v2) : ftype == 2 ? v1 : v2;   // HP / BP / LP
-                mono += (float)(fout * v.vel);
+                mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)));
             }
             // Spectrum-analysis tap (pre-master timbre signal).
             ring_[ringW_ & (kRing - 1)] = mono;

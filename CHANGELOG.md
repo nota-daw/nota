@@ -19,6 +19,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Operator grew two performance wheels and keyboard tracking, and its editor is now
+  the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
+  semitones) and a **mod wheel** on the modulation index sit in a rail that stays on screen
+  on every tab; the filter gains **keyboard tracking** (0 / ½ / 1 octave per octave) and
+  the amplifier a **Vel → Level** amount. The card lays the synth out as **Operators ·
+  Algorithm · Filter · Amp** tabs — the four operators as a table that names each one's
+  role in words, the eleven topologies as sketches over a routing diagram you can still
+  drag to re-route, and the filter response beside the live harmonic spectrum — over a
+  186 px rail that switches between **Global** (FM depth, feedback, tone, glide, bend
+  range, voice mode, volume and the track's meter) and **Env** (one operator's ADSR, drawn
+  and draggable, with key and velocity tracking), and a status strip that reads the patch
+  back in words. Projects saved before this load unchanged: the existing parameters keep
+  their index and the new ones start at values that sound exactly as before.
+- **Nota Operator ships 25 factory presets** (was 6) — keys, bells and mallets, basses,
+  leads, pads and percussion, including the six that existed before under their old names.
 - **Nota Synth grew an oscillator and a voice section, and its editor is now three tabs.**
   The oscillator gains **pulse width** (on the square), **detune**, **octave** and a
   **unison** stack of 1 / 2 / 4 / 7 voices with a stereo **spread**; the filter gains a
@@ -189,6 +204,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   message past the half-way point, so sweeping a mapped CC across it made the target
   flutter instead of toggling once. It now fires on the crossing only — which is also what
   makes a mapped gamepad trigger usable.
+- The filter-response graph shared by Nota Volt, Aurora, Bass and Operator labelled its
+  frequency axis `20 · 100 · 1k · 10k · 20k` regardless of where those points actually
+  fell, and read the cutoff off Volt's own map on every instrument. It now takes the
+  instrument's real cutoff range, so both the scale and the readout say what the engine
+  does.
 
 ## [0.38.0] — 2026-09-12
 

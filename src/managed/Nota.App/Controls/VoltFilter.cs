@@ -29,6 +29,11 @@ namespace Nota.App;
         private string _title = "FILTER 1";
         private bool _drag;
 
+        /// <summary>The instrument's own cutoff map, lo → hi in Hz (Volt's is the default).
+        /// The readout and the frequency scale both come from it, so the graph says what the
+        /// engine actually does.</summary>
+        public (double Lo, double Hi) FreqRange { get; set; } = (20.0, 18000.0);
+
         public VoltFilter(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
         public void Target(string title, (int, string) freq, (int, string) reso, int type)
         { _title = title; _freq = freq; _reso = reso; _type = type; InvalidateVisual(); }
@@ -132,10 +137,11 @@ namespace Nota.App;
             void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
             Lbl("+12", x0 + 1, top - 1, AxisB);
             Lbl("−48\u2009dB", x0 + 1, bot - 10, AxisB);
-            string[] fq = { "20", "100", "1k", "10k", "20k" };
-            for (int i = 0; i < 5; i++) { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(fq[i], Math.Clamp(lx - 6, x0, x1 - 18), bot + 2, AxisB); }
-            double hz = 20.0 * Math.Pow(900.0, cut);
+            double HzAt(double v) => FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, v);
+            for (int i = 0; i < 5; i++)
+            { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(NotaNum.Hz(HzAt(i / 4.0)), Math.Clamp(lx - 6, x0, x1 - 22), bot + 2, AxisB); }
+            double hz = HzAt(cut);
             Glyph.Draw(ctx, GlyphKind.Record, new Rect(x1 - 52, top + 2, 5, 5), AccentBright);
-            Lbl(hz >= 1000 ? $"{hz / 1000.0:0.0}k" : $"{hz:0}\u2009Hz", x1 - 45, top - 1, AccentBright);
+            Lbl(NotaNum.Hz(hz), x1 - 45, top - 1, AccentBright);
         }
     }

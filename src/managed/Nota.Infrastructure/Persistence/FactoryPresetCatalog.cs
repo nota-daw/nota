@@ -145,27 +145,113 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("pendulum", 8, "Down Runs",     ("balls", 0.4f), ("rate", 0.75f), ("sync", 1f), ("division", 0.25f), ("motion", 0f), ("quantize", 1f), ("chordsort", 1f), ("spread", 0.2f), ("notelen", 0.4f), ("tone", 0.48f), ("attack", 0.1f), ("decay", 0.4f), ("release", 0.4f), ("detune", 0.3f), ("volume", 0.8f), ("panspread", 0.3f));
         Inst("pendulum", 8, "Glass Bounce",  ("balls", 0.8f), ("rate", 0.8f), ("sync", 1f), ("division", 0.5f), ("motion", 1f), ("quantize", 0.5f), ("spread", 0.35f), ("notelen", 0.2f), ("tone", 0.7f), ("attack", 0.02f), ("decay", 0.35f), ("release", 0.35f), ("detune", 0.2f), ("volume", 0.8f), ("wave", 0.25f), ("bright", 0.8f), ("fm", 0.15f), ("panspread", 0.6f), ("humanize", 0.25f));
 
-        // ---- Nota Operator (kind 9) — 4-op FM. Coarse ≈ ratio (0.0667≈1:1); Level = carrier
-        //      amp or modulator index; Algo 0..1 = 11 algorithms (index = round(v*10)); Wave 0 Sine/.33 Tri/.67 Saw/1 Sqr.
-        Inst("operator", 9, "E-Piano",   ("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.4f), ("cdec", 0.5f),
-                                          ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.55f), ("dsus", 0.55f), ("drel", 0.35f),
-                                          ("filfreq", 0.85f), ("volume", 0.8f));
-        Inst("operator", 9, "FM Bell",   ("algo", 0.4f),  ("ccoarse", 0.2f), ("clevel", 0.7f), ("cdec", 0.3f),
-                                          ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.25f), ("dsus", 0f), ("drel", 0.5f),
-                                          ("feedback", 0.2f), ("filfreq", 1f), ("volume", 0.78f));
-        Inst("operator", 9, "FM Bass",   ("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.6f), ("cdec", 0.3f), ("csus", 0.2f),
-                                          ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.4f), ("dsus", 0.7f), ("drel", 0.2f),
-                                          ("mono", 1f), ("glide", 0.35f), ("filfreq", 0.5f), ("filreso", 0.2f), ("volume", 0.85f));
-        Inst("operator", 9, "Bright Lead",("algo", 0.3f), ("bcoarse", 0.133f), ("blevel", 0.5f), ("ccoarse", 0.0667f), ("clevel", 0.55f),
-                                          ("dcoarse", 0.0667f), ("dlevel", 1f), ("dsus", 0.8f), ("drel", 0.25f),
-                                          ("veltofm", 0.8f), ("feedback", 0.35f), ("filfreq", 0.9f), ("volume", 0.78f));
-        Inst("operator", 9, "Glass Pad", ("algo", 1f),    ("acoarse", 0.2f), ("alevel", 0.4f), ("bcoarse", 0.133f), ("blevel", 0.4f),
-                                          ("ccoarse", 0.0667f), ("clevel", 0.6f), ("dcoarse", 0.0667f), ("dlevel", 0.7f),
-                                          ("aatk", 0.4f), ("batk", 0.4f), ("catk", 0.35f), ("datk", 0.4f), ("dsus", 0.8f), ("drel", 0.6f),
-                                          ("filfreq", 0.75f), ("volume", 0.75f));
-        Inst("operator", 9, "Clav",      ("algo", 0f),    ("ccoarse", 0.133f), ("clevel", 0.65f), ("cdec", 0.35f), ("csus", 0.1f),
-                                          ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.3f), ("dsus", 0.2f), ("drel", 0.2f),
-                                          ("feedback", 0.15f), ("filfreq", 0.8f), ("volume", 0.82f));
+        // ---- Nota Operator (kind 9) — 4-op FM, 25 patches across keys, bells, basses,
+        //      leads, pads and percussion. Coarse = ratio index / 15 (0 ×0.5 · .0667 ×1 ·
+        //      .1333 ×2 · .2 ×3 · .2667 ×4 · .3333 ×5 · .4 ×6 · .4667 ×7 · .5333 ×8 ·
+        //      .9333 ×14); Fine is neutral at 0.5. Algo 0..1 = the 11 topologies
+        //      (index = round(v*10)); Wave 0 Sine / .33 Tri / .67 Saw / 1 Sqr. A modulator's
+        //      Level is its FM index, a carrier's is its amplitude.
+        // Keys
+        Inst("operator", 9, "E-Piano",      ("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.4f), ("cdec", 0.5f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.55f), ("dsus", 0.55f), ("drel", 0.35f),
+                                             ("filfreq", 0.85f), ("keylevel", 0.25f), ("volume", 0.8f));
+        Inst("operator", 9, "Tine Keys",    ("algo", 0.2f),  ("bcoarse", 0.0667f), ("blevel", 0.5f), ("bdec", 0.45f), ("bsus", 0.1f),
+                                             ("ccoarse", 0.9333f), ("clevel", 0.12f), ("cdec", 0.12f), ("csus", 0f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.6f), ("dsus", 0.35f), ("drel", 0.4f),
+                                             ("veltofm", 0.6f), ("keylevel", 0.3f), ("filfreq", 0.88f), ("volume", 0.8f));
+        Inst("operator", 9, "Wurly",        ("algo", 0f),    ("ccoarse", 0.2f), ("clevel", 0.5f), ("cdec", 0.28f), ("csus", 0.05f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.55f), ("dsus", 0.3f), ("drel", 0.3f),
+                                             ("feedback", 0.12f), ("veltofm", 0.7f), ("filfreq", 0.72f), ("volume", 0.82f));
+        Inst("operator", 9, "Clav",         ("algo", 0f),    ("ccoarse", 0.133f), ("clevel", 0.65f), ("cdec", 0.35f), ("csus", 0.1f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.3f), ("dsus", 0.2f), ("drel", 0.2f),
+                                             ("feedback", 0.15f), ("filfreq", 0.8f), ("filkeytrk", 0.5f), ("volume", 0.82f));
+        Inst("operator", 9, "Harpsichord",  ("algo", 0f),    ("ccoarse", 0.1333f), ("clevel", 0.55f), ("cdec", 0.25f), ("csus", 0.05f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.35f), ("dsus", 0f), ("drel", 0.18f),
+                                             ("feedback", 0.1f), ("veltolevel", 0.3f), ("filfreq", 0.9f), ("volume", 0.8f));
+        // Bells and mallets
+        Inst("operator", 9, "FM Bell",      ("algo", 0.4f),  ("ccoarse", 0.2f), ("clevel", 0.7f), ("cdec", 0.3f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.25f), ("dsus", 0f), ("drel", 0.5f),
+                                             ("feedback", 0.2f), ("filfreq", 1f), ("volume", 0.78f));
+        Inst("operator", 9, "Tubular Bell", ("algo", 0.3f),  ("acoarse", 0.2667f), ("alevel", 0.3f), ("adec", 0.4f), ("asus", 0f),
+                                             ("bcoarse", 0.4667f), ("blevel", 0.5f), ("bdec", 0.35f), ("bsus", 0f),
+                                             ("ccoarse", 0.1333f), ("clevel", 0.4f), ("cdec", 0.85f), ("csus", 0f), ("crel", 0.7f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 0.9f), ("ddec", 0.9f), ("dsus", 0f), ("drel", 0.75f),
+                                             ("filfreq", 1f), ("volume", 0.74f));
+        Inst("operator", 9, "Music Box",    ("algo", 0.5f),  ("acoarse", 0.9333f), ("alevel", 0.25f), ("adec", 0.12f), ("asus", 0f),
+                                             ("bcoarse", 0.0667f), ("blevel", 0.55f), ("bdec", 0.6f), ("bsus", 0f), ("brel", 0.5f),
+                                             ("ccoarse", 0.2f), ("clevel", 0.2f), ("cdec", 0.15f), ("csus", 0f),
+                                             ("dcoarse", 0.1333f), ("dlevel", 0.7f), ("ddec", 0.65f), ("dsus", 0f), ("drel", 0.55f),
+                                             ("filfreq", 1f), ("volume", 0.72f));
+        Inst("operator", 9, "Marimba",      ("algo", 0f),    ("ccoarse", 0.2667f), ("clevel", 0.45f), ("cdec", 0.14f), ("csus", 0f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.42f), ("dsus", 0f), ("drel", 0.3f),
+                                             ("veltofm", 0.5f), ("filfreq", 0.8f), ("volume", 0.82f));
+        Inst("operator", 9, "Kalimba",      ("algo", 0f),    ("ccoarse", 0.4f), ("clevel", 0.35f), ("cdec", 0.1f), ("csus", 0f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.38f), ("dsus", 0f), ("drel", 0.3f),
+                                             ("keylevel", 0.4f), ("filfreq", 0.85f), ("volume", 0.8f));
+        // Basses
+        Inst("operator", 9, "FM Bass",      ("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.6f), ("cdec", 0.3f), ("csus", 0.2f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.4f), ("dsus", 0.7f), ("drel", 0.2f),
+                                             ("mono", 1f), ("glide", 0.35f), ("filfreq", 0.5f), ("filreso", 0.2f), ("volume", 0.85f));
+        Inst("operator", 9, "Slap Bass",    ("algo", 0.2f),  ("bcoarse", 0.0667f), ("blevel", 0.55f), ("bdec", 0.3f), ("bsus", 0.15f),
+                                             ("ccoarse", 0.4667f), ("clevel", 0.2f), ("cdec", 0.1f), ("csus", 0f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.4f), ("dsus", 0.4f), ("drel", 0.2f),
+                                             ("mono", 1f), ("veltofm", 0.8f), ("filfreq", 0.6f), ("filreso", 0.2f), ("volume", 0.85f));
+        Inst("operator", 9, "Sub Sine",     ("algo", 1f),    ("alevel", 0f), ("blevel", 0f), ("clevel", 0f),
+                                             ("dcoarse", 0f), ("dlevel", 1f), ("ddec", 0.5f), ("dsus", 0.85f), ("drel", 0.25f),
+                                             ("mono", 1f), ("glide", 0.2f), ("filfreq", 0.4f), ("volume", 0.88f));
+        Inst("operator", 9, "Growl Bass",   ("algo", 0.4f),  ("acoarse", 0.0667f), ("alevel", 0.35f), ("adec", 0.4f), ("asus", 0.3f),
+                                             ("bcoarse", 0.1333f), ("blevel", 0.3f), ("bdec", 0.35f), ("bsus", 0.2f),
+                                             ("ccoarse", 0.2f), ("clevel", 0.25f), ("cdec", 0.3f), ("csus", 0.15f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("ddec", 0.45f), ("dsus", 0.6f), ("drel", 0.25f),
+                                             ("feedback", 0.3f), ("mono", 1f), ("filfreq", 0.5f), ("filreso", 0.3f), ("volume", 0.84f));
+        // Leads
+        Inst("operator", 9, "Bright Lead",  ("algo", 0.3f),  ("bcoarse", 0.133f), ("blevel", 0.5f), ("ccoarse", 0.0667f), ("clevel", 0.55f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("dsus", 0.8f), ("drel", 0.25f),
+                                             ("veltofm", 0.8f), ("feedback", 0.35f), ("filfreq", 0.9f), ("volume", 0.78f));
+        Inst("operator", 9, "Reed Lead",    ("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.5f), ("catk", 0.12f), ("cdec", 0.4f), ("csus", 0.5f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("datk", 0.06f), ("dsus", 0.85f), ("drel", 0.25f),
+                                             ("mono", 1f), ("glide", 0.12f), ("veltofm", 0.5f), ("bendrange", 0.0909f),
+                                             ("filfreq", 0.78f), ("volume", 0.8f));
+        Inst("operator", 9, "Metal Lead",   ("algo", 0.4f),  ("acoarse", 0.5333f), ("alevel", 0.22f), ("adec", 0.5f), ("asus", 0.6f),
+                                             ("bcoarse", 0.2f), ("blevel", 0.3f), ("bdec", 0.45f), ("bsus", 0.5f),
+                                             ("ccoarse", 0.1333f), ("clevel", 0.35f), ("cdec", 0.45f), ("csus", 0.6f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("dsus", 0.8f), ("drel", 0.25f),
+                                             ("feedback", 0.4f), ("mono", 1f), ("bendrange", 0.3636f), ("filfreq", 0.85f), ("volume", 0.76f));
+        Inst("operator", 9, "Whistle",      ("algo", 1f),    ("alevel", 0f), ("blevel", 0f), ("clevel", 0f),
+                                             ("dcoarse", 0.1333f), ("dlevel", 1f), ("datk", 0.25f), ("ddec", 0.5f), ("dsus", 0.9f), ("drel", 0.3f),
+                                             ("mono", 1f), ("glide", 0.15f), ("filfreq", 0.95f), ("volume", 0.74f));
+        // Pads and strings
+        Inst("operator", 9, "Glass Pad",    ("algo", 1f),    ("acoarse", 0.2f), ("alevel", 0.4f), ("bcoarse", 0.133f), ("blevel", 0.4f),
+                                             ("ccoarse", 0.0667f), ("clevel", 0.6f), ("dcoarse", 0.0667f), ("dlevel", 0.7f),
+                                             ("aatk", 0.4f), ("batk", 0.4f), ("catk", 0.35f), ("datk", 0.4f), ("dsus", 0.8f), ("drel", 0.6f),
+                                             ("filfreq", 0.75f), ("volume", 0.75f));
+        Inst("operator", 9, "Air Pad",      ("algo", 0.9f),  ("acoarse", 0.4667f), ("alevel", 0.18f), ("aatk", 0.5f), ("adec", 0.6f), ("asus", 0.5f), ("arel", 0.7f),
+                                             ("bcoarse", 0.0667f), ("blevel", 0.5f), ("batk", 0.55f), ("bsus", 0.85f), ("brel", 0.75f),
+                                             ("ccoarse", 0.1333f), ("clevel", 0.4f), ("catk", 0.5f), ("csus", 0.8f), ("crel", 0.72f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 0.7f), ("datk", 0.6f), ("dsus", 0.9f), ("drel", 0.8f),
+                                             ("filfreq", 0.8f), ("filkeytrk", 0.5f), ("volume", 0.72f));
+        Inst("operator", 9, "Choir Pad",    ("algo", 0.6f),  ("acoarse", 0.0667f), ("alevel", 0.2f), ("aatk", 0.45f), ("asus", 0.6f), ("arel", 0.6f),
+                                             ("bcoarse", 0.0667f), ("bfine", 0.56f), ("blevel", 0.5f), ("batk", 0.5f), ("bsus", 0.85f), ("brel", 0.7f),
+                                             ("ccoarse", 0.1333f), ("clevel", 0.35f), ("catk", 0.5f), ("csus", 0.8f), ("crel", 0.7f),
+                                             ("dcoarse", 0.0667f), ("dfine", 0.45f), ("dlevel", 0.8f), ("datk", 0.5f), ("dsus", 0.9f), ("drel", 0.75f),
+                                             ("filfreq", 0.7f), ("volume", 0.74f));
+        Inst("operator", 9, "Warm Strings", ("algo", 0.5f),  ("acoarse", 0.0667f), ("alevel", 0.3f), ("aatk", 0.35f), ("asus", 0.6f), ("arel", 0.6f),
+                                             ("bcoarse", 0.0667f), ("bfine", 0.54f), ("blevel", 0.7f), ("batk", 0.4f), ("bsus", 0.9f), ("brel", 0.7f),
+                                             ("ccoarse", 0.0667f), ("clevel", 0.28f), ("catk", 0.35f), ("csus", 0.6f), ("crel", 0.6f),
+                                             ("dcoarse", 0.0667f), ("dfine", 0.46f), ("dlevel", 0.7f), ("datk", 0.42f), ("dsus", 0.9f), ("drel", 0.72f),
+                                             ("filfreq", 0.66f), ("volume", 0.72f));
+        // Brass, organ, percussion
+        Inst("operator", 9, "Brass Section",("algo", 0f),    ("ccoarse", 0.0667f), ("clevel", 0.6f), ("catk", 0.2f), ("cdec", 0.4f), ("csus", 0.55f),
+                                             ("dcoarse", 0.0667f), ("dlevel", 1f), ("datk", 0.14f), ("dsus", 0.85f), ("drel", 0.3f),
+                                             ("veltofm", 0.85f), ("filfreq", 0.7f), ("volume", 0.8f));
+        Inst("operator", 9, "Drawbar Organ",("algo", 1f),    ("acoarse", 0.0667f), ("alevel", 0.5f), ("aatk", 0f), ("adec", 0f), ("asus", 1f), ("arel", 0.12f),
+                                             ("bcoarse", 0.1333f), ("blevel", 0.35f), ("batk", 0f), ("bdec", 0f), ("bsus", 1f), ("brel", 0.12f),
+                                             ("ccoarse", 0.2f), ("clevel", 0.22f), ("catk", 0f), ("cdec", 0f), ("csus", 1f), ("crel", 0.12f),
+                                             ("dcoarse", 0.2667f), ("dlevel", 0.6f), ("datk", 0f), ("ddec", 0f), ("dsus", 1f), ("drel", 0.12f),
+                                             ("veltolevel", 0.2f), ("filfreq", 0.8f), ("volume", 0.76f));
+        Inst("operator", 9, "Log Drum",     ("algo", 0f),    ("ccoarse", 0.1333f), ("clevel", 0.6f), ("cdec", 0.08f), ("csus", 0f),
+                                             ("dcoarse", 0f), ("dlevel", 1f), ("ddec", 0.3f), ("dsus", 0f), ("drel", 0.22f),
+                                             ("veltofm", 0.6f), ("filfreq", 0.55f), ("volume", 0.85f));
 
         // ---- Nota Grain (kind 10) — granular. Scan Mode 0 Scan/.5 Freeze/1 Key; Coarse 0.5 = 0 st
         //      (±24); presets shape the built-in default sample (drop your own to replace).
