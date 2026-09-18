@@ -19,6 +19,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Flux's editor is now the almanac's card, and the vector's worlds carry their own
+  unison.** The card shrinks from 900 to **700 × 260** and reads left to right: the
+  **Vector** field (the four worlds in their graph colours, the vector as a brass dot, and a
+  dashed teal ring where Motion and React pull it), **React** (a source picker that lists
+  the tracks when it opens, a scope of what Flux hears — envelope, transients and tilt —
+  beside the reaction's own level, LISTEN and the four targets) and **Macros** (Age, Motion,
+  Filter, Env and Space, then **glide, tune and gain**, which had no control on the card
+  before). A status strip reads the patch back in words: the blend of the four worlds, or
+  the source, target, **transients per bar** and where the vector is being pulled. FILTER
+  now shows the cutoff the engine actually uses at the current vector, and double-clicking
+  the field puts the vector back on its default. The "adaptive unison" the card promised is
+  real now: each world detunes a twin of the oscillator by its own amount (Warm the most,
+  Moog not at all), a little wider with Age. Projects load unchanged — no parameter moved.
+- **Nota Flux ships 25 factory presets** (was 6) — pads, keys and plucks, basses, leads and
+  a set of reactive patches meant for a drum or bass source, including the six that existed
+  before under their old names.
 - **The Nota Drum Rack's editor is now the almanac's card, with a kit picker in its header.**
   The header's **‹ Kit ⌄ ›** picker loads any factory kit into the rack in place (it
   replaces the pads) and steps through them; a rack names its kit even after a project is
@@ -279,6 +295,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tokens its own comments named.
 
 ### Fixed
+- **Nota Flux: with no source assigned, React is off.** It used to listen to Flux's own
+  output instead, so a patch aimed at the filter or the vector wobbled with its own chords.
+  The React followers now also run on time constants rather than once per audio block at a
+  fixed rate, so the reaction feels the same at any buffer size.
+- **Nota Flux: a repeated note no longer cuts itself off.** A note-off released every voice
+  of its pitch, so a note that started a hair before the previous one of the same pitch
+  ended went silent with it. A note-off now releases only the oldest held one.
 - **Nota Bass: back-to-back notes no longer drop out.** Two things silenced the next note of
   a tight line. A note-off released *every* note of its pitch, so when a repeated note
   started a sample before the previous one ended (float rounding, a Note Length or arp

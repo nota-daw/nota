@@ -368,7 +368,7 @@ Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width fro
   (teal for LFOs and envelopes) on the arc; end-of-chain trim fills with Border strong.
 - A bypassed card keeps its layout and turns to the disabled look via `Inactive`.
 
-Width exceptions, by decision: **Rhythm 900, Flux 900, Bass 1060, Physical 720** (squeezing
+Width exceptions, by decision: **Rhythm 900, Bass 1060, Physical 720** (squeezing
 them would be a redesign) and the host-plugin / parameter-list stubs (230, 190).
 
 ## Shell
@@ -428,7 +428,7 @@ Decisions taken while aligning the app, kept on purpose:
   Amp Model (7) and Cabinet (5), Compressor Character (5), Vintage Character (6), Delay
   Division (8), Arp Rate (8) and Order (8), Aurora Warp (5) and Filter (5), Bass LFO wave (5),
   Monolith Glide range (6), Pendulum Division (5) and Wave (5).
-- **Wide instruments** — Rhythm, Flux, Bass, Physical (see § Device cards).
+- **Wide instruments** — Rhythm, Bass, Physical (see § Device cards).
 - **Preset picker in the device header.** The almanac allows only name, badge and bypass
   there; switching presets is frequent enough to stay one click away.
 - **Zoom 28 px per beat** by default, not a 16 px bar; the ruler labels every bar once a bar

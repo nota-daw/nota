@@ -2538,14 +2538,91 @@ Console.WriteLine("-- Nota Flux --");
     fe.PluginParamSet(t, -1, vx, 0.34f); fe.PluginParamSet(t, -1, vy, 0.28f);
     var rbuf = new float[4096 * 2];
     fe.Seek(0.0); fe.Play();
-    float envSeen = 0f;
-    var sc = new float[8];
-    for (int b = 0; b < 20; b++) { fe.RenderOffline(rbuf, 4096); int n = fe.InstrumentScope(t, sc); if (n >= 4) envSeen = Math.Max(envSeen, sc[0]); }
+    float envSeen = 0f, reactSeen = 0f, pulled = 0f;
+    var sc = new float[9];
+    int scN = 0;
+    for (int b = 0; b < 20; b++)
+    {
+        fe.RenderOffline(rbuf, 4096); scN = fe.InstrumentScope(t, sc);
+        if (scN >= 6) { envSeen = Math.Max(envSeen, sc[0]); reactSeen = Math.Max(reactSeen, sc[3]); pulled = Math.Max(pulled, sc[4] - 0.34f); }
+    }
     fe.StopTransport();
+    Check(scN == 9, $"Flux scope publishes 9 values (got {scN})");
     Check(envSeen > 0.001f, $"React scope registers the sidechain envelope (env {envSeen:F3})");
+    Check(reactSeen > 0.01f && pulled > 0.01f, $"React on Vector pulls the vector with a source (react {reactSeen:F3}, Δx {pulled:F3})");
+    Check(sc[7] >= 2 && sc[8] == 1f, $"React counts the source's transients (onsets {sc[7]:F0}, source {sc[8]:F0})");
 
     fe.SetInstrumentSidechainSource(t, -1);
     Check(fe.InstrumentSidechainSource(t) == -1, "instrument sidechain clears");
+    // From here on the master is Flux alone: silence the duplicate and the drum source.
+    fe.SetTrackMute(t2, true); fe.SetTrackMute(drum, true);
+
+    // With no source React is off: its own loud notes don't modulate anything.
+    fe.SetClipNotes(t, 0, new[] { new NotaNote(48, 0.0, 3.0, 1f), new NotaNote(55, 0.0, 3.0, 1f), new NotaNote(60, 0.0, 3.0, 1f) });
+    float reactOff = 0f, driftOff = 0f;
+    fe.Seek(0.0); fe.Play();
+    for (int b = 0; b < 12; b++)
+    {
+        fe.RenderOffline(rbuf, 4096);
+        if (fe.InstrumentScope(t, sc) >= 9) { reactOff = Math.Max(reactOff, sc[3]); driftOff = Math.Max(driftOff, sc[8]); }
+    }
+    FluxStop();
+    Check(reactOff == 0f && driftOff == 0f, $"no source → React is off (react {reactOff:F3})");
+
+    // A repeated note that starts before the previous one ends keeps sounding when the old
+    // one's note-off arrives. A plucky, dry patch, so a released voice is silent in the
+    // window: the overlapping pair must stay well above the first note on its own.
+    int envI = -1, spI = -1;
+    for (int i = 0; i < pc; i++) { string pid = fe.PluginParamId(t, -1, i); if (pid == "env") envI = i; else if (pid == "space") spI = i; }
+    fe.PluginParamSet(t, -1, envI, 0.8f); fe.PluginParamSet(t, -1, spI, 0f);
+    float WindowRms(NotaNote[] notes)
+    {
+        fe.SetClipNotes(t, 0, notes);
+        var obuf = new float[FluxFrames(2.2) * 2];
+        fe.Seek(0.0); fe.Play(); FluxRender(obuf); FluxStop();
+        int from = FluxFrames(1.4), len = FluxFrames(0.4);
+        double acc = 0; for (int i = from; i < from + len; i++) acc += obuf[i * 2] * obuf[i * 2];
+        return (float)Math.Sqrt(acc / len);
+    }
+    float alone = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f) });
+    float held = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f), new NotaNote(60, 1.0, 1.5, 0.9f) });
+    Check(held > 0.01f && held > alone * 5, $"Flux: an overlapping repeat of a note keeps sounding (RMS {held:F3} vs {alone:F4} released)");
+    int FluxFrames(double beats) => (int)Math.Round(beats * 60.0 / 120.0 * (fe.SampleRate > 0 ? fe.SampleRate : 48000.0));
+    // Stop, then render a stopped block so the engine flushes held voices (it releases them
+    // on the play→stop edge it sees while rendering).
+    void FluxStop() { fe.StopTransport(); fe.RenderOffline(new float[64 * 2], 64); }
+    void FluxRender(float[] buf)   // in 4096-frame blocks, as the engine's host would
+    {
+        var blk = new float[4096 * 2];
+        for (int at = 0; at < buf.Length / 2; at += 4096)
+        {
+            int n = Math.Min(4096, buf.Length / 2 - at);
+            fe.RenderOffline(blk, n);
+            Array.Copy(blk, 0, buf, at * 2, n * 2);
+        }
+    }
+
+    // Factory presets: 25 ship, every named param is a real Flux id, each applies in place
+    // and renders audible and finite.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 11).ToList();
+        Check(mine.Count == 25, $"Nota Flux ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !fIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Flux preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        fe.SetClipNotes(t, 0, new[] { new NotaNote(48, 0.0, 1.5, 0.9f), new NotaNote(55, 0.0, 1.5, 0.9f), new NotaNote(62, 0.5, 1.0, 0.9f) });
+        var off = new System.Collections.Generic.List<string>();
+        var pbuf = new float[FluxFrames(2.0) * 2];
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(fe, p.Id, t, -1).Length != 0) { off.Add($"{p.DisplayName} (apply)"); continue; }
+            fe.Seek(0.0); fe.Play(); FluxRender(pbuf); FluxStop();
+            bool ok = true; foreach (var x in pbuf) if (!float.IsFinite(x) || Math.Abs(x) > 1.01f) { ok = false; break; }
+            float rms = Rms(pbuf, pbuf.Length / 2);
+            if (!ok || rms < 0.01f) off.Add($"{p.DisplayName} ({rms:F3})");
+        }
+        Check(off.Count == 0, $"every Flux preset applies and renders audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+    }
 }
 
 // ============================ Sampler ======================================

@@ -8,13 +8,15 @@
 //
 //   Vector (X,Y) blends four "timbre worlds" at the pad corners into one voice engine
 //     WARM (saw, warm)  · GLASS (bright square) · MOOG (fat, resonant) · GRAIN (gritty/noise)
-//   Osc (saw↔square↔noise morph) + Sub → drive (tanh) → TPT SVF low-pass → Amp (ADSR)
-//   then a shared Space stage (mini stereo reverb + width). Age adds analog wear
-//   (per-voice detune drift + hiss). Motion is a tempo-synced internal drift of the vector.
+//   Osc (saw↔square↔noise morph, plus a detuned twin — the adaptive unison) + Sub → drive
+//   (tanh) → TPT SVF low-pass → Amp (ADSR), then a shared Space stage (mini stereo reverb +
+//   width). Age adds analog wear (per-voice detune drift + hiss). Motion is a tempo-synced
+//   internal drift of the vector. Resonance, unison and drive are never set directly: each
+//   world carries its own, and the vector blends them ("adaptive").
 //
 //   React: the sidechain's envelope / transients / spectral tilt drive one Target —
 //     Filter, Pitch, Space, or Vector (drags the pad dot in rhythm). With no source
-//     assigned it self-listens to its own output so the section still breathes.
+//     assigned React is off: the followers fall to rest and nothing is modulated.
 //
 // All parameters ride the Instrument plugin-param interface (normalized 0..1, stable ids)
 // → automation / persist / clone for free. Header-only, allocation-free after construction.
@@ -44,7 +46,9 @@ public:
         kNumParams
     };
     // Live telemetry (scopeRead) — the editor draws the React scope + the moving pad dot.
-    enum Scope { S_Env = 0, S_Transient, S_Tilt, S_React, S_VecX, S_VecY, S_Active, kScopeN };
+    // S_Onsets counts detected transients since construction (the editor turns it into
+    // transients per bar); S_Source is 1 while a source is assigned.
+    enum Scope { S_Env = 0, S_Transient, S_Tilt, S_React, S_VecX, S_VecY, S_Active, S_Onsets, S_Source, kScopeN };
 
     FluxSynth() {
         set(VecX, 0.34f); set(VecY, 0.28f);
@@ -138,17 +142,22 @@ public:
         v->freqTarget = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
         v->freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freqTarget;
         v->vel = velocity;
-        v->phM = 0.0; v->phMu = 0.25; v->phS = 0.0;
+        v->phM = 0.0; v->phMu = noise(); v->phS = 0.0;   // the unison twin starts off-phase
         v->aEnv = 0.0f; v->aStage = Stage::Attack;
         v->s1[0] = v->s1[1] = 0.0;
         v->rndDet = noise() * 2.0f - 1.0f;
         v->pan = (noise() * 2.0f - 1.0f);
         v->active = true;
+        v->seq = ++noteSeq_;
         lastFreq_ = v->freqTarget;
     }
+    // Releases the oldest held note of this pitch only: a repeated note that starts a hair
+    // before the previous one ends keeps sounding when the old one lets go.
     void noteOff(int32_t pitch) override {
+        Voice* oldest = nullptr;
         for (auto& v : voices_)
-            if (v.active && v.pitch == pitch && v.aStage != Stage::Release) v.aStage = Stage::Release;
+            if (v.active && v.pitch == pitch && v.aStage != Stage::Release && (!oldest || v.seq < oldest->seq)) oldest = &v;
+        if (oldest) oldest->aStage = Stage::Release;
     }
     void allNotesOff() override { for (auto& v : voices_) v.active = false; }
 
@@ -190,6 +199,11 @@ public:
         const double m01 = std::clamp(waveMix * 2.0, 0.0, 1.0);          // saw → square
         const double noiseMix = std::clamp((waveMix - 0.5) * 2.0, 0.0, 1.0);
         const float  subLvl = (float)w.subLvl;
+        // Adaptive unison: a twin of the morph oscillator, detuned by the world's spread
+        // (and a little more with Age), mixed in at equal power.
+        const double uniMix = std::clamp(w.uni, 0.0, 1.0);
+        const double uniDet = std::exp2(uniMix * (7.0 + get(Age) * 8.0) / 1200.0);
+        const double uniNorm = 1.0 / std::sqrt(1.0 + uniMix * uniMix);
 
         // amp ADSR from Env macro (pad ⇠⇢ pluck).
         const double e = get(Env);
@@ -209,7 +223,6 @@ public:
         const float  wetAmt = space * 0.6f;
         const double driftInc = 0.4 * invSr;                                     // ~0.4 Hz analog drift
 
-        double outSq = 0.0;
         int active = 0;
         for (int32_t i = 0; i < frames; ++i) {
             driftPhase_ += driftInc; if (driftPhase_ >= 1.0) driftPhase_ -= 1.0;
@@ -226,13 +239,13 @@ public:
                 const double f = v.freqCur * tuneMult * pitchReactMult * std::exp2(cents / 1200.0);
                 const double inc = f * invSr;
 
-                // Morph oscillator: saw → square → noise.
-                const double saw = (2.0 * v.phM - 1.0) - polyBlep(v.phM, inc);
-                double sq = v.phM < 0.5 ? 1.0 : -1.0;
-                sq += polyBlep(v.phM, inc);
-                double p2 = v.phM + 0.5; if (p2 >= 1.0) p2 -= 1.0;
-                sq -= polyBlep(p2, inc);
-                double tone = saw + (sq - saw) * m01;
+                // Morph oscillator: saw → square → noise, with its detuned twin.
+                double tone = morph(v.phM, inc, m01);
+                if (uniMix > 1e-3) {
+                    const double inc2 = inc * uniDet;
+                    tone = (tone + morph(v.phMu, inc2, m01) * uniMix) * uniNorm;
+                    v.phMu += inc2; if (v.phMu >= 1.0) v.phMu -= 1.0;
+                }
                 tone = tone * (1.0 - noiseMix) + (noise() * 2.0f - 1.0f) * noiseMix;
                 v.phM += inc; if (v.phM >= 1.0) v.phM -= 1.0;
 
@@ -260,15 +273,10 @@ public:
             r = std::tanh(r * gain);
             out[i * 2]     += l;
             out[i * 2 + 1] += r;
-            outSq += (double)mono * mono;
         }
 
         for (auto& v : voices_) if (v.active) ++active;
         activeVoices_.store(active, std::memory_order_relaxed);
-
-        // Self-listen fallback level: a gentle follower on our own output.
-        const float outRms = frames > 0 ? (float)std::sqrt(outSq / frames) : 0.0f;
-        selfEnv_ += (outRms - selfEnv_) * 0.10f;
 
         // Publish telemetry for the editor.
         scope_[S_Env].store(scFast_, std::memory_order_relaxed);
@@ -278,6 +286,8 @@ public:
         scope_[S_VecX].store((float)vx, std::memory_order_relaxed);
         scope_[S_VecY].store((float)vy, std::memory_order_relaxed);
         scope_[S_Active].store((float)active, std::memory_order_relaxed);
+        scope_[S_Onsets].store((float)onsets_, std::memory_order_relaxed);
+        scope_[S_Source].store(hasSource_ ? 1.0f : 0.0f, std::memory_order_relaxed);
     }
 
 private:
@@ -287,12 +297,13 @@ private:
     static constexpr double kMotBeats[6] = { 4.0, 2.0, 1.0, 0.5, 1.0 / 3.0, 0.25 };
 
     // A timbre "world" at a pad corner. Bilinearly blended by the vector (X,Y).
-    struct World { double wave, subLvl, cutoff, reso, drive, bright; };
-    //                                   wave   sub   cutoff reso  drive bright
-    static constexpr World WARM  {0.15, 0.45, 0.42, 0.12, 0.30, 0.20};   // top-left
-    static constexpr World GLASS {0.70, 0.08, 0.88, 0.30, 0.12, 0.95};   // top-right
-    static constexpr World MOOG  {0.05, 0.70, 0.38, 0.62, 0.55, 0.10};   // bottom-left
-    static constexpr World GRAIN {0.85, 0.20, 0.55, 0.22, 0.80, 0.55};   // bottom-right
+    // The editor mirrors these (FluxInstrumentCard) to read the cutoff back in Hz.
+    struct World { double wave, subLvl, cutoff, reso, drive, bright, uni; };
+    //                                   wave   sub   cutoff reso  drive bright unison
+    static constexpr World WARM  {0.15, 0.45, 0.42, 0.12, 0.30, 0.20, 0.55};   // top-left
+    static constexpr World GLASS {0.70, 0.08, 0.88, 0.30, 0.12, 0.95, 0.35};   // top-right
+    static constexpr World MOOG  {0.05, 0.70, 0.38, 0.62, 0.55, 0.10, 0.00};   // bottom-left
+    static constexpr World GRAIN {0.85, 0.20, 0.55, 0.22, 0.80, 0.55, 0.25};   // bottom-right
     static World blend(double x, double y) {
         const double wt = (1 - x) * (1 - y), gt = x * (1 - y), mt = (1 - x) * y, rt = x * y;
         auto mix = [&](double a, double b, double c, double d) { return a * wt + b * gt + c * mt + d * rt; };
@@ -301,7 +312,8 @@ private:
                  mix(WARM.cutoff, GLASS.cutoff, MOOG.cutoff, GRAIN.cutoff),
                  mix(WARM.reso, GLASS.reso, MOOG.reso, GRAIN.reso),
                  mix(WARM.drive, GLASS.drive, MOOG.drive, GRAIN.drive),
-                 mix(WARM.bright, GLASS.bright, MOOG.bright, GRAIN.bright) };
+                 mix(WARM.bright, GLASS.bright, MOOG.bright, GRAIN.bright),
+                 mix(WARM.uni, GLASS.uni, MOOG.uni, GRAIN.uni) };
     }
 
     enum class Stage { Attack, Decay, Sustain, Release, Off };
@@ -311,6 +323,7 @@ private:
         double  freqTarget = 0.0, freqCur = 0.0;
         double  phM = 0.0, phMu = 0.0, phS = 0.0;
         float   vel = 0.0f, aEnv = 0.0f, rndDet = 0.0f, pan = 0.0f;
+        uint32_t seq = 0;   // note-on order, for noteOff
         Stage   aStage = Stage::Attack;
         double  s1[2] = {0, 0};
     };
@@ -318,7 +331,8 @@ private:
     // ---- React analysis: fast/slow envelope, transient, spectral tilt -----
     void analyzeSidechain(int32_t frames) {
         double sumSq = 0.0, sumHi = 0.0;
-        if (scBuf_ && scFrames_ > 0) {
+        hasSource_ = scTrackId_.load(std::memory_order_relaxed) >= 0;
+        if (hasSource_ && scBuf_ && scFrames_ > 0) {
             const int n = std::min(frames, scFrames_);
             for (int i = 0; i < n; ++i) {
                 const float m = 0.5f * (scBuf_[i * 2] + scBuf_[i * 2 + 1]);
@@ -329,21 +343,38 @@ private:
             const float rms = n > 0 ? (float)std::sqrt(sumSq / n) : 0.0f;
             const float hi = n > 0 ? (float)std::sqrt(sumHi / n) : 0.0f;
             const float tilt = std::clamp(hi / (rms + 1e-5f) * 0.8f, 0.0f, 1.0f);
-            updateFollowers(rms, tilt);
+            updateFollowers(rms, tilt, frames);
         } else {
-            // No source: self-listen so the React scope still breathes.
-            updateFollowers(selfEnv_, scTilt_);
+            // No source (or a silent one): the followers fall to rest, tilt to neutral.
+            updateFollowers(0.0f, 0.5f, frames);
         }
         // consume the buffer (only valid for this block).
         scBuf_ = nullptr; scFrames_ = 0;
     }
-    void updateFollowers(float rms, float tilt) {
-        scFast_ += (rms - scFast_) * (rms > scFast_ ? 0.6f : 0.08f);
-        scSlow_ += (rms - scSlow_) * 0.03f;
-        scTransient_ = std::clamp((scFast_ - scSlow_) * 5.0f, 0.0f, 1.0f);
-        scTilt_ += (tilt - scTilt_) * 0.15f;
+    // The followers run once per block with time constants, so they behave the same at any
+    // block size (tuned at 512 frames / 48 kHz: attack ~12 ms, release ~130 ms, slow ~350 ms).
+    float coef(int32_t frames, double tauSec) const {
+        return (float)(1.0 - std::exp(-(double)std::max<int32_t>(1, frames) / (tauSec * sampleRate_)));
+    }
+    void updateFollowers(float rms, float tilt, int32_t frames) {
+        const float prevFast = scFast_;
+        scFast_ += (rms - scFast_) * coef(frames, rms > scFast_ ? 0.0117 : 0.128);
+        scSlow_ += (rms - scSlow_) * coef(frames, 0.35);
+        // Transient = how far the fast follower jumps above the slow one, relative to it, so
+        // a quiet source registers its hits as clearly as a loud one (gated at about −50 dB).
+        scTransient_ = scFast_ > 0.003f ? std::clamp((scFast_ / (scSlow_ + 1e-3f) - 1.0f) * 0.5f, 0.0f, 1.0f) : 0.0f;
+        scTilt_ += (tilt - scTilt_) * coef(frames, 0.066);
+        // An onset: the fast follower jumps (by a fifth or more) while standing clear of the
+        // slow one. One per hit — it re-arms only once the level has fallen a third below the
+        // hit's peak, so the ripple of a low note inside one hit doesn't count twice.
+        if (!onsetArmed_) {
+            onsetPeak_ = std::max(onsetPeak_, scFast_);
+            if (scFast_ < onsetPeak_ * 0.67f) onsetArmed_ = true;
+        } else if (scTransient_ > 0.35f && scFast_ > prevFast * 1.2f) {
+            ++onsets_; onsetArmed_ = false; onsetPeak_ = scFast_;
+        }
         const float env01 = std::clamp(scFast_ * 3.5f, 0.0f, 1.0f);
-        reactAmt_ = get(Listen) * env01;
+        reactAmt_ = hasSource_ ? get(Listen) * env01 : 0.0f;
     }
 
     // ---- helpers ----------------------------------------------------------
@@ -374,6 +405,15 @@ private:
         st[1] = 2.0 * v2 - st[1];
         (void)k;
         return v2;   // low-pass
+    }
+    // One sample of the saw → square morph at phase `ph` (band-limited with polyBLEP).
+    static double morph(double ph, double inc, double m01) {
+        const double saw = (2.0 * ph - 1.0) - polyBlep(ph, inc);
+        double sq = ph < 0.5 ? 1.0 : -1.0;
+        sq += polyBlep(ph, inc);
+        double p2 = ph + 0.5; if (p2 >= 1.0) p2 -= 1.0;
+        sq -= polyBlep(p2, inc);
+        return saw + (sq - saw) * m01;
     }
     static double polyBlep(double t, double dt) {
         if (dt <= 0.0) return 0.0;
@@ -428,6 +468,7 @@ private:
     bool    playing_ = false;
     double  motionPhase_ = 0.0, driftPhase_ = 0.0;
     double  lastFreq_ = 0.0;
+    uint32_t noteSeq_ = 0;
     double  a1_ = 0.0, a2_ = 0.0, a3_ = 0.0;   // shared filter coeffs (block rate)
     uint32_t rng_ = 0x9E3779B9u;
 
@@ -436,7 +477,10 @@ private:
     int32_t scFrames_ = 0;
     std::atomic<int32_t> scTrackId_{-1};
     float scLp_ = 0.0f, scFast_ = 0.0f, scSlow_ = 0.0f, scTransient_ = 0.0f, scTilt_ = 0.5f;
-    float reactAmt_ = 0.0f, selfEnv_ = 0.0f;
+    float reactAmt_ = 0.0f;
+    bool  hasSource_ = false, onsetArmed_ = true;
+    float onsetPeak_ = 0.0f;
+    uint32_t onsets_ = 0;
 
     std::atomic<int32_t> activeVoices_{0};
     std::atomic<float> scope_[kScopeN];

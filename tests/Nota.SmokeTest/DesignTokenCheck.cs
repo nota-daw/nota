@@ -385,9 +385,9 @@ internal static class DesignTokenCheck
         yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
         // Accepted exceptions (decided 2026-09-16): plug-in / parameter stubs are narrow; the
-        // Rhythm, Flux, Bass and Physical instruments keep their wider layouts.
+        // Rhythm, Bass and Physical instruments keep their wider layouts.
         var exempt = new HashSet<string> { "PluginDeviceBody.cs", "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "RhythmInstrumentCard.cs", "FluxInstrumentCard.cs", "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
+            "RhythmInstrumentCard.cs", "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
         var off = Directory.EnumerateFiles(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")

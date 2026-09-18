@@ -582,14 +582,41 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("grain", 10, "Shimmer",      ("scanmode", 0.5f), ("coarse", 0.75f), ("grainsize", 0.5f), ("density", 0.8f), ("pitchrand", 0.1f), ("spread", 0.6f), ("filfreq", 1f), ("release", 0.6f), ("volume", 0.76f));
         Inst("grain", 10, "Sub Grain",    ("scanmode", 0.5f), ("coarse", 0.25f), ("grainsize", 0.6f), ("density", 0.7f), ("filfreq", 0.4f), ("filreso", 0.2f), ("volume", 0.85f));
 
-        // ---- Nota Flux (kind 11) — vector-morph synth. Vector (X,Y) blends WARM/GLASS/
-        //      MOOG/GRAIN; target: 0 Filter, 1 Pitch, 2 Space, 3 Vector (=1.0).
+        // ---- Nota Flux (kind 11) — vector-morph synth, 25 presets. Vector (X,Y) blends the
+        //      corners WARM (0,0) · GLASS (1,0) · MOOG (0,1) · GRAIN (1,1); target: 0 Filter,
+        //      1/3 Pitch, 2/3 Space, 1 Vector; motrate 0 1/1 · .2 1/2 · .4 1/4 · .6 1/8 ·
+        //      .8 1/8T · 1 1/16; env 0 pad → 1 pluck; tune 0.5 = 0 ct. React needs a source
+        //      track — without one the patch plays as it is drawn.
+        // Pads and textures.
         Inst("flux", 11, "Warm Drift",     ("vecx", 0.34f), ("vecy", 0.28f), ("age", 0.30f), ("motion", 0.45f), ("motrate", 0.4f), ("filter", 0.62f), ("env", 0.55f), ("space", 0.40f), ("listen", 0.72f), ("target", 1f));
+        Inst("flux", 11, "Velvet Pad",     ("vecx", 0.12f), ("vecy", 0.18f), ("age", 0.35f), ("motion", 0.35f), ("motrate", 0.2f), ("filter", 0.50f), ("env", 0.10f), ("space", 0.60f), ("listen", 0.50f), ("target", 1f));
+        Inst("flux", 11, "Grain Pad",      ("vecx", 0.80f), ("vecy", 0.85f), ("age", 0.60f), ("motion", 0.50f), ("motrate", 0.2f), ("filter", 0.50f), ("env", 0.35f), ("space", 0.55f), ("listen", 0.5f), ("target", 1f));
+        Inst("flux", 11, "Tape Choir",     ("vecx", 0.30f), ("vecy", 0.35f), ("age", 0.75f), ("motion", 0.40f), ("motrate", 0f), ("filter", 0.45f), ("env", 0.20f), ("space", 0.70f), ("listen", 0.40f), ("target", 2f / 3f));
+        Inst("flux", 11, "Slow Tide",      ("vecx", 0.60f), ("vecy", 0.20f), ("age", 0.40f), ("motion", 0.80f), ("motrate", 0f), ("filter", 0.52f), ("env", 0f), ("space", 0.75f), ("listen", 0.30f), ("target", 1f));
+        Inst("flux", 11, "Dust Drone",     ("vecx", 0.85f), ("vecy", 0.90f), ("age", 0.90f), ("motion", 0.65f), ("motrate", 0f), ("filter", 0.40f), ("env", 0f), ("space", 0.85f), ("tune", 0.47f), ("listen", 0.40f), ("target", 1f));
+        Inst("flux", 11, "Grain Storm",    ("vecx", 1f), ("vecy", 1f), ("age", 0.80f), ("motion", 0.70f), ("motrate", 1f), ("filter", 0.60f), ("env", 0.40f), ("space", 0.50f), ("listen", 0.70f), ("target", 1f));
+        // Keys and plucks.
         Inst("flux", 11, "Glass Keys",     ("vecx", 0.85f), ("vecy", 0.15f), ("age", 0.10f), ("motion", 0.20f), ("filter", 0.72f), ("env", 0.82f), ("space", 0.30f), ("listen", 0.4f), ("target", 0f));
+        Inst("flux", 11, "Glass Pluck",    ("vecx", 0.90f), ("vecy", 0.08f), ("age", 0.05f), ("motion", 0.10f), ("filter", 0.70f), ("env", 0.95f), ("space", 0.35f), ("listen", 0.60f), ("target", 0f));
+        Inst("flux", 11, "Crystal Bells",  ("vecx", 1f), ("vecy", 0f), ("age", 0f), ("motion", 0.15f), ("motrate", 0.6f), ("filter", 0.82f), ("env", 0.90f), ("space", 0.60f), ("listen", 0.40f), ("target", 2f / 3f));
+        Inst("flux", 11, "Night Keys",     ("vecx", 0.70f), ("vecy", 0.30f), ("age", 0.45f), ("motion", 0.20f), ("motrate", 0.2f), ("filter", 0.55f), ("env", 0.75f), ("space", 0.45f), ("listen", 0.50f), ("target", 0f));
+        Inst("flux", 11, "Digital Rain",   ("vecx", 0.95f), ("vecy", 0.60f), ("age", 0.15f), ("motion", 0.50f), ("motrate", 1f), ("filter", 0.75f), ("env", 0.92f), ("space", 0.55f), ("listen", 0.60f), ("target", 2f / 3f));
+        // Basses.
         Inst("flux", 11, "Moog Bass",      ("vecx", 0.05f), ("vecy", 0.90f), ("age", 0.35f), ("motion", 0.10f), ("filter", 0.45f), ("env", 0.70f), ("space", 0.15f), ("listen", 0.3f), ("target", 0f));
-        Inst("flux", 11, "Grain Pad",      ("vecx", 0.80f), ("vecy", 0.85f), ("age", 0.60f), ("motion", 0.50f), ("motrate", 0.2f), ("filter", 0.50f), ("env", 0.35f), ("space", 0.55f), ("listen", 0.5f), ("target", 3f / 3f));
+        Inst("flux", 11, "Sub Pressure",   ("vecx", 0f), ("vecy", 1f), ("age", 0.10f), ("motion", 0f), ("filter", 0.35f), ("env", 0.65f), ("space", 0.05f), ("listen", 0.80f), ("target", 0f));
+        Inst("flux", 11, "Rubber Bass",    ("vecx", 0.20f), ("vecy", 0.95f), ("age", 0.20f), ("motion", 0.05f), ("filter", 0.40f), ("env", 0.80f), ("space", 0.05f), ("glide", 0.15f), ("listen", 0.50f), ("target", 0f));
+        // Leads and brass.
+        Inst("flux", 11, "Moog Lead",      ("vecx", 0.10f), ("vecy", 0.75f), ("age", 0.25f), ("motion", 0.10f), ("filter", 0.66f), ("env", 0.60f), ("space", 0.20f), ("glide", 0.30f), ("listen", 0.30f), ("target", 1f / 3f));
+        Inst("flux", 11, "Portamento Lead",("vecx", 0.55f), ("vecy", 0.15f), ("age", 0.15f), ("motion", 0.10f), ("filter", 0.70f), ("env", 0.55f), ("space", 0.30f), ("glide", 0.45f), ("listen", 0.30f), ("target", 1f / 3f));
+        Inst("flux", 11, "Analog Brass",   ("vecx", 0.15f), ("vecy", 0.55f), ("age", 0.30f), ("motion", 0.10f), ("filter", 0.60f), ("env", 0.45f), ("space", 0.25f), ("listen", 0.40f), ("target", 0f));
+        Inst("flux", 11, "Broken Radio",   ("vecx", 0.75f), ("vecy", 0.70f), ("age", 1f), ("motion", 0.55f), ("motrate", 0.6f), ("filter", 0.42f), ("env", 0.50f), ("space", 0.30f), ("listen", 0.60f), ("target", 1f));
+        // Reactive — give them a drum or bass track as the source.
         Inst("flux", 11, "Reactive Vector",("vecx", 0.30f), ("vecy", 0.30f), ("age", 0.25f), ("motion", 0.30f), ("filter", 0.6f), ("env", 0.5f), ("space", 0.50f), ("listen", 0.90f), ("target", 1f));
         Inst("flux", 11, "Filter Chase",   ("vecx", 0.45f), ("vecy", 0.50f), ("age", 0.20f), ("motion", 0.25f), ("filter", 0.55f), ("env", 0.5f), ("space", 0.35f), ("listen", 0.85f), ("target", 0f));
+        Inst("flux", 11, "Pumping Chords", ("vecx", 0.40f), ("vecy", 0.25f), ("age", 0.20f), ("motion", 0.15f), ("filter", 0.60f), ("env", 0.35f), ("space", 0.40f), ("listen", 1f), ("target", 0f));
+        Inst("flux", 11, "Duck Space",     ("vecx", 0.55f), ("vecy", 0.30f), ("age", 0.20f), ("motion", 0.20f), ("filter", 0.58f), ("env", 0.25f), ("space", 0.80f), ("listen", 0.85f), ("target", 2f / 3f));
+        Inst("flux", 11, "Vector Dance",   ("vecx", 0.50f), ("vecy", 0.50f), ("age", 0.20f), ("motion", 0.60f), ("motrate", 0.6f), ("filter", 0.60f), ("env", 0.60f), ("space", 0.35f), ("listen", 0.90f), ("target", 1f));
+        Inst("flux", 11, "Pitch Wobble",   ("vecx", 0.20f), ("vecy", 0.50f), ("age", 0.30f), ("motion", 0.30f), ("filter", 0.55f), ("env", 0.55f), ("space", 0.30f), ("listen", 0.70f), ("target", 1f / 3f));
 
         // ---- Nota Rhythm (kind 12) — drum-machine kit voicings. Voices: 0 Kick, 1 Snare,
         //      2 Clap, 3 Rim, 4 Closed Hat, 5 Open Hat, 6 Tom, 7 Perc. Param id "v{n}_{p}"

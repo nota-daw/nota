@@ -289,9 +289,10 @@ and user presets, automation, persistence and cloning.
   Mono/Poly. 25 factory presets.
 - **Nota Physical** — physical modelling.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
-  (WARM/GLASS/MOOG/GRAIN), **React** (sidechain modulation from another track:
-  Filter/Pitch/Space/vector), 5 macro knobs (Age/Motion/Filter/Env/Space), and a sidechain
-  scope.
+  (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
+  (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
+  its envelope, transients and tilt, and transients per bar), 5 macro knobs
+  (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D), accents, per-step velocity, Swing/Humanize, and a per-voice **Sample** mode
