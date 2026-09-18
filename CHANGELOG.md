@@ -19,6 +19,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Volt grew performance wheels and wider macros, and its editor is now the
+  almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
+  semitones) joins the mod wheel in a rail that stays on screen on every tab, and the
+  vibrato can be put **on the mod wheel** so the patch's depth becomes the wheel's
+  ceiling. A **macro** now reaches **twelve** destinations instead of six — the three
+  source levels, Filter 2's cutoff and either LFO's rate on top of pitch, osc 2 pitch,
+  cutoff, resonance, level and pan — and names itself after what it drives (*BRIGHT*,
+  *DRIVE*, *MOTION*). The card lays the synth out as **Osc · Filter · Env · LFO · Mod ·
+  Macro** tabs — the three sources as a table, the selected filter's response as a drag
+  pad beside its type, slope and amounts, both envelopes drawn and draggable, the LFOs
+  each naming where they land, the matrix as cells you drag up for + and down for −, and
+  the eight macros as tiles — over a 186 px rail that switches between **Global** (voice
+  mode, bend range, cutoff, resonance, glide, gain, pan and the track's meter) and
+  **Voice** (both output amps, unison and the two velocity amounts), with a status strip
+  that reads the patch back in words. Projects saved before this load unchanged: the
+  existing parameters keep their index, the new ones start neutral, and a macro saved
+  against the old six destinations still points at the same one.
+- **Nota Volt ships 25 factory presets** (was 8) — basses, leads, pads, keys and motion
+  patches, including the eight that existed before under their old names.
 - **Nota Operator grew two performance wheels and keyboard tracking, and its editor is now
   the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
   semitones) and a **mod wheel** on the modulation index sit in a rail that stays on screen
@@ -204,6 +223,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   message past the half-way point, so sweeping a mapped CC across it made the target
   flutter instead of toggling once. It now fires on the crossing only — which is also what
   makes a mapped gamepad trigger usable.
+- Nota Volt's modulation matrix said "drag a cell · up +, down −" but actually took a
+  horizontal drag, and drew each route as a small bar that vanished at narrow cell widths.
+  It now drags vertically, as it always claimed, and a route lights its whole cell with a
+  brass wash that deepens with the amount.
 - The filter-response graph shared by Nota Volt, Aurora, Bass and Operator labelled its
   frequency axis `20 · 100 · 1k · 10k · 20k` regardless of where those points actually
   fell, and read the cutoff off Volt's own map on every instrument. It now takes the

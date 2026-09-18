@@ -85,8 +85,17 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("aurora", 5, "Fold Lead",   ("table", 0.33f), ("position", 0.5f), ("osc1warpmode", 1f), ("warp", 0.6f), ("cutoff", 0.82f), ("resonance", 0.22f),
                                          ("attack", 0.01f), ("decay", 0.3f), ("sustain", 0.7f), ("release", 0.22f), ("lfo1depth", 0.6f), ("mtx2_3", 0.35f), ("fxdrive", 0.3f), ("gain", 0.72f));
 
-        // ---- Nota Volt (kind 6) — virtual analog. Bipolar knobs (octave/semi/detune/
-        //      env/lfo/pan) are neutral at 0.5. Filter type: LP 0 / HP .33 / BP .66 / Notch 1.
+        // ---- Nota Volt (kind 6) — 25 patches across basses, leads, pads, keys and motion.
+        //      Bipolar knobs (octave/semi/detune/env/lfo/pan/macro amount) are neutral at
+        //      0.5; octave spans ±3 (.333 = −1 oct), semi ±12 (.5 + n/24), detune ±50 cents.
+        //      Filter type: LP 0 / HP .33 / BP .66 / Notch 1 · slope 12 dB 0 / 24 dB 1 ·
+        //      wave Saw 0 / Square .333 / Tri .667 / Sine 1 · LFO shape sin 0 / tri .333 /
+        //      sqr .667 / S&H 1 · LFO sync free 0 then 1 bar … 1/64 at n/7 (1/4 = .4286,
+        //      1/8 = .5714, 1/16 = .7143) · route F1 0 / F2 1 · noise dark 0 / pink .5 /
+        //      white 1. Matrix cells are mtx{src}_{dst}: src 0 amp env · 1 filter env ·
+        //      2 LFO 1 · 3 LFO 2 · 4 velocity · 5 key · 6 mod wheel; dst 0 pitch ·
+        //      1 osc 2 pitch · 2 cutoff · 3 reso · 4 level · 5 pan. A macro's dest is
+        //      n/11 over the twelve targets (3 = osc 2 level, 4 = cutoff, 8 = LFO 1 rate).
         Inst("volt", 6, "Fat Bass",   ("osc1octave", 0.333f), ("osc2octave", 0.333f), ("osc2detune", 0.58f), ("osc1level", 0.9f), ("osc2level", 0.8f),
                                       ("fil1freq", 0.34f), ("fil1reso", 0.26f), ("fil1env", 0.74f), ("fattack", 0.0f), ("fdecay", 0.28f), ("fsustain", 0.2f),
                                       ("attack", 0.0f), ("decay", 0.3f), ("sustain", 0.5f), ("release", 0.15f), ("amp1level", 0.9f), ("unison", 0.3f), ("velamp", 0.5f), ("volume", 0.85f));
@@ -111,6 +120,93 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("volt", 6, "Drifting Keys",("osc1wave", 0.0f), ("osc2wave", 0.33f), ("osc2detune", 0.55f), ("fil1freq", 0.56f), ("fil1reso", 0.16f), ("fil1env", 0.5f),
                                       ("lfo2rate", 0.18f), ("lfo2depth", 0.7f), ("mtx3_5", 0.85f), ("fattack", 0.2f), ("fdecay", 0.5f), ("fsustain", 0.4f),
                                       ("attack", 0.1f), ("decay", 0.4f), ("sustain", 0.7f), ("release", 0.45f), ("amp1level", 0.82f), ("unison", 0.35f), ("volume", 0.8f));
+
+        // v5: the rest of the library — basses, leads, pads, keys and motion patches.
+        // Basses
+        Inst("volt", 6, "Acid Bass",    ("osc1wave", 0.0f), ("osc1octave", 0.333f), ("osc2level", 0.0f), ("osc1level", 0.95f),
+                                      ("fil1freq", 0.30f), ("fil1reso", 0.72f), ("fil1env", 0.90f), ("fil1slope", 1.0f),
+                                      ("fattack", 0.0f), ("fdecay", 0.26f), ("fsustain", 0.04f), ("frelease", 0.16f),
+                                      ("attack", 0.0f), ("decay", 0.3f), ("sustain", 0.45f), ("release", 0.14f),
+                                      ("mono", 1.0f), ("glide", 0.2f), ("amp1level", 0.9f), ("velfilter", 0.6f), ("volume", 0.85f));
+        Inst("volt", 6, "Reese Bass",   ("osc1octave", 0.333f), ("osc2octave", 0.333f), ("osc2detune", 0.66f), ("osc1level", 0.9f), ("osc2level", 0.9f),
+                                      ("fil1freq", 0.36f), ("fil1reso", 0.18f), ("fil1env", 0.60f), ("fil1slope", 1.0f), ("unison", 0.55f),
+                                      ("attack", 0.0f), ("decay", 0.4f), ("sustain", 0.8f), ("release", 0.2f), ("amp1level", 0.9f),
+                                      ("mac0val", 0.5f), ("mac0dest", 0.2727f), ("mac0amt", 0.78f), ("volume", 0.82f));
+        Inst("volt", 6, "Growl Bass",   ("osc1octave", 0.333f), ("osc2octave", 0.333f), ("osc2detune", 0.60f), ("osc2wave", 0.333f),
+                                      ("fil1freq", 0.30f), ("fil1reso", 0.50f), ("fil1env", 0.72f), ("fil1slope", 1.0f),
+                                      ("lfo1shape", 0.333f), ("lfo1sync", 0.5714f), ("lfo1depth", 0.75f), ("mtx2_2", 0.78f),
+                                      ("attack", 0.0f), ("decay", 0.35f), ("sustain", 0.6f), ("release", 0.18f),
+                                      ("mono", 1.0f), ("amp1level", 0.88f), ("volume", 0.82f));
+        // Leads
+        Inst("volt", 6, "Super Saw",    ("osc2detune", 0.64f), ("osc1level", 0.85f), ("osc2level", 0.85f), ("unison", 0.9f),
+                                      ("fil1freq", 0.80f), ("fil1reso", 0.14f), ("fil1env", 0.56f),
+                                      ("attack", 0.08f), ("decay", 0.5f), ("sustain", 0.88f), ("release", 0.4f),
+                                      ("amp1level", 0.8f), ("volume", 0.72f));
+        Inst("volt", 6, "Solo Lead",    ("osc2detune", 0.55f), ("fil1freq", 0.70f), ("fil1reso", 0.28f), ("fil1env", 0.60f),
+                                      ("attack", 0.02f), ("decay", 0.4f), ("sustain", 0.82f), ("release", 0.25f),
+                                      ("mono", 1.0f), ("glide", 0.18f), ("vibrate", 0.45f), ("vibamt", 0.30f), ("vibwheel", 1.0f),
+                                      ("bendrange", 0.3636f), ("amp1level", 0.85f), ("volume", 0.8f));
+        Inst("volt", 6, "Hard Lead",    ("osc1wave", 0.333f), ("osc2wave", 0.333f), ("osc2detune", 0.58f), ("osc2semi", 0.5417f),
+                                      ("fil1freq", 0.66f), ("fil1reso", 0.42f), ("fil1env", 0.66f), ("fil1slope", 1.0f),
+                                      ("attack", 0.0f), ("decay", 0.35f), ("sustain", 0.72f), ("release", 0.2f),
+                                      ("mono", 1.0f), ("velfilter", 0.5f), ("amp1level", 0.85f), ("volume", 0.78f));
+        // Pads
+        Inst("volt", 6, "String Machine",("osc2detune", 0.60f), ("osc1level", 0.85f), ("osc2level", 0.85f), ("unison", 0.8f),
+                                      ("fil1freq", 0.60f), ("fil1reso", 0.12f), ("fil1env", 0.58f),
+                                      ("fattack", 0.35f), ("fdecay", 0.55f), ("fsustain", 0.55f), ("frelease", 0.6f),
+                                      ("attack", 0.42f), ("decay", 0.5f), ("sustain", 0.9f), ("release", 0.7f),
+                                      ("lfo2rate", 0.16f), ("lfo2depth", 0.5f), ("mtx3_5", 0.72f), ("amp1level", 0.8f), ("volume", 0.72f));
+        Inst("volt", 6, "Choir Pad",    ("osc1wave", 0.667f), ("osc2wave", 0.667f), ("osc2detune", 0.56f), ("noise", 0.06f), ("noisecolor", 1.0f),
+                                      ("fil1freq", 0.54f), ("fil1reso", 0.10f), ("fil1env", 0.56f), ("unison", 0.6f),
+                                      ("fattack", 0.45f), ("fdecay", 0.5f), ("fsustain", 0.6f), ("frelease", 0.6f),
+                                      ("attack", 0.55f), ("decay", 0.5f), ("sustain", 0.92f), ("release", 0.78f),
+                                      ("amp1level", 0.8f), ("volume", 0.74f));
+        Inst("volt", 6, "Dark Drone",   ("osc1octave", 0.333f), ("osc2octave", 0.333f), ("osc2detune", 0.70f), ("unison", 0.9f),
+                                      ("fil1freq", 0.30f), ("fil1reso", 0.24f), ("fil1env", 0.56f), ("fil1slope", 1.0f),
+                                      ("fattack", 0.6f), ("fdecay", 0.7f), ("fsustain", 0.7f), ("frelease", 0.8f),
+                                      ("attack", 0.68f), ("decay", 0.7f), ("sustain", 1.0f), ("release", 0.85f),
+                                      ("lfo1rate", 0.10f), ("lfo1depth", 0.6f), ("mtx2_2", 0.68f), ("amp1level", 0.78f), ("volume", 0.7f));
+        Inst("volt", 6, "Glass Pad",    ("osc1wave", 1.0f), ("osc2wave", 0.667f), ("osc2octave", 0.667f), ("osc2detune", 0.54f), ("osc2level", 0.45f),
+                                      ("fil1freq", 0.86f), ("fil1reso", 0.08f), ("fil1env", 0.5f), ("unison", 0.5f),
+                                      ("attack", 0.45f), ("decay", 0.6f), ("sustain", 0.75f), ("release", 0.82f),
+                                      ("mac0val", 0.4f), ("mac0dest", 0.3636f), ("mac0amt", 0.72f), ("amp1level", 0.8f), ("volume", 0.74f));
+        // Keys and plucks
+        Inst("volt", 6, "Electric Keys",("osc1wave", 0.667f), ("osc2wave", 1.0f), ("osc2detune", 0.53f), ("osc2level", 0.5f),
+                                      ("fil1freq", 0.66f), ("fil1reso", 0.12f), ("fil1env", 0.66f),
+                                      ("fattack", 0.0f), ("fdecay", 0.45f), ("fsustain", 0.1f), ("frelease", 0.3f),
+                                      ("attack", 0.0f), ("decay", 0.62f), ("sustain", 0.28f), ("release", 0.45f),
+                                      ("velamp", 0.7f), ("amp1level", 0.85f), ("volume", 0.8f));
+        Inst("volt", 6, "Bell Tone",    ("osc1wave", 1.0f), ("osc2wave", 1.0f), ("osc2semi", 0.7917f), ("osc2level", 0.55f), ("osc1octave", 0.667f),
+                                      ("fil1freq", 0.90f), ("fil1reso", 0.10f), ("fil1env", 0.5f),
+                                      ("attack", 0.0f), ("decay", 0.80f), ("sustain", 0.0f), ("release", 0.72f),
+                                      ("velamp", 0.6f), ("amp1level", 0.82f), ("volume", 0.76f));
+        Inst("volt", 6, "Clav Stab",    ("osc1wave", 0.333f), ("osc2wave", 0.333f), ("osc2detune", 0.54f), ("osc1phase", 0.25f), ("osc2phase", 0.25f),
+                                      ("fil1freq", 0.58f), ("fil1reso", 0.38f), ("fil1env", 0.82f), ("fil1key", 0.5f),
+                                      ("fattack", 0.0f), ("fdecay", 0.22f), ("fsustain", 0.0f), ("frelease", 0.14f),
+                                      ("attack", 0.0f), ("decay", 0.3f), ("sustain", 0.0f), ("release", 0.18f),
+                                      ("velfilter", 0.6f), ("amp1level", 0.88f), ("volume", 0.82f));
+        // Motion and noise
+        Inst("volt", 6, "Sample & Hold",("osc1wave", 0.333f), ("osc2detune", 0.57f),
+                                      ("fil1freq", 0.48f), ("fil1reso", 0.44f), ("fil1env", 0.5f),
+                                      ("lfo1shape", 1.0f), ("lfo1sync", 0.7143f), ("lfo1depth", 0.9f), ("mtx2_2", 0.88f),
+                                      ("attack", 0.0f), ("decay", 0.4f), ("sustain", 0.75f), ("release", 0.3f),
+                                      ("mac0val", 0.5f), ("mac0dest", 0.7273f), ("mac0amt", 0.70f), ("amp1level", 0.82f), ("volume", 0.78f));
+        Inst("volt", 6, "Noise Sweep",  ("osc1level", 0.0f), ("osc2level", 0.0f), ("noise", 0.95f), ("noisecolor", 0.85f),
+                                      ("fil1type", 0.667f), ("fil1freq", 0.35f), ("fil1reso", 0.62f), ("fil1env", 0.95f), ("fil1slope", 1.0f),
+                                      ("fattack", 0.55f), ("fdecay", 0.6f), ("fsustain", 0.8f), ("frelease", 0.6f),
+                                      ("attack", 0.4f), ("decay", 0.5f), ("sustain", 0.9f), ("release", 0.6f),
+                                      ("amp1level", 0.8f), ("volume", 0.7f));
+        Inst("volt", 6, "Siren",        ("osc1wave", 0.667f), ("osc2level", 0.0f),
+                                      ("fil1freq", 0.70f), ("fil1reso", 0.20f),
+                                      ("lfo1shape", 0.333f), ("lfo1rate", 0.18f), ("lfo1depth", 0.8f), ("mtx2_0", 0.62f),
+                                      ("attack", 0.05f), ("decay", 0.4f), ("sustain", 0.9f), ("release", 0.25f),
+                                      ("mono", 1.0f), ("amp1level", 0.82f), ("volume", 0.76f));
+        // Both filters in series — Filter 1 spills into Filter 2, which is what "To F2" is for.
+        Inst("volt", 6, "Serial Filters",("osc1route", 0.0f), ("osc2route", 0.0f), ("noiseroute", 0.0f), ("osc2detune", 0.57f),
+                                      ("fil1type", 0.0f), ("fil1freq", 0.58f), ("fil1reso", 0.30f), ("fil1env", 0.72f), ("fil1tof2", 1.0f),
+                                      ("fil2type", 0.333f), ("fil2freq", 0.26f), ("fil2reso", 0.24f),
+                                      ("amp1level", 0.0f), ("amp2level", 0.9f),
+                                      ("attack", 0.0f), ("decay", 0.4f), ("sustain", 0.7f), ("release", 0.25f), ("volume", 0.82f));
 
         // ---- Nota Bass (kind 7) — bass synth. Osc Shape morphs sine 0 → tri → saw → pulse 1.
         //      Bipolar knobs (octave/semi/env/lfo-amt/pitch) are neutral at 0.5. Filter type:

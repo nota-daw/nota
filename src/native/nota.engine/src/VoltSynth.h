@@ -19,8 +19,12 @@
 // On top of the fixed routings sits a generic MODULATION MATRIX (mockup 2a/2e):
 // 7 sources (Amp Env, Filter Env, LFO 1, LFO 2, Velocity, Key, Mod Wheel) × 6
 // destinations (Pitch, Osc2 Pitch, Cutoff, Reso, Level, Pan), each a bipolar amount.
-// Eight MACROS add manual offsets into the same destinations. Two full-shape LFOs
-// (sin/tri/sqr/S&H) with depth, per-note fade-in and optional tempo sync round it out.
+// Eight MACROS add manual offsets into a wider list of twelve destinations — the six
+// above plus the three source levels, Filter 2's cutoff and either LFO's rate. Two
+// full-shape LFOs (sin/tri/sqr/S&H) with depth, per-note fade-in and optional tempo
+// sync round it out, and two performance wheels — pitch bend with a selectable range
+// (1..12 semitones) and a mod wheel that is both a matrix source and, when the patch
+// asks for it, the hand on the vibrato.
 //
 // All parameters ride the Instrument plugin-param interface (normalized 0..1, stable
 // ids) → automation / persist / clone for free. Header-only; allocation-free after
@@ -47,9 +51,17 @@ public:
     static constexpr int kSources = 7;   // Amp Env, Flt Env, LFO1, LFO2, Vel, Key, Mod Whl
     static constexpr int kDests   = 6;   // Pitch, Osc2 Pitch, Cutoff, Reso, Level, Pan
     static constexpr int kMacros  = 8;
+    // Macros reach further than the matrix: the six voice-bus destinations above sit at
+    // indices 0, 2, 4, 7, 9 and 11 of this twelve-entry list, exactly where a six-entry
+    // normalized value rounds to — so a project saved against the old list still points
+    // at the same destination. The six new ones act on the block snapshot instead.
+    //   0 Pitch · 1 Osc 1 Level · 2 Osc 2 Pitch · 3 Osc 2 Level · 4 Cutoff · 5 Noise
+    //   6 Filter 2 · 7 Reso · 8 LFO 1 Rate · 9 Level · 10 LFO 2 Rate · 11 Pan
+    static constexpr int kMacroDests = 12;
 
     // Parameter layout (normalized 0..1). Order == persisted state layout — APPEND ONLY.
-    // Scalar block is 0..63; the matrix (64..105) and macros (106..129) follow.
+    // Scalar block is 0..63; the matrix (64..105), macros (106..129) and the two
+    // performance wheels (130..132) follow.
     enum Param {
         Osc1Wave = 0, Osc1Octave, Osc1Semi, Osc1Detune, Osc1Level, Osc1Route,
         Osc2Wave, Osc2Octave, Osc2Semi, Osc2Detune, Osc2Level, Osc2Route,
@@ -69,7 +81,10 @@ public:
         ModWheel, MonoMode, OutPan,                                  // 61,62,63
         MatrixBase,                                                  // 64 (42 entries)
         MacroBase = MatrixBase + kSources * kDests,                  // 106 (24 entries)
-        kNumParams = MacroBase + kMacros * 3                         // 130
+        // ---- appended (v5, almanac rework): the two performance wheels ----
+        ExtraBase = MacroBase + kMacros * 3,                         // 130
+        Bend = ExtraBase, BendRange, VibWheel,                       // 130,131,132
+        kNumParams                                                   // 133
     };
 
     static int matrixIdx(int s, int d) { return MatrixBase + s * kDests + d; }
@@ -96,6 +111,9 @@ public:
         set(ModWheel, 0.0f); set(MonoMode, 0.0f); set(OutPan, 0.5f);
         for (int s = 0; s < kSources; ++s) for (int d = 0; d < kDests; ++d) set((Param)matrixIdx(s, d), 0.5f);  // bipolar zero
         for (int m = 0; m < kMacros; ++m) { set((Param)macroIdx(m, 0), 0.0f); set((Param)macroIdx(m, 1), 0.0f); set((Param)macroIdx(m, 2), 0.5f); }
+        set(Bend, 0.5f);                  // centred
+        set(BendRange, 1.0f / 11.0f);     // ±2 semitones
+        set(VibWheel, 0.0f);              // vibrato at its own depth, not the wheel's
     }
 
     int32_t kind() const override { return 6; }
@@ -133,6 +151,7 @@ public:
             return std::string(ids[i]);
         }
         if (i < MacroBase) { int j = i - MatrixBase; return "mtx" + std::to_string(j / kDests) + "_" + std::to_string(j % kDests); }
+        if (i >= ExtraBase) { static const char* ex[] = { "bend", "bendrange", "vibwheel" }; return std::string(ex[i - ExtraBase]); }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "mac" + std::to_string(m) + (f == 0 ? "val" : f == 1 ? "dest" : "amt");
     }
@@ -160,6 +179,7 @@ public:
         static const char* srcNm[] = { "Amp Env", "Flt Env", "LFO 1", "LFO 2", "Velocity", "Key", "Mod Whl" };
         static const char* dstNm[] = { "Pitch", "Osc2 Pitch", "Cutoff", "Reso", "Level", "Pan" };
         if (i < MacroBase) { int j = i - MatrixBase; return std::string(srcNm[j / kDests]) + " → " + dstNm[j % kDests]; }
+        if (i >= ExtraBase) { static const char* exNm[] = { "Pitch Bend", "Bend Range", "Vibrato → Wheel" }; return std::string(exNm[i - ExtraBase]); }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "Macro " + std::to_string(m + 1) + (f == 0 ? "" : f == 1 ? " Dest" : " Amount");
     }
@@ -233,20 +253,44 @@ public:
     void allNotesOff() override { for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
+        // ---- macros first: six of the twelve destinations move the block snapshot
+        //      below (levels, Filter 2, LFO rates), the other six ride the voice bus ----
+        double macroDst[kDests] = { 0, 0, 0, 0, 0, 0 };
+        double macroBlk[6] = { 0, 0, 0, 0, 0, 0 };   // osc1 lvl · osc2 lvl · noise · fil2 · lfo1 rate · lfo2 rate
+        for (int m = 0; m < kMacros; ++m) {
+            const double x = get((Param)macroIdx(m, 0)) * (get((Param)macroIdx(m, 2)) - 0.5) * 2.0;
+            if (std::fabs(x) <= 1e-4) continue;
+            switch (macroDestOf(get((Param)macroIdx(m, 1)))) {
+                case 0:  macroDst[0] += x; break;   // Pitch
+                case 2:  macroDst[1] += x; break;   // Osc 2 Pitch
+                case 4:  macroDst[2] += x; break;   // Cutoff
+                case 7:  macroDst[3] += x; break;   // Reso
+                case 9:  macroDst[4] += x; break;   // Level
+                case 11: macroDst[5] += x; break;   // Pan
+                case 1:  macroBlk[0] += x; break;   // Osc 1 Level
+                case 3:  macroBlk[1] += x; break;   // Osc 2 Level
+                case 5:  macroBlk[2] += x; break;   // Noise Level
+                case 6:  macroBlk[3] += x; break;   // Filter 2 cutoff
+                case 8:  macroBlk[4] += x; break;   // LFO 1 rate
+                default: macroBlk[5] += x; break;   // LFO 2 rate
+            }
+        }
+
         // ---- per-block param snapshot ----
         const int   w1 = waveOf(Osc1Wave), w2 = waveOf(Osc2Wave);
         const double mult1 = pitchMult(Osc1Octave, Osc1Semi, Osc1Detune);
         const double mult2 = pitchMult(Osc2Octave, Osc2Semi, Osc2Detune);
-        const float lvl1 = get(Osc1Level), lvl2 = get(Osc2Level);
+        const float lvl1 = (float)std::clamp(get(Osc1Level) + macroBlk[0], 0.0, 2.0);
+        const float lvl2 = (float)std::clamp(get(Osc2Level) + macroBlk[1], 0.0, 2.0);
         const double r1 = get(Osc1Route), r2 = get(Osc2Route), rn = get(NoiseRoute);
-        const float noiseLvl = get(NoiseLevel);
+        const float noiseLvl = (float)std::clamp(get(NoiseLevel) + macroBlk[2], 0.0, 2.0);
         const double nColor = std::clamp((double)get(NoiseColor), 0.0, 1.0);
         const double nCoef = 0.02 + 0.9 * nColor;   // one-pole toward white as color rises
 
         const int    t1 = filtTypeOf(Fil1Type), t2 = filtTypeOf(Fil2Type);
         const bool   slope1 = get(Fil1Slope) > 0.5f, slope2 = get(Fil2Slope) > 0.5f;   // true = 24 dB (cascade)
         const double f1base = expMap(get(Fil1Freq), 20.0, 18000.0);
-        const double f2base = expMap(get(Fil2Freq), 20.0, 18000.0);
+        const double f2base = expMap(std::clamp(get(Fil2Freq) + macroBlk[3], 0.0, 1.0), 20.0, 18000.0);
         const double reso1 = get(Fil1Reso), reso2 = get(Fil2Reso);
         const double f1Env = bip(Fil1EnvAmt), f1Lfo = bip(Fil1LfoAmt), f1Key = get(Fil1KeyAmt), toF2 = get(Fil1ToF2);
         const double f2Env = bip(Fil2EnvAmt), f2Lfo = bip(Fil2LfoAmt), f2Key = get(Fil2KeyAmt);
@@ -263,13 +307,16 @@ public:
 
         // LFOs: shape + depth + optional tempo sync.
         const int    lfo1shape = shapeOf(Lfo1Shape), lfo2shape = shapeOf(Lfo2Shape);
-        const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync);
-        const double lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync);
+        // A macro on an LFO's rate scales its increment, so it works synced as well as free.
+        const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync) * std::exp2(macroBlk[4] * 2.0);
+        const double lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync) * std::exp2(macroBlk[5] * 2.0);
         const float  lfo1Depth = get(Lfo1Depth), lfo2Depth = get(Lfo2Depth);
         const float  fade1Inc = fadeInc(Lfo1Fade), fade2Inc = fadeInc(Lfo2Fade);
 
+        const float modWheel = get(ModWheel);
         const double vibInc = expMap(get(VibRate), 0.1, 12.0) / sampleRate_;
-        const double vibCents = get(VibAmt) * 50.0;
+        // "By the wheel": the vibrato depth the patch dials becomes the wheel's ceiling.
+        const double vibCents = get(VibAmt) * 50.0 * (get(VibWheel) > 0.5f ? (double)modWheel : 1.0);
         const double uni = get(Unison);
         const double uniDet = std::exp2(uni * 25.0 / 1200.0);   // side-osc detune (up to ~25 cents)
         const float  uniLvl = (float)(uni * 0.9);
@@ -279,22 +326,18 @@ public:
         const float volume = get(Volume);
         const float outPan = bipF(OutPan);
         const float opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi), opR = std::sin((outPan + 1.0f) * 0.25f * (float)kPi);
-        const float modWheel = get(ModWheel);
+
+        // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
+        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0) / 12.0);
 
         // ---- modulation matrix: compact list of active (src,dst,amount) ----
         int amS[kSources * kDests], amD[kSources * kDests], amCount = 0;
         double amA[kSources * kDests];
-        double macroDst[kDests] = { 0, 0, 0, 0, 0, 0 };
         for (int s = 0; s < kSources; ++s)
             for (int d = 0; d < kDests; ++d) {
                 double a = (get((Param)matrixIdx(s, d)) - 0.5) * 2.0;
                 if (std::fabs(a) > 1e-4) { amS[amCount] = s; amD[amCount] = d; amA[amCount] = a; ++amCount; }
             }
-        for (int m = 0; m < kMacros; ++m) {
-            double val = get((Param)macroIdx(m, 0));
-            double amt = (get((Param)macroIdx(m, 2)) - 0.5) * 2.0;
-            if (std::fabs(val * amt) > 1e-4) macroDst[destOf(get((Param)macroIdx(m, 1)))] += val * amt;
-        }
         const bool pitchMod = amActive(amD, amCount, 0) || amActive(amD, amCount, 1) || macroDst[0] != 0.0 || macroDst[1] != 0.0;
         const bool panMod   = amActive(amD, amCount, 5) || macroDst[5] != 0.0;
         const bool lvlMod   = amActive(amD, amCount, 4) || macroDst[4] != 0.0;
@@ -335,7 +378,7 @@ public:
                 }
 
                 if (glideCoef < 1.0) v.freqCur += (v.freqTarget - v.freqCur) * glideCoef; else v.freqCur = v.freqTarget;
-                double base = v.freqCur * vibMult * invSr;
+                double base = v.freqCur * vibMult * bendMul * invSr;
                 double m1 = mult1, m2 = mult2;
                 if (pitchMod) {
                     const double pm = std::exp2(dst[0] * 2.0);        // ±24 semitones at full
@@ -421,7 +464,7 @@ private:
     int    waveOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
     int    filtTypeOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
     int    shapeOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
-    static int destOf(float v) { return std::clamp((int)std::lround(v * (kDests - 1)), 0, kDests - 1); }
+    static int macroDestOf(float v) { return std::clamp((int)std::lround(v * (kMacroDests - 1)), 0, kMacroDests - 1); }
     static bool amActive(const int* d, int n, int dest) { for (int k = 0; k < n; ++k) if (d[k] == dest) return true; return false; }
     static double resoToK(double reso) { return std::clamp(2.0 - 1.9 * std::clamp(reso, 0.0, 1.0), 0.05, 2.0); }
 

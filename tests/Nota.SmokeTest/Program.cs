@@ -1234,7 +1234,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 130, $"Nota Volt exposes 130 params (got {pc})");
+    Check(pc == 133, $"Nota Volt exposes 133 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1249,7 +1249,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 130 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 133 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");
@@ -1312,6 +1312,95 @@ Console.WriteLine("-- Nota Volt --");
         RenderNote(out float wet);
         Check(wet > 0.001f && Math.Abs(wet - dry) > 1e-5f, $"mod-matrix LFO→Level changes output (dry {dry:F3} / wet {wet:F3})");
         Check(voices >= 1, $"voice meter reports sounding voices ({voices})");
+    }
+
+    // v5: the performance wheels and the vibrato-by-wheel switch.
+    Check(IdOf("bend") >= 0 && IdOf("bendrange") >= 0 && IdOf("vibwheel") >= 0,
+        "wheel params present (bend / bendrange / vibwheel)");
+    {
+        // Each case gets its own engine so a voice left sounding by one render cannot leak
+        // into the next, and each renders the same note for the same length.
+        float[] RenderWith(params (string Id, float Value)[] ps)
+        {
+            using var we = new NotaEngine();
+            we.SetBpm(120); we.SetTimeSignature(4, 4);
+            int tw = we.AddVoltSynthTrack();
+            foreach (var (id, value) in ps)
+                for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                    if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+            we.AddMidiClip(tw, 0.0, 4.0);
+            we.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            we.Seek(0.0); we.Play(); we.RenderOffline(b, 8192); we.StopTransport();
+            return b;
+        }
+        // Zero crossings stand in for pitch: bending up an octave roughly doubles them.
+        int Crossings(float[] b, int n)
+        {
+            int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++;
+            return c;
+        }
+        var flat = RenderWith(("osc2level", 0f), ("fil1freq", 0.9f));
+        var bent = RenderWith(("osc2level", 0f), ("fil1freq", 0.9f), ("bend", 1f), ("bendrange", 1f));
+        bool bfin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { bfin = false; break; }
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        Check(bfin && cb > cf * 1.5, $"pitch bend +12 st raises the pitch ({cf} → {cb} crossings)");
+
+        // Vibrato by wheel: with the wheel down the vibrato is silent, so the patch renders
+        // exactly as one with no vibrato at all; opening the wheel changes the sound.
+        var noVib = RenderWith(("vibamt", 0f), ("osc2level", 0f));
+        var wheelDown = RenderWith(("vibamt", 1f), ("vibwheel", 1f), ("modwheel", 0f), ("osc2level", 0f));
+        var wheelUp = RenderWith(("vibamt", 1f), ("vibwheel", 1f), ("modwheel", 1f), ("osc2level", 0f));
+        float Diff(float[] a, float[] b) { float d = 0; for (int i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        Check(Diff(noVib, wheelDown) < 1e-6f, "vibrato by wheel is silent with the wheel down");
+        Check(Diff(noVib, wheelUp) > 1e-4f, "vibrato by wheel opens up with the wheel up");
+    }
+
+    // v5: macros reach twelve destinations, six of which act on the block snapshot. The
+    // six older ones keep the normalized value an old project saved for them.
+    {
+        // Its own engine per case: this one's earlier tracks still hold clips, and their
+        // output would swamp the one voice under test.
+        float MacroRms(params (string Id, float Value)[] ps)
+        {
+            using var me2 = new NotaEngine();
+            me2.SetBpm(120); me2.SetTimeSignature(4, 4);
+            int tmm = me2.AddVoltSynthTrack();
+            void Put(string id, float v)
+            {
+                for (int i = 0; i < me2.PluginParamCount(tmm, -1); i++)
+                    if (me2.PluginParamId(tmm, -1, i) == id) { me2.PluginParamSet(tmm, -1, i, v); return; }
+            }
+            Put("osc2level", 0f);
+            foreach (var (id, value) in ps) Put(id, value);
+            me2.AddMidiClip(tmm, 0.0, 4.0);
+            me2.SetClipNotes(tmm, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            me2.Seek(0.0); me2.Play(); me2.RenderOffline(b, 8192); me2.StopTransport();
+            return Rms(b, 8192);
+        }
+        // Macro 1 → Osc 2 level (target 3 of 12), full amount: osc 2 comes back.
+        float plain = MacroRms();
+        float lifted = MacroRms(("mac0val", 1f), ("mac0dest", 3f / 11f), ("mac0amt", 1f));
+        Check(lifted > plain * 1.1f, $"a macro on Osc 2 level is audible ({plain:F3} → {lifted:F3})");
+        // The legacy six: 0.8 used to mean "Level" and still does.
+        float neutral = MacroRms(("mac0val", 1f), ("mac0dest", 0.8f), ("mac0amt", 0.5f));
+        float louder = MacroRms(("mac0val", 1f), ("mac0dest", 0.8f), ("mac0amt", 1f));
+        Check(louder > neutral * 1.1f, $"an old macro pointing at Level still lands there ({neutral:F3} → {louder:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Volt id, each applies in place.
+    {
+        var voltIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) voltIds.Add(ve.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 6).ToList();
+        Check(mine.Count == 25, $"Nota Volt ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !voltIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Volt preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = ve.AddVoltSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(ve, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Volt preset applies in place ({fails} failed)");
     }
 }
 

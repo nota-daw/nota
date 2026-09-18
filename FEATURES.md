@@ -261,8 +261,12 @@ and user presets, automation, persistence and cloning.
   crossfade, reverse loop, filter key-tracking, Vel→Vol; Sample · Pitch · Env · Filter
   tabs; an editable waveform.
 - **Nota Grain** — granular synthesizer.
-- **Nota Volt** — subtractive, with a 7×6 modulation matrix, 8 macros, extended LFOs
-  (shapes, fade-in, tempo sync), oscillator start phase, 12/24 dB filter slope, Mono/Poly.
+- **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
+  one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
+  its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a
+  dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix, 8 macros over 12
+  destinations, unison, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
+  modulation wheels, VEL→AMP, VEL→FILTER, Mono/Poly. 25 factory presets.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and unison, two filters with routing, two
   envelopes, two LFOs, an 8×7 mod matrix, 4 macros, built-in drive/chorus/reverb,
