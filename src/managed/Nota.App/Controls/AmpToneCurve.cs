@@ -18,10 +18,10 @@ internal sealed class AmpToneCurve : Control
     private static readonly IBrush Well = NotaPalette.BgSunken;
     private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush Grid = NotaPalette.SurfaceCard;
+    private static readonly IBrush Grid = NotaGraph.Grid;
     private static readonly IBrush Ref = NotaPalette.SurfaceRaised;
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private double _bass, _mid, _treb, _pres;   // dB
     private const double Sr = 44100, FLo = 40, FHi = 12000, DbSpan = 15;
@@ -47,7 +47,7 @@ internal sealed class AmpToneCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, new Pen(BorderIn, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double padB = 10, bot = h - padB, top = 3;
         double Y(double db) => top + (bot - top) * (0.5 - Math.Clamp(db / DbSpan, -1, 1) * 0.5);
         double X(double f) => w * (Math.Log(f / FLo) / Math.Log(FHi / FLo));
@@ -72,7 +72,7 @@ internal sealed class AmpToneCurve : Control
             }
             g.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(Amber, 1.6, lineJoin: PenLineJoin.Round), geo);
+        ctx.DrawGeometry(null, new Pen(Amber, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), geo);
     }
 
     // --- RBJ biquad coefficients + magnitude (mirrors Amp.h) ---

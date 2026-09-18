@@ -254,7 +254,7 @@ public partial class MainWindow
         {
             await RunBlockingAsync(title, "Rendering…", async prog =>
             {
-                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Rendering… {f * 100:0}%")));
+                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Rendering… {f * 100:0}\u2009%")));
                 ok = await Task.Run(() => _freezer.Freeze(Engine, sourceId, endBeats,
                     _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac));
             });

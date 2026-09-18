@@ -16,7 +16,7 @@ internal sealed class RhythmHitViz : Control
 {
     private double _decay = 0.5, _tune = 0.4, _punch = 0.5, _flash;
 
-    private static readonly IBrush EnvBrush = NotaPalette.AccentTint;
+    private static readonly IBrush EnvBrush = NotaPalette.AccentDim;
     private static Color Osc => NotaPalette.AccentBright.Color;
     private static readonly IPen ClickPen = new Pen(NotaPalette.Wash(NotaPalette.TealBright, 0x80), 1);
 

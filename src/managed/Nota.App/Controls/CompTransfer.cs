@@ -22,10 +22,10 @@ internal sealed class CompTransfer : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.AccentBright;
-    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x3C);
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
+    private static readonly IBrush Grid = NotaGraph.Grid;
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x16);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
     private const int Threshold = 0, Ratio = 1, Knee = 5;
     private const double Lo = -60, Hi = 0;
 
@@ -69,7 +69,7 @@ internal sealed class CompTransfer : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         var (x0, x1, top, bot) = Geo();
         for (int i = 1; i <= 3; i++) { double gx = x0 + (x1 - x0) * i / 4.0, gy = top + (bot - top) * i / 4.0; ctx.DrawLine(new Pen(Grid, 1), new Point(gx, top), new Point(gx, bot)); ctx.DrawLine(new Pen(Grid, 1), new Point(x0, gy), new Point(x1, gy)); }
         // Unity diagonal (dashed).
@@ -85,17 +85,16 @@ internal sealed class CompTransfer : Control
         var pts = new System.Collections.Generic.List<Point>();
         for (double db = Lo; db <= Hi + 0.01; db += 1.5) pts.Add(new Point(X(db, x0, x1), Y(OutDb(db, thr, ratio, knee), top, bot)));
         using (var gc = geo.Open()) { gc.BeginFigure(new Point(pts[0].X, bot), true); foreach (var pt in pts) gc.LineTo(pt); gc.LineTo(new Point(pts[^1].X, bot)); gc.EndFigure(true); }
-        ctx.DrawGeometry(Fill, null, geo);
         var pen = new Pen(Accent, 1.8, lineJoin: PenLineJoin.Round);
         for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
 
         // Operating handle at the threshold knee point.
-        ctx.DrawEllipse(Accent, new Pen(Sunken, 2), new Point(tx, Y(OutDb(thr, thr, ratio, knee), top, bot)), 4.5, 4.5);
+        NotaGraph.Node(ctx, new Point(tx, Y(OutDb(thr, thr, ratio, knee), top, bot)), active: true);
 
         void Txt(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         Txt("TRANSFER", x0 + 1, top - 1, Axis);
         Txt($"{ratio:0}:1 · knee {knee:0}", x1 - 68, top - 1, Accent);
         Txt("−60", 1, bot - 5, Axis);
-        Txt("0 dB in", x1 - 34, bot + 3, Axis);
+        Txt("0\u2009dB in", x1 - 34, bot + 3, Axis);
     }
 }

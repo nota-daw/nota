@@ -20,14 +20,19 @@ namespace Nota.App;
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-        private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly Typeface Face = new(FontFamily.Default);
+        private static readonly IBrush GridB = NotaGraph.Grid;
+        private static readonly Typeface Face = NotaFonts.Mono;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _freq, _reso;
         private int _type;
         private string _title = "FILTER 1";
         private bool _drag;
+
+        /// <summary>The instrument's own cutoff map, lo → hi in Hz (Volt's is the default).
+        /// The readout and the frequency scale both come from it, so the graph says what the
+        /// engine actually does.</summary>
+        public (double Lo, double Hi) FreqRange { get; set; } = (20.0, 18000.0);
 
         public VoltFilter(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
         public void Target(string title, (int, string) freq, (int, string) reso, int type)
@@ -58,7 +63,7 @@ namespace Nota.App;
             G1(_freq); G1(_reso);
         }
         private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.Accent, 0x18);
-        private static readonly IBrush AxisB = NotaPalette.TextDisabled;
+        private static readonly IBrush AxisB = NotaPalette.TextAxis;
         private static readonly IBrush HandleB = NotaPalette.AccentBright;
 
         private (double x0, double x1, double top, double bot) Geo()
@@ -90,6 +95,8 @@ namespace Nota.App;
                     p.Add(new(x0, bot)); p.Add(new(kx, mid)); p.Add(new(cx, peakY)); p.Add(new(rx, mid)); p.Add(new(x1, bot)); break;
                 case 3: // Notch: flat with a dip
                     p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, bot)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
+                case 4: // Morph (Aurora): flat either side with a bell at the cutoff
+                    p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
                 default: // LP: flat to cutoff, resonance peak, roll off
                     p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new((cx + x1) / 2, mid)); p.Add(new(x1, bot)); break;
             }
@@ -99,7 +106,7 @@ namespace Nota.App;
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-            ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
             var (x0, x1, top, bot) = Geo();
             // Grid: 3 horizontal (mid dashed) + 3 vertical.
             var gp = new Pen(GridB, 1);
@@ -120,22 +127,23 @@ namespace Nota.App;
                 gc.LineTo(new Point(pts[^1].X, bot));
                 gc.EndFigure(true);
             }
-            ctx.DrawGeometry(FillB, null, geo);
             var pen = new Pen(AccentBright, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
             for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
 
             // Cutoff marker line + draggable handle at the curve's cutoff point.
             ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 1), new Point(cx, top), new Point(cx, bot));
             double hy = _type == 3 ? bot : Math.Max(top + 2, top + (bot - top) * 0.34 - res * ((bot - top) * 0.34) * 0.92);
-            ctx.DrawEllipse(HandleB, new Pen(Sunken, 2), new Point(cx, hy), 4.5, 4.5);
+            NotaGraph.Node(ctx, new Point(cx, hy), active: true);
 
             // Axis labels: dB left, frequency scale along the bottom.
             void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
             Lbl("+12", x0 + 1, top - 1, AxisB);
-            Lbl("−48 dB", x0 + 1, bot - 10, AxisB);
-            string[] fq = { "20", "100", "1k", "10k", "20k" };
-            for (int i = 0; i < 5; i++) { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(fq[i], Math.Clamp(lx - 6, x0, x1 - 18), bot + 2, AxisB); }
-            double hz = 20.0 * Math.Pow(900.0, cut);
-            Lbl(hz >= 1000 ? $"● {hz / 1000.0:0.0}k" : $"● {hz:0} Hz", x1 - 52, top - 1, AccentBright);
+            Lbl("−48\u2009dB", x0 + 1, bot - 10, AxisB);
+            double HzAt(double v) => FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, v);
+            for (int i = 0; i < 5; i++)
+            { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(NotaNum.Hz(HzAt(i / 4.0)), Math.Clamp(lx - 6, x0, x1 - 22), bot + 2, AxisB); }
+            double hz = HzAt(cut);
+            Glyph.Draw(ctx, GlyphKind.Record, new Rect(x1 - 52, top + 2, 5, 5), AccentBright);
+            Lbl(NotaNum.Hz(hz), x1 - 45, top - 1, AccentBright);
         }
     }

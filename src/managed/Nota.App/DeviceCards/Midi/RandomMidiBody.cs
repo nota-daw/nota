@@ -59,43 +59,23 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         // ---- generic controls ----
         Control MiniSlider(string label, int p, double min, double max, Func<double, string> fmt, double w)
         {
-            var val = Mono(fmt(G(p)), Txt); val.MinWidth = 30;
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 9, Background = Sub, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Width = w, Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center });
-            slot.Children.Add(fill); slot.Children.Add(handle);
-            void Vis(double v) { double n = (v - min) / (max - min); fill.Width = n * w; handle.Margin = new Thickness(Math.Clamp(n * w - 4, 0, w - 8), 0, 0, 0); }
-            bool drag = false;
-            void SetX(double x) { double n = Math.Clamp(x / w, 0, 1); double v = min + n * (max - min); S(p, v); Vis(v); val.Text = fmt(v); Refresh(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-            MidiLearn.Bind(slot, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
-            readouts.Add(() => { if (!drag) { double v = G(p); Vis(v); val.Text = fmt(v); } });
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap(label), slot, val } };
+            var row = DeviceCardKit.SliderRow(label, () => (G(p) - min) / (max - min), n => { S(p, min + n * (max - min)); Refresh(); }, () => fmt(G(p)), out var sync,
+                trackWidth: w, valueWidth: 30);
+            MidiLearn.Bind(row, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
+            readouts.Add(sync);
+            return row;
         }
         Control Seg(int p, string[] names, Action<int>? extra = null, double fs = 9, double padX = 7)
         {
-            var arr = new Border[names.Length];
-            void Hi() { int cur = Math.Clamp(Gi(p), 0, names.Length - 1); for (int i = 0; i < names.Length; i++) { bool on = i == cur; arr[i].Background = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? Ink : Muted; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(padX, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = Muted } }; c.PointerPressed += (_, _) => { S(p, iv); extra?.Invoke(iv); Refresh(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp(Gi(p), 0, names.Length - 1), iv => { S(p, iv); extra?.Invoke(iv); Refresh(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
         Control Toggle(int p, string label, IBrush accent)
         {
-            var trk = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = Inset };
-            var knob = new Ellipse { Width = 6, Height = 6, Fill = Muted, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            trk.Child = knob;
-            var lbl = Cap(label, accent);
-            void Sync() { bool on = G(p) >= 0.5f; trk.Background = on ? accent : Inset; knob.Fill = on ? Ink : Muted; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; knob.Margin = new Thickness(on ? 0 : 2, 0, on ? 2 : 0, 0); lbl.Foreground = on ? accent : Muted; }
-            var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { trk, lbl } };
-            host.PointerPressed += (_, _) => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); };
-            readouts.Add(Sync); Sync();
+            var host = DeviceCardKit.Switch(label, () => G(p) >= 0.5f, () => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(host, MidiTarget.MidiDeviceParam(track, mi, p), label);
             return host;
         }
@@ -104,10 +84,10 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         {
             var nm = new TextBlock { Text = name, FontSize = 9, Foreground = Txt, Width = 56, VerticalAlignment = VerticalAlignment.Center };
             var val = Mono(fmt(G(p)), Sub); val.Width = 46; val.TextAlignment = TextAlignment.Right;
-            var fill = new Border { Background = colour, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+            var fill = new Border { Background = colour, CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
             var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Inset };
             slot.Children.Add(fill);
-            var slotClip = new Border { Height = 9, CornerRadius = new CornerRadius(3), ClipToBounds = true, Child = slot, VerticalAlignment = VerticalAlignment.Center };
+            var slotClip = new Border { Height = 9, CornerRadius = NotaRadius.Badge, ClipToBounds = true, Child = slot, VerticalAlignment = VerticalAlignment.Center };
             void Vis(double v) { fill.Width = (v - min) / (max - min) * slot.Bounds.Width; }
             bool drag = false;
             void SetX(double x) { double n = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); double v = min + n * (max - min); S(p, v); Vis(v); val.Text = fmt(v); Refresh(); }
@@ -124,15 +104,15 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         }
 
         // ---- LIVE strip ----
-        var chance = MiniSlider("CHANCE", PChance, 0, 1, v => $"{v * 100:0} %", 110);
+        var chance = MiniSlider("CHANCE", PChance, 0, 1, v => $"{v * 100:0}\u2009%", 110);
         var distSeg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("DIST"), Seg(PDist, Dists) } };
         var seedTxt = Mono("", Teal, 9);
         readouts.Add(() => seedTxt.Text = $"seed {Gi(PSeed)}" + (G(PLocked) >= 0.5f ? " · locked" : ""));
-        var lockBtn = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Lock seed", FontSize = 9 } };
-        void LockSync() { bool on = G(PLocked) >= 0.5f; lockBtn.Background = on ? TealSubtle : Card; lockBtn.BorderBrush = on ? Teal : Bd; ((TextBlock)lockBtn.Child!).Foreground = on ? Teal : Sub; }
+        var lockBtn = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Lock seed", FontSize = 9 } };
+        void LockSync() { bool on = G(PLocked) >= 0.5f; lockBtn.Background = on ? NotaPalette.AccentSubtle : Card; lockBtn.BorderBrush = on ? NotaPalette.BorderBrass : Bd; ((TextBlock)lockBtn.Child!).Foreground = on ? NotaPalette.AccentHover : Sub; }
         lockBtn.PointerPressed += (_, _) => { S(PLocked, G(PLocked) >= 0.5f ? 0 : 1); Refresh(); };
         readouts.Add(LockSync); LockSync();
-        var reroll = new Border { Background = Card, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 9, Foreground = Sub } };
+        var reroll = new Border { Background = Card, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 9, Foreground = Sub } };
         reroll.PointerPressed += (_, _) => { long s = (long)Gi(PSeed); s = (s * 1103515245L + 12345L) % 1000L; if (s <= 0) s += 1000; S(PSeed, s); Refresh(); };
         var liveR = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Children = { seedTxt, lockBtn, reroll } };
         var liveL = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = { chance, distSeg } };
@@ -147,11 +127,11 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         var varyStack = new StackPanel { Spacing = 3, Children =
         {
             vHead,
-            VaryRow("Note", PNoteRange, 0, 12, v => v < 0.5 ? "off" : $"±{v:0} st", Amber),
+            VaryRow("Note", PNoteRange, 0, 12, v => v < 0.5 ? "off" : $"±{v:0}\u2009st", Amber),
             VaryRow("Velocity", PVelAmt, 0, 1, v => v < 0.01 ? "off" : $"±{v * 0.5 * 127:0}", Amber),
-            VaryRow("Timing", PTimeAmt, 0, 1, v => v < 0.01 ? "off" : $"±{v * 50:0} ms", Teal),
-            VaryRow("Skip", PSkip, 0, 1, v => v < 0.01 ? "off" : $"{v * 100:0} %", Red),
-            VaryRow("Octave", POctAmt, 0, 1, v => { int n = (int)Math.Round(v * 2); return n <= 0 ? "off" : $"±{n} oct"; }, Amber),
+            VaryRow("Timing", PTimeAmt, 0, 1, v => v < 0.01 ? "off" : $"±{v * 50:0}\u2009ms", Teal),
+            VaryRow("Skip", PSkip, 0, 1, v => v < 0.01 ? "off" : $"{v * 100:0}\u2009%", Red),
+            VaryRow("Octave", POctAmt, 0, 1, v => { int n = (int)Math.Round(v * 2); return n <= 0 ? "off" : $"±{n}\u2009oct"; }, Amber),
         } };
         var varyPanel = new Border { Padding = new Thickness(8, 6), Child = varyStack };
 

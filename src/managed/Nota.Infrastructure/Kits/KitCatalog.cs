@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The shipped factory kits, as recipes. Ten kits x 16 pads, defined here rather than
+// The shipped factory kits, as recipes. 25 kits x 16 pads, defined here rather than
 // bundled as audio: the installer carries a few kilobytes of parameters and the WAVs
 // are rendered on the user's machine the first time Nota runs (KitLibrary).
+//
+// The first ten kits live here; the fifteen genre kits that followed are in
+// KitCatalog.Genres.cs. Browser order is the Build() list below.
 //
 // Pad layout follows the General MIDI drum map for notes 36-51, so a pattern written
 // for any other drum instrument lands on the right pads here:
@@ -25,7 +28,7 @@ using System.Collections.Generic;
 
 namespace Nota.Infrastructure.Kits;
 
-public static class KitCatalog
+public static partial class KitCatalog
 {
     private static IReadOnlyList<KitDefinition>? _all;
 
@@ -42,6 +45,9 @@ public static class KitCatalog
     {
         Volta(), Kompakt(), Micron(), Linnwood(), Atelier(),
         Cellar(), Neon(), Foundry(), Terra(), Aether(),
+        BrassRoom(), Breakline(), Bunker(), Pixel(), Velvet(),
+        Circuit(), Yard(), Byte(), Lagoon(), Titan(),
+        Shuffle(), Mirrorball(), Pit(), Hyper(), Crate(),
     };
 
     // ======================================================================

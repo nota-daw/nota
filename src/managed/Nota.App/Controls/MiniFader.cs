@@ -49,10 +49,15 @@ public sealed class MiniFader : Control
         _value = Math.Clamp(value, 0, max);
         Height = 12;
         MinWidth = 40;
+        Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
+
+    private double _lastY;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        // Left button only — right-click bubbles to the CV-modulate / MIDI Learn menu.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         // Double-click resets to the default value (e.g. 0 dB for a track volume).
         if (e.ClickCount == 2 && Default >= 0)
         {
@@ -62,15 +67,20 @@ public sealed class MiniFader : Control
             return;
         }
         _drag = true;
+        _lastY = e.GetPosition(this).Y;
         e.Pointer.Capture(this);
         GestureBegin?.Invoke();
-        SetFromX(e.GetPosition(this).X);
         e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (_drag) SetFromX(e.GetPosition(this).X);
+        if (!_drag) return;
+        double y = e.GetPosition(this).Y, dy = _lastY - y;   // up = increase, ~140px full range
+        _lastY = y;
+        if (dy == 0) return;
+        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        SetValue(_value + dy / (fine ? 1400.0 : 140.0) * _max);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -80,11 +90,9 @@ public sealed class MiniFader : Control
         e.Pointer.Capture(null);
     }
 
-    private void SetFromX(double x)
+    private void SetValue(double raw)
     {
-        double w = Bounds.Width;
-        if (w <= 0) return;
-        double v = Math.Clamp(x / w, 0, 1) * _max;
+        double v = Math.Clamp(raw, 0, _max);
         if (Math.Abs(v - _value) < 1e-4) return;
         _value = v;
         InvalidateVisual();
@@ -99,8 +107,10 @@ public sealed class MiniFader : Control
         double frac = _max > 0 ? _value / _max : 0;
         double fx = frac * w;
 
-        ctx.DrawRectangle(Track, null, new Rect(0, cy - 1.5, w, 3), 2, 2);
-        if (fx > 0) ctx.DrawRectangle(Accent ? FillAccent : Fill, null, new Rect(0, cy - 1.5, fx, 3), 2, 2);
-        ctx.DrawRectangle(Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - 4, 0, w - 8), cy - 4.5, 8, 9), 2, 2);
+        // Almanac slider: 3px well track, fill, 6×7 handle (SliderTrack draws the same).
+        ctx.DrawRectangle(Track, null, new Rect(0, cy - SliderTrack.TrackH / 2, w, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        if (fx > 0) ctx.DrawRectangle(Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        double hw = SliderTrack.HandleW, hh = SliderTrack.HandleH;
+        ctx.DrawRectangle(Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.ClipValue, NotaRadius.ClipValue);
     }
 }

@@ -15,7 +15,7 @@ namespace Nota.App;
 
 internal sealed class VelocityCurveViz : Control
 {
-    private static readonly IBrush GridB = NotaPalette.SurfaceCard;
+    private static readonly IBrush GridB = NotaGraph.Grid;
     private static readonly IBrush Ident = NotaPalette.SurfaceRaised;
     private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush Teal = NotaPalette.Wash(NotaPalette.Teal, 0x80);
@@ -68,7 +68,7 @@ internal sealed class VelocityCurveViz : Control
         if (_last is { } l && (l.x > 0 || l.y > 0))
         {
             var p = P(l.x, l.y);
-            ctx.DrawEllipse(new SolidColorBrush(NotaPalette.AccentBright.Color, 0.28), null, p, 7, 7);
+            ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.AccentBright, 0x47), null, p, 7, 7);
             ctx.DrawEllipse(Bright, new Pen(Ink, 2), p, 4.5, 4.5);
         }
     }

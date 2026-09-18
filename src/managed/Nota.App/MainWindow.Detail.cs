@@ -22,8 +22,8 @@ namespace Nota.App;
 public partial class MainWindow
 {
     // Base track colour for a track id (mirrors the arrangement palette, 1e).
-    private Color TrackColor(int trackId)
-        => ArrangementView.TrackColorForIndex(ArrangementView.EffectiveColorIndex(Engine, trackId));
+    private SolidColorBrush TrackBrush(int trackId)
+        => ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(Engine, trackId));
 
     // Detail-header track chip (1d/1e): colour dot · name · routing/PDC summary.
     // trackId <= 0 shows a plain mode label (e.g. the full-width Mixer).
@@ -50,9 +50,9 @@ public partial class MainWindow
             : master ? "Master" : ret ? $"Return {Engine.TrackReturnIndex(trackId) + 1}" : (inst ? "Inst " : "Audio ") + trackId;
         string type = master ? "master" : ret ? "return" : inst ? "instrument · MIDI in" : "audio · In 1";
         double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
-        string summary = string.Format(System.Globalization.CultureInfo.InvariantCulture, "· {0} · Monitor Auto · PDC {1:0.0} ms", type, ms);
+        string summary = string.Format(NotaNum.Culture, "· {0} · Monitor Auto · PDC {1:0.0}\u2009ms", type, ms);
 
-        var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = new SolidColorBrush(TrackColor(trackId)), VerticalAlignment = VerticalAlignment.Center };
+        var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = TrackBrush(trackId), VerticalAlignment = VerticalAlignment.Center };
         var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sumText = new TextBlock { Text = summary, Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
@@ -302,7 +302,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         _audioEditor = new AudioClipEditorView(Engine, trackId, clipIndex,
-            new SolidColorBrush(TrackColor(trackId)), () => Timeline.Refresh());
+            TrackBrush(trackId), () => Timeline.Refresh());
         _audioEditorTrackId = trackId;
         _audioEditorClipIndex = clipIndex;
     }
@@ -358,7 +358,7 @@ public partial class MainWindow
         };
         double length = Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
         double start = ci.StartBeat;
-        roll.SetTrackColor(TrackColor(trackId));
+        roll.SetTrackColor(TrackBrush(trackId));
         roll.SetClipIdentity(trackId, clipIndex);
         roll.SetNotes(Engine.GetClipNotes(trackId, clipIndex), length);
 
@@ -511,7 +511,7 @@ public partial class MainWindow
         {
             _sessionSlotTrack = -1; _sessionSlotScene = -1;   // audio slot: no pattern to step
             SyncClipTab();
-            var audioEd = new SessionAudioSlotEditor(Engine, trackId, scene, new SolidColorBrush(TrackColor(trackId)));
+            var audioEd = new SessionAudioSlotEditor(Engine, trackId, scene, TrackBrush(trackId));
             _editorRoll = null; _clipEditor = null;
             _editorTrackId = -1; _editorClipIndex = -1;
             _lastClipEditor = audioEd;
@@ -541,7 +541,7 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
         };
         double slotLen = Engine.SessionSlotLength(trackId, scene);
-        roll.SetTrackColor(TrackColor(trackId));
+        roll.SetTrackColor(TrackBrush(trackId));
         roll.SetClipIdentity(trackId, -(scene + 2));   // distinct key from arrangement clips
         roll.SetNotes(Engine.GetSessionNotes(trackId, scene), slotLen > 0 ? slotLen : 4);
 

@@ -57,20 +57,16 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         // Param-backed segmented control (fill = active choice).
         Control Seg(int p, string[] names, double fs = 9, double padX = 6, int off = 0)
         {
-            var arr = new Border[names.Length];
-            void Hi() { int cur = Math.Clamp(GI(p) - off, 0, names.Length - 1); for (int i = 0; i < names.Length; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Brushes.Transparent; arr[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(padX, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = MutedC } }; c.PointerPressed += (_, _) => { S(p, iv + off); Hi(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp(GI(p) - off, 0, names.Length - 1), iv => S(p, iv + off), out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
         // Outlined toggle: filled only when on.
         Control OutToggle(int p, string label)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(9, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
-            void Hi() { bool on = G(p) > 0.5f; b.Background = on ? AmberSubtle : Brushes.Transparent; b.BorderBrush = on ? Amber : Border2; ((TextBlock)b.Child!).Foreground = on ? AmberLit : MutedC; }
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(9, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
+            void Hi() { bool on = G(p) > 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; b.BorderBrush = on ? NotaPalette.BorderBrass : Border2; ((TextBlock)b.Child!).Foreground = on ? NotaPalette.AccentHover : MutedC; }
             b.PointerPressed += (_, _) => { S(p, G(p) > 0.5f ? 0 : 1); Hi(); };
             readouts.Add(Hi); Hi();
             MidiLearn.Bind(b, MidiTarget.MidiDeviceParam(track, mi, p), label);
@@ -79,9 +75,9 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         // Compact drag value (label above a field you drag; double-click resets).
         Control DragVal(int p, string name, double min, double max, Func<double, string> fmt)
         {
-            var val = new TextBlock { Text = fmt(G(p)), FontSize = 10, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var val = new TextBlock { Text = fmt(G(p)), FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            var field = new Border { MinWidth = 44, Height = 17, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(3, 0), Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = val };
+            var field = new Border { MinWidth = 44, Height = 17, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(3, 0), Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = val };
             bool drag = false; double sx = 0, sv = 0;
             field.PointerPressed += (_, e) =>
             {
@@ -96,15 +92,15 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         }
         Control Stepper(int p, int min, int max)
         {
-            var val = new TextBlock { Text = GI(p).ToString(), FontSize = 11, Foreground = TxtC, MinWidth = 18, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var val = new TextBlock { Text = GI(p).ToString(), FontSize = 9, Foreground = TxtC, MinWidth = 18, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            Border Btn(string t, int d) { var b = new Border { Width = 18, Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 11, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { int v = Math.Clamp(GI(p) + d, min, max); S(p, v); val.Text = v.ToString(); }; return b; }
+            Border Btn(string t, int d) { var b = new Border { Width = 18, Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { int v = Math.Clamp(GI(p) + d, min, max); S(p, v); val.Text = v.ToString(); }; return b; }
             readouts.Add(() => val.Text = GI(p).ToString());
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { Btn("−", -1), val, Btn("+", +1) } };
         }
 
         // ---- LIVE strip ----
-        string Pct(double v) => $"{v * 100:0}%";
+        string Pct(double v) => $"{v * 100:0}\u2009%";
         var live = new Border { Height = 34, Background = HdrBg, BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0), Children = {
                 Seg(GSync, new[] { "Free", "Sync" }, 9, 7),
@@ -135,7 +131,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         for (int i = 0; i < lanes.Length; i++)
         {
             int li = i;
-            var b = new Border { Height = 22, CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 0), BorderThickness = new Thickness(2, 0, 0, 0), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = lanes[i].name, FontSize = 10, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center } };
+            var b = new Border { Height = 22, CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 0), BorderThickness = new Thickness(2, 0, 0, 0), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = lanes[i].name, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center } };
             b.PointerPressed += (_, _) => SelectLane(li);
             laneBtns[i] = b; railCol.Children.Add(b);
         }
@@ -155,10 +151,10 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         var orderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 2, RowSpacing = 2 };
         for (int i = 0; i < 4; i++) orderGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         var orderChips = new Border[OrderNames.Length];
-        void HiOrder() { int cur = Math.Clamp(GI(GOrder), 0, OrderNames.Length - 1); for (int i = 0; i < OrderNames.Length; i++) { bool on = i == cur; orderChips[i].Background = on ? AmberSubtle : Inset; orderChips[i].BorderBrush = on ? Amber : Border2; ((TextBlock)orderChips[i].Child!).Foreground = on ? AmberLit : MutedC; } }
+        void HiOrder() { int cur = Math.Clamp(GI(GOrder), 0, OrderNames.Length - 1); for (int i = 0; i < OrderNames.Length; i++) { bool on = i == cur; orderChips[i].Background = on ? Amber : Inset; orderChips[i].BorderBrush = on ? Amber : Border2; ((TextBlock)orderChips[i].Child!).Foreground = on ? NotaPalette.TextOnAccent : MutedC; } }
         for (int i = 0; i < OrderNames.Length; i++)
         {
-            int iv = i; var c = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(2, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = OrderNames[i], FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } };
+            int iv = i; var c = new Border { BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = OrderNames[i], FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } };
             c.PointerPressed += (_, _) => { S(GOrder, iv); HiOrder(); };
             Grid.SetColumn(c, i % 2); Grid.SetRow(c, i / 2); orderChips[i] = c; orderGrid.Children.Add(c);
         }
@@ -168,25 +164,17 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         // Full-width segmented control: equal-star columns so the buttons fill the rail evenly.
         Control SegFill(int p, string[] names, int off = 0)
         {
-            int n = names.Length; var arr = new Border[n];
-            var grid = new Grid { ColumnSpacing = 2 };
-            void Hi() { int cur = Math.Clamp(GI(p) - off, 0, n - 1); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Inset; arr[i].BorderBrush = on ? Amber : Border2; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
-            for (int i = 0; i < n; i++)
-            {
-                grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-                int iv = i; var c = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } };
-                c.PointerPressed += (_, _) => { S(p, iv + off); Hi(); }; arr[i] = c; Grid.SetColumn(c, i); grid.Children.Add(c);
-            }
-            readouts.Add(Hi); Hi();
-            MidiLearn.Bind(grid, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
-            return grid;
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp(GI(p) - off, 0, names.Length - 1), iv => S(p, iv + off), out var sync, fill: true);
+            readouts.Add(sync);
+            MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
+            return seg;
         }
         var rightRail = new Border { Width = 120, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 7),
             Child = new StackPanel { Spacing = 5, Children = {
                 Block("ORDER", TxtC, orderGrid),
                 Block("OCT", MutedC, SegFill(GOctaves, new[] { "1", "2", "3", "4" }, off: 1)),
                 Block("DIR", MutedC, SegFill(GOctaveMode, DirGlyphs)),
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = "TRANSP", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, DragVal(GTranspose, "", -24, 24, v => $"{v:+0;-0;0} st") } } } } };
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = "TRANSPOSE", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, DragVal(GTranspose, "", -24, 24, v => $"{v:+0;−0;0}\u2009st") } } } } };
 
         // ---- assemble ----
         DockPanel.SetDock(laneRail, Dock.Left); DockPanel.SetDock(rightRail, Dock.Right);

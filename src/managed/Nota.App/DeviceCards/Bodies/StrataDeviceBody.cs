@@ -38,6 +38,8 @@ internal sealed class StrataDeviceBody : IDeviceBody
     };
 
     public double Width => 700;
+
+    public string? Subtitle => "LOOPER";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -60,22 +62,22 @@ internal sealed class StrataDeviceBody : IDeviceBody
         barNum.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var ticks = new Border[16];
         var tickRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 0; i < 16; i++) { ticks[i] = new Border { Width = i % 4 == 0 ? 2 : 1, Height = 14, Background = Sunken, CornerRadius = new CornerRadius(1) }; tickRow.Children.Add(ticks[i]); }
+        for (int i = 0; i < 16; i++) { ticks[i] = new Border { Width = i % 4 == 0 ? 2 : 1, Height = 14, Background = Sunken, CornerRadius = NotaRadius.Bar }; tickRow.Children.Add(ticks[i]); }
         var ofBars = new TextBlock { Text = "of – bars", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
 
         // Transport actions. Each button is captioned with what it does next; the
         // active mode's button lights in its colour.
         var actNames = new[] { "Record", "Overdub", "Play", "Stop" };
         var actCmds = new[] { C_Record, C_Overdub, C_Play, C_Stop };
-        var actColors = new[] { NotaPalette.Danger.Color, NotaPalette.Accent.Color, NotaPalette.Success.Color, NotaPalette.TextSecondary.Color };
+        var actInks = new[] { NotaPalette.Record, NotaPalette.Accent, NotaPalette.Success, NotaPalette.TextSecondary };
         var actBtn = new Border[4]; var actSub = new TextBlock[4]; var actName = new TextBlock[4];
         var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
-            actName[i] = new TextBlock { Text = actNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(actColors[i]) };
+            actName[i] = new TextBlock { Text = actNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = actInks[i] };
             actSub[i] = new TextBlock { Text = "", FontSize = 7, Foreground = TextTertiary };
-            actBtn[i] = new Border { Height = 24, MinWidth = 62, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            actBtn[i] = new Border { Height = 24, MinWidth = 62, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { actName[i], actSub[i] } } };
             actBtn[i].PointerPressed += (_, _) => Act(actCmds[iv]);
             actRow.Children.Add(actBtn[i]);
@@ -87,7 +89,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
-        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var layerRows = new Border[MaxLayers]; var waves = new StrataWave[MaxLayers];
         var stateTxts = new TextBlock[MaxLayers]; var dbTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers]; var idxTxts = new TextBlock[MaxLayers];
         var layerStack = new StackPanel { Spacing = 3 };
@@ -105,9 +107,9 @@ internal sealed class StrataDeviceBody : IDeviceBody
             // Vertical drag on the dB readout sets that layer's level.
             bool drag = false; double startY = 0, startDb = 0;
             dbTxts[i].PointerPressed += (_, e) => { drag = true; startY = e.GetPosition(dbTxts[iv]).Y; startDb = scope[7 + iv * 3]; e.Pointer.Capture(dbTxts[iv]); };
-            dbTxts[i].PointerMoved += (_, e) => { if (drag) { double db = Math.Clamp(startDb + (startY - e.GetPosition(dbTxts[iv]).Y) * 0.15, -24, 12); Act(A_LayerGain, iv, (float)db); dbTxts[iv].Text = $"{db:+0.0;-0.0;0.0}"; } };
+            dbTxts[i].PointerMoved += (_, e) => { if (drag) { double db = Math.Clamp(startDb + (startY - e.GetPosition(dbTxts[iv]).Y) * 0.15, -24, 12); Act(A_LayerGain, iv, (float)db); dbTxts[iv].Text = $"{db:+0.0;−0.0;0.0}"; } };
             dbTxts[i].PointerReleased += (_, e) => { drag = false; e.Pointer.Capture(null); };
-            muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = Sunken, Cursor = new Cursor(StandardCursorType.Hand),
+            muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = Sunken, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = "M", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
             muteBtns[i].PointerPressed += (_, _) => { bool nowMuted = scope[8 + iv * 3] <= 0.5f; Act(A_LayerMute, iv, nowMuted ? 1f : 0f); };
             var row = new DockPanel { LastChildFill = true, Children = { } };
@@ -115,7 +117,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { stateTxts[i], dbTxts[i], muteBtns[i] } };
             DockPanel.SetDock(left, Dock.Left); DockPanel.SetDock(right, Dock.Right);
             row.Children.Add(left); row.Children.Add(right); row.Children.Add(new Border { Margin = new Thickness(7, 0), Child = waves[i] });
-            layerRows[i] = new Border { Height = 36, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1, 1, 1, 1), Padding = new Thickness(7, 0), IsVisible = false, Child = row };
+            layerRows[i] = new Border { Height = 36, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1, 1, 1, 1), Padding = new Thickness(7, 0), IsVisible = false, Child = row };
             layerStack.Children.Add(layerRows[i]);
         }
         var layerHead = new DockPanel { LastChildFill = false, Children = { Lbl("LAYERS", 8, TextTertiary) } };
@@ -132,62 +134,46 @@ internal sealed class StrataDeviceBody : IDeviceBody
             double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
             double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
             double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
-            double tw = 84;
-            var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
-            var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
-            var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-            Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
-            canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
-            var val = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            bool drag = false;
-            void Vis(double v) { double nn = NormOf(v); fill.Width = Math.Max(0, nn * tw); Canvas.SetLeft(handle, nn * tw - 4); val.Text = fmt(v); }
-            void From(PointerEventArgs e) { double nn = Math.Clamp(e.GetPosition(canvas).X / tw, 0, 1); float v = (float)ValOf(nn); SetR(p, v); Vis(v); }
-            canvas.PointerPressed += (_, e) => { drag = true; engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""); e.Pointer.Capture(canvas); From(e); };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""); e.Pointer.Capture(null); } };
-            MidiLearn.Bind(canvas, MidiTarget.DeviceParam(track, di, p), name);
-            readouts.Add(() => { if (!drag) Vis(P(p)); });
-            Vis(P(p));
-            var lbl = new TextBlock { Text = name, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = ReferenceEquals(accent, Teal) ? Teal : TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center };
+            var slider = new SliderTrack { Width = 84 };
+            var val = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = 9, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+            void Vis() { slider.Norm = NormOf(P(p)); val.Text = fmt(P(p)); }
+            slider.Changed += n => { SetR(p, (float)ValOf(n)); val.Text = fmt(P(p)); };
+            slider.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+            slider.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+            MidiLearn.Bind(slider, MidiTarget.DeviceParam(track, di, p), name);
+            readouts.Add(() => { if (!slider.Dragging) Vis(); });
+            Vis();
+            var lbl = new TextBlock { Text = name.ToUpperInvariant(), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.RowLabelTracking, Foreground = TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center };
             var head = new DockPanel { LastChildFill = false, Children = { lbl } };
             DockPanel.SetDock(val, Dock.Right); head.Children.Add(val);
-            return new StackPanel { Spacing = 2, Children = { head, canvas } };
+            return new StackPanel { Spacing = 2, Children = { head, slider } };
         }
         Control Seg(int p, string[] names)
         {
-            int n = names.Length; var arr = new Border[n];
-            void Hi() { int cur = Math.Clamp((int)Math.Round(P(p)), 0, n - 1); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? Brass : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? OnAccent : TextTertiary; ((TextBlock)arr[i].Child!).FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
-            for (int i = 0; i < n; i++) { int iv = i; arr[i] = new Border { CornerRadius = new CornerRadius(2), Padding = new Thickness(0, 1), MinWidth = 26, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 8, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center } }; arr[i].PointerPressed += (_, _) => { SetR(p, iv); Hi(); }; row.Children.Add(arr[i]); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(1), Child = row };
+            int n = names.Length;
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp((int)Math.Round(P(p)), 0, n - 1), iv => SetR(p, iv), out var sync, minSegWidth: 26);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return seg;
         }
         Control Toggle(int p, string label, IBrush tint)
         {
-            var dot = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = Sunken, Child = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = TextTertiary, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center } };
-            var txt = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-            void Hi() { bool on = P(p) > 0.5f; var inner = (Border)dot.Child!; dot.Background = on ? tint : Sunken; inner.Background = on ? (IBrush)NotaPalette.BgApp : TextTertiary; inner.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; inner.Margin = on ? new Thickness(0, 0, 2, 0) : new Thickness(2, 0, 0, 0); txt.Foreground = on ? tint : TextTertiary; }
-            var b = new Border { Cursor = new Cursor(StandardCursorType.Hand), Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { dot, txt } } };
-            b.PointerPressed += (_, _) => { SetR(p, P(p) > 0.5f ? 0f : 1f); Hi(); };
+            var b = Switch(label, () => P(p) > 0.5f, () => SetR(p, P(p) > 0.5f ? 0f : 1f), out var sync);
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), label);
-            readouts.Add(Hi); Hi(); return b;
+            readouts.Add(sync); return b;
         }
         Control ActionBtn(string label, IBrush color, Action onClick)
         {
-            var b = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            var b = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = label, FontSize = 9, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center } };
             b.PointerPressed += (_, _) => onClick();
             return b;
         }
-        string PctF(double v) => $"{v:0} %"; string DbF(double v) => $"{v:+0.0;-0.0;0.0}"; string SpeedF(double v) => $"{v:0.00}×";
+        string PctF(double v) => $"{v:0}\u2009%"; string DbF(double v) => $"{v:+0.0;−0.0;0.0}"; string SpeedF(double v) => $"{v:0.00}×";
 
         var undo = ActionBtn("Undo", TextSecondary, () => Act(C_Undo));
         var export = ActionBtn("Export", TextSecondary, () => ctx.NotifyChanged());
-        var clear = ActionBtn("Clear", NotaPalette.Danger, () => Act(C_Clear));
+        var clear = ActionBtn("Clear", NotaPalette.TextSecondary, () => Act(C_Clear));
         var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4, Margin = new Thickness(0, 4, 0, 0) };
         Grid.SetColumn(undo, 0); Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
         bottomActions.Children.Add(undo); bottomActions.Children.Add(export); bottomActions.Children.Add(clear);
@@ -238,8 +224,8 @@ internal sealed class StrataDeviceBody : IDeviceBody
             for (int i = 0; i < 4; i++)
             {
                 bool on = i == active;
-                actBtn[i].Background = on ? new SolidColorBrush(Color.FromArgb(0x28, actColors[i].R, actColors[i].G, actColors[i].B)) : Card2;
-                actBtn[i].BorderBrush = on ? new SolidColorBrush(actColors[i]) : BorderStrong;
+                actBtn[i].Background = on ? NotaPalette.Wash(actInks[i], 0x28) : Card2;
+                actBtn[i].BorderBrush = on ? actInks[i] : BorderStrong;
             }
 
             layerHint.IsVisible = layers == 0;
@@ -251,15 +237,15 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 int st = (int)scope[6 + k * 3]; float gainDb = scope[7 + k * 3]; bool muted = scope[8 + k * 3] > 0.5f;
                 bool rec = recL == k;
                 stateTxts[k].Text = rec ? "REC" : muted ? "MUTED" : "PLAY";
-                stateTxts[k].Foreground = rec ? NotaPalette.Danger : muted ? TextTertiary : Success;
-                dbTxts[k].Text = $"{gainDb:+0.0;-0.0;0.0}";
+                stateTxts[k].Foreground = rec ? NotaPalette.Record : muted ? TextTertiary : Success;
+                dbTxts[k].Text = $"{gainDb:+0.0;−0.0;0.0}";
                 var mtxt = (TextBlock)muteBtns[k].Child!;
                 muteBtns[k].Background = muted ? NotaPalette.MuteTint : Sunken;
-                muteBtns[k].BorderBrush = muted ? NotaPalette.Danger : BorderDef;
-                mtxt.Foreground = muted ? NotaPalette.Danger : TextTertiary;
+                muteBtns[k].BorderBrush = muted ? NotaPalette.BorderBrass : BorderDef;
+                mtxt.Foreground = muted ? NotaPalette.AccentHover : TextTertiary;
                 var col = NotaPalette.InkColor(Palette[k % Palette.Length]);
-                layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Danger, 0x1A) : muted ? NotaPalette.SurfaceInset : NotaPalette.Wash(NotaPalette.Accent, 0x0D);
-                layerRows[k].BorderBrush = rec ? NotaPalette.Danger : muted ? BorderDef : new SolidColorBrush(Color.FromArgb(0x73, col.R, col.G, col.B));
+                layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Record, 0x1A) : muted ? NotaPalette.SurfaceInset : NotaPalette.Wash(NotaPalette.Accent, 0x0D);
+                layerRows[k].BorderBrush = rec ? NotaPalette.Record : muted ? BorderDef : new SolidColorBrush(Color.FromArgb(0x73, col.R, col.G, col.B));
                 int wn = engine.DeviceLayerWave(track, di, k, waveBuf, waveBuf.Length);
                 var env = new float[Math.Max(1, wn)];
                 for (int i = 0; i < wn; i++) env[i] = Math.Clamp(waveBuf[i], 0f, 1f);

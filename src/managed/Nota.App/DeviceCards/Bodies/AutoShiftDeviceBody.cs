@@ -40,11 +40,13 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush MutedB = NotaPalette.TextTertiary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
-    private static readonly IBrush Red = NotaPalette.Danger;
+    private static readonly IBrush Red = NotaPalette.Accent;   // a state, not an alert: red is kept for recording and overload
     private static readonly IBrush Hue = NotaPalette.BorderStrong;
     private static readonly IBrush Ink = NotaPalette.TextOnAccent;
 
     public double Width => 700;
+
+    public string? Subtitle => "PITCH";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -84,9 +86,9 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
         // bipolar cents meter (fixed 96×8)
         var mCenter = new Border { Width = 1, Background = Hue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
-        var mBand = new Border { Background = NotaPalette.Wash(NotaPalette.Danger, 0x59), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
-        var mMark = new Border { Width = 2, Background = Red, CornerRadius = new CornerRadius(1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) };
-        var centsMeter = new Panel { Width = 96, Height = 8, Children = { new Border { Background = Inset, CornerRadius = new CornerRadius(4) }, mCenter, mBand, mMark } };
+        var mBand = new Border { Background = NotaPalette.Wash(NotaPalette.Accent, 0x59), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var mMark = new Border { Width = 2, Background = Red, CornerRadius = NotaRadius.Bar, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) };
+        var centsMeter = new Panel { Width = 96, Height = 8, Children = { new Border { Background = Inset, CornerRadius = NotaRadius.Control }, mCenter, mBand, mMark } };
         void SetMeter(double cents)
         {
             cents = Math.Clamp(cents, -50, 50);
@@ -132,7 +134,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 int snapped = SnapMidi(dm, KeyOf(), Masks[ScaleOf()]);
                 double cents = (dm - snapped) * 100.0;
                 noteBig.Text = NoteName(snapped); noteBig.Foreground = AmberLit;
-                centsTb.Text = $"{cents:+0;-0;0} ¢";
+                centsTb.Text = $"{cents:+0;−0;0}\u2009¢";
                 corrTb.Text = $"→ corrected to {NoteName(snapped)}";
                 SetMeter(cents);
             }
@@ -145,60 +147,31 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         // ---- horizontal slider (label · track · value) ----
         Control Slider(string label, int p, Func<double, string> fmt, IBrush fill, bool bipolar = false)
         {
-            var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedB, Width = 46, VerticalAlignment = VerticalAlignment.Center };
-            var val = Mono(fmt(P(p)), Txt); val.Width = 34; val.TextAlignment = TextAlignment.Right;
-            var fillBar = new Border { Height = 3, Background = fill, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 8, Height = 9, Background = Sub, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center });
-            if (bipolar) slot.Children.Add(new Border { Width = 1, Background = Hue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) });
-            slot.Children.Add(fillBar); slot.Children.Add(handle);
-            void Vis(double v) { double W = slot.Bounds.Width; fillBar.Width = v * W; handle.Margin = new Thickness(Math.Clamp(v * W - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); }
-            bool drag = false;
-            void SetX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); SetP(p, (float)v); Vis(v); val.Text = fmt(v); }
-            slot.PointerPressed += (_, e) => { drag = true; Begin(p); e.Pointer.Capture(slot); SetX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            MidiLearn.Bind(slot, MidiTarget.DeviceParam(track, di, p), label);
-            ctx.AddDeviceRefresher(() => { if (!drag) { double v = P(p); Vis(v); val.Text = fmt(v); } });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(slot, 1); Grid.SetColumn(val, 2);
-            g.Children.Add(lbl); g.Children.Add(slot); g.Children.Add(val);
-            return g;
+            var row = DeviceCardKit.SliderRow(label, () => P(p), n => SetP(p, (float)n), () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), bipolar: bipolar, labelWidth: 46, valueWidth: 34);
+            ctx.AddDeviceRefresher(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), label);
+            return row;
         }
 
         // ---- segmented / toggle helpers ----
         Control Seg(string[] names, IBrush?[] accents, Func<int> get, Action<int> set)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            var cells = new Border[names.Length]; var texts = new TextBlock[names.Length];
-            void Sync() { int cur = get(); for (int i = 0; i < names.Length; i++) { bool on = i == cur; IBrush ac = accents[i] ?? Amber; cells[i].Background = on ? ac : Brushes.Transparent; texts[i].Foreground = on ? (ac == TealB ? Ink : Ink) : (accents[i] ?? MutedB); texts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
-            for (int i = 0; i < names.Length; i++)
-            {
-                int iv = i;
-                var t = new TextBlock { Text = names[i], FontSize = 9, Foreground = MutedB, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 1) };
-                var c = new Border { CornerRadius = new CornerRadius(2), Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-                c.PointerPressed += (_, e) => { e.Handled = true; set(iv); Sync(); };
-                cells[i] = c; texts[i] = t; row.Children.Add(c);
-            }
-            Sync(); ctx.AddDeviceRefresher(Sync);
-            return new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            // Role chromas stay inside the graphs; a chosen segment is brass.
+            var seg = DeviceCardKit.Segments(names, get, set, out var sync);
+            ctx.AddDeviceRefresher(sync);
+            return seg;
         }
         Control PillToggle(string label, int p, IBrush accent)
         {
-            var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BgApp, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1.5, 0) };
-            var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = CardBg, BorderBrush = Hue, BorderThickness = new Thickness(1), Child = knob };
-            var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = MutedB, VerticalAlignment = VerticalAlignment.Center };
-            void Sync() { bool on = P(p) >= 0.5f; pill.Background = on ? accent : CardBg; pill.BorderBrush = on ? Brushes.Transparent : Hue; knob.Background = on ? Ink : MutedB; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; lbl.Foreground = on ? accent : MutedB; }
-            var b = new Border { Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { pill, lbl } } };
-            b.PointerPressed += (_, e) => { e.Handled = true; SetP(p, P(p) >= 0.5f ? 0f : 1f); Sync(); };
-            Sync(); ctx.AddDeviceRefresher(Sync);
+            var b = Switch(label, () => P(p) >= 0.5f, () => SetP(p, P(p) >= 0.5f ? 0f : 1f), out var sync);
+            ctx.AddDeviceRefresher(sync);
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return b;
         }
         Control RailBtn(string label, Action onClick)
         {
-            var b = new Border { BorderBrush = Hue, BorderThickness = new Thickness(1), Background = CardBg, CornerRadius = new CornerRadius(3), Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            var b = new Border { BorderBrush = Hue, BorderThickness = new Thickness(1), Background = CardBg, CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = label, FontSize = 9, Foreground = Sub, HorizontalAlignment = HorizontalAlignment.Center } };
             b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
             return b;
@@ -216,7 +189,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var t = Mono(Keys[i], Sub); t.HorizontalAlignment = HorizontalAlignment.Center;
-                var c = new Border { Height = 17, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+                var c = new Border { Height = 17, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
                 c.PointerPressed += (_, e) => { e.Handled = true; SetP(Key, iv / 11f); if (P(Follow) < 0.5f && Math.Round(P(KeySrc) * 2) == 0) SetP(KeySrc, 0.5f); Sync(); };
                 cells[i] = c; texts[i] = t; Grid.SetColumn(c, i % 6); Grid.SetRow(c, i / 6); grid.Children.Add(c);
             }
@@ -232,7 +205,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var t = new TextBlock { Text = Scales[i], FontSize = 9, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center };
-                var c = new Border { Height = 16, CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+                var c = new Border { Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = t };
                 c.PointerPressed += (_, e) => { e.Handled = true; SetP(Scale, iv / (float)(Scales.Length - 1)); Sync(); };
                 cells[i] = c; texts[i] = t; col.Children.Add(c);
             }
@@ -256,7 +229,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         var keyScalePanel = new Border { Width = 176, Background = Rail, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(8, 6), Child = keyScaleInner };
 
         // ============ CORRECT / SHIFT rail (182) ============
-        string Pct(double v) => $"{v * 100:0}%";
+        string Pct(double v) => $"{v * 100:0}\u2009%";
         var learnBypass = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4, [DockPanel.DockProperty] = Dock.Bottom, Children = {
             RailBtn("Learn key", () => { int ak = AutoKey(Masks[ScaleOf()]); if (ak >= 0) { SetP(Key, ak / 11f); SetP(KeySrc, 0.5f); } }),
         } };
@@ -265,11 +238,11 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         var railTop = new StackPanel { Spacing = 4, Children = {
             Cap("CORRECT", TealB),
             Slider("Amount", Amount, Pct, TealB),
-            Slider("Speed", Speed, v => $"{Exp(v, 1, 250):0} ms", TealB),
-            Slider("Range", Range, v => $"±{1 + v * 11:0} st", TealB),
+            Slider("Speed", Speed, v => $"{Exp(v, 1, 250):0}\u2009ms", TealB),
+            Slider("Range", Range, v => $"±{1 + v * 11:0}\u2009st", TealB),
             new Border { Height = 1, Background = CardBg, Margin = new Thickness(0, 2) },
             Cap("SHIFT"),
-            Slider("Shift", Shift, v => $"{(v - 0.5) * 24:+0;-0;0} st", Amber, bipolar: true),
+            Slider("Shift", Shift, v => $"{(v - 0.5) * 24:+0;−0;0}\u2009st", Amber, bipolar: true),
             Slider("Formant", Formant, Pct, Amber),
             Slider("Mix", Mix, Pct, Amber),
         } };

@@ -18,8 +18,8 @@ namespace Nota.App;
         private static readonly IBrush AccentBright = NotaPalette.AccentBright;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         public enum K { Glyph, Decay }
-        private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly Typeface Face = new(FontFamily.Default);
+        private static readonly IBrush Grid = NotaGraph.Grid;
+        private static readonly Typeface Face = NotaFonts.Mono;
         private readonly K _k;
         private int _st;
         private double _exc, _pos, _damp, _tone, _inh, _body;
@@ -34,7 +34,7 @@ namespace Nota.App;
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 0) return;
-            ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
             double pad = 6, x0 = pad, x1 = w - pad, top = pad + 11, bot = h - pad - 9;
             var pen = new Pen(AccentBright, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 

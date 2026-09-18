@@ -47,9 +47,9 @@ internal static class ConsortJacks
         new(true, 15, "vel", "Velocity", Tone.Mod),
         new(true, 16, "at", "Aftertouch", Tone.Mod),
         new(true, 17, "wh", "Mod wheel", Tone.Mod),
-        new(true, 18, "a1›", "Atten 1 out", Tone.Mod),
-        new(true, 19, "a2›", "Atten 2 out", Tone.Mod),
-        new(true, 20, "Σ›", "Sum out", Tone.Mod),
+        new(true, 18, "a1→", "Atten 1 out", Tone.Mod),
+        new(true, 19, "a2→", "Atten 2 out", Tone.Mod),
+        new(true, 20, "Σ→", "Sum out", Tone.Mod),
     };
     // Destinations (inputs), index 1..22.
     public static readonly Jack[] Dests =
@@ -166,7 +166,7 @@ internal sealed class ConsortJackDot : Control
 // ---- dual transistor-ladder response: L (slate) / R (brass) or the series HP→LP curve ----
 internal sealed class ConsortFilterCurve : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private double _cut = 0.5, _reso, _space, _comp;
     private int _mode = 1;
     private bool _drag;
@@ -237,7 +237,7 @@ internal sealed class ConsortFilterCurve : Control
             ctx.DrawGeometry(null, new Pen(ChamberInk.Slate, 1.5), Curve(x => Db(Mag(Wr(x, _cut), _mode == 2))));
             ctx.DrawGeometry(null, new Pen(brass, 1.5), Curve(x => Db(Mag(Wr(x, cutB), false))));
         }
-        string Hz(double n) { double hz = 20 * Math.Pow(1000, n); return hz >= 1000 ? $"{hz / 1000:0.00} kHz" : $"{hz:0} Hz"; }
+        string Hz(double n) { double hz = 20 * Math.Pow(1000, n); return hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz"; }
         var lt = new FormattedText((_mode == 0 ? "HP " : "L ") + Hz(_cut), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _mode == 0 ? NotaPalette.TextSecondary : ChamberInk.Slate);
         var rt = new FormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.AccentBright);
         ctx.DrawText(lt, new Point(4, 3));
@@ -250,7 +250,7 @@ internal sealed class ConsortFilterCurve : Control
 // ---- BBD taps: the L lane on top, R below; bar height = level of each repeat ----
 internal sealed class ConsortDelayView : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private double _tl = 0.26, _tr = 0.39, _fb = 0.6, _mix = 0.4;
     private bool _ping = true, _digital;
     public ConsortDelayView() { ClipToBounds = true; }
@@ -290,7 +290,7 @@ internal sealed class ConsortDelayView : Control
         var ll = new FormattedText("L", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, bl);
         var rl = new FormattedText("R", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, br);
         ctx.DrawText(ll, new Point(4, 2)); ctx.DrawText(rl, new Point(4, h - rl.Height - 1));
-        var info = new FormattedText($"fb {_fb * 100:0} % · {(_digital ? "digital" : "compander on")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextSecondary);
+        var info = new FormattedText($"fb {_fb * 100:0}\u2009% · {(_digital ? "digital" : "compander on")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextSecondary);
         ctx.DrawText(info, new Point(w - info.Width - 4, 2));
         var ax = new FormattedText(ChamberInk.AxisLabel(span), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextDisabled);
         ctx.DrawText(ax, new Point(w - ax.Width - 4, h - ax.Height - 1));
@@ -300,7 +300,7 @@ internal sealed class ConsortDelayView : Control
 // ---- the 16 step cells: type (note / ratchet / tie / rest), playhead, length. Click / drag paints ----
 internal sealed class ConsortStepGrid : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private readonly int[] _type = new int[16];
     private int _len = 16, _play = -1, _ratchet = 3;
     private bool _drag; private int _last = -1;
@@ -346,7 +346,7 @@ internal sealed class ConsortStepGrid : Control
             var r = new Rect(i * (cw + gap) + 0.5, 0.5, cw - 1, h - 1);
             bool inLen = i < _len;
             int t = _type[i];
-            (Color c, string lbl) = t switch { 1 => (mv, $"×{_ratchet}"), 2 => (tl, "~"), 3 => (Colors.Transparent, "·"), _ => (ac, (i + 1).ToString(CultureInfo.InvariantCulture)) };
+            (Color c, string lbl) = t switch { 1 => (mv, $"×{_ratchet}"), 2 => (tl, "~"), 3 => (Colors.Transparent, "·"), _ => (ac, (i + 1).ToString(NotaNum.Culture)) };
             IBrush fill = t == 3 ? NotaPalette.BgSunken : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0x40 : 0x14), c.R, c.G, c.B));
             IBrush stroke = t == 3 ? NotaPalette.BorderDefault : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0xE0 : 0x50), c.R, c.G, c.B));
             ctx.DrawRectangle(fill, new Pen(stroke, i == _play ? 2 : 1), r, 3, 3);
@@ -360,8 +360,8 @@ internal sealed class ConsortStepGrid : Control
 // ---- step pitch lane: one bar per step at its pitch (±24 st); drag up/down to set ----
 internal sealed class ConsortPitchLane : Control
 {
-    private static readonly Typeface Sans = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
+    private static readonly Typeface Sans = NotaFonts.SansBold;
+    private static readonly Typeface Mono = NotaFonts.Mono;
     private readonly int[] _p = new int[16], _t = new int[16];
     private int _len = 16, _play = -1, _dragStep = -1;
     private bool _arp;
@@ -427,7 +427,7 @@ internal sealed class ConsortPitchLane : Control
         }
         if (_dragStep >= 0)
         {
-            var ft = new FormattedText(_p[_dragStep] == 0 ? "0 st" : $"{_p[_dragStep]:+0;-0} st", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.AccentBright);
+            var ft = new FormattedText(_p[_dragStep] == 0 ? "0\u2009st" : $"{_p[_dragStep]:+0;−0}\u2009st", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.AccentBright);
             double x = Math.Clamp((_dragStep + 0.5) * cw - ft.Width / 2, 2, w - ft.Width - 2);
             ctx.DrawText(ft, new Point(x, Math.Max(Top, Y(_p[_dragStep]) - 16)));
         }
@@ -439,9 +439,9 @@ internal sealed class ConsortPitchLane : Control
 //      jack to pull its cables, right-click for its cable list. ----
 internal sealed class ConsortJackField : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
-    private static readonly Typeface Sans = new("Inter, system-ui, sans-serif");
-    private static readonly Typeface SansBold = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Sans = NotaFonts.Sans;
+    private static readonly Typeface SansBold = NotaFonts.SansBold;
 
     public readonly record struct Group(string Title, ConsortJacks.Jack[] Jacks);
     private readonly List<List<Group>> _rows;     // strip mode: rows of groups; list mode: columns (one group each)
@@ -599,7 +599,7 @@ internal sealed class ConsortJackField : Control
                     }
                     else
                     {
-                        var t = new FormattedText(j.Short, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 6.5, col != null ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
+                        var t = new FormattedText(j.Short, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.Floor, col != null ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
                         ctx.DrawText(t, new Point(p.X - t.Width / 2, p.Y + 7));
                     }
                 }
@@ -635,9 +635,9 @@ internal sealed class ConsortJackField : Control
 // ---- source × destination matrix: rows = sources, columns = destinations, cell = depth ----
 internal sealed class ConsortPatchMatrix : Control
 {
-    private static readonly Typeface Mono = new("ui-monospace, Menlo, monospace");
-    private static readonly Typeface Sans = new("Inter, system-ui, sans-serif");
-    private static readonly Typeface SansBold = new("Inter, system-ui, sans-serif", FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Sans = NotaFonts.Sans;
+    private static readonly Typeface SansBold = NotaFonts.SansBold;
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
     private IReadOnlyList<ConsortCable> _cables = Array.Empty<ConsortCable>();
     private const double HeadH = 16, RowHdrW = 78;
@@ -725,7 +725,7 @@ internal sealed class ConsortPatchMatrix : Control
                     // depth bar from the centre
                     double mid = cell.X + cell.Width / 2, bw = cell.Width / 2 * Math.Abs(cb.Depth);
                     ctx.FillRectangle(new SolidColorBrush(Color.FromArgb(0x38, tc.R, tc.G, tc.B)), new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
-                    var v = new FormattedText($"{cb.Depth * 100:+0;-0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.TextPrimary);
+                    var v = new FormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.TextPrimary);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }
                 else

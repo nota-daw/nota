@@ -47,6 +47,28 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
         "Presentation references neither Avalonia nor Infrastructure");
 }
 
+// --- design tokens: the two palette files must agree -------------------------
+// NotaTheme.axaml and NotaPalette.cs carry the same palette for two different
+// consumers and nothing but discipline kept them in step. See DESIGN.md § Enforced by tests.
+{
+    Console.WriteLine("-- design: palette mirror --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.Run()) Check(ok, label);
+    Console.WriteLine("-- design: geometry --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunGeometry()) Check(ok, label);
+    Console.WriteLine("-- design: type --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunType()) Check(ok, label);
+    Console.WriteLine("-- design: controls --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunControls()) Check(ok, label);
+    Console.WriteLine("-- design: visualisers --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunVisualisers()) Check(ok, label);
+    Console.WriteLine("-- design: layout --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLayout()) Check(ok, label);
+    Console.WriteLine("-- design: numbers --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunNumbers()) Check(ok, label);
+    Console.WriteLine("-- design: bans --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBans()) Check(ok, label);
+}
+
 // Opt-in plugin-scan check (M3-1): `--scan <path-to-nota-scanworker>`. Kept out
 // of the default run because results depend on which plugins are installed.
 if (args.Length >= 2 && args[0] == "--scan")
@@ -954,7 +976,7 @@ Console.WriteLine("-- Nota Synth --");
     Check(se.DeviceName(t, -1) == "Nota Synth", $"instrument is Nota Synth (got '{se.DeviceName(t, -1)}')");
 
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 8, $"Nota Synth exposes 8 params (got {pc})");
+    Check(pc == 19, $"Nota Synth exposes 19 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -962,6 +984,20 @@ Console.WriteLine("-- Nota Synth --");
         if (se.PluginParamId(t, -1, i) == "cutoff") cut = i;
     }
     Check(idsOk && cut >= 0, "params have ids + names; cutoff present");
+    int PIdx(int tr, string id)
+    { for (int i = 0; i < se.PluginParamCount(tr, -1); i++) if (se.PluginParamId(tr, -1, i) == id) return i; return -1; }
+
+    // The first eight keep their index and id — the persisted layout is append-only, so
+    // automation lanes and project states written before the oscillator/voice sections
+    // still address the same parameters.
+    string[] legacyIds = { "wave", "attack", "decay", "sustain", "release", "cutoff", "resonance", "gain" };
+    bool layoutOk = true;
+    for (int i = 0; i < legacyIds.Length; i++) if (se.PluginParamId(t, -1, i) != legacyIds[i]) layoutOk = false;
+    Check(layoutOk, "the original eight params keep their index and id");
+    string[] newIds = { "filtype", "filenv", "pulsewidth", "detune", "octave", "unison", "spread", "glide", "velamp", "pan", "voicemode" };
+    bool newOk = true;
+    foreach (var id in newIds) if (PIdx(t, id) < 8) newOk = false;
+    Check(newOk, "oscillator / filter / voice params are all present");
 
     se.PluginParamSet(t, -1, cut, 0.33f);
     Check(Math.Abs(se.PluginParamGet(t, -1, cut) - 0.33f) < 1e-4, "param set/get round-trips");
@@ -998,6 +1034,62 @@ Console.WriteLine("-- Nota Synth --");
     var nbuf = new float[8192 * 2];
     se.Seek(0.0); se.Play(); se.RenderOffline(nbuf, 8192); se.StopTransport();
     Check(Rms(nbuf, 8192) > 0.005f, $"Nota Synth is audible (RMS {Rms(nbuf, 8192):F3})");
+
+    // A project written before the new sections carries only the first eight floats: it
+    // must still load, leaving the rest at their defaults (unison 1, poly, no glide).
+    int tl = se.AddInstrumentTrack();
+    var legacy = new byte[8 * 4];
+    for (int i = 0; i < 8; i++) BitConverter.GetBytes(i == 5 ? 0.42f : 0.5f).CopyTo(legacy, i * 4);
+    se.SetPluginState(tl, -1, legacy);
+    Check(Math.Abs(se.PluginParamGet(tl, -1, cut) - 0.42f) < 1e-4, "an eight-param state from an older project still loads");
+    Check(Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "unison")) - 0f) < 1e-4
+       && Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "voicemode")) - 0f) < 1e-4,
+        "params added since keep their defaults when an old state is loaded");
+
+    // Off / LP / HP / BP all pass signal, and each one sounds different from the others.
+    int tf = se.AddInstrumentTrack();
+    se.AddMidiClip(tf, 0.0, 4.0);
+    se.SetClipNotes(tf, 0, new[] { new NotaNote(48, 0.0, 2.0, 1.0f) });
+    int ftIdx = PIdx(tf, "filtype");
+    var levels = new float[4];
+    for (int k = 0; k < 4; k++)
+    {
+        se.PluginParamSet(tf, -1, ftIdx, k / 3f);
+        var fbuf = new float[8192 * 2];
+        se.Seek(0.0); se.Play(); se.RenderOffline(fbuf, 8192); se.StopTransport();
+        levels[k] = Rms(fbuf, 8192);
+    }
+    Check(levels[0] > 0.005f && levels[1] > 0.005f && levels[2] > 0.005f && levels[3] > 0.005f,
+        $"every filter type passes signal (off {levels[0]:F3}, lp {levels[1]:F3}, hp {levels[2]:F3}, bp {levels[3]:F3})");
+    Check(Math.Abs(levels[0] - levels[1]) > 1e-3 && Math.Abs(levels[1] - levels[2]) > 1e-3,
+        "the filter types do not render identically");
+
+    // Unison stacks voices: seven detuned copies are louder than one.
+    int tu = se.AddInstrumentTrack();
+    se.AddMidiClip(tu, 0.0, 4.0);
+    se.SetClipNotes(tu, 0, new[] { new NotaNote(60, 0.0, 2.0, 1.0f) });
+    se.PluginParamSet(tu, -1, PIdx(tu, "detune"), 0.7f);
+    var ubuf1 = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(ubuf1, 8192); se.StopTransport();
+    float one = Rms(ubuf1, 8192);
+    se.PluginParamSet(tu, -1, PIdx(tu, "unison"), 1f);
+    var ubuf7 = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(ubuf7, 8192); se.StopTransport();
+    float seven = Rms(ubuf7, 8192);
+    Check(seven > one * 1.05f, $"unison 7 thickens the tone (1 voice {one:F3} -> 7 voices {seven:F3})");
+
+    // Mono collapses a chord onto one voice; Legato does the same but does not retrigger.
+    int tm = se.AddInstrumentTrack();
+    se.AddMidiClip(tm, 0.0, 4.0);
+    se.SetClipNotes(tm, 0, new[] { new NotaNote(60, 0.0, 2.0, 1.0f), new NotaNote(64, 0.0, 2.0, 1.0f), new NotaNote(67, 0.0, 2.0, 1.0f) });
+    var pbuf = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(pbuf, 8192); se.StopTransport();
+    float poly = Rms(pbuf, 8192);
+    se.PluginParamSet(tm, -1, PIdx(tm, "voicemode"), 0.5f);
+    var mbuf = new float[8192 * 2];
+    se.Seek(0.0); se.Play(); se.RenderOffline(mbuf, 8192); se.StopTransport();
+    float mono = Rms(mbuf, 8192);
+    Check(mono > 0.005f && mono < poly, $"Mono collapses a three-note chord onto one voice (poly {poly:F3} -> mono {mono:F3})");
 }
 
 // ============================ Nota Physical ===============================
@@ -1078,7 +1170,7 @@ Console.WriteLine("-- Nota Aurora --");
     Check(ae.DeviceName(t, -1) == "Nota Aurora", $"instrument is Nota Aurora (got '{ae.DeviceName(t, -1)}')");
 
     int pc = ae.PluginParamCount(t, -1);
-    Check(pc == 132, $"Nota Aurora exposes 132 params (got {pc})");
+    Check(pc == 156, $"Nota Aurora exposes 156 params (got {pc})");
     int pos = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1093,7 +1185,7 @@ Console.WriteLine("-- Nota Aurora --");
     // State round-trips to another track (project save/load path).
     ae.PluginParamSet(t, -1, pos, 0.88f);
     var state = ae.GetPluginState(t, -1);
-    Check(state.Length >= 132 * 4, $"aurora state serialized ({state.Length} bytes)");
+    Check(state.Length >= 156 * 4, $"aurora state serialized ({state.Length} bytes)");
     int t2 = ae.AddWavetableSynthTrack();
     ae.SetPluginState(t2, -1, state);
     Check(Math.Abs(ae.PluginParamGet(t2, -1, pos) - 0.88f) < 1e-4, "aurora state restores params on another track");
@@ -1129,6 +1221,130 @@ Console.WriteLine("-- Nota Aurora --");
         var b2 = new float[8192 * 2]; ae.Seek(0.0); ae.Play(); ae.RenderOffline(b2, 8192); ae.StopTransport();
         Check(Rms(b2, 8192) > 0.001f, $"Aurora osc2-only patch is audible (RMS {Rms(b2, 8192):F3})");
     }
+
+    // v3 (almanac rework): the wheels, the output pan, LFO 2's sync and the three FX
+    // blocks' switches and characters all exist and all act.
+    Check(AId("bend") >= 0 && AId("bendrange") >= 0 && AId("outpan") >= 0 && AId("lfo2sync") >= 0
+          && AId("fxdriveon") >= 0 && AId("fxdrivemode") >= 0 && AId("fxtone") >= 0
+          && AId("fxchoruson") >= 0 && AId("fxchorusvoices") >= 0
+          && AId("fxreverbon") >= 0 && AId("fxreverbmode") >= 0 && AId("fxreverbsize") >= 0
+          && AId("mac7val") >= 0,
+        "Aurora v3 params present (wheels / out pan / LFO 2 sync / FX blocks / macro 8)");
+    {
+        // Each case gets its own engine so a voice left sounding by one render cannot leak
+        // into the next, and each renders the same note for the same length.
+        float[] RenderWith(params (string Id, float Value)[] ps)
+        {
+            using var we = new NotaEngine();
+            we.SetBpm(120); we.SetTimeSignature(4, 4);
+            int tw = we.AddWavetableSynthTrack();
+            foreach (var (id, value) in ps)
+                for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                    if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+            we.AddMidiClip(tw, 0.0, 4.0);
+            we.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            we.Seek(0.0); we.Play(); we.RenderOffline(b, 8192); we.StopTransport();
+            return b;
+        }
+        float Diff(float[] a, float[] b) { float d = 0; for (int i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        int Crossings(float[] b, int n)
+        { int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++; return c; }
+        float Side(float[] b, int n)
+        { float d = 0; for (int i = 0; i < n; i++) d += Math.Abs(b[i * 2] - b[i * 2 + 1]); return d / n; }
+
+        // Zero crossings stand in for pitch: bending up an octave roughly doubles them.
+        var flat = RenderWith(("fil1freq", 0.9f));
+        var bent = RenderWith(("bend", 1f), ("bendrange", 1f));
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        bool bfin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { bfin = false; break; }
+        Check(bfin && cb > cf * 1.5, $"Aurora pitch bend +12 st raises the pitch ({cf} -> {cb} crossings)");
+
+        // Output pan is equal-power: hard right silences the left channel.
+        var right = RenderWith(("outpan", 1f));
+        float lSum = 0, rSum = 0;
+        for (int i = 0; i < 8192; i++) { lSum += Math.Abs(right[i * 2]); rSum += Math.Abs(right[i * 2 + 1]); }
+        Check(lSum < 1e-4f && rSum > 0.001f, $"Aurora out pan hard right silences the left (L {lSum:F4} / R {rSum:F4})");
+
+        // Unison spread is what makes the stack stereo — and with it at zero the voice is
+        // exactly the mono one it always was.
+        var narrow = RenderWith(("unison", 0.5f), ("unidetune", 0.4f), ("unispread", 0f));
+        var wide = RenderWith(("unison", 0.5f), ("unidetune", 0.4f), ("unispread", 1f));
+        Check(Side(narrow, 8192) < 1e-6f, "Aurora unison at zero spread stays mono");
+        Check(Side(wide, 8192) > 1e-3f, $"Aurora unison spread opens the stereo field ({Side(wide, 8192):F4})");
+
+        // Each FX block answers its switch, and each character is its own sound.
+        var dryFx = RenderWith(("fxdrive", 0.7f), ("fxdriveon", 0f));
+        var clean = RenderWith();
+        Check(Diff(dryFx, clean) < 1e-6f, "Aurora drive switched off is the dry signal");
+        var tube = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 0f));
+        var tape = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 0.5f));
+        var fold = RenderWith(("fxdrive", 0.7f), ("fxdrivemode", 1f));
+        Check(Diff(tube, clean) > 1e-3f && Diff(tube, tape) > 1e-3f && Diff(tube, fold) > 1e-3f,
+            "Aurora drive Tube / Tape / Fold are three different curves");
+        var revOff = RenderWith(("fxreverb", 0.7f), ("fxreverbon", 0f));
+        var revRoom = RenderWith(("fxreverb", 0.7f), ("fxreverbmode", 0f));
+        var revHall = RenderWith(("fxreverb", 0.7f), ("fxreverbmode", 0.5f));
+        Check(Diff(revOff, clean) < 1e-6f, "Aurora reverb switched off is the dry signal");
+        Check(Diff(revRoom, clean) > 1e-4f && Diff(revRoom, revHall) > 1e-5f, "Aurora reverb Room and Hall differ, and both are wet");
+        var chOff = RenderWith(("fxchorus", 0.8f), ("fxchoruson", 0f));
+        var ch2 = RenderWith(("fxchorus", 0.8f), ("fxchorusvoices", 0.5f));
+        var ch4 = RenderWith(("fxchorus", 0.8f), ("fxchorusvoices", 1f));
+        Check(Diff(chOff, clean) < 1e-6f, "Aurora chorus switched off is the dry signal");
+        Check(Diff(ch2, ch4) > 1e-4f, "Aurora chorus 2x and 4x differ");
+
+        // LFO 2 can lock to the grid now, like LFO 1.
+        var lfoFree = RenderWith(("lfo2depth", 1f), ("mtx3_3", 1f), ("lfo2sync", 0f), ("lfo2rate", 0.9f));
+        var lfoSync = RenderWith(("lfo2depth", 1f), ("mtx3_3", 1f), ("lfo2sync", 4f / 7f));
+        Check(Diff(lfoFree, lfoSync) > 1e-4f, "Aurora LFO 2 tempo sync changes its rate");
+    }
+
+    // v3: macros reach twelve destinations, five of which act on the block snapshot. The
+    // seven older ones keep the normalized value an old project saved for them.
+    {
+        float MacroRms(params (string Id, float Value)[] ps)
+        {
+            using var me2 = new NotaEngine();
+            me2.SetBpm(120); me2.SetTimeSignature(4, 4);
+            int tmm = me2.AddWavetableSynthTrack();
+            void Put(string id, float v)
+            {
+                for (int i = 0; i < me2.PluginParamCount(tmm, -1); i++)
+                    if (me2.PluginParamId(tmm, -1, i) == id) { me2.PluginParamSet(tmm, -1, i, v); return; }
+            }
+            foreach (var (id, value) in ps) Put(id, value);
+            me2.AddMidiClip(tmm, 0.0, 4.0);
+            me2.SetClipNotes(tmm, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            me2.Seek(0.0); me2.Play(); me2.RenderOffline(b, 8192); me2.StopTransport();
+            return Rms(b, 8192);
+        }
+        // Macro 1 → Sub level (target 5 of 12), full amount: the sub comes up.
+        float plain = MacroRms();
+        float lifted = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 11f), ("mac0amt", 1f));
+        Check(lifted > plain * 1.1f, $"an Aurora macro on Sub level is audible ({plain:F3} -> {lifted:F3})");
+        // The legacy seven: 5/6 used to mean "Level" and still does.
+        float neutral = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 6f), ("mac0amt", 0.5f));
+        float louder = MacroRms(("mac0val", 1f), ("mac0dest", 5f / 6f), ("mac0amt", 1f));
+        Check(louder > neutral * 1.1f, $"an old Aurora macro pointing at Level still lands there ({neutral:F3} -> {louder:F3})");
+        // Macro 8 exists and works too.
+        float m8 = MacroRms(("mac7val", 1f), ("mac7dest", 5f / 11f), ("mac7amt", 1f));
+        Check(m8 > plain * 1.1f, $"Aurora macro 8 reaches its target ({plain:F3} -> {m8:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Aurora id, each applies in place.
+    {
+        var auroraIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) auroraIds.Add(ae.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 5).ToList();
+        Check(mine.Count == 25, $"Nota Aurora ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !auroraIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Aurora preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = ae.AddWavetableSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(ae, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Aurora preset applies in place ({fails} failed)");
+    }
 }
 
 // ============================ Nota Volt ====================================
@@ -1142,7 +1358,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 130, $"Nota Volt exposes 130 params (got {pc})");
+    Check(pc == 133, $"Nota Volt exposes 133 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1157,7 +1373,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 130 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 133 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");
@@ -1221,6 +1437,95 @@ Console.WriteLine("-- Nota Volt --");
         Check(wet > 0.001f && Math.Abs(wet - dry) > 1e-5f, $"mod-matrix LFO→Level changes output (dry {dry:F3} / wet {wet:F3})");
         Check(voices >= 1, $"voice meter reports sounding voices ({voices})");
     }
+
+    // v5: the performance wheels and the vibrato-by-wheel switch.
+    Check(IdOf("bend") >= 0 && IdOf("bendrange") >= 0 && IdOf("vibwheel") >= 0,
+        "wheel params present (bend / bendrange / vibwheel)");
+    {
+        // Each case gets its own engine so a voice left sounding by one render cannot leak
+        // into the next, and each renders the same note for the same length.
+        float[] RenderWith(params (string Id, float Value)[] ps)
+        {
+            using var we = new NotaEngine();
+            we.SetBpm(120); we.SetTimeSignature(4, 4);
+            int tw = we.AddVoltSynthTrack();
+            foreach (var (id, value) in ps)
+                for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                    if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+            we.AddMidiClip(tw, 0.0, 4.0);
+            we.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            we.Seek(0.0); we.Play(); we.RenderOffline(b, 8192); we.StopTransport();
+            return b;
+        }
+        // Zero crossings stand in for pitch: bending up an octave roughly doubles them.
+        int Crossings(float[] b, int n)
+        {
+            int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++;
+            return c;
+        }
+        var flat = RenderWith(("osc2level", 0f), ("fil1freq", 0.9f));
+        var bent = RenderWith(("osc2level", 0f), ("fil1freq", 0.9f), ("bend", 1f), ("bendrange", 1f));
+        bool bfin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { bfin = false; break; }
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        Check(bfin && cb > cf * 1.5, $"pitch bend +12 st raises the pitch ({cf} → {cb} crossings)");
+
+        // Vibrato by wheel: with the wheel down the vibrato is silent, so the patch renders
+        // exactly as one with no vibrato at all; opening the wheel changes the sound.
+        var noVib = RenderWith(("vibamt", 0f), ("osc2level", 0f));
+        var wheelDown = RenderWith(("vibamt", 1f), ("vibwheel", 1f), ("modwheel", 0f), ("osc2level", 0f));
+        var wheelUp = RenderWith(("vibamt", 1f), ("vibwheel", 1f), ("modwheel", 1f), ("osc2level", 0f));
+        float Diff(float[] a, float[] b) { float d = 0; for (int i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        Check(Diff(noVib, wheelDown) < 1e-6f, "vibrato by wheel is silent with the wheel down");
+        Check(Diff(noVib, wheelUp) > 1e-4f, "vibrato by wheel opens up with the wheel up");
+    }
+
+    // v5: macros reach twelve destinations, six of which act on the block snapshot. The
+    // six older ones keep the normalized value an old project saved for them.
+    {
+        // Its own engine per case: this one's earlier tracks still hold clips, and their
+        // output would swamp the one voice under test.
+        float MacroRms(params (string Id, float Value)[] ps)
+        {
+            using var me2 = new NotaEngine();
+            me2.SetBpm(120); me2.SetTimeSignature(4, 4);
+            int tmm = me2.AddVoltSynthTrack();
+            void Put(string id, float v)
+            {
+                for (int i = 0; i < me2.PluginParamCount(tmm, -1); i++)
+                    if (me2.PluginParamId(tmm, -1, i) == id) { me2.PluginParamSet(tmm, -1, i, v); return; }
+            }
+            Put("osc2level", 0f);
+            foreach (var (id, value) in ps) Put(id, value);
+            me2.AddMidiClip(tmm, 0.0, 4.0);
+            me2.SetClipNotes(tmm, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+            var b = new float[8192 * 2];
+            me2.Seek(0.0); me2.Play(); me2.RenderOffline(b, 8192); me2.StopTransport();
+            return Rms(b, 8192);
+        }
+        // Macro 1 → Osc 2 level (target 3 of 12), full amount: osc 2 comes back.
+        float plain = MacroRms();
+        float lifted = MacroRms(("mac0val", 1f), ("mac0dest", 3f / 11f), ("mac0amt", 1f));
+        Check(lifted > plain * 1.1f, $"a macro on Osc 2 level is audible ({plain:F3} → {lifted:F3})");
+        // The legacy six: 0.8 used to mean "Level" and still does.
+        float neutral = MacroRms(("mac0val", 1f), ("mac0dest", 0.8f), ("mac0amt", 0.5f));
+        float louder = MacroRms(("mac0val", 1f), ("mac0dest", 0.8f), ("mac0amt", 1f));
+        Check(louder > neutral * 1.1f, $"an old macro pointing at Level still lands there ({neutral:F3} → {louder:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Volt id, each applies in place.
+    {
+        var voltIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) voltIds.Add(ve.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 6).ToList();
+        Check(mine.Count == 25, $"Nota Volt ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !voltIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Volt preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = ve.AddVoltSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(ve, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Volt preset applies in place ({fails} failed)");
+    }
 }
 
 // ============================ Nota Bass ====================================
@@ -1234,7 +1539,7 @@ Console.WriteLine("-- Nota Bass --");
     Check(be.DeviceName(t, -1) == "Nota Bass", $"instrument is Nota Bass (got '{be.DeviceName(t, -1)}')");
 
     int pc = be.PluginParamCount(t, -1);
-    Check(pc == 34, $"Nota Bass exposes 34 params (got {pc})");
+    Check(pc == 39, $"Nota Bass exposes 39 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1246,7 +1551,7 @@ Console.WriteLine("-- Nota Bass --");
     // State round-trips to another track (project save/load path).
     be.PluginParamSet(t, -1, cut, 0.77f);
     var state = be.GetPluginState(t, -1);
-    Check(state.Length >= 34 * 4, $"bass state serialized ({state.Length} bytes)");
+    Check(state.Length >= 39 * 4, $"bass state serialized ({state.Length} bytes)");
     int t2 = be.AddBassSynthTrack();
     be.SetPluginState(t2, -1, state);
     Check(Math.Abs(be.PluginParamGet(t2, -1, cut) - 0.77f) < 1e-4, "bass state restores params on another track");
@@ -1283,6 +1588,131 @@ Console.WriteLine("-- Nota Bass --");
         be.Seek(1.99); be.Play(); be.RenderOffline(abuf, 4096); be.StopTransport();
         float after = be.PluginParamGet(ta, -1, fi);
         Check(after > 0.7f, $"automation drives Bass cutoff (filfreq = {after:F2})");
+    }
+
+    // A project saved before v2 (34 floats) loads: the old params keep their values and
+    // the five appended ones start at their defaults.
+    {
+        int told = be.AddBassSynthTrack();
+        be.SetPluginState(told, -1, state.AsSpan(0, 34 * 4).ToArray());
+        int ci = -1, pi = -1, li = -1;
+        for (int i = 0; i < be.PluginParamCount(told, -1); i++)
+        {
+            string id = be.PluginParamId(told, -1, i);
+            if (id == "filfreq") ci = i; else if (id == "outpan") pi = i; else if (id == "legato") li = i;
+        }
+        Check(Math.Abs(be.PluginParamGet(told, -1, ci) - 0.77f) < 1e-4
+              && Math.Abs(be.PluginParamGet(told, -1, pi) - 0.5f) < 1e-4 && be.PluginParamGet(told, -1, li) < 0.5f,
+            "a 34-param Bass state loads; the appended params stay at their defaults");
+    }
+
+    // Each case renders on its own engine so nothing sounding in one leaks into the next.
+    float[] BassRender(NotaNote[] notes, int frames, params (string Id, float Value)[] ps)
+    {
+        using var we = new NotaEngine();
+        we.SetBpm(120); we.SetTimeSignature(4, 4);
+        int tw = we.AddBassSynthTrack();
+        foreach (var (id, value) in ps)
+            for (int i = 0; i < we.PluginParamCount(tw, -1); i++)
+                if (we.PluginParamId(tw, -1, i) == id) we.PluginParamSet(tw, -1, i, value);
+        we.AddMidiClip(tw, 0.0, 4.0);
+        we.SetClipNotes(tw, 0, notes);
+        var b = new float[frames * 2];
+        we.Seek(0.0); we.Play(); we.RenderOffline(b, frames); we.StopTransport();
+        return b;
+    }
+    static float BassRms(float[] b, int from, int to, int ch = -1)
+    {
+        double sum = 0; int n = 0;
+        for (int i = from; i < to; i++)
+        {
+            if (ch != 1) { sum += b[i * 2] * (double)b[i * 2]; n++; }
+            if (ch != 0) { sum += b[i * 2 + 1] * (double)b[i * 2 + 1]; n++; }
+        }
+        return (float)Math.Sqrt(sum / Math.Max(1, n));
+    }
+    double bassSpb = (be.SampleRate > 0 ? be.SampleRate : 48000.0) * 60.0 / 120.0;   // 120 BPM
+    int BF(double beats) => (int)Math.Round(beats * bassSpb);
+
+    // Regression: back-to-back notes of the same pitch where the next note starts a hair
+    // before the previous one ends. The previous note's off used to release every note of
+    // that pitch — the new one too — so the line went silent. Mono (with glide, the
+    // default) and poly alike; the second note must still sound in the middle of its span.
+    for (int m = 0; m < 2; m++)
+    {
+        var b = BassRender(new[] { new NotaNote(36, 0.0, 0.52, 0.9f), new NotaNote(36, 0.5, 0.5, 0.9f) }, BF(1.2),
+            ("mono", m), ("release", 0f));
+        float mid = BassRms(b, BF(0.7), BF(0.95));
+        Check(mid > 0.01f, $"Nota Bass {(m == 1 ? "mono" : "poly")}: an overlapping repeat of the same note keeps sounding (RMS {mid:F3})");
+    }
+
+    // Mono, overlapping different pitches on a plucky patch (sustain 0, glide on): every
+    // note is a new attack unless Legato is on — before, the overlap skipped the attack and
+    // the second note of a tight line was silent.
+    {
+        var line = new[] { new NotaNote(36, 0.0, 0.55, 0.9f), new NotaNote(43, 0.5, 0.5, 0.9f) };
+        (string, float)[] pluck = { ("mono", 1f), ("glide", 0.3f), ("decay", 0.55f), ("sustain", 0f) };
+        var retrig = BassRender(line, BF(1.0), pluck);
+        var legato = BassRender(line, BF(1.0), pluck.Append(("legato", 1f)).ToArray());
+        float rAtt = BassRms(retrig, BF(0.5), BF(0.6)), lAtt = BassRms(legato, BF(0.5), BF(0.6));
+        Check(rAtt > 0.02f, $"Nota Bass mono: an overlapping note attacks afresh (RMS {rAtt:F3})");
+        Check(rAtt > lAtt * 2f, $"Nota Bass legato: an overlapping note slides without a new attack ({rAtt:F3} vs {lAtt:F3})");
+    }
+
+    // v2: the pitch-bend wheel and the output pan.
+    {
+        int Crossings(float[] b, int n)
+        {
+            int c = 0; for (int i = 2; i < n * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++;
+            return c;
+        }
+        var note = new[] { new NotaNote(45, 0.0, 2.0, 0.9f) };
+        (string, float)[] sine = { ("oscshape", 0f), ("sublevel", 0f), ("filfreq", 1f), ("filenv", 0.5f) };
+        var flat = BassRender(note, 8192, sine);
+        var bent = BassRender(note, 8192, sine.Append(("bend", 1f)).Append(("bendrange", 1f)).ToArray());
+        bool fin = true; foreach (var x in bent) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { fin = false; break; }
+        int cf = Crossings(flat, 8192), cb = Crossings(bent, 8192);
+        Check(fin && cb > cf * 1.5, $"Nota Bass: pitch bend +12 st raises the pitch ({cf} → {cb} crossings)");
+
+        var left = BassRender(note, 8192, ("outpan", 0f));
+        float l = BassRms(left, 0, 8192, 0), r = BassRms(left, 0, 8192, 1);
+        Check(l > 0.01f && r < l * 0.01f, $"Nota Bass: pan hard left silences the right channel (L {l:F3} / R {r:F3})");
+        var centre = BassRender(note, 8192);
+        float cl = BassRms(centre, 0, 8192, 0), cr = BassRms(centre, 0, 8192, 1);
+        Check(Math.Abs(cl - cr) < 1e-5f && Math.Abs(cl - l) < l * 0.05f, $"Nota Bass: centred pan keeps unity level on both sides ({cl:F3} / {cr:F3})");
+
+        // The mod wheel opens the LFO onto the cutoff: silent at 0, audible when up.
+        (string, float)[] wob = { ("filfreq", 0.35f), ("fillfo", 0.5f), ("lforate", 0.6f), ("filenv", 0.5f) };
+        var down = BassRender(note, 8192, wob);
+        var up = BassRender(note, 8192, wob.Append(("modwheel", 1f)).ToArray());
+        float d = 0; for (int i = 0; i < down.Length; i++) d += Math.Abs(down[i] - up[i]);
+        Check(d / down.Length > 1e-3f, "Nota Bass: the mod wheel moves the cutoff through the LFO");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Bass id, each applies in place.
+    {
+        var bassIds = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) bassIds.Add(be.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 7).ToList();
+        Check(mine.Count == 25, $"Nota Bass ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !bassIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Bass preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = be.AddBassSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(be, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Bass preset applies in place ({fails} failed)");
+        // Each preset is audible and finite on a short bass line.
+        var quiet = new System.Collections.Generic.List<string>();
+        foreach (var p in mine)
+        {
+            var doc = cat.Document(p.Id)!;
+            var b = BassRender(new[] { new NotaNote(36, 0.0, 0.5, 0.9f), new NotaNote(43, 0.5, 0.5, 0.9f), new NotaNote(36, 1.0, 0.5, 0.9f) },
+                BF(1.6), doc.NamedParams!.Select(kv => (kv.Key, kv.Value)).ToArray());
+            bool ok = true; foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 4f) { ok = false; break; }
+            float rms = BassRms(b, 0, BF(1.6));
+            if (!ok || rms < 0.01f || rms > 0.9f) quiet.Add($"{p.DisplayName} ({rms:F3})");
+        }
+        Check(quiet.Count == 0, $"every Bass preset renders audible and finite{(quiet.Count > 0 ? " — off: " + string.Join(", ", quiet) : "")}");
     }
 }
 
@@ -1864,7 +2294,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 43, $"Nota Operator exposes 43 params (got {pc})");
+    Check(pc == 48, $"Nota Operator exposes 48 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -1877,12 +2307,15 @@ Console.WriteLine("-- Nota Operator --");
     Check(idsOk && algoI >= 0, "params have ids + names; algo present");
     Check(opIds.Contains("fmdepth") && opIds.Contains("glide") && opIds.Contains("veltofm")
           && opIds.Contains("keylevel") && opIds.Contains("mono"), "mockup-3g params present (fmdepth/glide/veltofm/keylevel/mono)");
+    Check(opIds.Contains("bend") && opIds.Contains("bendrange") && opIds.Contains("modwheel")
+          && opIds.Contains("filkeytrk") && opIds.Contains("veltolevel"),
+          "wheel + tracking params present (bend/bendrange/modwheel/filkeytrk/veltolevel)");
 
     // State round-trips to another track.
     int dlvl = -1; for (int i = 0; i < pc; i++) if (oe.PluginParamId(t, -1, i) == "dlevel") dlvl = i;
     oe.PluginParamSet(t, -1, dlvl, 0.66f);
     var state = oe.GetPluginState(t, -1);
-    Check(state.Length >= 43 * 4, $"operator state serialized ({state.Length} bytes)");
+    Check(state.Length >= 48 * 4, $"operator state serialized ({state.Length} bytes)");
     int t2 = oe.AddOperatorSynthTrack();
     oe.SetPluginState(t2, -1, state);
     Check(Math.Abs(oe.PluginParamGet(t2, -1, dlvl) - 0.66f) < 1e-4, "operator state restores params on another track");
@@ -1931,6 +2364,63 @@ Console.WriteLine("-- Nota Operator --");
         bool fin = true; foreach (var s in mbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
         Check(fin && Rms(mbuf, 16384) > 0.001f, "Operator mono+glide legato renders audible + finite");
     }
+
+    // The two performance wheels and the new tracking amounts: a bent, wheel-open,
+    // key-tracked voice still renders finite and audible, and pitch bend really retunes.
+    {
+        int tw = oe.AddOperatorSynthTrack();
+        int Pi(string id) { for (int i = 0; i < oe.PluginParamCount(tw, -1); i++) if (oe.PluginParamId(tw, -1, i) == id) return i; return -1; }
+        oe.AddMidiClip(tw, 0.0, 4.0);
+        oe.SetClipNotes(tw, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.7f) });
+        float Peak(float[] b, int n) { float m = 0; for (int i = 0; i < n * 2; i++) m = Math.Max(m, Math.Abs(b[i])); return m; }
+
+        var wbuf = new float[8192 * 2];
+        oe.PluginParamSet(tw, -1, Pi("bend"), 1f);          // wheel fully up
+        oe.PluginParamSet(tw, -1, Pi("bendrange"), 1f);     // ±12 semitones
+        oe.PluginParamSet(tw, -1, Pi("modwheel"), 1f);
+        oe.PluginParamSet(tw, -1, Pi("filkeytrk"), 1f);
+        oe.Seek(0.0); oe.Play(); oe.RenderOffline(wbuf, 8192); oe.StopTransport();
+        bool wfin = true; foreach (var s in wbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { wfin = false; break; }
+        Check(wfin && Rms(wbuf, 8192) > 0.001f, "Operator bend + mod wheel + key track render audible + finite");
+
+        // Bent up an octave, the analysis fundamental doubles.
+        var sbend = new float[32];
+        oe.InstrumentScope(tw, sbend);
+        Check(sbend.Length == 32, "Operator scope still reports 32 partials while bent");
+
+        // Vel → Level at 0 flattens dynamics: the same soft note comes out far louder than
+        // it does at the classic full amount. Each case gets its own engine so a voice left
+        // sounding by the first render cannot leak into the second.
+        float SoftPeak(float velToLevel)
+        {
+            using var ve = new NotaEngine();
+            ve.SetBpm(120); ve.SetTimeSignature(4, 4);
+            int tv = ve.AddOperatorSynthTrack();
+            for (int i = 0; i < ve.PluginParamCount(tv, -1); i++)
+                if (ve.PluginParamId(tv, -1, i) == "veltolevel") ve.PluginParamSet(tv, -1, i, velToLevel);
+            ve.AddMidiClip(tv, 0.0, 4.0);
+            ve.SetClipNotes(tv, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.15f) });
+            var b = new float[8192 * 2];
+            ve.Seek(0.0); ve.Play(); ve.RenderOffline(b, 8192); ve.StopTransport();
+            return Peak(b, 8192);
+        }
+        float flat = SoftPeak(0f), classic = SoftPeak(1f);
+        Check(flat > classic * 2f, $"Operator vel → level off lifts a soft note (flat {flat:F3} vs classic {classic:F3})");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Operator id, each applies in place.
+    {
+        var opIdSet = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < oe.PluginParamCount(t, -1); i++) opIdSet.Add(oe.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 9).ToList();
+        Check(mine.Count == 25, $"Nota Operator ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !opIdSet.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Operator preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = oe.AddOperatorSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(oe, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Operator preset applies in place ({fails} failed)");
+    }
 }
 
 // ============================ Nota Grain ===================================
@@ -1943,7 +2433,7 @@ Console.WriteLine("-- Nota Grain --");
     Check(ge.TrackInstrumentKind(t) == 10, $"instrument kind is 10 (got {ge.TrackInstrumentKind(t)})");
     Check(ge.DeviceName(t, -1) == "Nota Grain", $"instrument is Nota Grain (got '{ge.DeviceName(t, -1)}')");
     int pc = ge.PluginParamCount(t, -1);
-    Check(pc == 22, $"Nota Grain exposes 22 params (got {pc})");
+    Check(pc == 23, $"Nota Grain exposes 23 params (got {pc})");
     int posI = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++) { if (ge.PluginParamId(t, -1, i).Length == 0) idsOk = false; if (ge.PluginParamId(t, -1, i) == "position") posI = i; }
     Check(idsOk && posI >= 0, "params have ids; position present");
@@ -1987,6 +2477,126 @@ Console.WriteLine("-- Nota Grain --");
         Check(rt > 0 && Math.Abs(gdst.PluginParamGet(rt, -1, posI) - 0.4f) < 1e-3, "reloaded Grain restores its params");
     }
     finally { try { System.IO.Directory.Delete(gdir, true); } catch { } try { System.IO.File.Delete(gpath); } catch { } }
+
+    // From here on: a fresh Grain on the built-in pad, rendered alone.
+    using var gx = new NotaEngine();
+    gx.SetBpm(120);
+    int g = gx.AddGrainSynthTrack();
+    int gpc = gx.PluginParamCount(g, -1);
+    var gIds = new System.Collections.Generic.HashSet<string>();
+    int GI(string id) { for (int i = 0; i < gpc; i++) if (gx.PluginParamId(g, -1, i) == id) return i; return -1; }
+    for (int i = 0; i < gpc; i++) gIds.Add(gx.PluginParamId(g, -1, i));
+    int wetI = GI("drywet");
+    Check(wetI == 22 && gx.PluginParamName(g, -1, wetI) == "Dry/Wet", "Dry/Wet is appended as param 22");
+    Check(Math.Abs(gx.InstrumentParamDefault(g, wetI) - 1f) < 1e-6, "Dry/Wet defaults fully wet (older projects sound as before)");
+    // A state saved before Dry/Wet existed (22 floats) loads fully wet, as it sounded.
+    {
+        var st = gx.GetPluginState(g, -1);
+        int g2 = gx.AddGrainSynthTrack();
+        gx.SetPluginState(g2, -1, st[..(22 * 4)]);
+        Check(Math.Abs(gx.PluginParamGet(g2, -1, wetI) - 1f) < 1e-6, "a 22-param state loads fully wet");
+        gx.RemoveTrack(g2);
+    }
+    int GrainFrames(double beats) => (int)Math.Round(beats * 60.0 / 120.0 * (gx.SampleRate > 0 ? gx.SampleRate : 48000.0));
+    void GrainStop() { gx.StopTransport(); gx.RenderOffline(new float[64 * 2], 64); }
+    void GrainRender(float[] buf, Action? perBlock = null)
+    {
+        var blk = new float[1024 * 2];
+        for (int at = 0; at < buf.Length / 2; at += 1024)
+        {
+            int n = Math.Min(1024, buf.Length / 2 - at);
+            gx.RenderOffline(blk, n);
+            Array.Copy(blk, 0, buf, at * 2, n * 2);
+            perBlock?.Invoke();
+        }
+    }
+    gx.AddMidiClip(g, 0.0, 4.0);
+    gx.SetClipNotes(g, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
+
+    // Dry, half and wet are each audible and finite.
+    foreach (var (wv, word) in new[] { (0f, "dry"), (0.5f, "half"), (1f, "wet") })
+    {
+        gx.PluginParamSet(g, -1, wetI, wv);
+        var wbuf = new float[GrainFrames(2.0) * 2];
+        gx.Seek(0.0); gx.Play(); GrainRender(wbuf); GrainStop();
+        float r = Rms(wbuf, wbuf.Length / 2); bool fin = true;
+        foreach (var x in wbuf) if (!float.IsFinite(x) || Math.Abs(x) > 4f) { fin = false; break; }
+        Check(r > 0.005f && fin, $"Grain {word} (Dry/Wet {wv:0.0}) is audible + finite (RMS {r:F3})");
+    }
+    gx.PluginParamSet(g, -1, wetI, 1f);
+
+    // The scope publishes the voices and the live grain cloud; Position is live — a held
+    // note's read head follows it (Freeze).
+    {
+        int posJ = GI("position");
+        gx.PluginParamSet(g, -1, GI("scanmode"), 0.5f);
+        gx.PluginParamSet(g, -1, posJ, 0.2f);
+        var sc = new float[2 + 8 * 12 * 3];
+        var heads = new float[8];
+        int maxGrains = 0, scN = 0; bool inRange = true;
+        float headBefore = -1, headAfter = -1;
+        gx.Seek(0.0); gx.Play();
+        var blk = new float[1024 * 2];
+        for (int b = 0; b < 40; b++)
+        {
+            if (b == 20) { headBefore = gx.GrainPlayPositions(g, heads) > 0 ? heads[0] : -1; gx.PluginParamSet(g, -1, posJ, 0.7f); }
+            gx.RenderOffline(blk, 1024);
+            scN = gx.InstrumentScope(g, sc);
+            if (scN >= 2)
+            {
+                int n = (int)sc[1];
+                maxGrains = Math.Max(maxGrains, n);
+                for (int k = 0; k < n; k++)
+                    for (int c = 0; c < 3; c++) { float v = sc[2 + k * 3 + c]; if (!(v >= 0f && v <= 1.0001f)) inRange = false; }
+            }
+        }
+        headAfter = gx.GrainPlayPositions(g, heads) > 0 ? heads[0] : -1;
+        GrainStop();
+        Check(scN >= 2 && sc[0] >= 0, $"Grain scope publishes voices + grains ({scN} values)");
+        Check(maxGrains >= 2 && inRange, $"Grain scope carries the live cloud in range ({maxGrains} grains)");
+        Check(Math.Abs(headBefore - 0.2f) < 0.02f && Math.Abs(headAfter - 0.7f) < 0.02f,
+            $"a held note follows Position live (read head {headBefore:F2} → {headAfter:F2})");
+        gx.PluginParamSet(g, -1, posJ, gx.InstrumentParamDefault(g, posJ));
+    }
+
+    // A repeated note that starts a hair before the previous one ends keeps sounding.
+    {
+        gx.PluginParamSet(g, -1, GI("attack"), 0f); gx.PluginParamSet(g, -1, GI("release"), 0f);
+        float WindowRms(NotaNote[] notes)
+        {
+            gx.SetClipNotes(g, 0, notes);
+            var obuf = new float[GrainFrames(2.2) * 2];
+            gx.Seek(0.0); gx.Play(); GrainRender(obuf); GrainStop();
+            int from = GrainFrames(1.4), len = GrainFrames(0.4);
+            double acc = 0; for (int i = from; i < from + len; i++) acc += obuf[i * 2] * obuf[i * 2];
+            return (float)Math.Sqrt(acc / len);
+        }
+        float alone = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f) });
+        float held = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f), new NotaNote(60, 1.0, 1.5, 0.9f) });
+        Check(held > 0.01f && held > alone * 5, $"Grain: an overlapping repeat of a note keeps sounding (RMS {held:F3} vs {alone:F4} released)");
+    }
+
+    // Factory presets: 25 ship, every named param is a real Grain id, each applies in place
+    // and renders audible and finite.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 10).ToList();
+        Check(mine.Count == 25, $"Nota Grain ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !gIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Grain preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        gx.SetClipNotes(g, 0, new[] { new NotaNote(48, 0.0, 1.5, 0.9f), new NotaNote(60, 0.0, 1.5, 0.9f), new NotaNote(67, 0.5, 1.0, 0.9f) });
+        var off = new System.Collections.Generic.List<string>();
+        var pbuf = new float[GrainFrames(2.0) * 2];
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(gx, p.Id, g, -1).Length != 0) { off.Add($"{p.DisplayName} (apply)"); continue; }
+            gx.Seek(0.0); gx.Play(); GrainRender(pbuf); GrainStop();
+            bool ok = true; foreach (var x in pbuf) if (!float.IsFinite(x) || Math.Abs(x) > 1.01f) { ok = false; break; }
+            float r = Rms(pbuf, pbuf.Length / 2);
+            if (!ok || r < 0.005f) off.Add($"{p.DisplayName} (RMS {r:F3})");
+        }
+        Check(off.Count == 0, $"every Grain preset is audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+    }
 }
 
 // ============================ Nota Flux ====================================
@@ -2048,14 +2658,91 @@ Console.WriteLine("-- Nota Flux --");
     fe.PluginParamSet(t, -1, vx, 0.34f); fe.PluginParamSet(t, -1, vy, 0.28f);
     var rbuf = new float[4096 * 2];
     fe.Seek(0.0); fe.Play();
-    float envSeen = 0f;
-    var sc = new float[8];
-    for (int b = 0; b < 20; b++) { fe.RenderOffline(rbuf, 4096); int n = fe.InstrumentScope(t, sc); if (n >= 4) envSeen = Math.Max(envSeen, sc[0]); }
+    float envSeen = 0f, reactSeen = 0f, pulled = 0f;
+    var sc = new float[9];
+    int scN = 0;
+    for (int b = 0; b < 20; b++)
+    {
+        fe.RenderOffline(rbuf, 4096); scN = fe.InstrumentScope(t, sc);
+        if (scN >= 6) { envSeen = Math.Max(envSeen, sc[0]); reactSeen = Math.Max(reactSeen, sc[3]); pulled = Math.Max(pulled, sc[4] - 0.34f); }
+    }
     fe.StopTransport();
+    Check(scN == 9, $"Flux scope publishes 9 values (got {scN})");
     Check(envSeen > 0.001f, $"React scope registers the sidechain envelope (env {envSeen:F3})");
+    Check(reactSeen > 0.01f && pulled > 0.01f, $"React on Vector pulls the vector with a source (react {reactSeen:F3}, Δx {pulled:F3})");
+    Check(sc[7] >= 2 && sc[8] == 1f, $"React counts the source's transients (onsets {sc[7]:F0}, source {sc[8]:F0})");
 
     fe.SetInstrumentSidechainSource(t, -1);
     Check(fe.InstrumentSidechainSource(t) == -1, "instrument sidechain clears");
+    // From here on the master is Flux alone: silence the duplicate and the drum source.
+    fe.SetTrackMute(t2, true); fe.SetTrackMute(drum, true);
+
+    // With no source React is off: its own loud notes don't modulate anything.
+    fe.SetClipNotes(t, 0, new[] { new NotaNote(48, 0.0, 3.0, 1f), new NotaNote(55, 0.0, 3.0, 1f), new NotaNote(60, 0.0, 3.0, 1f) });
+    float reactOff = 0f, driftOff = 0f;
+    fe.Seek(0.0); fe.Play();
+    for (int b = 0; b < 12; b++)
+    {
+        fe.RenderOffline(rbuf, 4096);
+        if (fe.InstrumentScope(t, sc) >= 9) { reactOff = Math.Max(reactOff, sc[3]); driftOff = Math.Max(driftOff, sc[8]); }
+    }
+    FluxStop();
+    Check(reactOff == 0f && driftOff == 0f, $"no source → React is off (react {reactOff:F3})");
+
+    // A repeated note that starts before the previous one ends keeps sounding when the old
+    // one's note-off arrives. A plucky, dry patch, so a released voice is silent in the
+    // window: the overlapping pair must stay well above the first note on its own.
+    int envI = -1, spI = -1;
+    for (int i = 0; i < pc; i++) { string pid = fe.PluginParamId(t, -1, i); if (pid == "env") envI = i; else if (pid == "space") spI = i; }
+    fe.PluginParamSet(t, -1, envI, 0.8f); fe.PluginParamSet(t, -1, spI, 0f);
+    float WindowRms(NotaNote[] notes)
+    {
+        fe.SetClipNotes(t, 0, notes);
+        var obuf = new float[FluxFrames(2.2) * 2];
+        fe.Seek(0.0); fe.Play(); FluxRender(obuf); FluxStop();
+        int from = FluxFrames(1.4), len = FluxFrames(0.4);
+        double acc = 0; for (int i = from; i < from + len; i++) acc += obuf[i * 2] * obuf[i * 2];
+        return (float)Math.Sqrt(acc / len);
+    }
+    float alone = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f) });
+    float held = WindowRms(new[] { new NotaNote(60, 0.0, 1.02, 0.9f), new NotaNote(60, 1.0, 1.5, 0.9f) });
+    Check(held > 0.01f && held > alone * 5, $"Flux: an overlapping repeat of a note keeps sounding (RMS {held:F3} vs {alone:F4} released)");
+    int FluxFrames(double beats) => (int)Math.Round(beats * 60.0 / 120.0 * (fe.SampleRate > 0 ? fe.SampleRate : 48000.0));
+    // Stop, then render a stopped block so the engine flushes held voices (it releases them
+    // on the play→stop edge it sees while rendering).
+    void FluxStop() { fe.StopTransport(); fe.RenderOffline(new float[64 * 2], 64); }
+    void FluxRender(float[] buf)   // in 4096-frame blocks, as the engine's host would
+    {
+        var blk = new float[4096 * 2];
+        for (int at = 0; at < buf.Length / 2; at += 4096)
+        {
+            int n = Math.Min(4096, buf.Length / 2 - at);
+            fe.RenderOffline(blk, n);
+            Array.Copy(blk, 0, buf, at * 2, n * 2);
+        }
+    }
+
+    // Factory presets: 25 ship, every named param is a real Flux id, each applies in place
+    // and renders audible and finite.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 11).ToList();
+        Check(mine.Count == 25, $"Nota Flux ships 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !fIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Flux preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        fe.SetClipNotes(t, 0, new[] { new NotaNote(48, 0.0, 1.5, 0.9f), new NotaNote(55, 0.0, 1.5, 0.9f), new NotaNote(62, 0.5, 1.0, 0.9f) });
+        var off = new System.Collections.Generic.List<string>();
+        var pbuf = new float[FluxFrames(2.0) * 2];
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(fe, p.Id, t, -1).Length != 0) { off.Add($"{p.DisplayName} (apply)"); continue; }
+            fe.Seek(0.0); fe.Play(); FluxRender(pbuf); FluxStop();
+            bool ok = true; foreach (var x in pbuf) if (!float.IsFinite(x) || Math.Abs(x) > 1.01f) { ok = false; break; }
+            float rms = Rms(pbuf, pbuf.Length / 2);
+            if (!ok || rms < 0.01f) off.Add($"{p.DisplayName} ({rms:F3})");
+        }
+        Check(off.Count == 0, $"every Flux preset applies and renders audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+    }
 }
 
 // ============================ Sampler ======================================
@@ -5051,24 +5738,42 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
 Console.WriteLine("-- Factory drum kits --");
 {
     var kits = Nota.Infrastructure.Kits.KitCatalog.All;
-    Check(kits.Count == 10, $"ten factory kits ({kits.Count})");
+    Check(kits.Count == 25, $"25 factory kits ({kits.Count})");
 
     var kitIds = new System.Collections.Generic.HashSet<string>();
-    bool padsOk = true, notesOk = true, namesOk = true;
+    var kitNames = new System.Collections.Generic.HashSet<string>();
+    bool padsOk = true, notesOk = true, namesOk = true, hatsOk = true;
     foreach (var k in kits)
     {
-        if (!kitIds.Add(k.Id)) padsOk = false;
+        if (!kitIds.Add(k.Id) || !kitNames.Add(k.Name)) padsOk = false;
         if (k.Pads.Count != 16) padsOk = false;
         var padNotes = new System.Collections.Generic.HashSet<int>();
+        var padNames = new System.Collections.Generic.HashSet<string>();
         foreach (var pad in k.Pads)
         {
             if (pad.Note < 36 || pad.Note > 51 || !padNotes.Add(pad.Note)) notesOk = false;
-            if (string.IsNullOrWhiteSpace(pad.Name)) namesOk = false;
+            if (string.IsNullOrWhiteSpace(pad.Name) || !padNames.Add(pad.Name)) namesOk = false;
+            if (pad.Choke < 0 || pad.Choke > 4) hatsOk = false;              // the card offers groups 1..4
+            if (pad.Name.EndsWith(" Hat") && pad.Choke != 1) hatsOk = false;  // closed cuts open
         }
+        // A choke group of one pad cuts nothing — a recipe typo.
+        if (k.Pads.Where(p => p.Choke > 0).GroupBy(p => p.Choke).Any(g => g.Count() < 2)) hatsOk = false;
     }
-    Check(padsOk, "every kit has a unique id and 16 pads");
+    Check(padsOk, "every kit has a unique id and name and 16 pads");
     Check(notesOk, "pad notes are unique and inside the GM bank (36..51)");
-    Check(namesOk, "every pad is named");
+    Check(namesOk, "every pad is named, uniquely within its kit");
+    Check(hatsOk, "hats share choke group 1; every choke group (1..4) pairs at least two pads");
+
+    // A loaded kit is recognised by its pads, so no two kits may share more than 12 of them:
+    // then a kit stays recognisable with up to three pads swapped or renamed.
+    int worstOverlap = 0; string worstPair = "";
+    for (int i = 0; i < kits.Count; i++)
+        for (int j = i + 1; j < kits.Count; j++)
+        {
+            int n = kits[i].Pads.Count(p => kits[j].Pads.Any(q => q.Note == p.Note && q.Name == p.Name));
+            if (n > worstOverlap) { worstOverlap = n; worstPair = $"{kits[i].Name}/{kits[j].Name}"; }
+        }
+    Check(worstOverlap <= 12, $"kits are told apart by their pads (most shared: {worstOverlap}, {worstPair})");
 
     // Rendering: deterministic, on target level, finite, and long enough to be a drum.
     var kick = kits[0].Pads[0];
@@ -5085,6 +5790,19 @@ Console.WriteLine("-- Factory drum kits --");
     Check(peak <= 1.0 && Math.Abs(20 * Math.Log10(peak) - kick.PeakDb) < 0.6,
           $"rendered peak hits the recipe's target ({20 * Math.Log10(peak):0.0} dBFS, want {kick.PeakDb:0.0})");
     Check(r1.Frames > r1.SampleRate / 50, $"one-shot is longer than 20 ms ({r1.Frames * 1000 / r1.SampleRate} ms)");
+
+    // Every recipe of every kit renders: finite, on its level, not silent.
+    var badPads = new System.Collections.Generic.List<string>();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    System.Threading.Tasks.Parallel.ForEach(kits.SelectMany(k => k.Pads.Select(p => (k, p))), kp =>
+    {
+        var r = Nota.Infrastructure.Kits.KitRenderer.Render(kp.p, 1);
+        double pk = 0; bool fin = r.Frames > 0;
+        foreach (var v in r.Interleaved) { if (!float.IsFinite(v)) { fin = false; break; } pk = Math.Max(pk, Math.Abs(v)); }
+        if (!fin || pk > 1.0 || pk <= 0 || Math.Abs(20 * Math.Log10(pk) - kp.p.PeakDb) > 1.0)
+            lock (badPads) badPads.Add($"{kp.k.Name}/{kp.p.Name}");
+    });
+    Check(badPads.Count == 0, $"all {kits.Sum(k => k.Pads.Count)} kit pads render finite and on level in {sw.ElapsedMilliseconds} ms{(badPads.Count > 0 ? ": " + string.Join(", ", badPads) : "")}");
 
     // Building a rack from a kit: every pad loaded, named, choked and audible.
     var svc = new DrumKitService();
@@ -5111,6 +5829,16 @@ Console.WriteLine("-- Factory drum kits --");
     // Loading a second kit into the same rack replaces its pads rather than stacking.
     Check(svc.LoadInto(ke, kt, kits[1].Id, out _) && ke.RackChainCount(kt) == 16, "loading another kit replaces the pads");
     Check(ke.RackChainName(kt, 0) == kits[1].Pads[0].Name, "the replaced pads carry the new kit's names");
+
+    // The card's kit picker names the kit a rack holds, and keeps naming it through a pad
+    // swap — but a rack stripped to a few pads is no longer that kit.
+    Check(svc.Identify(ke, kt) == kits[1].Id, $"the loaded kit is recognised ('{svc.Identify(ke, kt)}')");
+    ke.RackSetChainName(kt, 0, "My Kick");
+    Check(svc.Identify(ke, kt) == kits[1].Id, "a renamed pad keeps the kit recognised");
+    while (ke.RackChainCount(kt) > 3) ke.RackRemoveChain(kt, ke.RackChainCount(kt) - 1);
+    Check(svc.Identify(ke, kt) == "", "a rack stripped to three pads is no kit");
+    Check(svc.LoadInto(ke, kt, kits[24].Id, out string lastWarn) && svc.Identify(ke, kt) == kits[24].Id,
+          $"the last kit loads and is recognised ({(lastWarn.Length == 0 ? "no warnings" : lastWarn)})");
 }
 
 // ===================== M9-D: automation segment curves =====================

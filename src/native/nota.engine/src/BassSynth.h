@@ -13,9 +13,18 @@
 // A single morphing oscillator (continuous shape blend with pulse-width for the square
 // end), a dedicated sub oscillator, a TPT state-variable filter (optional 24 dB cascade)
 // with its own envelope, key-tracking and LFO, plus pre-filter and output saturation for
-// grit. Mono mode with legato glide (note stack, last-note priority) makes it a proper
-// bass; poly mode is available too. All parameters ride the Instrument plugin-param
-// interface (normalized 0..1, stable ids) → automation / persist / clone for free.
+// grit. Mono mode (note stack, last-note priority) with glide makes it a proper bass;
+// every new note retriggers the envelopes unless Legato is on, in which case a note
+// played over a held one slides into it without a new attack. Poly mode is available
+// too. Two performance wheels ride on top — pitch bend with a selectable range (1..12
+// semitones) and a mod wheel that opens the LFO onto the cutoff (a hand-played wobble)
+// — plus an output pan. All parameters ride the Instrument plugin-param interface
+// (normalized 0..1, stable ids) → automation / persist / clone for free.
+//
+// Note bookkeeping counts instances, not pitches: a note-off releases the oldest held
+// instance of that pitch only. Two overlapping notes of the same pitch (a repeated note
+// whose on lands a sample before the previous off) therefore no longer silence the new
+// one.
 //
 // Header-only like the other built-in synths. Allocation-free after construction; a
 // per-sample loop keeps filter/LFO modulation smooth. Filter coefficients update at
@@ -47,6 +56,8 @@ public:
         Attack, Decay, Sustain, Release,
         LfoRate, LfoWave, LfoPitch,
         Glide, Unison, Drive, Volume, VelAmp, VelFilter, Mono,
+        // ---- appended (v2, almanac rework): wheels, output pan, legato ----
+        Bend, BendRange, ModWheel, OutPan, Legato,
         kNumParams
     };
 
@@ -62,6 +73,11 @@ public:
         set(LfoRate, 0.35f); set(LfoWave, 0.0f); set(LfoPitch, 0.5f);
         set(Glide, 0.08f); set(Unison, 0.0f); set(Drive, 0.15f); set(Volume, 0.85f);
         set(VelAmp, 0.4f); set(VelFilter, 0.35f); set(Mono, 1.0f);
+        set(Bend, 0.5f);                  // centred
+        set(BendRange, 1.0f / 11.0f);     // ±2 semitones
+        set(ModWheel, 0.0f);
+        set(OutPan, 0.5f);                // centre
+        set(Legato, 0.0f);                // every note retriggers
     }
 
     int32_t kind() const override { return 7; }
@@ -79,7 +95,8 @@ public:
             "fattack", "fdecay", "fsustain", "frelease",
             "attack", "decay", "sustain", "release",
             "lforate", "lfowave", "lfopitch",
-            "glide", "unison", "drive", "volume", "velamp", "velfilter", "mono" };
+            "glide", "unison", "drive", "volume", "velamp", "velfilter", "mono",
+            "bend", "bendrange", "modwheel", "outpan", "legato" };
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
@@ -90,7 +107,8 @@ public:
             "Filter Attack", "Filter Decay", "Filter Sustain", "Filter Release",
             "Attack", "Decay", "Sustain", "Release",
             "LFO Rate", "LFO Wave", "LFO →Pitch",
-            "Glide", "Unison", "Drive", "Volume", "Vel→Amp", "Vel→Filter", "Mono" };
+            "Glide", "Unison", "Drive", "Volume", "Vel→Amp", "Vel→Filter", "Mono",
+            "Pitch Bend", "Bend Range", "Mod Wheel", "Out Pan", "Legato" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override {
@@ -130,59 +148,77 @@ public:
 
     // ---- note events ------------------------------------------------------
     void noteOn(int32_t pitch, float velocity) override {
-        const bool mono = get(Mono) >= 0.5f;
         const bool glideOn = get(Glide) > 0.001f;
-        if (mono) {
-            const bool hadHeld = monoCount_ > 0;   // another key already down → true legato overlap
-            if (monoCount_ < kMonoStack) monoStack_[monoCount_++] = pitch;
+        const double target = mtof(pitch);
+        const uint32_t seq = ++noteSeq_;
+        if (get(Mono) >= 0.5f) {
+            const bool hadHeld = monoCount_ > 0;   // another key already down → an overlap
+            if (monoCount_ == kMonoStack) {         // full: forget the oldest key
+                for (int r = 1; r < kMonoStack; ++r) monoStack_[r - 1] = monoStack_[r];
+                --monoCount_;
+            }
+            monoStack_[monoCount_++] = pitch;
             Voice& v = voices_[0];
-            const double target = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
-            // Legato (no envelope retrigger, glide the pitch) only when another note is still
-            // held. A note struck while the voice is merely releasing (all keys were lifted)
-            // must retrigger, otherwise it keeps decaying and never actually sounds.
-            const bool releasing = v.aStage == Stage::Release;
-            const bool legato = hadHeld && v.active && !releasing && glideOn;
-            if (!v.active || releasing) v.freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : target;
-            else if (!glideOn) v.freqCur = target;
+            const bool sounding = v.active && v.aStage != Stage::Release;
+            // Legato (no new attack, slide the pitch) only when the patch asks for it AND
+            // another note is still held. Otherwise every note is a fresh attack — before,
+            // an overlap with glide on skipped it, so on a plucky patch the next note of a
+            // tight line was silent.
+            const bool legato = get(Legato) >= 0.5f && hadHeld && sounding;
+            if (!v.active) v.freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : target;
+            else if (!glideOn) v.freqCur = target;   // else glide on from where it is now
             v.freqTarget = target;
-            v.pitch = pitch; v.ktOct = (pitch - 60) / 12.0; v.vel = velocity;
-            if (!legato) startVoice(v, /*resetPitch=*/false);
+            v.pitch = pitch; v.ktOct = (pitch - 60) / 12.0;
+            v.seq = seq;
+            if (!legato) { v.vel = velocity; startVoice(v); }
             v.active = true;
             lastFreq_ = target;
             return;
         }
         Voice* v = findFreeVoice();
         v->pitch = pitch;
-        v->freqTarget = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
+        v->freqTarget = target;
         // Poly: each voice starts at its own pitch. Gliding a fresh voice from the last
         // note's frequency (a mono/legato notion) makes chord/sequence voices sweep through
         // one another and beat — so no portamento in poly.
         v->freqCur = v->freqTarget;
         v->ktOct = (pitch - 60) / 12.0;
         v->vel = velocity;
-        startVoice(*v, /*resetPitch=*/false);
+        v->seq = seq;
+        v->active = false;   // a stolen voice starts clean, not from its old envelope
+        startVoice(*v);
         v->active = true;
         lastFreq_ = v->freqTarget;
     }
     void noteOff(int32_t pitch) override {
-        if (get(Mono) >= 0.5f) {
-            int w = 0;
-            for (int r = 0; r < monoCount_; ++r) if (monoStack_[r] != pitch) monoStack_[w++] = monoStack_[r];
-            monoCount_ = w;
+        // Drop one instance of the key from the mono stack (the oldest), whatever the mode:
+        // a key pressed in mono and released after switching to poly must not stay "held".
+        int found = -1;
+        for (int r = 0; r < monoCount_; ++r) if (monoStack_[r] == pitch) { found = r; break; }
+        if (found >= 0) {
+            for (int r = found + 1; r < monoCount_; ++r) monoStack_[r - 1] = monoStack_[r];
+            --monoCount_;
+        }
+        if (get(Mono) >= 0.5f && found >= 0) {
             Voice& v = voices_[0];
-            if (monoCount_ == 0) { v.aStage = Stage::Release; v.fStage = Stage::Release; }
-            else {
-                const int top = monoStack_[monoCount_ - 1];
+            if (monoCount_ == 0) { release(v); return; }
+            // Back to the newest key still held (or keep sounding the same one, when the
+            // key just lifted was an older repeat of it). No new attack — it's one phrase.
+            const int top = monoStack_[monoCount_ - 1];
+            if (top != v.pitch) {
                 v.pitch = top; v.ktOct = (top - 60) / 12.0;
-                v.freqTarget = 440.0 * std::pow(2.0, (top - 69) / 12.0);
+                v.freqTarget = mtof(top);
                 lastFreq_ = v.freqTarget;
             }
             return;
         }
+        // Poly (or a note that was struck in poly before switching to mono): release the
+        // oldest held voice of this pitch — only one, so a newer repeat keeps sounding.
+        Voice* oldest = nullptr;
         for (auto& v : voices_)
-            if (v.active && v.pitch == pitch && v.aStage != Stage::Release) {
-                v.aStage = Stage::Release; v.fStage = Stage::Release;
-            }
+            if (v.active && v.pitch == pitch && v.aStage != Stage::Release && (!oldest || v.seq < oldest->seq))
+                oldest = &v;
+        if (oldest) release(*oldest);
     }
     void allNotesOff() override { for (auto& v : voices_) v.active = false; monoCount_ = 0; }
 
@@ -219,6 +255,14 @@ public:
         const double glide = get(Glide);
         const double glideCoef = glide > 0.001 ? (1.0 - std::exp(-1.0 / (expMap(glide, 0.005, 0.6) * sampleRate_))) : 1.0;
         const float  velAmp = get(VelAmp), velFilt = get(VelFilter);
+        // Pitch-bend wheel, in the range the patch declares (1..12 semitones); the mod
+        // wheel opens the LFO onto the cutoff, up to ±2 octaves on top of the patch's own.
+        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0) / 12.0);
+        const double wheelLfo = get(ModWheel) * 2.0;
+        // Balance-law pan: centre is unity on both sides, so a centred patch sounds as it
+        // always has; a side fades the other channel out.
+        const float  pan = (get(OutPan) - 0.5f) * 2.0f;
+        const float  panL = std::min(1.0f, 1.0f - pan), panR = std::min(1.0f, 1.0f + pan);
         const double outDrive = 1.0 + get(Drive) * 7.0;                     // 1..8
         const double outMakeup = 1.0 / std::tanh(outDrive);
         const float  volume = get(Volume);
@@ -228,7 +272,7 @@ public:
             // Shared LFO.
             const double lfo = lfoValue(lfoWave, lfoPhase_, lfoSH_);
             lfoPhase_ += lfoInc; if (lfoPhase_ >= 1.0) { lfoPhase_ -= 1.0; lfoSH_ = noise() * 2.0f - 1.0f; }
-            const double pitchMod = lfoPitchSemis != 0.0 ? std::exp2(lfoPitchSemis * lfo / 12.0) : 1.0;
+            const double pitchMod = (lfoPitchSemis != 0.0 ? std::exp2(lfoPitchSemis * lfo / 12.0) : 1.0) * bendMul;
 
             float mono = 0.0f;
             for (auto& v : voices_) {
@@ -258,7 +302,7 @@ public:
                 if (v.modCount-- <= 0) {
                     v.modCount = 15;
                     const double velF = 1.0f - velFilt + velFilt * v.vel;
-                    const double octs = fEnvAmt * 4.0 * v.fEnv * velF + fKey * v.ktOct + fLfoAmt * 2.0 * lfo;
+                    const double octs = fEnvAmt * 4.0 * v.fEnv * velF + fKey * v.ktOct + (fLfoAmt * 2.0 + wheelLfo) * lfo;
                     const double fc = std::clamp(fbase * std::exp2(octs), 20.0, sampleRate_ * 0.49);
                     setSvf(v.a1, v.a2, v.a3, fc, k);
                 }
@@ -271,8 +315,8 @@ public:
 
             if (outDrive > 1.001) mono = (float)(std::tanh(mono * outDrive) * outMakeup);
             const float o = mono * volume * 0.5f;
-            out[i * 2]     += o;
-            out[i * 2 + 1] += o;
+            out[i * 2]     += o * panL;
+            out[i * 2 + 1] += o * panR;
         }
     }
 
@@ -291,20 +335,32 @@ private:
         double   s1[2] = {0, 0}, s2[2] = {0, 0};        // SVF integrator state (two cascaded stages)
         double   a1 = 0, a2 = 0, a3 = 0;
         int32_t  modCount = 0;
+        uint32_t seq = 0;                               // note-on order: a note-off releases the oldest
     };
 
     void  set(Param p, float v) { pn_[p].store(v, std::memory_order_relaxed); }
     float get(Param p) const { return pn_[p].load(std::memory_order_relaxed); }
     double bip(Param p) const { return (get(p) - 0.5f) * 2.0; }   // 0..1 → -1..+1
 
-    // Fresh note: reset phases + retrigger both envelopes.
-    void startVoice(Voice& v, bool /*resetPitch*/) {
-        v.phM = 0.0; v.phMu = 0.25; v.phS = 0.0;
-        v.aEnv = 0.0f; v.aStage = Stage::Attack;
-        v.fEnv = 0.0f; v.fStage = Stage::Attack;
-        v.s1[0] = v.s1[1] = v.s2[0] = v.s2[1] = 0.0;
-        v.a1 = v.a2 = v.a3 = 0.0;
+    static double mtof(int32_t pitch) { return 440.0 * std::pow(2.0, (pitch - 69) / 12.0); }
+
+    // New attack. A silent voice starts clean — phases at zero, envelopes and filter from
+    // rest. A voice that is still sounding (a mono retrigger) keeps its phases, filter
+    // state and envelope levels and attacks from where it is, so the retrigger never clicks.
+    void startVoice(Voice& v) {
+        if (!v.active) {
+            v.phM = 0.0; v.phMu = 0.25; v.phS = 0.0;
+            v.aEnv = 0.0f; v.fEnv = 0.0f;
+            v.s1[0] = v.s1[1] = v.s2[0] = v.s2[1] = 0.0;
+            v.a1 = v.a2 = v.a3 = 0.0;
+        }
+        v.aStage = Stage::Attack;
+        v.fStage = Stage::Attack;
         v.modCount = 0;
+    }
+    static void release(Voice& v) {
+        if (!v.active) return;
+        v.aStage = Stage::Release; v.fStage = Stage::Release;
     }
 
     static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
@@ -408,6 +464,7 @@ private:
     double  lfoPhase_ = 0.0;
     float   lfoSH_ = 0.0f;
     double  lastFreq_ = 0.0;    // portamento reference
+    uint32_t noteSeq_ = 0;
     uint32_t rng_ = 0x9E3779B9u;
     std::atomic<float> pn_[kNumParams];
 };

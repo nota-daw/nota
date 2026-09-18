@@ -19,6 +19,145 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Grain's editor is now the almanac's card, with a Dry/Wet knob and a live grain
+  cloud.** The vertical tab rail and the separate playhead strip give way to one layout:
+  the sample fills the centre as a graph — the Spray band around the dashed read Position,
+  each held voice's read head and, new, **every grain the engine is playing** as a teal dot
+  at its read position (high for left, low for right, larger the louder its window) — with
+  the five tabs (Grain · Pitch · Variation · Filter · Amp) along its top and each tab's
+  controls beneath it. **Drag across the sample to move Position**; double-click puts it
+  back. The 186 px rail on the right keeps **READ** (Scan / Freeze / Key, Position, Scan
+  speed, Spray) and the output — volume, **Dry/Wet** and the track's meter — on screen on
+  every tab, and a status strip reads the tab back in words beside the sample, voices and
+  live grain count. Knobs now read in the engine's units (grain size in ms, density as an
+  overlap, coarse in semitones, fine in cents, cutoff in Hz, envelope times), the header
+  shows grains per second, and the built-in pad draws its waveform too.
+- **Nota Grain: Dry/Wet.** A new parameter blends the grain cloud with the sample itself,
+  played straight from the read position at the note's pitch, before the filter and amp.
+  It is appended to the parameter list and defaults fully wet, so older projects and
+  presets sound as they did.
+- **Nota Grain ships 25 factory presets** (was 6) — clouds and pads, patches that move
+  through the file, keys and plucks that put the sample's own attack under the cloud,
+  glitch and stutter textures, basses, and Dry/Wet blends down to the plain sample,
+  including the six that existed before.
+- **Nota Flux's editor is now the almanac's card, and the vector's worlds carry their own
+  unison.** The card shrinks from 900 to **700 × 260** and reads left to right: the
+  **Vector** field (the four worlds in their graph colours, the vector as a brass dot, and a
+  dashed teal ring where Motion and React pull it), **React** (a source picker that lists
+  the tracks when it opens, a scope of what Flux hears — envelope, transients and tilt —
+  beside the reaction's own level, LISTEN and the four targets) and **Macros** (Age, Motion,
+  Filter, Env and Space, then **glide, tune and gain**, which had no control on the card
+  before). A status strip reads the patch back in words: the blend of the four worlds, or
+  the source, target, **transients per bar** and where the vector is being pulled. FILTER
+  now shows the cutoff the engine actually uses at the current vector, and double-clicking
+  the field puts the vector back on its default. The "adaptive unison" the card promised is
+  real now: each world detunes a twin of the oscillator by its own amount (Warm the most,
+  Moog not at all), a little wider with Age. Projects load unchanged — no parameter moved.
+- **Nota Flux ships 25 factory presets** (was 6) — pads, keys and plucks, basses, leads and
+  a set of reactive patches meant for a drum or bass source, including the six that existed
+  before under their old names.
+- **The Nota Drum Rack's editor is now the almanac's card, with a kit picker in its header.**
+  The header's **‹ Kit ⌄ ›** picker loads any factory kit into the rack in place (it
+  replaces the pads) and steps through them; a rack names its kit even after a project is
+  reopened or a pad or two is swapped. The body is the 700 × 260 card: **Pads** (the 4 × 4
+  grid, pad 1 bottom-left, each pad in its own hue, the choke group on the pad) and
+  **Mixer** (the bank's pads as rows: volume, pan, mute · solo · choke) under a strip with
+  the bank, swing, humanize and Fold, beside a **selected-pad** panel — its one-shot drawn
+  with a playhead, volume, pan, tune and decay, the choke group and a button into its
+  instrument — and a status line that reads the selection back in words. New: a **Chain**
+  view shows the selected pad's instrument and effects and adds effects to it (the panel's
+  *Open chain*), and a right-click on a pad **renames**, **re-chokes** or **removes** it.
+  An empty pad now also offers a Sampler.
+- **Fifteen new factory drum kits, 25 in all:** *Brass Room* (live rock kit in a big room),
+  *Breakline* (jungle break), *Bunker* (warehouse techno), *Pixel* (minimal clicks and
+  blips), *Velvet* (jazz brushes), *Circuit* (electro box), *Yard* (dub and reggae),
+  *Byte* (8-bit chip), *Lagoon* (amapiano log drums), *Titan* (trailer percussion),
+  *Shuffle* (UK garage), *Mirrorball* (70s disco), *Pit* (orchestral percussion), *Hyper*
+  (hyperpop) and *Crate* (90s boom bap). Like the first ten they are rendered on your
+  machine on first launch, sit on the General MIDI map with the hats choked together,
+  and bring their own swing and humanize.
+- **Nota Bass grew performance wheels, a Legato switch and an output pan, and its editor
+  is now the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5
+  / ±12 semitones) and a **mod wheel** that opens the LFO onto the cutoff — a wobble you
+  play by hand — sit in a rail that stays on screen on both tabs. **Legato** decides what
+  a note played over a held one does in mono: slide into it without a new attack (the
+  303 way), or — the default — attack afresh with the glide still sliding the pitch. The
+  card shrinks from the full window width to **700 × 260** and lays the synth out as
+  **Signal** (Osc, Sub and Filter as three rows: wave chips, shape, pulse width, tuning and
+  level; the sub's wave, octave and level with the mix sum; the filter's type and slope,
+  its response as a drag pad and cutoff, resonance, drive, env and key amounts) and
+  **Mod** (both envelopes drawn and draggable, the LFO with its destinations and the
+  velocity amounts), beside a **Global** rail — voice mode, glide, unison, drive, bend
+  range, legato, volume, pan and the track's meter — and a status strip that reads the
+  patch back in words. Projects saved before this load unchanged: the existing parameters
+  keep their index and the new ones start neutral.
+- **Nota Bass ships 25 factory presets** (was 6) — subs, plucks, acid lines, wobbles,
+  reeses, stabs and slides, including the six that existed before under their old names.
+- **Nota Aurora grew performance wheels, eight macros and a switchable FX chain, and its
+  editor is now the almanac's card.** A **pitch-bend** wheel with a selectable **range**
+  (±2 / ±5 / ±12 semitones) joins the mod wheel in a rail that stays on screen on every
+  tab. There are now **eight macros** instead of four, reaching **twelve** destinations
+  (warp, osc 2 level, sub level, unison detune and drive on top of the old seven), each
+  named after what it drives. **LFO 2** can lock to the tempo like LFO 1. The **unison**
+  stack is stereo: detune is its own dial in cents and **spread** widens the stack across
+  the field. The FX block became a chain of three switchable blocks: **drive** (Tube / Tape
+  / Fold, with a tone tilt), **chorus** (1× / 2× / 4×) and **reverb** (Room / Hall / Plate,
+  with size). The output also gets a **pan** control. The card lays the synth out as
+  **Osc · Filter · Env · LFO · Mod · FX** tabs over a 186 px rail that switches between
+  **Global** and **Macros**, with a status strip that reads the patch back in words.
+  Projects saved before this load: the existing parameters keep their index, the new
+  ones start at values that sound as before, and a macro saved against the old seven
+  destinations still points at the same one. The one exception is unison (see Changed).
+- **Nota Aurora ships 25 factory presets** (was 8): pads, keys, bells and plucks, leads,
+  basses and motion patches, including the eight that existed before under their old
+  names.
+- **Nota Volt grew performance wheels and wider macros, and its editor is now the
+  almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
+  semitones) joins the mod wheel in a rail that stays on screen on every tab, and the
+  vibrato can be put **on the mod wheel** so the patch's depth becomes the wheel's
+  ceiling. A **macro** now reaches **twelve** destinations instead of six — the three
+  source levels, Filter 2's cutoff and either LFO's rate on top of pitch, osc 2 pitch,
+  cutoff, resonance, level and pan — and names itself after what it drives (*BRIGHT*,
+  *DRIVE*, *MOTION*). The card lays the synth out as **Osc · Filter · Env · LFO · Mod ·
+  Macro** tabs — the three sources as a table, the selected filter's response as a drag
+  pad beside its type, slope and amounts, both envelopes drawn and draggable, the LFOs
+  each naming where they land, the matrix as cells you drag up for + and down for −, and
+  the eight macros as tiles — over a 186 px rail that switches between **Global** (voice
+  mode, bend range, cutoff, resonance, glide, gain, pan and the track's meter) and
+  **Voice** (both output amps, unison and the two velocity amounts), with a status strip
+  that reads the patch back in words. Projects saved before this load unchanged: the
+  existing parameters keep their index, the new ones start neutral, and a macro saved
+  against the old six destinations still points at the same one.
+- **Nota Volt ships 25 factory presets** (was 8) — basses, leads, pads, keys and motion
+  patches, including the eight that existed before under their old names.
+- **Nota Operator grew two performance wheels and keyboard tracking, and its editor is now
+  the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5 / ±12
+  semitones) and a **mod wheel** on the modulation index sit in a rail that stays on screen
+  on every tab; the filter gains **keyboard tracking** (0 / ½ / 1 octave per octave) and
+  the amplifier a **Vel → Level** amount. The card lays the synth out as **Operators ·
+  Algorithm · Filter · Amp** tabs — the four operators as a table that names each one's
+  role in words, the eleven topologies as sketches over a routing diagram you can still
+  drag to re-route, and the filter response beside the live harmonic spectrum — over a
+  186 px rail that switches between **Global** (FM depth, feedback, tone, glide, bend
+  range, voice mode, volume and the track's meter) and **Env** (one operator's ADSR, drawn
+  and draggable, with key and velocity tracking), and a status strip that reads the patch
+  back in words. Projects saved before this load unchanged: the existing parameters keep
+  their index and the new ones start at values that sound exactly as before.
+- **Nota Operator ships 25 factory presets** (was 6) — keys, bells and mallets, basses,
+  leads, pads and percussion, including the six that existed before under their old names.
+- **Nota Synth grew an oscillator and a voice section, and its editor is now three tabs.**
+  The oscillator gains **pulse width** (on the square), **detune**, **octave** and a
+  **unison** stack of 1 / 2 / 4 / 7 voices with a stereo **spread**; the filter gains a
+  **type** (Off / LP / HP / BP) and an **Env → Cutoff** amount; the voice section gains
+  **Poly 16 / Mono / Legato**, **glide**, **pan** and **Vel → Vol**. The card lays them out
+  as **Osc · Env · Filter** tabs — each one showing its graph full size with its knobs under
+  it — over a rail that keeps voice mode, volume, pan, glide, spread, velocity tracking and
+  the track's meter in view on every tab, and a status strip that reads the patch back in
+  words. The envelope's breakpoints and the filter's curve are draggable. Projects saved
+  before this load unchanged: the original eight parameters keep their index, and the new
+  ones start at values that sound exactly as before.
+- **Nota Synth ships 25 factory presets** (was 4) — pads, basses, leads, keys and moving
+  patches, including the four that existed before under their old names.
 - **Clip tools — generative writing and rewriting in the piano roll.** A **Tools** rail
   opens beside the roll with fifteen tools. Six **generators** write notes: *Rhythm*
   (a pattern weighted toward the strong beats, with density, variation and accent),
@@ -103,6 +242,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **Nota Aurora's unison dials now do what they say.** **Detune** is in cents (0–50) and
+  no longer scales with the voice count, and **spread**, which the engine used to ignore,
+  now pans the stack across the stereo field. Patches that use unison, including the
+  default one, therefore sound wider and more detuned than before. Turn spread down to
+  zero to get the old mono stack back.
 - **The top chrome is one row instead of two.** The transport bar and the toolbar under it
   were a 48px row and a 34px row mixing four unrelated jobs; they are now a single 60px
   bar, handing 22px back to the arrangement. It reads left to right: which view you are
@@ -172,10 +316,44 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tokens its own comments named.
 
 ### Fixed
+- **Nota Grain: Position is live.** A held note used to read from wherever Position was
+  when it started, so moving the knob or automating it did nothing until the next note.
+  Held notes now follow it — Scan adds its moving offset to it, Freeze sits on it and Key
+  offsets it by the note.
+- **Nota Grain: a repeated note no longer cuts itself off.** A note-off released every
+  voice of its pitch, so a note that started a hair before the previous one of the same
+  pitch ended went silent with it. A note-off now releases only the oldest held one.
+- **Nota Flux: with no source assigned, React is off.** It used to listen to Flux's own
+  output instead, so a patch aimed at the filter or the vector wobbled with its own chords.
+  The React followers now also run on time constants rather than once per audio block at a
+  fixed rate, so the reaction feels the same at any buffer size.
+- **Nota Flux: a repeated note no longer cuts itself off.** A note-off released every voice
+  of its pitch, so a note that started a hair before the previous one of the same pitch
+  ended went silent with it. A note-off now releases only the oldest held one.
+- **Nota Bass: back-to-back notes no longer drop out.** Two things silenced the next note of
+  a tight line. A note-off released *every* note of its pitch, so when a repeated note
+  started a sample before the previous one ended (float rounding, a Note Length or arp
+  device, notes drawn overlapping) the new note was cut off the moment the old one ended —
+  in mono and poly alike. And in mono with glide on, any overlap was taken as legato and
+  skipped the attack, so on a plucky patch whose envelope had already decayed the next
+  note never sounded. A note-off now releases only the oldest held instance of its pitch,
+  and an overlapping note attacks afresh unless the new **Legato** switch is on. A
+  retrigger of a still-sounding voice starts from where its envelopes are, so it never
+  clicks. Switching Poly → Mono while chords are held no longer leaves those voices
+  hanging.
 - A MIDI mapping onto a switch (mute, solo, a transport button) fired on every incoming
   message past the half-way point, so sweeping a mapped CC across it made the target
   flutter instead of toggling once. It now fires on the crossing only — which is also what
   makes a mapped gamepad trigger usable.
+- Nota Volt's modulation matrix said "drag a cell · up +, down −" but actually took a
+  horizontal drag, and drew each route as a small bar that vanished at narrow cell widths.
+  It now drags vertically, as it always claimed, and a route lights its whole cell with a
+  brass wash that deepens with the amount.
+- The filter-response graph shared by Nota Volt, Aurora, Bass and Operator labelled its
+  frequency axis `20 · 100 · 1k · 10k · 20k` regardless of where those points actually
+  fell, and read the cutoff off Volt's own map on every instrument. It now takes the
+  instrument's real cutoff range, so both the scale and the readout say what the engine
+  does.
 
 ## [0.38.0] — 2026-09-12
 

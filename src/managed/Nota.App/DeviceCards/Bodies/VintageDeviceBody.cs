@@ -25,8 +25,9 @@ internal sealed class VintageDeviceBody : IDeviceBody
     private static readonly string[] OsNames = { "Off", "2×", "4×", "8×" };
     private static readonly string[] Modes = { "Vinyl", "Cassette", "Reel", "VHS", "Tube", "Analog" };
 
-    public double Width => 660;
-    public bool AutoWidth => true;   // fixed-width islands → card sizes to content, always fits
+    public double Width => 700;   // the almanac device format: 700 × 260; the viz column takes the slack
+
+    public string? Subtitle => "CHARACTER";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -47,9 +48,9 @@ internal sealed class VintageDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(viz.Tick);
 
         // ---- formatters ----
-        static string PctF(double v) => $"{v * 100:0}%";
-        static string Bip(double v) => $"{(v - 0.5) * 200:+0;-0;0}%";
-        static string GainF(double v) => $"{(v - 0.5) * 24:+0.0;-0.0;0.0} dB";
+        static string PctF(double v) => $"{v * 100:0}\u2009%";
+        static string Bip(double v) => $"{(v - 0.5) * 200:+0;−0;0}\u2009%";
+        static string GainF(double v) => $"{(v - 0.5) * 24:+0.0;−0.0;0.0}\u2009dB";
 
         // ---- gauge-knob cell (shared Knob + value + caption) ----
         Control Cell(string name, int p, Func<double, string> fmt, IBrush? arc = null, double size = 40)
@@ -74,7 +75,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         {
             Background = Card2, BorderBrush = teal ? Teal : BorderDef,
             BorderThickness = teal ? new Thickness(2, 1, 1, 1) : new Thickness(1),
-            CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = body,
+            CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = body,
         };
         static TextBlock Head(string t, IBrush? c = null) => new() { Text = t, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, Margin = new Thickness(0, 0, 0, 7) };
 
@@ -87,7 +88,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             int vi = i;
             var chip = new Border
             {
-                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
+                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
                 Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = Modes[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
             };
@@ -106,7 +107,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         for (int i = 0; i < 4; i++)
         {
             int vi = i;
-            var chip = new Border { Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            var chip = new Border { Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = OsNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center } };
             chip.PointerPressed += (_, e) => { e.Handled = true; SetP(OS, vi / 3f); SyncOs(); };
             osChips[i] = chip; osRow.Children.Add(chip);
@@ -134,14 +135,13 @@ internal sealed class VintageDeviceBody : IDeviceBody
         } });
 
         // ---- SHAPE panel: the character viz as its own island ----
-        viz.Width = 220;
         var vizPanel = Panel(viz);
         vizPanel.VerticalAlignment = VerticalAlignment.Stretch;
 
         SyncViz();
         ctx.AddDeviceRefresher(SyncViz);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Left };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
         grid.Children.Add(charPanel);
         Grid.SetColumn(wearPanel, 1); grid.Children.Add(wearPanel);
         Grid.SetColumn(vizPanel, 2); grid.Children.Add(vizPanel);

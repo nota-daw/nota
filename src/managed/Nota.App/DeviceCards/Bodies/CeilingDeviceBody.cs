@@ -30,6 +30,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         { ("Clean", "transparent"), ("Punch", "lets transients through"), ("Glue", "slow, dense") };
 
     public double Width => 700;
+
+    public string? Subtitle => "LIMITER";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -62,47 +64,34 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
             double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
             double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
-            var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
-            var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
-            var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-            Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
-            canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
-            var val = new TextBlock { FontSize = 9, Foreground = TextPrimary, MinWidth = 40, VerticalAlignment = VerticalAlignment.Center };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            bool drag = false;
-            void Vis(double v) { double n = NormOf(v); fill.Width = Math.Max(0, n * tw); Canvas.SetLeft(handle, n * tw - 4); val.Text = fmt(v); }
-            void From(PointerEventArgs e) { double n = Math.Clamp(e.GetPosition(canvas).X / tw, 0, 1); float v = (float)ValOf(n); SetR(p, v); Vis(v); }
-            canvas.PointerPressed += (_, e) => { drag = true; engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""); e.Pointer.Capture(canvas); From(e); };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""); e.Pointer.Capture(null); } };
-            MidiLearn.Bind(canvas, MidiTarget.DeviceParam(track, di, p), name);
-            readouts.Add(() => { if (!drag) Vis(P(p)); });
-            Vis(P(p));
-            var lbl = new TextBlock { Text = name, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = ReferenceEquals(accent, Teal) ? Teal : TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-            if (lw > 0) lbl.Width = lw;
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { lbl, canvas, val } };
+            var row = DeviceCardKit.SliderRow(name, () => NormOf(P(p)), n => { SetR(p, (float)ValOf(n)); }, () => fmt(P(p)), out var sync,
+                begin: () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
+                end: () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
+                labelWidth: lw, trackWidth: tw, valueWidth: 40);
+            readouts.Add(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), name);
+            return row;
         }
         Control Toggle(int p, string label, IBrush tint)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold } };
-            void Hi() { bool on = P(p) > 0.5f; b.Background = on ? AccentSubtleB : Sunken; b.BorderBrush = on ? tint : BorderDef; ((TextBlock)b.Child!).Foreground = on ? tint : TextTertiary; }
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold } };
+            void Hi() { bool on = P(p) > 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Sunken; b.BorderBrush = on ? NotaPalette.BorderBrass : BorderDef; ((TextBlock)b.Child!).Foreground = on ? NotaPalette.AccentHover : TextTertiary; }
             b.PointerPressed += (_, _) => { SetR(p, P(p) > 0.5f ? 0f : 1f); Hi(); };
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), label);
             readouts.Add(Hi); Hi(); return b;
         }
 
-        string DbT(double v) => $"{v:0.0} dB";
-        string Db1(double v) => $"{v:+0.0;-0.0;0.0}";
-        string Ms(double v) => v < 10 ? $"{v:0.0} ms" : $"{v:0} ms";
-        string Pct(double v) => $"{v:0} %";
-        string MDb(double v) => v <= -119 ? "—" : $"{v:+0.0;-0.0;0.0}";
+        string DbT(double v) => $"{v:0.0}\u2009dB";
+        string Db1(double v) => $"{v:+0.0;−0.0;0.0}";
+        string Ms(double v) => v < 10 ? $"{v:0.0}\u2009ms" : $"{v:0}\u2009ms";
+        string Pct(double v) => $"{v:0}\u2009%";
+        string MDb(double v) => v <= -119 ? "—" : $"{v:+0.0;−0.0;0.0}";
 
         // ---------- LIVE strip: GR readout + Ceiling/Gain/Release + auto-release ----------
         var grNum = new TextBlock { Text = "0.0", FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = Teal, VerticalAlignment = VerticalAlignment.Center };
         grNum.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        var grFill = new Border { Height = 8, Background = Teal, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left };
-        var grBar = new Border { Width = 96, Height = 8, Background = Sunken, CornerRadius = new CornerRadius(4), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = grFill };
+        var grFill = new Border { Height = 8, Background = Teal, CornerRadius = NotaRadius.Control, HorizontalAlignment = HorizontalAlignment.Left };
+        var grBar = new Border { Width = 96, Height = 8, Background = Sunken, CornerRadius = NotaRadius.Control, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = grFill };
         var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0), Children = {
                 Lbl("GR", 8, TextTertiary), grNum, grBar,
@@ -123,8 +112,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             var sub = new TextBlock { Text = Chars[i].sub, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
             var row = new DockPanel { LastChildFill = false, Children = { name } };
             DockPanel.SetDock(sub, Dock.Right); row.Children.Add(sub);
-            var b = new Border { Height = 16, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = row };
-            void Hi() { bool on = Sel(Character, 3) == i; b.Background = on ? AccentSubtleB : Brushes.Transparent; b.BorderBrush = on ? Brass : BorderDef; name.Foreground = on ? AccentBright : TextSecondary; sub.Foreground = on ? TextSecondary : TextTertiary; }
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = row };
+            void Hi() { bool on = Sel(Character, 3) == i; b.Background = on ? Brass : Brushes.Transparent; b.BorderBrush = on ? Brass : BorderDef; name.Foreground = on ? NotaPalette.TextOnAccent : TextSecondary; sub.Foreground = on ? NotaPalette.TextOnAccent : TextTertiary; }
             b.PointerPressed += (_, _) => { SetR(Character, i); foreach (var a in charHi) a(); };
             charHi.Add(Hi); readouts.Add(Hi); Hi();
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, Character), engine.DeviceParamName(track, di, Character));
@@ -161,7 +150,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         for (int i = 0; i < engine.TrackCount; i++) { if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue; scIds.Add(ti.Id); scCombo.Items.Add($"SC: {i + 1} · {(ti.IsReturn ? "Ret" : ti.IsInstrument ? "Instr" : "Aud")}"); }
         scCombo.SelectedIndex = Math.Max(0, scIds.IndexOf(engine.DeviceSidechainSource(track, di)));
         scCombo.SelectionChanged += (_, _) => { int s = scCombo.SelectedIndex; if (s >= 0 && s < scIds.Count) { engine.SetDeviceSidechainSource(track, di, scIds[s]); ctx.NotifyChanged(); } };
-        var resetBtn = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        var resetBtn = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = "Reset peaks", FontSize = 9, Foreground = TextSecondary } };
         resetBtn.PointerPressed += (_, _) => { peakInHold = -120; peakOutHold = -120; maxGrHold = 0; truePeakHold = -120; };
         var bottomRow = new DockPanel { LastChildFill = false, Children = { scCombo } };

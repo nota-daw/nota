@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — the Nota Flux vector pad: a draggable XY control whose four corners
-// are "timbre worlds" (WARM / GLASS / MOOG / GRAIN). The background is a four-corner radial
-// gradient (one glow per world) over the sunken inset, matching the mockup. A bright dot is
-// the current vector; a teal dashed "ghost" shows where Motion + React are pulling it.
+// Detail · Devices — the Nota Flux vector field: a draggable XY control whose four corners
+// are "timbre worlds" (WARM / GLASS / MOOG / GRAIN). It is a graph window (NotaGraph): well,
+// hairline, radius 4, a crosshair in the grid colour, and the corner names in the four role
+// chromas — brass, steel, rose, teal — the only place on the card they appear. The brass
+// dot is the vector the parameters hold; a dashed teal ring, reached by a dashed arc, is
+// where Motion and React pull it right now.
 // X = 0..1 left→right, Y = 0..1 top→bottom. Reports drags via ValueChanged; Begin/End frame
-// an automation-write gesture on both axes.
+// an automation-write gesture on both axes. Left button only; double-click resets.
 
 using System;
 using System.Globalization;
@@ -19,17 +21,6 @@ namespace Nota.App;
 
 internal sealed class FluxVectorPad : Control
 {
-    private static Color Inset   => NotaPalette.BgSunken.Color;
-    private static Color GridCol  => NotaPalette.PadGrid.Color;
-    private static Color BorderCol => NotaPalette.GraphBorder.Color;
-    private static Color Warm    => NotaPalette.Accent.Color;   // top-left
-    private static Color Glass   => NotaPalette.InkColor("#6D8FB5");   // top-right
-    private static Color Moog    => NotaPalette.InkColor("#C4756A");   // bottom-left
-    private static Color Grain   => NotaPalette.InkColor("#7E8A6A");   // bottom-right
-    private static Color DotCol  => NotaPalette.AccentBright.Color;
-    private static Color Teal    => NotaPalette.Teal.Color;
-    private static readonly IBrush Muted  = NotaPalette.TextTertiary;
-
     private double _x = 0.34, _y = 0.28;         // base vector (params)
     private double _gx = 0.34, _gy = 0.28;       // effective (Motion + React) ghost
     private bool _ghost;
@@ -38,8 +29,17 @@ internal sealed class FluxVectorPad : Control
     public Action<double, double>? ValueChanged;
     public Action? GestureBegin;
     public Action? GestureEnd;
+    /// <summary>Double-click: put the vector back on its default.</summary>
+    public Action? Reset;
 
-    public FluxVectorPad() { ClipToBounds = true; }
+    public FluxVectorPad()
+    {
+        ClipToBounds = true;
+        Cursor = new Cursor(StandardCursorType.Hand);
+        DoubleTapped += (_, e) => { Reset?.Invoke(); e.Handled = true; };
+    }
+
+    public bool Dragging => _drag;
 
     /// <summary>Set the base vector position (from params) without firing ValueChanged.</summary>
     public void SetValue(double x, double y)
@@ -49,7 +49,7 @@ internal sealed class FluxVectorPad : Control
         _x = x; _y = y; InvalidateVisual();
     }
 
-    /// <summary>Set the effective (Motion + React) ghost dot; show=false hides it.</summary>
+    /// <summary>Set the effective (Motion + React) ghost; show=false hides it.</summary>
     public void SetGhost(double x, double y, bool show)
     {
         x = Math.Clamp(x, 0, 1); y = Math.Clamp(y, 0, 1);
@@ -59,6 +59,8 @@ internal sealed class FluxVectorPad : Control
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click bubbles
+        if (e.ClickCount > 1) return;                                           // DoubleTapped resets
         _drag = true; GestureBegin?.Invoke();
         e.Pointer.Capture(this);
         Apply(e.GetPosition(this));
@@ -72,6 +74,10 @@ internal sealed class FluxVectorPad : Control
     {
         if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); }
     }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+    }
 
     private void Apply(Point p)
     {
@@ -84,62 +90,45 @@ internal sealed class FluxVectorPad : Control
     public override void Render(DrawingContext ctx)
     {
         var r = new Rect(Bounds.Size);
-        // base + four-corner radial glows.
-        ctx.FillRectangle(new SolidColorBrush(Inset), r, 8);
-        Corner(ctx, r, 0, 0, Warm);
-        Corner(ctx, r, 1, 0, Glass);
-        Corner(ctx, r, 0, 1, Moog);
-        Corner(ctx, r, 1, 1, Grain);
+        if (r.Width < 8 || r.Height < 8) return;
+        NotaGraph.Window(ctx, r);
 
-        // crosshair grid.
-        var grid = new Pen(new SolidColorBrush(GridCol), 1);
-        ctx.DrawLine(grid, new Point(r.Width / 2, 0), new Point(r.Width / 2, r.Height));
-        ctx.DrawLine(grid, new Point(0, r.Height / 2), new Point(r.Width, r.Height / 2));
+        // crosshair.
+        ctx.DrawLine(NotaGraph.GridPen, new Point(Math.Round(r.Width / 2) + 0.5, 1), new Point(Math.Round(r.Width / 2) + 0.5, r.Height - 1));
+        ctx.DrawLine(NotaGraph.GridPen, new Point(1, Math.Round(r.Height / 2) + 0.5), new Point(r.Width - 1, Math.Round(r.Height / 2) + 0.5));
 
-        // corner labels.
-        Label(ctx, "WARM",  Warm,  6, 4, false);
-        Label(ctx, "GLASS", Glass, r.Width - 6, 4, true);
-        Label(ctx, "MOOG",  Moog,  6, r.Height - 15, false);
-        Label(ctx, "GRAIN", Grain, r.Width - 6, r.Height - 15, true);
+        // corner worlds, in the graph chromas.
+        Label(ctx, "WARM",  NotaPalette.Accent, 6, 4, false);
+        Label(ctx, "GLASS", NotaPalette.Steel,  r.Width - 6, 4, true);
+        Label(ctx, "MOOG",  NotaPalette.Rose,   6, r.Height - 13, false);
+        Label(ctx, "GRAIN", NotaPalette.Teal,   r.Width - 6, r.Height - 13, true);
 
-        // React/Motion ghost: dashed line from base to effective + hollow teal dot.
-        var bx = _x * r.Width; var by = _y * r.Height;
+        var b = new Point(_x * r.Width, _y * r.Height);
         if (_ghost)
         {
-            var gx = _gx * r.Width; var gy = _gy * r.Height;
-            var dash = new Pen(new SolidColorBrush(Teal, 0.75), 1, new DashStyle(new double[] { 3, 3 }, 0));
-            ctx.DrawLine(dash, new Point(bx, by), new Point(gx, gy));
-            var ring = new Pen(new SolidColorBrush(Teal, 0.85), 1.3, new DashStyle(new double[] { 3, 2 }, 0));
-            ctx.DrawEllipse(null, ring, new Point(gx, gy), 6, 6);
+            // A dashed arc from the vector to where it is pulled, then a dashed ring there.
+            var g = new Point(_gx * r.Width, _gy * r.Height);
+            var d = g - b;
+            var bend = new Point((b.X + g.X) / 2 - d.Y * 0.18, (b.Y + g.Y) / 2 + d.X * 0.18);
+            var geo = new StreamGeometry();
+            using (var gc = geo.Open())
+            {
+                gc.BeginFigure(b, false);
+                gc.QuadraticBezierTo(bend, g);
+                gc.EndFigure(false);
+            }
+            var dash = new Pen(NotaPalette.Teal, 1.4, new DashStyle(new double[] { 2, 2 }, 0));
+            ctx.DrawGeometry(null, dash, geo);
+            ctx.DrawEllipse(null, new Pen(NotaPalette.Teal, 1.5, new DashStyle(new double[] { 2, 1.5 }, 0)), g, 6, 6);
         }
 
-        // current vector dot (glow + bright core).
-        ctx.DrawEllipse(new SolidColorBrush(DotCol, 0.28), null, new Point(bx, by), 11, 11);
-        ctx.DrawEllipse(new SolidColorBrush(DotCol), new Pen(NotaPalette.BgApp, 1), new Point(bx, by), 6, 6);
-
-        // 1px inner border to match the mockup pad frame.
-        ctx.DrawRectangle(null, new Pen(new SolidColorBrush(BorderCol), 1), r, 8, 8);
+        // the vector: Brass Light with a ground-coloured ring.
+        ctx.DrawEllipse(NotaPalette.AccentBright, new Pen(NotaPalette.AccentSubtle, 2), b, 7, 7);
     }
 
-    private static void Corner(DrawingContext ctx, Rect r, double cx, double cy, Color col)
+    private static void Label(DrawingContext ctx, string text, IBrush ink, double x, double y, bool rightAlign)
     {
-        var glow = new RadialGradientBrush
-        {
-            Center = new RelativePoint(cx, cy, RelativeUnit.Relative),
-            GradientOrigin = new RelativePoint(cx, cy, RelativeUnit.Relative),
-            RadiusX = new RelativeScalar(0.62, RelativeUnit.Relative),
-            RadiusY = new RelativeScalar(0.72, RelativeUnit.Relative),
-        };
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x2A, col.R, col.G, col.B), 0));
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, col.R, col.G, col.B), 1));
-        ctx.FillRectangle(glow, r);
-    }
-
-    private void Label(DrawingContext ctx, string text, Color col, double x, double y, bool rightAlign)
-    {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold), 9, new SolidColorBrush(col));
-        double ox = rightAlign ? x - ft.Width : x;
-        ctx.DrawText(ft, new Point(ox, y));
+        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, NotaType.KnobLabel, ink);
+        ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }

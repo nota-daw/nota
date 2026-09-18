@@ -21,6 +21,7 @@ public domain, or AGPL-compatible copyleft.
 | signalsmith-linear | vendored | FFT / linear DSP primitives | MIT | ✅ in use |
 | HIIR (Laurent de Soras) | 1.40 | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — see note 4 |
 | Apple CoreAudio / CoreMIDI / AudioToolbox | system | Audio + MIDI I/O (macOS) | system SDK | ✅ in use |
+| Geist / Geist Mono (Vercel) | 1.7.2 | UI and numeric typefaces (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |
 | Freeverb (algorithm only) | — | Built-in reverb | public domain | ✅ in use — own implementation of the Jezar algorithm; no vendored code (`src/native/nota.engine/src/Reverb.h`) |
 
 Status key: ✅ cleared · ⚠️ cleared with a condition · ⏳ planned · ❌ rejected (incompatible).
@@ -47,6 +48,14 @@ patent-free. Re-confirm if targeting a jurisdiction with unusual patent terms.
 **4 — WTFPL is not accepted everywhere.**
 HIIR is released under the WTFPL, which some corporate legal reviews reject (it carries
 no warranty disclaimer and its enforceability is debated). It is fine for the AGPL build.
+
+**5 — Geist ships as bundled font files under the SIL Open Font License.** OFL 1.1
+allows embedding and redistributing the fonts with any software, including AGPL software,
+provided the fonts are not sold on their own and the license travels with them
+(`LICENSES/OFL-1.1-Geist.txt`). The eight static weights we use (Regular, Medium,
+SemiBold, Bold of each family) are copied unmodified from the `geist` npm package;
+"Geist" is a Reserved Font Name, so a subset or other modification must be renamed.
+They replace Inter, which came in through the `Avalonia.Fonts.Inter` package.
 
 ## Not shipped
 

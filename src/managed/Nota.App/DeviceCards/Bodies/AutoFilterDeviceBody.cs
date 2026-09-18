@@ -45,6 +45,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
     private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
 
     public double Width => 700;
+
+    public string? Subtitle => "FILTER";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -66,14 +68,14 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(curve.Tick);
 
         // ---- formatters ----
-        string Hz(double v) { double f = Exp(v, 30, 18000); return f >= 1000 ? $"{f / 1000:0.00} kHz" : $"{(int)Math.Round(f)} Hz"; }
-        static string PctF(double v) => $"{v * 100:0}%";
-        static string Bip(double v) => $"{(v - 0.5) * 200:+0;-0;0}%";
-        static string GainF(double v) => $"{(v - 0.5) * 48:+0.0;-0.0;0.0}";
-        static string Ms(double v, double lo, double hi) { double m = lo * Math.Pow(hi / lo, v); return m >= 100 ? $"{m:0}ms" : $"{m:0.0}ms"; }
+        string Hz(double v) { double f = Exp(v, 30, 18000); return f >= 1000 ? $"{f / 1000:0.0}\u2009k" : $"{(int)Math.Round(f)}\u2009Hz"; }
+        static string PctF(double v) => $"{v * 100:0}\u2009%";
+        static string Bip(double v) => $"{(v - 0.5) * 200:+0;−0;0}\u2009%";
+        static string GainF(double v) => $"{(v - 0.5) * 48:+0.0;−0.0;0.0}";
+        static string Ms(double v, double lo, double hi) { double m = lo * Math.Pow(hi / lo, v); return m >= 100 ? $"{m:0}\u2009ms" : $"{m:0.0}\u2009ms"; }
         string AttF(double v) => Ms(v, 0.1, 500);
         string RelF(double v) => Ms(v, 1, 2000);
-        string RateF(double v) => P(LfoSync) >= 0.5f ? DivNames[Math.Clamp((int)Math.Round(v * 7), 0, 7)] : $"{Exp(v, 0.01, 40):0.00}Hz";
+        string RateF(double v) => P(LfoSync) >= 0.5f ? DivNames[Math.Clamp((int)Math.Round(v * 7), 0, 7)] : $"{Exp(v, 0.01, 40):0.00}\u2009Hz";
 
         var readouts = new List<Action>();
 
@@ -95,12 +97,9 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // Segmented pill over a normalized param.
         Control Seg(int p, string[] opts, bool teal = false)
         {
-            int n = opts.Length; var cells = new Border[n]; var texts = new TextBlock[n];
-            void Sync() { int cur = (int)Math.Round(P(p) * (n - 1)); for (int i = 0; i < n; i++) { bool on = i == cur; cells[i].Background = on ? (teal ? TealSubtle : AmberSubtle) : Brushes.Transparent; cells[i].BorderBrush = on ? (teal ? TealC : Amber) : Brushes.Transparent; texts[i].Foreground = on ? (teal ? TealC : AmberLit) : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++) { int iv = i; var tb = new TextBlock { Text = opts[i], FontSize = 9, Foreground = MutedC }; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); SyncCurve(); RefreshAll(); }; cells[i] = c; texts[i] = tb; row.Children.Add(c); }
-            readouts.Add(Sync);
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            int n = opts.Length;
+            var seg = DeviceCardKit.Segments(opts, () => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); SyncCurve(); RefreshAll(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return seg;
         }
@@ -108,33 +107,20 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // Horizontal param slider (LIVE strip + rails).
         Control HSlider(int p, string label, Func<double, string> fmt, double lw, double vw, bool bipolar = false)
         {
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 11, MinWidth = 40 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
-            var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (vw > 0) { val.Width = vw; val.TextAlignment = TextAlignment.Right; }
-            bool drag = false;
-            void Upd() { double v = P(p); double W = slot.Bounds.Width; double hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); if (bipolar) { double c = W * 0.5; double a = Math.Min(c, hx), b = Math.Max(c, hx); fill.Margin = new Thickness(a, 0, 0, 0); fill.Width = Math.Max(0, b - a); } else fill.Width = hx; val.Text = fmt(v); }
-            void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); SetP(p, (float)v); SyncCurve(); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); Begin(p); SetFromX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            readouts.Add(() => { if (!drag) Upd(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            if (lw > 0) { var lbl = Cap(label); ((TextBlock)lbl).Width = lw; g.Children.Add(lbl); }
-            Grid.SetColumn(slot, 1); g.Children.Add(slot); Grid.SetColumn(val, 2); g.Children.Add(val);
-            MidiLearn.Bind(g, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            return g;
+            var row = DeviceCardKit.SliderRow(lw > 0 ? label : "", () => P(p), n => { SetP(p, (float)n); SyncCurve(); }, () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), bipolar: bipolar, labelWidth: lw, valueWidth: vw);
+            readouts.Add(sync);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
+            return row;
         }
 
         // Filter-type icons row (icon-only) for the LIVE strip.
         Control TypeRow()
         {
             var cells = new Border[4]; var icons = new IIconColor[4];
-            void Sync() { int cur = (int)Math.Round(P(Type) * 3); for (int i = 0; i < 4; i++) { bool on = i == cur; cells[i].Background = on ? AmberSubtle : Inset; cells[i].BorderBrush = on ? Amber : Border2; icons[i].Color = on ? AmberLit : MutedC; } }
+            void Sync() { int cur = (int)Math.Round(P(Type) * 3); for (int i = 0; i < 4; i++) { bool on = i == cur; cells[i].Background = on ? Amber : Inset; cells[i].BorderBrush = on ? Amber : Border2; icons[i].Color = on ? NotaPalette.TextOnAccent : MutedC; } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
-            for (int i = 0; i < 4; i++) { int iv = i; var ic = new FilterTypeIcon(i, MutedC); var c = new Border { Width = 34, Height = 22, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand), Child = new Border { Child = ic, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(Type, iv / 3f); SyncCurve(); RefreshAll(); }; cells[i] = c; icons[i] = ic; row.Children.Add(c); }
+            for (int i = 0; i < 4; i++) { int iv = i; var ic = new FilterTypeIcon(i, MutedC); var c = new Border { Width = 34, Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand), Child = new Border { Child = ic, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(Type, iv / 3f); SyncCurve(); RefreshAll(); }; cells[i] = c; icons[i] = ic; row.Children.Add(c); }
             readouts.Add(Sync);
             MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, Type), engine.DeviceParamName(track, di, Type));
             return row;
@@ -174,7 +160,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 var c = new Border
                 {
                     BorderThickness = new Thickness(1), 
-                    CornerRadius = new CornerRadius(3),
+                    CornerRadius = NotaRadius.Badge,
                     Padding = new Thickness(3, 2),
                     Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new StackPanel
@@ -223,8 +209,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         Control ToggleChip(int p, Func<double, string> fmt, bool cycle = false)
         {
             var tb = new TextBlock { Text = fmt(P(p)), FontSize = 8, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
-            void Sync() { bool on = P(p) >= 0.5f; b.Background = on ? TealSubtle : Brushes.Transparent; b.BorderBrush = on ? TealC : Border2; tb.Foreground = on ? TealC : MutedC; tb.Text = fmt(P(p)); }
+            var b = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            void Sync() { bool on = P(p) >= 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; b.BorderBrush = on ? NotaPalette.BorderBrass : Border2; tb.Foreground = on ? NotaPalette.AccentHover : MutedC; tb.Text = fmt(P(p)); }
             b.PointerPressed += (_, e) => { e.Handled = true; if (cycle) { float nx = P(p) + 0.25f; if (nx > 1.001f) nx = 0f; SetP(p, nx); } else SetP(p, P(p) >= 0.5f ? 0f : 1f); Sync(); };
             readouts.Add(Sync);
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
@@ -238,11 +224,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                     TypeRow(),
                     Seg(Slope, new[] { "12", "24" }),
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 150, Children = { Cap("FREQ"), HSlider(Freq, "", Hz, 0, 52) } },
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 116, Children = { Cap("RES"), HSlider(Res, "", PctF, 0, 34) } } } },
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 116, Children = { Cap("RESO"), HSlider(Res, "", PctF, 0, 34) } } } },
                 new StackPanel { [DockPanel.DockProperty] = Dock.Right, VerticalAlignment = VerticalAlignment.Center, Children = { Seg(Circuit, new[] { "Clean", "Analog" }) } } } } };
 
         // ================= graph =================
-        var graph = new Border { Padding = new Thickness(8, 7), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Child = curve, ClipToBounds = true } };
+        var graph = new Border { Padding = new Thickness(8, 7), Child = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Child = curve, ClipToBounds = true } };
 
         // ================= modulation column (ENV + LFO lanes) =================
         Control LaneHeader(int onParam, string name, params Control[] trailing)
@@ -300,7 +286,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             Children =
             {
                 Cell("RATE", LfoRate, RateF),
-                Cell("AMT", LfoAmt, PctF, TealC),
+                Cell("AMOUNT", LfoAmt, PctF, TealC),
                 Cell("MORPH", LfoMorph, PctF, TealC),
             }
         };
@@ -404,9 +390,9 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // Sidechain gain slider (dB, ±24, bipolar).
         var gVal = new TextBlock { Text = $"{engine.DeviceSidechainGain(track, di):0.0}", FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Right, Width = 28 };
         gVal.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        var gFill = new Border { Height = 3, Background = NotaPalette.BorderStrong, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var gTrack = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-        var gHandle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var gFill = new Border { Height = 3, Background = NotaPalette.BorderStrong, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var gTrack = new Border { Height = 3, Background = Inset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+        var gHandle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var gSlot = new Panel { Height = 10, MinWidth = 34, Children = { gTrack, gFill, gHandle } };
         void GUpd() { double db = engine.DeviceSidechainGain(track, di); double v = Math.Clamp((db + 24) / 48.0, 0, 1); double W = gSlot.Bounds.Width; gHandle.Margin = new Thickness(Math.Clamp(v * W - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); gFill.Width = v * W; gVal.Text = $"{db:0.0}"; }
         bool gd = false;
@@ -415,11 +401,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         gSlot.PointerMoved += (_, e) => { if (gd) GSet(e.GetPosition(gSlot).X); };
         gSlot.PointerReleased += (_, e) => { if (gd) { gd = false; e.Pointer.Capture(null); } };
 
-        var body = new StackPanel { Spacing = 4, Opacity = sw.IsOn ? 1.0 : 0.45, Children = {
+        var body = new StackPanel { Spacing = 4, Children = {
             combo,
             new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, Children = { Cap("GAIN", muted), WithCol(gSlot, 1), WithCol(gVal, 2) } } } };
 
-        void Reflect(int src) { bool on = src >= 0; body.Opacity = on ? 1.0 : 0.45; if (sw.IsOn != on) sw.IsOn = on; }
+        void Reflect(int src) { bool on = src >= 0; Inactive.Set(body, !on, interactive: true); if (sw.IsOn != on) sw.IsOn = on; }
         combo.SelectionChanged += (_, _) => { int sel = combo.SelectedIndex; if (sel < 0 || sel >= ids.Count) return; engine.SetDeviceSidechainSource(track, di, ids[sel]); Reflect(ids[sel]); };
         sw.Changed += on => { int src = on ? (ids.Count > 1 ? ids[1] : -1) : -1; engine.SetDeviceSidechainSource(track, di, src); combo.SelectedIndex = Math.Max(0, ids.IndexOf(src)); Reflect(src); };
         Avalonia.Threading.Dispatcher.UIThread.Post(GUpd);

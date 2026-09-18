@@ -23,6 +23,6 @@ public sealed partial class DeviceChainView
             Name: name, Subtitle: "MIDI", DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
             CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: body.Width, Kind: ChainKind.Midi);
         var content = body.Build(NewCardContext(), index);
-        return BuildCardShell(spec, body.FullBleed ? content : new Border { Padding = new Thickness(8), Child = content });
+        return BuildCardShell(spec, body.FullBleed ? content : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = content });
     }
 }

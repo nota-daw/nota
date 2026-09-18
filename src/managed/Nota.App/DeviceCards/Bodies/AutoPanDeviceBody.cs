@@ -24,8 +24,9 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
     private const int Rate = 0, Amount = 1, Waveform = 2, Shape = 3, Phase = 4, Mix = 5;
     private static readonly string[] Waves = { "Sine", "Tri", "Saw", "Sqr", "S&H" };
 
-    public double Width => 560;
-    public bool AutoWidth => true;   // fixed-width islands → card sizes to content
+    public double Width => 700;   // the almanac device format: 700 × 260; the viz column takes the slack
+
+    public string? Subtitle => "PANNER";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -37,7 +38,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         void End(int p) => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
         static double Exp(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
 
-        var viz = new AutoPanViz { VerticalAlignment = VerticalAlignment.Stretch, Width = 220 };
+        var viz = new AutoPanViz { VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 200 };
         void SyncViz()
         {
             int wv = Math.Clamp((int)Math.Round(P(Waveform) * 4), 0, 4);
@@ -46,8 +47,8 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(SyncViz);   // 60 Hz: also advances the live pan dot
 
         // ---- formatters ----
-        static string PctF(double v) => $"{v * 100:0}%";
-        string RateF(double v) => $"{Exp(v, 0.01, 40):0.00} Hz";
+        static string PctF(double v) => $"{v * 100:0}\u2009%";
+        string RateF(double v) => $"{Exp(v, 0.01, 40):0.00}\u2009Hz";
         static string DegF(double v) => $"{v * 360:0}°";
 
         // ---- gauge-knob cell ----
@@ -72,7 +73,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         Border Panel(Control body) => new()
         {
             Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = body,
+            CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = body,
         };
         static TextBlock Head(string t) => new() { Text = t, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = TextTertiary, Margin = new Thickness(0, 0, 0, 7) };
 
@@ -85,7 +86,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             int vi = i;
             var chip = new Border
             {
-                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4),
+                Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
                 Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = Waves[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary },
             };
@@ -122,7 +123,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
 
         SyncViz();
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Left };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
         grid.Children.Add(lfoPanel);
         Grid.SetColumn(motionPanel, 1); grid.Children.Add(motionPanel);
         Grid.SetColumn(vizPanel, 2); grid.Children.Add(vizPanel);

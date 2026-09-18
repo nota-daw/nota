@@ -39,7 +39,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush GreenC = NotaPalette.Success;
-    private static readonly IBrush RedC = NotaPalette.Danger;
+    private static readonly IBrush RedC = NotaPalette.TextSecondary;   // a state, not an alert: red is kept for recording and overload
     private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x28);
     private static readonly IBrush RowLit = NotaPalette.SurfaceRaised;
     private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x24);
@@ -68,10 +68,9 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         bool hasSample = acc.Info(out long sampleId, out int root) && sampleId != 0;
         if (!hasSample)
         {
-            var prompt = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new TextBlock { Text = "↓", FontSize = 22, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center },
-                new TextBlock { Text = "Drop a sample here", FontSize = 11, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
-                new TextBlock { Text = "drag from the Files tab or the browser", FontSize = 9, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center } } };
+            // Empty state: one line in Ink 5, centred, no illustration (almanac § States).
+            var prompt = new TextBlock { Text = "Drop a sample here", FontSize = 9, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            ToolTip.SetTip(prompt, "Drag from the Files tab or the browser");
             return new Border { Background = NotaPalette.BgApp, Child = prompt };
         }
 
@@ -115,12 +114,10 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         Control Seg(string id, string[] names, double fs = 9, double padX = 6)
         {
-            int n = names.Length; var arr = new Border[n];
-            void Hi() { int cur = GI(id, n); for (int i = 0; i < n; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Brushes.Transparent; arr[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(padX, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = MutedC } }; c.PointerPressed += (_, _) => { SetId(id, n > 1 ? iv / (double)(n - 1) : 0); RefreshAll(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi);
-            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            int n = names.Length;
+            var seg = DeviceCardKit.Segments(names, () => GI(id, n), iv => { SetId(id, n > 1 ? iv / (double)(n - 1) : 0); RefreshAll(); }, out var sync);
+            readouts.Add(sync);
+            return seg;
         }
 
         // Loop segmented (Off/Fwd/Ping/Rev) — maps to loopmode + reverse (append-safe).
@@ -129,16 +126,16 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             var names = new[] { "Off", "Fwd", "Ping", "Rev" }; var arr = new Border[4];
             int Cur() { int lm = (int)Math.Round(G("loopmode") * 2); bool rev = G("reverse") > 0.5f; return lm == 2 ? 2 : lm == 1 ? (rev ? 3 : 1) : 0; }
             void Set(int i) { SetId("loopmode", i == 2 ? 1.0 : i == 0 ? 0.0 : 0.5); SetId("reverse", i == 3 ? 1 : 0); }
-            void Hi() { int cur = Cur(); for (int i = 0; i < 4; i++) { bool on = i == cur; arr[i].Background = on ? AmberSubtle : Brushes.Transparent; arr[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? AmberLit : MutedC; } }
+            void Hi() { int cur = Cur(); for (int i = 0; i < 4; i++) { bool on = i == cur; arr[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; arr[i].BorderBrush = on ? NotaPalette.Accent : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? NotaPalette.TextOnAccent : MutedC; } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < 4; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, Foreground = MutedC } }; c.PointerPressed += (_, _) => { Set(iv); SyncWave(); RefreshAll(); }; arr[i] = c; row.Children.Add(c); }
+            for (int i = 0; i < 4; i++) { int iv = i; var c = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, Foreground = MutedC } }; c.PointerPressed += (_, _) => { Set(iv); SyncWave(); RefreshAll(); }; arr[i] = c; row.Children.Add(c); }
             readouts.Add(Hi);
-            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
         }
 
         Control OutToggle(string id, string label, bool teal = false)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold } };
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold } };
             void Hi() { bool on = G(id) > 0.5f; b.Background = on ? (teal ? TealSubtle : AmberSubtle) : Brushes.Transparent; b.BorderBrush = on ? (teal ? TealC : Amber) : Border2; ((TextBlock)b.Child!).Foreground = on ? (teal ? TealC : AmberLit) : MutedC; }
             b.PointerPressed += (_, _) => { SetId(id, G(id) > 0.5f ? 0 : 1); RefreshAll(); };
             readouts.Add(Hi);
@@ -147,7 +144,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         Control ActionBtn(string label, Action click)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, Foreground = NotaPalette.TextSecondary } };
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, Foreground = NotaPalette.TextSecondary } };
             b.PointerPressed += (_, _) => click();
             return b;
         }
@@ -167,42 +164,30 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         Control HSlider(string id, string label, Func<double, string> fmt, bool bipolar = false, double lw = 44, double vw = 52)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var track2 = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 10, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 11, MinWidth = 46 }; slot.Children.Add(track2); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
-            var val = MonoTx(fmt(G(id)), TxtC, 9); val.Width = vw; val.TextAlignment = TextAlignment.Right;
-            bool drag = false;
-            void Upd() { double v = G(id); double W = slot.Bounds.Width; double hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); if (bipolar) { double c = W * 0.5; double a = Math.Min(c, hx), b = Math.Max(c, hx); fill.Margin = new Thickness(a, 0, 0, 0); fill.Width = Math.Max(0, b - a); } else { fill.Margin = new Thickness(0); fill.Width = hx; } val.Text = fmt(v); }
-            void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); acc.ParamSet(pi, (float)v); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); acc.BeginGesture(id); SetFromX(e.GetPosition(slot).X); RefreshAll(); };
-            slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); acc.EndGesture(id); } };
-            readouts.Add(() => { if (!drag) Upd(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            var lbl = Cap(label); ((TextBlock)lbl).Width = lw;
-            g.Children.Add(lbl); Grid.SetColumn(slot, 1); g.Children.Add(slot); Grid.SetColumn(val, 2); g.Children.Add(val);
-            return g;
+            var row = DeviceCardKit.SliderRow(label, () => G(id), n => acc.ParamSet(pi, (float)n), () => fmt(G(id)), out var sync,
+                begin: () => { acc.BeginGesture(id); RefreshAll(); }, end: () => acc.EndGesture(id),
+                bipolar: bipolar, labelWidth: lw, valueWidth: vw);
+            readouts.Add(sync);
+            return row;
         }
 
         int rootv = root;
         Control RootStepper()
         {
             var lbl = MonoTx(NoteName(rootv), TxtC, 10); lbl.Width = 26; lbl.TextAlignment = TextAlignment.Center;
-            Border Btn(string t, int d) { var b = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { rootv = Math.Clamp(rootv + d, 0, 127); acc.SetRoot(rootv); lbl.Text = NoteName(rootv); RefreshAll(); }; return b; }
+            Border Btn(string t, int d) { var b = new Border { Width = 16, Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = RowLit, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = t, FontSize = 9, Foreground = NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => { rootv = Math.Clamp(rootv + d, 0, 127); acc.SetRoot(rootv); lbl.Text = NoteName(rootv); RefreshAll(); }; return b; }
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { Btn("−", -1), lbl, Btn("+", +1) } };
         }
 
         // ---- formatters (real units) ----
-        string Db(double v) => v <= 0.0011 ? "−∞ dB" : $"{20 * Math.Log10(v):+0.0;−0.0;0.0} dB";
+        string Db(double v) => v <= 0.0011 ? "−∞\u2009dB" : $"{20 * Math.Log10(v):+0.0;−0.0;0.0}\u2009dB";
         string Pan(double v) { double p = (v - 0.5) * 2; return Math.Abs(p) < 0.03 ? "C" : p < 0 ? $"L{Math.Abs(p) * 100:0}" : $"R{p * 100:0}"; }
-        string Hz(double v) { double fc = Exp(v, 20, 20000); return fc >= 1000 ? $"{fc / 1000:0.0} kHz" : $"{fc:0} Hz"; }
-        string St(double v) => $"{(v - 0.5) * 48:+0;-0;0} st";
-        string Cent(double v) => $"{(v - 0.5) * 100:+0;-0;0} c";
-        string Ms(double v, double lo, double hi) { double s = Exp(v, lo, hi); return s < 1 ? $"{s * 1000:0} ms" : $"{s:0.00} s"; }
-        string SusDb(double v) => v <= 0.0011 ? "−∞" : $"{20 * Math.Log10(v):0.0} dB";
-        string Pct(double v) => $"{v * 100:0}%";
+        string Hz(double v) { double fc = Exp(v, 20, 20000); return fc >= 1000 ? $"{fc / 1000:0.0}\u2009k" : $"{fc:0}\u2009Hz"; }
+        string St(double v) => $"{(v - 0.5) * 48:+0;−0;0}\u2009st";
+        string Cent(double v) => $"{(v - 0.5) * 100:+0;−0;0}\u2009c";
+        string Ms(double v, double lo, double hi) { double s = Exp(v, lo, hi); return s < 1 ? $"{s * 1000:0}\u2009ms" : $"{s:0.00}\u2009s"; }
+        string SusDb(double v) => v <= 0.0011 ? "−∞" : $"{20 * Math.Log10(v):0.0}\u2009dB";
+        string Pct(double v) => $"{v * 100:0}\u2009%";
 
         // ================= LIVE strip =================
         var voiceSeg = Seg("voicemode", new[] { "Poly 16", "Mono", "Choke" }, 9, 7);
@@ -210,7 +195,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Child = new DockPanel { LastChildFill = false, Margin = new Thickness(9, 0), Children = {
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, Children = {
                     Cap("LIVE", MutedC),
-                    HSlider("volume", "VOL", Db, lw: 26, vw: 52),
+                    HSlider("volume", "VOLUME", Db, lw: 26, vw: 52),
                     HSlider("pan", "PAN", Pan, bipolar: true, lw: 26, vw: 26),
                     HSlider("cutoff", "CUTOFF", Hz, lw: 40, vw: 52) } },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right, Children = {
@@ -227,7 +212,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             for (int i = 0; i < tabBtns.Length; i++) { bool on = i == t; tabBtns[i].Background = on ? RowLit : Brushes.Transparent; tabBtns[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)tabBtns[i].Child!).Foreground = on ? TxtC : MutedC; }
         }
         var railCol = new StackPanel { Spacing = 2 };
-        for (int i = 0; i < tabNames.Length; i++) { int ti = i; var b = new Border { Height = 20, CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 0), BorderThickness = new Thickness(2, 0, 0, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = tabNames[i], FontSize = 10, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => SelectTab(ti); tabBtns[i] = b; railCol.Children.Add(b); }
+        for (int i = 0; i < tabNames.Length; i++) { int ti = i; var b = new Border { Height = 20, CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 0), BorderThickness = new Thickness(2, 0, 0, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = tabNames[i], FontSize = 9, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center } }; b.PointerPressed += (_, _) => SelectTab(ti); tabBtns[i] = b; railCol.Children.Add(b); }
         var tabRail = new Border { Width = 70, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(5), Child = railCol };
 
         // ================= Sample tab =================
@@ -241,11 +226,11 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => { startFoot.Text = $"start {G("start") * durSec:0.00}"; endFoot.Text = $"end {G("end") * durSec:0.00}"; });
         var waveFoot = new DockPanel { LastChildFill = false, Height = 11, Children = { startFoot, endFoot } };
         DockPanel.SetDock(endFoot, Dock.Right);
-        var waveIsland = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Child =
+        var waveIsland = new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(8, 4), Child =
             new DockPanel { LastChildFill = true, Children = { WithDock(fileHdr, Dock.Top), WithDock(waveFoot, Dock.Bottom), wave } } };
         var loopRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Height = 40, Children = {
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("LOOP"), LoopSeg() } },
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Width = 150, Children = { Cap("XFADE"), HSlider("loopxfade", "", v => $"{v * 200:0} ms", lw: 0, vw: 46) } },
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Width = 150, Children = { Cap("CROSSFADE"), HSlider("loopxfade", "", v => $"{v * 200:0}\u2009ms", lw: 0, vw: 46) } },
             ActionSnap() } };
         Control ActionSnap()
         {
@@ -265,7 +250,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             KUnit("transpose", "TRANSPOSE", St), KUnit("detune", "DETUNE", Cent, mod: true) } };
         var rootRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("ROOT"), RootStepper() } };
         pages[1] = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 8), Children = {
-            WithDock(new Border { Height = 40, Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(4), Child = keys, Margin = new Thickness(0, 6, 0, 0) }, Dock.Bottom),
+            WithDock(new Border { Height = 40, Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(4), Child = keys, Margin = new Thickness(0, 6, 0, 0) }, Dock.Bottom),
             WithDock(rootRow, Dock.Bottom),
             pitchKnobs } };
 
@@ -277,17 +262,17 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             KUnit("sustain", "SUSTAIN", SusDb), KUnit("release", "RELEASE", v => Ms(v, 0.002, 6.0)) } };
         pages[2] = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 8), Children = {
             WithDock(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), [DockPanel.DockProperty] = Dock.Bottom, Children = { envKnobs, OutToggle("velamount", "VEL→VOL", teal: true) } }, Dock.Bottom),
-            new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6), Child = envBig } } };
+            new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6), Child = envBig } } };
 
         // ================= Filter tab =================
         var filtViz = new SamplerFilter { Height = 92 };
         readouts.Add(() => filtViz.Set(GI("filtertype", 4), G("cutoff"), G("resonance")));
         var filtKnobs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Children = {
-            KUnit("cutoff", "CUTOFF", Hz), KUnit("resonance", "RESO", Pct), KUnit("keytrack", "KEY TRACK", Pct, mod: true) } };
+            KUnit("cutoff", "CUTOFF", Hz), KUnit("resonance", "RESO", Pct), KUnit("keytrack", "KEYTRACK", Pct, mod: true) } };
         pages[3] = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 8), Children = {
             WithDock(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Children = { Cap("TYPE"), Seg("filtertype", new[] { "Off", "LP", "HP", "BP" }, 9, 8) } }, Dock.Top),
             WithDock(filtKnobs, Dock.Bottom),
-            new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6), Margin = new Thickness(0, 5), Child = filtViz } } };
+            new Border { Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6), Margin = new Thickness(0, 5), Child = filtViz } } };
 
         // ================= assemble =================
         DockPanel.SetDock(tabRail, Dock.Left);
@@ -319,19 +304,19 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             new DockPanel { LastChildFill = false, Children = {
                 WithDock(new StackPanel { Spacing = 5, Children = {
                     new TextBlock { Text = "AMP ENV", FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TealC },
-                    new Border { Height = 42, Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(2), Child = env },
-                    Row("ATK", () => G("attack"), v => Ms(v, 0.0005, 4.0)),
-                    Row("DEC", () => G("decay"), v => Ms(v, 0.002, 6.0)),
-                    Row("SUS", () => G("sustain"), SusDb),
-                    Row("REL", () => G("release"), v => Ms(v, 0.002, 6.0)) } }, Dock.Top),
+                    new Border { Height = 42, Background = Inset, BorderBrush = FieldBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(2), Child = env },
+                    Row("ATTACK", () => G("attack"), v => Ms(v, 0.0005, 4.0)),
+                    Row("DECAY", () => G("decay"), v => Ms(v, 0.002, 6.0)),
+                    Row("SUSTAIN", () => G("sustain"), SusDb),
+                    Row("RELEASE", () => G("release"), v => Ms(v, 0.002, 6.0)) } }, Dock.Top),
                 WithDock(OutToggle("velamount", "VEL → VOL", true), Dock.Bottom) } } };
     }
 
     private static Control WithDock(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
 
-    private static string sinfoLabel(double sr, double dur, int root) => $"{sr / 1000:0.#} k · {dur:0.00} s · root {NoteName(root)}";
+    private static string sinfoLabel(double sr, double dur, int root) => $"{sr / 1000:0.#} k · {dur:0.00}\u2009s · root {NoteName(root)}";
 
-    private static string LoopReadout(double ls, double le, double dur, int mode) => mode <= 0 ? "no loop" : $"loop {ls * dur:0.00} – {le * dur:0.00} s";
+    private static string LoopReadout(double ls, double le, double dur, int mode) => mode <= 0 ? "no loop" : $"loop {ls * dur:0.00} – {le * dur:0.00}\u2009s";
 
     // Downsample interleaved float samples to min/max pairs per bucket (mono sum).
     private static float[] BuildPeaks(float[] samples, int channels, long frames, int buckets)

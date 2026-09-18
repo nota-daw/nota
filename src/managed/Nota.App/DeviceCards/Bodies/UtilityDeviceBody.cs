@@ -27,7 +27,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
     // Packed scope layout (Utility::scopeRead): meters then kScopePairs (L,R) pairs.
     private const int S_InL = 0, S_InR = 1, S_OutL = 2, S_OutR = 3, S_Corr = 4, kMeters = 5, kPairs = 48, kScope = kMeters + kPairs * 2;
 
-    public double Width => 622;
+    public double Width => 700;   // the almanac device format: 700 × 260
+
+    public string? Subtitle => "UTILITY";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -42,9 +44,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         // ---- shared small controls (mirroring the Ceiling body) --------------
         Control Toggle(int p, string label, IBrush tint)
         {
-            var b = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(7, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold } };
-            void Hi() { bool on = P(p) > 0.5f; b.Background = on ? AccentSubtleB : Sunken; b.BorderBrush = on ? tint : BorderDef; ((TextBlock)b.Child!).Foreground = on ? tint : TextTertiary; }
+            void Hi() { bool on = P(p) > 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Sunken; b.BorderBrush = on ? NotaPalette.BorderBrass : BorderDef; ((TextBlock)b.Child!).Foreground = on ? NotaPalette.AccentHover : TextTertiary; }
             b.PointerPressed += (_, _) => { SetR(p, P(p) > 0.5f ? 0f : 1f); Hi(); };
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), label);
             readouts.Add(Hi); Hi(); return b;
@@ -55,29 +57,18 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             double mn = 20, mx = 2000, lmn = Math.Log(mn), lspan = Math.Log(mx) - lmn;
             double Norm(double v) => (Math.Log(Math.Clamp(v, mn, mx)) - lmn) / lspan;
             double Val(double n) => Math.Exp(lmn + Math.Clamp(n, 0, 1) * lspan);
-            var trk = new Border { Width = tw, Height = 3, Background = Sunken, CornerRadius = new CornerRadius(2) };
-            var fill = new Border { Height = 3, Background = Brass, CornerRadius = new CornerRadius(2) };
-            var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = new CornerRadius(2) };
-            var canvas = new Canvas { Width = tw, Height = 9, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-            Canvas.SetTop(trk, 3); Canvas.SetTop(fill, 3); Canvas.SetTop(handle, 0);
-            canvas.Children.Add(trk); canvas.Children.Add(fill); canvas.Children.Add(handle);
-            var val = new TextBlock { FontSize = 9, Foreground = TextPrimary, MinWidth = 44, VerticalAlignment = VerticalAlignment.Center };
-            val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            bool drag = false;
-            void Vis(double v) { double n = Norm(v); fill.Width = Math.Max(0, n * tw); Canvas.SetLeft(handle, n * tw - 4); val.Text = $"{v:0} Hz"; }
-            void From(PointerEventArgs e) { double n = Math.Clamp(e.GetPosition(canvas).X / tw, 0, 1); float v = (float)Val(n); SetR(MonoFreq, v); Vis(v); }
-            canvas.PointerPressed += (_, e) => { drag = true; engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, MonoFreq, ""); e.Pointer.Capture(canvas); From(e); };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, MonoFreq, ""); e.Pointer.Capture(null); } };
-            MidiLearn.Bind(canvas, MidiTarget.DeviceParam(track, di, MonoFreq), engine.DeviceParamName(track, di, MonoFreq));
-            readouts.Add(() => { if (!drag) Vis(P(MonoFreq)); });
-            Vis(P(MonoFreq));
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { canvas, val } };
+            var row = DeviceCardKit.SliderRow("", () => Norm(P(MonoFreq)), n => SetR(MonoFreq, (float)Val(n)), () => $"{P(MonoFreq):0}\u2009Hz", out var sync,
+                begin: () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, MonoFreq, ""),
+                end: () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, MonoFreq, ""),
+                trackWidth: tw, valueWidth: 44);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, MonoFreq), engine.DeviceParamName(track, di, MonoFreq));
+            readouts.Add(sync);
+            return row;
         }
         static TextBlock Cap(string t) => new() { Text = t, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary };
         Border Button(string text, Action onClick)
         {
-            var b = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
+            var b = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = text, FontSize = 9, Foreground = TextSecondary } };
             b.PointerPressed += (_, _) => onClick();
             return b;
@@ -120,7 +111,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         DockPanel.SetDock(fieldHead, Dock.Top); fieldStack.Children.Add(fieldHead);
         DockPanel.SetDock(corrRow, Dock.Bottom); fieldStack.Children.Add(corrRow);
         fieldStack.Children.Add(new Border { Child = gonio, Margin = new Thickness(0, 6, 0, 0) });
-        var field = Island("", 206, fieldStack, headerless: true, custom: fieldStack);
+        var field = Island("", double.NaN, fieldStack, headerless: true, custom: fieldStack);   // the work column takes the rest
 
         // ---------- LEVELS island --------------------------------------------
         Action<float> inL, inR, outL, outR;
@@ -136,7 +127,11 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         var levels = Island("LEVELS", 172, new StackPanel { Spacing = 2, Children = { knobRow, metersRow } });
 
         // ---------- assemble + live refresh ----------------------------------
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { routing, field, levels } };
+        // Three columns, the almanac order: choice (routing) → work (stereo field) → output (levels).
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
+        row.Children.Add(routing);
+        Grid.SetColumn(field, 1); row.Children.Add(field);
+        Grid.SetColumn(levels, 2); row.Children.Add(levels);
         var rootBody = new Border { Padding = new Thickness(8), Child = row };
 
         void GainMatch()
@@ -160,11 +155,11 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 gonio.Set(pairs, kPairs);
                 float c = scope[S_Corr];
                 corr.Set(c);
-                corrVal.Text = $"{c:+0.00;-0.00;0.00}";
+                corrVal.Text = $"{c:+0.00;−0.00;0.00}";
                 corrVal.Foreground = c < 0 ? Danger : c < 0.3f ? Brass : TextPrimary;
                 inL(scope[S_InL]); inR(scope[S_InR]); outL(scope[S_OutL]); outR(scope[S_OutR]);
             }
-            widthVal.Text = $"width {P(Width_):0} %";
+            widthVal.Text = $"width {P(Width_):0}\u2009%";
             foreach (var a in readouts) a();
         }
         ctx.AddDeviceRefresher(Refresh);
@@ -181,7 +176,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Control inner = headerless ? custom! : new StackPanel { Spacing = 6, Children = {
             new TextBlock { Text = title, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = TextSecondary }, body } };
         return new Border { Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 8), Child = inner };
+            CornerRadius = NotaRadius.Panel, Padding = new Thickness(9, 8), Child = inner };
     }
 
     // IN/OUT peak meter: two vertical bars (L/R) with peak-hold + a caption. Returns
@@ -191,8 +186,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Border Bar(out Action<float> set)
         {
             const double H = 96;
-            var fill = new Border { Background = Success, CornerRadius = new CornerRadius(1), VerticalAlignment = VerticalAlignment.Bottom, Height = 0 };
-            var track = new Border { Width = 9, Height = H, Background = Sunken, CornerRadius = new CornerRadius(2), ClipToBounds = true, Child = fill };
+            var fill = new Border { Background = Success, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Bottom, Height = 0 };
+            var track = new Border { Width = 9, Height = H, Background = Sunken, CornerRadius = NotaRadius.Clip, ClipToBounds = true, Child = fill };
             float hold = -120;
             set = peak =>
             {

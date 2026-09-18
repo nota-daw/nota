@@ -23,7 +23,7 @@ internal sealed class AutoFilterCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x22));
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8); // solid brass = current response
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x18);
     private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.Ink("#8AA6C0"), 0x22);
@@ -39,7 +39,7 @@ internal sealed class AutoFilterCurve : Control
         { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     private static readonly IBrush AxisB = NotaPalette.TextTertiary;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private const double FMin = 30.0, FMax = 18000.0;
     private const double DbTop = 18.0, DbBot = -36.0;
@@ -102,7 +102,7 @@ internal sealed class AutoFilterCurve : Control
         var n = _engine.DeviceScope(_track, _device, _scope, FftN);
         if (n < FftN)
         {
-            for (var k = 1; k < Bins; k++) _specDb[k] = Math.Max(-120, _specDb[k] - 2.5);
+            for (var k = 1; k < Bins; k++) _specDb[k] = -120;
             InvalidateVisual();
             return;
         }
@@ -120,7 +120,7 @@ internal sealed class AutoFilterCurve : Control
         {
             var mag = Math.Sqrt(_re[k] * _re[k] + _im[k] * _im[k]);
             var db = 20 * Math.Log10(mag / refMag + 1e-9);
-            _specDb[k] = db > _specDb[k] ? db : Math.Max(db, _specDb[k] - 2.5);
+            _specDb[k] = db;   // no release ballistics: the spectrum shows this frame (almanac § no meter animation)
         }
 
         InvalidateVisual();
@@ -191,7 +191,7 @@ internal sealed class AutoFilterCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         double logMin = Math.Log10(FMin), logMax = Math.Log10(FMax), logSpan = logMax - logMin;
 
@@ -226,7 +226,7 @@ internal sealed class AutoFilterCurve : Control
             g.EndFigure(true);
         }
 
-        ctx.DrawGeometry(SpecFill, SpecPen, spec);
+        ctx.DrawGeometry(null, SpecPen, spec);
 
         // --- teal sweep band: the range the modulation walks the cutoff over ---
         if (_sweepHi - _sweepLo > 0.004)
@@ -256,13 +256,11 @@ internal sealed class AutoFilterCurve : Control
             gc.LineTo(new Point(w, h));
             gc.EndFigure(true);
         }
-
-        ctx.DrawGeometry(CurveFill, null, geo);
         for (var i = 1; i < n; i++) ctx.DrawLine(CurvePen, pts[i - 1], pts[i]);
 
         // handle at the base cutoff, sitting on the curve.
         double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc), h);
-        ctx.DrawEllipse(HandleB, new Pen(Bg, 2), new Point(cx, cy), 5, 5);
+        NotaGraph.Node(ctx, new Point(cx, cy), active: true);
 
         // --- 3) dashed teal response at the live modulated cutoff (envelope + LFO) ---
         if (Math.Abs(_liveCut - _fcNorm) > 0.004)
@@ -289,13 +287,17 @@ internal sealed class AutoFilterCurve : Control
                     8, b), new Point(x, y));
         }
 
-        foreach (var (f, s) in new[] { (100.0, "100"), (1000.0, "1k"), (10000.0, "10k") })
-            Lbl(s, Math.Clamp(X(f) - 6, 2, w - 16), h - 11, AxisB);
+        // The range, in the bottom corners only.
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomLeft, "30");
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomRight, "18k Hz");
         var hz = HzOf(_liveCut);
-        Lbl(hz >= 1000 ? $"{hz / 1000.0:0.00} kHz" : $"{hz:0} Hz", 4, 2, HandleB);
-        var leg = new FormattedText("┄ modulated", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8,
+        Lbl(hz >= 1000 ? $"{hz / 1000.0:0.0}\u2009k" : $"{hz:0}\u2009Hz", 4, 2, HandleB);
+        // Legend inside the window: a dashed teal sample, then the word.
+        var leg = new FormattedText("modulated", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8,
             NotaPalette.Teal);
-        ctx.DrawText(leg, new Point(w - leg.Width - 4, 2));
+        double lx = w - leg.Width - 4;
+        ctx.DrawText(leg, new Point(lx, 2));
+        ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2, new DashStyle(new double[] { 2, 2 }, 0)), new Point(lx - 14, 2 + leg.Height / 2), new Point(lx - 4, 2 + leg.Height / 2));
     }
 
     // In-place iterative radix-2 Cooley–Tukey FFT.

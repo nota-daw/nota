@@ -32,7 +32,7 @@ internal sealed class StrataWave : Control
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0 || _env.Length == 0) return;
         int n = _env.Length; double bw = w / n, mid = h / 2;
         var full = _muted ? NotaPalette.BorderStrong
-                          : new SolidColorBrush(_recording ? NotaPalette.Danger.Color : Color.FromArgb(0xCC, _color.R, _color.G, _color.B));
+                          : new SolidColorBrush(_recording ? NotaPalette.Record.Color : Color.FromArgb(0xCC, _color.R, _color.G, _color.B));
         var future = NotaPalette.GraphBorder;
         double cut = _recording ? _progress * n : n;
         for (int i = 0; i < n; i++)

@@ -40,11 +40,15 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     private static readonly IBrush LabelC = NotaPalette.TextSecondary;
     private static readonly IBrush Dim = NotaPalette.BorderStrong;
     private static readonly IBrush Green = NotaPalette.Success;
-    private static readonly IBrush Red = NotaPalette.DangerDeep;
+    // Gate reduction and the shut state are the device working, not an alert: red belongs to
+    // recording and overload, so shut reads as quiet ink and reduction as brass data.
+    private static readonly IBrush Red = NotaPalette.Accent;
     private static readonly IBrush ThrC = NotaPalette.Threshold;
     private static readonly IBrush HandleC = NotaPalette.TextSecondary;
 
     public double Width => 700;
+
+    public string? Subtitle => "GATE";   // the processing type, shown as the header badge
     public bool FullBleed => true;
 
     public Control Build(DeviceCardContext ctx, int index)
@@ -69,48 +73,30 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(signal.Tick);
 
         // ---- formatters ----
-        static string ThrF(double v) => $"{-70 + v * 70:0.0} dB";
-        static string RetF(double v) => $"{v * 24:0.0} dB";
-        static string Ms(double v, double lo, double hi) { double m = Exp(v, lo, hi); return m >= 100 ? $"{m:0} ms" : m >= 10 ? $"{m:0.0} ms" : $"{m:0.00} ms"; }
+        static string ThrF(double v) => $"{-70 + v * 70:0.0}\u2009dB";
+        static string RetF(double v) => $"{v * 24:0.0}\u2009dB";
+        static string Ms(double v, double lo, double hi) { double m = Exp(v, lo, hi); return m >= 100 ? $"{m:0}\u2009ms" : m >= 10 ? $"{m:0.0}\u2009ms" : $"{m:0.00}\u2009ms"; }
         static string AttF(double v) => Ms(v, 0.01, 100);
         static string HoldF(double v) => Ms(v, 0.1, 500);
         static string RelF(double v) => Ms(v, 1, 2000);
-        static string FloorF(double v) => v <= 0.001 ? "−∞ dB" : $"{-70 + v * 70:0} dB";
+        static string FloorF(double v) => v <= 0.001 ? "−∞\u2009dB" : $"{-70 + v * 70:0.0}\u2009dB";
 
         // ---- horizontal slider ----
         Control HRow(int p, string label, Func<double, string> fmt, double labW, double valW, bool teal = false, bool bipolar = false)
         {
-            var accent = teal ? TealC : Amber;
-            var fill = new Border { Height = 3, Background = accent, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var trk = new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center };
-            var center = bipolar ? new Border { Width = 1, Background = Dim, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) } : null;
-            var handle = new Border { Width = 8, Height = 9, Background = HandleC, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 11, MinWidth = 30 }; slot.Children.Add(trk); if (center != null) slot.Children.Add(center); slot.Children.Add(fill); slot.Children.Add(handle);
-            var val = new TextBlock { Text = fmt(P(p)), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }; val.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); if (valW > 0) { val.Width = valW; val.TextAlignment = TextAlignment.Right; }
-            bool drag = false;
-            void Upd() { double v = P(p), W = slot.Bounds.Width, hx = v * W; handle.Margin = new Thickness(Math.Clamp(hx - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); fill.Width = hx; val.Text = fmt(v); }
-            void SetX(double x) { SetP(p, (float)Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1)); SyncLines(); Upd(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); Begin(p); SetX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); End(p); } };
-            MidiLearn.Bind(slot, MidiTarget.DeviceParam(track, di, p), label);
-            readouts.Add(() => { if (!drag) Upd(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            if (labW > 0) g.Children.Add(Cap(label, teal ? TealC : MutedC, labW));
-            Grid.SetColumn(slot, 1); g.Children.Add(slot); Grid.SetColumn(val, 2); g.Children.Add(val);
-            return g;
+            var row = DeviceCardKit.SliderRow(labW > 0 ? label : "", () => P(p), n => { SetP(p, (float)n); SyncLines(); }, () => fmt(P(p)), out var sync,
+                begin: () => Begin(p), end: () => End(p), bipolar: bipolar, labelWidth: labW, valueWidth: valW);
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), label);
+            readouts.Add(sync);
+            return row;
         }
 
         // Segmented pill over a normalized param.
         Control Seg(int p, string[] opts, bool teal = false)
         {
-            int n = opts.Length; var cells = new Border[n]; var texts = new TextBlock[n];
-            var accent = teal ? TealC : Amber; var lit = teal ? TealC : AmberLit; var sub = teal ? TealSubtle : AmberSubtle;
-            void Sync() { int cur = Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1); for (int i = 0; i < n; i++) { bool on = i == cur; cells[i].Background = on ? sub : Brushes.Transparent; cells[i].BorderBrush = on ? accent : Brushes.Transparent; texts[i].Foreground = on ? lit : MutedC; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++) { int iv = i; var tb = new TextBlock { Text = opts[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = MutedC }; var c = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb }; c.PointerPressed += (_, e) => { e.Handled = true; SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); Sync(); }; cells[i] = c; texts[i] = tb; row.Children.Add(c); }
-            readouts.Add(Sync);
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            int n = opts.Length;
+            var seg = DeviceCardKit.Segments(opts, () => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1), iv => SetP(p, n > 1 ? iv / (float)(n - 1) : 0f), out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return seg;
         }
@@ -120,15 +106,15 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             Child = new DockPanel { LastChildFill = false, Margin = new Thickness(9, 0), Children = {
                 WithDock(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = {
                     Cap("LIVE"),
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 210, Children = { Cap("THRESHOLD", MutedC, 56), new Border { Child = HRow(Threshold, "", ThrF, 0, 58), Width = 140 } } },
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 210, Children = { Cap("THRESH", MutedC, 56), new Border { Child = HRow(Threshold, "", ThrF, 0, 58), Width = 140 } } },
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Width = 130, Children = { Cap("RETURN", MutedC, 38), new Border { Child = HRow(Return, "", RetF, 0, 48), Width = 80 } } } } }, Dock.Left),
                 WithDock(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = {
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("FLIP"), Seg(Flip, new[] { "Gate", "Duck" }) } },
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("LOOK"), Seg(Lookahead, new[] { "0", "1", "5 ms" }) } } } }, Dock.Right) } } };
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("LOOK"), Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }) } } } }, Dock.Right) } } };
 
         // ================= ENVELOPE column =================
         var state = new TextBlock { Text = "OPEN", FontSize = 20, FontWeight = FontWeight.SemiBold, Foreground = Green, LineHeight = 20 }.WithMono();
-        var stateSub = new TextBlock { Text = "gate · GR 0.0 dB", FontSize = 9, Foreground = MutedC }.WithMono();
+        var stateSub = new TextBlock { Text = "gate · GR 0.0\u2009dB", FontSize = 9, Foreground = MutedC }.WithMono();
         var envTop = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = {
             new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1, Children = { state, stateSub } },
             WithCol(new Border { Width = 64, Height = 38, Child = new AHRGlyph(), VerticalAlignment = VerticalAlignment.Center }, 1) } };
@@ -150,9 +136,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Control Meter(string label, out Border fill, out TextBlock val, IBrush baseCol, out Border tick)
         {
             val = new TextBlock { FontSize = 9, Foreground = LabelC, Width = 38, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }.WithMono();
-            fill = new Border { Background = baseCol, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Width = 0 };
+            fill = new Border { Background = baseCol, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Width = 0 };
             tick = new Border { Width = 1, Background = ThrC, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, IsVisible = false };
-            var trk = new Panel { Height = 5, Children = { new Border { Background = Inset, CornerRadius = new CornerRadius(2) }, fill, tick } };
+            var trk = new Panel { Height = 5, Children = { new Border { Background = Inset, CornerRadius = NotaRadius.Clip }, fill, tick } };
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("22,*,Auto"), ColumnSpacing = 5, Height = 6, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Cap(label)); Grid.SetColumn(trk, 1); g.Children.Add(trk); Grid.SetColumn(val, 2); g.Children.Add(val);
             g.Tag = trk;   // so refresher can read the track width
@@ -162,7 +148,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         var grRow = Meter("GR", out var grFill, out var grVal, Red, out var _);
         var inTrk = (Panel)((Grid)inRow).Tag!; var grTrk = (Panel)((Grid)grRow).Tag!;
 
-        var led = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Green, VerticalAlignment = VerticalAlignment.Center };
+        var led = new Border { Width = 8, Height = 8, CornerRadius = NotaRadius.Control, Background = Green, VerticalAlignment = VerticalAlignment.Center };
         var ledTxt = new TextBlock { Text = "OPEN", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = Green, VerticalAlignment = VerticalAlignment.Center };
         var duty = new TextBlock { Text = "", FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }.WithMono();
         var ledRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Children = { led, WithCol(ledTxt, 1), WithCol(duty, 2) } };
@@ -190,13 +176,13 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         detEq.LpChanged += v => { Begin(DetLP); SetP(DetLP, (float)v); End(DetLP); };
         readouts.Add(() => detEq.Set(P(DetHP), P(DetLP)));
 
-        var listenChip = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand),
+        var listenChip = new Border { BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = "LISTEN", FontSize = 8, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center } };
-        void ListenSync() { bool on = P(Listen) >= 0.5f; listenChip.Background = on ? TealSubtle : Brushes.Transparent; listenChip.BorderBrush = on ? TealC : Dim; ((TextBlock)listenChip.Child!).Foreground = on ? TealC : MutedC; }
+        void ListenSync() { bool on = P(Listen) >= 0.5f; listenChip.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; listenChip.BorderBrush = on ? NotaPalette.BorderBrass : Dim; ((TextBlock)listenChip.Child!).Foreground = on ? NotaPalette.AccentHover : MutedC; }
         listenChip.PointerPressed += (_, e) => { e.Handled = true; SetP(Listen, P(Listen) >= 0.5f ? 0f : 1f); ListenSync(); };
         readouts.Add(ListenSync);
 
-        var scEqBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(4), Child =
+        var scEqBox = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(4), Child =
             new DockPanel { LastChildFill = true, Children = {
                 new Grid { Height = 11, [DockPanel.DockProperty] = Dock.Top, ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { Cap("SC EQ", MutedC), WithCol(listenChip, 1) } },
                 detEq } } };
@@ -225,10 +211,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             int n = engine.DeviceScope(track, di, scope, kScope);
             if (n < kScope) return;
             bool open = scope[S_Open] >= 0.5f && scope[S_GateGain] > 0.5f;
-            state.Text = open ? "OPEN" : "SHUT"; state.Foreground = open ? Green : Red;
-            stateSub.Text = $"gate · GR {scope[S_GrDb]:0.0} dB";
+            state.Text = open ? "OPEN" : "SHUT"; state.Foreground = open ? Green : NotaPalette.TextSecondary;
+            stateSub.Text = $"gate · GR {scope[S_GrDb]:0.0}\u2009dB";
             led.Background = open ? Green : Dim; ledTxt.Text = open ? "OPEN" : "SHUT"; ledTxt.Foreground = open ? Green : MutedC;
-            duty.Text = $"{scope[S_GateGain] * 100:0}% open";
+            duty.Text = $"{scope[S_GateGain] * 100:0}\u2009% open";
             double inW = inTrk.Bounds.Width, grW = grTrk.Bounds.Width;
             inFill.Width = Math.Clamp((scope[S_InDb] + 60) / 60, 0, 1) * inW;
             inVal.Text = $"{scope[S_InDb]:0.0}";
@@ -250,13 +236,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     // Small teal toggle with a state getter/setter, registered to the refresher list.
     private static Control MakeToggle(Func<bool> get, Action<bool> set, string label, List<Action> readouts)
     {
-        var knob = new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = NotaPalette.BgApp, VerticalAlignment = VerticalAlignment.Center };
-        var sw = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(1.5, 0), Child = knob };
-        var tb = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = NotaPalette.Teal, VerticalAlignment = VerticalAlignment.Center };
-        void Sync() { bool on = get(); sw.Background = on ? NotaPalette.Teal : NotaPalette.BorderStrong; knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; }
-        sw.PointerPressed += (_, e) => { e.Handled = true; set(!get()); Sync(); };
-        readouts.Add(Sync);
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { sw, tb } };
+        var b = DeviceCardKit.Switch(label, get, () => set(!get()), out var sync);
+        readouts.Add(sync);
+        return b;
     }
 }
 

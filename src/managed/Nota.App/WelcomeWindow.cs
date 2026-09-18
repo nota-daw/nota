@@ -219,8 +219,7 @@ public sealed class WelcomeWindow : NotaWindow
 
         var recover = new Button
         {
-            Content = "Recover",
-            Classes = { "primary" },
+            Content = "Recover",   // not solid brass: "New project" is this window's primary action
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 0, 0),
         };
@@ -247,7 +246,7 @@ public sealed class WelcomeWindow : NotaWindow
             Background = NotaPalette.AccentSubtle,
             BorderBrush = NotaPalette.Accent,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7),
+            CornerRadius = NotaRadius.Panel,
             Padding = new Thickness(14, 12),
             Margin = new Thickness(28, 16, 28, 0),
             Child = grid,

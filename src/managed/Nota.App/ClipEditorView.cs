@@ -107,9 +107,9 @@ public sealed class ClipEditorView : UserControl
         _envTab = Tab("Envelopes");
         _envTab.PointerPressed += (_, _) => ShowTab(true);
         _envTab.IsEnabled = _envPanel is not null;
-        _envTab.Opacity = _envPanel is not null ? 1 : 0.5;
         PaintTab(_notesTab, true);
         PaintTab(_envTab, false);
+        Inactive.Set(_envTab, _envPanel is null);
         var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { _notesTab, _envTab } };
         _toolsChip = Chip();
         SetChip(_toolsChip, "Tools", false);
@@ -134,8 +134,8 @@ public sealed class ClipEditorView : UserControl
     private Control ScaleControls()
     {
         _scaleToggle = Chip();
-        _keyChip = Chip();
-        _scaleChip = Chip();
+        _keyChip = Chip(dropdown: true);
+        _scaleChip = Chip(dropdown: true);
         _scaleToggle.PointerPressed += (_, e) => { e.Handled = true; Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); UpdateScaleChips(); };
         _keyChip.PointerPressed += (_, e) => { e.Handled = true; ShowMenu(_keyChip, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); UpdateScaleChips(); }); };
         _scaleChip.PointerPressed += (_, e) => { e.Handled = true; ShowMenu(_scaleChip, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); UpdateScaleChips(); }); };
@@ -155,23 +155,27 @@ public sealed class ClipEditorView : UserControl
     {
         bool on = Roll.ScaleOn;
         SetChip(_scaleToggle, on ? "On" : "Off", on);
-        SetChip(_keyChip, PianoRollView.KeyNames[Roll.ScaleRoot] + "  ▾", on);
-        SetChip(_scaleChip, PianoRollView.ScaleNames[Roll.ScaleIndex] + "  ▾", on);
-        _keyChip.Opacity = on ? 1 : 0.5;
-        _scaleChip.Opacity = on ? 1 : 0.5;
+        SetChip(_keyChip, PianoRollView.KeyNames[Roll.ScaleRoot], on);
+        SetChip(_scaleChip, PianoRollView.ScaleNames[Roll.ScaleIndex], on);
+        Inactive.Set(_keyChip, !on, interactive: true);
+        Inactive.Set(_scaleChip, !on, interactive: true);
     }
 
-    private static Border Chip() => new()
+    private static Border Chip(bool dropdown = false)
     {
-        Height = 22, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
-        Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong,
-        Padding = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
-        Child = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Foreground = TextSecondary },
-    };
+        var tb = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Foreground = TextSecondary };
+        return new Border
+        {
+            Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
+            Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong,
+            Padding = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
+            Child = dropdown ? Glyph.WithChevron(tb) : tb,
+        };
+    }
 
     private static void SetChip(Border chip, string text, bool active)
     {
-        var tb = (TextBlock)chip.Child!;
+        var tb = chip.Child as TextBlock ?? (TextBlock)((StackPanel)chip.Child!).Children[0];
         tb.Text = text;
         tb.Foreground = active ? AccentBright : TextSecondary;
         chip.Background = active ? AccentSubtle : NotaPalette.SurfaceRaised;
@@ -194,7 +198,7 @@ public sealed class ClipEditorView : UserControl
 
     private static Border Tab(string text) => new()
     {
-        Height = 22, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
+        Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
         Padding = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
         Child = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
     };
@@ -212,13 +216,13 @@ public sealed class ClipEditorView : UserControl
         {
             _engine = engine; _trackId = trackId; _clipIndex = clipIndex;
             _canvas = new EnvCanvas(lengthBeats) { Committed = OnCommitted };
-            _targetText = new TextBlock { Text = "Velocity ▾", FontSize = 10, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
+            _targetText = new TextBlock { Text = "Velocity", FontSize = 10, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
 
             var chip = new Border
             {
                 Height = 22, Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong,
-                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 0),
-                Cursor = new Cursor(StandardCursorType.Hand), Child = _targetText,
+                BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(10, 0),
+                Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(_targetText),
             };
             chip.PointerPressed += (_, e) => { e.Handled = true; CycleTarget(); };
             var hint = new TextBlock { Text = "click to add · drag to move · right-click to delete", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
@@ -240,7 +244,7 @@ public sealed class ClipEditorView : UserControl
         private void CycleTarget()
         {
             _target = _target == MidiClipEnvelope.Velocity ? MidiClipEnvelope.Volume : MidiClipEnvelope.Velocity;
-            _targetText.Text = (_target == MidiClipEnvelope.Volume ? "Volume" : "Velocity") + " ▾";
+            _targetText.Text = _target == MidiClipEnvelope.Volume ? "Volume" : "Velocity";
             Load();
         }
 

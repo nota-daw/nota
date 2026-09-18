@@ -28,7 +28,7 @@ internal sealed class DistributionViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, new Pen(BorderIn, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double padX = 6, padY = 5;
         double x0 = padX, x1 = w - padX, top = padY, bot = h - padY;
         double bw = (x1 - x0) / N;
@@ -44,7 +44,7 @@ internal sealed class DistributionViz : Control
             };
             double bh = Math.Max(1, hh * (bot - top));
             var rect = new Rect(x0 + k * bw + 0.5, bot - bh, Math.Max(1, bw - 1.4), bh);
-            ctx.DrawRectangle(new SolidColorBrush(Teal, 0.35 + 0.55 * hh), null, rect, 1, 1);
+            ctx.DrawRectangle(NotaPalette.Teal, null, rect, NotaRadius.BarValue, NotaRadius.BarValue);
         }
     }
 }

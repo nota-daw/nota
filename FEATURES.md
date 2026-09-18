@@ -252,28 +252,53 @@ voice count (on synths), move arrows, delete, and the ⠿ drag handle. All suppo
 and user presets, automation, persistence and cloning.
 
 ### Instruments
-- **Nota Synth** — subtractive synthesizer (the basic one).
+- **Nota Synth** — subtractive synthesizer (the basic one): one oscillator
+  (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
+  stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
+  Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
+  Osc · Env · Filter tabs with draggable envelope and filter graphs. 25 factory presets.
 - **Nota Sampler** — sampler (one-shot and loop), voice modes Poly 16 / Mono / Choke, loop
   crossfade, reverse loop, filter key-tracking, Vel→Vol; Sample · Pitch · Env · Filter
   tabs; an editable waveform.
-- **Nota Grain** — granular synthesizer.
-- **Nota Volt** — subtractive, with a 7×6 modulation matrix, 8 macros, extended LFOs
-  (shapes, fade-in, tempo sync), oscillator start phase, 12/24 dB filter slope, Mono/Poly.
+- **Nota Grain** — granular sampler: a read Position that Scans through the file, Freezes
+  or follows the keyboard, grains of a chosen size, density and window shape (Hann /
+  Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
+  pan variation, stereo spread, **Dry/Wet** against the sample itself, an LP/HP/BP filter
+  and an amp envelope. The card draws the sample with the live grain cloud on it (drag to
+  move Position). Drop a sample from the browser to replace the built-in pad. 25 factory
+  presets.
+- **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
+  one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
+  its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a
+  dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix, 8 macros over 12
+  destinations, unison, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
+  modulation wheels, VEL→AMP, VEL→FILTER, Mono/Poly. 25 factory presets.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
-  Off/Sync/Bend/PWM/Fold) plus a sub oscillator and unison, two filters with routing, two
-  envelopes, two LFOs, an 8×7 mod matrix, 4 macros, built-in drive/chorus/reverb,
-  Mono/Poly.
-- **Nota Operator** — FM synth, 4 operators, 11 algorithms (with interactive diagrams and
-  drag-to-reroute), spectrum display, VEL→FM, Glide, Mono.
+  Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
+  in cents, spread), two filters (LP/HP/BP/Notch/Morph, 12/24 dB) with per-source routing,
+  two envelopes, two tempo-syncable LFOs, an 8×7 mod matrix, 8 macros over 12
+  destinations, pitch-bend (±2/±5/±12) and modulation wheels, output pan, a switchable FX
+  chain (drive Tube/Tape/Fold with tone · chorus 1×/2×/4× · reverb Room/Hall/Plate with
+  size), Mono/Poly. 25 factory presets.
+- **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, fine detune, level and
+  their own ADSR each), 11 algorithms with interactive diagrams and drag-to-reroute,
+  feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard tracking, pitch-bend
+  (±2/±5/±12) and modulation wheels, VEL→FM, VEL→LEVEL, KEY→LEVEL, Glide, Mono.
 - **Nota Pendulum** — a "pendulum" sequencer: swinging balls generate notes, with swing
   curves (Linear/Pendulum/Ease/Bounce), bipolar Rate, a held chord, Scale, Hold, First
   Note, Reset, Humanize and Pan Spread.
-- **Nota Bass** — bass synth, mono (legato with glide) and poly modes.
+- **Nota Bass** — mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
+  pulse width), a sub oscillator (sine/square/tri, −1/−2 oct), a filter (LP/HP/BP/Notch,
+  12/24 dB) with pre-drive, its own envelope, key tracking and LFO, amp envelope, LFO to
+  cutoff and pitch, unison, output drive and pan, glide, Legato, pitch-bend (±2/±5/±12)
+  and mod wheels (the wheel opens the LFO onto the cutoff), VEL→AMP, VEL→FILTER,
+  Mono/Poly. 25 factory presets.
 - **Nota Physical** — physical modelling.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
-  (WARM/GLASS/MOOG/GRAIN), **React** (sidechain modulation from another track:
-  Filter/Pitch/Space/vector), 5 macro knobs (Age/Motion/Filter/Env/Space), and a sidechain
-  scope.
+  (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
+  (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
+  its envelope, transients and tilt, and transients per bar), 5 macro knobs
+  (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D), accents, per-step velocity, Swing/Humanize, and a per-voice **Sample** mode
@@ -381,14 +406,22 @@ and user presets, automation, persistence and cloning.
 - **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains
   with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
   a zone map, rack output (Volume/Glide), Fold/Save.
-- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads and Mixer views, per-pad
-  Volume/Pan/Tune/Decay, named pads, choke groups (monophonic cut), Swing/Humanize,
-  hot-swap. Its clips can be stepped in the detail panel's **Pattern** tab (see below).
-- **Ten factory kits** under Nota Drum Rack in the browser: *Volta* (warm analog boom),
-  *Kompakt* (punchy analog house), *Micron* (small vintage rhythm box), *Linnwood* (80s PCM
-  machine), *Atelier* (acoustic studio kit), *Cellar* (dusty vinyl break), *Neon* (modern
-  sub-forward, tuned 808 bass), *Foundry* (industrial metal), *Terra* (hand percussion),
-  *Aether* (ambient). 16 pads each on the General MIDI map (36–51), hats choked together,
+- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer and Chain views,
+  per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
+  right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
+  oscillogram with a playhead, and each pad's own effect chain. A **kit picker** in the
+  card header loads any factory kit in place and names the kit a rack holds. Its clips can
+  be stepped in the detail panel's **Pattern** tab (see below).
+- **25 factory kits** under Nota Drum Rack in the browser and in the card's kit picker:
+  *Volta* (warm analog boom), *Kompakt* (punchy analog house), *Micron* (small vintage
+  rhythm box), *Linnwood* (80s PCM machine), *Atelier* (acoustic studio kit), *Cellar*
+  (dusty vinyl break), *Neon* (modern sub-forward, tuned 808 bass), *Foundry* (industrial
+  metal), *Terra* (hand percussion), *Aether* (ambient), *Brass Room* (live rock kit in a
+  big room), *Breakline* (jungle break), *Bunker* (warehouse techno), *Pixel* (minimal),
+  *Velvet* (jazz brushes), *Circuit* (electro box), *Yard* (dub and reggae), *Byte* (8-bit
+  chip), *Lagoon* (amapiano log drums), *Titan* (trailer percussion), *Shuffle* (UK
+  garage), *Mirrorball* (70s disco), *Pit* (orchestral percussion), *Hyper* (hyperpop) and
+  *Crate* (90s boom bap). 16 pads each on the General MIDI map (36–51), hats choked together,
   with the kit's own swing and humanize. Load onto a new track or drop onto an existing
   Drum Rack to replace its pads. The one-shots are synthesized on first launch rather than
   shipped as audio (nothing added to the installer) and appear in the Files tab under

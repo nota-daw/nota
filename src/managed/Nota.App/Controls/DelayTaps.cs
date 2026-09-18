@@ -20,9 +20,9 @@ internal sealed class DelayTaps : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
-    private static readonly IBrush Axis = NotaPalette.TextDisabled;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush GridB = NotaGraph.Grid;
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private double _fracL = 0.25, _fracR = 0.25;
     private float _fb = 0.4f;
@@ -42,7 +42,7 @@ internal sealed class DelayTaps : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double x0 = 8, x1 = w - 8, mid = h * 0.5, half = (h - 30) * 0.5;
 
         // Ruler ticks (0 / mid / end) + centre axis.

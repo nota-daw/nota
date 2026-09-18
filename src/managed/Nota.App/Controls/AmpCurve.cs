@@ -20,8 +20,8 @@ internal sealed class AmpCurve : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Grid = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush Grid = NotaGraph.Grid;
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private float _drive = 1f, _bias;
     private int _stages = 1;
@@ -44,7 +44,7 @@ internal sealed class AmpCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double pad = 7, x0 = pad, x1 = w - pad, top = pad + 10, bot = h - pad - 9;
 
         var gridPen = new Pen(Grid, 1);
@@ -82,8 +82,8 @@ internal sealed class AmpCurve : Control
         }
         // input-drive axis (−40 dB … 0 dB).
         var axisB = NotaPalette.TextDisabled;
-        ctx.DrawText(new FormattedText("in −40 dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB), new Point(x0, bot + 2));
-        var zt = new FormattedText("0 dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB);
+        ctx.DrawText(new FormattedText("in −40\u2009dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB), new Point(x0, bot + 2));
+        var zt = new FormattedText("0\u2009dB", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 7, axisB);
         ctx.DrawText(zt, new Point(x1 - zt.Width, bot + 2));
     }
 }

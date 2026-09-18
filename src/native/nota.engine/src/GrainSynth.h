@@ -6,11 +6,17 @@
 // through the file (Scan speed, or Freeze, or Key = position follows the keyboard),
 // grains of a chosen Size spawn at a Density (overlap), each sprayed randomly around
 // the position, pitched by the note (+ Coarse/Fine), spread across the stereo field,
-// with per-grain position / pitch / pan randomisation. The grain cloud feeds a
-// subtractive filter and an amp ADSR. Ships with a procedural default sample so it
-// sounds before you drop your own.
+// with per-grain position / pitch / pan randomisation. Dry/Wet blends the cloud with the
+// sample itself, played straight from the read position at the note's pitch. The mix
+// feeds a subtractive filter and an amp ADSR. Ships with a procedural default sample so
+// it sounds before you drop your own.
 //
-//   sample ─▶ [Position/Scan] ─▶ grain cloud (Size · Density · Spray · Pitch · Spread) ─▶ filter ─▶ amp ─▶ out
+//   sample ─▶ [Position/Scan] ─▶ grain cloud (Size · Density · Spray · Pitch · Spread) ─┬▶ filter ─▶ amp ─▶ out
+//          └▶ dry read head (the sample at the note's pitch) ──────────── Dry/Wet ─────┘
+//
+// Position is live: a held note follows it (and its automation) — Scan adds a moving
+// offset to it, Freeze sits on it, Key offsets it by the note. The audio thread publishes
+// every live grain (read position, pan, window level) through scopeRead for the UI.
 //
 // Holds a shared SampleBuffer like the Sampler (so project save bundles it by id). All
 // params ride the plugin-param interface (normalized 0..1) → automation / persist /
@@ -38,6 +44,7 @@ public:
         Position = 0, Scan, Spray, GrainSize, Density, Coarse, Fine, Spread,
         PosRand, PitchRand, PanRand, ScanMode, FilterType, FilterFreq, FilterReso,
         Attack, Decay, Sustain, Release, Volume, Pan, GrainShape,
+        DryWet,                 // appended 2026-09: older projects load fully wet, as they sounded
         kNumParams
     };
 
@@ -49,6 +56,7 @@ public:
         set(FilterType, 0.0f); set(FilterFreq, 0.9f); set(FilterReso, 0.1f);
         set(Attack, 0.06f); set(Decay, 0.3f); set(Sustain, 0.85f); set(Release, 0.4f);
         set(Volume, 0.8f); set(Pan, 0.5f); set(GrainShape, 0.0f);
+        set(DryWet, 1.0f);
         for (auto& p : posPub_) p.store(-1.0f, std::memory_order_relaxed);
     }
 
@@ -72,6 +80,19 @@ public:
         for (int i = 0; i < kVoices && c < maxN; ++i) { float p = posPub_[i].load(std::memory_order_relaxed); if (p >= 0.0f) out[c++] = p; }
         return c;
     }
+    int32_t activeVoiceCount() const override { return activeVoices_.load(std::memory_order_relaxed); }
+
+    // Scope telemetry: [0] active voices · [1] live grains n · then n triples of (read
+    // position 0..1 through the sample, pan 0..1, window level 0..1) — the grain cloud.
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        if (!out || maxN < 2) return 0;
+        const int n = std::min<int>((int)scope_[1].load(std::memory_order_relaxed), (maxN - 2) / 3);
+        out[0] = scope_[0].load(std::memory_order_relaxed);
+        out[1] = (float)n;
+        for (int i = 0; i < n * 3; ++i) out[2 + i] = scope_[2 + i].load(std::memory_order_relaxed);
+        return 2 + n * 3;
+    }
+
     void setSample(std::shared_ptr<SampleBuffer> s, int32_t rootNote, bool /*loop*/) {
         if (s && !s->empty()) { sample_ = std::move(s); rootNote_ = rootNote; }
     }
@@ -82,14 +103,14 @@ public:
         static const char* ids[] = {
             "position", "scan", "spray", "grainsize", "density", "coarse", "fine", "spread",
             "posrand", "pitchrand", "panrand", "scanmode", "filtype", "filfreq", "filreso",
-            "attack", "decay", "sustain", "release", "volume", "pan", "grainshape" };
+            "attack", "decay", "sustain", "release", "volume", "pan", "grainshape", "drywet" };
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
         static const char* nm[] = {
             "Position", "Scan", "Spray", "Grain Size", "Density", "Coarse", "Fine", "Spread",
             "Pos Rand", "Pitch Rand", "Pan Rand", "Scan Mode", "Filter Type", "Filter Freq", "Filter Reso",
-            "Attack", "Decay", "Sustain", "Release", "Volume", "Pan", "Grain Shape" };
+            "Attack", "Decay", "Sustain", "Release", "Volume", "Pan", "Grain Shape", "Dry/Wet" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override {
@@ -123,21 +144,21 @@ public:
     // ---- notes ----
     void noteOn(int32_t pitch, float velocity) override {
         Voice* v = findFreeVoice();
-        v->active = true; v->pitch = pitch; v->vel = std::clamp(velocity, 0.0f, 1.0f);
-        v->env = 0.0f; v->stage = Stage::Attack; v->grainClock = 0.0;
+        v->active = true; v->pitch = pitch; v->vel = std::clamp(velocity, 0.0f, 1.0f); v->seq = ++seq_;
+        v->env = 0.0f; v->stage = Stage::Attack; v->grainClock = 0.0; v->scanOff = 0.0;
         v->s1L = v->s2L = v->s1R = v->s2R = 0.0;
         for (auto& g : v->grains) g.active = false;
         const int64_t frames = sample_ ? sample_->frames : 0;
-        const int mode = scanModeNow();
-        if (mode == 2) {   // Key: position follows the keyboard, pitch stays at root
-            double pos01 = std::clamp((double)get(Position) + (pitch - 60) / 36.0, 0.0, 1.0);
-            v->readPos = pos01 * frames;
-        } else {
-            v->readPos = (double)get(Position) * frames;
-        }
+        v->readPos = basePos01(pitch, scanModeNow()) * frames;
+        v->dryPos = v->readPos;
     }
+    // Releases the oldest held voice of the pitch only: a repeat that started a hair before
+    // the previous one of the same pitch ended keeps sounding.
     void noteOff(int32_t pitch) override {
-        for (auto& v : voices_) if (v.active && v.pitch == pitch && v.stage != Stage::Release) v.stage = Stage::Release;
+        Voice* oldest = nullptr;
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && v.stage != Stage::Release && (!oldest || v.seq < oldest->seq)) oldest = &v;
+        if (oldest) oldest->stage = Stage::Release;
     }
     void allNotesOff() override { for (auto& v : voices_) v.active = false; }
 
@@ -170,6 +191,20 @@ public:
         const double gpL = std::cos((panv + 1.0) * 0.25 * kPi), gpR = std::sin((panv + 1.0) * 0.25 * kPi);
         const double fg = std::tan(kPi * std::min(fbase, sampleRate_ * 0.49) / sampleRate_);
         const double fa1 = 1.0 / (1.0 + fg * (fg + fk));
+        const double wet = get(DryWet);
+        const bool   doWet = wet > 1e-4, doDry = wet < 1.0 - 1e-4;
+        const float  wetGain = (float)wet, dryGain = (float)((1.0 - wet) * kDryTrim);
+        const double dryEnd = (double)std::max<int64_t>(1, slen - 1);
+        const double dryFade = std::max(1.0, 0.004 * (sb->sourceSampleRate > 0 ? sb->sourceSampleRate : sampleRate_));
+
+        // Per-voice, per-block: where the read position sits (live), how fast the dry head runs.
+        for (auto& v : voices_) {
+            if (!v.active) continue;
+            v.base = basePos01(v.pitch, mode) * slen;
+            if (mode != 0) v.scanOff = 0.0;
+            const double semis = (mode == 2 ? 0.0 : (v.pitch - rootNote_)) + coarse + fine;
+            v.dryRate = std::pow(2.0, semis / 12.0) * srcRatio;
+        }
 
         for (int32_t i = 0; i < frames; ++i) {
             float mixL = 0.0f, mixR = 0.0f;
@@ -178,12 +213,28 @@ public:
                 advanceEnv(v.env, v.stage, aA, aD, aS, aR);
                 if (v.stage == Stage::Off) { v.active = false; continue; }
 
-                // Scan the read position (Scan mode only; wraps within the file).
-                if (mode == 0) { v.readPos += scanRate; if (v.readPos >= slen) v.readPos -= slen; else if (v.readPos < 0) v.readPos += slen; }
+                // The read position: the live base, plus the moving offset in Scan mode
+                // (wrapping within the file).
+                if (mode == 0) { v.scanOff += scanRate; if (v.scanOff >= slen) v.scanOff -= slen; else if (v.scanOff < 0) v.scanOff += slen; }
+                v.readPos = v.base + v.scanOff;
+                if (v.readPos >= slen) v.readPos -= slen;
+
+                // The dry head: the sample itself from the read position at the note's
+                // pitch, wrapping at the end with both ends faded so the wrap doesn't click.
+                float dl = 0.0f, dr = 0.0f;
+                if (doDry) {
+                    const int64_t d0 = (int64_t)v.dryPos; const double df = v.dryPos - d0;
+                    float l0, r0, l1, r1; sb->readStereo(d0, l0, r0); sb->readStereo(std::min<int64_t>(d0 + 1, slen - 1), l1, r1);
+                    const float fade = (float)std::min({ 1.0, v.dryPos / dryFade, (dryEnd - v.dryPos) / dryFade });
+                    dl = (l0 + (l1 - l0) * (float)df) * fade;
+                    dr = (r0 + (r1 - r0) * (float)df) * fade;
+                    v.dryPos += v.dryRate;
+                    if (v.dryPos >= dryEnd) v.dryPos = std::fmod(v.dryPos, dryEnd);
+                }
 
                 // Spawn grains at the density interval.
                 v.grainClock += 1.0;
-                if (v.grainClock >= interval) {
+                if (doWet && v.grainClock >= interval) {
                     v.grainClock -= interval;
                     Grain* g = freeGrain(v);
                     if (g) {
@@ -195,6 +246,7 @@ public:
                         double pan = 0.5 + (spread * 0.5 + panRand * 0.5) * (rnd() * 2.0 - 1.0);
                         pan = std::clamp(pan, 0.0, 1.0);
                         g->gL = (float)std::cos(pan * 0.5 * kPi); g->gR = (float)std::sin(pan * 0.5 * kPi);
+                        g->pan = (float)pan;
                         g->active = true;
                     }
                 }
@@ -213,8 +265,9 @@ public:
                     g.age += 1.0;
                     if (g.age >= g.len) g.active = false;
                 }
-                const float norm = (float)(1.0 / std::sqrt(overlap));
-                double yL = gl * norm, yR = gr * norm;
+                if (!doWet) v.grainClock = std::min(v.grainClock, interval);
+                const float norm = (float)(1.0 / std::sqrt(overlap)) * wetGain;
+                double yL = gl * norm + dl * dryGain, yR = gr * norm + dr * dryGain;
                 // Subtractive TPT filter per channel.
                 yL = svf(v.s1L, v.s2L, yL, fg, fa1, fk, ftype);
                 yR = svf(v.s1R, v.s2R, yR, fg, fa1, fk, ftype);
@@ -224,10 +277,25 @@ public:
             out[i * 2]     += (float)((mixL * gpL) * volume * 2.4);
             out[i * 2 + 1] += (float)((mixR * gpR) * volume * 2.4);
         }
-        // Publish each voice's read position (0..1) for the UI playheads.
+        // Publish each voice's read position (0..1) for the UI playheads, and the cloud.
         const double inv = slen > 0 ? 1.0 / slen : 0.0;
-        for (int vi = 0; vi < kVoices; ++vi)
-            posPub_[vi].store(voices_[vi].active ? (float)(voices_[vi].readPos * inv) : -1.0f, std::memory_order_relaxed);
+        int nv = 0, ng = 0;
+        for (int vi = 0; vi < kVoices; ++vi) {
+            const Voice& v = voices_[vi];
+            posPub_[vi].store(v.active ? (float)(v.readPos * inv) : -1.0f, std::memory_order_relaxed);
+            if (!v.active) continue;
+            ++nv;
+            for (const auto& g : v.grains) {
+                if (!g.active || ng >= kVoices * kGrains) continue;
+                scope_[2 + ng * 3].store((float)((g.pos + g.age * g.rate) * inv), std::memory_order_relaxed);
+                scope_[3 + ng * 3].store(g.pan, std::memory_order_relaxed);
+                scope_[4 + ng * 3].store(grainWindow(gshape, g.age / g.len) * v.env, std::memory_order_relaxed);
+                ++ng;
+            }
+        }
+        scope_[0].store((float)nv, std::memory_order_relaxed);
+        scope_[1].store((float)ng, std::memory_order_relaxed);
+        activeVoices_.store(nv, std::memory_order_relaxed);
     }
 
 private:
@@ -235,13 +303,18 @@ private:
     static constexpr double kTwoPi = 6.283185307179586;
     static constexpr int kVoices = 8;
     static constexpr int kGrains = 12;
+    // The dry head against the cloud: the cloud's windows and its 1/√overlap normalisation
+    // leave it well under the raw sample, so the dry side is trimmed to meet it.
+    static constexpr double kDryTrim = 0.5;
 
     enum class Stage { Attack, Decay, Sustain, Release, Off };
-    struct Grain { bool active = false; double pos = 0, age = 0, len = 1, rate = 1; float gL = 0.7f, gR = 0.7f; };
+    struct Grain { bool active = false; double pos = 0, age = 0, len = 1, rate = 1; float gL = 0.7f, gR = 0.7f, pan = 0.5f; };
     struct Voice {
-        bool active = false; int32_t pitch = 0; float vel = 0.0f;
+        bool active = false; int32_t pitch = 0; float vel = 0.0f; uint64_t seq = 0;
         float env = 0.0f; Stage stage = Stage::Off;
         double readPos = 0.0, grainClock = 0.0;
+        double base = 0.0, scanOff = 0.0;       // read position = base (live) + scan offset
+        double dryPos = 0.0, dryRate = 1.0;     // the dry head
         double s1L = 0, s2L = 0, s1R = 0, s2R = 0;
         Grain grains[kGrains];
     };
@@ -250,6 +323,12 @@ private:
     void  set(Param p, float v) { pn_[p].store(v, std::memory_order_relaxed); }
     float get(Param p) const { return pn_[p].load(std::memory_order_relaxed); }
     int   scanModeNow() const { return std::clamp((int)std::lround(get(ScanMode) * 2.0f), 0, 2); }
+    // Where a note reads (0..1): Position, or in Key mode Position moved by the note — C4
+    // reads at Position, each octave moves it a third of the file.
+    double basePos01(int32_t pitch, int mode) const {
+        const double p = get(Position);
+        return mode == 2 ? std::clamp(p + (pitch - 60) / 36.0, 0.0, 1.0) : p;
+    }
     static double expMap(double v, double lo, double hi) { return lo * std::pow(hi / lo, std::clamp(v, 0.0, 1.0)); }
     float rateOf(Param p, double lo, double hi) const { return (float)(1.0 / (expMap(get(p), lo, hi) * sampleRate_)); }
     float rnd() { rng_ ^= rng_ << 13; rng_ ^= rng_ >> 17; rng_ ^= rng_ << 5; return (rng_ & 0xFFFFFF) / 16777216.0f; }
@@ -311,6 +390,9 @@ private:
     uint32_t rng_ = 0x1234567u;
     std::atomic<float> pn_[kNumParams];
     std::atomic<float> posPub_[kVoices] = {};
+    std::atomic<float> scope_[2 + kVoices * kGrains * 3] = {};
+    std::atomic<int32_t> activeVoices_{0};
+    uint64_t seq_ = 0;
 };
 
 } // namespace nota

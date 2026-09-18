@@ -51,9 +51,18 @@ internal static class OperatorTopo
             for (int o = 0; o < 4; o++) if (level[o] == L)
             {
                 x[o] = cnt == 1 ? 0.5 : 0.14 + idx / (double)(cnt - 1) * 0.72; idx++;
-                y[o] = maxL == 0 ? 0.42 : 0.12 + (1.0 - L / (double)maxL) * 0.56;
+                y[o] = maxL == 0 ? 0.42 : 0.06 + (1.0 - L / (double)maxL) * 0.72;
             }
         }
+    }
+
+    /// <summary>How many modulation layers a topology stacks (0 = everything is a carrier).</summary>
+    public static int Depth(int[] tgt)
+    {
+        var level = new int[4];
+        for (int o = 3; o >= 0; o--) level[o] = tgt[o] == 4 ? 0 : level[tgt[o]] + 1;
+        int maxL = 0; for (int o = 0; o < 4; o++) maxL = Math.Max(maxL, level[o]);
+        return maxL;
     }
 
     // The op nearest a normalised point (for drag hit-testing), or -1.
@@ -75,7 +84,7 @@ internal sealed class OperatorAlgoMini : Control
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private readonly int _algo;
     private bool _active;
@@ -128,8 +137,8 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x2E);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
-    private static readonly Typeface Mono = new(new FontFamily("Geist Mono, monospace"));
+    private static readonly Typeface Bold = NotaFonts.SansBold;
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private int _algo;
     private double[] _x = new double[4], _y = new double[4];
@@ -190,12 +199,15 @@ internal sealed class OperatorRoutingViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Sunken, new Pen(BorderDef, 1), new Rect(0, 0, w, h), 6, 6);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         var tgt = OperatorTopo.Algo[_algo];
 
         double padX = 10, padT = 14, padB = 4;
         double gx0 = padX, gx1 = w - padX, gy0 = padT, gy1 = h - padB;
-        double bw = Math.Min(38, (gx1 - gx0) / 4.6), bh = Math.Min(20, (gy1 - gy0) / 3.2);
+        // Box height follows the stack depth, so the deepest chain still shows four
+        // separate boxes instead of one smear.
+        double bw = Math.Min(38, (gx1 - gx0) / 4.6);
+        double bh = Math.Clamp((gy1 - gy0) / (OperatorTopo.Depth(tgt) + 2.0), 10, 20);
         double outY = gy1 - bh * 0.4;
         Point Ctr(int o)
         {
@@ -213,10 +225,10 @@ internal sealed class OperatorRoutingViz : Control
         {
             var a = Ctr(o);
             if (tgt[o] < 4) { var b = Ctr(tgt[o]); ctx.DrawLine(new Pen(Teal, 1.4), a, b); }
-            else ctx.DrawLine(new Pen(Brass, 1.5), new Point(a.X, a.Y + bh / 2), new Point(a.X, outY));
+            else ctx.DrawLine(new Pen(Brass, NotaGraph.PrimaryWidth), new Point(a.X, a.Y + bh / 2), new Point(a.X, outY));
         }
         // OUT bus.
-        ctx.DrawLine(new Pen(Brass, 1.4), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
+        ctx.DrawLine(new Pen(Brass, NotaGraph.PrimaryWidth), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
         ctx.DrawText(new FormattedText("OUT", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, TextTertiary), new Point(gx1 - 22, outY + 1));
 
         // Boxes.
@@ -226,6 +238,9 @@ internal sealed class OperatorRoutingViz : Control
             var rect = new Rect(c.X - bw / 2, c.Y - bh / 2, bw, bh);
             _boxRect[o] = rect;
             bool carr = _carrier[o];
+            // Opaque ground first: the washes are translucent and a connection line passing
+            // behind a box would otherwise strike through its letter.
+            ctx.DrawRectangle(Sunken, null, rect, 3, 3);
             ctx.DrawRectangle(carr ? AccentSubtle : TealSubtle, new Pen(carr ? Brass : Teal, 1.3), rect, 3, 3);
             var ft = new FormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Bold, 10, carr ? AccentBright : Teal);
             ctx.DrawText(ft, new Point(c.X - ft.Width / 2, c.Y - ft.Height / 2));

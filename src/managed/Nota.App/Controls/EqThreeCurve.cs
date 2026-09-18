@@ -23,7 +23,7 @@ internal sealed class EqThreeCurve : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush BorderB = NotaPalette.BorderDefault;
-    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x22), 1);
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8);
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x18);
     private static readonly IBrush SpecFill = NotaPalette.Wash(NotaPalette.SignalInFill, 0x22);
@@ -33,8 +33,8 @@ internal sealed class EqThreeCurve : Control
     private static readonly IBrush LowB = NotaPalette.Ink("#C4756A");
     private static readonly IBrush MidB = NotaPalette.Ink("#C99C55");
     private static readonly IBrush HighB = NotaPalette.Ink("#6D8FB5");
-    private static readonly IBrush KillB = NotaPalette.Danger;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly IBrush KillB = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
+    private static readonly Typeface Face = NotaFonts.Mono;
 
     private const double FMin = 20.0, FMax = 20000.0;
     private const double DbTop = 18.0, DbBot = -24.0;
@@ -78,7 +78,7 @@ internal sealed class EqThreeCurve : Control
     public void Tick()
     {
         int n = _engine.DeviceScope(_track, _device, _scope, FftN);
-        if (n < FftN) { for (int k = 1; k < Bins; k++) _specDb[k] = Math.Max(-120, _specDb[k] - 2.5); InvalidateVisual(); return; }
+        if (n < FftN) { for (int k = 1; k < Bins; k++) _specDb[k] = -120; InvalidateVisual(); return; }
         for (int i = 0; i < FftN; i++) { _re[i] = _scope[i] * _hann[i]; _im[i] = 0; }
         Fft(_re, _im);
         _sr = _engine.SampleRate > 0 ? _engine.SampleRate : 48000;
@@ -87,7 +87,7 @@ internal sealed class EqThreeCurve : Control
         {
             double mag = Math.Sqrt(_re[k] * _re[k] + _im[k] * _im[k]);
             double db = 20 * Math.Log10(mag / refMag + 1e-9);
-            _specDb[k] = db > _specDb[k] ? db : Math.Max(db, _specDb[k] - 2.5);
+            _specDb[k] = db;   // no release ballistics: the spectrum shows this frame (almanac § no meter animation)
         }
         InvalidateVisual();
     }
@@ -114,7 +114,7 @@ internal sealed class EqThreeCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, new Pen(BorderB, 1), new Rect(0, 0, w, h), 5, 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         double logMin = Math.Log10(FMin), logMax = Math.Log10(FMax), logSpan = logMax - logMin;
         double X(double f) => (Math.Log10(f) - logMin) / logSpan * w;
@@ -136,7 +136,7 @@ internal sealed class EqThreeCurve : Control
             g.LineTo(new Point(w, h));
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(SpecFill, SpecPen, spec);
+        ctx.DrawGeometry(null, SpecPen, spec);
 
         // --- crossover markers ---
         ctx.DrawLine(XoverPen, new Point(X(_f1), 0), new Point(X(_f1), h));
@@ -159,19 +159,18 @@ internal sealed class EqThreeCurve : Control
             gc.LineTo(new Point(w, h));
             gc.EndFigure(true);
         }
-        ctx.DrawGeometry(CurveFill, null, geo);
         for (int i = 1; i < n; i++) ctx.DrawLine(CurvePen, pts[i - 1], pts[i]);
 
         // --- 3) band labels sitting in each band's frequency zone ---
         void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
         double xLow = X(Math.Sqrt(FMin * _f1)), xMid = X(Math.Sqrt(_f1 * _f2)), xHigh = X(Math.Sqrt(_f2 * FMax));
-        Lbl(_kLow ? "LOW kill" : $"LOW {(_gLow > 0 ? 20 * Math.Log10(_gLow) : 0):+0.0;-0.0;0.0}", Math.Clamp(xLow - 14, 3, w - 40), 3, _kLow ? KillB : LowB);
-        Lbl(_kMid ? "MID kill" : $"MID {(_gMid > 0 ? 20 * Math.Log10(_gMid) : 0):+0.0;-0.0;0.0}", Math.Clamp(xMid - 14, 3, w - 40), 3, _kMid ? KillB : MidB);
-        Lbl(_kHigh ? "HIGH kill" : $"HIGH {(_gHigh > 0 ? 20 * Math.Log10(_gHigh) : 0):+0.0;-0.0;0.0}", Math.Clamp(xHigh - 14, 3, w - 44), 3, _kHigh ? KillB : HighB);
+        Lbl(_kLow ? "LOW kill" : $"LOW {(_gLow > 0 ? 20 * Math.Log10(_gLow) : 0):+0.0;−0.0;0.0}", Math.Clamp(xLow - 14, 3, w - 40), 3, _kLow ? KillB : LowB);
+        Lbl(_kMid ? "MID kill" : $"MID {(_gMid > 0 ? 20 * Math.Log10(_gMid) : 0):+0.0;−0.0;0.0}", Math.Clamp(xMid - 14, 3, w - 40), 3, _kMid ? KillB : MidB);
+        Lbl(_kHigh ? "HIGH kill" : $"HIGH {(_gHigh > 0 ? 20 * Math.Log10(_gHigh) : 0):+0.0;−0.0;0.0}", Math.Clamp(xHigh - 14, 3, w - 44), 3, _kHigh ? KillB : HighB);
 
-        // frequency scale.
-        foreach (var (f, s) in new[] { (100.0, "100"), (1000.0, "1k"), (10000.0, "10k") })
-            Lbl(s, Math.Clamp(X(f) - 6, 2, w - 16), h - 11, AxisB);
+        // The range, in the bottom corners only.
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomLeft, "20");
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomRight, "20k Hz");
     }
 
     private static void Fft(double[] re, double[] im)

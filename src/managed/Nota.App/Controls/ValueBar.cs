@@ -21,7 +21,7 @@ public sealed class ValueBar : Control
     private static readonly IBrush FillAccent = NotaPalette.Teal;
     private static readonly IBrush FillBrass = NotaPalette.Accent;
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
-    private static readonly Typeface Mono = new("monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private double _value;                       // normalized 0..1
     private readonly Func<double, string> _fmt;  // formats the normalized value for display

@@ -28,7 +28,7 @@ namespace Nota.App;
 internal sealed class PentadInstrumentCard : IInstrumentCard
 {
     private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush Panel = NotaPalette.BgApp;
+    private static readonly IBrush Panel = NotaPalette.TextOnAccent; // dark ink over an engaged fill
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
@@ -130,15 +130,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // On/off pill toggle backed by a param (> 0.5 = on).
         Control Toggle(string id, string label, List<Action>? into = null)
         {
-            var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
-            var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4) };
-            var host = new Canvas { Width = 18, Height = 10 }; Canvas.SetTop(dot, 1.5); host.Children.Add(dot); pill.Child = host;
-            var txt = new TextBlock { Text = label, FontSize = 8, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
-            void Hi() { bool on = On(id); pill.Background = on ? Amber : OffPill; dot.Background = on ? Panel : MutedC; Canvas.SetLeft(dot, on ? 9.5 : 1.5); txt.Foreground = on ? TxtC : Txt2; }
-            var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { pill } };
-            if (label.Length > 0) wrap.Children.Add(txt);
-            wrap.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(wrap).Properties.IsLeftButtonPressed) return; SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
-            (into ?? readouts).Add(Hi); Hi();
+            var wrap = Switch(label, () => On(id), () => { SetP(id, On(id) ? 0f : 1f); Refresh(); }, out var sync);
+            (into ?? readouts).Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(wrap, MidiTarget.PluginParam(track, -1, pi), label.Length > 0 ? label : id);
             return wrap;
         }
@@ -146,31 +139,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // Segmented chips. values[i] is written on click; the lit chip is the nearest value.
         Control Chips(string id, string[] names, float[]? values = null, List<Action>? into = null, double fs = 7)
         {
-            int n = names.Length;
-            values ??= BuildValues(n);
-            var arr = new Border[n];
-            void Hi()
-            {
-                float cur = G(id); int best = 0;
-                for (int i = 1; i < n; i++) if (Math.Abs(values[i] - cur) < Math.Abs(values[best] - cur)) best = i;
-                bool exact = Math.Abs(values[best] - cur) < 0.02f;
-                for (int i = 0; i < n; i++)
-                {
-                    bool on = i == best && exact;
-                    arr[i].Background = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)arr[i].Child!; tb.Foreground = on ? Panel : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < n; i++)
-            {
-                int iv = i;
-                var c = new Border { CornerRadius = new CornerRadius(2), Padding = new Thickness(4, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, Foreground = MutedC } };
-                c.PointerPressed += (_, e) => { SetP(id, values[iv]); Refresh(); e.Handled = true; };
-                arr[i] = c; row.Children.Add(c);
-            }
-            (into ?? readouts).Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = row };
+            var vals = values ?? BuildValues(names.Length);
+            var seg = DeviceCardKit.Segments(names, () => DeviceCardKit.NearestExact(G(id), vals), iv => { SetP(id, vals[iv]); Refresh(); }, out var sync);
+            (into ?? readouts).Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), id);
             return seg;
         }
@@ -180,8 +151,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control WaveChip(string id, int wave, double w = 22, double h = 16)
         {
             var ic = new PentadWaveIcon(wave) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Width = w, Height = h, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
-            void Hi() { bool on = On(id); b.Background = on ? AmberSubtle : Brushes.Transparent; b.BorderBrush = on ? Amber : NotaPalette.BorderStrong; ic.Stroke = on ? AmberLit : MutedC; ic.InvalidateVisual(); }
+            var b = new Border { Width = w, Height = h, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+            void Hi() { bool on = On(id); b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.BorderStrong; ic.Stroke = on ? NotaPalette.AccentHover : MutedC; ic.InvalidateVisual(); }
             b.PointerPressed += (_, e) => { SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
             readouts.Add(Hi); Hi();
             if (I(id) is var pi and >= 0) MidiLearn.Bind(b, MidiTarget.PluginParam(track, -1, pi), id);
@@ -192,36 +163,14 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control HSlider(string id, Func<double, string> fmt, double valW = 24, Func<bool>? dim = null, List<Action>? into = null)
         {
             int pi = I(id);
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 6, Height = 7, Background = Handle, CornerRadius = new CornerRadius(2) };
-            var lay = new Canvas { Height = 9 };
-            lay.Children.Add(handle); Canvas.SetTop(handle, 1);
-            var canvas = new Panel { Height = 11, MinWidth = 24, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = {
-                new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center }, fill, lay } };
-            var val = MonoText("", 8, TxtC); val.MinWidth = valW; val.TextAlignment = TextAlignment.Right;
-            bool drag = false;
-            void Vis(double v)
-            {
-                double w = canvas.Bounds.Width; if (w <= 0) w = 80;
-                fill.Width = Math.Max(0, v * w); Canvas.SetLeft(handle, v * w - 3); val.Text = fmt(v);
-                bool d = dim?.Invoke() ?? false;
-                fill.Background = d ? NotaPalette.BorderStrong : Amber; handle.Background = d ? MutedC : Handle; val.Foreground = d ? Txt2 : TxtC;
-            }
-            void From(PointerEventArgs e) { double w = canvas.Bounds.Width; double v = w > 0 ? Math.Clamp(e.GetPosition(canvas).X / w, 0, 1) : 0; if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)v); Vis(v); Refresh(); }
-            canvas.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2 && pi >= 0) { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); e.Handled = true; return; }
-                drag = true; if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(canvas); From(e); e.Handled = true;
-            };
-            canvas.PointerMoved += (_, e) => { if (drag) From(e); };
-            canvas.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(null); } };
-            canvas.SizeChanged += (_, _) => Vis(G(id));
-            (into ?? readouts).Add(() => { if (!drag) Vis(G(id)); });
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            grid.Children.Add(canvas); grid.Children.Add(Col(val, 1));
-            if (pi >= 0) MidiLearn.Bind(grid, MidiTarget.PluginParam(track, -1, pi), id);
-            return grid;
+            var row = DeviceCardKit.SliderRow("", () => G(id), n => { if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)n); Refresh(); }, () => fmt(G(id)), out var sync,
+                begin: () => { if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); },
+                end: () => { if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); },
+                reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
+                dim: dim, valueWidth: valW);
+            (into ?? readouts).Add(sync);
+            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), id);
+            return row;
         }
         // Label + slider on one grid row.
         Control SliderRow(string label, string id, Func<double, string> fmt, double labW = 38, double valW = 24, Func<bool>? dim = null, List<Action>? into = null)
@@ -235,10 +184,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control VWheel(string id, string name, Func<double, string> fmt, IBrush lit, bool spring)
         {
             int pi = I(id);
-            var grad = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(NotaPalette.SurfaceRaised.Color, 0), new GradientStop(NotaPalette.BgSunken.Color, 0.5), new GradientStop(NotaPalette.SurfaceRaised.Color, 1) } };
-            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Stretch };
-            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = new CornerRadius(1) };
+            IBrush grad = NotaPalette.BgSunken;
+            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Bar };
             var lay = new Canvas { Width = 16 };
             lay.Children.Add(mark); Canvas.SetLeft(mark, 2);
             var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Children = { bar, lay } };
@@ -272,17 +220,17 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
 
         // ---- formatters -------------------------------------------------------------
         static double Exp(double lo, double hi, double v) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
-        static string Time(double s) => s >= 1 ? $"{s:0.0} s" : s >= 0.0995 ? $"{s * 1000:0} ms" : $"{s * 1000:0.#} ms";
-        static string ShortTime(double s) => s >= 1 ? $"{s:0.0}s" : $"{s * 1000:0}ms";
+        static string Time(double s) => s >= 1 ? $"{s:0.0}\u2009s" : s >= 0.0995 ? $"{s * 1000:0}\u2009ms" : $"{s * 1000:0.#}\u2009ms";
+        static string ShortTime(double s) => s >= 1 ? $"{s:0.0}\u2009s" : $"{s * 1000:0}\u2009ms";
         string Atk(float v) => ShortTime(Exp(0.0005, 10, v));
         string Dec(float v) => ShortTime(Exp(0.002, 15, v));
         string Glide(double v) => v < 0.002 ? "off" : Time(Exp(0.005, 10, v));
         string HzFmt(double hz) => hz >= 1000 ? $"{hz / 1000:0.00}k" : $"{hz:0}";
         string Cut(float v) => HzFmt(20 * Math.Pow(1000, v));
-        static string Pct(double v) => $"{v * 100:0} %";
+        static string Pct(double v) => $"{v * 100:0}\u2009%";
         static string Tenths(double v) => $"{v * 10:0.0}";
-        string LfoRate(float v) => On("lfosync") ? SyncNames[Math.Clamp((int)Math.Round(v * 13), 0, 13)] : $"{Exp(0.05, 20, v):0.0#} Hz";
-        string VolDb(float v) { double g = 2 * v * v; return g <= 1e-4 ? "−∞" : $"{20 * Math.Log10(g):0.0} dB"; }
+        string LfoRate(float v) => On("lfosync") ? SyncNames[Math.Clamp((int)Math.Round(v * 13), 0, 13)] : $"{Exp(0.05, 20, v):0.0#}\u2009Hz";
+        string VolDb(float v) { double g = 2 * v * v; return g <= 1e-4 ? "−∞" : $"{20 * Math.Log10(g):0.0}\u2009dB"; }
         int BendSt() => 1 + Math.Clamp((int)Math.Round(G("bendrange") * 11), 0, 11);
 
         // ======================================================================
@@ -290,7 +238,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // ======================================================================
         var bendTxt = MonoText("", 7, AmberLit); var modTxt = MonoText("", 7, MutedC);
         bendTxt.HorizontalAlignment = HorizontalAlignment.Center; modTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() => { bendTxt.Text = $"±{BendSt()} st"; modTxt.Text = $"{G("modwheel") * 100:0} %"; modTxt.Foreground = G("modwheel") > 0.01f ? AmberLit : MutedC; });
+        readouts.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? AmberLit : MutedC; });
         var wheelsBody = new DockPanel { LastChildFill = true };
         var wTitle = Caps("WHEELS"); wTitle.HorizontalAlignment = HorizontalAlignment.Center; wTitle.Margin = new Thickness(0, 0, 0, 4);
         wheelsBody.Children.Add(Docked(wTitle, Avalonia.Controls.Dock.Top));
@@ -299,7 +247,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         wheelsBody.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 3), Children = {
             VWheel("bend", "PITCH", v => "", Amber, spring: true),
             VWheel("modwheel", "MOD", v => "", AmberLit, spring: false) } });
-        var wheels = new Border { Width = 56, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(0, 5), Child = wheelsBody };
+        var wheels = new Border { Width = 56, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5), Child = wheelsBody };
         DockPanel.SetDock(wheels, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
@@ -314,8 +262,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols) };
             g.Children.Add(Cell(Lbl(isA ? "A" : "B", 10, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
             g.Children.Add(Cell(K($"{p}oct", "", v => Feet[Math.Clamp((int)Math.Round(v * 3), 0, 3)], false, 26, 40), 1));
-            g.Children.Add(Cell(K($"{p}semi", "", v => { int s = (int)Math.Round((v - 0.5f) * 24); return s == 0 ? "0 st" : $"{s:+0;-0} st"; }, false, 26, 40), 2));
-            g.Children.Add(Cell(K($"{p}fine", "", v => { double c = (v - 0.5) * 100; return Math.Abs(c) < 0.5 ? "0 c" : $"{c:+0;-0} c"; }, false, 26, 40), 3));
+            g.Children.Add(Cell(K($"{p}semi", "", v => { int s = (int)Math.Round((v - 0.5f) * 24); return s == 0 ? "0\u2009st" : $"{s:+0;−0}\u2009st"; }, false, 26, 40), 2));
+            g.Children.Add(Cell(K($"{p}fine", "", v => { double c = (v - 0.5) * 100; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, false, 26, 40), 3));
             var chips = isA ? Row(3, WaveChip("oasaw", 0), WaveChip("oapulse", 1)) : Row(3, WaveChip("obsaw", 0), WaveChip("obtri", 2), WaveChip("obpulse", 1));
             var pw = HSlider($"{p}pw", v => Pct(v), 30, () => !On($"{p}pulse"));
             pw.Width = 110;
@@ -364,14 +312,14 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
             var keyPct = MonoText("", 7, Txt2);
             readouts.Add(() => keyPct.Text = Pct(G("keytrk")));
-            var key = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEY TRK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
+            var key = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEYTRACK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto") };
             knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, 32, 44));
-            knobs.Children.Add(Col(K("reso", "RESON", v => Tenths(v), false, 32, 44), 1));
-            knobs.Children.Add(Col(K("fenvamt", "ENV AMT", v => Tenths(v), true, 32, 44), 2));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, 32, 44), 1));
+            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", v => Tenths(v), true, 32, 44), 2));
             knobs.Children.Add(Col(key, 3));
             var body = new DockPanel { LastChildFill = true, Children = { Docked(Caps("FILTER"), Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Bottom), graph } };
             return new Border { Width = 196, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 4), Child = body };
@@ -379,12 +327,12 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control EnvPanel(string title, string pre, PentadEnvCurve curve, bool amp)
         {
             var times = MonoText("", 7, Txt2);
-            readouts.Add(() => times.Text = $"{Atk(G(pre + "attack"))} · {Dec(G(pre + "decay"))} · {G(pre + "sustain") * 100:0}% · {(On("releaseon") ? Dec(G(pre + "release")) : "min")}");
+            readouts.Add(() => times.Text = $"{Atk(G(pre + "attack"))} · {Dec(G(pre + "decay"))} · {G(pre + "sustain") * 100:0}\u2009% · {(On("releaseon") ? Dec(G(pre + "release")) : "min")}");
             var head = new DockPanel { Height = 12, LastChildFill = false, Margin = new Thickness(0, 0, 0, 2) };
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
-            if (amp) head.Children.Add(Docked(Toggle("releaseon", "Rel"), Avalonia.Controls.Dock.Right));
+            if (amp) head.Children.Add(Docked(Toggle("releaseon", "Release"), Avalonia.Controls.Dock.Right));
             head.Children.Add(Docked(new Border { Margin = new Thickness(6, 0), Child = times }, Avalonia.Controls.Dock.Right));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
             var knobs = Row(0, K(pre + "attack", "A", Atk, amp, 24, 29), K(pre + "decay", "D", Dec, amp, 24, 29), K(pre + "sustain", "S", v => Pct(v), amp, 24, 29), K(pre + "release", "R", Dec, amp, 24, 29));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
@@ -481,7 +429,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             bool UniOff() => G("voicemode") < 0.25f && G("unison") < 0.25f;
             var noiseType = Chips("noisecolor", new[] { "White", "Pink" }); noiseType.Margin = new Thickness(24, 0, 0, 0);
             var uni = Row(6, new TextBlock { Text = "UNISON", FontSize = 7, FontWeight = FontWeight.Bold, Foreground = MutedC, Width = 38, VerticalAlignment = VerticalAlignment.Center }, Chips("unison", new[] { "Off", "×2", "×5" }));
-            var det = SliderRow("DETUNE", "unidetune", v => $"{v * 50:0} c", 38, 26, UniOff);
+            var det = SliderRow("DETUNE", "unidetune", v => $"{v * 50:0}\u2009c", 38, 26, UniOff);
             var sum = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { Caps("SUM"), Col(sumBar, 1), Col(sumTxt, 2) } };
             var g = new Grid { RowDefinitions = new RowDefinitions("*,*,*,*,Auto,*,*,*") };
             Control[] rows = { MixRow("mixaon", "mixa", "OSC A"), MixRow("mixbon", "mixb", "OSC B"), MixRow("mixnoiseon", "mixnoise", "NOISE"), noiseType,
@@ -499,17 +447,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var top = Row(10, K("volume", "VOLUME", VolDb, false, 40, 54), meters);
             var bend = Row(6, new TextBlock { Text = "BEND", FontSize = 7, FontWeight = FontWeight.Bold, Foreground = MutedC, Width = 38, VerticalAlignment = VerticalAlignment.Center },
                 Chips("bendrange", new[] { "2", "5", "7", "12" }, new[] { 1 / 11f, 4 / 11f, 6 / 11f, 1f }), Lbl("st", 7, MutedC, FontWeight.Normal));
-            var velF = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand) };
-            {   // Velocity → filter: a quick switch over the Velocity Filter amount (0 ↔ 50 %).
-                var pill = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5) };
-                var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4) };
-                var host = new Canvas { Width = 18, Height = 10 }; Canvas.SetTop(dot, 1.5); host.Children.Add(dot); pill.Child = host;
-                var tx = new TextBlock { Text = "Velocity → filter", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
-                velF.Child = Row(5, pill, tx);
-                void Hi() { bool on = G("velfilt") > 0.001f; pill.Background = on ? Amber : OffPill; dot.Background = on ? Panel : MutedC; Canvas.SetLeft(dot, on ? 9.5 : 1.5); tx.Foreground = on ? TxtC : Txt2; }
-                velF.PointerPressed += (_, e) => { SetP("velfilt", G("velfilt") > 0.001f ? 0f : 0.5f); Refresh(); e.Handled = true; };
-                readouts.Add(Hi); Hi();
-            }
+            // Velocity → filter: a quick switch over the Velocity Filter amount (0 ↔ 50 %).
+            var velF = Switch("Vel → filter", () => G("velfilt") > 0.001f, () => { SetP("velfilt", G("velfilt") > 0.001f ? 0f : 0.5f); Refresh(); }, out var velSync);
+            readouts.Add(velSync);
             var strip = new PentadVoiceStrip { Width = 90, Height = 14 }; voiceStrips.Add(strip);
             var voices = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Children = { Caps("VOICES"), Col(strip, 1), Col(Right(voiceCountTxt), 2) } };
             var body = new DockPanel { LastChildFill = false, Children = {
@@ -533,14 +473,14 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         int centreTab = 0;
 
         // Drift slider + seed re-roll (Oscillators tab bar)
-        var reroll = new Border { Padding = new Thickness(3, 0), CornerRadius = new CornerRadius(3), Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "⟳", FontSize = 9, Foreground = Txt2 } };
+        var reroll = new Border { Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = new Glyph(GlyphKind.Cycle, 9) { Foreground = Txt2 } };
         ToolTip.SetTip(reroll, "Re-roll the vintage seed (new per-voice spread)");
         reroll.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); e.Handled = true; };
-        var driftSl = HSlider("drift", v => $"{v * 100:0}%", 22); driftSl.Width = 76;
+        var driftSl = HSlider("drift", v => $"{v * 100:0}\u2009%", 22); driftSl.Width = 76;
         Control[] extras = {
             Row(5, Caps("DRIFT"), driftSl, reroll),
-            MonoText("4-pole LP · 24 dB/oct", 7, MutedC),
+            MonoText("4-pole LP · 24\u2009dB/oct", 7, MutedC),
             MonoText("", 7, MutedC) };
         readouts.Add(() => { if (extras[2] is TextBlock t) { int n = ActiveRoutes(); t.Text = $"per voice · {n} active route{(n == 1 ? "" : "s")}"; } });
 
@@ -550,9 +490,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var centre = TabFrame(new[] { "Oscillators", "Filter · Amp", "Poly Mod" }, centreHost, CentreBody, false, t => { centreTab = t; extrasHost.Content = extras[t]; Refresh(); }, extrasHost);
         var rightFrame = TabFrame(new[] { "Mixer", "Output" }, rightHost, RightBody, true, null, null);
-        var right = new Border { Width = 186, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Child = rightFrame };
+        var right = new Border { Width = 186, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Child = rightFrame };
         DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
-        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Margin = new Thickness(5, 0), Child = centre };
+        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip + Voice setup flyout
@@ -565,11 +505,11 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             return centreTab switch
             {
                 1 => $"Filter env → cutoff {G("fenvamt") * 10:0.0} · key tracking {KeyName(G("keytrk"))}{(G("velfilt") > 0.001f ? " · velocity → filter" : "")}{(On("lowcomp") ? " · bass comp" : "")}",
-                2 => $"Poly Mod: {ActiveRoutes()} route{(ActiveRoutes() == 1 ? "" : "s")} · LFO {LfoRate(G("lforate"))} {LfoShape()} · unison {(G("unison") < 0.25f ? "off" : G("unison") < 0.75f ? "×2" : "×5")}, detune {G("unidetune") * 50:0} c",
-                _ => $"{modeS} · {busy} voice{(busy == 1 ? "" : "s")} busy · glide {Glide(G("glide"))} · drift {G("drift") * 100:0} %",
+                2 => $"Poly Mod: {ActiveRoutes()} route{(ActiveRoutes() == 1 ? "" : "s")} · LFO {LfoRate(G("lforate"))} {LfoShape()} · unison {(G("unison") < 0.25f ? "off" : G("unison") < 0.75f ? "×2" : "×5")}, detune {G("unidetune") * 50:0}\u2009c",
+                _ => $"{modeS} · {busy} voice{(busy == 1 ? "" : "s")} busy · glide {Glide(G("glide"))} · drift {G("drift") * 100:0}\u2009%",
             };
         }
-        static string KeyName(float v) => Math.Abs(v - 0.5f) < 0.02f ? "½" : Math.Abs(v - 1f) < 0.02f ? "full" : v < 0.02f ? "off" : $"{v * 100:0} %";
+        static string KeyName(float v) => Math.Abs(v - 0.5f) < 0.02f ? "½" : Math.Abs(v - 1f) < 0.02f ? "full" : v < 0.02f ? "off" : $"{v * 100:0}\u2009%";
         string LfoShape()
         {
             var s = new List<string>();
@@ -580,7 +520,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         readouts.Add(() =>
         {
             statusLeft.Text = StatusText();
-            if (scN >= 8) statusRight.Text = $"{scope[7] / 1000:0.#} kHz · ×{(int)scope[6]} OS · CPU {scope[5] * 100:0.0} %";
+            if (scN >= 8) statusRight.Text = $"{scope[7] / 1000:0.#}\u2009kHz · ×{(int)scope[6]} OS · CPU {scope[5] * 100:0}\u2009%";
         });
 
         var flyReadouts = new List<Action>();
@@ -589,10 +529,10 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             var seedTxt = MonoText("", 8, TxtC);
             flyReadouts.Add(() => seedTxt.Text = $"#{(int)Math.Round(G("seed") * 16777215):X6}");
-            var rr = new Border { Padding = new Thickness(6, 1), CornerRadius = new CornerRadius(3), Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
+            var rr = new Border { Padding = new Thickness(6, 1), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
             rr.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); foreach (var a in flyReadouts) a(); e.Handled = true; };
             Control R(string label, Control c) { var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Height = 20 }; g.Children.Add(Caps(label)); c.HorizontalAlignment = HorizontalAlignment.Left; g.Children.Add(Col(c, 1)); return g; }
-            var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0 c" : $"{c:+0;-0} c"; }, 30, null, flyReadouts); tune.Width = 130;
+            var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, 30, null, flyReadouts); tune.Width = 130;
             var at = HSlider("aftertouch", v => Pct(v), 30, null, flyReadouts); at.Width = 130;
             var p = new StackPanel { Spacing = 2, Width = 250, Children = {
                 Lbl("VOICE SETUP", 9, TxtC),
@@ -603,14 +543,14 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 R("RELEASE", Toggle("releaseon", "Release switch", flyReadouts)),
                 R("OVERSAMPLING", Chips("oversample", new[] { "×2", "×4" }, null, flyReadouts, 8)),
                 R("BASS COMP", Toggle("lowcomp", "Restore lows at high Q", flyReadouts)),
-                R("NOISE FLOOR", Toggle("noisefloor", "−100 dBFS hiss", flyReadouts)),
+                R("NOISE FLOOR", Toggle("noisefloor", "−100\u2009dBFS hiss", flyReadouts)),
                 R("VINTAGE SEED", Row(8, seedTxt, rr)),
                 R("MASTER TUNE", tune),
                 R("AFTERTOUCH", at) } };
             return new Border { Padding = new Thickness(4, 2), Child = p };
         }
-        var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(3), Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "Voice ▾", FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center } };
+        var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
         ToolTip.SetTip(voiceBtn, "Voice setup: polyphony, allocation, glide mode, oversampling, vintage seed");
         voiceBtn.PointerPressed += (_, e) =>
         {

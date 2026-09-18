@@ -19,6 +19,8 @@ public partial class App : Avalonia.Application
 
     public override void Initialize()
     {
+        // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
+        NotaNum.Install();
         AvaloniaXamlLoader.Load(this);
     }
 

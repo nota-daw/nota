@@ -88,7 +88,7 @@ public sealed class SplashWindow : Window
             Background = NotaPalette.BgSunken,
             BorderBrush = NotaPalette.BorderDefault,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
+            CornerRadius = NotaRadius.Body,
             Child = stack,
         };
     }

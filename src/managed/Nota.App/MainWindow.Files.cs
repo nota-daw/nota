@@ -59,7 +59,7 @@ public partial class MainWindow
             double bpm = AutoWarpImported(trackId, clip);
             Timeline.Refresh();
             _vm.StatusText = bpm > 0
-                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Imported {0} · warped to tempo ({1:0.0} BPM)", name, bpm)
+                ? string.Format(NotaNum.Culture, "Imported {0} · warped to tempo ({1:0.0}\u2009BPM)", name, bpm)
                 : $"Imported {name}";
         });
     }
@@ -131,7 +131,7 @@ public partial class MainWindow
             await RunBlockingAsync("Export", opts.Stems ? "Exporting stems…" : "Exporting…", async prog =>
             {
                 var frac = new Progress<double>(f =>
-                    prog.Report(ProgressReport.At(f, $"Exporting {noun}… {f * 100:0}%")));
+                    prog.Report(ProgressReport.At(f, $"Exporting {noun}… {f * 100:0}\u2009%")));
                 if (opts.Stems)
                 {
                     int count = await Task.Run(() => _exporter.ExportStems(Engine, request, frac));
@@ -295,7 +295,7 @@ public partial class MainWindow
             {
                 remaining = Engine.WarpBuildStep(chunk);
                 double frac = Math.Clamp(1.0 - (double)remaining / total, 0.0, 1.0);
-                prog.Report(ProgressReport.At(frac, $"Preparing warped clips… {frac * 100:0}%"));
+                prog.Report(ProgressReport.At(frac, $"Preparing warped clips… {frac * 100:0}\u2009%"));
                 await Task.Yield();
             }
         });

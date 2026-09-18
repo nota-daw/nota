@@ -70,7 +70,11 @@ public sealed partial class ArrangementView
                 }
             }
 
+            // Bar numbers in mono 7. The almanac labels every 4 bars at its base scale
+            // (16px a bar); zoomed in far enough that a single bar has room, every bar is named.
             int firstBar = (int)Math.Floor(_o._scrollBeats / _o._beatsPerBar);
+            double barPx = _o._pixelsPerBeat * _o._beatsPerBar;
+            int labelEvery = barPx >= 40 ? 1 : 4;
             for (int bar = firstBar; ; bar++)
             {
                 double beat = bar * _o._beatsPerBar;
@@ -78,21 +82,22 @@ public sealed partial class ArrangementView
                 if (x > w) break;
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
+                if (bar % labelEvery != 0) continue;
                 var ft = new FormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, Typeface.Default, 9, RulerText);
+                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
 
-            // Playhead marker: a small brass triangle at the top of the ruler.
+            // Playhead flag: a 7×5 brass triangle at the top of the ruler.
             double px = _o.BeatToX(_o._playheadBeats);
             if (px >= -5 && px <= w + 5)
             {
                 var tri = new StreamGeometry();
                 using (var g = tri.Open())
                 {
-                    g.BeginFigure(new Point(px - 4, 0), true);
-                    g.LineTo(new Point(px + 4, 0));
-                    g.LineTo(new Point(px, 6));
+                    g.BeginFigure(new Point(px - 3.5, 0), true);
+                    g.LineTo(new Point(px + 3.5, 0));
+                    g.LineTo(new Point(px, 5));
                     g.EndFigure(true);
                 }
                 ctx.DrawGeometry(PlayheadBrush, null, tri);
@@ -247,11 +252,10 @@ public sealed partial class ArrangementView
                 }
             }
 
-            // Playhead across the footer lanes (brass line + glow).
+            // Playhead across the footer lanes: a 1px brass line.
             double px = _o.BeatToX(_o._playheadBeats);
             if (px >= 0 && px <= w)
             {
-                ctx.DrawLine(PlayheadGlow, new Point(px, 0), new Point(px, h));
                 ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
             }
         }

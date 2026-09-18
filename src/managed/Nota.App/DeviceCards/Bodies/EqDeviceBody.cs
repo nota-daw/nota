@@ -10,7 +10,8 @@ namespace Nota.App;
 
 internal sealed class EqDeviceBody : IDeviceBody
 {
-    public double Width => 520;
+    public double Width => 700;   // the almanac device format: 700 × 260
+    public string? Subtitle => "EQUALIZER";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int deviceIndex)
     {

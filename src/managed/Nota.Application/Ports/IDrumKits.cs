@@ -37,4 +37,9 @@ public interface IDrumKits
 
     /// <summary>Replaces the pads of an existing Drum Rack track with the kit.</summary>
     bool LoadInto(IAudioEngine engine, int trackId, string id, out string warning);
+
+    /// <summary>The kit a Drum Rack track was loaded from, recognised by its pads (the
+    /// note and name of each), or "" when no kit fits. A rack stays recognised after a
+    /// pad or two is swapped or renamed, so a saved project reopens with its kit name.</summary>
+    string Identify(IAudioEngine engine, int trackId);
 }

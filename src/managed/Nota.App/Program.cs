@@ -22,6 +22,6 @@ class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
-            .WithInterFont()
+            .WithNotaFonts()
             .LogToTrace();
 }

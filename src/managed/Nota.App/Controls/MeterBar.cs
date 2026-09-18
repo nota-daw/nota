@@ -1,120 +1,135 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-using Nota.Application;
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// M6-2: stereo peak/RMS level meter. Fed a NotaMeter each UI tick (~30 Hz);
-// the bar rises instantly and falls with a fixed decay, with a slower peak-hold
-// tick. dB-mapped (-60..0) with green/amber/red zones. Works vertical (track
-// headers) or horizontal (master bus in the transport bar).
+// Stereo level meter, drawn to the almanac (§ Visualisations · level meters):
+//   · each channel 11px wide with a 5px step between, radius 2, on the well ground —
+//     narrower hosts (a 64px track header) scale both down in the same proportion;
+//   · three zones, bottom to top: Signal up to −6 dB, Caution up to 0, Alert above 0;
+//   · no animation: the level is set the moment a reading arrives (a meter that eases
+//     lies about the sound), and the peak mark neither blinks nor falls on its own —
+//     it holds until the meter is clicked or reset.
+// Works vertical (mixer strips, track headers) or horizontal (master in the transport).
 
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application;
 
 namespace Nota.App;
 
 public sealed class MeterBar : Control
 {
-    // Ember Graphite meter colours (NotaTheme: Success / Warning / Danger, BgSunken).
-    private static readonly IBrush GreenBrush = NotaPalette.Success;
-    private static readonly IBrush AmberBrush = NotaPalette.Warning;
-    private static readonly IBrush RedBrush   = NotaPalette.Danger;
-    private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush HoldBrush = NotaPalette.TextPrimary;
-
-    private const double DbFloor = -60.0;
-    private const double AmberDb = (-6.0 - DbFloor) / (0.0 - DbFloor);   // −6 dB, normalised
-    private const double FallPerTick = 0.05;      // ~ full fall in ~0.7 s at 30 Hz
-    private const double HoldFallPerTick = 0.012; // peak-hold drifts down slowly
+    private static readonly IBrush Ground = NotaPalette.BgSunken;
 
     private readonly bool _horizontal;
-    private double _levelL, _levelR;       // displayed (decayed) 0..1
-    private double _holdL, _holdR;         // peak-hold 0..1
+    private double _levelL, _levelR;       // 0..1 on the meter scale
+    private double _holdL, _holdR;         // peak hold, 0..1
 
     public MeterBar(bool horizontal = false)
     {
         _horizontal = horizontal;
         if (horizontal) { Height = 12; MinWidth = 80; }
-        else { Width = 10; MinHeight = 40; }
+        else { Width = MeterScale.StereoWidth; MinHeight = 40; }
+        ToolTip.SetTip(this, "Clear the peak hold");
     }
 
-    /// <summary>Feed a fresh reading; the bar attacks up instantly and decays down.</summary>
+    /// <summary>Feed a fresh reading. The bar takes the value at once; the hold keeps the maximum.</summary>
     public void Push(NotaMeter m)
     {
-        _levelL = Step(_levelL, Norm(m.PeakL), FallPerTick);
-        _levelR = Step(_levelR, Norm(m.PeakR), FallPerTick);
-        _holdL = Math.Max(_levelL, _holdL - HoldFallPerTick);
-        _holdR = Math.Max(_levelR, _holdR - HoldFallPerTick);
+        _levelL = MeterScale.Norm(m.PeakL);
+        _levelR = MeterScale.Norm(m.PeakR);
+        _holdL = Math.Max(_holdL, _levelL);
+        _holdR = Math.Max(_holdR, _levelR);
         InvalidateVisual();
     }
 
-    /// <summary>Clears the meter to silence (e.g. on stop).</summary>
+    /// <summary>Clears the meter and its peak hold (e.g. on stop).</summary>
     public void Reset()
     {
         _levelL = _levelR = _holdL = _holdR = 0;
         InvalidateVisual();
     }
 
-    private static double Step(double cur, double target, double fall)
-        => target >= cur ? target : Math.Max(target, cur - fall);
-
-    private static double Norm(float amp)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        if (amp <= 1e-5f) return 0;
-        double db = AudioMath.LinToDb(amp);
-        return Math.Clamp((db - DbFloor) / (0.0 - DbFloor), 0.0, 1.0);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _holdL = _levelL; _holdR = _levelR;
+        InvalidateVisual();
+        e.Handled = true;
     }
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
+        double across = _horizontal ? h : w;
+        var (ch, gap, off) = MeterScale.Channels(across);
+        Rect A(double o) => _horizontal ? new Rect(0, o, w, ch) : new Rect(o, 0, ch, h);
+        MeterScale.DrawChannel(ctx, A(off), _levelL, _holdL, _horizontal);
+        MeterScale.DrawChannel(ctx, A(off + ch + gap), _levelR, _holdR, _horizontal);
+    }
+}
 
-        if (_horizontal)
-        {
-            double gap = 2, chH = (h - gap) / 2;
-            DrawChannel(ctx, new Rect(0, 0, w, chH), _levelL, _holdL);
-            DrawChannel(ctx, new Rect(0, chH + gap, w, chH), _levelR, _holdR);
-        }
-        else
-        {
-            double gap = 2, chW = (w - gap) / 2;
-            DrawChannel(ctx, new Rect(0, 0, chW, h), _levelL, _holdL);
-            DrawChannel(ctx, new Rect(chW + gap, 0, chW, h), _levelR, _holdR);
-        }
+/// <summary>The shared meter scale and zones, so every level meter reads the same.</summary>
+internal static class MeterScale
+{
+    public const double ChannelW = 11, Step = 5, StereoWidth = ChannelW * 2 + Step;
+    public const double FloorDb = -60, CeilDb = 6;
+
+    private static readonly IBrush Ground = NotaPalette.BgSunken;
+
+    public static double Norm(float amp)
+    {
+        if (amp <= 1e-5f) return 0;
+        double db = AudioMath.LinToDb(amp);
+        return Math.Clamp((db - FloorDb) / (CeilDb - FloorDb), 0, 1);
     }
 
-    // Discrete LED segments (HANDOFF §4: "segments, not gradients"). Lit cells
-    // are green; the peak-hold tick turns amber ≥ −6 dB and red at clip (0 dB).
-    private void DrawChannel(DrawingContext ctx, Rect area, double level, double hold)
-    {
-        ctx.DrawRectangle(Sunken, null, area, 2, 2);
-        double longLen = _horizontal ? area.Width : area.Height;
-        if (longLen <= 0) return;
-        const double gap = 1;
-        int cells = Math.Max(6, (int)(longLen / 4));
-        double cell = (longLen - (cells - 1) * gap) / cells;
-        if (cell <= 0) return;
+    public static double NormDb(double db) => Math.Clamp((db - FloorDb) / (CeilDb - FloorDb), 0, 1);
 
-        for (int i = 0; i < cells; i++)
+    public static readonly double CautionAt = NormDb(-6), AlertAt = NormDb(0);
+
+    /// <summary>The zone colour at a point on the scale.</summary>
+    public static IBrush Zone(double norm) => norm >= AlertAt ? NotaPalette.Danger : norm >= CautionAt ? NotaPalette.Warning : NotaPalette.Success;
+
+    /// <summary>Channel width, gap and leading offset for a stereo meter <paramref name="across"/> wide.</summary>
+    public static (double Ch, double Gap, double Offset) Channels(double across)
+    {
+        if (across >= StereoWidth) return (ChannelW, Step, (across - StereoWidth) / 2);
+        double k = across / StereoWidth;
+        double gap = Math.Max(1, Step * k);
+        return ((across - gap) / 2, gap, 0);
+    }
+
+    /// <summary>One channel: ground, zone-coloured level, a 2px hold mark in its zone colour.</summary>
+    public static void DrawChannel(DrawingContext ctx, Rect area, double level, double hold, bool horizontal)
+    {
+        double r = Math.Min(NotaRadius.ClipValue, Math.Min(area.Width, area.Height) / 2);
+        ctx.DrawRectangle(Ground, null, new RoundedRect(area, r));
+        double len = horizontal ? area.Width : area.Height;
+        if (len <= 0) return;
+
+        void Seg(double from, double to, IBrush ink)
         {
-            if ((i + 0.5) / cells > level) break;   // lit up to the level
-            double off = i * (cell + gap);
-            Rect r = _horizontal
-                ? new Rect(area.X + off, area.Y, cell, area.Height)
-                : new Rect(area.X, area.Bottom - off - cell, area.Width, cell);
-            ctx.FillRectangle(GreenBrush, r);
+            if (to <= from) return;
+            var rect = horizontal
+                ? new Rect(area.X + from * len, area.Y, (to - from) * len, area.Height)
+                : new Rect(area.X, area.Bottom - to * len, area.Width, (to - from) * len);
+            ctx.FillRectangle(ink, rect);
         }
+        Seg(0, Math.Min(level, CautionAt), NotaPalette.Success);
+        Seg(CautionAt, Math.Min(level, AlertAt), NotaPalette.Warning);
+        Seg(AlertAt, level, NotaPalette.Danger);
 
         if (hold > 0.02)
         {
-            var tick = hold >= AmberDb ? (hold >= 0.995 ? RedBrush : AmberBrush) : HoldBrush;
             const double t = 2;
-            Rect tr = _horizontal
-                ? new Rect(area.X + area.Width * hold - t, area.Y, t, area.Height)
-                : new Rect(area.X, area.Bottom - area.Height * hold - t, area.Width, t);
-            ctx.FillRectangle(tick, tr);
+            var mark = horizontal
+                ? new Rect(area.X + Math.Clamp(hold * len - t, 0, len - t), area.Y, t, area.Height)
+                : new Rect(area.X, area.Bottom - Math.Clamp(hold * len, t, len), area.Width, t);
+            ctx.FillRectangle(Zone(hold), mark);
         }
     }
 }

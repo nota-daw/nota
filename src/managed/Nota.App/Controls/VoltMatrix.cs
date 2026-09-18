@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Volt modulation matrix (mockup 2a/2e): a source×destination grid of bipolar
-// cells. Drag a cell vertically to set its amount (up = positive, down = negative);
-// right-click or double-click clears it. Source rows 0..3 are modulators (teal bars),
-// 4..6 are performance sources (amber). Reads/writes the mtx{s}_{d} plugin params and
-// records automation gestures, like the other Volt drag controls.
+// Nota Volt modulation matrix: a source×destination grid of bipolar cells. Drag a cell
+// vertically to set its amount (up = positive, down = negative); right-click or
+// double-click clears it. A route reads as a brass-washed cell carrying its signed
+// amount — the deeper the wash, the more of it — and an empty one stays a dark well, so
+// the routes a patch actually uses are the only thing on screen. Modulator rows are
+// named in teal, performance sources in plain ink. Reads/writes the mtx{s}_{d} plugin
+// params and records automation gestures, like the other Volt drag controls.
 
 using System;
 using System.Globalization;
@@ -21,14 +23,16 @@ internal sealed class VoltMatrix : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush GridB = NotaPalette.Wash(NotaPalette.BorderStrong, 0x40);
+    private static readonly IBrush GridB = NotaGraph.Grid;
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush TealFill = NotaPalette.Wash(NotaPalette.Teal, 0x80);
-    private static readonly IBrush AmberFill = NotaPalette.Wash(NotaPalette.Accent, 0x80);
+    private static readonly IBrush Lit = NotaPalette.AccentBright;
+    private static readonly IBrush LitEdge = NotaPalette.BorderBrass;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush CellBg = NotaPalette.BgSunken;
-    private static readonly Typeface Face = new(FontFamily.Default);
+    private static readonly Typeface Face = NotaFonts.Mono;
+    // How far the pointer travels for the full ±range — the knob's own feel.
+    private const double Travel = 140;
 
     private readonly IAudioEngine _e;
     private readonly int _t;
@@ -36,8 +40,15 @@ internal sealed class VoltMatrix : Control
     private readonly string[] _src, _dst;
     private const double LabelW = 56, HeaderH = 15;
     private int _dragS = -1, _dragD = -1;
-    private double _startX, _startVal;
+    private double _startY, _startVal;
 
+    /// <summary>How many leading source rows are modulators (named in teal); the rest are
+    /// performance sources.</summary>
+    public int Modulators { get; init; } = 4;
+
+    /// <summary>Raised after a cell changes, so the card can refresh what reads the matrix
+    /// (the route count, an LFO's "lands on" line, the status strip).</summary>
+    public event Action? Changed;
 
     public VoltMatrix(IAudioEngine e, int t, int[,] idx, string[] src, string[] dst)
     { _e = e; _t = t; _idx = idx; _src = src; _dst = dst; }
@@ -47,6 +58,7 @@ internal sealed class VoltMatrix : Control
     {
         foreach (var i in _idx) if (i >= 0) _e.PluginParamSet(_t, -1, i, 0.5f);
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     private (double cw, double ch) Cell()
@@ -61,8 +73,8 @@ internal sealed class VoltMatrix : Control
         int i = _idx[s, d]; if (i < 0) return;
         var pt = e.GetCurrentPoint(this);
         if (pt.Properties.IsRightButtonPressed || e.ClickCount == 2)
-        { _e.PluginParamSet(_t, -1, i, 0.5f); InvalidateVisual(); e.Handled = true; return; }
-        _dragS = s; _dragD = d; _startX = p.X; _startVal = _e.PluginParamGet(_t, -1, i);
+        { _e.PluginParamSet(_t, -1, i, 0.5f); InvalidateVisual(); Changed?.Invoke(); e.Handled = true; return; }
+        _dragS = s; _dragD = d; _startY = p.Y; _startVal = _e.PluginParamGet(_t, -1, i);
         _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, Id(s, d));
         e.Pointer.Capture(this); e.Handled = true;
     }
@@ -70,16 +82,18 @@ internal sealed class VoltMatrix : Control
     {
         if (_dragS < 0) return;
         int i = _idx[_dragS, _dragD]; if (i < 0) return;
-        // Horizontal drag: dragging one cell-width right/left sweeps the full ±range.
-        var (cw, _) = Cell();
-        double v = Math.Clamp(_startVal + (e.GetPosition(this).X - _startX) / Math.Max(24, cw), 0, 1);
-        _e.PluginParamSet(_t, -1, i, (float)v); InvalidateVisual();
+        // Vertical drag, like a knob: up adds, down subtracts, a modifier goes fine.
+        double fine = e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                   || e.KeyModifiers.HasFlag(KeyModifiers.Meta) ? 0.25 : 1.0;
+        double v = Math.Clamp(_startVal + (_startY - e.GetPosition(this).Y) / Travel * fine, 0, 1);
+        _e.PluginParamSet(_t, -1, i, (float)v); InvalidateVisual(); Changed?.Invoke();
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_dragS < 0) return;
         _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, Id(_dragS, _dragD));
         _dragS = _dragD = -1; e.Pointer.Capture(null);
+        Changed?.Invoke();
     }
 
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
@@ -98,28 +112,22 @@ internal sealed class VoltMatrix : Control
         for (int s = 0; s < _src.Length; s++)
         {
             double cy = HeaderH + s * ch;
-            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < 4 ? Teal : TxtC, 8);
+            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < Modulators ? Teal : TxtC, 8);
             for (int d = 0; d < _dst.Length; d++)
             {
                 double cx = LabelW + d * cw;
                 var r = new Rect(cx + 1, cy + 1, cw - 2, ch - 2);
                 int i = _idx[s, d];
-                bool has = i >= 0;
-                ctx.DrawRectangle(has ? CellBg : Sunken, new Pen(GridB, 1), r, 2, 2);
-                if (!has) continue;
+                if (i < 0) { ctx.DrawRectangle(Sunken, new Pen(GridB, 1), r, 2, 2); continue; }
                 double amt = (_e.PluginParamGet(_t, -1, i) - 0.5) * 2.0;
-                double midX = r.X + r.Width / 2;
-                // Bipolar horizontal bar: grows right for +, left for −, from the centre line.
-                if (Math.Abs(amt) > 0.01)
-                {
-                    double bw = Math.Abs(amt) * (r.Width / 2 - 1);
-                    var bar = amt > 0 ? new Rect(midX, r.Y + 1, bw, r.Height - 2)
-                                      : new Rect(midX - bw, r.Y + 1, bw, r.Height - 2);
-                    ctx.FillRectangle(s < 4 ? TealFill : AmberFill, bar);
-                }
-                ctx.DrawLine(new Pen(GridB, 1), new Point(midX, r.Y + 2), new Point(midX, r.Bottom - 2));
-                if (Math.Abs(amt) > 0.01 && r.Width >= 20)
-                    Txt(ctx, ((int)Math.Round(amt * 100)).ToString(), midX, r.Y + r.Height / 2 - 5, TxtC, 8, true);
+                bool on = Math.Abs(amt) > 0.01;
+                if (!on) { ctx.DrawRectangle(CellBg, new Pen(GridB, 1), r, 2, 2); continue; }
+                // A route lights the whole cell: a brass wash that deepens with the amount,
+                // a brass hairline, and the signed number in Brass Light.
+                var wash = NotaPalette.Wash(NotaPalette.Accent, (byte)(0x18 + 0x40 * Math.Min(1.0, Math.Abs(amt))));
+                ctx.DrawRectangle(wash, new Pen(LitEdge, 1), r, 2, 2);
+                if (r.Width >= 18)
+                    Txt(ctx, (amt > 0 ? "+" : "−") + (int)Math.Round(Math.Abs(amt) * 100), r.X + r.Width / 2, r.Y + r.Height / 2 - 5, Lit, 8, true);
             }
         }
     }

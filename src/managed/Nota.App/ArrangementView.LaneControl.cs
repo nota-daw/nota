@@ -103,7 +103,7 @@ public sealed partial class ArrangementView
         private static double PillWidth(string label)
         {
             var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                Typeface.Default, 9, Brushes.White);
+                Typeface.Default, 9, NotaPalette.TextPrimary);
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
         private Rect PillRect(int i, double w) => new(4, RowTop(i) + 3, w, PillH);
@@ -1100,9 +1100,10 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText("● REC", CultureInfo.InvariantCulture,
-                                FlowDirection.LeftToRight, Typeface.Default, 9, RecText);
-                            ctx.DrawText(ft, new Point(rr.X + 5, rr.Y + 3));
+                            var ft = new FormattedText("REC", CultureInfo.InvariantCulture,
+                                FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
+                            Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
+                            ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
                         }
                         break;
                     }
@@ -1296,9 +1297,10 @@ public sealed partial class ArrangementView
             double x0 = _o.BeatToX(c.StartBeat);
             double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
-            var (fill, border, _, content) = ClipColors(colorIndex);
+            var (fill, _, _, content) = ClipColors(colorIndex);
             var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
-            ctx.DrawRectangle(fill, selected ? ClipSelBorder : border, rect, 4, 4);
+            // A flat body in the track tint, radius 2, no outline; selection adds a 1px brass edge.
+            ctx.DrawRectangle(fill, selected ? ClipSelBorder : null, rect, NotaRadius.ClipValue, NotaRadius.ClipValue);
 
             // Resize-edge affordance: a bright bar on the edge a drag would trim.
             if (edgeHi != Drag.None)
@@ -1337,7 +1339,7 @@ public sealed partial class ArrangementView
             // Deactivated clip (key 0): grey it out with a dark scrim so it reads as "off"
             // while still showing its content/geometry. Inset so the (selection) border stays.
             if (!c.Active)
-                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), 3, 3);
+                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), NotaRadius.ClipValue, NotaRadius.ClipValue);
         }
 
         private const double BandH = 2;   // clip colour band along the top edge
@@ -1551,7 +1553,6 @@ public sealed partial class ArrangementView
             double px = _o.BeatToX(_o._playheadBeats);
             if (px >= 0 && px <= w)
             {
-                ctx.DrawLine(PlayheadGlow, new Point(px, 0), new Point(px, h));
                 ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
             }
         }

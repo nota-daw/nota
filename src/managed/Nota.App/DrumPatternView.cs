@@ -275,7 +275,7 @@ public sealed class DrumPatternView : UserControl
     private Control EmptyState()
         => new Border
         {
-            Background = NotaPalette.BgApp,
+            Background = NotaPalette.BgSunken,
             Child = new StackPanel
             {
                 Spacing = 6,
@@ -307,7 +307,7 @@ public sealed class DrumPatternView : UserControl
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(ruler, Dock.Top);
         DockPanel.SetDock(velocity, Dock.Bottom);
-        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { header, ruler, velocity, scroll } };
+        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgSunken, Children = { header, ruler, velocity, scroll } };
     }
 
     // ---- header: title · pad count · grid · page · clear ----
@@ -391,7 +391,7 @@ public sealed class DrumPatternView : UserControl
     private Control PadName(int r)
     {
         var pad = _pads[r];
-        var swatch = new Border { Width = 4, Height = 11, CornerRadius = new CornerRadius(1), Background = Hue(pad.Chain), VerticalAlignment = VerticalAlignment.Center };
+        var swatch = new Border { Width = 4, Height = 11, CornerRadius = NotaRadius.Bar, Background = Hue(pad.Chain), VerticalAlignment = VerticalAlignment.Center };
         var name = new TextBlock
         {
             Text = pad.Name, FontSize = 9, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
@@ -406,8 +406,8 @@ public sealed class DrumPatternView : UserControl
         inner.Children.Add(name);
         inner.Children.Add(note);
 
-        var cell = new Border { CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = inner };
-        ToolTip.SetTip(cell, $"{pad.Name} · {NoteName(pad.Note)} — click to play it and pick its velocity lane");
+        var cell = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = inner };
+        ToolTip.SetTip(cell, $"Play {pad.Name} · {NoteName(pad.Note)} and show its velocity lane");
         cell.PointerPressed += (_, e) =>
         {
             e.Handled = true;
@@ -424,7 +424,7 @@ public sealed class DrumPatternView : UserControl
 
     private Control StepCell(int r, int step)
     {
-        var cell = new Border { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand) };
+        var cell = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand) };
         _cells[r, step - _winStart] = cell;
         cell.PointerPressed += (_, e) =>
         {
@@ -470,7 +470,7 @@ public sealed class DrumPatternView : UserControl
     private Control VelocityCell(int step)
     {
         int local = step - _winStart;
-        var fill = new Border { VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.Accent, CornerRadius = new CornerRadius(2) };
+        var fill = new Border { VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.Accent, CornerRadius = NotaRadius.Clip };
         var slot = new Panel { Background = NotaPalette.SurfaceAbyss, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), ClipToBounds = true, Children = { fill } };
         _velFills[local] = fill;
         _velSlots[local] = slot;
@@ -484,7 +484,7 @@ public sealed class DrumPatternView : UserControl
         slot.PointerPressed += (_, e) => { e.Handled = true; e.Pointer.Capture(slot); _dragging = true; SetFromY(e, live: false); };
         slot.PointerMoved += (_, e) => { if (e.GetCurrentPoint(slot).Properties.IsLeftButtonPressed) SetFromY(e, live: true); };
         slot.PointerReleased += (_, e) => { e.Pointer.Capture(null); _dragging = false; };
-        return new Border { CornerRadius = new CornerRadius(2), ClipToBounds = true, Child = slot };
+        return new Border { CornerRadius = NotaRadius.Clip, ClipToBounds = true, Child = slot };
     }
 
     // Beat-grouped columns: one flexible column per beat, each holding its steps, so any
@@ -564,7 +564,7 @@ public sealed class DrumPatternView : UserControl
         if (cell is null) return;
         bool sel = r == _selRow;
         cell.Background = sel ? NotaPalette.AccentSubtle : NotaPalette.SurfaceInset;
-        cell.BorderBrush = sel ? NotaPalette.AccentTint : NotaPalette.BorderDefault;
+        cell.BorderBrush = sel ? NotaPalette.BorderBrass : NotaPalette.BorderDefault;
         _nameLabels[r].Foreground = sel ? NotaPalette.AccentBright : NotaPalette.TextPrimary;
     }
 
@@ -647,7 +647,7 @@ public sealed class DrumPatternView : UserControl
             bool on = i == sel;
             var chip = new Border
             {
-                CornerRadius = new CornerRadius(2), Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Clip, Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = on ? NotaPalette.Accent : Brushes.Transparent,
                 Child = new TextBlock { Text = names[i], FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal, Foreground = on ? NotaPalette.TextOnAccent : NotaPalette.TextTertiary },
             };
@@ -657,7 +657,7 @@ public sealed class DrumPatternView : UserControl
         return new Border
         {
             Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row,
+            CornerRadius = NotaRadius.Badge, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row,
         };
     }
 
@@ -666,7 +666,7 @@ public sealed class DrumPatternView : UserControl
         var b = new Border
         {
             BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = NotaPalette.SurfaceRaised,
-            CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = NotaPalette.TextSecondary },
         };

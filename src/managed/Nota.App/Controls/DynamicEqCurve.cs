@@ -34,23 +34,23 @@ public sealed class DynamicEqCurve : Control
     public const int HistLen = 120;   // 2 s at 60 Hz
 
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IPen GridPen = new Pen(NotaPalette.WellGrid, 1);
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IPen GridPenFaint = new Pen(NotaPalette.Wash(NotaPalette.WellGrid, 0x60), 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.BorderStrong, 1);
-    private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.7);
+    private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth);
     private static readonly IBrush CurveFill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
     private static readonly IPen DynPen = new Pen(NotaPalette.Teal, 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen ReachPen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x88), 1) { DashStyle = new DashStyle(new double[] { 2, 3 }, 0) };
     private static readonly IBrush DotBrass = NotaPalette.AccentBright;
     private static readonly IBrush DotTeal = NotaPalette.Teal;
-    private static readonly IBrush DotOff = NotaPalette.TextDisabled;
+    private static readonly IBrush DotOff = NotaPalette.TextAxis;
     private static readonly IBrush DotRing = NotaPalette.BgSunken;
     private static readonly IBrush SelRing = NotaPalette.AccentBright;
     private static readonly IBrush LabelDim = NotaPalette.TextTertiary;
     private static readonly IBrush LabelBright = NotaPalette.TextSecondary;
     private static readonly IBrush OnAccentText = NotaPalette.TextOnAccent;
-    private static readonly Typeface Mono = new("monospace");
-    private static readonly Typeface DotFont = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface DotFont = NotaFonts.SansBold;
 
     private readonly IAudioEngine _engine;
     private readonly int _track, _device;
@@ -261,7 +261,7 @@ public sealed class DynamicEqCurve : Control
         for (int t = 0; t < TypeNames.Length; t++)
         {
             int tt = t;
-            var mi = new MenuItem { Header = (t == curT ? "● " : "   ") + TypeNames[t] };
+            var mi = new MenuItem { Header = TypeNames[t], ToggleType = MenuItemToggleType.Radio, IsChecked = t == curT };
             mi.Click += (_, _) => { SetP(b, TypeF, tt); InvalidateVisual(); SelectionChanged?.Invoke(); };
             flyout.Items.Add(mi);
         }
@@ -270,7 +270,7 @@ public sealed class DynamicEqCurve : Control
         for (int m = 0; m < ModeNames.Length; m++)
         {
             int mm = m;
-            var mi = new MenuItem { Header = (m == curM ? "● " : "   ") + ModeNames[m], IsEnabled = HasGain(curT) || m == 0 };
+            var mi = new MenuItem { Header = ModeNames[m], ToggleType = MenuItemToggleType.Radio, IsChecked = m == curM, IsEnabled = HasGain(curT) || m == 0 };
             mi.Click += (_, _) =>
             {
                 // Seed a working Range when engaging dynamics (default is 0 → no GR ever).
@@ -299,7 +299,7 @@ public sealed class DynamicEqCurve : Control
     {
         double w = Bounds.Width, h = Bounds.Height, sr = Sr;
         if (w <= 0 || h <= 0) return;
-        ctx.FillRectangle(Bg, new Rect(0, 0, w, h), 5);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         // grid
         double[] majors = { 100, 1000, 10000 };
@@ -309,14 +309,15 @@ public sealed class DynamicEqCurve : Control
         {
             double x = FreqToX(f, w);
             ctx.DrawLine(GridPen, new Point(x, 0), new Point(x, h));
-            Label(ctx, f >= 1000 ? $"{f / 1000:0}k" : $"{f:0}", x + 2, h - 11, LabelDim);
         }
         for (int db = -12; db <= 12; db += 6)
         {
             double y = GainToY(db, h);
             ctx.DrawLine(db == 0 ? ZeroPen : GridPen, new Point(0, y), new Point(w, y));
-            if (db != 0) Label(ctx, $"{(db > 0 ? "+" : "")}{db}", 2, y - 9, LabelDim);
         }
+        // The range is labelled in the bottom corners and nowhere else — no full axes.
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomLeft, "20");
+        NotaGraph.Axis(ctx, new Rect(0, 0, w, h), NotaGraph.Corner.BottomRight, "20k Hz");
 
         // reach lines for dynamic bands (how far each can travel)
         for (int b = 0; b < Bands; b++)
@@ -328,7 +329,7 @@ public sealed class DynamicEqCurve : Control
             ctx.DrawLine(ReachPen, new Point(x, y0), new Point(x, y1));
         }
 
-        // static curve (brass) + fill
+        // static curve (brass)
         DrawCurve(ctx, w, h, sr, false, CurveFill, CurvePen);
         // momentary curve (teal dashed) — only meaningful when something is engaged
         DrawCurve(ctx, w, h, sr, true, null, DynPen);
@@ -340,13 +341,11 @@ public sealed class DynamicEqCurve : Control
             int type = BandType(b);
             double x = FreqToX(P(b, FreqF), w);
             double y = GainToY(HasGain(type) ? P(b, GainF) : 0, h);
+            // Almanac node: selected brass, the rest Ink 3; a dynamic band keeps its teal
+            // (modulation) and an off band drops to Ink 6. The band number is in the readout.
             bool sel = b == _selected;
-            bool dyn = IsDyn(b);
-            double r = sel ? 8.5 : 7;
-            IBrush fill = !on ? DotOff : dyn ? DotTeal : DotBrass;
-            var ring = sel ? new Pen(SelRing, 2) : new Pen(DotRing, 1.5);
-            ctx.DrawEllipse(fill, ring, new Point(x, y), r, r);
-            DotLabel(ctx, (b + 1).ToString(), x, y, on ? OnAccentText : LabelDim, 9.5);
+            IBrush? ink = !on ? NotaPalette.TextDisabled : sel ? null : IsDyn(b) ? NotaPalette.Teal : null;
+            NotaGraph.Node(ctx, new Point(x, y), sel, ink);
         }
 
         // readout
@@ -354,10 +353,10 @@ public sealed class DynamicEqCurve : Control
         if (_selected >= 0 && BandOn(_selected))
         {
             int b = _selected, type = BandType(b);
-            string dynTxt = IsDyn(b) ? $"  {(BandMode(b) == 1 ? "↓" : "↑")} {P(b, RangeF):+0.0;-0.0} dB · GR {_gr[b]:+0.0;-0.0;0.0}" : "";
-            txt = string.Format(CultureInfo.InvariantCulture, "B{0} {1}  {2:0} Hz{3}  Q {4:0.00}{5}",
+            string dynTxt = IsDyn(b) ? $"  {(BandMode(b) == 1 ? "↓" : "↑")} {P(b, RangeF):+0.0;−0.0}\u2009dB · GR {_gr[b]:+0.0;−0.0;0.0}" : "";
+            txt = string.Format(NotaNum.Culture, "B{0} {1}  {2:0} Hz{3}  Q {4:0.00}{5}",
                 b + 1, TypeNames[type], P(b, FreqF),
-                HasGain(type) ? $"  {P(b, GainF):+0.0;-0.0} dB" : "", P(b, QF), dynTxt);
+                HasGain(type) ? $"  {P(b, GainF):+0.0;−0.0}\u2009dB" : "", P(b, QF), dynTxt);
         }
         else
         {
@@ -386,7 +385,7 @@ public sealed class DynamicEqCurve : Control
             }
             if (gf != null) { gf.LineTo(new Point(w, h / 2)); gf.EndFigure(true); gf.Dispose(); }
         }
-        if (fill != null && fillGeo != null) ctx.DrawGeometry(fill, null, fillGeo);
+        // No fill under the curve (almanac § Visualisations); the fill argument is ignored.
         ctx.DrawGeometry(null, pen, curve);
     }
 }

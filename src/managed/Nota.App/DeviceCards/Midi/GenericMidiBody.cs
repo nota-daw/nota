@@ -43,5 +43,5 @@ internal sealed class GenericMidiBody : IMidiDeviceBody
         return panel;
     }
 
-    private static string FmtParam(float v, bool integral) => integral ? Math.Round(v).ToString("0", CultureInfo.InvariantCulture) : v.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string FmtParam(float v, bool integral) => integral ? Math.Round(v).ToString("0", NotaNum.Culture) : v.ToString("0.00", NotaNum.Culture);
 }

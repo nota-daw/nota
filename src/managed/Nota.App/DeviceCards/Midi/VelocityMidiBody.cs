@@ -69,30 +69,16 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         // ---- generic controls ----
         Control MiniSlider(string label, int p, double min, double max, Func<double, string> fmt, double w)
         {
-            var val = Mono(fmt(G(p)), Txt); val.MinWidth = 26;
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Width = w, Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center });
-            slot.Children.Add(fill); slot.Children.Add(handle);
-            void Vis(double v) { double n = (v - min) / (max - min); fill.Width = n * w; handle.Margin = new Thickness(Math.Clamp(n * w - 3.5, 0, w - 7), 0, 0, 0); }
-            bool drag = false;
-            void SetX(double x) { double n = Math.Clamp(x / w, 0, 1); double v = min + n * (max - min); S(p, v); Vis(v); val.Text = fmt(v); Refresh(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-            MidiLearn.Bind(slot, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
-            readouts.Add(() => { if (!drag) { double v = G(p); Vis(v); val.Text = fmt(v); } });
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap(label), slot, val } };
+            var row = DeviceCardKit.SliderRow(label, () => (G(p) - min) / (max - min), n => { S(p, min + n * (max - min)); Refresh(); }, () => fmt(G(p)), out var sync,
+                trackWidth: w, valueWidth: 26);
+            MidiLearn.Bind(row, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
+            readouts.Add(sync);
+            return row;
         }
         Control Seg(int p, string[] names, Action<int>? extra = null, double fs = 9, double padX = 7)
         {
-            var arr = new Border[names.Length];
-            void Hi() { int cur = Math.Clamp(Gi(p), 0, names.Length - 1); for (int i = 0; i < names.Length; i++) { bool on = i == cur; arr[i].Background = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? Ink : Muted; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++) { int iv = i; var c = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(padX, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = Muted } }; c.PointerPressed += (_, _) => { S(p, iv); extra?.Invoke(iv); Refresh(); }; arr[i] = c; row.Children.Add(c); }
-            readouts.Add(Hi); Hi();
-            var seg = new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var seg = DeviceCardKit.Segments(names, () => Math.Clamp(Gi(p), 0, names.Length - 1), iv => { S(p, iv); extra?.Invoke(iv); Refresh(); }, out var sync);
+            readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
@@ -125,7 +111,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var transDock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(transHead, Dock.Top); DockPanel.SetDock(axis, Dock.Bottom);
         transDock.Children.Add(transHead); transDock.Children.Add(axis); transDock.Children.Add(viz);
-        var transPanel = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 4), Margin = new Thickness(8, 7), Child = transDock };
+        var transPanel = new Border { Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(8, 4), Margin = new Thickness(8, 7), Child = transDock };
 
         readouts.Add(() =>
         {
@@ -148,7 +134,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var rangeFill = new Border { Background = NotaPalette.Wash(NotaPalette.Accent, 0x73), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
         var rangeBar = new Panel { Height = 8, Background = Inset, Cursor = new Cursor(StandardCursorType.Hand) };
         rangeBar.Children.Add(rangeFill);
-        var rangeClip = new Border { Height = 8, CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = rangeBar };
+        var rangeClip = new Border { Height = 8, CornerRadius = NotaRadius.Control, ClipToBounds = true, Child = rangeBar };
         int rDrag = 0;   // 1 = lo, 2 = hi
         void RangeVis() { double W = rangeBar.Bounds.Width, lo = G(POutLo), hi = G(POutHi); rangeFill.Margin = new Thickness(lo * W, 0, 0, 0); rangeFill.Width = Math.Max(0, (hi - lo) * W); loT.Text = $"{Math.Max(1, lo * 127):0}"; hiT.Text = $"{hi * 127:0}"; }
         void RangeX(double x) { double n = Math.Clamp(x / Math.Max(1, rangeBar.Bounds.Width), 0, 1); if (rDrag == 1) S(POutLo, Math.Min(n, G(POutHi))); else S(POutHi, Math.Max(n, G(POutLo))); RangeVis(); Refresh(); }
@@ -159,21 +145,16 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         readouts.Add(() => { if (rDrag == 0) RangeVis(); });
 
         // RANDOM ON toggle (amount lives in the strip; this gates it, remembering the amount).
-        var rndTrk = new Border { Width = 18, Height = 10, CornerRadius = new CornerRadius(5), Background = Inset };
-        var rndKnob = new Ellipse { Width = 6, Height = 6, Fill = Muted, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        rndTrk.Child = rndKnob;
-        var rndLbl = Cap("RANDOM ON", Teal);
-        void RndSync() { bool on = G(PRandom) > 0; rndTrk.Background = on ? Teal : Inset; rndKnob.Fill = on ? Ink : Muted; rndKnob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left; rndKnob.Margin = new Thickness(on ? 0 : 2, 0, on ? 2 : 0, 0); rndLbl.Foreground = on ? Teal : Muted; if (on) lastRnd = G(PRandom); }
-        var rndToggle = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { rndTrk, rndLbl } };
-        rndToggle.PointerPressed += (_, _) => { if (G(PRandom) > 0) S(PRandom, 0); else S(PRandom, lastRnd > 0 ? lastRnd : 0.2); Refresh(); };
-        readouts.Add(RndSync); RndSync();
+        var rndToggle = DeviceCardKit.Switch("Random", () => G(PRandom) > 0,
+            () => { if (G(PRandom) > 0) S(PRandom, 0); else S(PRandom, lastRnd > 0 ? lastRnd : 0.2); Refresh(); }, out var rndSync);
+        readouts.Add(rndSync);
 
         var dirRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("MODE"), Seg(PRandomDir, Dirs, null, 8, 6) } };
 
         // LAST 12 NOTES histogram.
         var bars = new Border[12];
         var barRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Height = 22, VerticalAlignment = VerticalAlignment.Bottom };
-        for (int i = 0; i < 12; i++) { bars[i] = new Border { Width = 9, CornerRadius = new CornerRadius(1), VerticalAlignment = VerticalAlignment.Bottom, Background = AmberDim, Height = 2 }; barRow.Children.Add(bars[i]); }
+        for (int i = 0; i < 12; i++) { bars[i] = new Border { Width = 9, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Bottom, Background = AmberDim, Height = 2 }; barRow.Children.Add(bars[i]); }
         readouts.Add(() =>
         {
             for (int i = 0; i < 12; i++)

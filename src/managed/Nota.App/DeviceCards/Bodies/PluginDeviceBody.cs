@@ -25,14 +25,14 @@ internal sealed class PluginDeviceBody : IDeviceBody
         var open = new Border
         {
             Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Padding = new Thickness(12, 4), HorizontalAlignment = HorizontalAlignment.Center,
+            CornerRadius = NotaRadius.Tile, Padding = new Thickness(12, 4), HorizontalAlignment = HorizontalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "Open editor ↗", FontSize = 11, Foreground = TextPrimary },
+            Child = new TextBlock { Text = "Open editor ↗", FontSize = 9, Foreground = TextPrimary },
         };
         open.PointerPressed += (_, _) => { try { engine.OpenPluginEditor(track, index); } catch { /* no-op */ } };
 
         double ms = engine.SampleRate > 0 ? engine.TrackLatencySamples(track) / engine.SampleRate * 1000.0 : 0;
-        var latency = new TextBlock { Text = $"latency {ms:0.0} ms — compensated", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
+        var latency = new TextBlock { Text = $"latency {ms:0.0}\u2009ms — compensated", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
         latency.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
 
         var body = new StackPanel
@@ -40,7 +40,7 @@ internal sealed class PluginDeviceBody : IDeviceBody
             Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = "Hosted plug-in — native GUI in own window", FontSize = 10, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
+                new TextBlock { Text = "Hosted plug-in — native GUI in own window", FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
                 open, latency,
             },
         };

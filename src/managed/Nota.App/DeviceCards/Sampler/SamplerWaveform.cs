@@ -19,14 +19,15 @@ internal sealed class SamplerWaveform : Control
     private static readonly IBrush WaveDim = NotaPalette.Wash(NotaPalette.Accent, 0x40);
     private static readonly IBrush Outside = NotaPalette.Wash(NotaPalette.BgSunken, 0x80);
     private static readonly IBrush LoopFill = NotaPalette.Wash(NotaPalette.Accent, 0x14);   // brass wash
-    private static readonly IPen StartPen = new Pen(NotaPalette.Success, 2);          // start = green
-    private static readonly IPen EndPen = new Pen(NotaPalette.Danger, 2);            // end = red
+    // Trim boundaries: 1px brass lines (almanac § oscillogram); green and red are status only.
+    private static readonly IPen StartPen = new Pen(NotaPalette.Accent, 1);
+    private static readonly IPen EndPen = new Pen(NotaPalette.Accent, 1);
     private static readonly IPen LoopPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xC8), 1.2);
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen GridPen = new Pen(NotaPalette.Wash(NotaPalette.BorderStrong, 0x55), 1);
+    private static readonly IPen GridPen = NotaGraph.GridPen;
     private static readonly IPen PlayPen = new Pen(NotaPalette.AccentBright, 1.4) { };
     private static readonly IBrush GridText = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = new("monospace");
+    private static readonly Typeface Mono = NotaFonts.Mono;
 
     private float[] _peaks = Array.Empty<float>();
     private double _start, _end = 1, _ls, _le = 1;
@@ -77,7 +78,7 @@ internal sealed class SamplerWaveform : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Bg, null, new Rect(0, 0, w, h), 4, 4);
+        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double cy = h / 2;
 
         // Time grid (behind the waveform): vertical lines + labels at a nice step.
@@ -88,7 +89,7 @@ internal sealed class SamplerWaveform : Control
             {
                 double x = t / _dur * w;
                 ctx.DrawLine(GridPen, new Point(x, 0), new Point(x, h));
-                string lbl = _dur >= 1 ? $"{t:0.##}s" : $"{(int)Math.Round(t * 1000)}";
+                string lbl = _dur >= 1 ? $"{t:0.##}\u2009s" : $"{(int)Math.Round(t * 1000)}";
                 ctx.DrawText(new FormattedText(lbl, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, GridText), new Point(x + 2, h - 11));
             }
         }

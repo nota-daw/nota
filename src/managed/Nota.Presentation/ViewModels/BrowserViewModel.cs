@@ -217,7 +217,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         
         var instruments = new List<BrowserItem>
         {
-            new() { Name = "Nota Synth", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 0, Sub = "simple synth" },
+            new() { Name = "Nota Synth", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 0, Sub = "subtractive synth" },
             new() { Name = "Nota Physical", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 2, Sub = "physical synth" },
             new() { Name = "Nota Aurora", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 5, Sub = "wavetable synth" },
             new() { Name = "Nota Volt", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 6, Sub = "analog synth" },
