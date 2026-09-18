@@ -7,7 +7,8 @@
 // 4×4 pad grid for the drum rack) in the middle, and the selected chain's device chain
 // on the right. The two rack addressings differ only via IRackAccess. Built per-rebuild
 // with a DeviceCardContext; all mutable state (selected chain, refreshers, drop glow,
-// rebuild) lives in the view behind the context.
+// rebuild) lives in the view behind the context. The Drum Rack body is in
+// RackCardView.Drum.cs.
 
 using System;
 using Avalonia;
@@ -23,7 +24,7 @@ using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
 
-internal sealed class RackCardView(DeviceCardContext ctx)
+internal sealed partial class RackCardView(DeviceCardContext ctx)
 {
     private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Prism", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata" };
     private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 21, 2, 20, 3, 4, 18, 14, 19, 6, 7, 8, 17, 12, 9, 10, 11, 15 };
@@ -49,9 +50,6 @@ internal sealed class RackCardView(DeviceCardContext ctx)
     private static readonly IBrush IrRed = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
     private static bool _macroMapMode;     // Instrument Rack: second (Macro-map) view
     private static int _splitAxis;         // 0 = Key zone, 1 = Velocity
-    private static bool _drumMixer;        // Drum Rack: false = Pads view, true = Mixer view
-    private static int _drumBank;          // Drum Rack: current pad bank 0..3 (C1..C4 → notes 36+bank*16)
-    private static bool _drumFold;         // Drum Rack: hide empty pads in the grid
     private static bool _aeMacroMap;       // Audio Effect Rack: macro-map view
     private static bool _aeFold;           // Audio Effect Rack: fold device cards to titles
     private readonly System.Collections.Generic.List<Action> _irTick = new();
@@ -940,345 +938,6 @@ internal sealed class RackCardView(DeviceCardContext ctx)
         return row;
     }
 
-    // Drum Rack card, rebuilt to mockup 2q (700×260): a 4×4 hue-coded pad grid with a
-    // selected-pad detail panel, or a Mixer view (every loaded pad as a row). A LIVE strip
-    // carries bank / swing / humanize / fold. Pads still audition on click and accept drops.
-    public Control BuildDrumRackCard()
-    {
-        var a = new InstrumentRackAccess(E, T);
-        E.SetAuditionTrack(T);   // so clicking a pad plays it without arming
-        int chains = a.ChainCount();
-        Sel = chains > 0 ? Math.Clamp(Sel, 0, chains - 1) : 0;
-        _irTick.Clear();
-
-        var header = DrumHeader(a);
-        var strip  = DrumLiveStrip(a);
-        Control bodyView = _drumMixer ? DrumMixerView(a) : DrumPadsView(a);
-        DockPanel.SetDock(header, Dock.Top); DockPanel.SetDock(strip, Dock.Top);
-        var content = new DockPanel { LastChildFill = true, Children = { header, strip, bodyView } };
-        if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
-        return new Border { Width = 700, Height = 260, Background = NotaPalette.BgApp, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true, Child = content };
-    }
-
-    // ---- header (22): name · pad count ----
-    private Control DrumHeader(IRackAccess a)
-    {
-        int pads = 0;
-        for (int c = 0; c < a.ChainCount(); c++) if (a.ChainTriggerNote(c) >= 0) pads++;
-        return RackHeader("Nota Drum Rack", $"DRUMS · {pads} PAD{(pads == 1 ? "" : "S")}");
-    }
-
-    // ---- LIVE strip (34): bank · swing · humanize · fold ----
-    private Control DrumLiveStrip(IRackAccess a)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(IrCap("BANK"));
-        row.Children.Add(IrSeg(new[] { "C1", "C2", "C3", "C4" }, _drumBank, i => { _drumBank = i; _ctx.RequestRebuild(); }));
-        row.Children.Add(DrumKitKnob("SWING", 52, IrAmber, () => E.RackSwing(T), v => E.RackSetSwing(T, v)));
-        row.Children.Add(DrumKitKnob("HUMANIZE", 46, IrTeal, () => E.RackHumanize(T), v => E.RackSetHumanize(T, v)));
-        var fold = DrumChip("Fold", _drumFold, () => { _drumFold = !_drumFold; _ctx.RequestRebuild(); });
-        // Pads / Mixer view switch: moved here from the header (almanac header carries name and badge only).
-        var view = IrSeg(new[] { "Pads", "Mixer" }, _drumMixer ? 1 : 0, i => { _drumMixer = i == 1; _ctx.RequestRebuild(); });
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right, Children = { view, fold } };
-        var dp = new DockPanel { LastChildFill = false, Margin = new Thickness(9, 0), Children = { row, right } };
-        return new Border { Height = 34, Background = IrHdr, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = dp };
-    }
-
-    // A labelled kit slider (swing / humanize) with a fixed-width groove + live % readout.
-    private Control DrumKitKnob(string label, double width, IBrush accent, Func<float> get, Action<float> set)
-    {
-        var val = IrMono("0\u2009%", IrTxt, 9); val.MinWidth = 30;
-        var slot = HSlider(width, accent, () => get(), v => { set((float)v); val.Text = $"{v * 100:0}\u2009%"; });
-        val.Text = $"{get() * 100:0}\u2009%";
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap(label), slot, val } };
-    }
-
-    private static Border DrumChip(string text, bool on, Action onClick)
-    {
-        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = on ? IrTeal : NotaPalette.BorderStrong, Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : IrCard, CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = text, FontSize = 9, Foreground = on ? IrTeal : NotaPalette.TextSecondary } };
-        b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
-        return b;
-    }
-
-    // A fixed-width horizontal groove+fill+handle bound to a 0..1 getter/setter.
-    private static Control HSlider(double width, IBrush accent, Func<double> get, Action<double> set)
-    {
-        var slider = new SliderTrack { Width = width, Norm = Math.Clamp(get(), 0, 1) };
-        slider.Changed += set;
-        return slider;
-    }
-
-    // ==================== Pads view ====================
-    private Control DrumPadsView(IRackAccess a)
-    {
-        var grid = DrumPadGrid(a);
-        var panel = DrumSelectedPanel(a);
-        DockPanel.SetDock(grid, Dock.Left);
-        return new DockPanel { LastChildFill = true, Children = { grid, panel } };
-    }
-
-    private Control DrumPadGrid(IRackAccess a)
-    {
-        int bankBase = 36 + _drumBank * 16;
-        var notes = new System.Collections.Generic.List<int>();
-        // Hardware order: pad 1 bottom-left, ascending left→right, bottom→top.
-        foreach (int rowBase in new[] { bankBase + 12, bankBase + 8, bankBase + 4, bankBase })
-            for (int col = 0; col < 4; col++) notes.Add(rowBase + col);
-        if (_drumFold) notes = notes.FindAll(nn => ChainForNote(a, nn) >= 0);
-
-        var uni = new UniformGrid { Columns = 4, Rows = _drumFold ? Math.Max(1, (notes.Count + 3) / 4) : 4 };
-        foreach (int nn in notes) uni.Children.Add(DrumPad(a, nn));
-        return new Border { Width = 314, Padding = new Thickness(8, 7), Child = uni };
-    }
-
-    // A pad's display name: the chain name if set, else the chain instrument's.
-    private string PadName(IRackAccess a, int chain)
-    {
-        string n = E.RackChainName(T, chain);
-        return n.Length > 0 ? n : a.ChainInstrumentName(chain);
-    }
-
-    private Control DrumPad(IRackAccess a, int note)
-    {
-        int chain = ChainForNote(a, note);
-        bool filled = chain >= 0;
-        bool selected = filled && chain == Sel;
-        var hue = filled ? PadHue(chain) : NotaPalette.SurfaceAbyss;
-        int choke = filled ? E.RackChainChoke(T, chain) : 0;
-        // The pad's own name when it has one (kit voice, dropped sample); otherwise the
-        // instrument's — which for a Sampler is the same word on every pad.
-        string name = filled ? PadName(a, chain) : NoteName(note);
-
-        var nameTb = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = filled ? IrTxt : IrMuted, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Top };
-        var noteTb = IrMono(NoteName(note), filled ? NotaPalette.TextSecondary : IrMuted, 7);
-        var chokeTb = IrMono(choke > 0 ? $"CH {choke}" : "", IrTeal, 7);
-        var bottom = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Bottom, Children = { noteTb, WithRight(chokeTb) } };
-        var cell = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), Margin = new Thickness(5, 4) };
-        cell.Children.Add(nameTb);
-        Grid.SetRow(bottom, 2); cell.Children.Add(bottom);
-
-        IBrush LoadedBg() => filled ? PadFill(hue, 0.16) : IrCard;
-        IBrush SelBg() => PadFill(hue, 0.28);
-        IBrush idleBorder = selected ? AccentBright : (filled ? PadFill(hue, 0.5) : IrBorder);
-        double idleThick = 1;   // selection shows in colour (SelBg), not a thicker edge
-        var pad = new Border { Margin = new Thickness(2), Background = selected ? SelBg() : LoadedBg(), BorderBrush = idleBorder, BorderThickness = new Thickness(idleThick), CornerRadius = NotaRadius.Tile, Cursor = new Cursor(StandardCursorType.Hand), Child = cell };
-        ToolTip.SetTip(pad, filled ? $"{name} · {NoteName(note)} — click to play + edit" : $"{NoteName(note)} — click to add · drop a sample here");
-
-        if (filled)
-        {
-            // Live: brighten the pad while it's sounding (meter > floor).
-            _irTick.Add(() => {
-                bool hot = E.RackChainMeter(T, chain) > 0.02f;
-                pad.Background = hot ? PadFill(hue, 0.42) : (chain == Sel ? SelBg() : LoadedBg());
-                pad.BorderBrush = hot ? AccentBright : (chain == Sel ? AccentBright : PadFill(hue, 0.5));
-            });
-            pad.PointerPressed += (_, e) => {
-                var pt = e.GetCurrentPoint(pad).Properties;
-                if (pt.IsRightButtonPressed) { e.Handled = true; SelectPad(chain); return; }
-                if (pt.IsLeftButtonPressed) { e.Handled = true; e.Pointer.Capture(pad); E.NoteOn(note, 1.0f); }
-            };
-            pad.PointerReleased += (_, e) => { E.NoteOff(note); e.Pointer.Capture(null); SelectPad(chain); };
-        }
-        else
-        {
-            pad.PointerPressed += (_, e) => { e.Handled = true; ShowAddPadMenu(a, pad, note); };
-        }
-
-        DragDrop.SetAllowDrop(pad, true);
-        DragDrop.AddDragOverHandler(pad, (_, e) => {
-            if (!BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.None; return; }
-            e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow();
-            pad.BorderBrush = AccentBright;   // drop target: colour only, no thicker border
-        });
-        DragDrop.AddDragLeaveHandler(pad, (_, _) => { pad.BorderBrush = idleBorder; });
-        DragDrop.AddDropHandler(pad, (_, e) => {
-            pad.BorderBrush = idleBorder; pad.BorderThickness = new Thickness(idleThick);
-            var items = BrowserView.DroppedItems(e);
-            if (items.Count == 0) return;
-            int bankTop = (36 + _drumBank * 16) + 16;
-            for (int i = 0; i < items.Count && note + i < bankTop; i++) DropOnPad(a, note + i, items[i]);
-            e.Handled = true;
-        });
-        return pad;
-    }
-
-    // ---- selected-pad detail panel ----
-    private Control DrumSelectedPanel(IRackAccess a)
-    {
-        var panel = new Border { Background = NotaPalette.SurfaceInset, BorderBrush = IrBorder, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(9, 6) };
-        int chains = a.ChainCount();
-        if (chains == 0 || Sel < 0 || Sel >= chains || a.ChainTriggerNote(Sel) < 0)
-        {
-            panel.Child = new TextBlock { Text = "Select a pad to edit it.", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            return panel;
-        }
-        int c = Sel, note = a.ChainTriggerNote(c);
-        int devs = a.ChainDeviceCount(c);
-        int choke = E.RackChainChoke(T, c);
-        var hue = PadHue(c);
-
-        var head = new DockPanel { LastChildFill = false, Children = {
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Clip, Background = hue, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = PadName(a, c), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
-                IrMono($"{NoteName(note)} · {(choke > 0 ? $"choke CH {choke}" : "no choke")} · {devs} dev", IrMuted) } },
-            WithRight(DrumOpenChip(a, c)) } };
-
-        var col = new StackPanel { Spacing = 5 };
-        col.Children.Add(head);
-        col.Children.Add(DrumSampleBox(a, c, hue));
-        col.Children.Add(DrumParamRow("VOLUME", () => VolNorm(a.ChainGain(c)), v => a.SetChainGain(c, NormVol(v)), () => VolText(a.ChainGain(c))));
-        col.Children.Add(DrumParamRow("PAN", () => (a.ChainPan(c) + 1) / 2, v => a.SetChainPan(c, (float)(v * 2 - 1)), () => PanText(a.ChainPan(c))));
-        col.Children.Add(DrumParamRow("TUNE", () => (E.RackChainTune(T, c) + 48) / 96.0, v => E.RackSetChainTune(T, c, (int)Math.Round(v * 96 - 48)), () => $"{E.RackChainTune(T, c):+0;−0;0}\u2009st"));
-        col.Children.Add(DrumParamRow("DECAY", () => E.RackChainDecay(T, c), v => E.RackSetChainDecay(T, c, (float)v), () => DecayText(E.RackChainDecay(T, c))));
-
-        var chokeLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = {
-            IrCap("CHOKE"),
-            IrSeg(new[] { "Off", "1", "2", "3", "4" }, choke, i => { E.RackSetChainChoke(T, c, i); _ctx.RequestRebuild(); }) } };
-        var samplerChip = DrumChip("Sampler", false, () => OpenChainInstrumentGui(a, c, panel));
-        var chokeRow = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 3, 0, 0), Children = { chokeLeft, WithRight(samplerChip) } };
-        DockPanel.SetDock(chokeRow, Dock.Bottom);
-        panel.Child = new DockPanel { LastChildFill = true, Children = { chokeRow, col } };
-        return panel;
-    }
-
-    private Border DrumOpenChip(IRackAccess a, int c)
-    {
-        Border b = null!;
-        b = new Border { Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "Open chain", FontSize = 8, Foreground = IrMuted } };
-        b.PointerPressed += (_, e) => { e.Handled = true; OpenChainInstrumentGui(a, c, b); };
-        return b;
-    }
-
-    private Control DrumSampleBox(IRackAccess a, int c, SolidColorBrush hue)
-    {
-        var title = IrMono("", IrTxt, 8);
-        var dur = IrMono("", IrMuted, 8);
-        var bars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-        float[] peaks = Array.Empty<float>();
-        if (E.RackChainSamplerInfo(T, c, out var si) && si.SampleId != 0 && E.TryGetSampleInfo(si.SampleId, out var sinfo))
-        {
-            float[] raw = E.ReadSample(si.SampleId);
-            int ch = Math.Max(1, sinfo.Channels); long frames = sinfo.Frames; double sr = sinfo.SampleRate;
-            peaks = MiniPeaks(raw, ch, frames, 40);
-            title.Text = a.ChainInstrumentName(c);
-            dur.Text = sr > 0 ? $"{frames / sr:0.00}\u2009s" : "";
-        }
-        else { title.Text = a.ChainInstrumentName(c); dur.Text = "synth"; }
-
-        if (peaks.Length > 0)
-            foreach (float p in peaks)
-                bars.Children.Add(new Border { Width = 3, Height = Math.Max(1, p * 30), Background = hue, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center });
-        else
-            bars.Children.Add(new TextBlock { Text = "— no sample —", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center });
-
-        var top = new DockPanel { LastChildFill = false, Children = { title, WithRight(dur) } };
-        var inner = new DockPanel { LastChildFill = true, Children = { top } };
-        DockPanel.SetDock(top, Dock.Top);
-        inner.Children.Add(new Border { Child = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = bars }, VerticalAlignment = VerticalAlignment.Center });
-        return new Border { Height = 56, Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(7, 4), Child = inner };
-    }
-
-    // A param row: label (44) · flexible groove · value (48). Synced via the 60 Hz tick.
-    private Control DrumParamRow(string label, Func<double> get, Action<double> set, Func<string> disp)
-    {
-        var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = IrMuted, Width = 44, VerticalAlignment = VerticalAlignment.Center };
-        var val = IrMono(disp(), IrTxt, 9); val.Width = 48; val.TextAlignment = TextAlignment.Right;
-        var fill = new Border { Height = 3, Background = IrAmber, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var handle = new Border { Width = 8, Height = 9, Background = NotaPalette.TextSecondary, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Children = { new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, fill, handle } };
-        void Vis(double v) { double W = slot.Bounds.Width; fill.Width = v * W; handle.Margin = new Thickness(Math.Clamp(v * W - 4, 0, Math.Max(0, W - 8)), 0, 0, 0); }
-        bool drag = false;
-        void SetX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); set(v); Vis(v); val.Text = disp(); }
-        slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetX(e.GetPosition(slot).X); };
-        slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-        slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-        _irTick.Add(() => { if (!drag) { Vis(Math.Clamp(get(), 0, 1)); val.Text = disp(); } });
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(slot, 1); Grid.SetColumn(val, 2);
-        g.Children.Add(lbl); g.Children.Add(slot); g.Children.Add(val);
-        return g;
-    }
-
-    // ==================== Mixer view ====================
-    private Control DrumMixerView(IRackAccess a)
-    {
-        var pads = new System.Collections.Generic.List<int>();
-        for (int c = 0; c < a.ChainCount(); c++) if (a.ChainTriggerNote(c) >= 0) pads.Add(c);
-        pads.Sort((x, y) => a.ChainTriggerNote(x).CompareTo(a.ChainTriggerNote(y)));
-
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("96,26,*,40,44"), ColumnSpacing = 6, Height = 22, Margin = new Thickness(9, 0) };
-        void H(string t, int col, IBrush? cc = null) { var x = new TextBlock { Text = t, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = cc ?? IrMuted, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(x, col); head.Children.Add(x); }
-        H("PAD", 0); H("NOTE", 1); H("VOLUME", 2); H("PAN", 3); H("M S CHK", 4);
-        var headBar = new Border { Height = 22, Background = NotaPalette.SurfaceInset, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
-
-        var rows = new StackPanel { Spacing = 2 };
-        foreach (int c in pads) rows.Children.Add(DrumMixerRow(a, c));
-        if (pads.Count == 0) rows.Children.Add(new TextBlock { Text = "No pads loaded — drop samples on the Pads view.", FontSize = 9, Foreground = IrMuted, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
-        var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(9, 4, 9, 4) };
-        DockPanel.SetDock(headBar, Dock.Top);
-        return new DockPanel { LastChildFill = true, Children = { headBar, scroll } };
-    }
-
-    private Control DrumMixerRow(IRackAccess a, int c)
-    {
-        int note = a.ChainTriggerNote(c);
-        var hue = PadHue(c);
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("96,26,*,40,44"), ColumnSpacing = 6, Height = 13 };
-        var nameCell = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-            new Border { Width = 4, Height = 10, CornerRadius = NotaRadius.Bar, Background = hue, VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = PadName(a, c), FontSize = 9, Foreground = c == Sel ? IrAmberLit : IrTxt, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } };
-        nameCell.PointerPressed += (_, _) => SelectPad(c);
-        Grid.SetColumn(nameCell, 0); g.Children.Add(nameCell);
-        var noteTb = IrMono(NoteName(note), IrMuted); Grid.SetColumn(noteTb, 1); g.Children.Add(noteTb);
-
-        var vslot = new SliderTrack { Norm = VolNorm(a.ChainGain(c)) };
-        vslot.Changed += v => a.SetChainGain(c, NormVol(v));
-        _irTick.Add(() => { if (!vslot.Dragging) vslot.Norm = VolNorm(a.ChainGain(c)); });
-        MidiLearn.Bind(vslot, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
-        Grid.SetColumn(vslot, 2); g.Children.Add(vslot);
-
-        var panTb = IrMono(PanText(a.ChainPan(c)), NotaPalette.TextSecondary); panTb.TextAlignment = TextAlignment.Center; Grid.SetColumn(panTb, 3); g.Children.Add(panTb);
-
-        int choke = E.RackChainChoke(T, c);
-        var padMute = IrMsBtn("M", a.ChainMute(c), IrRed, () => { a.SetChainMute(c, !a.ChainMute(c)); _ctx.RequestRebuild(); });
-        var padSolo = IrMsBtn("S", a.ChainSolo(c), IrAmber, () => { a.SetChainSolo(c, !a.ChainSolo(c)); _ctx.RequestRebuild(); });
-        MidiLearn.Bind(padMute, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Pad Mute");
-        MidiLearn.Bind(padSolo, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Pad Solo");
-        var msc = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = {
-            padMute, padSolo,
-            IrMsBtn(choke > 0 ? choke.ToString() : "·", choke > 0, IrTeal, () => { E.RackSetChainChoke(T, c, (choke + 1) % 5); _ctx.RequestRebuild(); }) } };
-        Grid.SetColumn(msc, 4); g.Children.Add(msc);
-        return g;
-    }
-
-    // ---- drum helpers: pad hue + value mapping + mini peaks ----
-    // Pad hues are the track palette slots themselves, so a pad re-tints with the theme.
-    private static SolidColorBrush PadHue(int chain) => NotaPalette.TrackBrushes[((chain % 8) + 8) % 8];
-    private static IBrush PadFill(SolidColorBrush c, double alpha) => NotaPalette.Wash(c, (byte)(Math.Clamp(alpha, 0, 1) * 255));
-    private static double VolNorm(float gain) { double db = gain <= 0.001 ? -60 : 20 * Math.Log10(gain); return Math.Clamp((db + 60) / 66.0, 0, 1); }
-    private static float NormVol(double v) { double db = -60 + v * 66; return (float)Math.Pow(10, db / 20); }
-    private static string VolText(float gain) { double db = gain <= 0.001 ? -60 : 20 * Math.Log10(gain); return db <= -59 ? "−∞" : $"{db:+0.0;−0.0;0.0}\u2009dB"; }
-    private static string PanText(float pan) { int p = (int)Math.Round(pan * 50); return p == 0 ? "C" : (p < 0 ? $"{-p}L" : $"{p}R"); }
-    private static string DecayText(float d) => d >= 0.999f ? "hold" : $"{20 * Math.Pow(100, d):0}\u2009ms";
-    private static float[] MiniPeaks(float[] raw, int ch, long frames, int buckets)
-    {
-        var o = new float[buckets];
-        if (frames <= 0 || raw.Length == 0) return o;
-        long per = Math.Max(1, frames / buckets);
-        for (int b = 0; b < buckets; b++)
-        {
-            long s = (long)b * per; float mx = 0;
-            for (long i = 0; i < per; i++) { long f = s + i; if (f >= frames) break; float v = 0; for (int cc = 0; cc < ch; cc++) v += Math.Abs(raw[f * ch + cc]); v /= ch; if (v > mx) mx = v; }
-            o[b] = mx;
-        }
-        float peak = 0; foreach (float v in o) peak = Math.Max(peak, v);
-        if (peak > 0) for (int b = 0; b < buckets; b++) o[b] /= peak;
-        return o;
-    }
-
     // ---- rack body (macros + chains), reused by both rack types ------------
     // The 4×2 macro grid column, shared by the rack card and the drum-rack card.
     private Control MacroColumn(IRackAccess a)
@@ -1823,87 +1482,18 @@ internal sealed class RackCardView(DeviceCardContext ctx)
             if (a.TryGetMapping(i, out var m) && m.Chain == chain && m.DeviceIndex == dev && m.ParamIndex == param) a.RemoveMapping(i);
     }
 
-    // ---- drum-rack pads ---------------------------------------------------
-    private static int ChainForNote(IRackAccess a, int note)
-    {
-        for (int c = 0; c < a.ChainCount(); c++) if (a.ChainTriggerNote(c) == note) return c;
-        return -1;
-    }
-
-    // Show a pad's chain in the device area (only rebuilds when the selection changes).
-    private void SelectPad(int chain)
-    {
-        if (chain < 0 || chain == Sel) return;
-        Sel = chain;
-        _ctx.RequestRebuild();
-    }
-
-    // A browser item dropped on a specific pad: sample → Sampler on this note;
-    // instrument → that built-in on this note (replacing any existing chain).
-    private void DropOnPad(IRackAccess a, int note, Nota.Presentation.BrowserItem item)
-    {
-        int existing = ChainForNote(a, note);
-        switch (item.Kind)
-        {
-            case Nota.Presentation.BrowserItemKind.Sample:
-                if (existing >= 0) a.RemoveChain(existing);
-                int cs = E.RackAddSamplerChain(T, item.Path, note, false);
-                if (cs >= 0)
-                {
-                    E.RackSetChainTriggerNote(T, cs, note);
-                    // Label the pad with the sample's name — 16 pads all reading
-                    // "Nota Sampler" tell the user nothing.
-                    E.RackSetChainName(T, cs, System.IO.Path.GetFileNameWithoutExtension(item.Path));
-                }
-                break;
-            case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
-                if (existing >= 0) a.RemoveChain(existing);
-                int ci = a.AddChain(item.BuiltinKind);
-                if (ci >= 0) a.SetChainTriggerNote(ci, note);
-                break;
-            case Nota.Presentation.BrowserItemKind.PluginInstrument:
-                if (existing >= 0) a.RemoveChain(existing);
-                int cp = E.RackAddPluginInstrumentChain(T, item.CatalogIndex);
-                if (cp >= 0) E.RackSetChainTriggerNote(T, cp, note);
-                break;
-            default:
-                return;   // effects / presets aren't pad content
-        }
-        _ctx.RequestRebuild();
-    }
-
-    private void ShowAddPadMenu(IRackAccess a, Control anchor, int note)
-    {
-        var f = new MenuFlyout();
-        void Add(string header, int kind)
-        {
-            var mi = new MenuItem { Header = header };
-            mi.Click += (_, _) =>
-            {
-                int c = a.AddChain(kind);
-                if (c >= 0) a.SetChainTriggerNote(c, note);
-                _ctx.RequestRebuild();
-            };
-            f.Items.Add(mi);
-        }
-        Add("Nota Synth", 0);
-        Add("Nota Physical", 2);
-        Add("Nota Aurora", 5);
-        Add("Nota Volt", 6);
-        Add("Nota Bass", 7);
-        Add("Nota Pendulum", 8);
-        Add("Nota Operator", 9);
-        Add("Nota Grain", 10);
-        Add("Nota Flux", 11);
-        Add("Nota Monolith", 13);
-        Add("Nota Pentad", 14);
-        Add("Nota Consort", 15);
-        f.ShowAt(anchor, showAtPointer: true);
-    }
-
     // ---- small shared bits ------------------------------------------------
     private static Control SectionLabel(string text) => new TextBlock
     { Text = text, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextTertiary };
+
+    // A teal on/off chip (the Effect Rack's Follow / Manual selector).
+    private static Border DrumChip(string text, bool on, Action onClick)
+    {
+        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = on ? IrTeal : NotaPalette.BorderStrong, Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : IrCard, CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = text, FontSize = 9, Foreground = on ? IrTeal : NotaPalette.TextSecondary } };
+        b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
+        return b;
+    }
 
     // A small clickable chip (GUI / Save preset on the chain instrument card).
     private static Border ActionChip(string text, Action onClick)

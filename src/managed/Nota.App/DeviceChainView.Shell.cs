@@ -90,7 +90,15 @@ public sealed partial class DeviceChainView
     internal readonly record struct ShellSpec(
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
-        Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null);
+        Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null,
+        CardPresets? Presets = null);
+
+    /// <summary>A card's own preset list, in place of the factory presets for its kind — the
+    /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
+    /// names the one the device holds now ("" when none fits); <paramref name="Apply"/> loads
+    /// one by id and returns a warning, or "".</summary>
+    internal sealed record CardPresets(
+        IReadOnlyList<(string Id, string Name)> Items, Func<string> Current, Func<string, string> Apply);
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
@@ -100,8 +108,8 @@ public sealed partial class DeviceChainView
     // name opens the factory presets for this kind with the current one checked; ‹ › step to
     // the previous / next preset, wrapping (from Init, › is the first and ‹ the last).
     // Clicks are handled so they neither select nor start dragging the card.
-    private Control PresetPicker(List<FactoryPresetInfo> presets, int cur, string current,
-        Action<FactoryPresetInfo> apply, Action<int> step)
+    private Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
+        Action<int> apply, Action<int> step)
     {
         const double H = 18;
         var label = new TextBlock
@@ -123,9 +131,9 @@ public sealed partial class DeviceChainView
             var flyout = new MenuFlyout();
             for (int i = 0; i < presets.Count; i++)
             {
-                var info = presets[i];
-                var mi = new MenuItem { Header = info.DisplayName, ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
-                mi.Click += (_, _) => apply(info);
+                int iv = i;
+                var mi = new MenuItem { Header = presets[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                mi.Click += (_, _) => apply(iv);
                 flyout.Items.Add(mi);
             }
             flyout.ShowAt(name);
@@ -222,19 +230,40 @@ public sealed partial class DeviceChainView
         };
         ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · right-click for A/B, move and delete" : "Right-click for more");
 
-        // Factory presets for this device, and applying one in place.
-        var presets = s.PresetKind >= 0 || s.IsInstrument || s.Kind == ChainKind.Midi
-            ? _factory.All().Where(p => p.BuiltinKind == s.PresetKind
-                && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect))).ToList()
-            : new List<FactoryPresetInfo>();
+        // Factory presets for this device (or the card's own list), and applying one in place.
+        List<(string Id, string Name)> presets;
+        Action<string> applyById;
+        if (s.Presets is { } own)
+        {
+            presets = own.Items.ToList();
+            // What the device holds now wins over what this card last applied: a kit loaded
+            // from the browser, or a project reopened, still names its kit.
+            string now = own.Current();
+            if (now.Length > 0 && presets.FindIndex(p => p.Id == now) is var ni and >= 0) { extra.PresetId = now; extra.Preset = presets[ni].Name; }
+            applyById = id =>
+            {
+                string warn = own.Apply(id);
+                if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                Changed?.Invoke();
+            };
+        }
+        else
+        {
+            presets = s.PresetKind >= 0 || s.IsInstrument || s.Kind == ChainKind.Midi
+                ? _factory.All().Where(p => p.BuiltinKind == s.PresetKind
+                    && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect)))
+                    .Select(p => (p.Id, p.DisplayName)).ToList()
+                : new List<(string Id, string Name)>();
+            applyById = id => _factory.ApplyInPlace(_engine, id, _trackId, di);
+        }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
-        void ApplyPreset(FactoryPresetInfo p) { _factory.ApplyInPlace(_engine, p.Id, _trackId, di); extra.PresetId = p.Id; extra.Preset = p.DisplayName; Rebuild(); }
+        void ApplyPreset(int i) { var p = presets[i]; applyById(p.Id); extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild(); }
         void StepPreset(int dir)
         {
             int n = presets.Count; if (n == 0) return;
-            ApplyPreset(presets[curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n]);
+            ApplyPreset(curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n);
         }
-        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets, curPreset, extra.Preset, ApplyPreset, StepPreset));
+        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
 
@@ -249,9 +278,9 @@ public sealed partial class DeviceChainView
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
                 for (int i = 0; i < presets.Count; i++)
                 {
-                    var info = presets[i];
-                    var mi = new MenuItem { Header = info.DisplayName, ToggleType = MenuItemToggleType.Radio, IsChecked = i == curPreset };
-                    mi.Click += (_, _) => ApplyPreset(info);
+                    int iv = i;
+                    var mi = new MenuItem { Header = presets[i].Name, ToggleType = MenuItemToggleType.Radio, IsChecked = i == curPreset };
+                    mi.Click += (_, _) => ApplyPreset(iv);
                     menu.Items.Add(mi);
                 }
                 flyout.Items.Add(menu);

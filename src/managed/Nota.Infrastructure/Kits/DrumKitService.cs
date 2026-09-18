@@ -66,6 +66,33 @@ public sealed class DrumKitService : IDrumKits
         return true;
     }
 
+    public string Identify(IAudioEngine engine, int trackId)
+    {
+        int chains = engine.RackChainCount(trackId);
+        if (chains <= 0) return "";
+        var pads = new HashSet<(int Note, string Name)>();
+        for (int c = 0; c < chains; c++)
+        {
+            int note = engine.RackChainTriggerNote(trackId, c);
+            if (note >= 0) pads.Add((note, engine.RackChainName(trackId, c)));
+        }
+
+        // The kit sharing the most pads wins, if it shares at least three quarters of its
+        // own and no other kit ties it — most kits have a Kick on 36 and a Snare on 38, so
+        // a near-empty rack must not read as whichever kit happens to come first.
+        string best = "";
+        int bestScore = 0, runnerUp = 0;
+        foreach (var kit in KitCatalog.All)
+        {
+            int score = 0;
+            foreach (var p in kit.Pads) if (pads.Contains((p.Note, p.Name))) score++;
+            if (score > bestScore) { runnerUp = bestScore; bestScore = score; best = kit.Id; }
+            else if (score > runnerUp) runnerUp = score;
+        }
+        var winner = KitCatalog.ById(best);
+        return winner is not null && bestScore * 4 >= winner.Pads.Count * 3 && bestScore > runnerUp ? best : "";
+    }
+
     private static void Fill(IAudioEngine engine, int track, KitDefinition kit, out string warning)
     {
         KitLibrary.Ensure(kit);

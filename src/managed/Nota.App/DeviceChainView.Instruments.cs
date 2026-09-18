@@ -17,7 +17,7 @@ public sealed partial class DeviceChainView
     {
         int kind = _engine.TrackInstrumentKind(_trackId);
         if (kind == 3) return new RackCardView(NewCardContext()).BuildInstrumentRackCard();   // Instrument Rack
-        if (kind == 4) return new RackCardView(NewCardContext()).BuildDrumRackCard();          // Drum Rack
+        if (kind == 4) return DrumRackCard();
         // Built-in Sampler + synths (Synth/Physical/Aurora/Volt) → their strategy; anything
         // else (or a synth reporting no params) → the generic Open-GUI card.
         bool hasParams = _engine.PluginParamCount(_trackId, -1) > 0;
@@ -29,6 +29,31 @@ public sealed partial class DeviceChainView
             Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
             PresetKind: kind, IsInstrument: true, Width: strategy.CardWidth, Kind: ChainKind.Instrument,
             VoiceLabel: strategy.VoiceLabel);
+        return BuildCardShell(spec, body);
+    }
+
+    // The Drum Rack in the shared shell: its presets are the factory kits, which replace the
+    // rack's pads, and the badge counts the loaded pads.
+    private Control DrumRackCard()
+    {
+        var body = new RackCardView(NewCardContext()).BuildDrumRackBody(out int pads);
+        CardPresets? kits = null;
+        if (_kits is { } k)
+        {
+            int t = _trackId;
+            var items = new System.Collections.Generic.List<(string, string)>();
+            foreach (var kit in k.All()) items.Add((kit.Id, kit.Name));
+            kits = new CardPresets(items, () => k.Identify(_engine, t), id =>
+            {
+                k.LoadInto(_engine, t, id, out string warn);
+                _rackSelChain = 0;
+                return warn;
+            });
+        }
+        var spec = new ShellSpec(
+            Name: _engine.DeviceName(_trackId, -1), Subtitle: $"DRUMS · {pads} PAD{(pads == 1 ? "" : "S")}", DeviceIndex: -1, Count: 1,
+            Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
+            PresetKind: 4, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument, Presets: kits);
         return BuildCardShell(spec, body);
     }
 

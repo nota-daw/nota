@@ -43,6 +43,7 @@ public sealed partial class DeviceChainView : UserControl
     private readonly IAudioEngine _engine;
     private readonly IFactoryPresets _factory;
     private readonly IPluginCatalog? _catalog;   // maps a copied plugin's id → catalog index for paste
+    private readonly IDrumKits? _kits;           // the Drum Rack card's preset list
     private readonly DeviceCardFactory _cardFactory = new();
     private readonly InstrumentCardFactory _instrumentFactory = new();
     private readonly MidiDeviceCardFactory _midiFactory = new();
@@ -60,6 +61,9 @@ public sealed partial class DeviceChainView : UserControl
     /// routes it (effect → the shown track; instrument → a rack chain / drum pad).</summary>
     public event Action<BrowserItem>? ItemDropped;
 
+    /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
+    public event Action<string>? StatusMessage;
+
     // Accent overlay shown while a browser item is dragged over the panel.
     private readonly Border _dropGlow = new()
     {
@@ -70,11 +74,12 @@ public sealed partial class DeviceChainView : UserControl
         Margin = new Thickness(2),
     };
 
-    public DeviceChainView(IAudioEngine engine, IFactoryPresets factory, IPluginCatalog? catalog = null)
+    public DeviceChainView(IAudioEngine engine, IFactoryPresets factory, IPluginCatalog? catalog = null, IDrumKits? kits = null)
     {
         _engine = engine;
         _factory = factory;
         _catalog = catalog;
+        _kits = kits;
         Focusable = true;   // so Ctrl+C/X/V + Delete on a selected device reach OnKeyDown
         var scroller = new ScrollViewer
         {

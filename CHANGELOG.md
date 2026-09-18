@@ -19,6 +19,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **The Nota Drum Rack's editor is now the almanac's card, with a kit picker in its header.**
+  The header's **‹ Kit ⌄ ›** picker loads any factory kit into the rack in place (it
+  replaces the pads) and steps through them; a rack names its kit even after a project is
+  reopened or a pad or two is swapped. The body is the 700 × 260 card: **Pads** (the 4 × 4
+  grid, pad 1 bottom-left, each pad in its own hue, the choke group on the pad) and
+  **Mixer** (the bank's pads as rows: volume, pan, mute · solo · choke) under a strip with
+  the bank, swing, humanize and Fold, beside a **selected-pad** panel — its one-shot drawn
+  with a playhead, volume, pan, tune and decay, the choke group and a button into its
+  instrument — and a status line that reads the selection back in words. New: a **Chain**
+  view shows the selected pad's instrument and effects and adds effects to it (the panel's
+  *Open chain*), and a right-click on a pad **renames**, **re-chokes** or **removes** it.
+  An empty pad now also offers a Sampler.
+- **Fifteen new factory drum kits, 25 in all:** *Brass Room* (live rock kit in a big room),
+  *Breakline* (jungle break), *Bunker* (warehouse techno), *Pixel* (minimal clicks and
+  blips), *Velvet* (jazz brushes), *Circuit* (electro box), *Yard* (dub and reggae),
+  *Byte* (8-bit chip), *Lagoon* (amapiano log drums), *Titan* (trailer percussion),
+  *Shuffle* (UK garage), *Mirrorball* (70s disco), *Pit* (orchestral percussion), *Hyper*
+  (hyperpop) and *Crate* (90s boom bap). Like the first ten they are rendered on your
+  machine on first launch, sit on the General MIDI map with the hats choked together,
+  and bring their own swing and humanize.
 - **Nota Bass grew performance wheels, a Legato switch and an output pan, and its editor
   is now the almanac's card.** A **pitch-bend** wheel with a selectable **range** (±2 / ±5
   / ±12 semitones) and a **mod wheel** that opens the LFO onto the cutoff — a wobble you

@@ -5541,24 +5541,42 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
 Console.WriteLine("-- Factory drum kits --");
 {
     var kits = Nota.Infrastructure.Kits.KitCatalog.All;
-    Check(kits.Count == 10, $"ten factory kits ({kits.Count})");
+    Check(kits.Count == 25, $"25 factory kits ({kits.Count})");
 
     var kitIds = new System.Collections.Generic.HashSet<string>();
-    bool padsOk = true, notesOk = true, namesOk = true;
+    var kitNames = new System.Collections.Generic.HashSet<string>();
+    bool padsOk = true, notesOk = true, namesOk = true, hatsOk = true;
     foreach (var k in kits)
     {
-        if (!kitIds.Add(k.Id)) padsOk = false;
+        if (!kitIds.Add(k.Id) || !kitNames.Add(k.Name)) padsOk = false;
         if (k.Pads.Count != 16) padsOk = false;
         var padNotes = new System.Collections.Generic.HashSet<int>();
+        var padNames = new System.Collections.Generic.HashSet<string>();
         foreach (var pad in k.Pads)
         {
             if (pad.Note < 36 || pad.Note > 51 || !padNotes.Add(pad.Note)) notesOk = false;
-            if (string.IsNullOrWhiteSpace(pad.Name)) namesOk = false;
+            if (string.IsNullOrWhiteSpace(pad.Name) || !padNames.Add(pad.Name)) namesOk = false;
+            if (pad.Choke < 0 || pad.Choke > 4) hatsOk = false;              // the card offers groups 1..4
+            if (pad.Name.EndsWith(" Hat") && pad.Choke != 1) hatsOk = false;  // closed cuts open
         }
+        // A choke group of one pad cuts nothing — a recipe typo.
+        if (k.Pads.Where(p => p.Choke > 0).GroupBy(p => p.Choke).Any(g => g.Count() < 2)) hatsOk = false;
     }
-    Check(padsOk, "every kit has a unique id and 16 pads");
+    Check(padsOk, "every kit has a unique id and name and 16 pads");
     Check(notesOk, "pad notes are unique and inside the GM bank (36..51)");
-    Check(namesOk, "every pad is named");
+    Check(namesOk, "every pad is named, uniquely within its kit");
+    Check(hatsOk, "hats share choke group 1; every choke group (1..4) pairs at least two pads");
+
+    // A loaded kit is recognised by its pads, so no two kits may share more than 12 of them:
+    // then a kit stays recognisable with up to three pads swapped or renamed.
+    int worstOverlap = 0; string worstPair = "";
+    for (int i = 0; i < kits.Count; i++)
+        for (int j = i + 1; j < kits.Count; j++)
+        {
+            int n = kits[i].Pads.Count(p => kits[j].Pads.Any(q => q.Note == p.Note && q.Name == p.Name));
+            if (n > worstOverlap) { worstOverlap = n; worstPair = $"{kits[i].Name}/{kits[j].Name}"; }
+        }
+    Check(worstOverlap <= 12, $"kits are told apart by their pads (most shared: {worstOverlap}, {worstPair})");
 
     // Rendering: deterministic, on target level, finite, and long enough to be a drum.
     var kick = kits[0].Pads[0];
@@ -5575,6 +5593,19 @@ Console.WriteLine("-- Factory drum kits --");
     Check(peak <= 1.0 && Math.Abs(20 * Math.Log10(peak) - kick.PeakDb) < 0.6,
           $"rendered peak hits the recipe's target ({20 * Math.Log10(peak):0.0} dBFS, want {kick.PeakDb:0.0})");
     Check(r1.Frames > r1.SampleRate / 50, $"one-shot is longer than 20 ms ({r1.Frames * 1000 / r1.SampleRate} ms)");
+
+    // Every recipe of every kit renders: finite, on its level, not silent.
+    var badPads = new System.Collections.Generic.List<string>();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    System.Threading.Tasks.Parallel.ForEach(kits.SelectMany(k => k.Pads.Select(p => (k, p))), kp =>
+    {
+        var r = Nota.Infrastructure.Kits.KitRenderer.Render(kp.p, 1);
+        double pk = 0; bool fin = r.Frames > 0;
+        foreach (var v in r.Interleaved) { if (!float.IsFinite(v)) { fin = false; break; } pk = Math.Max(pk, Math.Abs(v)); }
+        if (!fin || pk > 1.0 || pk <= 0 || Math.Abs(20 * Math.Log10(pk) - kp.p.PeakDb) > 1.0)
+            lock (badPads) badPads.Add($"{kp.k.Name}/{kp.p.Name}");
+    });
+    Check(badPads.Count == 0, $"all {kits.Sum(k => k.Pads.Count)} kit pads render finite and on level in {sw.ElapsedMilliseconds} ms{(badPads.Count > 0 ? ": " + string.Join(", ", badPads) : "")}");
 
     // Building a rack from a kit: every pad loaded, named, choked and audible.
     var svc = new DrumKitService();
@@ -5601,6 +5632,16 @@ Console.WriteLine("-- Factory drum kits --");
     // Loading a second kit into the same rack replaces its pads rather than stacking.
     Check(svc.LoadInto(ke, kt, kits[1].Id, out _) && ke.RackChainCount(kt) == 16, "loading another kit replaces the pads");
     Check(ke.RackChainName(kt, 0) == kits[1].Pads[0].Name, "the replaced pads carry the new kit's names");
+
+    // The card's kit picker names the kit a rack holds, and keeps naming it through a pad
+    // swap — but a rack stripped to a few pads is no longer that kit.
+    Check(svc.Identify(ke, kt) == kits[1].Id, $"the loaded kit is recognised ('{svc.Identify(ke, kt)}')");
+    ke.RackSetChainName(kt, 0, "My Kick");
+    Check(svc.Identify(ke, kt) == kits[1].Id, "a renamed pad keeps the kit recognised");
+    while (ke.RackChainCount(kt) > 3) ke.RackRemoveChain(kt, ke.RackChainCount(kt) - 1);
+    Check(svc.Identify(ke, kt) == "", "a rack stripped to three pads is no kit");
+    Check(svc.LoadInto(ke, kt, kits[24].Id, out string lastWarn) && svc.Identify(ke, kt) == kits[24].Id,
+          $"the last kit loads and is recognised ({(lastWarn.Length == 0 ? "no warnings" : lastWarn)})");
 }
 
 // ===================== M9-D: automation segment curves =====================

@@ -399,14 +399,22 @@ and user presets, automation, persistence and cloning.
 - **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains
   with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
   a zone map, rack output (Volume/Glide), Fold/Save.
-- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads and Mixer views, per-pad
-  Volume/Pan/Tune/Decay, named pads, choke groups (monophonic cut), Swing/Humanize,
-  hot-swap. Its clips can be stepped in the detail panel's **Pattern** tab (see below).
-- **Ten factory kits** under Nota Drum Rack in the browser: *Volta* (warm analog boom),
-  *Kompakt* (punchy analog house), *Micron* (small vintage rhythm box), *Linnwood* (80s PCM
-  machine), *Atelier* (acoustic studio kit), *Cellar* (dusty vinyl break), *Neon* (modern
-  sub-forward, tuned 808 bass), *Foundry* (industrial metal), *Terra* (hand percussion),
-  *Aether* (ambient). 16 pads each on the General MIDI map (36–51), hats choked together,
+- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer and Chain views,
+  per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
+  right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
+  oscillogram with a playhead, and each pad's own effect chain. A **kit picker** in the
+  card header loads any factory kit in place and names the kit a rack holds. Its clips can
+  be stepped in the detail panel's **Pattern** tab (see below).
+- **25 factory kits** under Nota Drum Rack in the browser and in the card's kit picker:
+  *Volta* (warm analog boom), *Kompakt* (punchy analog house), *Micron* (small vintage
+  rhythm box), *Linnwood* (80s PCM machine), *Atelier* (acoustic studio kit), *Cellar*
+  (dusty vinyl break), *Neon* (modern sub-forward, tuned 808 bass), *Foundry* (industrial
+  metal), *Terra* (hand percussion), *Aether* (ambient), *Brass Room* (live rock kit in a
+  big room), *Breakline* (jungle break), *Bunker* (warehouse techno), *Pixel* (minimal),
+  *Velvet* (jazz brushes), *Circuit* (electro box), *Yard* (dub and reggae), *Byte* (8-bit
+  chip), *Lagoon* (amapiano log drums), *Titan* (trailer percussion), *Shuffle* (UK
+  garage), *Mirrorball* (70s disco), *Pit* (orchestral percussion), *Hyper* (hyperpop) and
+  *Crate* (90s boom bap). 16 pads each on the General MIDI map (36–51), hats choked together,
   with the kit's own swing and humanize. Load onto a new track or drop onto an existing
   Drum Rack to replace its pads. The one-shots are synthesized on first launch rather than
   shipped as audio (nothing added to the installer) and appear in the Files tab under
