@@ -18,6 +18,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-09-18
+
+### Highlights
+- **Clip tools.** A new Tools rail in the piano roll writes and rewrites notes — rhythms,
+  chords, Euclidean patterns, arpeggios, ornaments, strums and more — and you hear every
+  change before you apply it.
+- **Every built-in instrument redesigned.** Synth, Volt, Aurora, Operator, Bass, Flux, Grain
+  and the Drum Rack now share one compact card with tabs, live graphs and a status line;
+  most gained pitch-bend and mod wheels and new controls, and every synth ships 25 presets.
+- **25 drum kits and a step sequencer.** The Drum Rack gets factory kits synthesized on your
+  machine, a kit picker, named pads and a Pattern tab for programming beats step by step.
+- **Song sections and a Snap switch.** Mark Intro, Verse and Drop over the ruler to jump,
+  loop and select by section; switch Snap off to place clips freely.
+- **A lighter, cleaner workspace.** A new light theme (Ember Paper), a single-row transport,
+  a compact browser and calmer clips and groups give the arrangement more room.
+- **Simpler automation and a gamepad as a controller.** Arm Record and move a control to
+  write automation — no more modes — and map a game controller's buttons and sticks like
+  MIDI (macOS).
+
 ### Added
 - **Nota Grain's editor is now the almanac's card, with a Dry/Wet knob and a live grain
   cloud.** The vertical tab rail and the separate playhead strip give way to one layout:
