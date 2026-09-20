@@ -256,7 +256,7 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
-                new TextBlock { Text = "ZOOM", Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) },
+                new TextBlock { Text = "ZOOM", Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
                 zoomOut, zoomIn,
             },
         };
