@@ -384,6 +384,17 @@ and user presets, automation, persistence and cloning.
   band gain and solo. Amount scales every ratio; Peak/RMS detection, lookahead (PDC), a
   band-split external sidechain with Listen, auto makeup, Mix, output gain and a −0.3 dBFS soft
   clip. Transfer curve with drag handles, detector-envelope trace, per-band GR meters.
+- **Nota Lens** (22) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
+  passing the audio through untouched. *Spectrum*: FFT 512–16384, Hann / Blackman-Harris /
+  flat-top window, frame averaging, fractional-octave smoothing, fall time, pink tilt, peak
+  hold, and a pointer cursor reading frequency, note, cents and level. *Scope*: the trace is
+  pinned to the trigger point and stands still while older passes fade; Auto / Normal / Single
+  on a rising or falling edge, a level dragged on the trace, holdoff, 20 µs–20 ms per division,
+  A/B cursors for Δt / 1/Δt / ΔV with the matching note, and Export WAV of the captured window.
+  *Waterfall*: a 4 / 12 / 60-second spectrogram with gain, floor, contrast and FFT overlap.
+  A permanent SCALE rail, Freeze, a note grid, a linear or log frequency axis, an L+R / L / R
+  source that can read Mid/Side, and a status line with peak, crest, momentary LUFS and L/R
+  correlation. Readable from MCP with `read_analyzer`.
 - **Nota Chorus** — modulation (chorus) effect.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.

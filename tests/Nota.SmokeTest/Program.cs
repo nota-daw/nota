@@ -3919,6 +3919,222 @@ Console.WriteLine("-- Nota Prism --");
     }
 }
 
+// ============================ Nota Lens ====================================
+Console.WriteLine("-- Nota Lens --");
+{
+    // Lens = analyzer (kind 22). Own engine, fed a deterministic 1 kHz sine so the
+    // spectrum peak, the scope period and the third-octave table are all predictable.
+    // The analysis runs lazily on the message thread and is rate-limited by Display Rate,
+    // so each read is preceded by a render + a short wait.
+    const int ViewP = 0, FreezeP = 1, SourceP = 2, MidSideP = 3, FftSizeP = 4, WindowP = 5,
+              AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
+              TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
+    const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
+              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 20;
+    const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4;
+    const int A_Rearm = 0, A_ResetPeak = 1;
+
+    string lensWav = Path.Combine(Path.GetTempPath(), "nota_lens_" + Guid.NewGuid().ToString("N") + ".wav");
+    Nota.SmokeTest.WavWriter.WriteTones(lensWav, 4.0, new double[] { 1000 }, 0.25, 44100);
+    using var le = new NotaEngine();
+    le.SetBpm(120); le.SetTimeSignature(4, 4);
+    int lt = le.AddAudioTrack();
+    le.AddAudioClip(lt, lensWav, startBeat: 0.0);
+    int ld = le.AddBuiltinDevice(lt, 22);
+    try
+    {
+        Check(ld >= 0, "add built-in Nota Lens");
+        Check(le.DeviceName(lt, ld) == "Nota Lens", $"name is Nota Lens (got '{le.DeviceName(lt, ld)}')");
+        Check(le.TrackDeviceBuiltinKind(lt, ld) == 22, $"builtin kind is 22 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
+        int lpc = le.DeviceParamCount(lt, ld);
+        Check(lpc == 37, $"Nota Lens exposes 37 params (got {lpc})");
+        var lnames = Enumerable.Range(0, lpc).Select(i => le.DeviceParamName(lt, ld, i)).ToList();
+        Check(lnames.Distinct().Count() == lpc && lnames.All(n => n.Length > 0), "Lens param names are unique and non-empty");
+        le.DeviceSetParam(lt, ld, TiltP, 0.42f);
+        Check(Math.Abs(le.DeviceGetParam(lt, ld, TiltP) - 0.42f) < 1e-4, "Lens param set/get round-trips");
+        le.DeviceSetParam(lt, ld, TiltP, le.DeviceParamDefault(lt, ld, TiltP));
+        le.DeviceSetParam(lt, ld, RateP, 1f);   // 60 fps: the shortest analysis interval
+
+        const int LN = 8192;
+        var lb = new float[LN * 2];
+        var lsc = new float[32];
+        float Render(int blocks = 4)
+        {
+            le.Seek(0); le.Play();
+            float r = 0;
+            for (int k = 0; k < blocks; k++)
+            {
+                le.RenderOffline(lb, LN);
+                foreach (var s in lb) if (!float.IsFinite(s)) { Check(false, "Lens render stays finite"); break; }
+                r = Rms(lb, LN);
+            }
+            le.StopTransport();
+            System.Threading.Thread.Sleep(40);   // let the rate limiter open
+            return r;
+        }
+        double Sc(int i) => lsc[i];
+        void Read() { int n = le.DeviceScope(lt, ld, lsc, kLensScope); Check(n == kLensScope, $"Lens scope returns {kLensScope} values (got {n})"); }
+
+        // An analyzer passes audio through untouched.
+        le.SetDeviceBypassed(lt, ld, true);
+        float rByp = Render();
+        le.SetDeviceBypassed(lt, ld, false);
+        float rThru = Render();
+        Check(rByp > 1e-2f && Math.Abs(20 * Math.Log10(rThru / Math.Max(1e-9f, rByp))) < 0.01,
+              $"Lens passes the signal through unchanged ({20 * Math.Log10(rThru / Math.Max(1e-9f, rByp)):+0.000;-0.000} dB vs bypass)");
+        Check(le.TrackLatencySamples(lt) == 0, $"Lens adds no latency to the track (got {le.TrackLatencySamples(lt)} smp)");
+        Read();
+
+        // Spectrum: the 1 kHz tone is the loudest peak, at roughly −12 dBFS.
+        Check(Math.Abs(Sc(M_PeakHz) - 1000) < 80, $"spectrum finds the 1 kHz tone ({Sc(M_PeakHz):F0} Hz)");
+        Check(Sc(M_RmsDb) is > -25 and < -9, $"RMS follows the tone ({Sc(M_RmsDb):F1} dB)");
+        // Calibration: unsmoothed, a 0.25 sine must read its own −12.0 dBFS (a Hann window
+        // costs up to 1.4 dB of scalloping when the tone falls between bins). Smoothing then
+        // averages power over a band, so it legitimately reads a narrow tone lower.
+        float smoothWas = le.DeviceGetParam(lt, ld, SmoothP);
+        le.DeviceSetParam(lt, ld, SmoothP, 0f);
+        Render(); Read();
+        Check(Sc(M_PeakDb) is > -14 and < -11, $"an unsmoothed 0.25 sine reads −12 dBFS ({Sc(M_PeakDb):F1} dB)");
+        le.DeviceSetParam(lt, ld, SmoothP, smoothWas);
+        Render(); Read();
+        Check(Sc(M_PeakDb) < -13, $"smoothing averages the tone's power over its band ({Sc(M_PeakDb):F1} dB)");
+        Check(Math.Abs(Sc(M_SampleRate) - 44100) < 1, $"Lens reports the sample rate ({Sc(M_SampleRate):F0} Hz)");
+
+        var curveBuf = new float[1024];
+        Check(le.DeviceLayerWave(lt, ld, L_Spectrum, curveBuf, curveBuf.Length) == 512, "Lens publishes a 512-point spectrum curve");
+        Check(le.DeviceLayerWave(lt, ld, L_Peak, curveBuf, curveBuf.Length) == 512, "Lens publishes a 512-point peak-hold curve");
+        Check(le.DeviceLayerWave(lt, ld, L_Waterfall, curveBuf, curveBuf.Length) == 256, "Lens publishes a 256-bin waterfall row");
+        int traceN = le.DeviceLayerWave(lt, ld, L_Trace, curveBuf, curveBuf.Length);
+        Check(traceN == 512, $"Lens publishes a 512-point scope trace (got {traceN})");
+        Check(le.DeviceLayerWave(lt, ld, L_Raw, curveBuf, curveBuf.Length) > 0, "Lens publishes the raw triggered window");
+
+        // The curve peaks where the tone is, not at the edges.
+        le.DeviceLayerWave(lt, ld, L_Spectrum, curveBuf, curveBuf.Length);
+        int best = 0;
+        for (int i = 1; i < 512; i++) if (curveBuf[i] > curveBuf[best]) best = i;
+        double bestHz = 20 * Math.Pow(Math.Min(20000, 44100 * 0.45) / 20.0, best / 511.0);
+        Check(Math.Abs(bestHz - 1000) < 80, $"the published curve peaks at the tone ({bestHz:F0} Hz)");
+
+        // FFT size + resolution follow the parameter.
+        le.DeviceSetParam(lt, ld, FftSizeP, 1f);   // 16384
+        Render(); Read();
+        Check((int)Sc(M_FftN) == 16384, $"FFT size follows the param ({Sc(M_FftN):F0})");
+        Check(Math.Abs(Sc(M_BinHz) - 44100.0 / 16384) < 0.01, $"bin width follows the FFT size ({Sc(M_BinHz):F3} Hz)");
+        Check(Math.Abs(Sc(M_PeakHz) - 1000) < 40, $"the finer FFT still finds the tone ({Sc(M_PeakHz):F0} Hz)");
+        le.DeviceSetParam(lt, ld, FftSizeP, le.DeviceParamDefault(lt, ld, FftSizeP));
+
+        // Scope: a 1 kHz sine measures a 1 ms period and a full-scale-ish Vpp.
+        le.DeviceSetParam(lt, ld, ViewP, 0.5f);
+        Render(); Read();
+        Check(Math.Abs(Sc(M_PeriodMs) - 1.0) < 0.06, $"scope measures the 1 ms period ({Sc(M_PeriodMs):F3} ms)");
+        Check(Math.Abs(Sc(M_FreqHz) - 1000) < 60, $"scope reports the tone's frequency ({Sc(M_FreqHz):F1} Hz)");
+        Check(Sc(M_Vpp) is > 0.2f and < 1.2f, $"scope measures Vpp ({Sc(M_Vpp):F3})");
+        Check(Sc(M_Vrms) > 0.05f, $"scope measures Vrms ({Sc(M_Vrms):F3})");
+
+        // Single-shot: the capture holds until it is re-armed.
+        le.DeviceSetParam(lt, ld, TrigModeP, 1f);
+        Render(); Read();
+        Check(Sc(M_Held) > 0.5f, "a finished Single capture holds the trace");
+        le.DeviceAction(lt, ld, A_Rearm, 0, 0f);
+        Render(); Read();
+        Check(Sc(M_Held) > 0.5f, "re-arm captures again and holds");
+        le.DeviceSetParam(lt, ld, TrigModeP, 0f);
+        Render(); Read();
+        Check(Sc(M_Held) < 0.5f, "Auto free-runs again");
+
+        // Freeze holds the display.
+        le.DeviceSetParam(lt, ld, FreezeP, 1f);
+        Render(); Read();
+        Check(Sc(M_Held) > 0.5f, "Freeze holds the capture");
+        le.DeviceSetParam(lt, ld, FreezeP, 0f);
+
+        // Source / Mid-Side: a mono clip has no Side content.
+        le.DeviceSetParam(lt, ld, MidSideP, 1f);
+        le.DeviceSetParam(lt, ld, SourceP, 0.5f);   // Mid
+        Render(); Read();
+        double midDb = Sc(M_RmsDb);
+        le.DeviceSetParam(lt, ld, SourceP, 1f);     // Side
+        Render(); Read();
+        double sideDb = Sc(M_RmsDb);
+        Check(midDb - sideDb > 40, $"a mono source has no Side content (Mid {midDb:F1} dB, Side {sideDb:F1} dB)");
+        le.DeviceSetParam(lt, ld, MidSideP, 0f);
+        le.DeviceSetParam(lt, ld, SourceP, 0f);
+        le.DeviceSetParam(lt, ld, ViewP, 0f);
+        le.DeviceAction(lt, ld, A_ResetPeak, 0, 0f);
+        Render(); Read();
+
+        // Text reports (the MCP surface).
+        var bandLines = le.DeviceText(lt, ld, 1).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Check(bandLines.Length == 31, $"Lens reports 31 third-octave bands (got {bandLines.Length})");
+        Check(le.DeviceText(lt, ld, 0).Contains("peak"), "Lens summary names the peak");
+        Check(le.DeviceText(lt, ld, 2).Contains("window"), "Lens reports the scope window");
+        Check(le.DeviceText(lt, ld, 3).Length > 0, "Lens reports its spectral peaks");
+        le.DeviceSetParam(lt, ld, CursorAP, 0.25f);
+        le.DeviceSetParam(lt, ld, CursorBP, 0.5f);
+        Check(le.DeviceText(lt, ld, 4).Contains("dt"), "Lens reports the A/B cursor measurements");
+
+        // Clone: duplicating the track copies the params.
+        le.DeviceSetParam(lt, ld, SmoothP, 0.77f);
+        le.DeviceSetParam(lt, ld, WindowP, 1f);
+        int ldup = le.DuplicateTrack(lt);
+        Check(ldup > 0 && le.TrackDeviceBuiltinKind(ldup, 0) == 22
+              && Math.Abs(le.DeviceGetParam(ldup, 0, SmoothP) - 0.77f) < 1e-4
+              && Math.Abs(le.DeviceGetParam(ldup, 0, WindowP) - 1f) < 1e-4, "duplicate track clones the Lens params");
+        le.RemoveTrack(ldup);
+        for (int i = 0; i < lpc; i++) le.DeviceSetParam(lt, ld, i, le.DeviceParamDefault(lt, ld, i));
+
+        // Automation drives the trigger level.
+        int llane = le.AddAutomationLane(lt, AutomationTarget.DeviceParam, ld, TrigLevelP);
+        Check(llane >= 0, "add Lens Trigger Level automation lane");
+        le.SetAutomationPoints(lt, llane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+        le.Seek(1.99); le.Play(); le.RenderOffline(lb, 4096); le.StopTransport();
+        Check(le.DeviceGetParam(lt, ld, TrigLevelP) > 0.7f, $"automation drives Lens Trigger Level ({le.DeviceGetParam(lt, ld, TrigLevelP):F2})");
+        le.RemoveAutomationLane(lt, llane);
+
+        // Factory presets: every named param exists and each applies + still passes audio.
+        {
+            var cat = new FactoryPresetCatalog();
+            var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 22).ToList();
+            Check(mine.Count >= 25, $"Nota Lens ships at least 25 factory presets ({mine.Count})");
+            var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !lnames.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+            Check(bad.Count == 0, $"every Lens preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+            float rRef = Render(1);   // same block count as the per-preset renders below
+            int pf = 0;
+            foreach (var p in mine)
+            {
+                if (cat.ApplyInPlace(le, p.Id, lt, ld).Length != 0) { pf++; continue; }
+                float r = Render(1);
+                if (!float.IsFinite(r) || Math.Abs(20 * Math.Log10(r / Math.Max(1e-9f, rRef))) > 0.01) pf++;
+            }
+            Check(pf == 0, $"every Lens preset applies and still passes audio through ({pf} failed)");
+            cat.ApplyInPlace(le, "lens/Scope · Single Shot", lt, ld);
+            Check(le.DeviceGetParam(lt, ld, ViewP) > 0.4f && le.DeviceGetParam(lt, ld, TrigModeP) > 0.9f, "Scope · Single Shot selects the scope and arms Single");
+            cat.ApplyInPlace(le, "lens/Mix Overview", lt, ld);
+            Check(le.DeviceGetParam(lt, ld, ViewP) < 1e-3 && le.DeviceGetParam(lt, ld, TrigModeP) < 1e-3, "unnamed params reset to defaults between presets");
+            for (int i = 0; i < lpc; i++) le.DeviceSetParam(lt, ld, i, le.DeviceParamDefault(lt, ld, i));
+            le.DeviceSetParam(lt, ld, RateP, 1f);
+        }
+
+        // MCP: the kind is listed and read_analyzer returns a parsed reading.
+        {
+            var dt = new Nota.Mcp.Tools.DeviceTools(le, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+            Check(dt.ListDeviceKinds().Any(k => k.Kind == 22 && k.Name == "Nota Lens"), "MCP lists Nota Lens (kind 22)");
+            Render();
+            var reading = dt.ReadAnalyzer(lt, ld).Result;
+            Check(reading.Bands.Length == 31, $"MCP read_analyzer returns 31 bands (got {reading.Bands.Length})");
+            Check(reading.Summary.Length > 0 && reading.Scope.Length > 0 && reading.Cursors.Length > 0, "MCP read_analyzer returns the summary, scope and cursor lines");
+            var loudest = reading.Bands.OrderByDescending(b => b.Db).First();
+            Check(Math.Abs(loudest.Hz - 1000) < 300, $"the loudest third-octave band is the 1 kHz one (got {loudest.Hz:F0} Hz)");
+            Check(reading.Peaks.Length > 0 && Math.Abs(reading.Peaks[0].Hz - 1000) < 80 && reading.Peaks[0].Note.Length > 0,
+                  $"MCP read_analyzer names the strongest peak ({(reading.Peaks.Length > 0 ? $"{reading.Peaks[0].Hz:F0} Hz {reading.Peaks[0].Note}" : "none")})");
+        }
+    }
+    finally
+    {
+        try { File.Delete(lensWav); } catch { }
+    }
+}
+
 // ============================ Nota Level ===================================
 Console.WriteLine("-- Nota Level (AutoGain) --");
 {

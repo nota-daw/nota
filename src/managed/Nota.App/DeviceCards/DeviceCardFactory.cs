@@ -40,6 +40,7 @@ internal sealed class DeviceCardFactory
         [19] = new ShutterDeviceBody(),
         [20] = new ChamberDeviceBody(),
         [21] = new PrismDeviceBody(),
+        [22] = new LensDeviceBody(),
     };
 
     /// <summary>Resolve the body for a device: -1 = hosted plugin, a mapped built-in kind,

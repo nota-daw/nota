@@ -18,6 +18,33 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Nota Lens — analyzer and oscilloscope.** A new built-in audio effect (kind 22) that shows
+  you what a track is actually doing. Drop it anywhere in a chain; it passes the audio through
+  untouched and adds no latency. One card, three views behind tabs:
+  - **Spectrum** — FFT of 512 / 2048 / 4096 / 16384 points with a Hann, Blackman-Harris or
+    flat-top window, frame averaging, fractional-octave smoothing, adjustable fall time, a
+    pink-noise tilt so a balanced mix reads flat, and a peak-hold trace with its own hold
+    time. Move the pointer over the curve to read a frequency, its note and cents, and its
+    level. A 0.25 sine reads its own −12.0 dBFS.
+  - **Scope** — a triggered oscilloscope that behaves like a bench instrument: the trace is
+    pinned to the trigger point and stands still, older passes fade out behind it. Auto /
+    Normal / Single triggering on a rising or falling edge, with a level you drag on the
+    trace and a holdoff. Time/div from 20 µs to 20 ms, volt/div from 0.02 to 2. A/B cursors
+    you drag for Δt, 1/Δt, ΔV and the matching note, and **Export WAV** to write the captured
+    window to disk.
+  - **Waterfall** — a spectrogram over the last 4, 12 or 60 seconds, with gain, floor,
+    contrast and FFT overlap.
+  Plus a permanent SCALE rail (dB top and range, or volt/div and time/div), a live status
+  line (peak, crest, momentary LUFS, L/R correlation), Freeze, an optional note grid, a
+  linear or logarithmic frequency axis, and an L+R / L / R source that can read Mid/Side
+  instead. All 37 controls are device parameters, so automation, MIDI learn, A/B compare and
+  project save work as they do everywhere else. **32 factory presets** across the three views.
+- **MCP: `read_analyzer`.** Ask for what a Nota Lens is measuring and get it back parsed —
+  the summary line, the scope measurements, the A/B cursor readings, 31 third-octave band
+  levels and the strongest spectral peaks with note names. `get_device_text` on a Lens
+  returns the same reports as text.
+
 ## [0.40.0] — 2026-09-18
 
 ### Highlights

@@ -242,6 +242,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             new() { Name = "Nota EQ-8", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 0, Sub = "8-band EQ" },
             new() { Name = "Nota Compressor", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 1, Sub = "built-in" },
             new() { Name = "Nota Prism", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 21, Sub = "multiband dynamics" },
+            new() { Name = "Nota Lens", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 22, Sub = "analyzer / scope" },
             new() { Name = "Nota Reverb", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 2, Sub = "built-in" },
             new() { Name = "Nota Chamber", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 20, Sub = "hybrid reverb" },
             new() { Name = "Nota Delay", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 3, Sub = "built-in" },

@@ -20,6 +20,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         (6, "Nota Valve"), (7, "Auto Filter"), (8, "Nota Vintage"), (9, "Nota Orbit"), (10, "Auto Shift"),
         (11, "Beat Repeat"), (12, "Crush"), (13, "Dynamic EQ-8"), (14, "Ceiling"), (15, "Strata"),
         (16, "EQ-3"), (17, "Forge"), (18, "Nota Level"), (19, "Nota Shutter"), (20, "Nota Chamber"), (21, "Nota Prism"),
+        (22, "Nota Lens"),
     };
 
     public sealed record DeviceKind(int Kind, string Name);
@@ -66,6 +67,49 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));
 
-    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR).")]
+    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed.")]
     public Task<string> GetDeviceText(int trackId, int deviceIndex, int id) => Read(() => E.DeviceText(trackId, deviceIndex, id));
+
+    public sealed record AnalyzerBand(double Hz, double Db);
+    public sealed record AnalyzerPeak(double Hz, double Db, string Note);
+    public sealed record AnalyzerReading(string Summary, string Scope, string Cursors, AnalyzerBand[] Bands, AnalyzerPeak[] Peaks);
+
+    [McpServerTool(Name = "read_analyzer"), Description(
+        "Read what a Nota Lens (built-in effect kind 22) is measuring on a track right now: a summary line "
+        + "(loudest spectral peak, RMS, crest factor, momentary LUFS, L/R correlation), the scope measurements "
+        + "(trigger state, window, period and frequency, Vpp, Vrms), the A/B cursor measurements, the 31 "
+        + "third-octave band levels in dB, and the strongest spectral peaks with their note names. The reading "
+        + "reflects the Lens's own parameters — FFT size, window, averaging, tilt, source (L+R / L / R, or "
+        + "Mid/Side) and Freeze — so set those with set_device_param first. Add a Lens with add_device (kind 22) "
+        + "on the track you want to measure; the analyzer passes audio through untouched.")]
+    public Task<AnalyzerReading> ReadAnalyzer(int trackId, int deviceIndex) => Read(() =>
+    {
+        var bands = new List<AnalyzerBand>();
+        foreach (var line in E.DeviceText(trackId, deviceIndex, 1).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = line.Split('\t');
+            if (f.Length >= 2 && Num(f[0]) is { } hz && Num(f[1]) is { } db) bands.Add(new AnalyzerBand(hz, db));
+        }
+        var peaks = new List<AnalyzerPeak>();
+        foreach (var line in E.DeviceText(trackId, deviceIndex, 3).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = line.Split('\t');
+            if (f.Length >= 3 && Num(f[0]) is { } hz && Num(f[1]) is { } db) peaks.Add(new AnalyzerPeak(hz, db, f[2].Trim()));
+        }
+        return new AnalyzerReading(
+            E.DeviceText(trackId, deviceIndex, 0),
+            E.DeviceText(trackId, deviceIndex, 2),
+            E.DeviceText(trackId, deviceIndex, 4),
+            bands.ToArray(), peaks.ToArray());
+    });
+
+    // "20 Hz" / "−18.4 dB" → the number, or null when the field is not one.
+    private static double? Num(string s)
+    {
+        var t = s.Trim().Replace('−', '-');
+        int end = 0;
+        while (end < t.Length && (char.IsDigit(t[end]) || t[end] is '-' or '+' or '.')) end++;
+        return double.TryParse(t[..end], System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+    }
 }
