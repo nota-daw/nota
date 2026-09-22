@@ -3069,7 +3069,7 @@ Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ + Compressor chain (rms
 int revDev = engine.AddBuiltinDevice(fxT, 2);
 Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 14, "add built-in Reverb (14 params)");
 int delDev = engine.AddBuiltinDevice(fxT, 3);
-Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 14, "add built-in Delay (14 params)");
+Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
 Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 9, "add built-in Utility (9 params)");
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
@@ -3104,6 +3104,132 @@ engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ+Comp+Reverb+Delay+Utility chain (rms={Rms(buf, frames):0.0000})");
 engine.StopTransport();
+
+// ============================ Nota Delay ====================================
+Console.WriteLine("-- Nota Delay --");
+{
+    using var de = new NotaEngine();
+    de.SetBpm(120); de.SetTimeSignature(4, 4);
+    int dt = de.AddInstrumentTrack();
+    de.AddMidiClip(dt, 0.0, 4.0);
+    de.SetClipNotes(dt, 0, new[] { new NotaNote(60, 0.0, 0.25, 1.0f) });
+    int dd = de.AddBuiltinDevice(dt, 3);
+    const int Sync = 0, TimeL = 1, TimeR = 2, DivL = 3, LinkLR = 5, Feedback = 6, PingPong = 8,
+              Freeze = 11, DryWet = 12, Output = 13, DryLevel = 14, Diffuse = 15, LowCut = 16,
+              HighCut = 17, TapeMode = 18, FadeChange = 19, WidthP = 20, BassMono = 21,
+              WetOnly = 22, LatencyComp = 23;
+    Check(dd >= 0 && de.TrackDeviceBuiltinKind(dt, dd) == 3, "add built-in Nota Delay (kind 3)");
+    Check(de.DeviceParamName(dt, dd, DryLevel) == "Dry Level" && de.DeviceParamName(dt, dd, Diffuse) == "Diffuse"
+          && de.DeviceParamName(dt, dd, LowCut) == "Low Cut" && de.DeviceParamName(dt, dd, HighCut) == "High Cut"
+          && de.DeviceParamName(dt, dd, TapeMode) == "Tape Mode" && de.DeviceParamName(dt, dd, FadeChange) == "Fade on Change"
+          && de.DeviceParamName(dt, dd, WidthP) == "Width" && de.DeviceParamName(dt, dd, BassMono) == "Bass Mono"
+          && de.DeviceParamName(dt, dd, WetOnly) == "Wet Only" && de.DeviceParamName(dt, dd, LatencyComp) == "Latency Comp",
+          "Delay names its appended params");
+    de.DeviceSetParam(dt, dd, Diffuse, 0.62f);
+    Check(Math.Abs(de.DeviceGetParam(dt, dd, Diffuse) - 0.62f) < 1e-4, "Delay param set/get round-trips");
+
+    float[] Render(int frames = 40000)
+    {
+        var b = new float[frames * 2];
+        de.Seek(0); de.Play(); de.RenderOffline(b, frames); de.StopTransport();
+        return b;
+    }
+    static bool Finite(float[] b) { foreach (var s in b) if (!float.IsFinite(s) || Math.Abs(s) > 8f) return false; return true; }
+    // Energy in the tail, well after the 0.25-beat note has ended — that is the repeats.
+    static double TailRms(float[] b, int fromFrame)
+    {
+        double sum = 0; int n = 0;
+        for (int i = fromFrame * 2; i < b.Length; i++) { sum += b[i] * b[i]; n++; }
+        return n > 0 ? Math.Sqrt(sum / n) : 0;
+    }
+
+    // Free ms, wet only: the repeats are all that is left, and they keep coming.
+    de.DeviceSetParam(dt, dd, Sync, 0f);
+    de.DeviceSetParam(dt, dd, TimeL, 0.1f);    // 200 ms
+    de.DeviceSetParam(dt, dd, TimeR, 0.1f);
+    de.DeviceSetParam(dt, dd, LinkLR, 1f);
+    de.DeviceSetParam(dt, dd, Feedback, 0.6f);
+    de.DeviceSetParam(dt, dd, WetOnly, 1f);
+    var wet = Render();
+    Check(Finite(wet) && TailRms(wet, 24000) > 1e-4, $"Delay repeats ring on after the note (tail rms {TailRms(wet, 24000):F4})");
+
+    // The loop filters bite: a narrow band leaves less in the tail than the open band.
+    de.DeviceSetParam(dt, dd, LowCut, 0.75f);   // ~630 Hz
+    de.DeviceSetParam(dt, dd, HighCut, 0.35f);  // ~1 kHz
+    var narrow = Render();
+    Check(Finite(narrow) && TailRms(narrow, 24000) < TailRms(wet, 24000),
+          $"Low/High Cut thin the repeats ({TailRms(narrow, 24000):F4} < {TailRms(wet, 24000):F4})");
+    de.DeviceSetParam(dt, dd, LowCut, 0f); de.DeviceSetParam(dt, dd, HighCut, 1f);
+
+    // Every character switch renders finite and audible.
+    foreach (var (p, v, what) in new[] { (PingPong, 1f, "ping-pong"), (TapeMode, 1f, "tape mode"),
+                                         (FadeChange, 0f, "repitch"), (Diffuse, 1f, "diffusion"),
+                                         (WidthP, 1f, "width 200 %"), (BassMono, 0.6f, "bass mono") })
+    {
+        float was = de.DeviceGetParam(dt, dd, p);
+        de.DeviceSetParam(dt, dd, p, v);
+        var b = Render();
+        Check(Finite(b) && TailRms(b, 24000) > 1e-5, $"Delay {what} renders finite + audible (tail rms {TailRms(b, 24000):F4})");
+        de.DeviceSetParam(dt, dd, p, was);
+    }
+
+    // Freeze holds the loop instead of letting it decay, and Clear loop empties it.
+    de.DeviceSetParam(dt, dd, Feedback, 0.3f);
+    de.DeviceSetParam(dt, dd, Freeze, 1f);
+    var held = Render(60000);
+    double early = TailRms(held[..(30000 * 2)], 20000), late = TailRms(held, 50000);
+    Check(Finite(held) && late > early * 0.5, $"Freeze holds the loop instead of decaying (late {late:F4} vs early {early:F4})");
+    de.DeviceAction(dt, dd, 0, 0, 0);                   // Clear loop
+    var cleared = new float[8000 * 2];
+    de.RenderOffline(cleared, 8000);                    // transport stopped: nothing new goes in
+    Check(Rms(cleared, 8000) < 1e-4, $"Clear loop empties the delay buffer (rms {Rms(cleared, 8000):F5})");
+    de.DeviceSetParam(dt, dd, Freeze, 0f);
+    de.DeviceSetParam(dt, dd, WetOnly, 0f);
+
+    // Dry Level and Output are real trims on the dry path.
+    de.DeviceSetParam(dt, dd, DryWet, 0f);
+    de.DeviceSetParam(dt, dd, Output, 0.5f);
+    de.DeviceSetParam(dt, dd, DryLevel, 0.70711f);
+    float unity = Rms(Render(8000), 8000);
+    de.DeviceSetParam(dt, dd, DryLevel, 0f);
+    float silent = Rms(Render(8000), 8000);
+    Check(unity > 1e-3 && silent < unity * 0.05f, $"Dry Level trims the dry path ({silent:F4} vs {unity:F4})");
+    de.DeviceSetParam(dt, dd, DryLevel, 0.70711f);
+
+    // Latency Comp shortens the loop by the diffuser's group delay — a different signal.
+    de.DeviceSetParam(dt, dd, DryWet, 1f);
+    de.DeviceSetParam(dt, dd, Diffuse, 0.8f);
+    de.DeviceSetParam(dt, dd, LatencyComp, 1f);
+    var comped = Render(20000);
+    de.DeviceSetParam(dt, dd, LatencyComp, 0f);
+    var raw = Render(20000);
+    double diff = 0; for (int i = 0; i < raw.Length; i++) { double d = comped[i] - raw[i]; diff += d * d; }
+    Check(Finite(comped) && Finite(raw) && Math.Sqrt(diff / raw.Length) > 1e-5, "Latency Comp moves the repeats");
+    de.DeviceSetParam(dt, dd, LatencyComp, 1f);
+
+    // Telemetry + the MCP status line.
+    var sc = new float[11];
+    de.DeviceSetParam(dt, dd, Sync, 1f); de.DeviceSetParam(dt, dd, DivL, 2f / 7f);
+    Render(20000);
+    int scn = de.DeviceScope(dt, dd, sc, sc.Length);
+    Check(scn == 11 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
+    string text = de.DeviceText(dt, dd, 0);
+    Check(text.Contains("1/8"), $"Delay status text names the division (got '{text}')");
+
+    // Clone: duplicating the track keeps the appended params.
+    de.DeviceSetParam(dt, dd, Diffuse, 0.44f);
+    int t2 = de.DuplicateTrack(dt);
+    int dd2 = de.TrackDeviceCount(t2) - 1;
+    Check(t2 > 0 && Math.Abs(de.DeviceGetParam(t2, dd2, Diffuse) - 0.44f) < 1e-4, "duplicate track clones the Delay's params");
+
+    // Automation: a device-param lane drives Feedback.
+    int lane = de.AddAutomationLane(dt, AutomationTarget.DeviceParam, dd, Feedback);
+    Check(lane >= 0, "add Delay Feedback automation lane");
+    de.SetAutomationPoints(dt, lane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.85f) });
+    var ab = new float[4096 * 2];
+    de.Seek(1.99); de.Play(); de.RenderOffline(ab, 4096); de.StopTransport();
+    Check(de.DeviceGetParam(dt, dd, Feedback) > 0.7f, $"automation drives Delay Feedback ({de.DeviceGetParam(dt, dd, Feedback):F2})");
+}
 
 // ============================ Nota Crush ====================================
 Console.WriteLine("-- Nota Crush --");

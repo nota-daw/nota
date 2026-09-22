@@ -327,8 +327,12 @@ and user presets, automation, persistence and cloning.
 - **Nota Reverb** (2) — Hall/Room/Plate/Chamber, RT60, HF damp, pre-delay, size,
   diffusion, low/high cut, width, tail modulation, Freeze; an interactive tail graph.
 - **Nota Delay** (3) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
-  and dotted values), Link, feedback, spread, ping-pong, tape WOW modulation, Freeze; an
-  echo-tap graph.
+  and dotted values), Link, feedback, spread, ping-pong; a tone stage in the loop (low cut,
+  high cut, allpass diffusion, tape saturation) with tape WOW modulation; Freeze (loop held,
+  input muted) and Clear loop; a time change either crossfades (Fade on change) or glides,
+  bending the pitch tape-style; output stage with dry level, width, bass mono, wet only and
+  latency compensation for the diffuser. Tabs: Time / Loop · Wow and Levels / Output, over a
+  live repeat window that lights the repeat sounding now. Tap tempo. 29 factory presets.
 - **Nota Utility** (4) — gain, L/R balance, stereo width (mid/side 0–400%), channel mode
   (Stereo/Left/Right/Swap), bass mono, mute, phase invert; goniometer/vectorscope,
   correlation meter, meters, Gain match.

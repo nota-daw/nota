@@ -1081,10 +1081,46 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("reverb", 2, "Bright Plate",("Algorithm", 0.66f), ("Decay", 0.5f),  ("HF Damp", 0.15f), ("High Cut", 1.0f), ("Diffusion", 0.8f), ("Dry/Wet", 0.3f));
         Fx("reverb", 2, "Shimmer Freeze",("Algorithm", 0.0f), ("Freeze", 1.0f), ("Mod Rate", 0.4f), ("Mod Depth", 0.6f), ("Width", 1.0f), ("Dry/Wet", 0.5f));
 
-        // ---- Delay (kind 3) — all params normalized 0..1. Div: 1/16 0 … 1/8 .29 … 1/4 .71 … 1/2 1.
-        Fx("delay", 3, "Slapback",    ("Sync", 0.0f), ("Time L", 0.06f), ("Time R", 0.06f), ("Feedback", 0.12f), ("Dry/Wet", 0.25f));
-        Fx("delay", 3, "Dub Eighths", ("Sync", 1.0f), ("Div L", 0.286f), ("Div R", 0.286f), ("Feedback", 0.58f), ("Ping-Pong", 1.0f), ("Wow Depth", 0.3f), ("Dry/Wet", 0.35f));
-        Fx("delay", 3, "Ping Quarter",("Sync", 1.0f), ("Div L", 0.714f), ("Div R", 0.714f), ("Feedback", 0.45f), ("Ping-Pong", 1.0f), ("Spread", 0.3f), ("Dry/Wet", 0.3f));
+        // ---- Delay (kind 3) — 29 presets, all params normalized 0..1. Div: 1/16 0 · 1/8T .143 ·
+        //      1/8 .286 · 1/8. .429 · 1/4T .571 · 1/4 .714 · 1/4. .857 · 1/2 1. Time L/R = ms / 2000.
+        //      Low Cut = log(Hz / 20) / log(100) · High Cut = log(Hz / 200) / log(100) (1 = off) ·
+        //      Bass Mono = log(Hz / 30) / log(16.7) (0 = off) · Wow Rate = log(Hz / .05) / log(160) ·
+        //      Dry Level and Output are 0 dB at .707 and .5 · Width is 100 % at .5 · Spread = ms / 50.
+        // Short and classic
+        Fx("delay", 3, "Slapback",        ("Sync", 0f), ("Time L", 0.060f), ("Time R", 0.060f), ("Link L/R", 1f), ("Feedback", 0.10f), ("High Cut", 0.80f), ("Dry/Wet", 0.25f));
+        Fx("delay", 3, "Doubler",         ("Sync", 0f), ("Time L", 0.014f), ("Time R", 0.019f), ("Feedback", 0f), ("Width", 0.70f), ("Dry/Wet", 0.35f));
+        Fx("delay", 3, "Rockabilly Slap", ("Sync", 0f), ("Time L", 0.055f), ("Link L/R", 1f), ("Feedback", 0.22f), ("Tape Mode", 1f), ("High Cut", 0.70f), ("Dry/Wet", 0.28f));
+        Fx("delay", 3, "Haas Widener",    ("Sync", 0f), ("Time L", 0.008f), ("Time R", 0.013f), ("Feedback", 0f), ("Width", 0.85f), ("Dry/Wet", 0.50f));
+        Fx("delay", 3, "Vocal Throw",     ("Sync", 1f), ("Div L", 0.714f), ("Link L/R", 1f), ("Feedback", 0.30f), ("Low Cut", 0.42f), ("High Cut", 0.70f), ("Dry/Wet", 0.22f));
+        // Tempo-synced
+        Fx("delay", 3, "Eighth Bounce",   ("Sync", 1f), ("Div L", 0.286f), ("Div R", 0.286f), ("Ping-Pong", 1f), ("Feedback", 0.38f), ("Spread", 0.48f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Dub Eighths",     ("Sync", 1f), ("Div L", 0.286f), ("Div R", 0.286f), ("Ping-Pong", 1f), ("Feedback", 0.62f), ("Low Cut", 0.48f), ("High Cut", 0.75f), ("Wow Depth", 0.30f), ("Dry/Wet", 0.35f));
+        Fx("delay", 3, "Ping Quarter",    ("Sync", 1f), ("Div L", 0.714f), ("Div R", 0.714f), ("Ping-Pong", 1f), ("Feedback", 0.45f), ("Spread", 0.30f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Dotted Eighth",   ("Sync", 1f), ("Div L", 0.429f), ("Link L/R", 1f), ("Feedback", 0.40f), ("High Cut", 0.78f), ("Dry/Wet", 0.28f));
+        Fx("delay", 3, "Triplet Roll",    ("Sync", 1f), ("Div L", 0.143f), ("Link L/R", 1f), ("Feedback", 0.48f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Sixteenth Stutter",("Sync", 1f), ("Div L", 0f),    ("Link L/R", 1f), ("Feedback", 0.55f), ("High Cut", 0.72f), ("Dry/Wet", 0.35f));
+        Fx("delay", 3, "Half-Note Wash",  ("Sync", 1f), ("Div L", 1f),     ("Link L/R", 1f), ("Feedback", 0.55f), ("Diffuse", 0.45f), ("Dry/Wet", 0.35f));
+        Fx("delay", 3, "Cross Rhythm",    ("Sync", 1f), ("Div L", 0.286f), ("Div R", 0.429f), ("Ping-Pong", 1f), ("Feedback", 0.44f), ("Dry/Wet", 0.32f));
+        Fx("delay", 3, "Polyrhythm 3:4",  ("Sync", 1f), ("Div L", 0.571f), ("Div R", 0.714f), ("Feedback", 0.40f), ("Width", 0.65f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Wide Quarters",   ("Sync", 1f), ("Div L", 0.714f), ("Div R", 0.714f), ("Ping-Pong", 1f), ("Spread", 0.60f), ("Width", 0.80f), ("Feedback", 0.42f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Trance Gate Echo",("Sync", 1f), ("Div L", 0f),     ("Div R", 0.143f), ("Ping-Pong", 1f), ("Feedback", 0.62f), ("Low Cut", 0.50f), ("High Cut", 0.82f), ("Dry/Wet", 0.34f));
+        // Tape and character
+        Fx("delay", 3, "Tape Echo",       ("Sync", 0f), ("Time L", 0.140f), ("Link L/R", 1f), ("Feedback", 0.45f), ("Tape Mode", 1f), ("Fade on Change", 0f), ("Wow Rate", 0.30f), ("Wow Depth", 0.25f), ("Low Cut", 0.35f), ("High Cut", 0.60f), ("Dry/Wet", 0.32f));
+        Fx("delay", 3, "Space Echo",      ("Sync", 0f), ("Time L", 0.185f), ("Link L/R", 1f), ("Feedback", 0.55f), ("Tape Mode", 1f), ("Diffuse", 0.35f), ("Wow Depth", 0.30f), ("Low Cut", 0.42f), ("High Cut", 0.55f), ("Dry/Wet", 0.36f));
+        Fx("delay", 3, "Warped Tape",     ("Sync", 0f), ("Time L", 0.220f), ("Link L/R", 1f), ("Feedback", 0.50f), ("Tape Mode", 1f), ("Fade on Change", 0f), ("Wow Rate", 0.45f), ("Wow Depth", 0.70f), ("Dry/Wet", 0.34f));
+        Fx("delay", 3, "Bucket Brigade",  ("Sync", 0f), ("Time L", 0.090f), ("Link L/R", 1f), ("Feedback", 0.42f), ("Tape Mode", 1f), ("Low Cut", 0.30f), ("High Cut", 0.45f), ("Dry/Wet", 0.30f));
+        Fx("delay", 3, "Slap Wide",       ("Sync", 0f), ("Time L", 0.156f), ("Time R", 0.187f), ("Feedback", 0.18f), ("Spread", 0.44f), ("Width", 0.67f), ("Dry/Wet", 0.44f));
+        Fx("delay", 3, "Repitch Riser",   ("Sync", 0f), ("Time L", 0.300f), ("Link L/R", 1f), ("Feedback", 0.60f), ("Tape Mode", 1f), ("Fade on Change", 0f), ("Wow Depth", 0.35f), ("Dry/Wet", 0.40f));
+        Fx("delay", 3, "Telephone Echo",  ("Sync", 1f), ("Div L", 0.286f), ("Link L/R", 1f), ("Feedback", 0.50f), ("Low Cut", 0.70f), ("High Cut", 0.50f), ("Dry/Wet", 0.32f));
+        // Ambient and frozen
+        Fx("delay", 3, "Diffuse Cloud",   ("Sync", 1f), ("Div L", 0.857f), ("Link L/R", 1f), ("Feedback", 0.70f), ("Diffuse", 0.85f), ("Low Cut", 0.44f), ("High Cut", 0.66f), ("Width", 0.75f), ("Dry/Wet", 0.42f));
+        Fx("delay", 3, "Ambient Wash",    ("Sync", 1f), ("Div L", 1f), ("Div R", 1f), ("Ping-Pong", 1f), ("Feedback", 0.72f), ("Diffuse", 0.75f), ("Low Cut", 0.50f), ("High Cut", 0.65f), ("Width", 0.80f), ("Dry/Wet", 0.45f));
+        Fx("delay", 3, "Dark Cavern",     ("Sync", 0f), ("Time L", 0.350f), ("Link L/R", 1f), ("Feedback", 0.68f), ("Diffuse", 0.60f), ("Low Cut", 0.30f), ("High Cut", 0.40f), ("Dry/Wet", 0.40f));
+        Fx("delay", 3, "Tape Hold",       ("Sync", 1f), ("Div L", 0.286f), ("Link L/R", 1f), ("Freeze", 1f), ("Feedback", 1f), ("Diffuse", 0.56f), ("Low Cut", 0.477f), ("High Cut", 0.753f), ("Wow Rate", 0.30f), ("Wow Depth", 0.15f), ("Spread", 0.88f), ("Dry Level", 0f), ("Dry/Wet", 1f), ("Output", 0.38f));
+        Fx("delay", 3, "Frozen Bed",      ("Sync", 1f), ("Div L", 1f), ("Link L/R", 1f), ("Freeze", 1f), ("Diffuse", 1f), ("High Cut", 0.60f), ("Width", 0.80f), ("Dry/Wet", 0.70f), ("Output", 0.42f));
+        // Sends (wet only, for a return track)
+        Fx("delay", 3, "Send · Eighth",   ("Wet Only", 1f), ("Sync", 1f), ("Div L", 0.286f), ("Div R", 0.286f), ("Ping-Pong", 1f), ("Feedback", 0.40f), ("Low Cut", 0.42f), ("High Cut", 0.78f), ("Bass Mono", 0.49f), ("Dry/Wet", 1f));
+        Fx("delay", 3, "Send · Quarter",  ("Wet Only", 1f), ("Sync", 1f), ("Div L", 0.714f), ("Div R", 0.714f), ("Ping-Pong", 1f), ("Feedback", 0.45f), ("Spread", 0.55f), ("Width", 0.80f), ("Low Cut", 0.45f), ("Dry/Wet", 1f));
 
         // ---- Utility (kind 4) — Gain -24..24 dB · Balance -1..1 · Width 0..400% ·
         //      Channel Mode 0..3 (Stereo/Left/Right/Swap) · Mono Freq 20..2000 Hz · toggles 0/1

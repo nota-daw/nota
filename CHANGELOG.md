@@ -288,6 +288,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **Nota Delay is a full delay, not a time-and-feedback box.** The card moves onto the same
+  frame as Nota Chamber — a LOOP column (feedback · spread), a centre panel with **Time**
+  and **Loop · Wow** tabs over a live repeat window, a **Levels / Output** panel and a
+  status strip — and the engine grows the parts that were missing:
+  - **A tone stage inside the loop:** a low cut and a high cut you drag on the FILTER
+    graph, allpass **Diffuse** that smears the repeats towards reverb, and **Tape mode**,
+    which adds head loss and soft saturation and doubles the WOW depth.
+  - **Changing the delay time is a choice.** *Fade on change* crossfades to the new tap, so
+    dragging a time knob or picking another division stays clean; switched off, the read
+    head glides to it and bends the pitch like a tape machine.
+  - **An output stage:** a separate **dry level**, stereo **width** and **bass mono** on the
+    repeats, **Wet only** for a return track, and **latency compensation** that pulls the
+    read pointer back by the diffuser's group delay so each repeat still lands on the beat.
+  - **Freeze** now truly holds — the loop bypasses its filters and saturation while it is
+    on, so a held loop neither dulls nor grows — and **Clear loop** empties the buffer.
+    **Tap tempo** sets the time by ear.
+  - The repeat window draws the two channels on a dB scale, lights the repeat that is
+    sounding, and reads the same in Ember Paper. **29 factory presets**, up from three.
+  - The ten new parameters are appended, so older projects open unchanged and every one of
+    them automates, MIDI-learns, saves in a preset and is reachable over MCP;
+    `get_device_text` returns the delay's status line, and the new `device_action` tool
+    clears the loop.
 - **Nota Aurora's unison dials now do what they say.** **Detune** is in cents (0–50) and
   no longer scales with the voice count, and **spread**, which the engine used to ignore,
   now pans the stack across the stereo field. Patches that use unison, including the
