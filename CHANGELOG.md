@@ -55,6 +55,75 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Dynamic EQ-8 is redrawn around its graph, and each band gets its own key.** The card
+  follows the new mockup on the 700 × 260 frame: the response graph takes almost the whole
+  width, a row of eight band chips sits over it, the selected band is edited in a panel on the
+  right, and a status strip closes the card:
+  - **Graph** — the live response in brass, the static one as a teal dashed line while they
+    differ, the output spectrum under them (from the engine's FFT) and the selected band's own
+    curve. Every band is a numbered node, off bands included; a dynamic band grows a whisker
+    to where its range can take it, with a dot riding it at the gain it has now. A tooltip by
+    the selected node reads the band and, for a dynamic band, its gain now with a 2-second
+    history. Drag a node for frequency and gain, the wheel over it for Q, double-click it to
+    switch the band on or off, double-click empty space for a new bell there; right-click
+    keeps the type / mode / on / solo menu.
+  - **Band chips** — number, type and frequency of all eight bands, with a bar showing how
+    much of its range each dynamic band uses right now. Click to select, double-click to
+    switch a band on or off.
+  - **Band panel** — On, the type (HP · LS · Bell · Notch · HS · LP), FREQ / GAIN / Q knobs (Q
+    reads RESO on the cuts), the dynamics mode (Static · Duck · Lift), THRESH with the band's
+    level marked on it, RANGE, ATTACK, RELEASE, the key and Solo. Range is set by magnitude;
+    Duck starts as a cut and Lift as a boost, and the arrow by the value flips it (upward /
+    downward expansion).
+  - New **Dynamic** master switch: off parks every band on its static gain, to hear what the
+    dynamics do. New per-band **Key**: Self, or Ext — the key track (click Ext to pick it). The
+    old all-bands Sidechain switch still works and hands over to the per-band keys when a
+    band is set back to Self.
+  - The **Output** gain now has a control: drag the OUT readout in the status strip.
+  - **33 factory presets**, up from six — vocal (de-essers, tame, presence, proximity, air,
+    podcast), mix and master (bus air, glue, mud, harshness, loudness contour), drums, bass,
+    keyed ducking (kick ducks bass, vocal pocket, voice-over space), instruments, expansion
+    and a static cleanup. The new parameters are appended and default to the old sound, so
+    older projects and presets open unchanged; the automation menu lists the parameters
+    under Band 1 … Band 8. `get_device_text` returns the status line, the live reading and a
+    guide to the parameters, the new `read_dynamic_eq` returns every band with its level and
+    gain now plus the spectrum, and `set_dynamic_eq_band` edits a band in one call.
+- **Nota Crush shows its steps, its spectrum and its transfer curve, and gains Auto gain and a
+  DC filter.** The card moves onto the 700 × 260 frame of Ceiling and Beat Repeat — a CRUSH
+  column (input and output), a centre panel with **Quantiser**, **Spectrum** and **Transfer**
+  tabs, a **Grit** / **Output** panel and a status strip. The slider row over the graph
+  becomes Bits / Rate / Drive / Wet knobs under it, Mode a switch over it, Anti-alias moves
+  next to it:
+  - **Quantiser** — 10 ms of a sine held and quantised to the real hold length, the steps
+    over the level grid (enlarged above 4 bits, and it says so). Drag up / down for Bits,
+    left / right for Rate. Shows the rate against the project's, one sample of how many is
+    kept, and the quantisation noise.
+  - **Spectrum** — the output in 40 bands from an FFT in the engine: brass where it is the
+    signal, teal where the crush added something — bright above the reduced Nyquist (the
+    images); a dashed outline where the post filter took signal away. Drag the Nyquist line
+    for Rate and the filter line for the post filter. Shows the images above the Nyquist and
+    THD+N.
+  - **Transfer** — the input → output curve through Drive, the mode and the real level count,
+    with a dot where the signal peaks, next to the form it makes of a sine. Drag for Drive.
+    Shows how many times Fold folds the signal.
+  - **Grit** holds Dither, Jitter, Noise, the post filter and the gain, with a Result box —
+    bits and rate, and whether the filter cuts the images. **Output** measures in, out and
+    the crest factor, and holds the new switches.
+  - New **Auto gain**: rides the output back to the input's loudness (300 ms RMS, ±24 dB), so
+    Bits and Drive stop jumping in level. New **DC filter**: a 10 Hz high-pass on the crushed
+    signal.
+  - Rate is now a fractional sample and hold, so it sweeps smoothly and automation doesn't
+    zipper. Anti-alias is a 4th-order
+    Butterworth low-pass instead of a one-pole, so far less folds back into the audible range.
+  - **33 factory presets**, up from six — classic lo-fi (tape, sampler, SP-1200, telephone,
+    AM, walkie-talkie), retro machines (8-bit, 4-bit, NES, 16-bit console, Game Boy, Speak &
+    Spell), subtle texture for buses and hats, destruction (1-bit, aliasing, broken clock,
+    bitrot) and folds. The two new parameters are appended and default off, so older projects
+    and presets open unchanged. Every parameter automates, MIDI-learns, saves in a preset and
+    is reachable over MCP. `get_device_text` returns the status line, the live reading and a
+    guide to the parameter values, `device_action` 0 resets the meters, and the new
+    `read_crush` returns the settings, the meters, THD+N, the images, the folds, the
+    auto-gain correction and the spectrum.
 - **Nota Ceiling shows its level, its reduction and its loudness, and gains True Peak, Delta, a
   key high-pass and a loudness target.** The card moves onto the 700 × 260 frame of Beat Repeat
   and Shutter — a LIMIT column (input with the ceiling, reduction, output), a centre panel with
@@ -345,6 +414,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Nota Dynamic EQ-8's key track did nothing.** The device never stored the sidechain source
+  it was given, so a chosen key track was forgotten at once and every band kept listening to
+  its own track. The key is now kept, saved with the project and heard by the bands set to
+  Ext.
+- **Nota Crush's Fold went silent under Drive, and Rate moved in steps.** Fold clamped its
+  input at four times the fold point, so with a few dB of Drive whole stretches of the wave
+  collapsed to zero; it now folds on for as far as the signal goes, and more Drive means more
+  folds. The sample and hold rounded the hold to whole samples, so the upper half of Rate
+  jumped between a few rates (22 → 14.7 → 11 kHz); it now holds fractional lengths.
 - **Nota Ceiling's integrated loudness and true peak.** The integrated LUFS gated 100 ms
   slices instead of the 400 ms blocks BS.1770 asks for, so quiet passages were weighed wrong;
   it now gates overlapping 400 ms blocks. The true-peak meter interpolated with a spline that

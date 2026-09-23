@@ -46,6 +46,15 @@ internal sealed class SliderTrack : Control
     /// <summary>A modulation depth: teal fill and handle instead of brass.</summary>
     public bool Modulation { get; init; }
 
+    /// <summary>A role chroma for the fill (teal / rose), overriding brass or Modulation; its
+    /// light tone draws the handle. May change live.</summary>
+    public IBrush? Ink { get => _ink; set { if (ReferenceEquals(_ink, value)) return; _ink = value; InvalidateVisual(); } }
+    private IBrush? _ink;
+
+    /// <summary>A 1px teal mark at this 0..1 position (a live level against the value); NaN hides it.</summary>
+    public double Marker { get => _marker; set { if (value.Equals(_marker)) return; _marker = value; InvalidateVisual(); } }
+    private double _marker = double.NaN;
+
     /// <summary>Double-click handler (restore the default). Null disables double-click.</summary>
     public Action? Reset { get; init; }
 
@@ -128,12 +137,17 @@ internal sealed class SliderTrack : Control
         double x = _norm * w;
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
         if (b - a > 0.5)
-            ctx.DrawRectangle(_dim ? FillDim : Modulation ? ModFill : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
         if (Bipolar)
             ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, cy - 3, 1, 6));
 
+        if (!double.IsNaN(_marker) && !_dim)
+            ctx.FillRectangle(ModHandle, new Rect(Math.Round(Math.Clamp(_marker, 0, 1) * (w - 1)), 0, 1, h));
+
         double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
-        ctx.DrawRectangle(_dim ? HandleDim : Modulation ? ModHandle : Handle, null,
+        IBrush inkHandle = ReferenceEquals(_ink, NotaPalette.Rose) ? NotaPalette.RoseBright
+            : ReferenceEquals(_ink, NotaPalette.Teal) ? ModHandle : _ink ?? (Modulation ? ModHandle : Handle);
+        ctx.DrawRectangle(_dim ? HandleDim : inkHandle, null,
             new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.ClipValue));
     }
 }

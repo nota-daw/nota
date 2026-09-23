@@ -1584,22 +1584,123 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("beatrepeat", 11, "Latch Freeze",        ("Chance", 0f), ("Grid", 0.2f), ("Mode", 0.5f), ("Latch", 1f));
         Fx("beatrepeat", 11, "Gate Only Bursts",    ("Interval", 0.6f), ("Offset", 0.5f), ("Grid", 0.4f), ("Gate", 0.5f), ("Mode", 1f));
 
-        // ---- Nota Crush (kind 12) — all params normalized 0..1. Mode 0 Digital/.5 Analog/1 Fold.
-        Fx("crush", 12, "Broken Radio",    ("Bits", 0.35f), ("Rate", 0.30f), ("Mode", 0f),    ("Dither", 0.15f), ("Jitter", 0.10f), ("Noise Floor", 0.05f), ("Post Filter", 0.70f), ("Dry/Wet", 0.78f), ("Output", 0.5f));
-        Fx("crush", 12, "8-Bit Arcade",    ("Bits", 0.30f), ("Rate", 0.25f), ("Mode", 0f),    ("Dither", 0.05f), ("Jitter", 0f),    ("Noise Floor", 0f),    ("Post Filter", 0.85f), ("Dry/Wet", 1f),   ("Output", 0.5f));
-        Fx("crush", 12, "Lo-Fi Warmth",    ("Bits", 0.45f), ("Rate", 0.40f), ("Mode", 1f),    ("Dither", 0.30f), ("Jitter", 0.15f), ("Noise Floor", 0.10f), ("Post Filter", 0.60f), ("Dry/Wet", 0.65f), ("Output", 0.5f));
-        Fx("crush", 12, "Digital Grit",    ("Bits", 0.20f), ("Rate", 0.15f), ("Mode", 0f),    ("Dither", 0f),    ("Jitter", 0.25f), ("Noise Floor", 0.15f), ("Post Filter", 0.50f), ("Dry/Wet", 0.85f), ("Output", 0.5f));
-        Fx("crush", 12, "Folded Crunch",   ("Bits", 0.40f), ("Rate", 0.50f), ("Mode", 1f),    ("Dither", 0.10f), ("Jitter", 0.05f), ("Noise Floor", 0.05f), ("Post Filter", 0.75f), ("Dry/Wet", 0.70f), ("Output", 0.5f));
-        Fx("crush", 12, "Telephone Line",  ("Bits", 0.15f), ("Rate", 0.10f), ("Mode", 0f),    ("Dither", 0f),    ("Jitter", 0f),    ("Noise Floor", 0.20f), ("Post Filter", 0.40f), ("Dry/Wet", 1f),   ("Output", 0.5f));
+        // ---- Nota Crush (kind 12) — all params normalized 0..1 (unnamed ones reset to their defaults:
+        //      13.7 bit, ~1.9 kHz, Digital, dither 15 %, filter ~10 kHz, wet 100 %, drive 0 dB). Bits
+        //      1 + v·23 (0.13 = 4 bit, 0.30 = 8 bit, 0.48 = 12 bit); Rate exp 500 Hz … 0.48·sr (0.185 =
+        //      1 kHz, 0.37 = 2 k, 0.555 = 4 k, 0.74 = 8 k, 0.825 = 11 k); Mode 0 Digital / .5 Analog /
+        //      1 Fold; Post Filter exp 200 Hz … 20 k (0.5 = 2 k, 0.65 = 4 k, 0.8 = 8 k); Drive −12 … +24 dB
+        //      (0.333 = 0 dB, 0.5 = +6, 0.667 = +12); Output ±12 dB (0.5 = 0). Anti-Alias, Auto Gain,
+        //      DC Filter 1 = on.
+        Fx("crush", 12, "Init");
+        // Classic lo-fi
+        Fx("crush", 12, "Broken Radio",    ("Bits", 0.35f), ("Rate", 0.30f), ("Mode", 0f),   ("Dither", 0.15f), ("Jitter", 0.10f), ("Noise Floor", 0.05f), ("Post Filter", 0.70f), ("Dry/Wet", 0.78f), ("Output", 0.5f));
+        Fx("crush", 12, "Lo-Fi Warmth",    ("Bits", 0.45f), ("Rate", 0.40f), ("Mode", 0.5f), ("Dither", 0.30f), ("Jitter", 0.15f), ("Noise Floor", 0.10f), ("Post Filter", 0.60f), ("Dry/Wet", 0.65f), ("Auto Gain", 1f));
+        Fx("crush", 12, "Lo-Fi Tape",      ("Bits", 0.30f), ("Rate", 0.66f), ("Mode", 0.5f), ("Dither", 0.30f), ("Jitter", 0.22f), ("Noise Floor", 0.12f), ("Post Filter", 0.68f), ("Dry/Wet", 0.70f), ("Anti-Alias", 1f), ("Drive", 0.5f), ("Output", 0.375f));
+        Fx("crush", 12, "Dusty Sampler",   ("Bits", 0.48f), ("Rate", 0.74f), ("Mode", 0.5f), ("Dither", 0.20f), ("Noise Floor", 0.08f), ("Post Filter", 0.78f), ("Dry/Wet", 1f),   ("Anti-Alias", 1f), ("Drive", 0.42f));
+        Fx("crush", 12, "SP-1200 Grit",    ("Bits", 0.48f), ("Rate", 0.87f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 0.92f), ("Dry/Wet", 1f),   ("Drive", 0.40f));
+        Fx("crush", 12, "MPC Crunch",      ("Bits", 0.65f), ("Rate", 0.92f), ("Mode", 0.5f), ("Dither", 0.10f), ("Post Filter", 0.95f), ("Dry/Wet", 1f),   ("Anti-Alias", 1f), ("Drive", 0.45f));
+        Fx("crush", 12, "Telephone Line",  ("Bits", 0.15f), ("Rate", 0.10f), ("Mode", 0f),   ("Dither", 0f),    ("Noise Floor", 0.20f), ("Post Filter", 0.40f), ("Dry/Wet", 1f),   ("Output", 0.5f));
+        Fx("crush", 12, "AM Transmitter",  ("Bits", 0.26f), ("Rate", 0.48f), ("Mode", 0.5f), ("Dither", 0.25f), ("Jitter", 0.30f), ("Noise Floor", 0.30f), ("Post Filter", 0.55f), ("Dry/Wet", 1f),   ("Anti-Alias", 1f), ("DC Filter", 1f));
+        Fx("crush", 12, "Walkie-Talkie",   ("Bits", 0.17f), ("Rate", 0.28f), ("Mode", 0.5f), ("Dither", 0.40f), ("Jitter", 0.15f), ("Noise Floor", 0.35f), ("Post Filter", 0.52f), ("Dry/Wet", 1f),   ("Drive", 0.6f), ("Auto Gain", 1f));
+        // Retro machines
+        Fx("crush", 12, "8-Bit Arcade",    ("Bits", 0.30f), ("Rate", 0.25f), ("Mode", 0f),   ("Dither", 0.05f), ("Jitter", 0f),    ("Noise Floor", 0f),    ("Post Filter", 0.85f), ("Dry/Wet", 1f),   ("Output", 0.5f));
+        Fx("crush", 12, "4-Bit Handheld",  ("Bits", 0.13f), ("Rate", 0.56f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 0.80f), ("Dry/Wet", 1f),   ("Drive", 0.40f), ("Auto Gain", 1f));
+        Fx("crush", 12, "NES Pulse",       ("Bits", 0.13f), ("Rate", 0.78f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 0.95f), ("Dry/Wet", 1f),   ("DC Filter", 1f));
+        Fx("crush", 12, "16-Bit Console",  ("Bits", 0.65f), ("Rate", 0.70f), ("Mode", 0f),   ("Dither", 0.05f), ("Post Filter", 0.76f), ("Dry/Wet", 1f),   ("Anti-Alias", 1f));
+        Fx("crush", 12, "Game Boy Wave",   ("Bits", 0.13f), ("Rate", 0.66f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 0.72f), ("Dry/Wet", 1f),   ("DC Filter", 1f), ("Output", 0.42f));
+        Fx("crush", 12, "Speak & Spell",   ("Bits", 0.22f), ("Rate", 0.52f), ("Mode", 0.5f), ("Dither", 0.10f), ("Jitter", 0.05f), ("Post Filter", 0.62f), ("Dry/Wet", 1f),   ("Drive", 0.45f));
+        // Subtle texture
+        Fx("crush", 12, "Subtle Air",      ("Bits", 0.60f), ("Rate", 0.95f), ("Mode", 0.5f), ("Dither", 0.20f), ("Post Filter", 1f),   ("Dry/Wet", 0.35f));
+        Fx("crush", 12, "Parallel Grit",   ("Bits", 0.26f), ("Rate", 0.60f), ("Mode", 0f),   ("Dither", 0.10f), ("Post Filter", 0.75f), ("Dry/Wet", 0.30f), ("Drive", 0.5f), ("Auto Gain", 1f));
+        Fx("crush", 12, "Vinyl Dust",      ("Bits", 0.55f), ("Rate", 0.85f), ("Mode", 0.5f), ("Dither", 0.45f), ("Jitter", 0.08f), ("Noise Floor", 0.18f), ("Post Filter", 0.74f), ("Dry/Wet", 0.55f));
+        Fx("crush", 12, "Warm 12-Bit",     ("Bits", 0.48f), ("Rate", 0.82f), ("Mode", 0.5f), ("Dither", 0.25f), ("Post Filter", 0.80f), ("Dry/Wet", 1f),   ("Anti-Alias", 1f), ("Auto Gain", 1f));
+        Fx("crush", 12, "Hi-Hat Sizzle",   ("Bits", 0.35f), ("Rate", 0.68f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 1f),   ("Dry/Wet", 0.45f));
+        Fx("crush", 12, "Drum Bus Dirt",   ("Bits", 0.40f), ("Rate", 0.80f), ("Mode", 0.5f), ("Dither", 0.10f), ("Post Filter", 0.85f), ("Dry/Wet", 0.50f), ("Drive", 0.55f), ("Auto Gain", 1f), ("DC Filter", 1f));
+        // Destroy
+        Fx("crush", 12, "Digital Grit",    ("Bits", 0.20f), ("Rate", 0.15f), ("Mode", 0f),   ("Dither", 0f),    ("Jitter", 0.25f), ("Noise Floor", 0.15f), ("Post Filter", 0.50f), ("Dry/Wet", 0.85f), ("Output", 0.5f));
+        Fx("crush", 12, "1-Bit Buzz",      ("Bits", 0f),    ("Rate", 0.55f), ("Mode", 0f),   ("Dither", 0f),    ("Post Filter", 0.62f), ("Dry/Wet", 1f),   ("Auto Gain", 1f), ("DC Filter", 1f));
+        Fx("crush", 12, "Aliasing Storm",  ("Bits", 0.35f), ("Rate", 0.12f), ("Mode", 0f),   ("Dither", 0f),    ("Jitter", 0.10f), ("Post Filter", 1f),   ("Dry/Wet", 1f),   ("Auto Gain", 1f));
+        Fx("crush", 12, "Broken Clock",    ("Bits", 0.40f), ("Rate", 0.45f), ("Mode", 0f),   ("Dither", 0.05f), ("Jitter", 1f),    ("Post Filter", 0.80f), ("Dry/Wet", 1f));
+        Fx("crush", 12, "Bitrot",          ("Bits", 0.09f), ("Rate", 0.35f), ("Mode", 0.5f), ("Dither", 0.60f), ("Jitter", 0.40f), ("Noise Floor", 0.45f), ("Post Filter", 0.58f), ("Dry/Wet", 1f), ("Drive", 0.6f), ("Auto Gain", 1f), ("DC Filter", 1f));
+        Fx("crush", 12, "Sub Destroyer",   ("Bits", 0.10f), ("Rate", 0.20f), ("Mode", 0.5f), ("Dither", 0f),    ("Post Filter", 0.35f), ("Dry/Wet", 0.60f), ("Drive", 0.75f), ("Auto Gain", 1f), ("DC Filter", 1f));
+        // Fold
+        Fx("crush", 12, "Folded Crunch",   ("Bits", 0.40f), ("Rate", 0.50f), ("Mode", 1f),   ("Dither", 0.10f), ("Jitter", 0.05f), ("Noise Floor", 0.05f), ("Post Filter", 0.75f), ("Dry/Wet", 0.70f), ("Output", 0.5f));
+        Fx("crush", 12, "Broken Toy",      ("Bits", 0.13f), ("Rate", 0.82f), ("Mode", 1f),   ("Dither", 0f),    ("Post Filter", 0.80f), ("Dry/Wet", 1f),   ("Drive", 0.667f), ("Output", 0.29f), ("Auto Gain", 1f));
+        Fx("crush", 12, "Gentle Fold",     ("Bits", 0.70f), ("Rate", 1f),    ("Mode", 1f),   ("Dither", 0.05f), ("Post Filter", 0.85f), ("Dry/Wet", 0.50f), ("Drive", 0.25f), ("Auto Gain", 1f), ("DC Filter", 1f));
+        Fx("crush", 12, "West Coast Fold", ("Bits", 0.80f), ("Rate", 1f),    ("Mode", 1f),   ("Dither", 0f),    ("Post Filter", 0.90f), ("Dry/Wet", 1f),   ("Drive", 0.58f), ("Anti-Alias", 1f), ("Auto Gain", 1f), ("DC Filter", 1f));
+        Fx("crush", 12, "Metal Fold",      ("Bits", 0.22f), ("Rate", 0.62f), ("Mode", 1f),   ("Dither", 0.05f), ("Jitter", 0.10f), ("Post Filter", 0.70f), ("Dry/Wet", 1f),   ("Drive", 0.83f), ("Auto Gain", 1f), ("DC Filter", 1f));
 
-        // ---- Nota Dynamic EQ-8 (kind 13) — raw units, param names "<band> <field>".
-        //      "n Mode": 0 Static / 1 Above (duck) / 2 Below (lift). "n Rng" signed dB.
-        Fx("dyneq", 13, "De-Ess",         ("6 On", 1f), ("6 Type", 2f), ("6 Freq", 7000f), ("6 Q", 3.5f), ("6 Mode", 1f), ("6 Thr", -28f), ("6 Rng", -8f), ("6 Atk", 1f),  ("6 Rel", 60f));
-        Fx("dyneq", 13, "De-Harsh Vox",   ("4 Freq", 3000f), ("4 Q", 2.4f), ("4 Mode", 1f), ("4 Thr", -24f), ("4 Rng", -6f), ("4 Atk", 5f), ("4 Rel", 120f));
-        Fx("dyneq", 13, "Bass Control",   ("2 Freq", 90f), ("2 Q", 1.0f), ("2 Mode", 1f), ("2 Thr", -20f), ("2 Rng", -6f), ("2 Atk", 8f), ("2 Rel", 140f));
-        Fx("dyneq", 13, "Vocal Presence", ("4 Freq", 3500f), ("4 Q", 1.2f), ("4 Mode", 2f), ("4 Thr", -30f), ("4 Rng", 4f), ("4 Atk", 12f), ("4 Rel", 180f), ("7 Type", 4f), ("7 Freq", 11000f), ("7 Gain", 2f));
-        Fx("dyneq", 13, "Warm Master",    ("2 Type", 1f), ("2 Freq", 110f), ("2 Gain", 1.8f), ("7 Freq", 10000f), ("7 Mode", 1f), ("7 Thr", -18f), ("7 Rng", -3f), ("7 Atk", 20f), ("7 Rel", 250f));
-        Fx("dyneq", 13, "Punch Tighten",  ("3 Freq", 800f), ("3 Q", 1.2f), ("3 Mode", 1f), ("3 Thr", -22f), ("3 Rng", -5f), ("3 Atk", 3f), ("3 Rel", 90f));
+        // ---- Nota Dynamic EQ-8 (kind 13) — raw units, param names "<band> <field>" (unnamed
+        //      params reset to the defaults: 1 low cut 30 Hz, 2 bell 120, 3 bell 800, 4 bell 3 k,
+        //      7 high shelf 10 k, 8 high cut 20 k on and flat; 5 / 6 off; dynamics −24 dB, −6 dB,
+        //      10 / 120 ms). "n Type" 0 HP / 1 LS / 2 Bell / 3 Notch / 4 HS / 5 LP. "n Mode" 0 Static /
+        //      1 Duck (acts above Thr) / 2 Lift (acts below Thr); "n Rng" signed dB (Duck normally
+        //      cuts, Lift boosts — the other sign is upward / downward expansion). "n Key" 1 = the
+        //      band listens to the key track (route one with the sidechain source).
+        Fx("dyneq", 13, "Init");
+        // Vocal
+        Fx("dyneq", 13, "De-Ess",             ("6 On", 1f), ("6 Type", 2f), ("6 Freq", 7000f), ("6 Q", 3.5f), ("6 Mode", 1f), ("6 Thr", -28f), ("6 Rng", -8f), ("6 Atk", 1f),  ("6 Rel", 60f));
+        Fx("dyneq", 13, "De-Ess Soft",        ("6 On", 1f), ("6 Type", 4f), ("6 Freq", 6500f), ("6 Mode", 1f), ("6 Thr", -30f), ("6 Rng", -5f), ("6 Atk", 2f), ("6 Rel", 80f));
+        Fx("dyneq", 13, "De-Harsh Vox",       ("4 Freq", 3000f), ("4 Q", 2.4f), ("4 Mode", 1f), ("4 Thr", -24f), ("4 Rng", -6f), ("4 Atk", 5f), ("4 Rel", 120f));
+        Fx("dyneq", 13, "Vocal Tame",         ("1 Freq", 90f), ("2 Type", 1f), ("2 Freq", 180f), ("2 Gain", -1.5f), ("2 Q", 0.71f),
+                                              ("3 Freq", 380f), ("3 Gain", -1f), ("3 Q", 1.4f), ("3 Mode", 1f), ("3 Thr", -28f), ("3 Rng", -4f), ("3 Atk", 20f), ("3 Rel", 180f),
+                                              ("4 Freq", 2600f), ("4 Gain", 2f), ("4 Q", 0.9f),
+                                              ("5 On", 1f), ("5 Freq", 6800f), ("5 Q", 3f), ("5 Mode", 1f), ("5 Thr", -34f), ("5 Rng", -9f), ("5 Atk", 1f), ("5 Rel", 60f),
+                                              ("7 Freq", 12000f), ("7 Gain", 2.5f), ("8 On", 0f));
+        Fx("dyneq", 13, "Vocal Presence",     ("4 Freq", 3500f), ("4 Q", 1.2f), ("4 Mode", 2f), ("4 Thr", -30f), ("4 Rng", 4f), ("4 Atk", 12f), ("4 Rel", 180f), ("7 Type", 4f), ("7 Freq", 11000f), ("7 Gain", 2f));
+        Fx("dyneq", 13, "Proximity Control",  ("1 Freq", 70f), ("2 Type", 1f), ("2 Freq", 200f), ("2 Q", 0.71f), ("2 Mode", 1f), ("2 Thr", -22f), ("2 Rng", -5f), ("2 Atk", 10f), ("2 Rel", 150f));
+        Fx("dyneq", 13, "Air Lift Vocal",     ("1 Freq", 80f), ("7 Freq", 11000f), ("7 Gain", 1f), ("7 Mode", 2f), ("7 Thr", -36f), ("7 Rng", 4f), ("7 Atk", 15f), ("7 Rel", 200f));
+        Fx("dyneq", 13, "Podcast Voice",      ("1 Freq", 80f), ("2 Freq", 250f), ("2 Q", 1.2f), ("2 Mode", 1f), ("2 Thr", -26f), ("2 Rng", -4f), ("2 Atk", 15f), ("2 Rel", 160f),
+                                              ("4 Freq", 3500f), ("4 Gain", 1.5f), ("4 Q", 1f),
+                                              ("6 On", 1f), ("6 Freq", 7500f), ("6 Q", 3f), ("6 Mode", 1f), ("6 Thr", -30f), ("6 Rng", -6f), ("6 Atk", 1f), ("6 Rel", 50f));
+        // Mix and master
+        Fx("dyneq", 13, "Mix Bus Air",        ("2 Type", 1f), ("2 Freq", 90f), ("2 Gain", 1f), ("2 Q", 0.71f), ("2 Mode", 1f), ("2 Thr", -20f), ("2 Rng", -3f), ("2 Atk", 5f), ("2 Rel", 90f), ("2 Key", 1f),
+                                              ("3 Freq", 778f), ("3 Gain", 1.5f), ("3 Q", 1f), ("3 Mode", 1f), ("3 Thr", -30f), ("3 Rng", -6f), ("3 Atk", 8f), ("3 Rel", 140f),
+                                              ("4 Q", 1f), ("7 Freq", 8300f), ("7 Gain", -2f), ("7 Mode", 2f), ("7 Thr", -24f), ("7 Rng", 6f), ("7 Atk", 10f), ("7 Rel", 120f));
+        Fx("dyneq", 13, "Warm Master",        ("2 Type", 1f), ("2 Freq", 110f), ("2 Gain", 1.8f), ("7 Freq", 10000f), ("7 Mode", 1f), ("7 Thr", -18f), ("7 Rng", -3f), ("7 Atk", 20f), ("7 Rel", 250f));
+        Fx("dyneq", 13, "Master Glue EQ",     ("2 Type", 1f), ("2 Freq", 60f), ("2 Mode", 1f), ("2 Thr", -18f), ("2 Rng", -2f), ("2 Atk", 30f), ("2 Rel", 300f),
+                                              ("3 Freq", 250f), ("3 Q", 0.8f), ("3 Mode", 1f), ("3 Thr", -24f), ("3 Rng", -2f), ("3 Atk", 20f), ("3 Rel", 250f),
+                                              ("4 Freq", 2500f), ("4 Q", 1f), ("4 Mode", 1f), ("4 Thr", -22f), ("4 Rng", -2f), ("4 Atk", 10f), ("4 Rel", 200f),
+                                              ("7 Freq", 12000f), ("7 Gain", 1f));
+        Fx("dyneq", 13, "Mud Control",        ("3 Freq", 300f), ("3 Q", 1.2f), ("3 Mode", 1f), ("3 Thr", -26f), ("3 Rng", -5f), ("3 Atk", 15f), ("3 Rel", 160f));
+        Fx("dyneq", 13, "Harshness Guard",    ("4 Freq", 3200f), ("4 Q", 2f), ("4 Mode", 1f), ("4 Thr", -24f), ("4 Rng", -4f), ("4 Atk", 3f), ("4 Rel", 100f),
+                                              ("6 On", 1f), ("6 Freq", 5500f), ("6 Q", 2.5f), ("6 Mode", 1f), ("6 Thr", -26f), ("6 Rng", -4f), ("6 Atk", 2f), ("6 Rel", 80f));
+        Fx("dyneq", 13, "Loudness Contour",   ("2 Type", 1f), ("2 Freq", 100f), ("2 Mode", 2f), ("2 Thr", -30f), ("2 Rng", 4f), ("2 Atk", 30f), ("2 Rel", 400f),
+                                              ("7 Freq", 9000f), ("7 Mode", 2f), ("7 Thr", -34f), ("7 Rng", 3f), ("7 Atk", 30f), ("7 Rel", 400f));
+        // Drums
+        Fx("dyneq", 13, "Punch Tighten",      ("3 Freq", 800f), ("3 Q", 1.2f), ("3 Mode", 1f), ("3 Thr", -22f), ("3 Rng", -5f), ("3 Atk", 3f), ("3 Rel", 90f));
+        Fx("dyneq", 13, "Kick Box Cut",       ("2 Type", 1f), ("2 Freq", 60f), ("2 Gain", 2f), ("3 Freq", 350f), ("3 Q", 1.6f), ("3 Mode", 1f), ("3 Thr", -28f), ("3 Rng", -6f), ("3 Atk", 5f), ("3 Rel", 120f));
+        Fx("dyneq", 13, "Snare Ring Tamer",   ("5 On", 1f), ("5 Freq", 230f), ("5 Q", 6f), ("5 Mode", 1f), ("5 Thr", -30f), ("5 Rng", -8f), ("5 Atk", 2f), ("5 Rel", 180f));
+        Fx("dyneq", 13, "Cymbal Smoother",    ("6 On", 1f), ("6 Freq", 4500f), ("6 Q", 2f), ("6 Mode", 1f), ("6 Thr", -30f), ("6 Rng", -3f), ("6 Atk", 2f), ("6 Rel", 100f),
+                                              ("7 Freq", 8000f), ("7 Mode", 1f), ("7 Thr", -28f), ("7 Rng", -5f), ("7 Atk", 1f), ("7 Rel", 90f));
+        Fx("dyneq", 13, "Room Mic Duck",      ("2 Type", 1f), ("2 Freq", 150f), ("2 Mode", 1f), ("2 Thr", -20f), ("2 Rng", -6f), ("2 Atk", 1f), ("2 Rel", 80f),
+                                              ("3 Freq", 600f), ("3 Q", 1f), ("3 Mode", 1f), ("3 Thr", -24f), ("3 Rng", -4f), ("3 Atk", 2f), ("3 Rel", 120f));
+        // Bass
+        Fx("dyneq", 13, "Bass Control",       ("2 Freq", 90f), ("2 Q", 1.0f), ("2 Mode", 1f), ("2 Thr", -20f), ("2 Rng", -6f), ("2 Atk", 8f), ("2 Rel", 140f));
+        Fx("dyneq", 13, "Bass Clarity",       ("1 Freq", 35f), ("3 Freq", 250f), ("3 Q", 1.4f), ("3 Mode", 1f), ("3 Thr", -24f), ("3 Rng", -5f), ("3 Atk", 10f), ("3 Rel", 120f),
+                                              ("4 Freq", 800f), ("4 Gain", 2f), ("4 Q", 1.2f));
+        Fx("dyneq", 13, "Sub Tamer",          ("1 Freq", 25f), ("2 Type", 1f), ("2 Freq", 60f), ("2 Mode", 1f), ("2 Thr", -18f), ("2 Rng", -6f), ("2 Atk", 20f), ("2 Rel", 200f));
+        // Keyed from another track (route the key track with the sidechain source)
+        Fx("dyneq", 13, "Kick Ducks Bass",    ("2 Freq", 70f), ("2 Q", 1.2f), ("2 Mode", 1f), ("2 Thr", -30f), ("2 Rng", -8f), ("2 Atk", 1f), ("2 Rel", 120f), ("2 Key", 1f));
+        Fx("dyneq", 13, "Vocal Pocket",       ("3 Freq", 1000f), ("3 Q", 1f), ("3 Mode", 1f), ("3 Thr", -34f), ("3 Rng", -3f), ("3 Atk", 5f), ("3 Rel", 150f), ("3 Key", 1f),
+                                              ("4 Freq", 2500f), ("4 Q", 0.8f), ("4 Mode", 1f), ("4 Thr", -32f), ("4 Rng", -4f), ("4 Atk", 5f), ("4 Rel", 150f), ("4 Key", 1f));
+        Fx("dyneq", 13, "Voiceover Space",    ("3 Freq", 1500f), ("3 Q", 0.7f), ("3 Mode", 1f), ("3 Thr", -35f), ("3 Rng", -5f), ("3 Atk", 10f), ("3 Rel", 250f), ("3 Key", 1f));
+        // Instruments
+        Fx("dyneq", 13, "Guitar Resonance",   ("2 Freq", 180f), ("2 Q", 1f), ("2 Mode", 1f), ("2 Thr", -22f), ("2 Rng", -3f), ("2 Atk", 10f), ("2 Rel", 150f),
+                                              ("3 Freq", 1800f), ("3 Q", 4f), ("3 Mode", 1f), ("3 Thr", -26f), ("3 Rng", -6f), ("3 Atk", 2f), ("3 Rel", 100f));
+        Fx("dyneq", 13, "Piano Boom Control", ("2 Type", 1f), ("2 Freq", 150f), ("2 Mode", 1f), ("2 Thr", -24f), ("2 Rng", -4f), ("2 Atk", 20f), ("2 Rel", 250f),
+                                              ("7 Freq", 9000f), ("7 Gain", 1.5f));
+        Fx("dyneq", 13, "Acoustic Body Lift", ("2 Freq", 200f), ("2 Q", 1f), ("2 Mode", 2f), ("2 Thr", -36f), ("2 Rng", 3f), ("2 Atk", 20f), ("2 Rel", 300f),
+                                              ("7 Gain", 1.5f));
+        Fx("dyneq", 13, "Pad Smoother",       ("4 Freq", 2000f), ("4 Q", 1f), ("4 Mode", 1f), ("4 Thr", -28f), ("4 Rng", -4f), ("4 Atk", 20f), ("4 Rel", 300f),
+                                              ("7 Freq", 7000f), ("7 Mode", 1f), ("7 Thr", -30f), ("7 Rng", -3f), ("7 Atk", 20f), ("7 Rel", 300f));
+        // Expansion (the flipped directions)
+        Fx("dyneq", 13, "Upward Air",         ("7 Freq", 10000f), ("7 Mode", 1f), ("7 Thr", -30f), ("7 Rng", 4f), ("7 Atk", 5f), ("7 Rel", 150f));
+        Fx("dyneq", 13, "Hiss Dip",           ("7 Freq", 6000f), ("7 Mode", 2f), ("7 Thr", -45f), ("7 Rng", -8f), ("7 Atk", 5f), ("7 Rel", 200f));
+        // Static
+        Fx("dyneq", 13, "Cleanup",            ("1 Freq", 80f), ("1 Q", 0.9f), ("2 Freq", 250f), ("2 Gain", -3f), ("2 Q", 2f), ("3 Freq", 1200f), ("3 Gain", -1.5f), ("3 Q", 1f),
+                                              ("4 Freq", 4000f), ("4 Gain", 2.5f), ("4 Q", 1.2f), ("5 On", 1f), ("5 Type", 3f), ("5 Freq", 3150f), ("5 Q", 8f),
+                                              ("6 On", 1f), ("6 Type", 4f), ("6 Freq", 10000f), ("6 Gain", 3f), ("6 Q", 0.71f), ("7 On", 0f), ("8 On", 0f));
 
         // ---- Nota Ceiling (kind 14) — look-ahead limiter, raw units (unnamed params reset to their
         //      defaults: Ceiling −1 dB, Gain 0, Release 120 ms, Look-ahead 3 ms, Link 100 %, SC HP

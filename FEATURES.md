@@ -397,18 +397,26 @@ and user presets, automation, persistence and cloning.
   box and meters; 31 factory presets; MCP `read_beat_repeat`.
 - **Nota Orbit** (10, formerly Auto Pan) — auto-pan and tremolo, L/R phase (0° = tremolo …
   180° = pan), 5 LFO shapes, Shape, Mix.
-- **Nota Crush** (12) — bit crusher: Bit Depth, Sample Rate, Drive, Wet, Anti-Alias;
-  Digital/Analog/Fold modes; GRIT (Dither/Jitter/Noise); an OUTPUT filter; quantizer and
-  aliasing-spectrum visualisers.
+- **Nota Crush** (12) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
+  Wet; Digital / Analog / Fold modes; Anti-alias (4th order); GRIT (Dither / Jitter / Noise);
+  a post filter, output gain, Auto gain and a DC filter. Quantiser / Spectrum (engine FFT:
+  signal, added content, images above the Nyquist) / Transfer graphs (drag Bits and Rate, the
+  Nyquist and the filter, Drive), a CRUSH in/out column, Grit / Output panels; 33 factory
+  presets; MCP `read_crush`.
 - **Nota Ceiling** (14) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
   program-dependent auto stage), Clean / Punch / Glue characters, look-ahead, stereo link,
   True Peak (4× inter-sample detection), Delta (hear what it removes), a key high-pass and an
   external key; a BS.1770 / R128 loudness meter (LUFS M / S / I, LRA, PLR, true peak) against
   a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target), a LIMIT
   column, Meters / Detector panels; 32 factory presets; MCP `read_ceiling`.
-- **Nota Dynamic EQ-8** (13) — 8-band parametric with dynamics: each band Static/Duck/Lift,
-  threshold, range, attack/release, sidechain, Solo band; a dual curve (static plus
-  momentary) and a band table with GR.
+- **Nota Dynamic EQ-8** (13) — 8-band parametric with dynamics: each band Static / Duck
+  (above the threshold) / Lift (below it), threshold, signed range (cut or boost — upward and
+  downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
+  master switch, Solo, output. A full-width response graph (live curve, static curve while
+  they differ, the output spectrum, draggable numbered nodes with a whisker to each dynamic
+  band's range and its gain now, a tooltip with a 2 s gain history), a strip of band chips
+  with their activity, a panel for the selected band with the band's level on the threshold;
+  33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
 - **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.

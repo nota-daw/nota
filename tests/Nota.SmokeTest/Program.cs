@@ -3683,7 +3683,12 @@ Console.WriteLine("-- Nota Crush --");
     Check(ce.DeviceName(ct, cd) == "Nota Crush", $"device name is Nota Crush (got '{ce.DeviceName(ct, cd)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 12, $"builtin kind is 12 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int pc = ce.DeviceParamCount(ct, cd);
-    Check(pc == 11, $"Nota Crush exposes 11 params (got {pc})");
+    Check(pc == 13, $"Nota Crush exposes 13 params (got {pc})");
+    string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter" };
+    bool crNamesOk = pc == crNames.Length;
+    for (int p = 0; p < Math.Min(pc, crNames.Length); p++) crNamesOk &= ce.DeviceParamName(ct, cd, p) == crNames[p];
+    Check(crNamesOk, "the original eleven params keep their order; Auto Gain and DC Filter are appended");
+    Check(ce.DeviceParamDefault(ct, cd, 11) == 0f && ce.DeviceParamDefault(ct, cd, 12) == 0f, "appended params default off (the old sound)");
 
     // Param round-trip.
     ce.DeviceSetParam(ct, cd, 0, 0.42f);   // Bits
@@ -3696,30 +3701,37 @@ Console.WriteLine("-- Nota Crush --");
 
     // Heavy crush → still finite, different from bypass.
     ce.DeviceSetParam(ct, cd, 0, 0.1f);   // ~3 bit
-    ce.DeviceSetParam(ct, cd, 1, 0.05f);  // ~1 kHz
+    ce.DeviceSetParam(ct, cd, 1, 0.05f);  // ~600 Hz
     ce.DeviceSetParam(ct, cd, 7, 1.0f);   // full wet
     var crushed = new float[8192 * 2];
     ce.Seek(0); ce.Play(); ce.RenderOffline(crushed, 8192); ce.StopTransport();
     bool fin = true; foreach (var s in crushed) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
     Check(fin && Rms(crushed, 8192) > 0.001f, $"heavy crush stays finite + audible (rms {Rms(crushed, 8192):F3})");
 
-    // Each mode renders finite.
+    // Each mode renders finite, with and without anti-alias / auto gain / DC filter.
     for (int m = 0; m < 3; m++)
-    {
-        ce.DeviceSetParam(ct, cd, 2, m / 2f);   // Mode
-        var mb = new float[8192 * 2];
-        ce.Seek(0); ce.Play(); ce.RenderOffline(mb, 8192); ce.StopTransport();
-        bool mfin = true; foreach (var s in mb) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { mfin = false; break; }
-        Check(mfin && Rms(mb, 8192) > 0.001f, $"Crush mode {m} renders finite + audible (rms {Rms(mb, 8192):F3})");
-    }
+        for (int x = 0; x < 2; x++)
+        {
+            ce.DeviceSetParam(ct, cd, 2, m / 2f);   // Mode
+            ce.DeviceSetParam(ct, cd, 0, x == 1 ? 0.3f : 0.1f);   // 8 bit under the anti-alias, else a quiet note rounds to zero
+            ce.DeviceSetParam(ct, cd, 8, x); ce.DeviceSetParam(ct, cd, 11, x); ce.DeviceSetParam(ct, cd, 12, x);
+            var mb = new float[8192 * 2];
+            ce.Seek(0); ce.Play(); ce.RenderOffline(mb, 8192); ce.StopTransport();
+            bool mfin = true; foreach (var s in mb) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { mfin = false; break; }
+            Check(mfin && Rms(mb, 8192) > 0.001f, $"Crush mode {m}{(x == 1 ? " + AA / auto gain / DC" : "")} renders finite + audible (rms {Rms(mb, 8192):F3})");
+        }
+    for (int p = 8; p <= 12; p++) if (p is 8 or 11 or 12) ce.DeviceSetParam(ct, cd, p, 0f);
+    ce.DeviceSetParam(ct, cd, 2, 0f);
 
-    // Clone: duplicate track preserves params.
+    // Clone: duplicate track preserves params (the appended ones too).
     ce.DeviceSetParam(ct, cd, 0, 0.55f);
+    ce.DeviceSetParam(ct, cd, 12, 1f);
     int t2 = ce.DuplicateTrack(ct);
     int cd2 = ce.TrackDeviceCount(t2) - 1;
-    Check(t2 > 0 && Math.Abs(ce.DeviceGetParam(t2, cd2, 0) - 0.55f) < 1e-4, "duplicate track clones Crush params");
+    Check(t2 > 0 && Math.Abs(ce.DeviceGetParam(t2, cd2, 0) - 0.55f) < 1e-4 && ce.DeviceGetParam(t2, cd2, 12) > 0.5f, "duplicate track clones Crush params");
+    ce.DeviceSetParam(ct, cd, 12, 0f);
 
-    // Automation: a device-param lane drives Bits.
+    // Automation: a device-param lane drives Bits, another an appended param (Auto Gain).
     int lane = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cd, 0);
     Check(lane >= 0, "add Crush Bits automation lane");
     ce.SetAutomationPoints(ct, lane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
@@ -3727,6 +3739,153 @@ Console.WriteLine("-- Nota Crush --");
     ce.Seek(1.99); ce.Play(); ce.RenderOffline(ab, 4096); ce.StopTransport();
     float after = ce.DeviceGetParam(ct, cd, 0);
     Check(after > 0.7f, $"automation drives Crush Bits (Bits = {after:F2})");
+    int lane2 = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cd, 11);
+    ce.SetAutomationPoints(ct, lane2, new[] { new AutomationPoint(0.0, 1f), new AutomationPoint(4.0, 1f) });
+    ce.Seek(1.0); ce.Play(); ce.RenderOffline(ab, 1024); ce.StopTransport();
+    Check(ce.DeviceGetParam(ct, cd, 11) > 0.5f, "automation drives an appended param (Auto Gain)");
+}
+{
+    // The 440 Hz smoke sine through Crush on an audio track: meters, spectrum, auto gain, DC.
+    using var ce = new NotaEngine();
+    ce.SetBpm(120);
+    int ct = ce.AddAudioTrack();
+    ce.AddAudioClip(ct, wav, 0.0);
+    int cd = ce.AddBuiltinDevice(ct, 12);
+    const int CrTele = 32, CrBands = 40, CrScope = CrTele + 2 * CrBands;
+    var sc = new float[CrScope];
+    float[] Render(int frames) { var b = new float[frames * 2]; ce.Seek(0); ce.Play(); ce.RenderOffline(b, frames); ce.StopTransport(); return b; }
+    void Clean()
+    {
+        ce.DeviceSetParam(ct, cd, 0, 1f);    // 24 bit
+        ce.DeviceSetParam(ct, cd, 1, 1f);    // full rate
+        ce.DeviceSetParam(ct, cd, 2, 0f);    // Digital
+        ce.DeviceSetParam(ct, cd, 3, 0f);    // no dither
+        ce.DeviceSetParam(ct, cd, 6, 1f);    // filter 20 kHz
+        ce.DeviceSetParam(ct, cd, 10, 1f / 3f); // drive 0 dB
+    }
+    float[] Analyse()
+    {
+        ce.DeviceAction(ct, cd, 0, 0, 0);   // fresh meters and spectrum average
+        Render(22050); Render(22050);       // let the 300 ms RMS settle
+        int n = ce.DeviceScope(ct, cd, sc, CrScope);
+        Check(n == CrScope, $"Crush scope returns the telemetry and the spectrum ({n} of {CrScope})");
+        return sc;
+    }
+
+    Clean();
+    Analyse();
+    Check(sc[5] > 1000 && sc[0] > -12 && sc[0] < 0 && sc[1] > -12 && sc[2] < sc[0] && sc[3] > -30,
+          $"meters: sample rate {sc[5]}, in {sc[0]:F1} / out {sc[1]:F1} dBFS, RMS {sc[2]:F1} / {sc[3]:F1}");
+    Check(Math.Abs(sc[8] - 24f) < 0.01f && sc[7] > 2f && sc[7] < 2.2f && sc[22] > 0.5f, $"clean settings: 24 bit, hold {sc[7]:F2} at the top rate (0.48·sr), spectrum analysed");
+    float thdClean = sc[11];
+    Check(thdClean < 0.05f, $"a clean crush adds little (THD+N {thdClean * 100:F2} %)");
+    Check(Math.Abs(sc[4] - 3f) < 1.2f, $"crest of a sine reads ~3 dB ({sc[4]:F1})");
+    int peakBand = 0;
+    for (int b = 1; b < CrBands; b++) if (sc[CrTele + CrBands + b] > sc[CrTele + CrBands + peakBand]) peakBand = b;
+    double peakHz = 20 * Math.Pow(1000, (peakBand + 0.5) / CrBands);
+    Check(peakHz > 300 && peakHz < 650, $"the output spectrum peaks at the sine (band {peakBand}, ~{peakHz:0} Hz)");
+
+    // 4 bit at ~1 kHz: lots added, images above the reduced Nyquist; anti-alias cuts them.
+    ce.DeviceSetParam(ct, cd, 0, 0.13f);
+    ce.DeviceSetParam(ct, cd, 1, 0.185f);
+    Analyse();
+    float thdCrushed = sc[11], imgOff = sc[12];
+    Check(thdCrushed > 0.1f && thdCrushed > thdClean * 5 && imgOff > -40f && sc[7] > 30 && Math.Abs(sc[20] - sc[6] / 2) < 1,
+          $"4 bit @ {sc[6]:0} Hz adds content (THD+N {thdCrushed * 100:F0} %, images {imgOff:F1} dB, hold {sc[7]}, Nyquist {sc[20]:0})");
+    Check(sc[10] < -24 && sc[10] > -27, $"quantisation noise follows the bits ({sc[10]:F1} dB at 4 bit)");
+
+    // Fold with +12 dB of drive folds the 0.5-peak sine over.
+    ce.DeviceSetParam(ct, cd, 0, 1f); ce.DeviceSetParam(ct, cd, 1, 1f);
+    ce.DeviceSetParam(ct, cd, 2, 1f);
+    ce.DeviceSetParam(ct, cd, 10, 24f / 36f);   // +12 dB
+    Analyse();
+    Check(sc[17] >= 2 && sc[16] > 1f, $"Fold reports its folds (driven peak ×{sc[16]:F2}, {sc[17]} folds)");
+
+    // Auto gain: −6 dB of drive in Digital (no clipping downstream), the output comes back to
+    // the clean level and the correction reads +6 dB.
+    Clean();
+    ce.DeviceSetParam(ct, cd, 11, 0f);
+    Render(8192); var reference = Render(22050);
+    ce.DeviceSetParam(ct, cd, 10, 6f / 36f);
+    Render(8192); var quiet = Render(22050);
+    ce.DeviceSetParam(ct, cd, 11, 1f);
+    Render(22050); var matched = Render(22050);
+    ce.DeviceScope(ct, cd, sc, CrTele);
+    float rRef = Rms(reference, 22050), rQuiet = Rms(quiet, 22050), rMatch = Rms(matched, 22050);
+    Check(rQuiet < rRef * 0.6f && Math.Abs(20 * Math.Log10(rMatch / rRef)) < 1.0 && Math.Abs(sc[13] - 6f) < 1f,
+          $"auto gain brings −6 dB of drive back (rms {rRef:F3} → {rQuiet:F3} → {rMatch:F3}; correction {sc[13]:+0.0} dB)");
+    ce.DeviceSetParam(ct, cd, 11, 0f);
+    Clean();
+
+    // Reset meters (action 0) clears the holds.
+    ce.DeviceScope(ct, cd, sc, CrTele);
+    float holdBefore = sc[24];
+    {
+        var z = new float[4096 * 2];
+        ce.Seek(3.0); ce.Play(); ce.RenderOffline(z, 4096);   // past the clip: silence, the tails die out
+        ce.DeviceAction(ct, cd, 0, 0, 0);
+        ce.RenderOffline(z, 64); ce.StopTransport();
+    }
+    ce.DeviceScope(ct, cd, sc, CrTele);
+    Check(holdBefore > -20 && sc[24] < -100 && sc[25] < -100, $"device_action 0 resets the peak holds (out {holdBefore:F0} → {sc[24]:F0}, in {sc[25]:F0})");
+
+    // DC filter: a sine riding on +0.3 of DC keeps it through the crush, loses it with the filter.
+    string dcwav = Path.Combine(Path.GetTempPath(), "nota_smoke_crush_dc.wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(dcwav, 2.0, 44100, i => { double v = 0.3 + 0.2 * Math.Sin(2 * Math.PI * 220 * i / 44100.0); return (v, v); });
+    int dt = ce.AddAudioTrack();
+    ce.AddAudioClip(dt, dcwav, 0.0);
+    int dd = ce.AddBuiltinDevice(dt, 12);
+    ce.SetTrackMute(ct, true);
+    ce.DeviceSetParam(dt, dd, 0, 1f); ce.DeviceSetParam(dt, dd, 1, 1f); ce.DeviceSetParam(dt, dd, 3, 0f); ce.DeviceSetParam(dt, dd, 6, 1f);
+    static double Mean(float[] b, int from, int to) { double s = 0; for (int i = from * 2; i < to * 2; i++) s += b[i]; return s / ((to - from) * 2); }
+    var dOff = Render(44100);
+    ce.DeviceSetParam(dt, dd, 12, 1f);
+    var dOn = Render(44100);
+    double mOff = Mean(dOff, 22050, 44100), mOn = Mean(dOn, 22050, 44100);
+    Check(mOff > 0.2 && Math.Abs(mOn) < 0.02, $"DC filter takes the offset out (mean {mOff:F3} → {mOn:F4})");
+    ce.SetTrackMute(ct, false);
+    ce.SetTrackMute(dt, true);
+
+    // Texts.
+    ce.DeviceSetParam(ct, cd, 2, 0.5f);
+    ce.DeviceSetParam(ct, cd, 8, 1f);
+    Render(8192);
+    string t0 = ce.DeviceText(ct, cd, 0), t1 = ce.DeviceText(ct, cd, 1), tg = ce.DeviceText(ct, cd, 2);
+    Check(t0.StartsWith("Analog") && t0.Contains("bit") && t0.Contains("anti-alias") && t1.Contains("THD+N") && t1.Contains("Nyquist") && tg.Contains("Auto Gain"),
+          $"device texts: status '{t0[..Math.Min(60, t0.Length)]}…', live, guide");
+
+    // MCP reading.
+    ce.DeviceSetParam(ct, cd, 0, 0.3f);
+    ce.DeviceSetParam(ct, cd, 1, 0.4f);
+    ce.DeviceAction(ct, cd, 0, 0, 0);
+    Render(8192);
+    var crtools = new Nota.Mcp.Tools.DeviceTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var cr = crtools.ReadCrush(ct, cd).Result;
+    Check(cr.Mode == "Analog" && Math.Abs(cr.Bits - 7.9) < 0.1 && cr.AntiAlias && !cr.AutoGain && cr.Spectrum.Length == 20 && cr.Signal
+          && cr.SpectrumValid && cr.InputPeakDb > -12 && cr.RateHz > 1000 && cr.NyquistHz > 500 && cr.SampleRate > 1000
+          && cr.Summary.Length > 0 && cr.Live.Length > 0 && cr.Spectrum.Any(b => b.OutputDb > -40),
+          $"MCP read_crush reports the settings, meters and spectrum ({cr.Bits} bit @ {cr.RateHz} Hz, THD+N {cr.ThdNPercent} %, images {cr.ImagesDb} dB)");
+
+    // Every factory preset names only real params and renders finite.
+    var crcat = new FactoryPresetCatalog();
+    int crPresets = 0; bool crNamesOk = true, crPresetsOk = true;
+    var crNames = new HashSet<string>();
+    for (int p = 0; p < ce.DeviceParamCount(ct, cd); p++) crNames.Add(ce.DeviceParamName(ct, cd, p));
+    foreach (var info in crcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 12) continue;
+        var doc = crcat.Document(info.Id);
+        if (doc is null) continue;
+        crPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!crNames.Contains(k)) { crNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        crcat.ApplyInPlace(ce, info.Id, ct, cd);
+        Render(4096);
+        var pb = Render(22050);
+        bool ok = Rms(pb, 22050) > 1e-4f;
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > 4f) { ok = false; break; }
+        if (!ok) { crPresetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / silent / over (rms {Rms(pb, 22050):F4})"); }
+    }
+    Check(crPresets >= 25 && crNamesOk && crPresetsOk, $"{crPresets} Crush factory presets, all params known, all render finite and audible");
 }
 
 // ============================ Nota Dynamic EQ-8 =============================
@@ -3742,53 +3901,172 @@ Console.WriteLine("-- Nota Dynamic EQ-8 --");
     Check(de.DeviceName(dt, dd) == "Nota Dynamic EQ-8", $"name is Nota Dynamic EQ-8 (got '{de.DeviceName(dt, dd)}')");
     Check(de.TrackDeviceBuiltinKind(dt, dd) == 13, $"builtin kind is 13 (got {de.TrackDeviceBuiltinKind(dt, dd)})");
     int dpc = de.DeviceParamCount(dt, dd);
-    Check(dpc == 83, $"Dynamic EQ-8 exposes 83 params (got {dpc})");
+    Check(dpc == 92, $"Dynamic EQ-8 exposes 92 params (got {dpc})");
+    string[] fields = { "On", "Type", "Freq", "Gain", "Q", "Mode", "Thr", "Rng", "Atk", "Rel" };
+    bool layoutOk = true;
+    for (int b = 0; b < 8; b++) for (int f = 0; f < 10; f++) layoutOk &= de.DeviceParamName(dt, dd, b * 10 + f) == $"{b + 1} {fields[f]}";
+    layoutOk &= de.DeviceParamName(dt, dd, 80) == "Output" && de.DeviceParamName(dt, dd, 81) == "Sidechain" && de.DeviceParamName(dt, dd, 82) == "Solo";
+    Check(layoutOk, "the original 83 params keep their names and order");
+    bool appendedOk = de.DeviceParamName(dt, dd, 83) == "Dynamics" && de.DeviceParamDefault(dt, dd, 83) == 1f;
+    for (int b = 0; b < 8; b++) appendedOk &= de.DeviceParamName(dt, dd, 84 + b) == $"{b + 1} Key" && de.DeviceParamDefault(dt, dd, 84 + b) == 0f;
+    Check(appendedOk, "Dynamics (default on) and the eight band Keys (default Self) are appended");
 
     // Band 4 (index 3) field bases: On=30 Type=31 Freq=32 Gain=33 Q=34 Mode=35 Thr=36 Rng=37.
     de.DeviceSetParam(dt, dd, 36, -45f);
     Check(Math.Abs(de.DeviceGetParam(dt, dd, 36) + 45f) < 1e-3, "Dynamic EQ param set/get round-trips");
+    de.DeviceSetParam(dt, dd, 36, -500f);
+    Check(Math.Abs(de.DeviceGetParam(dt, dd, 36) + 60f) < 1e-3, "an out-of-range value is clamped to the param's range");
+
+    float[] Render(int frames) { var b = new float[frames * 2]; de.Seek(0); de.Play(); de.RenderOffline(b, frames); de.StopTransport(); return b; }
+    static bool Finite(float[] b) { foreach (var s in b) if (!float.IsFinite(s) || Math.Abs(s) > 8f) return false; return true; }
 
     // Default (flat static) passes audio.
-    var pb = new float[8192 * 2];
-    de.Seek(0); de.Play(); de.RenderOffline(pb, 8192); de.StopTransport();
+    var pb = Render(8192);
     Check(Rms(pb, 8192) > 0.001f, $"Dynamic EQ passes audio (rms {Rms(pb, 8192):F3})");
 
-    // Make band 4 a downward-dynamic bell that engages on the note; check GR telemetry.
+    // Band 4: a ducking bell on the note engages; check GR, the level and the full telemetry.
     de.DeviceSetParam(dt, dd, 32, 500f);   // Freq
-    de.DeviceSetParam(dt, dd, 35, 1f);     // Mode = Above (duck)
+    de.DeviceSetParam(dt, dd, 35, 1f);     // Mode = Duck (above)
     de.DeviceSetParam(dt, dd, 36, -55f);   // Thr low → engages
     de.DeviceSetParam(dt, dd, 37, -12f);   // Rng
-    var eb = new float[8192 * 2];
-    de.Seek(0); de.Play(); de.RenderOffline(eb, 8192); de.StopTransport();
+    var eb = Render(8192);
     var gr = new float[8];
     int gn = de.DeviceScope(dt, dd, gr, 8);
-    Check(gn == 8, $"GR telemetry returns 8 bands (got {gn})");
+    Check(gn == 8, $"an 8-slot reader still gets the eight band gains (got {gn})");
     Check(gr[3] < -0.05f, $"dynamic band 4 reduces gain (GR {gr[3]:F2} dB)");
-    bool defin = true; foreach (var s in eb) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { defin = false; break; }
-    Check(defin && Rms(eb, 8192) > 0.001f, "dynamic engaged stays finite + audible");
+    Check(Finite(eb) && Rms(eb, 8192) > 0.001f, "dynamic engaged stays finite + audible");
+    const int DqTele = 32, DqScope = DqTele + 96;
+    var dsc = new float[DqScope];
+    Render(4096);
+    int dsn = de.DeviceScope(dt, dd, dsc, DqScope);
+    Check(dsn == DqScope && dsc[8 + 3] > -55f && dsc[16] > 1000 && dsc[20] > -60f,
+          $"telemetry: band levels, sample rate, output peak ({dsn} slots, band 4 level {dsc[11]:F1} dBFS, out {dsc[20]:F1})");
+    bool specOk = dsc[18] > 0.5f; float specMax = -120;
+    for (int i = 0; i < 96; i++) specMax = Math.Max(specMax, dsc[DqTele + i]);
+    Check(specOk && specMax > -60f, $"the output spectrum is analysed (peak band {specMax:F1} dB)");
+
+    // Dynamics off parks every band on its static gain.
+    de.DeviceSetParam(dt, dd, 83, 0f);
+    Render(8192);
+    de.DeviceScope(dt, dd, gr, 8);
+    Check(Math.Abs(gr[3]) < 1e-4f, $"Dynamics off leaves the bands static (GR {gr[3]:F3})");
+    de.DeviceSetParam(dt, dd, 83, 1f);
+
+    // Lift acts below the threshold: a threshold far above the level lifts by the range.
+    de.DeviceSetParam(dt, dd, 35, 2f);     // Mode = Lift (below)
+    de.DeviceSetParam(dt, dd, 36, 0f);
+    de.DeviceSetParam(dt, dd, 37, 6f);
+    Render(8192);
+    de.DeviceScope(dt, dd, gr, 8);
+    Check(gr[3] > 3f, $"Lift boosts while the band is under the threshold (+{gr[3]:F2} dB)");
+    de.DeviceSetParam(dt, dd, 36, -60f);
+    Render(8192); Render(8192);
+    de.DeviceScope(dt, dd, gr, 8);
+    Check(gr[3] < 0.5f, $"… and lets go above it ({gr[3]:F2} dB)");
+    de.DeviceSetParam(dt, dd, 35, 1f); de.DeviceSetParam(dt, dd, 36, -55f); de.DeviceSetParam(dt, dd, 37, -12f);
 
     // Solo band 4 (param 82 = band index+1): renders finite.
     de.DeviceSetParam(dt, dd, 82, 4f);
-    var sb = new float[8192 * 2];
-    de.Seek(0); de.Play(); de.RenderOffline(sb, 8192); de.StopTransport();
-    bool sfin = true; foreach (var s in sb) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { sfin = false; break; }
-    Check(sfin, "solo band renders finite");
+    Check(Finite(Render(8192)), "solo band renders finite");
     de.DeviceSetParam(dt, dd, 82, 0f);
 
-    // Clone: duplicate track preserves params.
+    // Texts.
+    Render(8192);
+    string t0 = de.DeviceText(dt, dd, 0), t1 = de.DeviceText(dt, dd, 1), t2 = de.DeviceText(dt, dd, 2);
+    Check(t0.Contains("B4 Bell 500 Hz") && t0.Contains("duck") && t1.Contains("B4 level") && t1.Contains("gain now") && t2.Contains("Lift"),
+          $"device texts: status '{t0[..Math.Min(50, t0.Length)]}…', live, guide");
+
+    // MCP: read the bands and edit one.
+    var dqtools = new Nota.Mcp.Tools.DeviceTools(de, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var dr = dqtools.ReadDynamicEq(dt, dd).Result;
+    Check(dr.Bands.Length == 8 && dr.Bands[3].Mode == "Duck" && dr.Bands[3].Dynamic && dr.Bands[3].GainNowDb < -0.05 && dr.Dynamics
+          && dr.SampleRate > 1000 && dr.Spectrum.Length == 24 && dr.Summary.Length > 0 && dr.Live.Length > 0,
+          $"MCP read_dynamic_eq reports the bands, their gain now and the spectrum (B4 {dr.Bands[3].GainNowDb} dB, level {dr.Bands[3].LevelDb})");
+    var db6 = dqtools.SetDynamicEqBand(dt, dd, 6, on: true, type: "high shelf", freqHz: 8000, gainDb: 2, mode: "Lift", thresholdDb: -30, rangeDb: 4, key: "Ext").Result;
+    Check(db6.On && db6.Type == "High shelf" && db6.FreqHz == 8000 && db6.Mode == "Lift" && db6.RangeDb == 4 && db6.Key == "Ext"
+          && Math.Abs(de.DeviceGetParam(dt, dd, 89) - 1f) < 1e-3, "MCP set_dynamic_eq_band edits a band (type, frequency, mode, range, key)");
+    bool threw = false;
+    try { dqtools.SetDynamicEqBand(dt, dd, 6, mode: "Sideways").Wait(); } catch { threw = true; }
+    Check(threw, "set_dynamic_eq_band rejects an unknown mode");
+    dqtools.SetDynamicEqBand(dt, dd, 6, on: false, key: "Self").Wait();
+
+    // Clone: duplicate track preserves params, the appended ones too.
     de.DeviceSetParam(dt, dd, 33, 4.5f);   // band 4 Gain
+    de.DeviceSetParam(dt, dd, 86, 1f);     // band 3 Key
     int dt2 = de.DuplicateTrack(dt);
     int dd2 = de.TrackDeviceCount(dt2) - 1;
-    Check(dt2 > 0 && Math.Abs(de.DeviceGetParam(dt2, dd2, 33) - 4.5f) < 1e-3, "duplicate track clones Dynamic EQ params");
+    Check(dt2 > 0 && Math.Abs(de.DeviceGetParam(dt2, dd2, 33) - 4.5f) < 1e-3 && de.DeviceGetParam(dt2, dd2, 86) > 0.5f,
+          "duplicate track clones Dynamic EQ params (appended Key included)");
+    de.DeviceSetParam(dt, dd, 86, 0f);
 
-    // Automation: a device-param lane drives band 4 gain (raw dB points).
+    // Automation: a device-param lane drives band 4 gain (raw dB points) and the appended Dynamics.
     int dlane = de.AddAutomationLane(dt, AutomationTarget.DeviceParam, dd, 33);
     Check(dlane >= 0, "add Dynamic EQ gain automation lane");
     de.SetAutomationPoints(dt, dlane, new[] { new AutomationPoint(0.0, -6f), new AutomationPoint(2.0, 6f) });
+    int dlane2 = de.AddAutomationLane(dt, AutomationTarget.DeviceParam, dd, 83);
+    de.SetAutomationPoints(dt, dlane2, new[] { new AutomationPoint(0.0, 0f), new AutomationPoint(4.0, 0f) });
     var dab = new float[4096 * 2];
     de.Seek(1.99); de.Play(); de.RenderOffline(dab, 4096); de.StopTransport();
     float dafter = de.DeviceGetParam(dt, dd, 33);
     Check(dafter > 3f, $"automation drives band gain ({dafter:F2} dB)");
+    Check(de.DeviceGetParam(dt, dd, 83) < 0.5f, "automation drives the appended Dynamics switch");
+    de.RemoveAutomationLane(dt, dlane2); de.RemoveAutomationLane(dt, dlane);
+    de.DeviceSetParam(dt, dd, 83, 1f);
+
+    // Every factory preset names only real params and renders finite and audible.
+    var dqcat = new FactoryPresetCatalog();
+    int dqPresets = 0; bool dqNamesOk = true, dqPresetsOk = true;
+    var dqNames = new HashSet<string>();
+    for (int p = 0; p < dpc; p++) dqNames.Add(de.DeviceParamName(dt, dd, p));
+    foreach (var info in dqcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 13) continue;
+        var doc = dqcat.Document(info.Id);
+        if (doc is null) continue;
+        dqPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!dqNames.Contains(k)) { dqNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        dqcat.ApplyInPlace(de, info.Id, dt, dd);
+        var b = Render(8192);
+        if (!Finite(b) || Rms(b, 8192) < 1e-4f) { dqPresetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / silent (rms {Rms(b, 8192):F4})"); }
+    }
+    Check(dqPresets >= 25 && dqNamesOk && dqPresetsOk, $"{dqPresets} Dynamic EQ-8 factory presets, all params known, all render finite and audible");
+}
+{
+    // The key: band 4 hears the key track, not its own signal. The EQ'd track plays a 440 Hz
+    // sine; the key track is silent, then a loud 440 Hz sine.
+    string kwav = Path.Combine(Path.GetTempPath(), "nota_smoke_dyneq_key.wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(kwav, 2.0, 44100, i => { double v = 0.5 * Math.Sin(2 * Math.PI * 440 * i / 44100.0); return (v, v); });
+    using var ke = new NotaEngine();
+    ke.SetBpm(120);
+    int silent = ke.AddAudioTrack();
+    int keyTrack = ke.AddAudioTrack();
+    ke.AddAudioClip(keyTrack, kwav, 0.0);
+    int kt = ke.AddAudioTrack();
+    ke.AddAudioClip(kt, kwav, 0.0);
+    int kd = ke.AddBuiltinDevice(kt, 13);
+    ke.DeviceSetParam(kt, kd, 32, 440f); ke.DeviceSetParam(kt, kd, 35, 1f); ke.DeviceSetParam(kt, kd, 36, -40f); ke.DeviceSetParam(kt, kd, 37, -9f);
+    var kgr = new float[16];
+    float Gr4()
+    {
+        // In 512-frame blocks: the key a device hears is its source's previous block.
+        var b = new float[512 * 2]; ke.Seek(0); ke.Play();
+        for (int k = 0; k < 80; k++) ke.RenderOffline(b, 512);
+        ke.StopTransport();
+        ke.DeviceScope(kt, kd, kgr, 16);
+        return kgr[3];
+    }
+    float self = Gr4();
+    ke.DeviceSetParam(kt, kd, 87, 1f);                     // band 4 Key = Ext
+    float extNone = Gr4();                                 // no key track routed → hears itself
+    ke.SetDeviceSidechainSource(kt, kd, silent);
+    Check(ke.DeviceSidechainSource(kt, kd) == silent, "the key track is stored on the device");
+    float extSilent = Gr4();
+    ke.SetDeviceSidechainSource(kt, kd, keyTrack);
+    float extLoud = Gr4();
+    Check(self < -3f && extNone < -3f && Math.Abs(extSilent) < 0.1f && extLoud < -3f && kgr[8 + 3] > -40f,
+          $"Ext keys the band from the key track (self {self:F1}, no key {extNone:F1}, silent key {extSilent:F2}, loud key {extLoud:F1} dB)");
+    ke.DeviceSetParam(kt, kd, 87, 0f);
+    Check(Gr4() < -3f, "Self ignores the routed key");
 }
 
 // ============================ Nota Ceiling =================================

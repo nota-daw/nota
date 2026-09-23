@@ -394,9 +394,11 @@ public sealed partial class ArrangementView
                     // Nota Utility its mono, phase and true-peak params ("Mono Freq", "Invert L", "TP Ceiling" …),
                     // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter"), Nota Auto Shift its
                     // scale notes, detector and MIDI target ("Note C#", "Det Low", "MIDI Glide" …) and Nota
-                    // Beat Repeat its repeat filter ("Filter Freq", "Filter Type", "Filter Narrow" …):
+                    // Beat Repeat its repeat filter ("Filter Freq", "Filter Type", "Filter Narrow" …) and
+                    // Nota Dynamic EQ-8 its eight bands ("3 Freq", "3 Thr" … under "Band 3"):
                     // a word shared by two or more params becomes a submenu.
-                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 4 or 6 or 7 or 8 or 10 or 11 or 19 or 20 or 21 or 22;
+                    int bkind = e.TrackDeviceBuiltinKind(t.Id, d);
+                    bool grouped = bkind is 1 or 4 or 6 or 7 or 8 or 10 or 11 or 13 or 19 or 20 or 21 or 22;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }
@@ -409,7 +411,11 @@ public sealed partial class ArrangementView
                         var leaf = Leaf(sub ? names[p][(head.Length + 1)..] : names[p], $"D:{dd}:{pp}",
                             () => SetAutoTarget(t, AutomationTarget.DeviceParam, dd, pp), automated);
                         if (!sub) { devMenu.Items.Add(leaf); continue; }
-                        if (!groups.TryGetValue(head, out var g)) { g = new MenuItem { Header = head }; groups[head] = g; devMenu.Items.Add(g); }
+                        if (!groups.TryGetValue(head, out var g))
+                        {
+                            g = new MenuItem { Header = bkind == 13 && int.TryParse(head, out _) ? "Band " + head : head };
+                            groups[head] = g; devMenu.Items.Add(g);
+                        }
                         g.Items.Add(leaf);
                     }
                     flyout.Items.Add(devMenu);
