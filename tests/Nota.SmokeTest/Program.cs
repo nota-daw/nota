@@ -5400,76 +5400,190 @@ Console.WriteLine("-- Nota Lens --");
 // ============================ Nota Level ===================================
 Console.WriteLine("-- Nota Level (AutoGain) --");
 {
-    // AutoGain = loudness-matching utility (kind 18). Own engine (it changes level, which
-    // would skew the shared master mix used by later tests).
+    // Nota Level = loudness leveler (kind 18). Own engine (it changes level, which would skew the
+    // shared master mix used by later tests). 10 params: the original 9 + Gain (manual) appended.
     using var ae = new NotaEngine();
     ae.SetBpm(120); ae.SetTimeSignature(4, 4);
     int at = ae.AddInstrumentTrack();
-    ae.AddMidiClip(at, 0.0, 16.0);
-    ae.SetClipNotes(at, 0, new[] { new NotaNote(57, 0.0, 15.5, 0.5f) });   // quiet, sustained source → needs boost
+    ae.AddMidiClip(at, 0.0, 32.0);
+    ae.SetClipNotes(at, 0, new[] { new NotaNote(57, 0.0, 31.5, 0.5f) });   // quiet, sustained source → needs boost
     int ag = ae.AddBuiltinDevice(at, 18);
     Check(ag >= 0, "add built-in Nota Level");
     Check(ae.DeviceName(at, ag) == "Nota Level", $"name is Nota Level (got '{ae.DeviceName(at, ag)}')");
     Check(ae.TrackDeviceBuiltinKind(at, ag) == 18, $"builtin kind is 18 (got {ae.TrackDeviceBuiltinKind(at, ag)})");
-    Check(ae.DeviceParamCount(at, ag) == 9, $"Nota Level exposes 9 params (got {ae.DeviceParamCount(at, ag)})");
+    Check(ae.DeviceParamCount(at, ag) == 10 && ae.DeviceParamName(at, ag, 9) == "Gain",
+          $"Nota Level exposes 10 params, Gain appended (got {ae.DeviceParamCount(at, ag)})");
+    Check(Math.Abs(ae.DeviceParamDefault(at, ag, 9) - 0.5f) < 1e-4 && Math.Abs(ae.DeviceParamDefault(at, ag, 0) - 0.611f) < 1e-3,
+          "Level defaults: Gain 0 dB, Target −14 LUFS");
 
     // Param round-trip.
     ae.DeviceSetParam(at, ag, 0, 0.75f);   // Target
-    Check(Math.Abs(ae.DeviceGetParam(at, ag, 0) - 0.75f) < 1e-4, "AutoGain param set/get round-trips");
+    Check(Math.Abs(ae.DeviceGetParam(at, ag, 0) - 0.75f) < 1e-4, "Level param set/get round-trips");
     ae.DeviceSetParam(at, ag, 0, 0.611f);  // −14 LUFS
     ae.DeviceSetParam(at, ag, 1, 0f);      // Scale = Momentary (fast measurement)
     ae.DeviceSetParam(at, ag, 4, 0f);      // Response = Fast
+    ae.DeviceSetParam(at, ag, 5, 0f);      // Window 0.4 s → glide 0.1 s
     ae.DeviceSetParam(at, ag, 6, 1f);      // Max Gain = 24 dB (allow a big boost)
 
+    // Look-ahead: Safe on reports latency (Fast 5 ms, Slow 20 ms); Safe off none.
+    var asc = new float[21];
     var ab = new float[8192 * 2];
-    var asc = new float[9];
+    ae.Seek(0); ae.Play(); ae.RenderOffline(ab, 1024); ae.StopTransport();
+    ae.DeviceScope(at, ag, asc, asc.Length);
+    double sr0 = asc[17];
+    Check(sr0 > 0 && Math.Abs(asc[16] - (Math.Round(0.005 * sr0) + 1)) < 1.5, $"Level Fast look-ahead latency ≈ 5 ms ({asc[16]} smp at {sr0} Hz)");
+    Check(asc[18] < 0.5f && Math.Abs(asc[12]) < 1e-3, "Level holds the gain until the input has been measured");
+
     // Let the meter/gain settle (Fast/Momentary settles < 1 s; render ~4.6 s inside the note).
     ae.Seek(0); ae.Play();
     for (int k = 0; k < 25; k++) ae.RenderOffline(ab, 8192);
     int an = ae.DeviceScope(at, ag, asc, asc.Length);
     ae.StopTransport();
     bool afin = true; foreach (var s in ab) if (!float.IsFinite(s)) { afin = false; break; }
-    Check(afin && Rms(ab, 8192) > 0.001f, $"AutoGain passes audio (rms {Rms(ab, 8192):F3})");
-    Check(an == 9, $"AutoGain scope returns 9 meters (got {an})");
+    Check(afin && Rms(ab, 8192) > 0.001f, $"Level passes audio (rms {Rms(ab, 8192):F3})");
+    Check(an == 21, $"Level scope returns 21 values (got {an})");
+    Check(asc[18] > 0.5f, "Level has measured the input (primed)");
     // Quiet source matched up toward −14 → a real boost, and the output ends louder than the input.
-    Check(asc[4] > 4.0f, $"auto-gain boosts a quiet source toward target (applied {asc[4]:F1} dB)");
-    Check(asc[1] > asc[0] + 3.0f, $"gain-matched output is louder than input (out {asc[1]:F1} > in {asc[0]:F1} LUFS)");
+    Check(asc[4] > 4.0f && asc[12] > 4.0f, $"auto boosts a quiet source toward target (applied {asc[4]:F1} dB, correction {asc[12]:F1})");
+    Check(asc[1] > asc[0] + 3.0f, $"leveled output is louder than input (out {asc[1]:F1} > in {asc[0]:F1} LUFS)");
+    Check(Math.Abs(asc[10] - asc[3]) < 2.5f || asc[20] > 0.3f, $"output sits on the target unless true-peak holds it (out {asc[10]:F1}, target {asc[3]:F1}, TP hold {asc[20]:F1})");
 
-    // True-peak safety keeps the boosted output from clipping.
+    // True-peak safety keeps the boosted output under the ceiling (−1 dBTP).
     ae.DeviceSetParam(at, ag, 7, 1f);   // Safe on
-    ae.Seek(0); ae.Play(); for (int k = 0; k < 4; k++) ae.RenderOffline(ab, 8192); ae.StopTransport();
+    ae.DeviceSetParam(at, ag, 0, 1f);   // Target 0 LUFS: push into the limiter
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 8; k++) ae.RenderOffline(ab, 8192); ae.StopTransport();
     float pk = 0; foreach (var s in ab) pk = Math.Max(pk, Math.Abs(s));
-    Check(pk <= 1.01f, $"true-peak safety holds the ceiling (peak {pk:F3})");
+    float ceilLin = MathF.Pow(10, -1f / 20f);
+    Check(pk <= ceilLin + 1e-3f, $"true-peak safety holds the −1 dBTP ceiling (peak {pk:F3})");
+    ae.DeviceScope(at, ag, asc, asc.Length);
+    Check(asc[20] > 0.1f, $"the limiter reports its reduction (held {asc[20]:F1} dB)");
+    ae.DeviceSetParam(at, ag, 0, 0.611f);
 
-    // Manual (Auto off) holds the correction rather than tracking.
-    ae.DeviceSetParam(at, ag, 2, 0f);   // Auto off
-    ae.Seek(0); ae.Play(); ae.RenderOffline(ab, 4096); ae.DeviceScope(at, ag, asc, asc.Length); ae.StopTransport();
-    Check(float.IsFinite(asc[4]), "manual mode renders finite (held correction)");
+    // Slow response → 20 ms look-ahead; Safe off → no latency.
+    ae.DeviceSetParam(at, ag, 4, 1f);
+    Check(Math.Abs(ae.TrackLatencySamples(at) - (Math.Round(0.02 * sr0) + 1)) < 1.5, $"Level Slow look-ahead ≈ 20 ms ({ae.TrackLatencySamples(at)} smp)");
+    ae.DeviceSetParam(at, ag, 7, 0f);
+    Check(ae.TrackLatencySamples(at) == 0, "Level with Safe off has no latency");
+    ae.DeviceSetParam(at, ag, 7, 1f); ae.DeviceSetParam(at, ag, 4, 0f);
+
+    // Manual: the Gain param is applied (limited to ±Max Gain); MATCH (action 1) sets it to the distance to the target.
+    ae.DeviceSetParam(at, ag, 2, 0f);                 // Manual
+    ae.DeviceSetParam(at, ag, 9, 0.5f + 6f / 48f);    // +6 dB
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 3; k++) ae.RenderOffline(ab, 8192); ae.DeviceScope(at, ag, asc, asc.Length); ae.StopTransport();
+    Check(Math.Abs(asc[12] - 6f) < 0.1f, $"manual mode applies the Gain param (+6 → {asc[12]:F2} dB)");
+    ae.DeviceSetParam(at, ag, 6, 0.125f);             // Max Gain 3 dB → the manual gain is limited
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 2; k++) ae.RenderOffline(ab, 8192); ae.DeviceScope(at, ag, asc, asc.Length); ae.StopTransport();
+    Check(Math.Abs(asc[12] - 3f) < 0.1f, $"manual gain is limited to ±Max Gain ({asc[12]:F2} dB)");
+    ae.DeviceSetParam(at, ag, 6, 1f);
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 4; k++) ae.RenderOffline(ab, 8192); ae.StopTransport();
+    ae.DeviceScope(at, ag, asc, asc.Length);
+    double want = asc[3] - asc[9] - 0;                // target − measured − trim
+    ae.DeviceAction(at, ag, 1, 0, 0f);
+    Check(ae.DeviceGetParam(at, ag, 2) < 0.5f && Math.Abs((ae.DeviceGetParam(at, ag, 9) - 0.5f) * 48f - Math.Clamp(want, -24, 24)) < 0.3,
+          $"device_action 1 (MATCH) sets Gain to the distance to the target ({(ae.DeviceGetParam(at, ag, 9) - 0.5f) * 48f:F1} vs {want:F1} dB)");
+    ae.DeviceSetParam(at, ag, 2, 1f);                 // Auto again
+    ae.DeviceAction(at, ag, 0, 0, 0f);                // RESET — re-seed the measurement
+    ae.Seek(0); ae.Play(); ae.RenderOffline(ab, 4096); ae.StopTransport();
+    ae.DeviceScope(at, ag, asc, asc.Length);
+    Check(asc[18] > 0.5f && float.IsFinite(asc[9]), "device_action 0 (RESET) re-seeds the measurement");
+
+    // Silence: the gain holds instead of riding up into noise. A short note, then nothing.
+    {
+        int st = ae.AddInstrumentTrack();
+        ae.AddMidiClip(st, 0.0, 16.0);
+        ae.SetClipNotes(st, 0, new[] { new NotaNote(57, 0.0, 3.0, 0.5f) });   // 1.5 s at 120 BPM
+        int sg = ae.AddBuiltinDevice(st, 18);
+        ae.DeviceSetParam(st, sg, 1, 0f); ae.DeviceSetParam(st, sg, 4, 0f); ae.DeviceSetParam(st, sg, 5, 0.5f); ae.DeviceSetParam(st, sg, 6, 1f);
+        var ssc = new float[21];
+        ae.Seek(0); ae.Play();
+        for (int k = 0; k < 7; k++) ae.RenderOffline(ab, 8192);          // ~1.3 s: inside the note
+        ae.DeviceScope(st, sg, ssc, ssc.Length); float during = ssc[12];
+        for (int k = 0; k < 13; k++) ae.RenderOffline(ab, 8192);         // ~2.4 s on: the release tail sinks under the hold gate
+        ae.DeviceScope(st, sg, ssc, ssc.Length); float held = ssc[12];
+        Check(ssc[15] > 0.5f, $"the fading tail reads as silence (in {ssc[2]:F1} LUFS)");
+        for (int k = 0; k < 16; k++) ae.RenderOffline(ab, 8192);         // ~3 s more of silence
+        ae.DeviceScope(st, sg, ssc, ssc.Length);
+        ae.StopTransport();
+        Check(ssc[15] > 0.5f && Math.Abs(ssc[12] - held) < 0.05f,
+              $"silence holds the gain instead of riding up ({during:F1} in the note, {held:F1} → {ssc[12]:F1} dB in silence, in {ssc[2]:F1} LUFS)");
+        ae.RemoveTrack(st);
+    }
+
+    // Integrated scale renders finite.
+    ae.DeviceSetParam(at, ag, 1, 1f);
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 4; k++) ae.RenderOffline(ab, 8192); ae.StopTransport();
+    bool ifin = true; foreach (var s in ab) if (!float.IsFinite(s)) { ifin = false; break; }
+    Check(ifin, "Level on the Integrated scale renders finite");
+    ae.DeviceSetParam(at, ag, 1, 0f);
 
     // Sidechain: routing a reference track makes the target follow that track's loudness.
     int refT = ae.AddInstrumentTrack();
-    ae.AddMidiClip(refT, 0.0, 4.0);
-    ae.SetClipNotes(refT, 0, new[] { new NotaNote(57, 0.0, 3.5, 1.0f) });   // louder reference
+    ae.AddMidiClip(refT, 0.0, 8.0);
+    ae.SetClipNotes(refT, 0, new[] { new NotaNote(57, 0.0, 7.5, 1.0f) });   // louder reference
     ae.SetDeviceSidechainSource(at, ag, refT);
-    Check(ae.DeviceSidechainSource(at, ag) == refT, "AutoGain accepts a sidechain reference source");
-    ae.DeviceSetParam(at, ag, 2, 1f);   // Auto back on
+    Check(ae.DeviceSidechainSource(at, ag) == refT, "Level accepts a sidechain reference source");
     ae.Seek(0); ae.Play(); for (int k = 0; k < 6; k++) ae.RenderOffline(ab, 8192); ae.DeviceScope(at, ag, asc, asc.Length); ae.StopTransport();
-    Check(asc[7] > -119f, $"sidechain reference loudness is measured (scLufs {asc[7]:F1})");
+    Check(asc[7] > -119f && Math.Abs(asc[3] - asc[7]) < 0.5f, $"the reference's loudness is the target (ref {asc[7]:F1}, target {asc[3]:F1})");
     bool sfin = true; foreach (var s in ab) if (!float.IsFinite(s)) { sfin = false; break; }
-    Check(sfin, "AutoGain with sidechain renders finite");
+    Check(sfin, "Level with a reference renders finite");
+    Check(ae.DeviceText(at, ag, 0).Contains("reference"), "summary names the reference");
     ae.SetDeviceSidechainSource(at, ag, -1);
 
-    // Clone: duplicating the track carries AutoGain params.
-    ae.DeviceSetParam(at, ag, 6, 0.7f);   // Max Gain
-    int atD = ae.DuplicateTrack(at); int agD = ae.TrackDeviceCount(atD) - 1;
-    Check(atD > 0 && Math.Abs(ae.DeviceGetParam(atD, agD, 6) - 0.7f) < 1e-3, "duplicate track clones AutoGain params");
+    // Device texts.
+    Check(ae.DeviceText(at, ag, 0).Contains("target") && ae.DeviceText(at, ag, 1).Contains("LUFS") && ae.DeviceText(at, ag, 2).Contains("Gain"),
+          "Level device texts: summary, live reading, parameter guide");
 
-    // Automation drives Target.
+    // MCP: read / set in units, level_match.
+    var ltools = new Nota.Mcp.Tools.DeviceTools(ae, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var lr = ltools.SetLevel(at, ag, targetLufs: -16, scale: "Integrated", response: "Slow", windowSeconds: 6, maxGainDb: 18, trimDb: -1.5,
+        truePeakSafe: true, ceilingDbtp: -2).Result;
+    Check(Math.Abs(lr.TargetLufs + 16) < 0.1 && lr.Scale == "Integrated" && lr.Response == "Slow" && Math.Abs(lr.WindowSeconds - 6) < 0.05
+          && Math.Abs(lr.MaxGainDb - 18) < 0.1 && Math.Abs(lr.TrimDb + 1.5) < 0.05 && Math.Abs(lr.CeilingDbtp + 2) < 0.05 && lr.Mode == "Auto"
+          && lr.Summary.Contains("integrated") && lr.Live.Length > 0, "MCP set_level / read_level in units");
+    lr = ltools.SetLevel(at, ag, mode: "Manual", manualGainDb: 4).Result;
+    Check(lr.Mode == "Manual" && Math.Abs(lr.ManualGainDb - 4) < 0.1, "MCP set_level switches to Manual with a gain");
+    ae.Seek(0); ae.Play(); for (int k = 0; k < 4; k++) ae.RenderOffline(ab, 8192); ae.StopTransport();
+    lr = ltools.LevelMatch(at, ag).Result;
+    Check(lr.Mode == "Manual" && lr.Primed, $"MCP level_match sets the manual gain ({lr.ManualGainDb:F1} dB)");
+    ltools.SetLevel(at, ag, mode: "Auto").Wait();
+
+    // Clone: duplicating the track carries Level params, Gain included.
+    ae.DeviceSetParam(at, ag, 6, 0.7f);   // Max Gain
+    ae.DeviceSetParam(at, ag, 9, 0.6f);   // Gain
+    int atD = ae.DuplicateTrack(at); int agD = ae.TrackDeviceCount(atD) - 1;
+    Check(atD > 0 && Math.Abs(ae.DeviceGetParam(atD, agD, 6) - 0.7f) < 1e-3 && Math.Abs(ae.DeviceGetParam(atD, agD, 9) - 0.6f) < 1e-3,
+          "duplicate track clones Level params (Gain included)");
+
+    // Automation drives Target and Gain.
     int alane = ae.AddAutomationLane(at, AutomationTarget.DeviceParam, ag, 0);
-    Check(alane >= 0, "add AutoGain Target automation lane");
+    int alane2 = ae.AddAutomationLane(at, AutomationTarget.DeviceParam, ag, 9);
+    Check(alane >= 0 && alane2 >= 0, "add Level Target + Gain automation lanes");
     ae.SetAutomationPoints(at, alane, new[] { new AutomationPoint(0.0, 0.3f), new AutomationPoint(2.0, 0.9f) });
+    ae.SetAutomationPoints(at, alane2, new[] { new AutomationPoint(0.0, 0.5f), new AutomationPoint(2.0, 0.8f) });
     ae.Seek(1.99); ae.Play(); ae.RenderOffline(ab, 4096); ae.StopTransport();
-    Check(ae.DeviceGetParam(at, ag, 0) > 0.7f, $"automation drives AutoGain Target ({ae.DeviceGetParam(at, ag, 0):F2})");
+    Check(ae.DeviceGetParam(at, ag, 0) > 0.7f && ae.DeviceGetParam(at, ag, 9) > 0.7f,
+          $"automation drives Level Target ({ae.DeviceGetParam(at, ag, 0):F2}) and Gain ({ae.DeviceGetParam(at, ag, 9):F2})");
+    ae.RemoveAutomationLane(at, alane2); ae.RemoveAutomationLane(at, alane);
+
+    // Factory presets: at least 25, only real param names, each applies and renders finite.
+    var lcat = new FactoryPresetCatalog();
+    var lNames = new HashSet<string>();
+    for (int p = 0; p < ae.DeviceParamCount(at, ag); p++) lNames.Add(ae.DeviceParamName(at, ag, p));
+    int lPresets = 0; bool lNamesOk = true, lRenderOk = true;
+    foreach (var info in lcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 18) continue;
+        var doc = lcat.Document(info.Id);
+        if (doc is null) continue;
+        lPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!lNames.Contains(k)) { lNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        lcat.ApplyInPlace(ae, info.Id, at, ag);
+        ae.Seek(0); ae.Play(); ae.RenderOffline(ab, 8192); ae.StopTransport();
+        foreach (var v in ab) if (!float.IsFinite(v)) { lRenderOk = false; Console.WriteLine($"    non-finite output in {info.DisplayName}"); break; }
+    }
+    Check(lPresets >= 25, $"Nota Level ships at least 25 factory presets (got {lPresets})");
+    Check(lNamesOk, "every Level preset names real params");
+    Check(lRenderOk, "every Level preset renders finite");
 }
 
 // ============================ Nota Forge ===================================

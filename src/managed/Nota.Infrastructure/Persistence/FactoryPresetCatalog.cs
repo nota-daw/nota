@@ -1040,14 +1040,44 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Forge("Envelope Bite",     FgG(9f, env: 60), FgS(1, FTape, 45));
         Forge("Slow Tide",         FgG(9f, lfo: 40, freeHz: 0.2f), FgS(1, FTape, 50), FgS(2, FTube, 30, width: 130));
 
-        // ---- Nota AutoGain (kind 18) — loudness matching, all params normalized 0..1.
-        //      Target 0..1 → −36..0 LUFS; Scale 0 Mom/0.5 Short/1 Integ; Response 0 Fast/1 Slow.
-        Fx("autogain", 18, "Stream −14 LUFS",   ("Target", 0.611f), ("Scale", 0.5f), ("Response", 1f), ("Safe", 1f));
-        Fx("autogain", 18, "Podcast −16 LUFS",  ("Target", 0.556f), ("Scale", 1f),   ("Response", 1f), ("Window", 0.84f), ("Safe", 1f));
-        Fx("autogain", 18, "Broadcast −23 LUFS",("Target", 0.361f), ("Scale", 1f),   ("Response", 1f), ("Max Gain", 0.6f), ("Safe", 1f));
-        Fx("autogain", 18, "Club −9 LUFS",      ("Target", 0.75f),  ("Scale", 0.5f), ("Response", 0f), ("Max Gain", 0.75f), ("Safe", 1f));
-        Fx("autogain", 18, "Fast Leveler",      ("Target", 0.611f), ("Scale", 0f),   ("Response", 0f), ("Max Gain", 0.5f), ("Safe", 1f));
-        Fx("autogain", 18, "Match Reference",   ("Scale", 1f), ("Response", 1f), ("Window", 0.84f), ("Max Gain", 0.75f), ("Safe", 1f));
+        // ---- Nota Level (kind 18) — loudness leveler, all params normalized 0..1 (unnamed ones reset
+        //      to their defaults). Written in units through Lv(): target LUFS, scale 0 Mom / 1 Short /
+        //      2 Integ, fast Response, glide Window s, Max Gain dB, true-peak Safe with its Ceiling
+        //      dBTP, Trim dB; manual = Manual mode at Gain dB. The first six keep their names.
+        Lv("Stream −14 LUFS",       -14, 1);
+        Lv("Podcast −16 LUFS",      -16, 2);
+        Lv("Broadcast −23 LUFS",    -23, 2, maxG: 14.4f);
+        Lv("Club −9 LUFS",           -9, 1, fast: true, maxG: 18);
+        Lv("Fast Leveler",          -14, 0, fast: true, window: 3);
+        Lv("Match Reference",       -14, 2, window: 6, maxG: 18);
+        // Delivery targets
+        Lv("EBU R128 −23",          -23, 2, window: 8);
+        Lv("ATSC A/85 −24",         -24, 2, window: 8, ceil: -2);
+        Lv("Apple Music −16",       -16, 1);
+        Lv("YouTube −14",           -14, 1);
+        Lv("Loud Master −11",       -11, 1, window: 4, ceil: -1);
+        Lv("Audiobook −18 (ACX)",   -18, 2, window: 8, ceil: -3);
+        Lv("Cinema Dialogue −27",   -27, 2, window: 10, ceil: -2);
+        Lv("Game Audio −24",        -24, 2, window: 8, ceil: -1);
+        Lv("Radio Loud −12",        -12, 1, fast: true, window: 3, maxG: 15);
+        // Speech
+        Lv("Voice Rider",           -18, 1, fast: true, window: 4);
+        Lv("Dialogue Leveler",      -20, 1, fast: true, window: 3, maxG: 15);
+        Lv("Interview Balance",     -18, 1, window: 2, maxG: 18);
+        Lv("Live Stream Rider",     -16, 0, fast: true, window: 2);
+        Lv("Quiet Source Boost",    -14, 1, fast: true, window: 1.5f, maxG: 18);
+        // Music and mixing
+        Lv("Gentle Rider",          -16, 2, window: 10, maxG: 6);
+        Lv("Tight Rider",           -14, 0, fast: true, window: 1, maxG: 12);
+        Lv("Gain Staging −18",      -18, 1, maxG: 24, safe: false);
+        Lv("Mix Bus −20",           -20, 1, window: 8, safe: false);
+        Lv("Mastering Prep −18",    -18, 2, window: 10, ceil: -3);
+        Lv("Music Bed −28",         -28, 1, window: 6, maxG: 18);
+        Lv("Sample Normalizer −12", -12, 0, fast: true, window: 0.5f, maxG: 24);
+        Lv("Match Reference Fast",  -14, 1, fast: true, window: 2, maxG: 18);
+        // Static
+        Lv("True-Peak Guard",       -14, 1, manual: 0, ceil: -1);
+        Lv("Static Boost +6",       -14, 1, manual: 6, maxG: 12, ceil: -1);
 
         // ---- Nota Shutter (kind 19) — noise gate / ducker, all params normalized 0..1 (unnamed ones
         //      reset to their defaults). Threshold −70 + 70v dB (.286 = −50, .357 = −45, .4 = −42,
@@ -1991,6 +2021,20 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-effect", kind, isInstrument: false, isMidi: false, ps);
+
+    // Nota Level in units → normalized pairs (see the Level block above).
+    private void Lv(string name, float targetLufs, int scale, bool fast = false, float window = 6, float maxG = 12, bool safe = true,
+        float ceil = -1, float trim = 0, float? manual = null)
+    {
+        var ps = new List<(string, float)>
+        {
+            ("Target", Math.Clamp((targetLufs + 36f) / 36f, 0f, 1f)), ("Scale", scale / 2f), ("Response", fast ? 0f : 1f),
+            ("Window", (float)(Math.Log(Math.Clamp(window, 0.4f, 10f) / 0.4) / Math.Log(25))), ("Max Gain", maxG / 24f),
+            ("Safe", safe ? 1f : 0f), ("Ceiling", (ceil + 6f) / 6f), ("Trim", 0.5f + trim / 24f),
+            ("Auto", manual is null ? 1f : 0f), ("Gain", 0.5f + (manual ?? 0f) / 48f),
+        };
+        Fx("autogain", 18, name, ps.ToArray());
+    }
 
     // Nota Forge stage types (the S* Type step, × 1/5).
     private const int FTube = 0, FDiode = 1, FTape = 2, FFuzz = 3, FDigital = 4, FFold = 5;

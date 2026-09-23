@@ -55,6 +55,44 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Level is redrawn as a full leveler.** The card follows the new mockup on the 700 × 260
+  frame, in the language of EQ-8 and Forge:
+  - **Correction.** Manual / Auto sit over a fader around 0 dB. Auto rides it in teal. In
+    Manual you drag it, and switching to Manual starts from the gain Auto was riding. The gain
+    applied shows in large type, with the reason when something holds it (max gain, max cut,
+    true-peak, silence). **MATCH** (Manual) sets the fader to the distance to the target.
+    **RESET** (Auto) restarts the measurement from the loudness now, so the ride catches up at
+    once. Target and Trim sit under it. Click the Target value for the standards (−9 … −27
+    LUFS: streaming, podcast, EBU R128, ATSC A/85 …) or to match another track's loudness.
+  - **Loudness.** Mom / Short / Integ over the last 8 s: the input, the output and the target
+    with its ±1 LU band. A dot marks the output now. Drag the line to move the target. Under
+    it, IN · OUT · Δ · TP.
+  - **Meters and response.** IN and OUT against the target, TP against the ceiling, and the
+    correction. Fast / Slow, Window and Max Gain. **True-peak safe** with its ceiling in dBTP
+    (drag it). A status strip says what the leveler is doing and shows the sample rate, scale,
+    look-ahead and correlation.
+  - **Scales.** Momentary 400 ms, Short-term 3 s, Integrated 12 s with BS.1770 gating.
+    **Window** is now the glide time: Slow glides over all of it, Fast over a quarter.
+  - **Silence holds.** Before the first signal, and while the input is too quiet to level
+    (more than 20 LU under its own 12 s level, more than Max Gain + 12 LU under the target, or
+    under −70 LUFS), the measurement and the gain hold. Pauses and release tails no longer get
+    pumped up into noise.
+  - **Look-ahead limiter.** True-peak safe is now a look-ahead limiter (5 ms on Fast, 20 ms on
+    Slow) that never lets a true peak through above the ceiling. Its latency is reported, so
+    delay compensation keeps the track in time.
+  - **Compatibility.** The manual **Gain** is appended (0 dB by default), so projects, racks
+    and presets saved before this open. Older projects that had Auto off held the correction
+    they had reached. They now apply the manual Gain (0 dB), so press MATCH once.
+  - **30 factory presets**, up from six: delivery targets (EBU R128, ATSC A/85, Apple Music,
+    YouTube, Audiobook ACX, Cinema Dialogue, Game Audio …), speech riders, music and mixing
+    (Gentle Rider, Gain Staging −18, Mix Bus −20, Music Bed −28 …) and static ones (True-Peak
+    Guard, Static Boost +6). The six earlier presets keep their names.
+  - **MCP: `read_level`, `set_level`, `level_match`.** `read_level` reports the mode and state,
+    the target (or the reference), the loudness in and out on every scale, the distance to the
+    target, the correction and what holds it, the limiter, true peak and latency. `set_level`
+    edits Level in LUFS, dB and seconds and routes a reference. `level_match` is MATCH.
+    `get_device_text` gives a summary, a live reading and a parameter guide. `device_action` 0
+    is RESET and 1 is MATCH. Every parameter automates, MIDI-learns and saves in a preset.
 - **Nota Forge is redrawn, and every stage gets its own shape.** The card follows the new
   mockup on the 700 × 260 frame, in the language of EQ-8:
   - **Stages.** On the left the routing (Serial / Parallel / M/S / Multi) sits over the three

@@ -443,9 +443,13 @@ and user presets, automation, persistence and cloning.
   band's curve, the brass sum and the output spectrum (engine FFT) — drag the crossover handles,
   or ride a band's gain in its zone; a status strip; 30 factory presets; MCP `read_eq3`,
   `set_eq3`.
-- **Nota Level** (18) — automatic loudness matching (LUFS): LUFS measurement (BS.1770),
-  AUTO/MATCH, true-peak safe, sidechain (match to reference); loudness history and
-  IN/OUT/TP/correlation meters.
+- **Nota Level** (18) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target
+  (−36 … 0 LUFS, standards menu) over Window (Fast / Slow), Manual holds a draggable fader and
+  MATCH sets it to the distance to the target; Momentary / Short-term / Integrated (gated)
+  scales; Max Gain, Trim; holds the gain in silence and release tails; True-peak safe
+  look-ahead limiter (5 / 20 ms, PDC) with a Ceiling; match to a reference track (sidechain).
+  An 8 s loudness graph (drag the target), IN / OUT / TP / correction meters and a status
+  strip; 30 factory presets; MCP `read_level`, `set_level`, `level_match`.
 - **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
   Attack/Hold/Release with a Linear / Log / Snap shape, Floor (range), Lookahead, Flip
   (ducker), Retrigger (trigger mode), a 12 dB/oct detector band-pass (switchable) with Listen,
