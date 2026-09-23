@@ -41,6 +41,25 @@ internal static class WavWriter
         }
     }
 
+    // 16-bit stereo PCM from a per-frame generator (left, right), for the stereo devices.
+    public static void WriteStereo(string path, double seconds, int sampleRate, Func<int, (double L, double R)> gen)
+    {
+        int frames = (int)(seconds * sampleRate);
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var w = new BinaryWriter(fs);
+        int dataBytes = frames * 4;
+        w.Write("RIFF"u8.ToArray()); w.Write(36 + dataBytes); w.Write("WAVE"u8.ToArray());
+        w.Write("fmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)2);
+        w.Write(sampleRate); w.Write(sampleRate * 4); w.Write((short)4); w.Write((short)16);
+        w.Write("data"u8.ToArray()); w.Write(dataBytes);
+        for (int i = 0; i < frames; i++)
+        {
+            var (l, r) = gen(i);
+            w.Write((short)(Math.Clamp(l, -1, 1) * short.MaxValue));
+            w.Write((short)(Math.Clamp(r, -1, 1) * short.MaxValue));
+        }
+    }
+
     // First half silence, second half a steady tone. Used to prove source-region
     // editing: sliding the Start marker to the midpoint should reveal the tone.
     public static void WriteSilenceThenTone(string path, double seconds, double freq, int sampleRate)

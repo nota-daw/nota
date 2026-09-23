@@ -67,10 +67,10 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));
 
-    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen). Reverb (kind 2): id 0 = a one-line summary (algorithm, RT60, pre-delay, diffusion, mix, early reflections / vintage, or that the tail is frozen). Compressor (kind 1): id 0 = a one-line summary (character, threshold, ratio, knee, attack / release, detector, range, mix, the reduction right now, external key / unlinked / Listen) — or use read_dynamics for the numbers. Auto Filter (kind 7): id 0 = a one-line summary (type, slope, cutoff, Q, what the envelope and LFO drive and by how much, drive, mix, sidechain key), 1 = the live reading (modulated cutoff with its note, resonance, envelope level, LFO value and phase, onsets counted), 2 = a guide to what each 0..1 parameter value means — or use read_filter_motion for the numbers. Nota Vintage (kind 8): id 0 = a one-line summary (character, drive, tone model and shelves, wow / flutter with their rates, noise, crackle, wear, stage, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, asymmetry, wow and flutter in cents, band-limit, hiss level, auto-comp gain), 2 = a guide to what each 0..1 parameter value means — or use read_vintage for the numbers. Nota Valve (kind 6): id 0 = a one-line summary (model, gain, the tone stack with the middle's frequency, bright / deep, even-only, cabinet with mic, distance, axis and position, low / high cut, gate, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, estimated aliasing, drive, gate open / closed, auto-comp gain, the cab's loss at 4 kHz vs on-axis), 2 = a guide to the parameter values and units — or use read_valve for the numbers.")]
+    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen). Reverb (kind 2): id 0 = a one-line summary (algorithm, RT60, pre-delay, diffusion, mix, early reflections / vintage, or that the tail is frozen). Compressor (kind 1): id 0 = a one-line summary (character, threshold, ratio, knee, attack / release, detector, range, mix, the reduction right now, external key / unlinked / Listen) — or use read_dynamics for the numbers. Auto Filter (kind 7): id 0 = a one-line summary (type, slope, cutoff, Q, what the envelope and LFO drive and by how much, drive, mix, sidechain key), 1 = the live reading (modulated cutoff with its note, resonance, envelope level, LFO value and phase, onsets counted), 2 = a guide to what each 0..1 parameter value means — or use read_filter_motion for the numbers. Nota Vintage (kind 8): id 0 = a one-line summary (character, drive, tone model and shelves, wow / flutter with their rates, noise, crackle, wear, stage, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, asymmetry, wow and flutter in cents, band-limit, hiss level, auto-comp gain), 2 = a guide to what each 0..1 parameter value means — or use read_vintage for the numbers. Nota Valve (kind 6): id 0 = a one-line summary (model, gain, the tone stack with the middle's frequency, bright / deep, even-only, cabinet with mic, distance, axis and position, low / high cut, gate, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, estimated aliasing, drive, gate open / closed, auto-comp gain, the cab's loss at 4 kHz vs on-axis), 2 = a guide to the parameter values and units — or use read_valve for the numbers. Nota Utility (kind 4): id 0 = a one-line summary (channel mode, width and its L/R or M/S law, mono below with its slope, balance, phase, mute, gain, auto match and its reference, true-peak limit), 1 = the live reading (in / out LUFS-S, peak and RMS, true peak, the delta in the meter's unit, correlation, width, energy balance, auto-match gain, limiter reduction), 2 = a guide to the parameter values and units — or use read_utility for the numbers.")]
     public Task<string> GetDeviceText(int trackId, int deviceIndex, int id) => Read(() => E.DeviceText(trackId, deviceIndex, id));
 
-    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Reverb (kind 2): id 0 kills the tail (empties the reverb's buffers, so whatever is still ringing — or frozen — stops). Auto Filter (kind 7): id 0 restarts the LFO (from its start phase; in Sync the cycle is re-anchored to the current beat), id 1 resets the envelope follower (drops a held peak). Nota Vintage (kind 8): id 0 resets the wear (restarts the wow and flutter at their zero phase and silences a ringing crackle). Nota Valve (kind 6): id 0 resets the amp (clears the filters, the gate and the auto-comp). Devices without a command ignore the call.")]
+    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Reverb (kind 2): id 0 kills the tail (empties the reverb's buffers, so whatever is still ringing — or frozen — stops). Auto Filter (kind 7): id 0 restarts the LFO (from its start phase; in Sync the cycle is re-anchored to the current beat), id 1 resets the envelope follower (drops a held peak). Nota Vintage (kind 8): id 0 resets the wear (restarts the wow and flutter at their zero phase and silences a ringing crackle). Nota Valve (kind 6): id 0 resets the amp (clears the filters, the gate and the auto-comp). Nota Utility (kind 4): id 0 gain match — moves Gain once so the output meets the reference (the input's level, or Target when Match To = 1) over the last 3 s in the Meter's unit; id 1 resets the meters (level history, holds and the auto-match ride). Devices without a command ignore the call.")]
     public Task DeviceAction(int trackId, int deviceIndex, [Description("Command id — see the device's list in this description")] int id,
         int intArg = 0, float floatArg = 0) => Mutate(() => E.DeviceAction(trackId, deviceIndex, id, intArg, floatArg));
 
@@ -236,6 +236,52 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
             models[Math.Clamp((int)V(17), 0, 6)], Db(V(0)), Db(V(1)), Math.Round(V(4) * 100, 2), Db(V(12)), h, Math.Round(V(15), 1),
             Math.Max(1, (int)V(18)), Math.Round(V(16), 2), V(14) > 0.5f, Math.Round(V(23), 1), Math.Round(V(13), 1), Math.Round(V(20)),
             Math.Round(V(19), 1), Math.Round(V(27), 1), Curve(tele), Curve(tele + 2 * resp), V(3));
+    });
+
+    public sealed record UtilityBand(double Hz, double Pan, double Width, double Correlation, double LevelDb, double SetWidthPercent);
+    public sealed record UtilityReading(string Summary, string Live, string Meter, double InLevel, double OutLevel, double DeltaDb,
+        double InLufsShort, double OutLufsShort, double InPeakDb, double OutPeakDb, double InRmsDb, double OutRmsDb, double TruePeakDb,
+        double Correlation, double WidthPercent, double ConfiguredWidthPercent, double EnergyBalanceDb, double AutoMatchDb, double LimiterDb,
+        double MonoHz, UtilityBand[] Bands, double SampleRate);
+
+    [McpServerTool(Name = "read_utility"), Description(
+        "Read what a Nota Utility (built-in effect kind 4 — routing, stereo field and levels) is measuring right now: the input and "
+        + "output level in the Meter's unit (LUFS-S / Peak / RMS) and their delta, short-term loudness (LUFS, 3 s), sample peak "
+        + "(dBFS, 1 s hold) and RMS (dBFS, 300 ms) of both, the output true peak (dBTP, 3 s hold), the output correlation (−1..+1), "
+        + "its width (side against mid, %; 100 = uncorrelated), the configured width above the mono cutoff, the L/R energy balance "
+        + "(dB, + = left louder), the auto-match gain, the true-peak limiter's reduction, the mono cutoff (0 = off) and eight bands "
+        + "of the output's stereo field over the last second (pan −1 L … +1 R, width share 0 mono … 0.71 uncorrelated … 1 "
+        + "anti-phase, correlation, level dB, and the width the settings give that band in %). Levels move only while audio plays "
+        + "through the track (−120 = silence). Use get_device_text id 2 for what each parameter value means, device_action 0 to "
+        + "gain match.")]
+    public Task<UtilityReading> ReadUtility(int trackId, int deviceIndex) => Read(() =>
+    {
+        const int tele = 48, hist = 80, bands = 32, resp = 96;
+        const int bandAt = tele + 6 * hist;
+        var sc = new float[bandAt + 5 * bands + resp];
+        int n = E.DeviceScope(trackId, deviceIndex, sc, sc.Length);
+        float V(int i) => n > i ? sc[i] : 0f;
+        float L(int i) => n > i ? sc[i] : -120f;
+        static double R1(double v) => Math.Round(v, 1);
+        string[] meters = { "LUFS-S", "Peak", "RMS" };
+        double inL = L(16), outL = L(17);
+        // Eight bands: every fourth analysis band, their centres ~ 45 Hz … 11 kHz.
+        var outBands = new List<UtilityBand>();
+        if (n >= bandAt + 5 * bands)
+        {
+            double lo = V(28) > 0 ? V(28) : 30, hi = V(29) > lo ? V(29) : 16000;
+            for (int b = 1; b < bands; b += 4)
+            {
+                double hz = lo * Math.Pow(hi / lo, (b + 0.5) / bands);
+                outBands.Add(new UtilityBand(Math.Round(hz), Math.Round(sc[bandAt + b], 2), Math.Round(sc[bandAt + bands + b], 2),
+                    Math.Round(sc[bandAt + 2 * bands + b], 2), R1(sc[bandAt + 3 * bands + b]), Math.Round(sc[bandAt + 4 * bands + b])));
+            }
+        }
+        return new UtilityReading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1),
+            meters[Math.Clamp((int)V(24), 0, 2)], R1(inL), R1(outL), inL > -119 && outL > -119 ? R1(outL - inL) : 0,
+            R1(L(5)), R1(L(6)), R1(L(9)), R1(L(10)), R1(L(7)), R1(L(8)), R1(L(11)),
+            Math.Round(V(4), 2), Math.Round(V(21)), Math.Round(V(22)), R1(V(20)), R1(V(14)), R1(V(15)), Math.Round(V(23)),
+            outBands.ToArray(), V(3));
     });
 
     public sealed record AnalyzerBand(double Hz, double Db);

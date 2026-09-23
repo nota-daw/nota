@@ -57,14 +57,67 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("synth", 0, "Filter Sweep",   ("wave", 0f),     ("attack", 0.35f), ("decay", 0.70f), ("sustain", 0.75f), ("release", 0.70f), ("cutoff", 0.30f), ("resonance", 0.45f), ("filenv", 0.92f), ("unison", 0.333f), ("detune", 0.57f), ("gain", 0.74f));
         Inst("synth", 0, "Band Motion",    ("wave", 0.333f), ("pulsewidth", 0.44f), ("attack", 0.28f), ("decay", 0.62f), ("sustain", 0.70f), ("release", 0.62f), ("filtype", 1f), ("cutoff", 0.58f), ("resonance", 0.50f), ("filenv", 0.74f), ("unison", 0.333f), ("detune", 0.60f), ("spread", 0.65f), ("gain", 0.74f));
 
-        // ---- Nota Physical (kind 2) — modal percussion. Res1 Type: Beam 0 / Marimba .2 /
-        //      String .4 / Membrane .6 / Plate .8 / Pipe 1. Tune/Ratio are neutral at 0.5.
-        Inst("physical", 2, "Marimba",     ("malletvol", 0.85f), ("malletstiff", 0.45f), ("r1type", 0.2f), ("r1decay", 0.38f), ("r1material", 0.62f), ("r1bright", 0.55f), ("r1hit", 0.25f), ("volume", 0.8f));
-        Inst("physical", 2, "Vibraphone",  ("malletvol", 0.8f),  ("malletstiff", 0.5f),  ("r1type", 0.2f), ("r1decay", 0.78f), ("r1material", 0.22f), ("r1bright", 0.6f),  ("r1hit", 0.3f),  ("volume", 0.78f));
-        Inst("physical", 2, "Glass Bell",  ("malletvol", 0.8f),  ("malletstiff", 0.62f), ("r1type", 0.0f), ("r1decay", 0.82f), ("r1material", 0.2f),  ("r1bright", 0.72f), ("r1inharm", 0.22f), ("r1hit", 0.5f), ("volume", 0.75f));
-        Inst("physical", 2, "Tubular",     ("malletvol", 0.8f),  ("malletstiff", 0.55f), ("r1type", 1.0f), ("r1decay", 0.8f),  ("r1material", 0.3f),  ("r1bright", 0.55f), ("r1hit", 0.2f),  ("volume", 0.72f));
-        Inst("physical", 2, "Wood Block",  ("malletvol", 0.9f),  ("malletstiff", 0.7f),  ("r1type", 0.0f), ("r1decay", 0.14f), ("r1material", 0.82f), ("r1bright", 0.5f),  ("r1hit", 0.3f),  ("volume", 0.82f));
-        Inst("physical", 2, "Membrane",    ("malletvol", 0.85f), ("malletstiff", 0.5f),  ("r1type", 0.6f), ("r1decay", 0.32f), ("r1material", 0.62f), ("r1bright", 0.5f),  ("r1inharm", 0.1f), ("r1hit", 0.4f), ("volume", 0.8f));
+        // ---- Nota Physical (kind 2) — 32 modal patches: mallets, bells, percussion, plucked
+        //      and blown, textures. Type (r1type / r2type): Beam 0 / Marimba .2 / String .4 /
+        //      Membrane .6 / Plate .8 / Pipe 1 · noisetype LP 0 / BP .5 / HP 1 · structure
+        //      1→2 serial 0 / 1+2 parallel 1 · mono Poly 0 / Mono 1. Tune, bank tune, ratio,
+        //      noise env, pan and resmix are neutral at .5; tune and bank tune span ±24 st
+        //      (.75 = +12, .25 = −12, n st = .5 + n/48). Decay: .5 ≈ 0.85 s, .7 ≈ 2.9 s,
+        //      .9 ≈ 10 s. A struck body rings on noise (mallet 0 + sustained noise) = bowed / blown.
+        // Mallets
+        Inst("physical", 2, "Marimba",       ("malletvol", 0.85f), ("malletstiff", 0.45f), ("r1type", 0.2f), ("r1decay", 0.38f), ("r1material", 0.62f), ("r1bright", 0.55f), ("r1hit", 0.25f), ("volume", 0.8f));
+        Inst("physical", 2, "Vibraphone",    ("malletvol", 0.8f),  ("malletstiff", 0.5f),  ("r1type", 0.2f), ("r1decay", 0.78f), ("r1material", 0.22f), ("r1bright", 0.6f),  ("r1hit", 0.3f),  ("volume", 0.78f));
+        Inst("physical", 2, "Xylophone",     ("malletvol", 0.85f), ("malletstiff", 0.78f), ("malletcolor", 0.6f), ("r1type", 0.2f), ("r1decay", 0.3f), ("r1material", 0.7f), ("r1bright", 0.72f), ("r1hit", 0.22f), ("tune", 0.75f), ("volume", 0.78f));
+        Inst("physical", 2, "Glockenspiel",  ("malletvol", 0.8f),  ("malletstiff", 0.88f), ("malletnoise", 0.05f), ("malletcolor", 0.7f), ("r1type", 0f), ("r1decay", 0.72f), ("r1material", 0.18f), ("r1bright", 0.78f), ("r1hit", 0.3f), ("tune", 0.75f), ("volume", 0.7f));
+        Inst("physical", 2, "Bass Marimba",  ("malletvol", 0.9f),  ("malletstiff", 0.25f), ("malletcolor", 0.2f), ("r1type", 0.2f), ("r1decay", 0.52f), ("r1material", 0.6f), ("r1bright", 0.42f), ("r1hit", 0.2f), ("tune", 0.25f), ("volume", 0.85f));
+        Inst("physical", 2, "Soft Vibes",    ("malletvol", 0.8f),  ("malletstiff", 0.2f),  ("malletcolor", 0.25f), ("r1type", 0.2f), ("r1decay", 0.7f), ("r1material", 0.28f), ("r1bright", 0.45f), ("r1hit", 0.3f),
+                                             ("r2on", 1f), ("r2type", 0.2f), ("r2decay", 0.72f), ("r2material", 0.28f), ("r2bright", 0.45f), ("r2hit", 0.3f), ("r2tune", 0.50208f), ("volume", 0.72f));
+        Inst("physical", 2, "Balafon",       ("malletvol", 0.85f), ("malletstiff", 0.6f),  ("malletnoise", 0.3f), ("malletcolor", 0.55f), ("r1type", 0.2f), ("r1decay", 0.26f), ("r1material", 0.78f), ("r1bright", 0.55f), ("r1inharm", 0.06f), ("r1hit", 0.35f),
+                                             ("noisevol", 0.25f), ("noisetype", 0.5f), ("noisefreq", 0.55f), ("noised", 0.15f), ("noises", 0f), ("noiser", 0.1f), ("volume", 0.8f));
+        // Bells
+        Inst("physical", 2, "Glass Bell",    ("malletvol", 0.8f),  ("malletstiff", 0.62f), ("r1type", 0.0f), ("r1decay", 0.82f), ("r1material", 0.2f),  ("r1bright", 0.72f), ("r1inharm", 0.22f), ("r1hit", 0.5f), ("volume", 0.75f));
+        Inst("physical", 2, "Tubular",       ("malletvol", 0.8f),  ("malletstiff", 0.55f), ("r1type", 1.0f), ("r1decay", 0.8f),  ("r1material", 0.3f),  ("r1bright", 0.55f), ("r1hit", 0.2f),  ("volume", 0.72f));
+        Inst("physical", 2, "Church Bell",   ("malletvol", 0.85f), ("malletstiff", 0.7f),  ("r1type", 0.8f), ("r1decay", 0.9f), ("r1material", 0.22f), ("r1bright", 0.62f), ("r1inharm", 0.35f), ("r1hit", 0.4f),
+                                             ("r2on", 1f), ("r2type", 0f), ("r2decay", 0.85f), ("r2material", 0.25f), ("r2inharm", 0.2f), ("r2tune", 0.25f), ("resmix", 0.4f), ("noteoff", 0.05f), ("volume", 0.7f));
+        Inst("physical", 2, "Music Box",     ("malletvol", 0.8f),  ("malletstiff", 0.85f), ("malletcolor", 0.7f), ("r1type", 0f), ("r1decay", 0.62f), ("r1material", 0.35f), ("r1bright", 0.7f), ("r1hit", 0.15f), ("tune", 0.75f), ("noteoff", 0.1f), ("volume", 0.72f));
+        Inst("physical", 2, "Crystal Chime", ("malletvol", 0.8f),  ("malletstiff", 0.9f),  ("r1type", 0f), ("r1decay", 0.85f), ("r1material", 0.15f), ("r1bright", 0.85f), ("r1inharm", 0.12f), ("r1ratio", 0.55f), ("r1hit", 0.45f),
+                                             ("r2on", 1f), ("r2type", 0f), ("r2decay", 0.8f), ("r2material", 0.15f), ("r2bright", 0.8f), ("r2tune", 0.8958f), ("resmix", 0.35f), ("tune", 0.75f), ("volume", 0.66f));
+        Inst("physical", 2, "Gamelan",       ("malletvol", 0.85f), ("malletstiff", 0.6f),  ("r1type", 0f), ("r1decay", 0.78f), ("r1material", 0.3f), ("r1bright", 0.55f), ("r1inharm", 0.25f), ("r1ratio", 0.45f), ("r1hit", 0.3f),
+                                             ("r2on", 1f), ("r2type", 0f), ("r2decay", 0.78f), ("r2material", 0.3f), ("r2bright", 0.55f), ("r2inharm", 0.25f), ("r2ratio", 0.45f), ("r2hit", 0.3f), ("r2tune", 0.50417f),
+                                             ("noteoff", 0.1f), ("volume", 0.72f));
+        Inst("physical", 2, "Singing Bowl",  ("malletvol", 0.6f),  ("malletstiff", 0.3f),  ("malletcolor", 0.3f), ("r1type", 0f), ("r1decay", 0.95f), ("r1material", 0.1f), ("r1bright", 0.5f), ("r1inharm", 0.15f), ("r1ratio", 0.42f), ("r1hit", 0.5f),
+                                             ("noisevol", 0.15f), ("noisetype", 0.5f), ("noisefreq", 0.45f), ("noisea", 0.5f), ("noises", 0.5f), ("noiser", 0.5f), ("noteoff", 0.02f), ("tune", 0.25f), ("volume", 0.7f));
+        Inst("physical", 2, "Wind Chimes",   ("malletvol", 0.8f),  ("malletstiff", 0.85f), ("r1type", 0.8f), ("r1decay", 0.8f), ("r1material", 0.2f), ("r1bright", 0.8f), ("r1inharm", 0.4f), ("r1hit", 0.5f), ("tune", 0.75f), ("noteoff", 0.05f), ("volume", 0.66f));
+        // Percussion
+        Inst("physical", 2, "Wood Block",    ("malletvol", 0.9f),  ("malletstiff", 0.7f),  ("r1type", 0.0f), ("r1decay", 0.14f), ("r1material", 0.82f), ("r1bright", 0.5f),  ("r1hit", 0.3f),  ("volume", 0.82f));
+        Inst("physical", 2, "Membrane",      ("malletvol", 0.85f), ("malletstiff", 0.5f),  ("r1type", 0.6f), ("r1decay", 0.32f), ("r1material", 0.62f), ("r1bright", 0.5f),  ("r1inharm", 0.1f), ("r1hit", 0.4f), ("volume", 0.8f));
+        Inst("physical", 2, "Hand Drum",     ("malletvol", 0.85f), ("malletstiff", 0.35f), ("malletnoise", 0.35f), ("malletcolor", 0.35f), ("r1type", 0.6f), ("r1decay", 0.28f), ("r1material", 0.7f), ("r1bright", 0.45f), ("r1inharm", 0.05f), ("r1hit", 0.15f),
+                                             ("noisevol", 0.3f), ("noisefreq", 0.45f), ("noised", 0.12f), ("noises", 0f), ("noiser", 0.1f), ("tune", 0.25f), ("volume", 0.85f));
+        Inst("physical", 2, "Steel Drum",    ("malletvol", 0.85f), ("malletstiff", 0.5f),  ("r1type", 0.4f), ("r1decay", 0.55f), ("r1material", 0.45f), ("r1bright", 0.6f), ("r1hit", 0.3f),
+                                             ("r2on", 1f), ("r2type", 0.6f), ("r2decay", 0.45f), ("r2material", 0.5f), ("r2tune", 0.75f), ("resmix", 0.35f), ("volume", 0.76f));
+        Inst("physical", 2, "Log Drum",      ("malletvol", 0.9f),  ("malletstiff", 0.35f), ("malletcolor", 0.3f), ("r1type", 0f), ("r1decay", 0.3f), ("r1material", 0.75f), ("r1bright", 0.4f), ("r1ratio", 0.45f), ("r1hit", 0.2f), ("tune", 0.25f), ("volume", 0.85f));
+        Inst("physical", 2, "Cowbell",       ("malletvol", 0.85f), ("malletstiff", 0.8f),  ("malletnoise", 0.2f), ("r1type", 0.8f), ("r1decay", 0.28f), ("r1material", 0.55f), ("r1bright", 0.65f), ("r1inharm", 0.3f), ("r1ratio", 0.6f), ("r1hit", 0.35f), ("tune", 0.75f), ("volume", 0.72f));
+        Inst("physical", 2, "Clave",         ("malletvol", 0.9f),  ("malletstiff", 0.9f),  ("r1type", 0f), ("r1decay", 0.18f), ("r1material", 0.7f), ("r1bright", 0.6f), ("r1hit", 0.4f), ("tune", 0.75f), ("volume", 0.8f));
+        Inst("physical", 2, "Kalimba",       ("malletvol", 0.85f), ("malletstiff", 0.62f), ("malletcolor", 0.5f), ("r1type", 0f), ("r1decay", 0.5f), ("r1material", 0.45f), ("r1bright", 0.55f), ("r1hit", 0.1f),
+                                             ("r2on", 1f), ("r2type", 0.6f), ("r2decay", 0.2f), ("r2material", 0.6f), ("structure", 0f), ("volume", 0.8f));
+        // Plucked, blown and bowed
+        Inst("physical", 2, "Harp Pluck",    ("malletvol", 0.9f),  ("malletstiff", 0.55f), ("malletcolor", 0.5f), ("r1type", 0.4f), ("r1decay", 0.62f), ("r1material", 0.55f), ("r1bright", 0.6f), ("r1hit", 0.12f), ("noteoff", 0.2f), ("volume", 0.78f));
+        Inst("physical", 2, "Koto",          ("malletvol", 0.85f), ("malletstiff", 0.75f), ("malletnoise", 0.2f), ("r1type", 0.4f), ("r1decay", 0.55f), ("r1material", 0.6f), ("r1bright", 0.7f), ("r1inharm", 0.04f), ("r1hit", 0.08f), ("volume", 0.76f));
+        Inst("physical", 2, "Tine Keys",     ("malletvol", 0.85f), ("malletstiff", 0.55f), ("r1type", 0f), ("r1decay", 0.7f), ("r1material", 0.5f), ("r1bright", 0.5f), ("r1hit", 0.12f),
+                                             ("r2on", 1f), ("structure", 0f), ("r2type", 0.4f), ("r2decay", 0.45f), ("r2bright", 0.5f), ("r2hit", 0.2f), ("noteoff", 0.45f), ("volume", 0.8f));
+        Inst("physical", 2, "Pan Flute",     ("malletvol", 0f), ("noisevol", 0.3f), ("noisetype", 0.5f), ("noisefreq", 0.62f), ("noisereso", 0.3f), ("noisea", 0.35f), ("noised", 0.4f), ("noises", 0.8f), ("noiser", 0.35f),
+                                             ("r1type", 1f), ("r1decay", 0.32f), ("r1material", 0.6f), ("r1bright", 0.5f), ("r1hit", 0.5f), ("noteoff", 0.6f), ("volume", 0.8f));
+        Inst("physical", 2, "Blown Bottle",  ("malletvol", 0f), ("noisevol", 0.2f), ("noisetype", 0.5f), ("noisefreq", 0.5f), ("noisereso", 0.4f), ("noisea", 0.3f), ("noises", 0.7f), ("noiser", 0.3f),
+                                             ("r1type", 1f), ("r1decay", 0.6f), ("r1material", 0.75f), ("r1bright", 0.35f), ("r1hit", 0.5f), ("volume", 0.55f));
+        Inst("physical", 2, "Bowed Glass",   ("malletvol", 0f), ("noisevol", 0.14f), ("noisetype", 0.5f), ("noisefreq", 0.7f), ("noisereso", 0.5f), ("noisea", 0.55f), ("noised", 0.5f), ("noises", 0.85f), ("noiser", 0.5f),
+                                             ("r1type", 0f), ("r1decay", 0.85f), ("r1material", 0.2f), ("r1bright", 0.7f), ("r1inharm", 0.12f), ("r1hit", 0.45f), ("noteoff", 0.35f), ("volume", 0.55f));
+        // Textures and mono
+        Inst("physical", 2, "Metal Plate",   ("malletvol", 0.85f), ("malletstiff", 0.7f),  ("malletnoise", 0.25f), ("r1type", 0.8f), ("r1decay", 0.82f), ("r1material", 0.25f), ("r1bright", 0.7f), ("r1inharm", 0.2f), ("r1hit", 0.6f),
+                                             ("r2on", 1f), ("r2type", 0.8f), ("r2decay", 0.75f), ("r2material", 0.25f), ("r2inharm", 0.35f), ("r2tune", 0.6458f), ("noteoff", 0.1f), ("volume", 0.66f));
+        Inst("physical", 2, "Mono Kalimba",  ("mono", 1f), ("malletvol", 0.85f), ("malletstiff", 0.62f), ("r1type", 0f), ("r1decay", 0.5f), ("r1material", 0.45f), ("r1bright", 0.6f), ("r1hit", 0.1f),
+                                             ("r2on", 1f), ("r2type", 0.6f), ("r2decay", 0.2f), ("r2material", 0.6f), ("structure", 0f), ("tune", 0.75f), ("volume", 0.8f));
+        Inst("physical", 2, "Sub Thump",     ("mono", 1f), ("malletvol", 0.9f), ("malletstiff", 0.2f), ("malletcolor", 0.15f), ("r1type", 0.6f), ("r1decay", 0.3f), ("r1material", 0.8f), ("r1bright", 0.3f), ("r1hit", 0.1f),
+                                             ("noisevol", 0.2f), ("noisefreq", 0.2f), ("noised", 0.1f), ("noises", 0f), ("tune", 0.25f), ("volume", 0.9f));
 
         // ---- Nota Aurora (kind 5) — 25 patches: pads, keys, leads, basses, plucks and
         //      motion. Table: Analog 0 / Pulse .333 / Formant .667 / Chroma 1 · warp mode
@@ -1192,14 +1245,45 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("delay", 3, "Send · Eighth",   ("Wet Only", 1f), ("Sync", 1f), ("Div L", 0.286f), ("Div R", 0.286f), ("Ping-Pong", 1f), ("Feedback", 0.40f), ("Low Cut", 0.42f), ("High Cut", 0.78f), ("Bass Mono", 0.49f), ("Dry/Wet", 1f));
         Fx("delay", 3, "Send · Quarter",  ("Wet Only", 1f), ("Sync", 1f), ("Div L", 0.714f), ("Div R", 0.714f), ("Ping-Pong", 1f), ("Feedback", 0.45f), ("Spread", 0.55f), ("Width", 0.80f), ("Low Cut", 0.45f), ("Dry/Wet", 1f));
 
-        // ---- Utility (kind 4) — Gain -24..24 dB · Balance -1..1 · Width 0..400% ·
-        //      Channel Mode 0..3 (Stereo/Left/Right/Swap) · Mono Freq 20..2000 Hz · toggles 0/1
-        Fx("util", 4, "Stereo Widener", ("Gain", 0f),  ("Width", 175f), ("Balance", 0f));
-        Fx("util", 4, "Bass Mono",      ("Width", 130f), ("Mono Below", 1f), ("Mono Freq", 140f));
-        Fx("util", 4, "Mono Maker",     ("Width", 100f), ("Mono Below", 1f), ("Mono Freq", 500f));
-        Fx("util", 4, "Narrow",         ("Width", 55f));
-        Fx("util", 4, "Trim −6 dB",     ("Gain", -6f));
-        Fx("util", 4, "Swap L/R",       ("Channel Mode", 3f));
+        // ---- Nota Utility (kind 4) — real units: Gain −24..24 dB · Balance −1..1 · Width 0..400 % ·
+        //      Channel Mode 0 Stereo/1 Left/2 Right/3 Swap · Mono Freq 20..2000 Hz · Mono Slope 0 = 6 /
+        //      1 = 12 / 2 = 24 dB/oct · Width Mode 0 L/R / 1 M/S (mid ↔ side, 200 % = side only) ·
+        //      Match To 0 input / 1 Target · Target −36..0 in the Meter's unit · Meter 0 LUFS-S / 1 Peak /
+        //      2 RMS · TP Ceiling −6..0 dBTP · toggles 1 = on. Unnamed → default (the device as added).
+        Fx("util", 4, "Init",            ("Width", 100f));
+        // Width
+        Fx("util", 4, "Stereo Widener",  ("Width", 175f));
+        Fx("util", 4, "Wide, Level Held",("Width", 150f), ("Width Mode", 1f));
+        Fx("util", 4, "Wide Master",     ("Width", 125f), ("Mono Below", 1f), ("Mono Freq", 120f), ("Mono Slope", 1f));
+        Fx("util", 4, "Wide Pad",        ("Width", 160f), ("Width Mode", 1f), ("Mono Below", 1f), ("Mono Freq", 200f), ("Mono Slope", 1f));
+        Fx("util", 4, "Bus Glue",        ("Width", 115f), ("Mono Below", 1f), ("Mono Freq", 120f), ("Mono Slope", 1f));
+        Fx("util", 4, "Narrow",          ("Width", 55f));
+        Fx("util", 4, "Mono",            ("Width", 0f));
+        Fx("util", 4, "Side Only",       ("Width", 200f), ("Width Mode", 1f));
+        // Bass mono
+        Fx("util", 4, "Bass Mono",       ("Width", 130f), ("Mono Below", 1f), ("Mono Freq", 140f));
+        Fx("util", 4, "Mono Maker",      ("Width", 100f), ("Mono Below", 1f), ("Mono Freq", 500f));
+        Fx("util", 4, "Club Low End",    ("Mono Below", 1f), ("Mono Freq", 100f), ("Mono Slope", 2f));
+        Fx("util", 4, "Sub Mono 60",     ("Mono Below", 1f), ("Mono Freq", 60f), ("Mono Slope", 2f));
+        Fx("util", 4, "Vinyl Safe",      ("Mono Below", 1f), ("Mono Freq", 250f), ("Mono Slope", 1f), ("Width", 90f), ("TP Limit", 1f), ("TP Ceiling", -1f));
+        // Routing
+        Fx("util", 4, "Swap L/R",        ("Channel Mode", 3f));
+        Fx("util", 4, "Left Only",       ("Channel Mode", 1f));
+        Fx("util", 4, "Right Only",      ("Channel Mode", 2f));
+        Fx("util", 4, "Polarity Flip",   ("Invert L", 1f), ("Invert R", 1f));
+        Fx("util", 4, "Fix Left Polarity", ("Invert L", 1f));
+        Fx("util", 4, "Mute",            ("Mute", 1f));
+        // Levels
+        Fx("util", 4, "Trim −6 dB",      ("Gain", -6f));
+        Fx("util", 4, "Boost +6 dB",     ("Gain", 6f));
+        Fx("util", 4, "Level Match",     ("Auto Match", 1f));
+        Fx("util", 4, "RMS Match",       ("Auto Match", 1f), ("Meter", 2f));
+        Fx("util", 4, "Gain Match −9",   ("Match To", 1f), ("Target", -9f), ("TP Limit", 1f), ("TP Ceiling", -1f));
+        Fx("util", 4, "Streaming −14 LUFS", ("Auto Match", 1f), ("Match To", 1f), ("Target", -14f), ("TP Limit", 1f), ("TP Ceiling", -1f));
+        Fx("util", 4, "Podcast −16 LUFS",   ("Auto Match", 1f), ("Match To", 1f), ("Target", -16f), ("TP Limit", 1f), ("TP Ceiling", -1f));
+        Fx("util", 4, "Broadcast −23 LUFS", ("Auto Match", 1f), ("Match To", 1f), ("Target", -23f), ("TP Limit", 1f), ("TP Ceiling", -1f));
+        Fx("util", 4, "Peak Target −3 dB",  ("Meter", 1f), ("Match To", 1f), ("Target", -3f));
+        Fx("util", 4, "True-Peak Safety",   ("TP Limit", 1f), ("TP Ceiling", -1f));
 
         // ---- Nota Valve (kind 6) — the first 14 params keep their raw units: Model 0 Clean/1 Boost/
         //      2 Blues/3 Rock/4 Lead/5 Heavy/6 Bass; Gain / Bass / Middle / Treble / Presence / Output

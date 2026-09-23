@@ -390,9 +390,10 @@ public sealed partial class ArrangementView
                     // Nota Prism (52) by band ("Low", "Mid", "High", "Crossover") and Nota Lens (37) by
                     // view ("Spectrum", "Scope", "Waterfall", "Cursor"), the Compressor its key
                     // ("SC HP", "SC Gain" …), the Auto Filter its sources ("Env", "LFO", "Mod"), Nota
-                    // Vintage its tone and wow ("Tone Low", "Wow Rate" …) and Nota Valve its mic ("Mic Distance" …):
+                    // Vintage its tone and wow ("Tone Low", "Wow Rate" …), Nota Valve its mic ("Mic Distance" …) and
+                    // Nota Utility its mono, phase and true-peak params ("Mono Freq", "Invert L", "TP Ceiling" …):
                     // a word shared by two or more params becomes a submenu.
-                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 6 or 7 or 8 or 20 or 21 or 22;
+                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 4 or 6 or 7 or 8 or 20 or 21 or 22;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }
@@ -480,14 +481,23 @@ public sealed partial class ArrangementView
         var root = new MenuItem { Header = e.DeviceName(t.Id, -1) };
         var groups = new System.Collections.Generic.Dictionary<string, MenuItem>();
         int n = e.PluginParamCount(t.Id, -1);
+        // Group by the name's head ("Res1 Decay" → Res1 › Decay); a head only one param has
+        // stays a plain entry under its full name ("Note Off", not Note › Off).
+        static string Head(string nm) { int sp = nm.LastIndexOf(' '); return sp >= 0 ? nm[..sp] : ""; }
+        var sizes = new System.Collections.Generic.Dictionary<string, int>();
+        for (int i = 0; i < n; i++)
+        {
+            string h = Head(e.PluginParamName(t.Id, -1, i));
+            sizes[h] = sizes.TryGetValue(h, out var c) ? c + 1 : 1;
+        }
         for (int i = 0; i < n; i++)
         {
             string id = e.PluginParamId(t.Id, -1, i);
             string nm = e.PluginParamName(t.Id, -1, i);
             if (id.Length == 0) continue;
-            int sp = nm.LastIndexOf(' ');
-            string leaf = sp >= 0 ? nm[(sp + 1)..] : nm;
-            string grp = sp >= 0 ? nm[..sp] : "";
+            string grp = Head(nm);
+            if (grp.Length > 0 && sizes[grp] < 2) grp = "";
+            string leaf = grp.Length > 0 ? nm[(grp.Length + 1)..] : nm;
             string pid = id;
             var item = Leaf(leaf, $"P:-1:{pid}", () => SetAutoPluginTarget(t, -1, pid), automated);
             if (grp.Length == 0) root.Items.Add(item);

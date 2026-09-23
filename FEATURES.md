@@ -293,7 +293,13 @@ and user presets, automation, persistence and cloning.
   cutoff and pitch, unison, output drive and pan, glide, Legato, pitch-bend (±2/±5/±12)
   and mod wheels (the wheel opens the LFO onto the cutoff), VEL→AMP, VEL→FILTER,
   Mono/Poly. 25 factory presets.
-- **Nota Physical** — physical modelling.
+- **Nota Physical** — modal percussion: a mallet (stiffness, strike noise, colour) and a
+  filtered noise burst with its own ADSR and envelope → filter strike one or two tuned
+  resonator banks (Beam / Marimba / String / Membrane / Plate / Pipe partial series with
+  decay, material, brightness, inharmonicity, ratio, hit position and tune), in series
+  (1→2) or parallel (1+2) with a Res 1 / Res 2 mix; the partials drawn as the engine tunes
+  them (drag for ratio and brightness), Poly (8 voices) / Mono, tune, fine, note-off
+  damping, volume, pan and a meter. 32 factory presets. MCP: `read_physical`.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
   (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
   (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
@@ -344,9 +350,13 @@ and user presets, automation, persistence and cloning.
   bending the pitch tape-style; output stage with dry level, width, bass mono, wet only and
   latency compensation for the diffuser. Tabs: Time / Loop · Wow and Levels / Output, over a
   live repeat window that lights the repeat sounding now. Tap tempo. 29 factory presets.
-- **Nota Utility** (4) — gain, L/R balance, stereo width (mid/side 0–400%), channel mode
-  (Stereo/Left/Right/Swap), bass mono, mute, phase invert; goniometer/vectorscope,
-  correlation meter, meters, Gain match.
+- **Nota Utility** (4) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
+  mode (Stereo / Left / Right / Swap), mono below a cutoff at 6 / 12 / 24 dB/oct, mute, phase
+  invert per side; Gain match and continuous Level match to the input or a Target (LUFS-S / peak /
+  RMS), a zero-latency true-peak limiter. Tabs: Field (the stereo field by frequency, drag balance /
+  width) / Mono (width over frequency, drag the cutoff) / Levels (in and out over 8 s against the
+  target) and Routing / Output, with a LEVEL column, correlation and a status strip. 30 factory
+  presets. MCP: `read_utility`.
 - **Nota Valve** (6, formerly Amplifier) — guitar amp: 7 models (Clean / Boost / Blues /
   Rock / Lead / Heavy / Bass), gain, a Bass / Middle / Treble / Presence tone stack with a
   sweepable middle, Bright and Deep, an even-harmonics-only preamp; a cabinet (Match / 1×12 /

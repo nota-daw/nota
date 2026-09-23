@@ -1103,7 +1103,7 @@ Console.WriteLine("-- Nota Physical --");
     Check(pe.DeviceName(t, -1) == "Nota Physical", $"instrument is Nota Physical (got '{pe.DeviceName(t, -1)}')");
 
     int pc = pe.PluginParamCount(t, -1);
-    Check(pc == 36, $"Nota Physical exposes 36 params (got {pc})");
+    Check(pc == 38, $"Nota Physical exposes 38 params (got {pc})");
     int dec = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1115,7 +1115,7 @@ Console.WriteLine("-- Nota Physical --");
     // State round-trips to another track (project save/load path).
     pe.PluginParamSet(t, -1, dec, 0.77f);
     var state = pe.GetPluginState(t, -1);
-    Check(state.Length >= 36 * 4, $"collision state serialized ({state.Length} bytes)");
+    Check(state.Length >= 38 * 4, $"physical state serialized ({state.Length} bytes)");
     int t2 = pe.AddPhysicalSynthTrack();
     pe.SetPluginState(t2, -1, state);
     Check(Math.Abs(pe.PluginParamGet(t2, -1, dec) - 0.77f) < 1e-4, "collision state restores params on another track");
@@ -1156,6 +1156,150 @@ Console.WriteLine("-- Nota Physical --");
         var nbuf = new float[8192 * 2];
         pe.Seek(0.0); pe.Play(); pe.RenderOffline(nbuf, 8192); pe.StopTransport();
         Check(Rms(nbuf, 8192) > 0.001f, $"noise exciter (mallet off) is audible ({Rms(nbuf, 8192):F3})");
+    }
+
+    // ---- v2 (redesign): Mono, Res Mix, telemetry, presets ----------------
+    double physSpb = (pe.SampleRate > 0 ? pe.SampleRate : 48000.0) * 60.0 / 120.0;   // 120 BPM
+    int BF(double beats) => (int)Math.Round(beats * physSpb);
+    int PI(int tr, string id)
+    {
+        for (int i = 0; i < pe.PluginParamCount(tr, -1); i++) if (pe.PluginParamId(tr, -1, i) == id) return i;
+        return -1;
+    }
+    float[] PhysRender((string id, float v)[] ps, NotaNote[] notes, int frames)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120); e.SetTimeSignature(4, 4);
+        int tr = e.AddPhysicalSynthTrack();
+        foreach (var (id, v) in ps)
+            for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) e.PluginParamSet(tr, -1, i, v);
+        e.AddMidiClip(tr, 0.0, 8.0);
+        e.SetClipNotes(tr, 0, notes);
+        var b = new float[frames * 2];
+        e.Seek(0.0); e.Play(); e.RenderOffline(b, frames); e.StopTransport();
+        return b;
+    }
+
+    // A project saved before v2 (36 floats) loads: old values kept, Mono off, Res Mix even.
+    {
+        int told = pe.AddPhysicalSynthTrack();
+        pe.PluginParamSet(t, -1, PI(t, "mono"), 1f); pe.PluginParamSet(t, -1, PI(t, "resmix"), 0.1f);
+        var full = pe.GetPluginState(t, -1);
+        pe.SetPluginState(told, -1, full.AsSpan(0, 36 * 4).ToArray());
+        Check(Math.Abs(pe.PluginParamGet(told, -1, dec) - 0.15f) < 1e-4, "a 36-param (pre-v2) state keeps its values");
+        Check(pe.PluginParamGet(told, -1, PI(told, "mono")) < 0.5f && Math.Abs(pe.PluginParamGet(told, -1, PI(told, "resmix")) - 0.5f) < 1e-4,
+            "a pre-v2 state loads Poly with an even Res Mix");
+        int tc = pe.DuplicateTrack(t);
+        Check(pe.PluginParamGet(tc, -1, PI(tc, "mono")) > 0.5f && Math.Abs(pe.PluginParamGet(tc, -1, PI(tc, "resmix")) - 0.1f) < 1e-4,
+            "duplicate track clones Mono and Res Mix");
+        pe.PluginParamSet(t, -1, PI(t, "mono"), 0f); pe.PluginParamSet(t, -1, PI(t, "resmix"), 0.5f);
+    }
+
+    // Res Mix in 1+2: 0 = resonator 1 alone (bit-identical to Res 2 off), 1 = resonator 2 alone.
+    {
+        var note = new[] { new NotaNote(60, 0.0, 1.0, 0.9f) };
+        var r2 = new (string, float)[] { ("r2on", 1f), ("r2type", 0.8f), ("structure", 1f) };
+        var off = PhysRender(new[] { ("r2on", 0f) }, note, 8192);
+        var only1 = PhysRender(r2.Append(("resmix", 0f)).ToArray(), note, 8192);
+        var sum = PhysRender(r2.Append(("resmix", 0.5f)).ToArray(), note, 8192);
+        var only2 = PhysRender(r2.Append(("resmix", 1f)).ToArray(), note, 8192);
+        double diff = 0; for (int i = 0; i < off.Length; i++) diff = Math.Max(diff, Math.Abs(off[i] - only1[i]));
+        Check(diff < 1e-5, $"Res Mix 0 = resonator 1 alone (max diff {diff:E1})");
+        double d12 = 0; for (int i = 0; i < off.Length; i++) d12 = Math.Max(d12, Math.Abs(only2[i] - only1[i]));
+        Check(Rms(only2, 8192) > 0.001f && d12 > 1e-3, $"Res Mix 1 = resonator 2 alone, a different sound (RMS {Rms(only2, 8192):F3})");
+        double dSum = 0; for (int i = 0; i < off.Length; i++) dSum = Math.Max(dSum, Math.Abs(sum[i] - (only1[i] + only2[i])));
+        Check(dSum < 1e-4, $"Res Mix 0.5 = both at full level, the pre-v2 sum (max diff {dSum:E1})");
+        // 1→2: resonator 1 rings resonator 2 — bounded (it used to ring up by τ·sr), and Res
+        // Mix 0 leaves resonator 1's own sound alone.
+        var ser = new (string, float)[] { ("r2on", 1f), ("r2type", 0.4f), ("r2decay", 0.9f), ("structure", 0f) };
+        var serial = PhysRender(ser.Append(("resmix", 0.5f)).ToArray(), note, 8192);
+        float serRms = Rms(serial, 8192), peak = 0; foreach (var x in serial) peak = Math.Max(peak, Math.Abs(x));
+        Check(serRms > 0.01f && peak < 1.5f, $"1→2 with a long-ringing resonator 2 stays bounded (RMS {serRms:F3}, peak {peak:F2})");
+        var serial0 = PhysRender(ser.Append(("resmix", 0f)).ToArray(), note, 8192);
+        double dSer = 0; for (int i = 0; i < off.Length; i++) dSer = Math.Max(dSer, Math.Abs(serial0[i] - off[i]));
+        Check(dSer < 1e-5, $"1→2 with Res Mix 0 = resonator 1 alone (max diff {dSer:E1})");
+    }
+
+    // Mono chokes the sounding note when a new one strikes; Poly lets both ring.
+    for (int m = 0; m < 2; m++)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120); e.SetTimeSignature(4, 4);
+        int tr = e.AddPhysicalSynthTrack();
+        for (int i = 0; i < e.PluginParamCount(tr, -1); i++)
+        {
+            string id = e.PluginParamId(tr, -1, i);
+            if (id == "mono") e.PluginParamSet(tr, -1, i, m);
+            else if (id == "r1decay") e.PluginParamSet(tr, -1, i, 0.9f);
+            else if (id == "noteoff") e.PluginParamSet(tr, -1, i, 0f);
+        }
+        e.AddMidiClip(tr, 0.0, 4.0);
+        e.SetClipNotes(tr, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f), new NotaNote(67, 0.5, 2.0, 0.9f) });
+        var b = new float[BF(0.5) * 2];
+        e.Seek(0.0); e.Play(); e.RenderOffline(b, BF(0.5)); e.StopTransport();
+        int voices = e.InstrumentVoiceCount(tr);
+        Check(voices == (m == 1 ? 1 : 2), $"Physical {(m == 1 ? "mono" : "poly")}: {voices} voice(s) sound after two overlapping strikes");
+        Check(Rms(b, BF(0.5)) > 0.001f, $"Physical {(m == 1 ? "mono" : "poly")} is audible");
+    }
+
+    // Telemetry: the last struck pitch and bank 1's partial table as the engine tunes it.
+    {
+        int ts = pe.AddPhysicalSynthTrack();
+        pe.AddMidiClip(ts, 0.0, 4.0);
+        pe.SetClipNotes(ts, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f) });
+        var b = new float[4096 * 2];
+        pe.Seek(0.0); pe.Play(); pe.RenderOffline(b, 4096); pe.StopTransport();
+        var sc = new float[Nota.Application.PhysicalModel.ScopeLength];
+        int n = pe.InstrumentScope(ts, sc);
+        Check(n == Nota.Application.PhysicalModel.ScopeLength, $"Physical scope returns {Nota.Application.PhysicalModel.ScopeLength} floats (got {n})");
+        Check(Math.Abs(sc[2] - 261.63f) < 0.5f, $"scope reports the struck fundamental (C4 = {sc[2]:F2} Hz)");
+        Check(sc[3] > 1e-4f, $"scope reports an output peak ({sc[3]:F4})");
+        var bank1 = Nota.Application.PhysicalModel.Bank(sc, 0);
+        Check(Math.Abs(bank1[0].Ratio - 1) < 1e-4 && Math.Abs(bank1[1].Ratio - 3.984) < 0.01, $"bank 1 = marimba partials (1, {bank1[1].Ratio:F3} …)");
+        Check(bank1[0].Tau > bank1[8].Tau, "high partials die sooner than the fundamental");
+        pe.PluginParamSet(ts, -1, PI(ts, "r1tune"), 0.75f);
+        pe.InstrumentScope(ts, sc);
+        Check(Math.Abs(Nota.Application.PhysicalModel.Bank(sc, 0)[0].Ratio - 2) < 1e-3, "bank tune +12 st doubles the partial ratios");
+        string sum = Nota.Application.PhysicalModel.Summary(id => pe.PluginParamGet(ts, -1, PI(ts, id)));
+        Check(sum.Contains("marimba") && sum.StartsWith("Poly 8"), $"summary reads the patch ('{sum}')");
+    }
+
+    // Automation: a plugin-param lane on Res Mix drives it during playback.
+    {
+        int ta = pe.AddPhysicalSynthTrack();
+        int mi = PI(ta, "resmix");
+        int lane = pe.AddPluginAutomationLane(ta, -1, "resmix");
+        Check(lane >= 0, "add plugin automation lane on resmix");
+        pe.SetAutomationPoints(ta, lane, new[] { new AutomationPoint(0.0, 0.0f, 0f), new AutomationPoint(2.0, 1.0f, 0f) });
+        var ab = new float[4096 * 2];
+        pe.Seek(1.99); pe.Play(); pe.RenderOffline(ab, 4096); pe.StopTransport();
+        Check(pe.PluginParamGet(ta, -1, mi) > 0.9f, $"automation drives Res Mix ({pe.PluginParamGet(ta, -1, mi):F2})");
+    }
+
+    // Factory presets: 32 ship, every named param is a real Physical id, each applies in
+    // place and renders audible + finite.
+    {
+        var ids = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) ids.Add(pe.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 2).ToList();
+        Check(mine.Count == 32, $"Nota Physical ships 32 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Physical preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int tp = pe.AddPhysicalSynthTrack();
+        int fails = mine.Count(p => cat.ApplyInPlace(pe, p.Id, tp, -1).Length != 0);
+        Check(fails == 0, $"every Physical preset applies in place ({fails} failed)");
+        var off = new System.Collections.Generic.List<string>();
+        foreach (var p in mine)
+        {
+            var doc = cat.Document(p.Id)!;
+            var b = PhysRender(doc.NamedParams!.Select(kv => (kv.Key, kv.Value)).ToArray(),
+                new[] { new NotaNote(60, 0.0, 0.5, 0.9f), new NotaNote(64, 0.5, 0.5, 0.9f), new NotaNote(67, 1.0, 0.5, 0.9f) }, BF(1.6));
+            bool ok = true; foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 4f) { ok = false; break; }
+            float rms = Rms(b, BF(1.6));
+            if (!ok || rms < 0.005f || rms > 0.9f) off.Add($"{p.DisplayName} ({rms:F3})");
+        }
+        Check(off.Count == 0, $"every Physical preset renders audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
     }
 }
 
@@ -3071,7 +3215,7 @@ Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.D
 int delDev = engine.AddBuiltinDevice(fxT, 3);
 Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
-Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 9, "add built-in Utility (9 params)");
+Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 17, "add built-in Utility (17 params)");
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
 Check(Math.Abs(engine.DeviceGetParam(fxT, delDev, 12) - 0.5f) < 0.001f, "Delay param round-trips");
 int ampDev = engine.AddBuiltinDevice(fxT, 6);
@@ -7081,6 +7225,225 @@ Console.WriteLine("-- Nota Valve (effect kind 6) --");
         Check(aveng.DeviceGetParam(avt, avd, ADeep) < 0.5f && aveng.DeviceGetParam(avt, avd, AGate) < 0.001f && aveng.DeviceGetParam(avt, avd, AHighCut) > 0.99f,
               "unnamed params reset to defaults between presets");
     }
+}
+
+// ===================== Nota Utility (effect kind 4) ========================
+Console.WriteLine("-- Nota Utility (effect kind 4) --");
+{
+    // 8 s of stereo: a 60 Hz tone in anti-phase (pure side) under a 2 kHz tone in phase (pure mid).
+    string uwav = Path.Combine(Path.GetTempPath(), "nota_smoke_utility.wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(uwav, 8.0, 44100, i =>
+    {
+        double lo = 0.3 * Math.Sin(2 * Math.PI * 60 * i / 44100.0), hi = 0.3 * Math.Sin(2 * Math.PI * 2000 * i / 44100.0);
+        return (hi + lo, hi - lo);
+    });
+    using var ueng = new NotaEngine();
+    int ut = ueng.AddAudioTrack();
+    ueng.AddAudioClip(ut, uwav, 0.0);
+    int ud = ueng.AddBuiltinDevice(ut, 4);
+    Check(ud >= 0 && ueng.DeviceName(ut, ud) == "Nota Utility" && ueng.TrackDeviceBuiltinKind(ut, ud) == 4, "add Nota Utility (kind 4)");
+    int upc = ueng.DeviceParamCount(ut, ud);
+    Check(upc == 17, $"Nota Utility exposes 17 params ({upc})");
+    const int UGain = 0, UBal = 1, UWidth = 2, UMode = 3, UMonoF = 4, UMono = 5, UMute = 6, UInvL = 7, UWMode = 9, USlope = 10,
+        UAuto = 11, UMatchTo = 12, UTarget = 13, UMeter = 14, UTp = 15, UCeil = 16;
+    string[] uNames = { "Gain", "Balance", "Width", "Channel Mode", "Mono Freq", "Mono Below", "Mute", "Invert L", "Invert R",
+                        "Width Mode", "Mono Slope", "Auto Match", "Match To", "Target", "Meter", "TP Limit", "TP Ceiling" };
+    bool namesOk = true;
+    for (int k = 0; k < upc && k < uNames.Length; k++) namesOk &= ueng.DeviceParamName(ut, ud, k) == uNames[k];
+    Check(namesOk, "the original nine params keep their order; Width Mode … TP Ceiling are appended");
+    Check(Math.Abs(ueng.DeviceParamMax(ut, ud, UWidth) - 400f) < 1e-3f && Math.Abs(ueng.DeviceParamMin(ut, ud, UGain) + 24f) < 1e-3f
+          && Math.Abs(ueng.DeviceParamMin(ut, ud, UTarget) + 36f) < 1e-3f && Math.Abs(ueng.DeviceParamMax(ut, ud, UMeter) - 2f) < 1e-3f,
+          "params keep real units (Gain ±24 dB, Width 0..400 %, Target −36..0, Meter 0..2)");
+    Check(Math.Abs(ueng.DeviceParamDefault(ut, ud, UWidth) - 100f) < 1e-3f && Math.Abs(ueng.DeviceParamDefault(ut, ud, UMonoF) - 120f) < 1e-3f
+          && ueng.DeviceParamDefault(ut, ud, UWMode) < 0.5f && ueng.DeviceParamDefault(ut, ud, USlope) < 0.5f && ueng.DeviceParamDefault(ut, ud, UAuto) < 0.5f
+          && ueng.DeviceParamDefault(ut, ud, UTp) < 0.5f && Math.Abs(ueng.DeviceParamDefault(ut, ud, UCeil) + 1f) < 1e-3f,
+          "appended params default to the old sound (L/R width, 6 dB/oct mono, no auto match, no limiter)");
+    ueng.DeviceSetParam(ut, ud, UWidth, 250f);
+    Check(Math.Abs(ueng.DeviceGetParam(ut, ud, UWidth) - 250f) < 1e-3f, "device param set/get round-trips (raw units)");
+    ueng.DeviceSetParam(ut, ud, UWidth, 900f);
+    Check(Math.Abs(ueng.DeviceGetParam(ut, ud, UWidth) - 400f) < 1e-3f, "out-of-range values clamp to the param's range");
+    ueng.DeviceSetParam(ut, ud, UWidth, 100f);
+
+    var ubuf = new float[4096 * 2];
+    int uFrames = 0;
+    // Render n frames from `from` seconds; keep the last 4096 in ubuf.
+    void URender(int n = 8192, double from = 0.5)
+    {
+        ueng.SetBpm(120); ueng.Seek(from * 2); ueng.Play();
+        for (int k = 0; k < n; k += 4096) ueng.RenderOffline(ubuf, 4096);
+        ueng.StopTransport(); uFrames = n;
+    }
+    double Side() { double s = 0; for (int i = 0; i < 4096; i++) { double d = 0.5 * (ubuf[i * 2] - ubuf[i * 2 + 1]); s += d * d; } return Math.Sqrt(s / 4096); }
+    double Mid() { double s = 0; for (int i = 0; i < 4096; i++) { double d = 0.5 * (ubuf[i * 2] + ubuf[i * 2 + 1]); s += d * d; } return Math.Sqrt(s / 4096); }
+    double ChRms(int c) { double s = 0; for (int i = 0; i < 4096; i++) s += ubuf[i * 2 + c] * (double)ubuf[i * 2 + c]; return Math.Sqrt(s / 4096); }
+    bool UFinite() { foreach (var x in ubuf) if (!float.IsFinite(x) || Math.Abs(x) > 8f) return false; return true; }
+
+    URender(); double side0 = Side(), mid0 = Mid();
+    Check(side0 > 0.1 && mid0 > 0.1, $"the test signal carries mid and side ({mid0:0.000} / {side0:0.000})");
+    // Width: 0 → mono; 200 L/R → twice the side; M/S 200 → side only; M/S 150 keeps the side and halves the mid.
+    ueng.DeviceSetParam(ut, ud, UWidth, 0f); URender();
+    Check(Side() < 0.002 && Math.Abs(Mid() - mid0) < 0.01, $"Width 0 is mono ({Side():0.0000})");
+    ueng.DeviceSetParam(ut, ud, UWidth, 200f); URender();
+    Check(Math.Abs(Side() / side0 - 2) < 0.05 && Math.Abs(Mid() - mid0) < 0.01, $"L/R Width 200 doubles the side ({Side() / side0:0.00}×)");
+    ueng.DeviceSetParam(ut, ud, UWMode, 1f); URender();
+    Check(Mid() < 0.002 && Math.Abs(Side() - side0) < 0.01, $"M/S Width 200 is side only (mid {Mid():0.0000})");
+    ueng.DeviceSetParam(ut, ud, UWidth, 150f); URender();
+    Check(Math.Abs(Mid() / mid0 - 0.5) < 0.03 && Math.Abs(Side() - side0) < 0.01, $"M/S Width 150 trades the mid for width, the side holds ({Mid() / mid0:0.00}× mid)");
+    ueng.DeviceSetParam(ut, ud, UWMode, 0f); ueng.DeviceSetParam(ut, ud, UWidth, 100f);
+
+    // Mono below 120 Hz removes the 60 Hz side, steeper slopes more of it; the mid is untouched.
+    ueng.DeviceSetParam(ut, ud, UMono, 1f);
+    var sideBySlope = new double[3];
+    for (int sl = 0; sl < 3; sl++) { ueng.DeviceSetParam(ut, ud, USlope, sl); URender(16384); sideBySlope[sl] = Side(); }
+    Check(sideBySlope[0] < side0 * 0.6 && sideBySlope[1] < sideBySlope[0] * 0.7 && sideBySlope[2] < sideBySlope[1] * 0.6 && Math.Abs(Mid() - mid0) < 0.01,
+          $"Mono below 120 Hz takes out the 60 Hz side, more with each slope (6 / 12 / 24: {sideBySlope[0] / side0:0.00} / {sideBySlope[1] / side0:0.00} / {sideBySlope[2] / side0:0.00})");
+    ueng.DeviceSetParam(ut, ud, UMono, 0f); ueng.DeviceSetParam(ut, ud, USlope, 0f);
+
+    // Channel modes, phase, balance, mute.
+    ueng.DeviceSetParam(ut, ud, UMode, 1f); URender();
+    bool same = true; for (int i = 0; i < 4096; i++) same &= Math.Abs(ubuf[i * 2] - ubuf[i * 2 + 1]) < 1e-5f;
+    Check(same, "Channel Mode Left puts the left on both sides");
+    ueng.DeviceSetParam(ut, ud, UMode, 0f); URender(); var stereo = (float[])ubuf.Clone();
+    ueng.DeviceSetParam(ut, ud, UMode, 3f); URender();
+    bool swapped = true; for (int i = 0; i < 4096; i++) swapped &= Math.Abs(ubuf[i * 2] - stereo[i * 2 + 1]) < 1e-4f;
+    Check(swapped, "Channel Mode Swap swaps the sides");
+    ueng.DeviceSetParam(ut, ud, UMode, 0f);
+    ueng.DeviceSetParam(ut, ud, UInvL, 1f); URender();
+    bool inv = true; for (int i = 0; i < 4096; i++) inv &= Math.Abs(ubuf[i * 2] + stereo[i * 2]) < 1e-4f;
+    Check(inv, "Invert L flips the left channel");
+    ueng.DeviceSetParam(ut, ud, UInvL, 0f);
+    ueng.DeviceSetParam(ut, ud, UBal, -1f); URender();
+    Check(ChRms(1) < 1e-4 && ChRms(0) > 0.1, "Balance −1 leaves the left only");
+    ueng.DeviceSetParam(ut, ud, UBal, 0f);
+    ueng.DeviceSetParam(ut, ud, UMute, 1f); URender();
+    Check(ChRms(0) + ChRms(1) < 1e-5, "Mute silences the output");
+    ueng.DeviceSetParam(ut, ud, UMute, 0f);
+    ueng.DeviceSetParam(ut, ud, UGain, 6f); URender();
+    Check(Math.Abs(20 * Math.Log10(Mid() / mid0) - 6) < 0.2, $"Gain +6 dB raises the level ({20 * Math.Log10(Mid() / mid0):+0.0;-0.0} dB)");
+    ueng.DeviceSetParam(ut, ud, UGain, 0f);
+
+    // Scope: telemetry, the level history and the band analysis.
+    const int uTele = 48, uHist = 80, uBands = 32, uResp = 96, uBandAt = uTele + 6 * uHist;
+    var usc = new float[uBandAt + 5 * uBands + uResp];
+    ueng.DeviceAction(ut, ud, 1, 0, 0);
+    URender(44100 * 4);
+    int un = ueng.DeviceScope(ut, ud, usc, usc.Length);
+    Check(un == usc.Length && usc[3] > 1000 && usc[33] > 0.5f, $"Utility scope carries telemetry, histories and bands ({un} values, sr {usc[3]:0})");
+    Check(usc[5] > -30 && usc[5] < 0 && Math.Abs(usc[6] - usc[5]) < 0.3 && usc[11] > -12 && usc[11] < 0.5,
+          $"loudness and true peak are metered (in {usc[5]:0.0} LUFS, out {usc[6]:0.0} LUFS, TP {usc[11]:0.0} dBTP)");
+    int filled = 0; for (int k = 0; k < uHist; k++) if (usc[uTele + 1 * uHist + k] > -100) filled++;
+    Check(filled >= 30 && filled <= uHist, $"the output loudness history fills as audio plays ({filled} of {uHist} points)");
+    int bLow = -1, bHigh = -1;
+    for (int b = 0; b < uBands; b++)
+    {
+        double hz = 30 * Math.Pow(16000 / 30.0, (b + 0.5) / uBands);
+        if (bLow < 0 && hz > 55) bLow = b;
+        if (bHigh < 0 && hz > 1900) bHigh = b;
+    }
+    float wLow = usc[uBandAt + uBands + bLow], wHigh = usc[uBandAt + uBands + bHigh], cLow = usc[uBandAt + 2 * uBands + bLow];
+    Check(wLow > 0.9f && cLow < -0.8f && wHigh < 0.1f, $"bands: the 60 Hz tone reads anti-phase, the 2 kHz tone mono (width {wLow:0.00} / {wHigh:0.00}, corr {cLow:+0.00;-0.00})");
+    ueng.DeviceSetParam(ut, ud, UMono, 1f); ueng.DeviceSetParam(ut, ud, UMonoF, 200f); ueng.DeviceSetParam(ut, ud, UWidth, 200f); ueng.DeviceSetParam(ut, ud, USlope, 2f);
+    ueng.DeviceScope(ut, ud, usc, usc.Length);
+    float setLow = usc[uBandAt + 4 * uBands + bLow], setHigh = usc[uBandAt + 4 * uBands + bHigh], effW = usc[22];
+    Check(setLow < 50 && Math.Abs(setHigh - 200) < 5 && Math.Abs(effW - 200) < 0.5, $"the configured width drops below the mono cutoff ({setLow:0} % at 60 Hz, {setHigh:0} % at 2 kHz)");
+    ueng.DeviceSetParam(ut, ud, UMono, 0f); ueng.DeviceSetParam(ut, ud, UMonoF, 120f); ueng.DeviceSetParam(ut, ud, UWidth, 100f); ueng.DeviceSetParam(ut, ud, USlope, 0f);
+
+    // Gain match (action 0): to the input, then to a Target.
+    ueng.DeviceSetParam(ut, ud, UGain, 8f); URender(44100 * 4);
+    ueng.DeviceAction(ut, ud, 0, 0, 0);
+    Check(Math.Abs(ueng.DeviceGetParam(ut, ud, UGain)) < 0.5f, $"Gain match brings a +8 dB output back to the input level (Gain {ueng.DeviceGetParam(ut, ud, UGain):+0.0;-0.0})");
+    ueng.DeviceSetParam(ut, ud, UMatchTo, 1f); ueng.DeviceSetParam(ut, ud, UTarget, -20f);
+    ueng.DeviceAction(ut, ud, 0, 0, 0);
+    URender(44100 * 4); ueng.DeviceScope(ut, ud, usc, uBandAt);
+    Check(Math.Abs(usc[6] + 20) < 0.7, $"Gain match to Target −20 LUFS lands there ({usc[6]:0.0} LUFS)");
+    ueng.DeviceSetParam(ut, ud, UMeter, 2f);
+    ueng.DeviceAction(ut, ud, 0, 0, 0);
+    URender(44100 * 4); ueng.DeviceScope(ut, ud, usc, uBandAt);
+    Check(Math.Abs(usc[8] + 20) < 0.7 && (int)usc[24] == 2, $"… and in RMS, to −20 dBFS RMS ({usc[8]:0.0} dBFS)");
+    ueng.DeviceSetParam(ut, ud, UMeter, 0f); ueng.DeviceSetParam(ut, ud, UMatchTo, 0f); ueng.DeviceSetParam(ut, ud, UGain, 0f);
+
+    // Auto match: a +10 dB output rides back to the input's loudness.
+    ueng.DeviceSetParam(ut, ud, UGain, 10f); ueng.DeviceSetParam(ut, ud, UAuto, 1f);
+    URender(44100 * 7);
+    ueng.DeviceScope(ut, ud, usc, uBandAt);
+    Check(Math.Abs(usc[13] - usc[12]) < 1.0 && usc[14] < -8, $"Auto Match rides a hot output to the input (out {usc[13]:0.0} vs in {usc[12]:0.0} LUFS, ride {usc[14]:+0.0;-0.0} dB)");
+    ueng.DeviceSetParam(ut, ud, UAuto, 0f); ueng.DeviceSetParam(ut, ud, UGain, 0f);
+
+    // True-peak limiter: +14 dB would clip; with the limiter no sample passes the ceiling.
+    ueng.DeviceSetParam(ut, ud, UGain, 14f); ueng.DeviceSetParam(ut, ud, UTp, 1f); ueng.DeviceSetParam(ut, ud, UCeil, -1f);
+    URender(44100);
+    float upk = 0; foreach (var x in ubuf) upk = Math.Max(upk, Math.Abs(x));
+    ueng.DeviceScope(ut, ud, usc, uBandAt);
+    Check(upk <= 0.8913f + 1e-4f && usc[15] > 3 && UFinite(), $"the true-peak limiter holds −1 dBTP (peak {20 * Math.Log10(upk):0.00} dBFS, reduction {usc[15]:0.0} dB)");
+    ueng.DeviceSetParam(ut, ud, UTp, 0f); ueng.DeviceSetParam(ut, ud, UGain, 0f);
+
+    // Texts, the reset action.
+    ueng.DeviceSetParam(ut, ud, UMono, 1f); ueng.DeviceSetParam(ut, ud, UWMode, 1f);
+    string utext = ueng.DeviceText(ut, ud, 0);
+    Check(utext.StartsWith("Stereo") && utext.Contains("M/S") && utext.Contains("mono below 120 Hz"), $"status text names the mode, width law and mono (got '{utext}')");
+    Check(ueng.DeviceText(ut, ud, 1).Contains("LUFS-S") && ueng.DeviceText(ut, ud, 2).Contains("Mono Slope"), "live reading and parameter guide texts");
+    ueng.DeviceAction(ut, ud, 1, 0, 0);
+    URender(4096);
+    ueng.DeviceScope(ut, ud, usc, uBandAt);
+    int after = 0; for (int k = 0; k < uHist; k++) if (usc[uTele + uHist + k] > -100) after++;
+    Check(after <= 1, $"reset clears the level history ({after} points left)");
+    ueng.DeviceSetParam(ut, ud, UMono, 0f); ueng.DeviceSetParam(ut, ud, UWMode, 0f);
+
+    // MCP: the utility reading.
+    var utools = new Nota.Mcp.Tools.DeviceTools(ueng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    URender(44100 * 4);
+    var ur = utools.ReadUtility(ut, ud).Result;
+    Check(ur.Meter == "LUFS-S" && ur.SampleRate > 1000 && ur.Bands.Length == 8 && ur.Summary.StartsWith("Stereo") && ur.OutLufsShort > -30
+          && Math.Abs(ur.DeltaDb) < 0.5 && ur.Bands[0].Width > 0.8,
+          $"MCP read_utility reports levels, delta and bands (out {ur.OutLufsShort:0.0} LUFS, Δ {ur.DeltaDb:+0.0;-0.0}, low band width {ur.Bands[0].Width:0.00})");
+
+    // Duplicate the track → cloneDevice(kind 4) carries the params, appended ones too.
+    ueng.DeviceSetParam(ut, ud, UWidth, 140f); ueng.DeviceSetParam(ut, ud, USlope, 2f); ueng.DeviceSetParam(ut, ud, UTarget, -9f);
+    int ucopy = ueng.DuplicateTrack(ut);
+    Check(ucopy > 0 && Math.Abs(ueng.DeviceGetParam(ucopy, ud, UWidth) - 140f) < 1e-3f && Math.Abs(ueng.DeviceGetParam(ucopy, ud, USlope) - 2f) < 1e-3f
+          && Math.Abs(ueng.DeviceGetParam(ucopy, ud, UTarget) + 9f) < 1e-3f, "duplicate track clones Utility params (appended ones too)");
+    ueng.RemoveTrack(ucopy);
+    ueng.DeviceSetParam(ut, ud, UWidth, 100f); ueng.DeviceSetParam(ut, ud, USlope, 0f); ueng.DeviceSetParam(ut, ud, UTarget, -14f);
+
+    // Automation drives an original and an appended param.
+    int ulane = ueng.AddAutomationLane(ut, AutomationTarget.DeviceParam, ud, UWidth);
+    ueng.SetAutomationPoints(ut, ulane, new[] { new AutomationPoint(0, 200f), new AutomationPoint(16, 200f) });
+    int ulane2 = ueng.AddAutomationLane(ut, AutomationTarget.DeviceParam, ud, UTarget);
+    ueng.SetAutomationPoints(ut, ulane2, new[] { new AutomationPoint(0, -27f), new AutomationPoint(16, -27f) });
+    URender();
+    Check(Math.Abs(ueng.DeviceGetParam(ut, ud, UWidth) - 200f) < 2f, $"automation drives Width ({ueng.DeviceGetParam(ut, ud, UWidth):0} %)");
+    Check(Math.Abs(ueng.DeviceGetParam(ut, ud, UTarget) + 27f) < 0.5f, $"automation drives Target ({ueng.DeviceGetParam(ut, ud, UTarget):0.0})");
+    ueng.RemoveAutomationLane(ut, ulane2);
+    ueng.RemoveAutomationLane(ut, ulane);
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders finite; the old names stay.
+    {
+        var names = new HashSet<string>();
+        for (int k = 0; k < upc; k++) names.Add(ueng.DeviceParamName(ut, ud, k));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 4).ToList();
+        Check(mine.Count >= 25, $"Nota Utility ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Utility preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        Check(new[] { "Stereo Widener", "Bass Mono", "Mono Maker", "Narrow", "Trim −6 dB", "Swap L/R" }.All(n => mine.Any(p => p.DisplayName == n)),
+              "the original six Utility presets keep their names");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(ueng, p.Id, ut, ud).Length != 0) { pf++; continue; }
+            URender();
+            if (!UFinite()) pf++;
+            if (p.DisplayName != "Mute" && p.DisplayName != "Side Only" && Rms(ubuf, 4096) < 1e-4f) pf++;
+        }
+        Check(pf == 0, $"every Utility preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(ueng, "util/Club Low End", ut, ud);
+        Check(ueng.DeviceGetParam(ut, ud, UMono) > 0.5f && Math.Abs(ueng.DeviceGetParam(ut, ud, USlope) - 2f) < 1e-3f && Math.Abs(ueng.DeviceGetParam(ut, ud, UMonoF) - 100f) < 1e-3f,
+              "Club Low End preset: mono below 100 Hz at 24 dB/oct");
+        cat.ApplyInPlace(ueng, "util/Init", ut, ud);
+        Check(ueng.DeviceGetParam(ut, ud, UMono) < 0.5f && Math.Abs(ueng.DeviceGetParam(ut, ud, UWidth) - 100f) < 1e-3f && ueng.DeviceGetParam(ut, ud, USlope) < 0.5f,
+              "unnamed params reset to defaults between presets");
+    }
+    try { File.Delete(uwav); } catch { }
 }
 
 // ===================== Nota Vintage (effect kind 8) ========================

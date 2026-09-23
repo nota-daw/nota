@@ -19,6 +19,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **MCP: `read_physical`.** Ask a Nota Physical track what it is: a one-line summary of the
+  patch, a guide to every parameter's values, the sounding voices, the last struck pitch, the
+  output peak and both resonators' 16 partials as the engine tunes them (Hz, level, ring
+  time, whether each one sounds).
 - **Nota Lens — analyzer and oscilloscope.** A new built-in audio effect (kind 22) that shows
   you what a track is actually doing. Drop it anywhere in a chain; it passes the audio through
   untouched and adds no latency. One card, three views behind tabs:
@@ -51,6 +55,63 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Physical's editor is now the almanac's card, with a voice mode, a resonator mix and
+  the partials it actually rings.** The card moves onto the 700 × 260 frame the other
+  instruments use — an **Exciter** / **Resonator** tab panel with a one-line reading of the
+  chain beside the tabs, a fixed **Output** rail and a status strip:
+  - **Exciter** — the mallet's four knobs › the noise burst: LP / BP / HP, a draggable ADSR
+    with its stage times written under it, and level, envelope → filter (in octaves), freq
+    and reso.
+  - **Resonator** — pick bank 1 or 2, switch bank 2 on, choose its material and the
+    structure. The partial window now comes from the engine itself: every partial where the
+    last struck note puts it, how loud it is struck and how long it rings, the ones past
+    Nyquist left out, the other bank drawn faintly behind, and a count of what sounds. Drag
+    it sideways to spread the series (Ratio) and up / down to tilt the highs (Bright). Knobs
+    read in real units — decay in seconds, tune in semitones, ratio as its exponent.
+  - **Output** — **Poly / Mono**, tune (semitones), fine (cents), note-off, volume, pan and
+    the track's meter. The header shows the sounding voices (x/8) or MONO.
+- **Nota Physical: Mono and Res Mix.** Two new parameters: **Mono** plays one note at a time
+  — a new strike chokes the sounding one with a 4 ms fade, so repeated hits don't smear —
+  and **Res Mix** balances resonator 1 against resonator 2 (both at full level in the
+  middle, which is how every project saved before sounds). Both automate, save and clone.
+- **Nota Physical ships 32 factory presets** (was 6) — mallets (xylophone, glockenspiel,
+  bass marimba, soft vibes, balafon), bells (church bell, music box, crystal chime, gamelan,
+  singing bowl, wind chimes), percussion (hand drum, steel drum, log drum, cowbell, clave,
+  kalimba), plucked, blown and bowed (harp, koto, tine keys, pan flute, blown bottle, bowed
+  glass) and textures (metal plate, mono kalimba, sub thump).
+- **Instrument automation menus flatten single entries.** A built-in instrument's parameter
+  whose name shares its first word with no other one is listed under its full name
+  ("Note Off"), not as a one-item submenu.
+
+- **Nota Utility shows where the stereo field and the level go, not just its knobs.** The card
+  moves onto the Valve / Vintage / Auto Filter frame — a LEVEL column (input and output meters
+  with their level), a centre panel with **Field**, **Mono** and **Levels** tabs, a
+  **Routing / Output** panel and a status strip. The goniometer gives way to pictures that say
+  which part of the signal does what:
+  - **Field** — the output's stereo field by frequency over the last second, lows at the bottom:
+    where each band sits between L and R, how far it spreads, and how far the width setting
+    spreads an uncorrelated band. Drag sideways for the balance, up and down for the width.
+  - **Mono** — the width over frequency as the settings make it, the mono region shaded, against
+    the output's measured width. Drag sideways for the mono cutoff, up and down for the width.
+  - **Levels** — input and output over the last 8 s in LUFS-S, sample peak or RMS, with the
+    target, the delta and the true peak. Drag up and down for the target.
+  - **New in the engine:** an **M/S width law** (mid and side are traded, so widening does not get
+    louder; 200 % = side only), a **mono-below slope** of 6, 12 or 24 dB/oct with 60 / 120 / 240 Hz
+    quick picks, **level matching** — a one-shot **Gain match** and a continuous **Level match**,
+    to the input's level or to a **Target**, in the meter's unit, measured before Gain so a
+    second press does not chase the first — a zero-latency **true-peak limiter** with its
+    ceiling, and LUFS-S, peak, RMS and true-peak metering of both sides. Gain, width and balance
+    are now smoothed, so automating them no longer clicks.
+  - **30 factory presets**, up from six — width, bass mono, routing and level targets (streaming
+    −14, podcast −16, broadcast −23 LUFS …); the six old ones keep their names. The first nine
+    parameters keep their order, units and defaults and the eight new ones are appended and
+    default to the old sound, so older projects open unchanged. Every one of them automates
+    (mono, phase and true-peak params grouped in the lane menu), MIDI-learns, saves in a preset
+    and is reachable over MCP. `get_device_text` returns the status line, the live reading and a
+    guide to the parameter values, `device_action` 0 gain-matches and 1 resets the meters, and
+    the new `read_utility` returns the levels in every unit, the delta, true peak, correlation,
+    width, energy balance, the auto-match gain, the limiter's reduction and eight bands of the
+    stereo field.
 - **Nota Valve shows the amp it runs, not just its knobs.** The card moves onto the Vintage /
   Auto Filter / Lens frame — a STAGE column (gain and output faders), a centre panel with
   **Amp**, **Cab** and **Harmonics** tabs, a **Cabinet / Output** panel and a status strip.
@@ -151,6 +212,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     projects open unchanged and every one of them automates (grouped under *SC* in the
     lane menu), MIDI-learns, saves in a preset and is reachable over MCP; `get_device_text`
     returns the compressor's status line.
+
+### Fixed
+- **Nota Physical's 1→2 structure no longer blows up.** Resonator 1 fed resonator 2 at full
+  gain, so a partial landing on one of resonator 2's rang it up by thousands of times and the
+  track clipped. Resonator 2 now works as a set of resonant band-passes at the level of its
+  partials, and Res Mix sets how much of resonator 1's own sound comes through with it.
 
 ## [0.40.0] — 2026-09-18
 
