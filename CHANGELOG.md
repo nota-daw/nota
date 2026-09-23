@@ -51,6 +51,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Vintage shows what the era does to the signal, not just its knobs.** The card moves
+  onto the Auto Filter / Lens / Compressor frame — a STATE column (drive and wear faders), a
+  centre panel with **Curve**, **Wear** and **Output** tabs, a **Tone / Output** panel and a
+  status strip. The six characters are now a list in each tab's head row instead of a grid
+  of buttons:
+  - **Curve** — the transfer curve the saturation runs (read from the engine, so it is the
+    real one), what you hear after Mix, Output and auto-comp, a dot where the input peak sits,
+    the THD and the curve's asymmetry. Drag the window for the drive.
+  - **Wear** — the pitch drift over the last four seconds in cents, wow in brass and flutter
+    in teal. Drag up and down for the depth, sideways for the rate.
+  - **Output** — the harmonics the curve adds at the input's level (f … 7f) against the hiss
+    floor, with the input / output peaks.
+  - **New in the engine:** a **tone model** (Warm — the era's own tilt and head bump, as
+    before; Flat; Dark) with **low and high shelves**, **Character** (the era's voicing on or
+    off), **wow and flutter rates** (the wow free or synced from 4 bars to 1/8), a **hiss
+    high-pass**, **wear that follows the input** (hiss and crackle only under the signal),
+    **stereo drift**, a **Tube / Analog output stage**, **even-harmonics-only** saturation and
+    **auto gain compensation**. Flutter wanders a little as Wear rises.
+  - **30 factory presets**, up from six, level-matched to the dry signal — records, tape
+    decks, VHS, tube and console colour, telephone and AM radio. The thirteen new parameters
+    are appended and default to the old sound, so older projects open unchanged; every one of
+    them automates (the tone and wow ones grouped in the lane menu), MIDI-learns, saves in a
+    preset and is reachable over MCP. `get_device_text` returns the status line, the live
+    reading and a guide to the parameter values, `device_action` 0 resets the wear, and the
+    new `read_vintage` returns the THD with the harmonics, the asymmetry, the wow and flutter
+    in cents, the pitch drift's range, the band-limit, the hiss level and the auto-comp gain.
 - **Nota Auto Filter shows the cutoff moving, not just where it is set.** The card moves onto
   the Lens / Compressor / Delay frame — a SHAPE column (cutoff and resonance faders, with a
   mark where the modulation has them now), a centre panel with **Filter**, **Envelope** and

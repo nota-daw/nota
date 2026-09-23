@@ -6915,32 +6915,162 @@ Console.WriteLine("-- Nota Vintage (effect kind 8) --");
     Check(vveng.DeviceName(vvt, vvdi) == "Nota Vintage", $"device is Nota Vintage (got '{vveng.DeviceName(vvt, vvdi)}')");
     Check(vveng.TrackDeviceBuiltinKind(vvt, vvdi) == 8, "device reports builtin kind 8");
     int vvpc = vveng.DeviceParamCount(vvt, vvdi);
-    Check(vvpc == 11, $"Nota Vintage exposes 11 params ({vvpc})");
-    vveng.DeviceSetParam(vvt, vvdi, 1, 0.7f);   // Drive
-    Check(Math.Abs(vveng.DeviceGetParam(vvt, vvdi, 1) - 0.7f) < 1e-3f, "device param set/get round-trips");
+    Check(vvpc == 24, $"Nota Vintage exposes 24 params ({vvpc})");
+    const int VMode = 0, VDrive = 1, VWow = 3, VFlutter = 4, VNoise = 5, VCrackle = 6, VWear = 7, VMix = 8, VOutput = 9,
+        VLow = 11, VHigh = 12, VModel = 13, VChar = 14, VComp = 15, VWowRate = 16, VFlutRate = 17, VWowSync = 18,
+        VHissHp = 19, VFollow = 20, VStereo = 21, VStage = 22, VEven = 23;
+    Check(vveng.DeviceParamName(vvt, vvdi, VLow) == "Tone Low" && vveng.DeviceParamName(vvt, vvdi, VModel) == "Tone Model"
+          && vveng.DeviceParamName(vvt, vvdi, VComp) == "Auto Comp" && vveng.DeviceParamName(vvt, vvdi, VWowSync) == "Wow Sync"
+          && vveng.DeviceParamName(vvt, vvdi, VStage) == "Output Stage" && vveng.DeviceParamName(vvt, vvdi, VEven) == "Even Only",
+          "appended params: Tone Low/High/Model · Character · Auto Comp · Wow/Flutter Rate · Wow Sync · Hiss HP · Wear Follow · Stereo Drift · Output Stage · Even Only");
+    // The appended params default to the voicing older projects had.
+    Check(vveng.DeviceParamDefault(vvt, vvdi, VChar) > 0.5f && vveng.DeviceParamDefault(vvt, vvdi, VModel) < 0.01f
+          && Math.Abs(vveng.DeviceParamDefault(vvt, vvdi, VLow) - 0.5f) < 1e-6f && vveng.DeviceParamDefault(vvt, vvdi, VComp) < 0.5f
+          && vveng.DeviceParamDefault(vvt, vvdi, VStage) < 0.01f && vveng.DeviceParamDefault(vvt, vvdi, VEven) < 0.5f,
+          "appended params default to the old sound (character on, warm model, flat shelves, no stage / comp / even)");
+    vveng.DeviceSetParam(vvt, vvdi, VDrive, 0.7f);
+    Check(Math.Abs(vveng.DeviceGetParam(vvt, vvdi, VDrive) - 0.7f) < 1e-3f, "device param set/get round-trips");
 
-    // Engage the wear/wow/flutter/noise stages so every path renders.
-    vveng.DeviceSetParam(vvt, vvdi, 3, 0.6f);   // Wow
-    vveng.DeviceSetParam(vvt, vvdi, 4, 0.6f);   // Flutter
-    vveng.DeviceSetParam(vvt, vvdi, 5, 0.5f);   // Noise
-    vveng.DeviceSetParam(vvt, vvdi, 6, 0.5f);   // Crackle
-    vveng.DeviceSetParam(vvt, vvdi, 7, 0.4f);   // Wear
-    vveng.SetBpm(120);
-    for (int mode = 0; mode < 6; mode++)
+    var vbuf = new float[4096 * 2];
+    void VRender(int n = 4096) { vveng.SetBpm(120); vveng.Seek(0); vveng.Play(); for (int k = 0; k < n; k += 4096) vveng.RenderOffline(vbuf, 4096); vveng.StopTransport(); }
+    bool VFinite(float[] b) { foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 8f) return false; return true; }
+
+    // Engage the wear/wow/flutter/noise stages so every path renders; every mode, both voicings.
+    vveng.DeviceSetParam(vvt, vvdi, VWow, 0.6f);
+    vveng.DeviceSetParam(vvt, vvdi, VFlutter, 0.6f);
+    vveng.DeviceSetParam(vvt, vvdi, VNoise, 0.5f);
+    vveng.DeviceSetParam(vvt, vvdi, VCrackle, 0.5f);
+    vveng.DeviceSetParam(vvt, vvdi, VWear, 0.4f);
+    int vBad = 0;
+    for (int ch = 1; ch >= 0; ch--)
+        for (int mode = 0; mode < 6; mode++)
+        {
+            vveng.DeviceSetParam(vvt, vvdi, VChar, ch);
+            vveng.DeviceSetParam(vvt, vvdi, VMode, mode / 5f);
+            VRender();
+            float rms = Rms(vbuf, 4096);
+            if (!(rms > 1e-4f && VFinite(vbuf))) vBad++;
+        }
+    Check(vBad == 0, $"every mode renders audible + stable, with the voicing on and off ({vBad} failed)");
+    vveng.DeviceSetParam(vvt, vvdi, VChar, 1f);
+    vveng.DeviceSetParam(vvt, vvdi, VMode, 0.2f);   // Cassette: wow + flutter both weigh in
+
+    // Every new switch and choice renders audible + finite.
+    int vSw = 0;
+    foreach (var (p, v) in new[] { (VModel, 0.5f), (VModel, 1f), (VLow, 1f), (VHigh, 0f), (VComp, 1f), (VWowSync, 1f), (VHissHp, 1f),
+                                   (VFollow, 1f), (VStereo, 1f), (VStage, 0.5f), (VStage, 1f), (VEven, 1f), (VFlutRate, 1f), (VWowRate, 1f) })
     {
-        vveng.DeviceSetParam(vvt, vvdi, 0, mode / 5f);
-        var vbuf = new float[2048 * 2];
-        vveng.Seek(0); vveng.Play();
-        vveng.RenderOffline(vbuf, 2048);
-        vveng.StopTransport();
-        float rms = Rms(vbuf, 2048); bool finite = true;
-        foreach (var s in vbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { finite = false; break; }
-        Check(rms > 1e-4f && finite, $"Vintage mode {mode} is audible + stable (rms {rms:0.000})");
+        vveng.DeviceSetParam(vvt, vvdi, p, v);
+        VRender();
+        if (!(Rms(vbuf, 4096) > 1e-4f && VFinite(vbuf))) vSw++;
+        vveng.DeviceSetParam(vvt, vvdi, p, vveng.DeviceParamDefault(vvt, vvdi, p));
     }
+    Check(vSw == 0, $"every tone model, shelf, stage and wear switch renders stable ({vSw} failed)");
 
-    // Duplicate the track → cloneDevice(kind 8) must carry the params.
+    // Scope: telemetry, the transfer curve, the two pitch histories.
+    const int vTele = 32, vCurve = 48, vHist = 1024;
+    var vsc = new float[vTele + vCurve + 2 * vHist];
+    VRender(16384);
+    int vn = vveng.DeviceScope(vvt, vvdi, vsc, vsc.Length);
+    Check(vn == vsc.Length && vsc[3] > 1000 && vsc[25] == vHist, $"Vintage scope carries telemetry + curve + histories ({vn} values, sr {vsc[3]:0})");
+    Check(vsc[0] > 0.01f && vsc[1] > 0.01f, $"input / output peaks are metered ({vsc[0]:0.00} → {vsc[1]:0.00})");
+    bool mono = true; for (int k = 1; k < vCurve; k++) if (vsc[vTele + k] < vsc[vTele + k - 1] - 1e-4f) mono = false;
+    Check(mono && vsc[vTele] == 0f && vsc[vTele + vCurve - 1] > 0.3f, $"the transfer curve rises from 0 ({vsc[vTele + vCurve - 1]:0.00} at 0 dBFS)");
+    Check(vsc[12] > 0.001f && vsc[13] == 0f && vsc[14] < 0f, $"THD and harmonics are measured (THD {vsc[12] * 100:0.0} %, 2nd {vsc[14]:0} dB)");
+    float wmax = 0; for (int k = 0; k < vHist; k++) wmax = Math.Max(wmax, Math.Abs(vsc[vTele + vCurve + k]));
+    Check(wmax > 1f && vsc[8] > 1f, $"the wow history is written in cents (peak {wmax:0.0} ¢, depth ±{vsc[8]:0.0} ¢)");
+
+    // Wow rate: faster rate, more cents for the same depth; sync picks the rate from the tempo.
+    float c0 = vsc[8];
+    vveng.DeviceSetParam(vvt, vvdi, VWowRate, 0.9f); vveng.DeviceScope(vvt, vvdi, vsc, vsc.Length);
+    Check(vsc[8] > c0 * 2 && vsc[6] > 2f, $"Wow Rate speeds the wow ({vsc[6]:0.00} Hz, ±{vsc[8]:0} ¢)");
+    vveng.DeviceSetParam(vvt, vvdi, VWowSync, 1f); vveng.DeviceSetParam(vvt, vvdi, VWowRate, 0.4f);   // 1 bar at 120 BPM = 0.5 Hz
+    VRender(); vveng.DeviceScope(vvt, vvdi, vsc, vsc.Length);
+    Check(Math.Abs(vsc[6] - 0.5f) < 0.01f, $"Wow Sync: 1 bar at 120 BPM = 0.5 Hz ({vsc[6]:0.000})");
+    vveng.DeviceSetParam(vvt, vvdi, VWowSync, 0f); vveng.DeviceSetParam(vvt, vvdi, VWowRate, vveng.DeviceParamDefault(vvt, vvdi, VWowRate));
+
+    // Even Only: the 3rd harmonic falls away, the 2nd stays.
+    vveng.DeviceSetParam(vvt, vvdi, VMode, 1f); vveng.DeviceSetParam(vvt, vvdi, VDrive, 0.8f);
+    vveng.DeviceScope(vvt, vvdi, vsc, vsc.Length);
+    float odd3 = vsc[15];
+    vveng.DeviceSetParam(vvt, vvdi, VEven, 1f); vveng.DeviceScope(vvt, vvdi, vsc, vsc.Length);
+    Check(vsc[15] < -80f && vsc[14] > -60f && odd3 > -60f, $"Even Only drops the odd harmonics (3rd {odd3:0} → {vsc[15]:0} dB, 2nd {vsc[14]:0} dB)");
+    vveng.DeviceSetParam(vvt, vvdi, VEven, 0f);
+
+    // Auto Comp pulls a hot drive back toward the input level.
+    foreach (var p in new[] { VWow, VFlutter, VNoise, VCrackle, VWear }) vveng.DeviceSetParam(vvt, vvdi, p, 0f);
+    vveng.DeviceSetParam(vvt, vvdi, VDrive, 1f);
+    VRender(); float hot = Rms(vbuf, 4096);
+    vveng.DeviceSetParam(vvt, vvdi, VComp, 1f);
+    VRender(16384); float comped = Rms(vbuf, 4096);
+    vveng.SetDeviceBypassed(vvt, vvdi, true); VRender(); float dryR = Rms(vbuf, 4096); vveng.SetDeviceBypassed(vvt, vvdi, false);
+    Check(Math.Abs(20 * Math.Log10(comped / dryR)) < 2.5 && Math.Abs(20 * Math.Log10(hot / dryR)) > 3,
+          $"Auto Comp matches the dry level ({20 * Math.Log10(hot / dryR):+0.0;-0.0;0.0} dB → {20 * Math.Log10(comped / dryR):+0.0;-0.0;0.0} dB)");
+    vveng.DeviceSetParam(vvt, vvdi, VComp, 0f);
+
+    // Mix 0 = the dry signal (the wow tap is only in the wet path).
+    vveng.DeviceSetParam(vvt, vvdi, VMix, 0f);
+    VRender(); float mix0 = Rms(vbuf, 4096);
+    Check(Math.Abs(mix0 - dryR) < dryR * 0.02f, $"Mix 0 passes the dry signal ({mix0:0.000} vs {dryR:0.000})");
+    vveng.DeviceSetParam(vvt, vvdi, VMix, 1f);
+
+    // Texts + the reset action.
+    vveng.DeviceSetParam(vvt, vvdi, VMode, 0.2f); vveng.DeviceSetParam(vvt, vvdi, VWow, 0.4f);
+    string vtext = vveng.DeviceText(vvt, vvdi, 0);
+    Check(vtext.StartsWith("Cassette") && vtext.Contains("wow 40 %"), $"status text names the character and the wow (got '{vtext}')");
+    Check(vveng.DeviceText(vvt, vvdi, 1).Contains("THD") && vveng.DeviceText(vvt, vvdi, 2).Contains("Output Stage"), "live reading and parameter guide texts");
+    vveng.DeviceAction(vvt, vvdi, 0, 0, 0);
+    VRender(); Check(VFinite(vbuf), "the wear reset action keeps the output finite");
+
+    // MCP: the character reading.
+    var vtools = new Nota.Mcp.Tools.DeviceTools(vveng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    VRender(16384);
+    var vr = vtools.ReadVintage(vvt, vvdi).Result;
+    Check(vr.Character == "Cassette" && vr.SampleRate > 1000 && vr.WowCents > 0 && vr.HarmonicsDb.Length == 6 && vr.Summary.StartsWith("Cassette") && vr.PitchMaxCentsLast4s >= vr.PitchMinCentsLast4s,
+          $"MCP read_vintage reports the character, THD and pitch drift ({vr.Character}, THD {vr.ThdPercent:0.0} %, ±{vr.WowCents:0} ¢)");
+
+    // Duplicate the track → cloneDevice(kind 8) must carry the params, appended ones too.
+    vveng.DeviceSetParam(vvt, vvdi, VStage, 1f);
     int vvcopy = vveng.DuplicateTrack(vvt);
-    Check(vvcopy > 0 && Math.Abs(vveng.DeviceGetParam(vvcopy, vvdi, 1) - 0.7f) < 1e-3f, "duplicate track clones Vintage params");
+    Check(vvcopy > 0 && Math.Abs(vveng.DeviceGetParam(vvcopy, vvdi, VWow) - 0.4f) < 1e-3f && vveng.DeviceGetParam(vvcopy, vvdi, VStage) > 0.9f,
+          "duplicate track clones Vintage params (appended ones too)");
+    vveng.RemoveTrack(vvcopy);   // the copy would play into the master and skew the level checks below
+
+    // Automation drives an appended param.
+    int vlane = vveng.AddAutomationLane(vvt, AutomationTarget.DeviceParam, vvdi, VHigh);
+    vveng.SetAutomationPoints(vvt, vlane, new[] { new AutomationPoint(0, 0.9f), new AutomationPoint(16, 0.9f) });
+    VRender();
+    Check(Math.Abs(vveng.DeviceGetParam(vvt, vvdi, VHigh) - 0.9f) < 0.01f, $"automation drives Tone High ({vveng.DeviceGetParam(vvt, vvdi, VHigh):0.00})");
+    vveng.RemoveAutomationLane(vvt, vlane);
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>();
+        for (int k = 0; k < vvpc; k++) names.Add(vveng.DeviceParamName(vvt, vvdi, k));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 8).ToList();
+        Check(mine.Count >= 25, $"Nota Vintage ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Vintage preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        vveng.SetDeviceBypassed(vvt, vvdi, true); VRender(16384); float dryRef = Rms(vbuf, 4096); vveng.SetDeviceBypassed(vvt, vvdi, false);
+        int pf = 0; var loud = new List<string>();
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(vveng, p.Id, vvt, vvdi).Length != 0) { pf++; continue; }
+            VRender(16384);
+            float r = Rms(vbuf, 4096);
+            if (!VFinite(vbuf) || r < 1e-4f) pf++;
+            double db = 20 * Math.Log10(r / dryRef);
+            if (Environment.GetEnvironmentVariable("NOTA_VINTAGE_LEVELS") == "1") Console.WriteLine($"   level {p.DisplayName,-20} {db:+0.0;-0.0;0.0} dB");
+            if (Math.Abs(db) > 4) loud.Add($"{p.DisplayName} {db:+0.0;-0.0;0.0} dB");
+        }
+        Check(pf == 0, $"every Vintage preset applies and renders ({pf} failed)");
+        Check(loud.Count == 0, $"every Vintage preset sits within ±4 dB of the dry level{(loud.Count > 0 ? " — " + string.Join(", ", loud) : "")}");
+        cat.ApplyInPlace(vveng, "vintage/Tube Glue", vvt, vvdi);
+        Check(Math.Abs(vveng.DeviceGetParam(vvt, vvdi, VStage) - 0.5f) < 1e-3f && vveng.DeviceGetParam(vvt, vvdi, VComp) > 0.5f, "Tube Glue preset: tube stage + auto-comp");
+        cat.ApplyInPlace(vveng, "vintage/Dusty Vinyl", vvt, vvdi);
+        Check(vveng.DeviceGetParam(vvt, vvdi, VStage) < 0.01f && vveng.DeviceGetParam(vvt, vvdi, VComp) < 0.5f, "unnamed params reset to defaults between presets");
+    }
 }
 
 // ===================== Nota Orbit (effect kind 9) ======================

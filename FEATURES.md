@@ -358,8 +358,14 @@ and user presets, automation, persistence and cloning.
 - **Nota Auto Shift** (7) — real-time vocal pitch correction: pitch detection, Key +
   Scale, Follow scale device, correction amount and speed, Range (guards against octave
   jumps), Formant, Mix; a PITCH TRACE visualiser.
-- **Nota Vintage** (8) — degradation and saturation: 6 era modes
-  (Vinyl/Cassette/Reel/VHS/Tube/Analog), wow/flutter, noise, crackle, wear.
+- **Nota Vintage** (8) — degradation and saturation: 6 era characters
+  (Vinyl/Cassette/Reel/VHS/Tube/Analog, with the voicing switchable off), drive, tone with a
+  Warm / Flat / Dark model and low / high shelves, wow (free or tempo-synced) and flutter with
+  their rates, noise with a hiss high-pass, crackle, wear, wear that follows the input, stereo
+  drift, a Tube / Analog output stage, even-harmonics-only saturation, auto gain compensation,
+  mix, output, oversampling. Tabs: Curve (the transfer curve, the input on it) / Wear (pitch
+  drift over 4 s in cents) / Output (harmonics against the hiss floor) and Tone / Output, with
+  a STATE column and a status strip. 30 factory presets. MCP: `read_vintage`.
 - **Nota Beat Repeat** (9) — beat repeat with Mix/Insert/Gate modes, Chance, Gate, Repeat,
   Latch, INTERVAL/GRID, Pitch/Decay/Volume, FILTER, Mix; a TIMELINE visualiser.
 - **Nota Orbit** (10, formerly Auto Pan) — auto-pan and tremolo, L/R phase (0° = tremolo …

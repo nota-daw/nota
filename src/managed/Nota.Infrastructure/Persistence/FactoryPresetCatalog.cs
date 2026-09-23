@@ -1252,13 +1252,48 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("autofilter", 7, "Talking Filter",  ("Type", 0.333f), ("Slope", 1f), ("Freq", 0.45f), ("Res", 0.55f), ("Mod Target", 1f), ("Env Amt", 0.75f), ("Env Attack", 0.25f), ("Env Release", 0.55f), ("LFO Amt", 0.25f), ("LFO Rate", 0.60f), ("LFO Wave", 0.25f), ("Morph", 0.3f), ("Gain", 0.22f), ("Dry/Wet", 1f));
 
         // ---- Nota Vintage (kind 8) — all params normalized 0..1. Mode 0 Vinyl/.2 Cassette/
-        //      .4 Reel/.6 VHS/.8 Tube/1 Analog; Tone 0.5 = neutral tilt; Output 0.5 = 0 dB.
-        Fx("vintage", 8, "Dusty Vinyl",   ("Mode", 0.0f), ("Drive", 0.35f), ("Tone", 0.42f), ("Wow", 0.35f), ("Flutter", 0.20f), ("Noise", 0.30f), ("Crackle", 0.55f), ("Wear", 0.25f), ("Mix", 1f), ("Output", 0.5f));
-        Fx("vintage", 8, "Warped Cassette",("Mode", 0.2f), ("Drive", 0.45f), ("Tone", 0.40f), ("Wow", 0.45f), ("Flutter", 0.55f), ("Noise", 0.45f), ("Crackle", 0.10f), ("Wear", 0.40f), ("Mix", 1f), ("Output", 0.5f));
-        Fx("vintage", 8, "Reel Warmth",   ("Mode", 0.4f), ("Drive", 0.55f), ("Tone", 0.52f), ("Wow", 0.25f), ("Flutter", 0.20f), ("Noise", 0.18f), ("Crackle", 0.05f), ("Wear", 0.15f), ("Mix", 1f), ("Output", 0.5f));
-        Fx("vintage", 8, "VHS Fever",     ("Mode", 0.6f), ("Drive", 0.40f), ("Tone", 0.32f), ("Wow", 0.45f), ("Flutter", 0.70f), ("Noise", 0.50f), ("Crackle", 0.30f), ("Wear", 0.55f), ("Mix", 1f), ("Output", 0.55f));
-        Fx("vintage", 8, "Tube Glow",     ("Mode", 0.8f), ("Drive", 0.60f), ("Tone", 0.58f), ("Wow", 0f),     ("Flutter", 0f),     ("Noise", 0.08f), ("Crackle", 0f),    ("Wear", 0.05f), ("Mix", 1f), ("Output", 0.5f));
-        Fx("vintage", 8, "Analog Glue",   ("Mode", 1.0f), ("Drive", 0.45f), ("Tone", 0.50f), ("Wow", 0f),     ("Flutter", 0f),     ("Noise", 0.05f), ("Crackle", 0f),    ("Wear", 0f),    ("Mix", 1f), ("Output", 0.5f));
+        //      .4 Reel/.6 VHS/.8 Tube/1 Analog; Tone 0.5 = neutral tilt; Output 0.5 = 0 dB (±12);
+        //      Tone Low/High 0.5 = 0 dB (±12); Tone Model 0 Warm/.5 Flat/1 Dark; Wow Rate free
+        //      0.1·40^v Hz (.462 = 0.55 Hz), synced round(v·5) → 4 bars/2 bars/1 bar/1/2/1/4/1/8;
+        //      Flutter Rate 2·10^v Hz (.544 = 7 Hz); Hiss HP 20·100^v Hz; Output Stage 0 off/.5
+        //      Tube/1 Analog; Oversampling .333 2×/.667 4×/1 8×. Unnamed → default (note the
+        //      defaults carry some wow, flutter, noise and crackle — clean presets zero them).
+        // Vinyl
+        Fx("vintage", 8, "Dusty Vinyl",       ("Mode", 0.0f), ("Drive", 0.35f), ("Tone", 0.42f), ("Wow", 0.35f), ("Flutter", 0.20f), ("Noise", 0.30f), ("Crackle", 0.55f), ("Wear", 0.25f), ("Mix", 1f), ("Output", 0.408f));
+        Fx("vintage", 8, "78 RPM Shellac",    ("Mode", 0.0f), ("Drive", 0.50f), ("Tone", 0.35f), ("Tone Model", 1f), ("Tone High", 0.38f), ("Wow", 0.20f), ("Flutter", 0.10f), ("Noise", 0.50f), ("Hiss HP", 0.5f), ("Crackle", 0.80f), ("Wear", 0.70f), ("Output", 0.4625f));
+        Fx("vintage", 8, "Lo-Fi Beat Tape",   ("Mode", 0.0f), ("Drive", 0.30f), ("Tone", 0.40f), ("Tone Low", 0.58f), ("Wow", 0.35f), ("Flutter", 0.15f), ("Noise", 0.20f), ("Crackle", 0.50f), ("Wear", 0.30f), ("Output", 0.392f));
+        Fx("vintage", 8, "Clean Crackle",     ("Mode", 0.0f), ("Drive", 0.10f), ("Tone Model", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.12f), ("Crackle", 0.55f), ("Wear", 0.10f), ("Output", 0.35f));
+        Fx("vintage", 8, "Warped Record",     ("Mode", 0.0f), ("Drive", 0.30f), ("Wow", 0.75f), ("Wow Rate", 0.298f), ("Flutter", 0.10f), ("Noise", 0.25f), ("Crackle", 0.40f), ("Wear", 0.35f), ("Stereo Drift", 1f), ("Output", 0.392f));
+        // Tape
+        Fx("vintage", 8, "Warped Cassette",   ("Mode", 0.2f), ("Drive", 0.45f), ("Tone", 0.40f), ("Wow", 0.45f), ("Flutter", 0.55f), ("Noise", 0.45f), ("Crackle", 0.10f), ("Wear", 0.40f), ("Mix", 1f), ("Output", 0.5f));
+        Fx("vintage", 8, "Worn Deck",         ("Mode", 0.2f), ("Drive", 0.52f), ("Tone Model", 1f), ("Wow", 0.30f), ("Flutter", 0.25f), ("Flutter Rate", 0.6f), ("Noise", 0.30f), ("Hiss HP", 0.48f), ("Crackle", 0.45f), ("Wear", 0.64f), ("Wear Follow", 1f), ("Mix", 0.78f), ("Output", 0.73f));
+        Fx("vintage", 8, "Chewed Tape",       ("Mode", 0.2f), ("Drive", 0.50f), ("Wow", 0.80f), ("Flutter", 0.70f), ("Flutter Rate", 0.78f), ("Noise", 0.45f), ("Crackle", 0.20f), ("Wear", 0.85f), ("Stereo Drift", 1f), ("Output", 0.53f));
+        Fx("vintage", 8, "Walkman",           ("Mode", 0.2f), ("Drive", 0.40f), ("Tone", 0.45f), ("Wow", 0.25f), ("Flutter", 0.45f), ("Flutter Rate", 0.70f), ("Noise", 0.35f), ("Crackle", 0f), ("Wear", 0.30f), ("Output", 0.5f));
+        Fx("vintage", 8, "Reel Warmth",       ("Mode", 0.4f), ("Drive", 0.55f), ("Tone", 0.52f), ("Wow", 0.25f), ("Flutter", 0.20f), ("Noise", 0.18f), ("Crackle", 0.05f), ("Wear", 0.15f), ("Mix", 1f), ("Output", 0.617f));
+        Fx("vintage", 8, "Tape Saturation",   ("Mode", 0.4f), ("Drive", 0.70f), ("Tone Low", 0.56f), ("Wow", 0.05f), ("Flutter", 0.05f), ("Noise", 0.06f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.333f));
+        Fx("vintage", 8, "Mastering Tape",    ("Mode", 0.4f), ("Drive", 0.40f), ("Tone Model", 0.5f), ("Tone High", 0.54f), ("Wow", 0.02f), ("Flutter", 0.03f), ("Noise", 0.03f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.667f), ("Output", 0.47f));
+        Fx("vintage", 8, "Tape Sway 1/2",     ("Mode", 0.4f), ("Drive", 0.35f), ("Wow", 0.50f), ("Wow Sync", 1f), ("Wow Rate", 0.6f), ("Flutter", 0.10f), ("Noise", 0.10f), ("Crackle", 0f), ("Wear", 0.10f), ("Output", 0.533f));
+        Fx("vintage", 8, "Seasick 2 Bars",    ("Mode", 0.2f), ("Drive", 0.30f), ("Wow", 0.90f), ("Wow Sync", 1f), ("Wow Rate", 0.2f), ("Flutter", 0.10f), ("Noise", 0.15f), ("Crackle", 0f), ("Wear", 0.20f), ("Stereo Drift", 1f), ("Output", 0.47f));
+        // VHS
+        Fx("vintage", 8, "VHS Fever",         ("Mode", 0.6f), ("Drive", 0.40f), ("Tone", 0.32f), ("Wow", 0.45f), ("Flutter", 0.70f), ("Noise", 0.50f), ("Crackle", 0.30f), ("Wear", 0.55f), ("Mix", 1f), ("Output", 0.45f));
+        Fx("vintage", 8, "VHS Dream",         ("Mode", 0.6f), ("Drive", 0.30f), ("Tone Model", 1f), ("Wow", 0.45f), ("Wow Rate", 0.5f), ("Flutter", 0.50f), ("Noise", 0.30f), ("Crackle", 0.10f), ("Wear", 0.40f), ("Stereo Drift", 1f), ("Mix", 0.8f), ("Output", 0.5f));
+        Fx("vintage", 8, "Broken Tracking",   ("Mode", 0.6f), ("Drive", 0.50f), ("Wow", 0.70f), ("Flutter", 0.90f), ("Flutter Rate", 0.875f), ("Noise", 0.60f), ("Crackle", 0.50f), ("Wear", 0.90f), ("Stereo Drift", 1f), ("Output", 0.5f));
+        // Tube
+        Fx("vintage", 8, "Tube Glow",         ("Mode", 0.8f), ("Drive", 0.60f), ("Tone", 0.58f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.08f), ("Crackle", 0f), ("Wear", 0.05f), ("Mix", 1f), ("Output", 0.7125f));
+        Fx("vintage", 8, "Tube Glue",         ("Mode", 0.8f), ("Drive", 0.72f), ("Tone", 0.76f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.18f), ("Crackle", 0f), ("Wear", 0.40f), ("Output Stage", 0.5f), ("Auto Comp", 1f), ("Mix", 0.64f), ("Output", 0.54f), ("Oversampling", 0.667f));
+        Fx("vintage", 8, "Even Warmth",       ("Mode", 0.8f), ("Drive", 0.50f), ("Even Only", 1f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.333f), ("Output", 0.446f));
+        Fx("vintage", 8, "Hot Preamp",        ("Mode", 0.8f), ("Drive", 0.90f), ("Tone", 0.55f), ("Tone Low", 0.55f), ("Output Stage", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.05f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.667f), ("Output", 0.667f));
+        Fx("vintage", 8, "Parallel Tube",     ("Mode", 0.8f), ("Drive", 0.95f), ("Output Stage", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Mix", 0.4f), ("Oversampling", 0.333f), ("Output", 0.54f));
+        // Analog
+        Fx("vintage", 8, "Analog Glue",       ("Mode", 1.0f), ("Drive", 0.45f), ("Tone", 0.50f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.05f), ("Crackle", 0f), ("Wear", 0f), ("Mix", 1f), ("Output", 0.533f));
+        Fx("vintage", 8, "Console Bus",       ("Mode", 1.0f), ("Drive", 0.35f), ("Output Stage", 1f), ("Tone Low", 0.53f), ("Tone High", 0.53f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.04f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.333f));
+        Fx("vintage", 8, "Transformer Color", ("Mode", 1.0f), ("Drive", 0.55f), ("Even Only", 1f), ("Output Stage", 1f), ("Tone Low", 0.60f), ("Tone High", 0.45f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Output", 0.533f));
+        Fx("vintage", 8, "Crunch Drive",      ("Mode", 1.0f), ("Drive", 0.95f), ("Tone", 0.60f), ("Output Stage", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.667f));
+        // Special
+        Fx("vintage", 8, "Telephone Line",    ("Mode", 0.6f), ("Drive", 0.60f), ("Tone Model", 1f), ("Tone Low", 0.10f), ("Tone High", 0.30f), ("Wow", 0f), ("Flutter", 0.10f), ("Noise", 0.25f), ("Hiss HP", 0.65f), ("Crackle", 0.20f), ("Wear", 1f), ("Output", 0.5f));
+        Fx("vintage", 8, "AM Radio",          ("Mode", 0.6f), ("Drive", 0.50f), ("Tone Low", 0.15f), ("Tone High", 0.30f), ("Wow", 0.05f), ("Flutter", 0.30f), ("Noise", 0.50f), ("Hiss HP", 0.85f), ("Crackle", 0.25f), ("Wear", 0.90f), ("Output", 0.5f));
+        Fx("vintage", 8, "Neutral Saturator", ("Character", 0f), ("Drive", 0.50f), ("Tone Model", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.667f));
+        Fx("vintage", 8, "Gated Dust",        ("Character", 0f), ("Drive", 0f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.35f), ("Hiss HP", 0.5f), ("Crackle", 0.30f), ("Wear", 0.20f), ("Wear Follow", 1f), ("Output", 0.42f));
 
         // ---- Nota Auto Pan (kind 9) — all params normalized 0..1. Waveform 0 Sine/.25 Tri/
         //      .5 Saw/.75 Sqr/1 S&H; Phase 0.5 = 180° (pan), 0 = tremolo; Rate exp 0.01..40 Hz.
