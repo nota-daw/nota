@@ -401,8 +401,12 @@ and user presets, automation, persistence and cloning.
   octaves, optionally narrowing with each repeat); Repeat (hold or Latch) and Mix. Timeline /
   Slices / Filter graphs (drag the offset, the gate and the filter), a REPEAT column, a state
   box and meters; 31 factory presets; MCP `read_beat_repeat`.
-- **Nota Orbit** (10, formerly Auto Pan) — auto-pan and tremolo, L/R phase (0° = tremolo …
-  180° = pan), 5 LFO shapes, Shape, Mix.
+- **Nota Orbit** (9, formerly Auto Pan) — auto-pan and tremolo on one LFO: L/R phase (0° =
+  tremolo … 180° = pan, with 0° / 90° / 180° buttons), Sine / Tri / Saw / Sqr / S&H, Shape
+  (Glide on S&H), Amount, Mix; rate free (0.01–40 Hz) or synced (4/1 … 1/32 with dotted and
+  triplet values, locked to the bar). A gain graph over two cycles (drag Amount and Phase),
+  the pan line with its swing, OUT L / R meters and a status strip; 31 factory presets; MCP
+  `read_orbit`.
 - **Nota Crush** (12) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
   Wet; Digital / Analog / Fold modes; Anti-alias (4th order); GRIT (Dither / Jitter / Noise);
   a post filter, output gain, Auto gain and a DC filter. Quantiser / Spectrum (engine FFT:
@@ -426,10 +430,13 @@ and user presets, automation, persistence and cloning.
 - **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.
-- **Nota Forge** (17) — multi-stage saturator: 3 stages
-  (Tube/Diode/Tape/Fuzz/Digital/Fold), Serial/Parallel/Mid-Side/Multiband routings,
-  Amount/Tone/Wet, Bias/Width, LFO→Drive and Env→Tone; a transfer curve and a harmonics
-  chart; **OVERSAMPLE** (Off/2×/4×/8×).
+- **Nota Forge** (17) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
+  each with drive, output trim, feedback and its own Bias / Tone / Width; Serial / Parallel /
+  Mid-Side (Mid · Side · M+S) / Multiband (< 180 Hz · mids · > 2.4 kHz) routings; Amount /
+  Wet / Out; LFO→Drive (free or synced) and Env→Tone; a transfer curve (whole device or the
+  selected stage, each stage faint, the modulated curve, the live input) and harmonics 2–9
+  with THD from the engine; **OVERSAMPLE** (Off/2×/4×/8×) with an aliasing warning; 32 factory
+  presets; MCP `read_forge`, `set_forge`, `set_forge_stage`.
 - **Nota EQ-3** (16) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
   Classic ±15 dB range) with a 0 dB detent and KILL buttons, two crossovers, 24 / 48 dB/oct
   Linkwitz-Riley slopes (phase-aligned, flat at unity), output gain. A response graph with each

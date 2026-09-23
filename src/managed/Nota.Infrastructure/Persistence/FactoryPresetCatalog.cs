@@ -994,15 +994,51 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Eq3("Megaphone", ("Mid", 0.9333f), ("High", 0.0f), ("Low Kill", 1f), ("Low Freq", 0.6736f), ("High Freq", 0.4491f), ("Slope", 1f), ("Gain", 0.4583f));
         Fx("eq3", 16, "Classic Flat", ("Range", 0f), ("Low", 0.5f), ("Mid", 0.5f), ("High", 0.5f));
 
-        // ---- Nota Forge (kind 17) — multi-stage saturation, all params normalized 0..1.
-        //      Stage type: 0 Tube/0.2 Diode/0.4 Tape/0.6 Fuzz/0.8 Digital/1 Fold; gains/bias
-        //      bipolar (0.5 = neutral); Routing 0 Serial/0.33 Par/0.67 M-S/1 Multiband.
-        Fx("forge", 17, "Cabinet Heat",     ("Amount", 0.42f), ("Tone", 0.6f), ("Bias", 0.6f), ("S1 Type", 0f),   ("S1 Drive", 0.5f), ("S1 On", 1f), ("S2 On", 0f), ("S3 On", 0f));
-        Fx("forge", 17, "Diode Crunch",     ("Amount", 0.5f),  ("S1 Type", 0.2f), ("S1 Drive", 0.68f), ("S1 On", 1f), ("S2 Type", 0.6f), ("S2 Drive", 0.4f), ("S2 On", 1f), ("S3 On", 0f));
-        Fx("forge", 17, "Tape Glue",        ("Amount", 0.3f),  ("Wet", 0.85f), ("S1 Type", 0.4f), ("S1 Drive", 0.32f), ("S1 On", 1f), ("S2 On", 0f), ("S3 On", 0f));
-        Fx("forge", 17, "Fuzz Wall",        ("Amount", 0.62f), ("S1 Type", 0.6f), ("S1 Drive", 0.85f), ("S1 FB", 0.3f), ("S1 On", 1f), ("S2 Type", 0.2f), ("S2 Drive", 0.5f), ("S2 On", 1f), ("S3 On", 0f));
-        Fx("forge", 17, "Parallel Warmth",  ("Routing", 0.333f), ("Amount", 0.4f), ("S1 Type", 0f), ("S1 Drive", 0.5f), ("S1 On", 1f), ("S2 Type", 0.4f), ("S2 Drive", 0.35f), ("S2 On", 1f), ("S3 On", 0f));
-        Fx("forge", 17, "Multiband Drive",  ("Routing", 1f), ("Amount", 0.45f), ("S1 Type", 0f), ("S1 Drive", 0.45f), ("S1 On", 1f), ("S2 Type", 0.4f), ("S2 Drive", 0.4f), ("S2 On", 1f), ("S3 Type", 0.8f), ("S3 Drive", 0.3f), ("S3 On", 1f), ("LFO Drive", 0.3f));
+        // ---- Nota Forge (kind 17) — multi-stage saturation. Written in units through Forge(…):
+        //      FgG = the globals (Amount dB, routing 0 Serial / 1 Parallel / 2 M-S / 3 Multi, wet %,
+        //      output dB, LFO → drive %, env → tone %, sync division 0 2/1 … 3 1/4 … 7 1/64 or a free
+        //      rate in Hz, oversampling 0 Off … 3 8×); FgS = a stage (1..3, type, drive %, out dB,
+        //      feedback %, bias %, tone dB, width %). Stages not named are off.
+        Forge("Init", FgG(10.5f), FgS(1, FTube, 40));
+        // Warmth
+        Forge("Cabinet Heat",      FgG(12.6f), FgS(1, FTube, 50, bias: 20, tone: 2.4f));
+        Forge("Tape Glue",         FgG(9f, wet: 85), FgS(1, FTape, 32));
+        Forge("Tube Warmth",       FgG(6f), FgS(1, FTube, 35, bias: 15, tone: -1));
+        Forge("Console Bus",       FgG(4.5f), FgS(1, FTape, 25), FgS(2, FTube, 20, bias: 10));
+        Forge("Vocal Silk",        FgG(6f, wet: 70), FgS(1, FTube, 30, bias: 25, tone: 1.5f));
+        Forge("Bass Weight",       FgG(9f), FgS(1, FTape, 45, tone: -3), FgS(2, FTube, 30, bias: 20));
+        // Drive
+        Forge("Diode Crunch",      FgG(15f), FgS(1, FDiode, 68), FgS(2, FFuzz, 40));
+        Forge("Amp Stack",         FgG(18f, outDb: -3), FgS(1, FTube, 60, bias: 20), FgS(2, FDiode, 50, tone: -2), FgS(3, FTape, 30));
+        Forge("Guitar Edge",       FgG(16.5f, outDb: -3), FgS(1, FDiode, 55, bias: 30, tone: 3));
+        Forge("Snare Crack",       FgG(12f, wet: 75, os: 1), FgS(1, FDiode, 50, tone: 4), FgS(2, FDigital, 25));
+        // Destroy
+        Forge("Fuzz Wall",         FgG(18.6f, outDb: -3), FgS(1, FFuzz, 85, fb: 30), FgS(2, FDiode, 50));
+        Forge("Fold Bells",        FgG(6f, os: 2), FgS(1, FFold, 45, tone: 3));
+        Forge("Digital Hard Clip", FgG(12f, os: 1), FgS(1, FDigital, 60));
+        Forge("Broken Speaker",    FgG(21f, outDb: -6, os: 1), FgS(1, FFuzz, 70, bias: 60, tone: -6, width: 60), FgS(2, FFold, 40, fb: 20));
+        Forge("Feedback Scream",   FgG(15f, outDb: -4.5f), FgS(1, FTube, 70, fb: 70), FgS(2, FFuzz, 60, fb: 40, tone: -3));
+        Forge("Wavefolder Synth",  FgG(9f, outDb: -3, os: 2), FgS(1, FFold, 60, bias: 20, fb: 15), FgS(2, FTape, 30, tone: -2));
+        // Parallel
+        Forge("Parallel Warmth",   FgG(12f, routing: 1), FgS(1, FTube, 50), FgS(2, FTape, 35));
+        Forge("Drum Glue",         FgG(6f, routing: 1, wet: 60, outDb: -1.5f, lfo: 35, env: 20, div: 2, os: 1),
+                                   FgS(1, FTube, 55, fb: 10, bias: 15), FgS(2, FTape, 45, tone: -3), FgS(3, FDiode, 30, outDb: -3, bias: -20));
+        Forge("NY Drums",          FgG(12f, routing: 1, wet: 45), FgS(1, FDiode, 70), FgS(2, FFuzz, 50, outDb: -3));
+        Forge("Bass Parallel Grit", FgG(9f, routing: 1, wet: 50), FgS(1, FFuzz, 60, tone: -4), FgS(2, FTube, 40));
+        // Mid / Side
+        Forge("Wide Air",          FgG(6f, routing: 2), FgS(1, FTube, 20), FgS(2, FTape, 50, tone: 3, width: 140));
+        Forge("Mono Grit Core",    FgG(12f, routing: 2), FgS(1, FDiode, 60), FgS(2, FTape, 15));
+        Forge("Side Sizzle",       FgG(9f, routing: 2, os: 1), FgS(2, FDigital, 45, tone: 4, width: 130));
+        // Multiband
+        Forge("Multiband Drive",   FgG(13.5f, routing: 3, lfo: 30, os: 1), FgS(1, FTube, 45), FgS(2, FTape, 40), FgS(3, FDigital, 30));
+        Forge("Warm Master",       FgG(3f, routing: 3, os: 2), FgS(1, FTape, 35, tone: 1), FgS(2, FTube, 25, bias: 10), FgS(3, FDigital, 15, tone: -4, width: 120));
+        Forge("Low-End Only",      FgG(12f, routing: 3), FgS(1, FTube, 60, bias: 15));
+        Forge("Presence Lift",     FgG(9f, routing: 3), FgS(2, FTube, 40, tone: 2), FgS(3, FTape, 35, width: 120));
+        // Motion
+        Forge("Breathing Drive",   FgG(12f, lfo: 50, div: 2), FgS(1, FTube, 50));
+        Forge("Wobble Crunch",     FgG(15f, lfo: 70, div: 4, os: 1), FgS(1, FDiode, 55), FgS(2, FFold, 25));
+        Forge("Envelope Bite",     FgG(9f, env: 60), FgS(1, FTape, 45));
+        Forge("Slow Tide",         FgG(9f, lfo: 40, freeHz: 0.2f), FgS(1, FTape, 50), FgS(2, FTube, 30, width: 130));
 
         // ---- Nota AutoGain (kind 18) — loudness matching, all params normalized 0..1.
         //      Target 0..1 → −36..0 LUFS; Scale 0 Mom/0.5 Short/1 Integ; Response 0 Fast/1 Slow.
@@ -1542,14 +1578,49 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("vintage", 8, "Neutral Saturator", ("Character", 0f), ("Drive", 0.50f), ("Tone Model", 0.5f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0f), ("Crackle", 0f), ("Wear", 0f), ("Auto Comp", 1f), ("Oversampling", 0.667f));
         Fx("vintage", 8, "Gated Dust",        ("Character", 0f), ("Drive", 0f), ("Wow", 0f), ("Flutter", 0f), ("Noise", 0.35f), ("Hiss HP", 0.5f), ("Crackle", 0.30f), ("Wear", 0.20f), ("Wear Follow", 1f), ("Output", 0.42f));
 
-        // ---- Nota Auto Pan (kind 9) — all params normalized 0..1. Waveform 0 Sine/.25 Tri/
-        //      .5 Saw/.75 Sqr/1 S&H; Phase 0.5 = 180° (pan), 0 = tremolo; Rate exp 0.01..40 Hz.
-        Fx("autopan", 9, "Classic Pan",   ("Rate", 0.60f), ("Amount", 0.80f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 1f));
-        Fx("autopan", 9, "Tremolo",       ("Rate", 0.70f), ("Amount", 0.70f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0f),   ("Mix", 1f));
-        Fx("autopan", 9, "Chop Gate",     ("Rate", 0.72f), ("Amount", 1.0f),  ("Waveform", 0.75f), ("Shape", 0f),    ("Phase", 0f),   ("Mix", 1f));
-        Fx("autopan", 9, "Slow Sweep",    ("Rate", 0.40f), ("Amount", 0.90f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 1f));
-        Fx("autopan", 9, "Random Space",  ("Rate", 0.62f), ("Amount", 0.75f), ("Waveform", 1f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 0.85f));
-        Fx("autopan", 9, "Hard Square",   ("Rate", 0.66f), ("Amount", 0.85f), ("Waveform", 0f),    ("Shape", 0.9f),  ("Phase", 0.5f), ("Mix", 1f));
+        // ---- Nota Orbit (kind 9, formerly Auto Pan) — all params normalized 0..1 (unnamed ones reset
+        //      to their defaults). Waveform 0 Sine/.25 Tri/.5 Saw/.75 Sqr/1 S&H; Shape sharpens the
+        //      smooth waves, on S&H it is the glide; Phase 0..1 = 0..360° (0 tremolo, .25 = 90°, .5 =
+        //      180° pan); Rate exp 0.01*4000^v Hz (.278 = 0.1, .361 = 0.2, .472 = 0.5, .555 = 1, .6 =
+        //      1.45, .639 = 2, .749 = 5, .771 = 6, .855 = 12 Hz); Sync 1 = Division sets the rate: round(15v)
+        //      of 4/1, 2/1, 1/1, 1/2D, 1/2, 1/2T, 1/4D, 1/4, 1/4T, 1/8D, 1/8, 1/8T, 1/16D, 1/16, 1/16T, 1/32
+        //      (.133 = 1/1, .267 = 1/2, .4 = 1/4D, .467 = 1/4, .6 = 1/8D, .667 = 1/8, .733 = 1/8T, .867 = 1/16).
+        Fx("autopan", 9, "Init",             ("Rate", 0.60f), ("Amount", 0.70f), ("Waveform", 0f), ("Shape", 0f), ("Phase", 0.5f), ("Mix", 1f), ("Sync", 0f), ("Division", 0.667f));
+        // Pan — free
+        Fx("autopan", 9, "Classic Pan",      ("Rate", 0.60f), ("Amount", 0.80f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 1f));
+        Fx("autopan", 9, "Slow Sweep",       ("Rate", 0.40f), ("Amount", 0.90f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 1f));
+        Fx("autopan", 9, "Hard Square",      ("Rate", 0.66f), ("Amount", 0.85f), ("Waveform", 0f),    ("Shape", 0.9f),  ("Phase", 0.5f), ("Mix", 1f));
+        Fx("autopan", 9, "Wide Drift",       ("Rate", 0.278f), ("Amount", 0.90f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Gentle Sway",      ("Rate", 0.472f), ("Amount", 0.45f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Quarter Circle",   ("Rate", 0.555f), ("Amount", 0.80f), ("Phase", 0.25f));
+        Fx("autopan", 9, "Ping Pong",        ("Rate", 0.639f), ("Amount", 0.90f), ("Waveform", 0.75f), ("Phase", 0.5f));
+        // Pan — synced
+        Fx("autopan", 9, "Eighth Swirl",     ("Sync", 1f), ("Division", 0.667f), ("Waveform", 0.25f), ("Shape", 0.45f), ("Amount", 1f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Bar Sweep",        ("Sync", 1f), ("Division", 0.133f), ("Amount", 0.85f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Two-Bar Drift",    ("Sync", 1f), ("Division", 0.067f), ("Amount", 0.80f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Quarter Pan",      ("Sync", 1f), ("Division", 0.467f), ("Amount", 0.70f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Dotted Bounce",    ("Sync", 1f), ("Division", 0.6f),   ("Waveform", 0.25f), ("Amount", 0.80f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Triplet Roll",     ("Sync", 1f), ("Division", 0.733f), ("Amount", 0.60f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Saw Rotor",        ("Sync", 1f), ("Division", 0.467f), ("Waveform", 0.5f), ("Shape", 0.2f), ("Amount", 0.70f), ("Phase", 0.5f));
+        // Tremolo
+        Fx("autopan", 9, "Tremolo",          ("Rate", 0.70f), ("Amount", 0.70f), ("Waveform", 0f),    ("Shape", 0f),    ("Phase", 0f),   ("Mix", 1f));
+        Fx("autopan", 9, "Chop Gate",        ("Rate", 0.72f), ("Amount", 1.0f),  ("Waveform", 0.75f), ("Shape", 0f),    ("Phase", 0f),   ("Mix", 1f));
+        Fx("autopan", 9, "Chop Trem",        ("Sync", 1f), ("Division", 0.867f), ("Waveform", 0.75f), ("Amount", 0.60f), ("Phase", 0f), ("Mix", 0.85f));
+        Fx("autopan", 9, "Vintage Amp Trem", ("Rate", 0.749f), ("Amount", 0.55f), ("Shape", 0.15f), ("Phase", 0f));
+        Fx("autopan", 9, "Deep Throb",       ("Sync", 1f), ("Division", 0.467f), ("Shape", 0.3f), ("Amount", 0.90f), ("Phase", 0f));
+        Fx("autopan", 9, "Helicopter",       ("Rate", 0.855f), ("Amount", 0.85f), ("Waveform", 0.75f), ("Phase", 0f));
+        Fx("autopan", 9, "Sidechain Pump",   ("Sync", 1f), ("Division", 0.467f), ("Waveform", 0.5f), ("Amount", 0.80f), ("Phase", 0f));
+        Fx("autopan", 9, "Stutter 32",       ("Sync", 1f), ("Division", 1f), ("Waveform", 0.75f), ("Amount", 1f), ("Phase", 0f));
+        // Random
+        Fx("autopan", 9, "Random Space",     ("Rate", 0.62f), ("Amount", 0.75f), ("Waveform", 1f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 0.85f));
+        Fx("autopan", 9, "Random Steps",     ("Sync", 1f), ("Division", 0.667f), ("Waveform", 1f), ("Amount", 0.80f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Drifting Cloud",   ("Rate", 0.40f), ("Waveform", 1f), ("Shape", 1f), ("Amount", 0.70f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Glitch Gate",      ("Sync", 1f), ("Division", 0.867f), ("Waveform", 1f), ("Amount", 1f), ("Phase", 0f));
+        Fx("autopan", 9, "Wander",           ("Sync", 1f), ("Division", 0.267f), ("Waveform", 1f), ("Shape", 0.8f), ("Amount", 0.60f), ("Phase", 0.25f));
+        // Subtle
+        Fx("autopan", 9, "Stereo Breath",    ("Rate", 0.361f), ("Amount", 0.25f), ("Phase", 0.5f));
+        Fx("autopan", 9, "Mix Motion",       ("Sync", 1f), ("Division", 0.267f), ("Waveform", 0.25f), ("Amount", 0.35f), ("Phase", 0.5f), ("Mix", 0.6f));
+        Fx("autopan", 9, "Offset Swirl",     ("Sync", 1f), ("Division", 0.4f), ("Amount", 0.60f), ("Phase", 0.375f));
 
         // ---- Nota Auto Shift (kind 10) — pitch correction, all params normalized 0..1 (unnamed ones
         //      reset to their defaults). Key round(11v) (0 C, .182 D, .364 E, .455 F, .636 G, .818 A);
@@ -1920,6 +1991,46 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-effect", kind, isInstrument: false, isMidi: false, ps);
+
+    // Nota Forge stage types (the S* Type step, × 1/5).
+    private const int FTube = 0, FDiode = 1, FTape = 2, FFuzz = 3, FDigital = 4, FFold = 5;
+
+    // Nota Forge globals in units → normalized pairs (see the Forge block above).
+    private static (string Name, float Value)[] FgG(float amountDb, int routing = 0, float wet = 100, float outDb = 0, float lfo = 0,
+        float env = 0, int div = 3, float freeHz = 0, int os = 0)
+    {
+        var ps = new List<(string, float)>
+        {
+            ("Amount", amountDb / 30f), ("Routing", routing / 3f), ("Wet", wet / 100f), ("Output", 0.5f + outDb / 48f),
+            ("LFO Drive", lfo / 100f), ("Env Tone", env / 100f), ("Oversampling", os / 3f),
+            ("Tone", 0.5f), ("Bias", 0.5f), ("Width", 0.5f),
+        };
+        if (freeHz > 0) { ps.Add(("LFO Sync", 0f)); ps.Add(("LFO Rate", MathF.Log(freeHz / 0.05f) / MathF.Log(400f))); }
+        else { ps.Add(("LFO Sync", 1f)); ps.Add(("LFO Rate", div / 7f)); }
+        return ps.ToArray();
+    }
+
+    // A Nota Forge stage for Forge(…): number 1..3, type, drive %, out dB, feedback %, bias %, tone dB, width %.
+    private static (int N, int Type, float Drive, float OutDb, float Fb, float Bias, float Tone, float Width) FgS(int n, int type, float drive,
+        float outDb = 0, float fb = 0, float bias = 0, float tone = 0, float width = 100) => (n, type, drive, outDb, fb, bias, tone, width);
+
+    // Every stage is spelled out: the ones named are on as given, the rest are off — so a preset
+    // never inherits the default stages.
+    private void Forge(string name, (string Name, float Value)[] globals, params (int N, int Type, float Drive, float OutDb, float Fb, float Bias, float Tone, float Width)[] stages)
+    {
+        var ps = new List<(string, float)>(globals);
+        var used = new bool[4];
+        foreach (var st in stages)
+        {
+            used[st.N] = true;
+            string p = "S" + st.N + " ";
+            ps.Add((p + "On", 1f)); ps.Add((p + "Type", st.Type / 5f)); ps.Add((p + "Drive", st.Drive / 100f));
+            ps.Add((p + "Out", 0.5f + st.OutDb / 24f)); ps.Add((p + "FB", st.Fb / 100f)); ps.Add((p + "Bias", 0.5f + st.Bias / 200f));
+            ps.Add((p + "Tone", 0.5f + st.Tone / 24f)); ps.Add((p + "Width", st.Width / 200f));
+        }
+        for (int n = 1; n <= 3; n++) if (!used[n]) ps.Add(("S" + n + " On", 0f));
+        Fx("forge", 17, name, ps.ToArray());
+    }
 
     // Nota EQ-3 in the Isolator law — names Range, so it isn't read as a pre-Range preset.
     private void Eq3(string name, params (string Name, float Value)[] ps)

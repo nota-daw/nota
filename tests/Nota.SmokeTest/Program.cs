@@ -5476,7 +5476,8 @@ Console.WriteLine("-- Nota Level (AutoGain) --");
 Console.WriteLine("-- Nota Forge --");
 {
     // Own engine instance (a driven saturator would pollute the shared master mix used by
-    // later tests). Forge = multi-stage saturation (kind 17), 27 params (incl. Oversampling).
+    // later tests). Forge = multi-stage saturation (kind 17), 36 params: the original 27 (incl.
+    // Oversampling) + per-stage Bias / Tone / Width appended by the redesign.
     using var fe = new NotaEngine();
     fe.SetBpm(120); fe.SetTimeSignature(4, 4);
     int ft2 = fe.AddInstrumentTrack();
@@ -5486,50 +5487,145 @@ Console.WriteLine("-- Nota Forge --");
     Check(fg >= 0, "add built-in Nota Forge");
     Check(fe.DeviceName(ft2, fg) == "Nota Forge", $"name is Nota Forge (got '{fe.DeviceName(ft2, fg)}')");
     Check(fe.TrackDeviceBuiltinKind(ft2, fg) == 17, $"builtin kind is 17 (got {fe.TrackDeviceBuiltinKind(ft2, fg)})");
-    Check(fe.DeviceParamCount(ft2, fg) == 27, $"Nota Forge exposes 27 params (got {fe.DeviceParamCount(ft2, fg)})");
+    Check(fe.DeviceParamCount(ft2, fg) == 36, $"Nota Forge exposes 36 params (got {fe.DeviceParamCount(ft2, fg)})");
+    // Append-only layout: the old indices keep their names, the per-stage shape sits at 27..35, neutral.
+    Check(fe.DeviceParamName(ft2, fg, 0) == "Amount" && fe.DeviceParamName(ft2, fg, 12) == "S1 Drive" && fe.DeviceParamName(ft2, fg, 26) == "Oversampling"
+          && fe.DeviceParamName(ft2, fg, 27) == "S1 Bias" && fe.DeviceParamName(ft2, fg, 31) == "S2 Tone" && fe.DeviceParamName(ft2, fg, 35) == "S3 Width",
+          "Forge param layout: old indices unchanged, S1 Bias … S3 Width appended at 27..35");
+    bool fNeutral = true;
+    for (int p = 27; p < 36; p++) if (Math.Abs(fe.DeviceParamDefault(ft2, fg, p) - 0.5f) > 1e-6f || Math.Abs(fe.DeviceGetParam(ft2, fg, p) - 0.5f) > 1e-6f) fNeutral = false;
+    Check(fNeutral, "Forge per-stage Bias / Tone / Width default neutral (0.5), so older projects sound the same");
 
     // Param round-trip.
     fe.DeviceSetParam(ft2, fg, 0, 0.6f);   // Amount
     Check(Math.Abs(fe.DeviceGetParam(ft2, fg, 0) - 0.6f) < 1e-4, "Forge param set/get round-trips");
 
     var fb2 = new float[8192 * 2];
-    fe.Seek(0); fe.Play(); fe.RenderOffline(fb2, 8192); fe.StopTransport();
-    bool ffin = true; foreach (var s in fb2) if (!float.IsFinite(s)) { ffin = false; break; }
-    Check(ffin && Rms(fb2, 8192) > 0.001f, $"Forge passes audio (rms {Rms(fb2, 8192):F3})");
+    float[] FRender() { fe.Seek(0); fe.Play(); fe.RenderOffline(fb2, 8192); fe.StopTransport(); return fb2; }
+    bool Fin(float[] b) { foreach (var s in b) if (!float.IsFinite(s)) return false; return true; }
+    FRender();
+    Check(Fin(fb2) && Rms(fb2, 8192) > 0.001f, $"Forge passes audio (rms {Rms(fb2, 8192):F3})");
 
     // Drive adds harmonics → raises level vs a light setting (crude saturation check).
     fe.DeviceSetParam(ft2, fg, 0, 0.1f);   // low amount
     fe.DeviceSetParam(ft2, fg, 12, 0.1f);  // S1 drive low
-    fe.Seek(0); fe.Play(); fe.RenderOffline(fb2, 8192); fe.StopTransport();
+    FRender();
     float rmsLow = Rms(fb2, 8192);
     fe.DeviceSetParam(ft2, fg, 0, 0.8f);   // high amount
     fe.DeviceSetParam(ft2, fg, 12, 0.8f);  // S1 drive high
-    fe.Seek(0); fe.Play(); fe.RenderOffline(fb2, 8192); fe.StopTransport();
-    bool dfin = true; foreach (var s in fb2) if (!float.IsFinite(s)) { dfin = false; break; }
-    Check(dfin && Rms(fb2, 8192) > rmsLow, $"more drive → more energy ({Rms(fb2, 8192):F3} > {rmsLow:F3})");
+    FRender();
+    Check(Fin(fb2) && Rms(fb2, 8192) > rmsLow, $"more drive → more energy ({Rms(fb2, 8192):F3} > {rmsLow:F3})");
 
-    // All four routings render finite + audible.
+    // All four routings render finite + audible, with every stage on and a stage shape set.
+    fe.DeviceSetParam(ft2, fg, 20, 1f);           // S2 On
+    fe.DeviceSetParam(ft2, fg, 25, 1f);           // S3 On
+    fe.DeviceSetParam(ft2, fg, 29, 0.8f);         // S1 Width 160 %
+    fe.DeviceSetParam(ft2, fg, 31, 0.8f);         // S2 Tone +7 dB
+    fe.DeviceSetParam(ft2, fg, 33, 0.3f);         // S3 Bias −40 %
     for (int rt = 0; rt < 4; rt++)
     {
-        fe.DeviceSetParam(ft2, fg, 6, rt / 3f);       // Routing
-        fe.DeviceSetParam(ft2, fg, 20, 1f);           // S2 On
-        fe.DeviceSetParam(ft2, fg, 25, 1f);           // S3 On
-        fe.Seek(0); fe.Play(); fe.RenderOffline(fb2, 8192); fe.StopTransport();
-        bool rfin = true; foreach (var s in fb2) if (!float.IsFinite(s)) { rfin = false; break; }
-        Check(rfin && Rms(fb2, 8192) > 0.001f, $"Forge routing {rt} renders finite + audible (rms {Rms(fb2, 8192):F3})");
+        fe.DeviceSetParam(ft2, fg, 6, rt / 3f);   // Routing
+        FRender();
+        Check(Fin(fb2) && Rms(fb2, 8192) > 0.001f, $"Forge routing {rt} renders finite + audible (rms {Rms(fb2, 8192):F3})");
+    }
+    // Extremes: every stage Fold at full drive, feedback, bias, tone and width, 8× oversampling.
+    for (int st = 0; st < 3; st++)
+    {
+        fe.DeviceSetParam(ft2, fg, 11 + st * 5, 1f); fe.DeviceSetParam(ft2, fg, 12 + st * 5, 1f); fe.DeviceSetParam(ft2, fg, 14 + st * 5, 1f);
+        fe.DeviceSetParam(ft2, fg, 27 + st * 3, 1f); fe.DeviceSetParam(ft2, fg, 28 + st * 3, 1f); fe.DeviceSetParam(ft2, fg, 29 + st * 3, 1f);
+    }
+    fe.DeviceSetParam(ft2, fg, 26, 1f);
+    for (int rt = 0; rt < 4; rt++)
+    {
+        fe.DeviceSetParam(ft2, fg, 6, rt / 3f);
+        FRender();
+        float pk = 0; foreach (var v in fb2) pk = Math.Max(pk, Math.Abs(v));
+        Check(Fin(fb2) && pk < 16f, $"Forge routing {rt} stays finite + bounded at the extremes (peak {pk:F2})");
     }
 
-    // Clone: duplicating the track carries Forge params.
-    fe.DeviceSetParam(ft2, fg, 3, 0.62f);   // Output
-    int ftD = fe.DuplicateTrack(ft2); int fgD = fe.TrackDeviceCount(ftD) - 1;
-    Check(ftD > 0 && Math.Abs(fe.DeviceGetParam(ftD, fgD, 3) - 0.62f) < 1e-3, "duplicate track clones Forge params");
+    // Per-stage Tone brightens: a +12 dB tilt raises the energy above the pivot vs −12 dB.
+    fe.DeviceSetParam(ft2, fg, 6, 0f); fe.DeviceSetParam(ft2, fg, 26, 0f);
+    for (int st = 0; st < 3; st++) { fe.DeviceSetParam(ft2, fg, 15 + st * 5, st == 0 ? 1f : 0f); fe.DeviceSetParam(ft2, fg, 14 + st * 5, 0f); }
+    fe.DeviceSetParam(ft2, fg, 11, 0f); fe.DeviceSetParam(ft2, fg, 12, 0.5f); fe.DeviceSetParam(ft2, fg, 27, 0.5f); fe.DeviceSetParam(ft2, fg, 29, 0.5f);
+    float Hf(float[] b) { double e = 0, prev = 0; for (int i = 0; i < 8192; i++) { double m = b[i * 2]; e += (m - prev) * (m - prev); prev = m; } return (float)e; }
+    fe.DeviceSetParam(ft2, fg, 28, 0f); FRender(); float dark = Hf(fb2) / Math.Max(1e-9f, Rms(fb2, 8192) * Rms(fb2, 8192));
+    fe.DeviceSetParam(ft2, fg, 28, 1f); FRender(); float bright = Hf(fb2) / Math.Max(1e-9f, Rms(fb2, 8192) * Rms(fb2, 8192));
+    Check(bright > dark * 1.5f, $"Forge S1 Tone tilts the stage (bright {bright:F1} vs dark {dark:F1})");
+    fe.DeviceSetParam(ft2, fg, 28, 0.5f);
 
-    // Automation drives Amount.
+    // Telemetry: the scope carries meters, THD and curves from the same shapers.
+    FRender();
+    var fsc = new float[32 + 8 * 4 + 129 * 8];
+    int fsn = fe.DeviceScope(ft2, fg, fsc, fsc.Length);
+    Check(fsn == fsc.Length, $"Forge scope returns telemetry + harmonics + curves ({fsn} values)");
+    bool curveOk = true;
+    for (int i = 1; i < 129; i++) if (!float.IsFinite(fsc[64 + i]) || fsc[64 + i] < fsc[64 + i - 1] - 1e-4f) curveOk = false;   // Tube chain: monotonic
+    Check(curveOk && fsc[64] < 0 && fsc[64 + 128] > 0, "Forge transfer curve (Tube) is finite, rising, through the origin");
+    Check(fsc[13] > 0.3f && fsc[4] > 1000 && fsc[0] > -60 && fsc[1] > -60 && fsc[21] > 0.5f,
+          $"Forge scope: THD {fsc[13]:F1} %, sample rate, in / out peaks, signal flag");
+    Check(fsc[22] < 0.5f, "Forge: no aliasing warning with Tube");
+    fe.DeviceSetParam(ft2, fg, 11, 0.8f);   // S1 Digital, oversampling off
+    fe.DeviceScope(ft2, fg, fsc, 32);
+    Check(fsc[22] > 0.5f, "Forge: the aliasing warning lights for Digital without oversampling");
+    fe.DeviceSetParam(ft2, fg, 26, 1f / 3f);
+    fe.DeviceScope(ft2, fg, fsc, 32);
+    Check(fsc[22] < 0.5f && Math.Abs(fsc[7] - 2) < 1e-3, "Forge: 2× oversampling clears it");
+    fe.DeviceSetParam(ft2, fg, 11, 0f);
+    fe.DeviceSetParam(ft2, fg, 0, 0.1f); fe.DeviceSetParam(ft2, fg, 12, 0.2f);   // a gentle drive …
+    fe.DeviceSetParam(ft2, fg, 27, 0.9f);   // … and S1 bias → even harmonics
+    fe.DeviceScope(ft2, fg, fsc, fsc.Length);
+    Check((int)fsc[17] is 2 or 3, $"Forge: a biased Tube reads even-heavy / mixed (flavour {fsc[17]})");
+    fe.DeviceSetParam(ft2, fg, 27, 0.5f);
+    Check(fe.DeviceText(ft2, fg, 0).Contains("serial") && fe.DeviceText(ft2, fg, 1).Contains("THD")
+          && fe.DeviceText(ft2, fg, 2).Contains("Sn Bias"), "Forge device texts: summary, live reading, parameter guide");
+
+    // MCP: read / set in units.
+    var ftools = new Nota.Mcp.Tools.DeviceTools(fe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var fr = ftools.SetForgeStage(ft2, fg, 2, on: true, type: "Tape", drivePercent: 40, toneDb: -3, widthPercent: 150).Result;
+    Check(fr.Stages[1].On && fr.Stages[1].Type == "Tape" && Math.Abs(fr.Stages[1].DrivePercent - 40) < 0.2 && Math.Abs(fr.Stages[1].ToneDb + 3) < 0.1
+          && Math.Abs(fr.Stages[1].WidthPercent - 150) < 0.2, "MCP set_forge_stage sets a stage in units and reads it back");
+    fr = ftools.SetForge(ft2, fg, routing: "Multiband", amountDb: 12, wetPercent: 80, lfoDivision: "1/8", lfoDrivePercent: 40, oversampling: 4).Result;
+    Check(fr.Routing == "Multiband" && Math.Abs(fr.AmountDb - 12) < 0.1 && Math.Abs(fr.Wet - 0.8) < 1e-3 && fr.LfoSync && fr.LfoRate == "1/8"
+          && fr.Oversampling == "4x" && fr.Stages[0].Role == "Low" && fr.Stages[2].Role == "High" && fr.TransferCurve.Length == 17
+          && fr.HarmonicsDb.Length == 8 && fr.Summary.Contains("multiband") && fr.Live.Length > 0,
+          $"MCP set_forge / read_forge in units (THD {fr.ThdPercent} %, {fr.Flavor})");
+
+    // Clone: duplicating the track carries Forge params, the appended ones included.
+    fe.DeviceSetParam(ft2, fg, 3, 0.62f);   // Output
+    fe.DeviceSetParam(ft2, fg, 34, 0.2f);   // S3 Tone
+    int ftD = fe.DuplicateTrack(ft2); int fgD = fe.TrackDeviceCount(ftD) - 1;
+    Check(ftD > 0 && Math.Abs(fe.DeviceGetParam(ftD, fgD, 3) - 0.62f) < 1e-3 && Math.Abs(fe.DeviceGetParam(ftD, fgD, 34) - 0.2f) < 1e-3,
+          "duplicate track clones Forge params (incl. the per-stage shape)");
+
+    // Automation drives Amount and a per-stage param.
     int flane = fe.AddAutomationLane(ft2, AutomationTarget.DeviceParam, fg, 0);
     Check(flane >= 0, "add Forge Amount automation lane");
     fe.SetAutomationPoints(ft2, flane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    int flane2 = fe.AddAutomationLane(ft2, AutomationTarget.DeviceParam, fg, 30);
+    fe.SetAutomationPoints(ft2, flane2, new[] { new AutomationPoint(0.0, 0.0f), new AutomationPoint(2.0, 1.0f) });
     fe.Seek(1.99); fe.Play(); fe.RenderOffline(fb2, 4096); fe.StopTransport();
-    Check(fe.DeviceGetParam(ft2, fg, 0) > 0.7f, $"automation drives Forge Amount ({fe.DeviceGetParam(ft2, fg, 0):F2})");
+    Check(fe.DeviceGetParam(ft2, fg, 0) > 0.7f && fe.DeviceGetParam(ft2, fg, 30) > 0.8f,
+          $"automation drives Forge Amount ({fe.DeviceGetParam(ft2, fg, 0):F2}) and S2 Bias ({fe.DeviceGetParam(ft2, fg, 30):F2})");
+    fe.RemoveAutomationLane(ft2, flane2); fe.RemoveAutomationLane(ft2, flane);
+
+    // Every factory preset names only real params and renders finite + audible.
+    var fcat = new FactoryPresetCatalog();
+    int fPresets = 0; bool fNamesOk = true, fPresetsOk = true;
+    var fNames = new HashSet<string>();
+    for (int p = 0; p < fe.DeviceParamCount(ft2, fg); p++) fNames.Add(fe.DeviceParamName(ft2, fg, p));
+    foreach (var info in fcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 17) continue;
+        var doc = fcat.Document(info.Id);
+        if (doc is null) continue;
+        fPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!fNames.Contains(k)) { fNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        fcat.ApplyInPlace(fe, info.Id, ft2, fg);
+        FRender();
+        float pk = 0; foreach (var v in fb2) pk = Math.Max(pk, Math.Abs(v));
+        if (!Fin(fb2) || Rms(fb2, 8192) < 1e-3f || pk > 4f) { fPresetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / silent / over (rms {Rms(fb2, 8192):F4}, peak {pk:F2})"); }
+    }
+    Check(fPresets >= 25 && fNamesOk && fPresetsOk, $"{fPresets} Forge factory presets, all params known, all render finite and audible");
 }
 
 // -- EQ-8: per-band shaping, param round-trip, analyzer scope --
@@ -8472,6 +8568,10 @@ Console.WriteLine("-- Nota Vintage (effect kind 8) --");
 // ===================== Nota Orbit (effect kind 9) ======================
 Console.WriteLine("-- Nota Orbit (effect kind 9) --");
 {
+    // Params (AutoPan.h): 0 Rate, 1 Amount, 2 Waveform, 3 Shape, 4 Phase, 5 Mix, 6 Sync, 7 Division.
+    // Scope: 0 in, 1 out L, 2 out R (dBFS) · 3 gain L, 4 gain R · 5 pan · 6 window phase · 7 rate Hz ·
+    // 8 BPM · 9 playing · 10 locked · 11 sample rate · 12..15 S&H steps · 16 / 17 pan min / max ·
+    // 18 division beats · 19 bar beats · 20 CPU · 21 signal · 22 floor · 23 cycles.
     using var apeng = new NotaEngine();
     int apt = apeng.AddAudioTrack();
     apeng.AddAudioClip(apt, wav, 0.0);
@@ -8480,40 +8580,152 @@ Console.WriteLine("-- Nota Orbit (effect kind 9) --");
     Check(apeng.DeviceName(apt, apdi) == "Nota Orbit", $"device is Nota Orbit (got '{apeng.DeviceName(apt, apdi)}')");
     Check(apeng.TrackDeviceBuiltinKind(apt, apdi) == 9, "device reports builtin kind 9");
     int appc = apeng.DeviceParamCount(apt, apdi);
-    Check(appc == 6, $"Nota Orbit exposes 6 params ({appc})");
+    Check(appc == 8, $"Nota Orbit exposes 8 params ({appc})");
+    Check(apeng.DeviceParamName(apt, apdi, 0) == "Rate" && apeng.DeviceParamName(apt, apdi, 5) == "Mix"
+          && apeng.DeviceParamName(apt, apdi, 6) == "Sync" && apeng.DeviceParamName(apt, apdi, 7) == "Division",
+          "original params keep their places; Sync and Division are appended");
+    Check(apeng.DeviceParamDefault(apt, apdi, 6) < 0.5f && Math.Abs(apeng.DeviceParamDefault(apt, apdi, 7) - 10f / 15f) < 1e-3f,
+          "Sync defaults to Free (older projects open unchanged), Division to 1/8");
     apeng.DeviceSetParam(apt, apdi, 0, 0.7f);   // Rate
     Check(Math.Abs(apeng.DeviceGetParam(apt, apdi, 0) - 0.7f) < 1e-3f, "device param set/get round-trips");
+
+    var apbuf = new float[2048 * 2];
+    var apsc = new float[32];
+    bool ApFinite() { foreach (var s in apbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) return false; return true; }
+    void ApRender(int frames = 2048) { apeng.Seek(0); apeng.Play(); apeng.RenderOffline(apbuf, frames); apeng.StopTransport(); }
+    int ApScope() => apeng.DeviceScope(apt, apdi, apsc, apsc.Length);
 
     // Each waveform renders audible + finite.
     apeng.DeviceSetParam(apt, apdi, 1, 0.8f);   // Amount
     apeng.SetBpm(120);
-    var apbuf = new float[2048 * 2];
     for (int wv = 0; wv < 5; wv++)
     {
         apeng.DeviceSetParam(apt, apdi, 2, wv / 4f);
-        apeng.Seek(0); apeng.Play();
-        apeng.RenderOffline(apbuf, 2048);
-        apeng.StopTransport();
-        float rms = Rms(apbuf, 2048); bool finite = true;
-        foreach (var s in apbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { finite = false; break; }
-        Check(rms > 1e-4f && finite, $"Auto Pan waveform {wv} is audible + stable (rms {rms:0.000})");
+        ApRender();
+        float rms = Rms(apbuf, 2048);
+        Check(rms > 1e-4f && ApFinite(), $"Orbit waveform {wv} is audible + stable (rms {rms:0.000})");
     }
 
-    // Phase 180° drives the stereo position off-centre (auto-pan); Phase 0° keeps it
-    // centred (tremolo) — the published pan position distinguishes the two.
+    // Phase 180° drives the stereo position off-centre (auto-pan); Phase 0° keeps it centred
+    // (tremolo) — the published pan position distinguishes the two.
     apeng.DeviceSetParam(apt, apdi, 2, 0f);     // sine (continuous)
     apeng.DeviceSetParam(apt, apdi, 1, 1.0f);   // Amount full
     apeng.DeviceSetParam(apt, apdi, 4, 0.5f);   // Phase 180° → pan
-    apeng.Seek(0); apeng.Play(); apeng.RenderOffline(apbuf, 2048); apeng.StopTransport();
+    ApRender();
     float panPos = apeng.DeviceGainReduction(apt, apdi);
-    Check(Math.Abs(panPos - 0.5f) > 0.05f, $"Auto Pan (Phase 180°) pushes the balance off-centre ({panPos:0.00})");
+    Check(Math.Abs(panPos - 0.5f) > 0.05f, $"Orbit (Phase 180°) pushes the balance off-centre ({panPos:0.00})");
+    int apn = ApScope();
+    Check(apn == 32 && apsc[16] < -0.5f && apsc[17] > 0.5f, $"Orbit publishes the pan swing over the window ({apsc[16]:0.00} … {apsc[17]:0.00})");
     apeng.DeviceSetParam(apt, apdi, 4, 0f);     // Phase 0° → tremolo
-    apeng.Seek(0); apeng.Play(); apeng.RenderOffline(apbuf, 2048); apeng.StopTransport();
+    ApRender();
     float tremPos = apeng.DeviceGainReduction(apt, apdi);
-    Check(Math.Abs(tremPos - 0.5f) < 1e-3f, $"Auto Pan (Phase 0°) stays centred = tremolo ({tremPos:0.00})");
+    Check(Math.Abs(tremPos - 0.5f) < 1e-3f, $"Orbit (Phase 0°) stays centred = tremolo ({tremPos:0.00})");
+    ApScope();
+    Check(Math.Abs(apsc[3] - apsc[4]) < 1e-4f && Math.Abs(apsc[5]) < 1e-3f, "tremolo: both gains equal, pan 0");
+    Check(Math.Abs(apsc[22]) < 1e-4f, $"floor = 1 − Amount·Mix ({apsc[22]:0.000})");
 
+    // Sync: the rate follows the tempo and the LFO locks to the song position.
+    apeng.DeviceSetParam(apt, apdi, 4, 0.5f);
+    apeng.DeviceSetParam(apt, apdi, 6, 1f);            // Sync
+    apeng.DeviceSetParam(apt, apdi, 7, 7f / 15f);      // 1/4 → 2 Hz at 120 BPM
+    ApRender();
+    ApScope();
+    Check(Math.Abs(apsc[7] - 2f) < 1e-3f, $"Sync 1/4 at 120 BPM runs at 2 Hz ({apsc[7]:0.000})");
+    Check(apsc[10] > 0.5f && Math.Abs(apsc[18] - 1f) < 1e-4f, "the synced LFO locks to the song position");
+    {
+        double sr = apsc[11], beats = (2048 - 1) / (sr * 0.5);          // the last sample's beat
+        double want = beats % 2.0;                                        // 1 beat per cycle, window of 2
+        Check(Math.Abs(apsc[6] - want) < 0.01, $"locked window phase follows the beat ({apsc[6]:0.000} vs {want:0.000})");
+    }
+    apeng.DeviceSetParam(apt, apdi, 7, 1f);            // 1/32 → 16 Hz
+    ApRender();
+    ApScope();
+    Check(Math.Abs(apsc[7] - 16f) < 1e-2f, $"Sync 1/32 at 120 BPM runs at 16 Hz ({apsc[7]:0.00})");
+    Check(apeng.DeviceText(apt, apdi, 0).Contains("sync 1/32"), $"status names the division ('{apeng.DeviceText(apt, apdi, 0)}')");
+    apeng.SetBpm(90);
+    ApRender();
+    ApScope();
+    Check(Math.Abs(apsc[7] - 12f) < 1e-2f, $"the synced rate follows a tempo change (90 BPM → {apsc[7]:0.00} Hz)");
+    apeng.SetBpm(120);
+
+    // Free run: the LFO restarts on device_action 0.
+    apeng.DeviceSetParam(apt, apdi, 6, 0f);
+    apeng.DeviceSetParam(apt, apdi, 0, 0.9f);   // ~17 Hz
+    ApRender(); ApScope();
+    Check(apsc[10] < 0.5f && apsc[23] >= 1f, $"free run: not locked, cycles run ({apsc[23]:0})");
+    apeng.DeviceAction(apt, apdi, 0, 0, 0f);
+    ApRender(64);
+    ApScope();
+    Check(apsc[23] < 1f && apsc[6] < 0.1f, $"device_action 0 restarts the LFO (cycle {apsc[23]:0}, phase {apsc[6]:0.000})");
+
+    // S&H: deterministic steps in −1..1; Glide (Shape) smooths the gain between them.
+    apeng.DeviceSetParam(apt, apdi, 2, 1f);
+    apeng.DeviceSetParam(apt, apdi, 0, 0.83f);  // ~10 Hz
+    float ShJump(float glide)
+    {
+        apeng.DeviceSetParam(apt, apdi, 3, glide);
+        apeng.Seek(0); apeng.Play();
+        float worst = 0, prev = -1;
+        for (int b = 0; b < 64; b++)
+        {
+            apeng.RenderOffline(apbuf, 256);
+            ApScope();
+            if (prev >= 0) worst = Math.Max(worst, Math.Abs(apsc[3] - prev));
+            prev = apsc[3];
+        }
+        apeng.StopTransport();
+        return worst;
+    }
+    ApScope();
+    bool shOk = true; for (int k = 12; k < 16; k++) shOk &= apsc[k] >= -1f && apsc[k] <= 1f;
+    Check(shOk && apsc[12] != apsc[13], "S&H publishes its four window steps in −1..1");
+    float hard = ShJump(0f), glide = ShJump(1f);
+    Check(glide < hard * 0.6f, $"S&H Glide smooths the steps (largest jump per 256 smp {hard:0.000} → {glide:0.000})");
+    apeng.DeviceSetParam(apt, apdi, 3, 0f);
+
+    // Texts and the MCP reading.
+    Check(apeng.DeviceText(apt, apdi, 1).Contains("LFO") && apeng.DeviceText(apt, apdi, 2).Contains("1/16T"),
+          "device text 1 = live reading, 2 = parameter guide with the division table");
+    {
+        apeng.DeviceSetParam(apt, apdi, 2, 0f);
+        apeng.DeviceSetParam(apt, apdi, 6, 1f);
+        apeng.DeviceSetParam(apt, apdi, 7, 7f / 15f);
+        ApRender();
+        var aptools = new Nota.Mcp.Tools.DeviceTools(apeng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        var ar = aptools.ReadOrbit(apt, apdi).Result;
+        Check(ar.Mode == "auto-pan" && ar.Sync && ar.Division == "1/4" && Math.Abs(ar.RateHz - 2) < 1e-2 && ar.Waveform == "Sine"
+              && ar.Locked && ar.Summary.Length > 0 && ar.Live.Length > 0,
+              $"MCP read_orbit reports the settings and the live state ({ar.Mode}, {ar.Division}, {ar.RateHz} Hz, pan {ar.Pan})");
+    }
+
+    // Clone keeps the appended params.
     int apcopy = apeng.DuplicateTrack(apt);
-    Check(apcopy > 0 && Math.Abs(apeng.DeviceGetParam(apcopy, apdi, 0) - 0.7f) < 1e-3f, "duplicate track clones Auto Pan params");
+    Check(apcopy > 0 && Math.Abs(apeng.DeviceGetParam(apcopy, apdi, 7) - 7f / 15f) < 1e-3f && apeng.DeviceGetParam(apcopy, apdi, 6) > 0.5f,
+          "duplicate track clones Orbit params incl. Sync / Division");
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>();
+        for (int k = 0; k < appc; k++) names.Add(apeng.DeviceParamName(apt, apdi, k));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 9).ToList();
+        Check(mine.Count >= 25, $"Nota Orbit ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Orbit preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(apeng, p.Id, apt, apdi).Length != 0) { pf++; continue; }
+            ApRender();
+            if (!ApFinite() || Rms(apbuf, 2048) < 1e-4f) pf++;
+        }
+        Check(pf == 0, $"every Orbit preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(apeng, "autopan/Chop Trem", apt, apdi);
+        Check(apeng.DeviceGetParam(apt, apdi, 6) > 0.5f && OrbitDiv(apeng.DeviceGetParam(apt, apdi, 7)) == 13, "Chop Trem preset: synced 1/16");
+        cat.ApplyInPlace(apeng, "autopan/Classic Pan", apt, apdi);
+        Check(apeng.DeviceGetParam(apt, apdi, 6) < 0.5f, "unnamed params (Sync) reset to defaults between presets");
+        static int OrbitDiv(float v) => Math.Clamp((int)Math.Round(v * 15), 0, 15);
+    }
 }
 
 // ===================== Nota Auto Shift (effect kind 10) ===================

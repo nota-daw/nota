@@ -55,6 +55,74 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Forge is redrawn, and every stage gets its own shape.** The card follows the new
+  mockup on the 700 × 260 frame, in the language of EQ-8:
+  - **Stages.** On the left the routing (Serial / Parallel / M/S / Multi) sits over the three
+    stages. Each stage shows its on dot, its type and the role it plays: in **M/S** stage 1
+    drives the Mid, stage 2 the Side and stage 3 the recombined signal; in **Multi** stage 1
+    takes the lows (below 180 Hz), stage 2 the mids and stage 3 the highs (above 2.4 kHz).
+    Drag a stage's output dB up or down to trim it. Drive and a teal Feedback sit under it.
+    Click a stage to select it.
+  - **Shape per stage.** The selected stage gets its type (Tube, Tape, Diode, Fuzz, Fold,
+    Digital) and three knobs: **Bias** (asymmetry, ±100 %), **Tone** (a ±12 dB tilt after the
+    stage) and **Width** (the stage's stereo image, 0 … 200 %). Before, Bias, Tone and Width
+    were shared by all stages.
+  - **Transfer and harmonics.** Amount, Wet and Out sit over the transfer curve. In M/S and
+    Multi the curve shows the selected stage. Every stage also shows faintly on its own, the
+    LFO-modulated curve is dashed teal, and a dot marks where the input sits now. Drag the
+    curve for Amount. Under it, harmonics 2 … 9 of a −6 dB sine show odd partials in brass,
+    even ones in ink, and the THD with its character (odd-heavy, even-heavy, mixed). The
+    curves and harmonics come from the engine's own shapers, so they match what you hear.
+  - **Modulation and quality.** LFO → Drive, Env → Tone and Rate, with a Sync switch. Sync
+    offers eight divisions from 2 bars to 1/64. Oversampling Off / 2× / 4× / 8×. A status strip
+    warns when Digital or Fold runs without oversampling. It also shows the sample rate,
+    oversampling, latency and CPU.
+  - **Compatibility.** The per-stage Bias / Tone / Width are appended and default to neutral.
+    The old shared Bias, Tone and Width stay as master offsets, so projects, racks and presets
+    saved before this sound the same. When a master offset is set, the status strip says so.
+    Mid/Side and Multiband now follow the stage roles above (Multiband crossovers moved from
+    200 Hz / 2 kHz to 180 Hz / 2.4 kHz), so older projects that use these two routings sound
+    somewhat different.
+  - **32 factory presets**, up from six: warmth, drive, destruction, parallel, mid/side,
+    multiband and moving presets (Drum Glue, Warm Master, Wide Air, Low-End Only, Breathing
+    Drive …). The six earlier presets keep their names.
+  - **Automation** lists the stage params under Stage 1 / 2 / 3 and the LFO in its own group.
+  - **MCP: `read_forge`, `set_forge`, `set_forge_stage`.** `read_forge` reports the routing,
+    each stage with its role, THD and harmonics, the curve, the modulation, the meters and
+    the aliasing warning. `set_forge` and `set_forge_stage` edit Forge in dB, % and names.
+    `get_device_text` gives a summary, a live reading and a parameter guide, and
+    `device_action` 0 restarts the LFO and resets the meters.
+- **Nota Orbit is redrawn, and its LFO can follow the tempo.** The card follows the new mockup on
+  the 700 × 260 frame, laid out like Level and EQ-8:
+  - **LFO.** Pick the waveform and switch between **Hz** and **Sync**. The rate shows as a large
+    readout with its period in ms. Rate and Shape sit under it.
+  - **Sync.** The rate becomes a note value from 4/1 to 1/32, with dotted and triplet values.
+    While the transport plays, the LFO locks to the song position and restarts on the bar (a
+    2/1 or 4/1 cycle restarts every 2 or 4 bars). When the transport stops, it keeps running
+    at the synced rate.
+  - **Glide on S&H.** On S&H, Shape becomes **Glide**, a slide from one random step to the
+    next. The right channel now plays the same steps as the left, one Phase later. At 0° the
+    steps move both channels together, as a random tremolo; at 180° they pan.
+  - **Gain graph.** Both channels' gain over two cycles (L brass, R teal), with the floor the
+    depth reaches in dB and a running head with the gain dots. Drag up / down for Amount and
+    left / right for Phase. Double-click resets both. Under the graph, a line shows where the
+    sound sits between left and right, and the swing it covers.
+  - **Motion.** Amount, Phase and Mix; **0° / 90° / 180°** buttons for the phase; the mode the
+    phase makes (tremolo, auto-pan or offset pan); and OUT L / OUT R meters with each
+    channel's gain. A status strip explains what you hear and shows the sample rate, tempo and
+    whether the LFO is free or synced.
+  - The channel gains now glide over about 1 ms, so Square and a jump in the transport no
+    longer click.
+  - **Compatibility.** Sync and Division are appended and default to Hz, so projects, racks
+    and presets saved before this open unchanged.
+  - **31 factory presets**, up from six: free and synced pans, tremolos (Chop Trem, Vintage Amp
+    Trem, Sidechain Pump, Helicopter), random steps and glides, and subtle motion. The six
+    earlier presets keep their names.
+  - **MCP: `read_orbit`.** It reports the settings, the rate and period, the mode, each
+    channel's gain now, the pan and its swing, whether the LFO is locked to the song, the
+    tempo and the levels. `get_device_text` gives a summary, a live reading and a parameter
+    guide with the Division table. `device_action` 0 restarts the LFO and 1 resets the
+    meters. Every parameter automates, MIDI-learns and saves in a preset.
 - **Nota EQ-8 is redrawn with slopes, mid/side and global controls.** The card follows the new
   mockup on the 700 × 260 frame, laid out like Dynamic EQ-8:
   - **Band chips and graph.** A row of eight chips (number, type, channel, frequency) sits over

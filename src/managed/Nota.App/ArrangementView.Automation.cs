@@ -395,10 +395,11 @@ public sealed partial class ArrangementView
                     // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter"), Nota Auto Shift its
                     // scale notes, detector and MIDI target ("Note C#", "Det Low", "MIDI Glide" …) and Nota
                     // Beat Repeat its repeat filter ("Filter Freq", "Filter Type", "Filter Narrow" …), and
-                    // Nota EQ-8 and Nota Dynamic EQ-8 their eight bands ("3 Freq", "3 Slope" … under "Band 3"):
+                    // Nota EQ-8 and Nota Dynamic EQ-8 their eight bands ("3 Freq", "3 Slope" … under "Band 3"),
+                    // Nota Forge its three stages ("S2 Drive", "S2 Tone" … under "Stage 2") and its LFO:
                     // a word shared by two or more params becomes a submenu.
                     int bkind = e.TrackDeviceBuiltinKind(t.Id, d);
-                    bool grouped = bkind is 0 or 1 or 4 or 6 or 7 or 8 or 10 or 11 or 13 or 19 or 20 or 21 or 22;
+                    bool grouped = bkind is 0 or 1 or 4 or 6 or 7 or 8 or 10 or 11 or 13 or 17 or 19 or 20 or 21 or 22;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }
@@ -413,7 +414,12 @@ public sealed partial class ArrangementView
                         if (!sub) { devMenu.Items.Add(leaf); continue; }
                         if (!groups.TryGetValue(head, out var g))
                         {
-                            g = new MenuItem { Header = bkind is 0 or 13 && int.TryParse(head, out _) ? "Band " + head : head };
+                            g = new MenuItem
+                            {
+                                Header = bkind is 0 or 13 && int.TryParse(head, out _) ? "Band " + head
+                                    : bkind == 17 && head.Length == 2 && head[0] == 'S' && char.IsDigit(head[1]) ? "Stage " + head[1]
+                                    : head,
+                            };
                             groups[head] = g; devMenu.Items.Add(g);
                         }
                         g.Items.Add(leaf);
