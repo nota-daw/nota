@@ -1470,14 +1470,61 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("autopan", 9, "Random Space",  ("Rate", 0.62f), ("Amount", 0.75f), ("Waveform", 1f),    ("Shape", 0f),    ("Phase", 0.5f), ("Mix", 0.85f));
         Fx("autopan", 9, "Hard Square",   ("Rate", 0.66f), ("Amount", 0.85f), ("Waveform", 0f),    ("Shape", 0.9f),  ("Phase", 0.5f), ("Mix", 1f));
 
-        // ---- Nota Auto Shift (kind 10) — all params normalized 0..1. Key 0 C..1 B;
-        //      Scale 0 Chromatic/.25 Major/.5 Minor/.75 Pent Maj/1 Pent Min; Shift 0.5 = 0 st.
-        Fx("autoshift", 10, "Hard Tune",      ("Key", 0f),     ("Scale", 0.25f), ("Amount", 1.0f), ("Speed", 0.0f),  ("Shift", 0.5f), ("Mix", 1f));
-        Fx("autoshift", 10, "Natural Vocal",  ("Key", 0f),     ("Scale", 0.25f), ("Amount", 0.7f), ("Speed", 0.45f), ("Shift", 0.5f), ("Mix", 1f));
-        Fx("autoshift", 10, "Minor Key",      ("Key", 0.818f), ("Scale", 0.5f),  ("Amount", 0.9f), ("Speed", 0.2f),  ("Shift", 0.5f), ("Mix", 1f));
-        Fx("autoshift", 10, "Chromatic Fix",  ("Key", 0f),     ("Scale", 0f),    ("Amount", 0.8f), ("Speed", 0.25f), ("Shift", 0.5f), ("Mix", 1f));
-        Fx("autoshift", 10, "Octave Up",      ("Key", 0f),     ("Scale", 0.25f), ("Amount", 0.6f), ("Speed", 0.3f),  ("Shift", 1.0f), ("Mix", 0.5f));
-        Fx("autoshift", 10, "Pentatonic Pop", ("Key", 0.583f), ("Scale", 0.75f), ("Amount", 1.0f), ("Speed", 0.1f),  ("Shift", 0.5f), ("Mix", 1f));
+        // ---- Nota Auto Shift (kind 10) — pitch correction, all params normalized 0..1 (unnamed ones
+        //      reset to their defaults). Key round(11v) (0 C, .182 D, .364 E, .455 F, .636 G, .818 A);
+        //      Scale 0 Chromatic/.25 Major/.5 Minor/.75 Penta Maj/1 Penta Min; Custom Scale 1 = the
+        //      Note C..B toggles are the scale; Speed 2*150^v ms (0 = 2, .1 = 3.3, .2 = 5.4, .3 = 9,
+        //      .4 = 15, .5 = 25, .6 = 40, .7 = 67); Range 1 + 11v st (.182 = ±3, .364 = ±5, 1 = ±12);
+        //      Shift (v−.5)·24 st (.208 = −7, .333 = −4, .667 = +4, .792 = +7, 0/1 = ∓12); Fine (v−.5)·200 ¢;
+        //      Formant 1 = formants preserved (0 = they move with the pitch); Formant Shift (v−.5)·200 %
+        //      (±100 % = one octave); Det Low / High MIDI 24 + 72v (.167 C2, .222 E2, .292 A2, .333 C3,
+        //      .389 E3, .458 A3, .556 E4, .625 A4, .722 E5, .833 C6, .889 E6, 1 C7); Key Source 0 Auto /
+        //      .5 Manual / 1 MIDI (route the MIDI track as the sidechain source); MIDI Mode 0 Note / 1 Scale;
+        //      MIDI Glide 5*160^v ms (.273 = 20, .49 = 60, .626 = 120); MIDI Bend Range 6v st.
+        Fx("autoshift", 10, "Init",               ("Key", 0f));
+        // Correction
+        Fx("autoshift", 10, "Hard Tune",          ("Scale", 0.25f), ("Amount", 1f), ("Speed", 0f), ("Formant", 1f));
+        Fx("autoshift", 10, "Robot Voice",        ("Scale", 0f), ("Amount", 1f), ("Speed", 0f), ("Range", 1f), ("Formant", 1f));
+        Fx("autoshift", 10, "Natural Vocal",      ("Scale", 0.25f), ("Amount", 0.7f), ("Speed", 0.5f), ("Human", 0.5f), ("Formant", 1f));
+        Fx("autoshift", 10, "Transparent Touch",  ("Scale", 0.25f), ("Amount", 0.5f), ("Speed", 0.7f), ("Human", 0.8f), ("Range", 0.182f), ("Formant", 1f));
+        Fx("autoshift", 10, "Pop Lead",           ("Scale", 0.25f), ("Amount", 0.9f), ("Speed", 0.3f), ("Human", 0.25f), ("Formant", 1f), ("Skip Sibilants", 1f));
+        Fx("autoshift", 10, "R&B Runs",           ("Key", 0.818f), ("Scale", 0.5f), ("Amount", 0.85f), ("Speed", 0.2f), ("Human", 0.35f), ("Range", 0.182f), ("Formant", 1f));
+        Fx("autoshift", 10, "Ballad",             ("Scale", 0.25f), ("Amount", 0.7f), ("Speed", 0.6f), ("Human", 0.7f), ("Formant", 1f));
+        Fx("autoshift", 10, "Rap Hook",           ("Key", 0.818f), ("Scale", 0.5f), ("Amount", 1f), ("Speed", 0.1f), ("Human", 0.1f), ("Formant", 1f), ("Skip Sibilants", 1f));
+        Fx("autoshift", 10, "Choir Tighten",      ("Scale", 0.25f), ("Amount", 0.6f), ("Speed", 0.55f), ("Human", 0.6f), ("Formant", 1f), ("Det Low", 0.333f));
+        Fx("autoshift", 10, "Auto Key",           ("Key Source", 0f), ("Scale", 0.25f), ("Amount", 0.9f), ("Speed", 0.25f), ("Human", 0.3f), ("Formant", 1f));
+        // Scales
+        Fx("autoshift", 10, "Chromatic Fix",      ("Scale", 0f), ("Amount", 0.8f), ("Speed", 0.25f));
+        Fx("autoshift", 10, "Minor Key",          ("Key", 0.818f), ("Scale", 0.5f), ("Amount", 0.9f), ("Speed", 0.2f));
+        Fx("autoshift", 10, "Pentatonic Pop",     ("Key", 0.583f), ("Scale", 0.75f), ("Amount", 1f), ("Speed", 0.1f));
+        Fx("autoshift", 10, "Blues in A",         ("Key", 0.818f), ("Custom Scale", 1f), ("Note C", 1f), ("Note C#", 0f), ("Note D", 1f), ("Note D#", 1f),
+            ("Note E", 1f), ("Note F", 0f), ("Note F#", 0f), ("Note G", 1f), ("Note G#", 0f), ("Note A", 1f), ("Note A#", 0f), ("Note B", 0f),
+            ("Amount", 0.85f), ("Speed", 0.3f), ("Human", 0.4f), ("Formant", 1f));
+        Fx("autoshift", 10, "Dorian Groove",      ("Key", 0.182f), ("Custom Scale", 1f), ("Note C", 1f), ("Note C#", 0f), ("Note D", 1f), ("Note D#", 0f),
+            ("Note E", 1f), ("Note F", 1f), ("Note F#", 0f), ("Note G", 1f), ("Note G#", 0f), ("Note A", 1f), ("Note A#", 0f), ("Note B", 1f),
+            ("Amount", 0.9f), ("Speed", 0.2f), ("Formant", 1f));
+        // Voice types (detection range)
+        Fx("autoshift", 10, "Soprano",            ("Scale", 0.25f), ("Amount", 0.8f), ("Speed", 0.35f), ("Human", 0.4f), ("Formant", 1f), ("Det Low", 0.458f), ("Det High", 0.889f));
+        Fx("autoshift", 10, "Alto",               ("Scale", 0.25f), ("Amount", 0.8f), ("Speed", 0.35f), ("Human", 0.4f), ("Formant", 1f), ("Det Low", 0.389f), ("Det High", 0.833f));
+        Fx("autoshift", 10, "Tenor",              ("Scale", 0.25f), ("Amount", 0.8f), ("Speed", 0.35f), ("Human", 0.4f), ("Formant", 1f), ("Det Low", 0.292f), ("Det High", 0.722f));
+        Fx("autoshift", 10, "Bass Voice",         ("Scale", 0.25f), ("Amount", 0.8f), ("Speed", 0.4f), ("Human", 0.4f), ("Formant", 1f), ("Det Low", 0.167f), ("Det High", 0.556f));
+        Fx("autoshift", 10, "Lead Instrument",    ("Scale", 0f), ("Amount", 0.8f), ("Speed", 0.3f), ("Formant", 1f), ("Det Low", 0.056f), ("Det High", 1f), ("Det Sens", 0.6f));
+        // Creative
+        Fx("autoshift", 10, "Octave Up",          ("Scale", 0.25f), ("Amount", 0.6f), ("Speed", 0.3f), ("Shift", 1f), ("Mix", 0.5f));
+        Fx("autoshift", 10, "Octave Down",        ("Amount", 0f), ("Shift", 0f), ("Formant", 1f));
+        Fx("autoshift", 10, "Chipmunk",           ("Amount", 0f), ("Shift", 0.792f));
+        Fx("autoshift", 10, "Monster",            ("Amount", 0f), ("Shift", 0.208f), ("Formant Shift", 0.3f));
+        Fx("autoshift", 10, "Gender Up",          ("Amount", 0f), ("Shift", 0.667f), ("Formant", 1f), ("Formant Shift", 0.64f));
+        Fx("autoshift", 10, "Gender Down",        ("Amount", 0f), ("Shift", 0.333f), ("Formant", 1f), ("Formant Shift", 0.36f));
+        Fx("autoshift", 10, "Formant Up",         ("Amount", 0f), ("Formant", 1f), ("Formant Shift", 0.7f));
+        Fx("autoshift", 10, "Detune Double",      ("Amount", 0f), ("Fine", 0.45f), ("Formant", 1f), ("Mix", 0.5f));
+        Fx("autoshift", 10, "Fifth Harmony",      ("Scale", 0.25f), ("Amount", 0.8f), ("Speed", 0.3f), ("Shift", 0.792f), ("Formant", 1f), ("Mix", 0.5f));
+        // MIDI target — pick the guide track in the MIDI tab (FROM)
+        Fx("autoshift", 10, "Harmony Lock",       ("Key Source", 1f), ("MIDI Mode", 0f), ("MIDI Latch", 1f), ("Amount", 0.85f), ("Speed", 0.2f), ("MIDI Glide", 0.49f),
+            ("MIDI Bend", 1f), ("MIDI Bend Range", 0.333f), ("Formant", 1f), ("Formant Shift", 0.62f));
+        Fx("autoshift", 10, "MIDI Hard Tune",     ("Key Source", 1f), ("Amount", 1f), ("Speed", 0f), ("MIDI Bend", 0f), ("Formant", 1f));
+        Fx("autoshift", 10, "MIDI Scale Follow",  ("Key Source", 1f), ("MIDI Mode", 1f), ("MIDI Latch", 1f), ("Amount", 0.9f), ("Speed", 0.25f), ("Human", 0.3f), ("Formant", 1f));
+        Fx("autoshift", 10, "MIDI Melody Replace",("Key Source", 1f), ("MIDI Oct Lock", 1f), ("Range", 1f), ("Amount", 1f), ("Speed", 0.1f), ("MIDI Glide", 0.273f), ("Formant", 1f));
 
         // ---- Nota Beat Repeat (kind 11) — all params normalized 0..1. Interval 0 1/8..1 4 Bar
         //      (.6=1 Bar); Grid 0 1/4..1 1/16T (.4=1/16); Mode 0 Mix/.5 Insert/1 Gate.

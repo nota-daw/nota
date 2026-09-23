@@ -55,6 +55,43 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Auto Shift is a full vocal tuner: it keeps the voice's character, learns the key and
+  can follow a MIDI part.** The card moves onto the 700 × 260 frame of Shutter, Utility and
+  Valve — a PITCH column (where the voice sits and the correction now), a centre panel with
+  **Trace**, **Scale** and **MIDI** tabs, a **Shift** / **Detect** panel and a status strip:
+  - **Trace** — the sung pitch and the corrected one over the last two seconds on the
+    scale's note lanes, the target lit; key, scale, Auto / Manual / MIDI and Learn above it;
+    Amount, Speed, Range and the new **Human**, which keeps vibrato and drift around the
+    corrected note instead of flattening them.
+  - **Scale** — how long each note was sung (the last ~16 bars) under the scale's notes, and
+    twelve note buttons: click one to add or take it out, which makes a **Custom** scale. The
+    scale list adds Harmonic and Melodic Minor, Dorian, Phrygian, Lydian, Mixolydian, Blues and
+    Whole Tone. **Learn** listens, then sets the key and scale that fit what was sung; **Auto**
+    follows it as you go (both match Krumhansl key profiles, with the runner-up shown).
+  - **MIDI** — pick an instrument track and the voice is pulled to its notes: the last held
+    note or the held notes as a scale, Latch between notes, Oct lock, and **Pitch bend from
+    MIDI** with Glide and Bend (steps within the bend range glide, wider leaps jump). The
+    guide track can stay muted.
+  - **Shift** — Shift, the new **Fine** (±100 ¢), the new **Formant** shift and Mix, the note
+    being sung with its frequency and clarity, **Preserve formants**. **Detect** — a voice-type
+    source list, the detection range (Low / High), Sensitivity, the Learn result and **Skip
+    sibilants** (s, sh and breaths pass unshifted instead of turning metallic).
+  - The shifter is new: pitch-synchronous grains taken a whole period apart, so with Preserve
+    formants the vowel stays where it was while the pitch moves (a +12 st shift no longer
+    sounds like a chipmunk), Formant moves the vowel on its own, the shifted voice keeps its
+    level, and with nothing to correct the sound passes through unchanged. The pitch tracker runs on an FFT and only looks inside
+    the detection range, so low voices are found and CPU stays low.
+  - **34 factory presets**, up from six — correction styles (hard tune, robot, natural, pop,
+    R&B, ballad, rap, choir, auto key), scales (blues, dorian, pentatonic …), voice types,
+    creative shifts (octaves, chipmunk, monster, gender up / down, doubler, fifth harmony) and
+    MIDI targets (harmony lock, melody replace). The 26 new parameters are appended and default
+    to the old behaviour, so older projects open unchanged; every one of them automates (the
+    scale notes, the detector and the MIDI target are grouped in the lane menu), MIDI-learns,
+    saves in a preset and is reachable over MCP. `get_device_text` returns the status line,
+    the live reading and a guide to the parameter values, `device_action` 0 resets the
+    analysis and 1 runs Learn, `set_device_sidechain` picks the MIDI source, and the new
+    `read_auto_shift` returns the pitch, target, correction, scale, sung notes, key guesses,
+    the MIDI note and the last two seconds of pitch.
 - **Nota Shutter shows the gate working, and gains a shape, trigger mode and a real key
   switch.** The card moves onto the 700 × 260 frame of Utility, Valve and Vintage — a STATE
   column (the input, or the key when a sidechain drives it, with the threshold tick, and the
@@ -245,6 +282,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Nota Auto Shift's timing, Mix and Follow.** The shifter delayed the voice by about 16 ms
+  without telling the engine, so a tuned vocal sat late against the other tracks; the delay is
+  now reported and compensated. Mix blended that delayed voice with an undelayed dry one, which
+  combed; both are aligned now. Follow scale device wrote the Nota Scale's root into the key as
+  a raw number, so it landed on B for any root but C — it now copies the key and the scale. The Speed
+  readout showed 1–250 ms while the engine used 2–300 ms.
+- **Device commands inside a rack.** A card in a rack chain (Reset on Shutter, Learn on Auto
+  Shift) sent its command to the track's own device at the same position instead; it now does
+  nothing there.
 - **Nota Shutter's detector and Duck.** The detector's follower let go of the key within a
   sample instead of over 3 ms, so the gate leaned on Hold to stay open on low notes; it now
   follows the key as intended, and the level meters decay smoothly. In Duck, Attack now sets

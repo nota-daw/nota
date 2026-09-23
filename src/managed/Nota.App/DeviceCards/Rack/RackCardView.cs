@@ -1674,6 +1674,7 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             // track's top-level device at the same index.
             case nameof(Nota.Application.IAudioEngine.DeviceScope):           return 0;
             case nameof(Nota.Application.IAudioEngine.DeviceLayerWave):       return 0;
+            case nameof(Nota.Application.IAudioEngine.DeviceAction):          return null;   // same: it would command the top-level device
             case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain): return false;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):  return -1;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return 0f;

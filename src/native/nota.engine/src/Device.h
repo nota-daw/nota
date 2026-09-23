@@ -20,6 +20,8 @@
 
 namespace nota {
 
+struct MidiEv;
+
 class Device {
 public:
     virtual ~Device() = default;
@@ -130,6 +132,12 @@ public:
     // built-in Compressor and for hosted plugins that expose a sidechain input
     // bus (Phase C). The UI only offers a source picker when this is true.
     virtual bool acceptsSidechain() const { return false; }
+
+    // MIDI key: a device that follows another track's notes (Nota Auto Shift's MIDI target)
+    // returns true; the engine then hands it the sidechain source track's post-FX note
+    // events for the block (offsets within the block) right before process(). Audio thread.
+    virtual bool wantsMidiKey() const { return false; }
+    virtual void setMidiKey(const MidiEv* /*evs*/, int32_t /*n*/) {}
 
     // Sidechain shaping (Phase D). Stored on the base so they
     // persist/query generically; each dynamics device reads them in process():

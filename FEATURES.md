@@ -373,9 +373,14 @@ and user presets, automation, persistence and cloning.
   response over the spectrum, modulation range) / Envelope (cutoff over time) / LFO (motion
   over two bars) and Mod / Output, with a SHAPE column and a status strip. 30 factory
   presets. MCP: `read_filter_motion`.
-- **Nota Auto Shift** (7) — real-time vocal pitch correction: pitch detection, Key +
-  Scale, Follow scale device, correction amount and speed, Range (guards against octave
-  jumps), Formant, Mix; a PITCH TRACE visualiser.
+- **Nota Auto Shift** (10) — real-time vocal pitch correction: an FFT NSDF pitch tracker
+  with a detection range (voice-type presets), sensitivity and sibilant detection; Key +
+  Scale (5 scales, 8 modes, a Custom 12-note set), Auto key and one-shot Learn (Krumhansl
+  key profiles over the sung-note histogram), Follow scale device, or a MIDI target from
+  another track's notes (Note / Scale, Latch, Oct lock, Glide within a bend range); Amount,
+  Speed, Range, Human (keeps vibrato); a PSOLA shifter with Shift, Fine, Preserve formants
+  and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs, a
+  PITCH column, Shift / Detect panel; 34 factory presets; MCP `read_auto_shift`.
 - **Nota Vintage** (8) — degradation and saturation: 6 era characters
   (Vinyl/Cassette/Reel/VHS/Tube/Analog, with the voicing switchable off), drive, tone with a
   Warm / Flat / Dark model and low / high shelves, wow (free or tempo-synced) and flutter with

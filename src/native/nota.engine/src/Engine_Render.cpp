@@ -395,6 +395,15 @@ void Engine::computeBlockMidi(Graph* g, int32_t frames, double blockStart, doubl
     }
 }
 
+// A device that takes a MIDI key (Nota Auto Shift's MIDI target) gets its source track's
+// post-FX notes for this block, from the pre-pass (blockMidi_). Audio thread.
+void Engine::feedMidiKey(Graph* g, Device& d, int32_t srcTrackId) {
+    if (!g) return;
+    const size_t nt = std::min(g->tracks.size(), blockMidiN_.size());
+    for (size_t j = 0; j < nt; ++j)
+        if (g->tracks[j] && g->tracks[j]->id() == srcTrackId) { d.setMidiKey(blockMidi_[j].data(), blockMidiN_[j]); return; }
+}
+
 // Renders the instrument's dry stereo (pre-fader) into `dst` (zeroed here) from this block's
 // precomputed MIDI: the track's own post-FX output plus the post-FX output of any track routing
 // its MIDI here (so a source's arp/MIDI-FX drive this instrument too). Fader/pan and the device
@@ -948,6 +957,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         const float* sc = s < 0 ? nullptr
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
+                        if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
                     }
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);  // tempo-synced devices
                     d->setTransportInfo(ti);                                          // hosted-plugin sync
@@ -1031,6 +1041,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         const float* sc = s < 0 ? nullptr
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
+                        if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
                     }
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti);
@@ -1097,6 +1108,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         const float* sc = s < 0 ? nullptr
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
+                        if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
                     }
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti);                                          // hosted-plugin sync

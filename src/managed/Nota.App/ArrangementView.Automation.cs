@@ -391,10 +391,11 @@ public sealed partial class ArrangementView
                     // view ("Spectrum", "Scope", "Waterfall", "Cursor"), the Compressor its key
                     // ("SC HP", "SC Gain" …), the Auto Filter its sources ("Env", "LFO", "Mod"), Nota
                     // Vintage its tone and wow ("Tone Low", "Wow Rate" …), Nota Valve its mic ("Mic Distance" …),
-                    // Nota Utility its mono, phase and true-peak params ("Mono Freq", "Invert L", "TP Ceiling" …) and
-                    // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter"):
+                    // Nota Utility its mono, phase and true-peak params ("Mono Freq", "Invert L", "TP Ceiling" …),
+                    // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter") and Nota Auto Shift its
+                    // scale notes, detector and MIDI target ("Note C#", "Det Low", "MIDI Glide" …):
                     // a word shared by two or more params becomes a submenu.
-                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 4 or 6 or 7 or 8 or 19 or 20 or 21 or 22;
+                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 4 or 6 or 7 or 8 or 10 or 19 or 20 or 21 or 22;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }

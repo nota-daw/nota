@@ -7813,6 +7813,11 @@ Console.WriteLine("-- Nota Orbit (effect kind 9) --");
 // ===================== Nota Auto Shift (effect kind 10) ===================
 Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
 {
+    // Params (AutoShift.h): 0 Key, 1 Scale, 2 Amount, 3 Speed, 4 Shift, 5 Mix, 6 Range, 7 Formant,
+    // 8 Key Source, 9 Follow, 10 Human, 11 Fine, 12 Formant Shift, 13 Det Low, 14 Det High,
+    // 15 Det Sens, 16 Skip Sibilants, 17 Custom Scale, 18..29 Note C..B, 30 MIDI Mode, 31 MIDI Latch,
+    // 32 MIDI Oct Lock, 33 MIDI Glide, 34 MIDI Bend Range, 35 MIDI Bend.
+    const int kTele = 32, kHistN = 384, kScopeN = kTele + 12 + 3 * kHistN;
     using var aseng = new NotaEngine();
     int ast = aseng.AddAudioTrack();
     aseng.AddAudioClip(ast, wav, 0.0);   // 1 s sine @ 440 Hz = A4 (MIDI 69)
@@ -7821,8 +7826,15 @@ Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
     Check(aseng.DeviceName(ast, asdi) == "Nota Auto Shift", $"device is Nota Auto Shift (got '{aseng.DeviceName(ast, asdi)}')");
     Check(aseng.TrackDeviceBuiltinKind(ast, asdi) == 10, "device reports builtin kind 10");
     int aspc = aseng.DeviceParamCount(ast, asdi);
-    Check(aspc == 10, $"Nota Auto Shift exposes 10 params ({aspc})");
-    Check(aseng.DeviceParamName(ast, asdi, 6) == "Range" && aseng.DeviceParamName(ast, asdi, 7) == "Formant", "new params: Range + Formant");
+    Check(aspc == 36, $"Nota Auto Shift exposes 36 params ({aspc})");
+    Check(aseng.DeviceParamName(ast, asdi, 6) == "Range" && aseng.DeviceParamName(ast, asdi, 7) == "Formant"
+          && aseng.DeviceParamName(ast, asdi, 9) == "Follow Scale", "original params keep their names and places");
+    Check(aseng.DeviceParamName(ast, asdi, 10) == "Human" && aseng.DeviceParamName(ast, asdi, 12) == "Formant Shift"
+          && aseng.DeviceParamName(ast, asdi, 18) == "Note C" && aseng.DeviceParamName(ast, asdi, 29) == "Note B"
+          && aseng.DeviceParamName(ast, asdi, 35) == "MIDI Bend", "appended params: Human … Note C..B … MIDI Bend");
+    Check(Math.Abs(aseng.DeviceParamDefault(ast, asdi, 7)) < 1e-6f && Math.Abs(aseng.DeviceParamDefault(ast, asdi, 10)) < 1e-6f
+          && Math.Abs(aseng.DeviceParamDefault(ast, asdi, 11) - 0.5f) < 1e-6f && Math.Abs(aseng.DeviceParamDefault(ast, asdi, 17)) < 1e-6f,
+          "new params default to the old behaviour (formants move, human 0, fine 0, no custom scale)");
     aseng.DeviceSetParam(ast, asdi, 2, 0.8f);   // Amount
     aseng.DeviceSetParam(ast, asdi, 6, 0.7f);   // Range
     aseng.DeviceSetParam(ast, asdi, 7, 0.6f);   // Formant
@@ -7835,12 +7847,13 @@ Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
     Check(Rms(asbuf, 8192) > 1e-4f, $"Auto Shift passes audio (rms {Rms(asbuf, 8192):0.000})");
     float detMidi = aseng.DeviceGainReduction(ast, asdi) * 127f;
     Check(Math.Abs(detMidi - 69f) < 1.5f, $"detects the 440 Hz sine as A4 (~69, got {detMidi:0.0})");
-    // Interleaved [detected, corrected] scope: even = detected A4, odd = corrected (in scale).
-    var asscope = new float[1024];
+    var asscope = new float[kScopeN];
     int asn = aseng.DeviceScope(ast, asdi, asscope, asscope.Length);
-    Check(asn >= 2 && (asn % 2) == 0, $"pitch scope returns interleaved pairs ({asn})");
-    bool anyDet = false; for (int s = 0; s < asn; s += 2) if (asscope[s] > 1e-4f) { anyDet = true; break; }
-    Check(anyDet, "scope carries the detected-pitch trace");
+    Check(asn == kScopeN, $"scope returns telemetry + histogram + three histories ({asn})");
+    bool anyDet = false; for (int s = kTele + 12; s < kTele + 12 + kHistN; s++) if (Math.Abs(asscope[s] - 69f) < 1f) { anyDet = true; break; }
+    Check(anyDet, "the detected-pitch history carries A4");
+    Check(asscope[8] > 40000 && asscope[10] > 100 && asscope[10] < 2000, $"telemetry: sample rate {asscope[8]:0} · latency {asscope[10]:0} smp");
+    Check(aseng.TrackLatencySamples(ast) == (int)asscope[10], $"latency reported for PDC ({aseng.TrackLatencySamples(ast)} smp)");
 
     // Manual Shift +12 st (ratio 2) audibly transposes → output differs from no-shift.
     aseng.DeviceSetParam(ast, asdi, 2, 0f);     // Amount 0 (isolate manual shift)
@@ -7856,6 +7869,210 @@ Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
 
     int ascopy = aseng.DuplicateTrack(ast);
     Check(ascopy > 0 && Math.Abs(aseng.DeviceGetParam(ascopy, asdi, 2) - 0f) < 1e-3f, "duplicate track clones Auto Shift params");
+    Check(aseng.DeviceText(ast, asdi, 0).Length > 20 && aseng.DeviceText(ast, asdi, 1).Length > 10 && aseng.DeviceText(ast, asdi, 2).Contains("Det Low"),
+          "device text: status, live reading, parameter guide");
+}
+
+// Nota Auto Shift on a voice-like tone: correction, transparency, formants, custom scale, MIDI target.
+{
+    const int sr = 44100, kScopeV = 32 + 12 + 3 * 384;
+    // Pitch of a mono segment by NSDF (first peak above 90 % of the max), in Hz.
+    static double PitchHz(float[] st, int from, int len, int srate)
+    {
+        var x = new double[len];
+        for (int i = 0; i < len; i++) x[i] = st[(from + i) * 2];
+        int minLag = srate / 1200, maxLag = srate / 60;
+        var n = new double[maxLag + 2];
+        double best = 0;
+        for (int lag = minLag - 1; lag <= maxLag + 1; lag++)
+        {
+            double r = 0, m = 0;
+            for (int i = 0; i + lag < len; i++) { r += x[i] * x[i + lag]; m += x[i] * x[i] + x[i + lag] * x[i + lag]; }
+            n[lag] = m > 1e-12 ? 2 * r / m : 0;
+            if (lag >= minLag && lag <= maxLag) best = Math.Max(best, n[lag]);
+        }
+        for (int lag = minLag; lag <= maxLag; lag++)
+            if (n[lag] > 0.9 * best && n[lag] >= n[lag - 1] && n[lag] >= n[lag + 1])
+            {
+                double den = n[lag - 1] - 2 * n[lag] + n[lag + 1];
+                double lf = lag + (Math.Abs(den) > 1e-12 ? 0.5 * (n[lag - 1] - n[lag + 1]) / den : 0);
+                return srate / lf;
+            }
+        return 0;
+    }
+    // Spectral centroid (Hz) of a Hann-windowed mono segment.
+    static double Centroid(float[] st, int from, int len, int srate)
+    {
+        double num = 0, den = 0;
+        for (int k = 1; k < len / 2; k += 2)
+        {
+            double re = 0, im = 0, w = 2 * Math.PI * k / len;
+            for (int i = 0; i < len; i++)
+            {
+                double v = st[(from + i) * 2] * (0.5 - 0.5 * Math.Cos(2 * Math.PI * i / len));
+                re += v * Math.Cos(w * i); im -= v * Math.Sin(w * i);
+            }
+            double mag = Math.Sqrt(re * re + im * im);
+            num += mag * k * srate / (double)len; den += mag;
+        }
+        return den > 0 ? num / den : 0;
+    }
+    static double Cents(double a, double b) => 1200 * Math.Log2(a / b);
+
+    // A vowel-like source: A3 + 40 cents with harmonics shaped by /a/ formants (700 / 1200 / 2600 Hz).
+    double f0 = 220.0 * Math.Pow(2, 0.4 / 12);
+    static double Formants(double f) => 1.0 / (1 + Math.Pow((f - 700) / 110, 2)) + 0.6 / (1 + Math.Pow((f - 1200) / 130, 2)) + 0.25 / (1 + Math.Pow((f - 2600) / 180, 2)) + 0.02;
+    string vox = Path.Combine(Path.GetTempPath(), "nota_smoke_autoshift_vox.wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(vox, 2.5, sr, i =>
+    {
+        double t = i / (double)sr, s = 0;
+        for (int h = 1; h * f0 < 8000; h++) s += Formants(h * f0) * Math.Sin(2 * Math.PI * h * f0 * t) / Math.Sqrt(h);
+        return (s * 0.25, s * 0.25);
+    });
+    using var ve = new NotaEngine();
+    ve.SetBpm(120);
+    int vt = ve.AddAudioTrack();
+    ve.AddAudioClip(vt, vox, 0.0);
+    int vd = ve.AddBuiltinDevice(vt, 10);
+    void VP(int p, float v) => ve.DeviceSetParam(vt, vd, p, v);
+    float[] Render(int frames) { var b = new float[frames * 2]; ve.Seek(0); ve.Play(); ve.RenderOffline(b, frames); ve.StopTransport(); return b; }
+    const int N = sr * 2, At = sr, Len = 8192;
+    VP(5, 0f);                                        // Mix 0 = the (latency-aligned) dry path
+    double inHz = PitchHz(Render(N), At, Len, sr);
+    Check(Math.Abs(Cents(inHz, f0)) < 5, $"dry path keeps the input pitch ({inHz:0.0} Hz vs {f0:0.0})");
+    VP(5, 1f);
+
+    // C major, Amount 100 %, fastest Speed → A3 (220 Hz).
+    VP(0, 0f); VP(1, 0.25f); VP(2, 1f); VP(3, 0f);
+    var tuned = Render(N);
+    double tunedHz = PitchHz(tuned, At, Len, sr);
+    Check(Math.Abs(Cents(tunedHz, 220.0)) < 8, $"corrects A3 +40 ¢ to A3 ({tunedHz:0.0} Hz, {Cents(tunedHz, 220.0):+0;-0} ¢)");
+    var tsc = new float[kScopeV]; ve.DeviceScope(vt, vd, tsc, tsc.Length);
+    Check(Math.Abs(tsc[1] - 57f) < 0.01f && Math.Abs(tsc[3] + 40f) < 6f, $"telemetry: target A3 (57, got {tsc[1]:0.0}), correction ≈ −40 ¢ (got {tsc[3]:0})");
+    bool finiteV = true; foreach (var s in tuned) if (!float.IsFinite(s) || Math.Abs(s) > 4f) { finiteV = false; break; }
+    Check(finiteV, "corrected output stays finite and bounded");
+
+    // Amount 0 + Shift 0 is transparent: the wet path matches the (equally delayed) dry path.
+    VP(2, 0f);
+    var wet0 = Render(N);
+    VP(5, 0f);
+    var dry0 = Render(N);
+    VP(5, 1f);
+    double err = 0, refE = 0;
+    for (int i = At * 2; i < (At + Len) * 2; i++) { err += (wet0[i] - dry0[i]) * (double)(wet0[i] - dry0[i]); refE += dry0[i] * (double)dry0[i]; }
+    double relErr = Math.Sqrt(err / Math.Max(1e-12, refE));
+    Check(relErr < 0.12, $"no correction, no shift → transparent against the delayed dry (rel. error {relErr:0.000})");
+
+    // +12 st: formants move with the pitch (Formant 0) or stay (Formant 1).
+    double c0 = Centroid(dry0, At, 4096, sr);
+    VP(4, 1f);
+    VP(7, 0f); var upMove = Render(N);
+    VP(7, 1f); var upKeep = Render(N);
+    double upHz = PitchHz(upKeep, At, Len, sr), cMove = Centroid(upMove, At, 4096, sr), cKeep = Centroid(upKeep, At, 4096, sr);
+    Check(Math.Abs(Cents(upHz, 2 * f0)) < 15, $"Shift +12 st with formants preserved doubles the pitch ({upHz:0.0} Hz vs {2 * f0:0.0})");
+    Check(cMove / c0 > 1.45 && cKeep / c0 < 1.3, $"formants: moved ×{cMove / c0:0.00}, preserved ×{cKeep / c0:0.00} (centroid {c0:0} Hz)");
+    static double SegDb(float[] b, int from, int len) { double e = 0; for (int i = from * 2; i < (from + len) * 2; i++) e += b[i] * (double)b[i]; return 10 * Math.Log10(e / (len * 2) + 1e-20); }
+    VP(4, 0f); var downKeep = Render(N); VP(4, 1f);   // −12 st, formants preserved
+    double dDry = SegDb(dry0, At, Len), dTuned = SegDb(tuned, At, Len) - dDry, dKeep = SegDb(upKeep, At, Len) - dDry,
+           dMove = SegDb(upMove, At, Len) - dDry, dDown = SegDb(downKeep, At, Len) - dDry;
+    Check(Math.Abs(dTuned) < 1.5 && Math.Abs(dKeep) < 1.5 && Math.Abs(dMove) < 1.5 && Math.Abs(dDown) < 1.5,
+          $"level holds: tuned {dTuned:0.0} dB, +12 st preserved {dKeep:0.0} / moved {dMove:0.0} dB, −12 st {dDown:0.0} dB");
+    VP(12, 0.75f); var fUp = Render(N);   // Formant Shift +50 % with the pitch unchanged
+    VP(4, 0.5f); var fOnly = Render(N);
+    double cF = Centroid(fOnly, At, 4096, sr), fHz = PitchHz(fOnly, At, Len, sr);
+    Check(cF / c0 > 1.15 && Math.Abs(Cents(fHz, f0)) < 15, $"Formant Shift moves the formants (×{cF / c0:0.00}) and keeps the pitch ({fHz:0.0} Hz)");
+    VP(12, 0.5f); VP(7, 0f);
+
+    // Custom scale: only G# → pulls A3 +40 ¢ down to G#3.
+    VP(2, 1f); VP(17, 1f);
+    for (int n = 0; n < 12; n++) VP(18 + n, n == 8 ? 1f : 0f);
+    var gs = Render(N);
+    double gsHz = PitchHz(gs, At, Len, sr);
+    Check(Math.Abs(Cents(gsHz, 207.652)) < 10, $"custom scale {{G#}} → G#3 ({gsHz:0.0} Hz)");
+    VP(17, 0f);
+
+    // Fine −40 ¢ on top of a hard tune to A lands 40 ¢ flat.
+    VP(11, 0.3f);
+    var fine = Render(N);
+    double fineHz = PitchHz(fine, At, Len, sr);
+    Check(Math.Abs(Cents(fineHz, 220.0) + 40) < 10, $"Fine −40 ¢ ({Cents(fineHz, 220.0):+0;-0} ¢ from A3)");
+    VP(11, 0.5f);
+
+    // MIDI target: an instrument track holding E3 drives the target (Oct Lock, Range 12 st).
+    int mt = ve.AddInstrumentTrack();
+    int mc = ve.AddMidiClip(mt, 0.0, 8.0);
+    ve.SetClipNotes(mt, mc, new[] { new NotaNote(52, 0.0, 7.5, 0.8f) });
+    ve.SetTrackMute(mt, true);
+    ve.SetDeviceSidechainSource(vt, vd, mt);
+    VP(8, 1f); VP(30, 0f); VP(32, 1f); VP(6, 1f);
+    var midiOut = Render(N);
+    double mHz = PitchHz(midiOut, At, Len, sr);
+    var msc = new float[kScopeV]; ve.DeviceScope(vt, vd, msc, msc.Length);
+    Check(Math.Abs(msc[11] - 52f) < 0.01f && msc[14] > 0.5f, $"MIDI source feeds the device (note {msc[11]:0}, live {msc[14]:0})");
+    Check(Math.Abs(Cents(mHz, 164.814)) < 12, $"MIDI target E3 pulls the voice to E3 ({mHz:0.0} Hz)");
+    VP(32, 0f);   // octave nearest the voice → E4 is 7 st up vs E3 5.4 st down → E3 either way; check no crash
+    VP(8, 0.5f); VP(6, 0.3636f);
+
+    // Skip Sibilants: noise with Shift +12 passes unshifted when on.
+    string noise = Path.Combine(Path.GetTempPath(), "nota_smoke_autoshift_noise.wav");
+    var rng = new Random(7);
+    Nota.SmokeTest.WavWriter.WriteStereo(noise, 2.5, sr, i => { double hp = rng.NextDouble() * 2 - 1; return (hp * 0.2, hp * 0.2); });
+    int nt2 = ve.AddAudioTrack();
+    ve.SetTrackMute(vt, true);
+    ve.AddAudioClip(nt2, noise, 0.0);
+    int nd = ve.AddBuiltinDevice(nt2, 10);
+    ve.DeviceSetParam(nt2, nd, 4, 1f);                // +12 st
+    ve.DeviceSetParam(nt2, nd, 5, 0f); var nDry = Render(N);
+    ve.DeviceSetParam(nt2, nd, 5, 1f);
+    ve.DeviceSetParam(nt2, nd, 16, 1f); var nSkip = Render(N);
+    ve.DeviceSetParam(nt2, nd, 16, 0f); var nShift = Render(N);
+    double eSkip = 0, eShift = 0, eRef = 0;
+    for (int i = At * 2; i < (At + Len) * 2; i++)
+    { eSkip += Math.Pow(nSkip[i] - nDry[i], 2); eShift += Math.Pow(nShift[i] - nDry[i], 2); eRef += nDry[i] * (double)nDry[i]; }
+    Check(Math.Sqrt(eSkip / eRef) < 0.2 && Math.Sqrt(eShift / eRef) > 0.5,
+          $"Skip Sibilants passes noise unshifted (rel. err {Math.Sqrt(eSkip / eRef):0.00} vs shifted {Math.Sqrt(eShift / eRef):0.00})");
+
+    // Learn: start, sing, commit → a key and Major/Minor, Key Source Manual.
+    ve.SetTrackMute(vt, false); ve.SetTrackMute(nt2, true);
+    ve.DeviceSetParam(vt, vd, 8, 0f);                 // Auto
+    ve.DeviceAction(vt, vd, 1, 1, 0);
+    Render(N);
+    var lsc = new float[kScopeV]; ve.DeviceScope(vt, vd, lsc, lsc.Length);
+    Check(lsc[15] > 0.5f && lsc[16] >= 0 && lsc[23] > 0.5f, $"Learn runs and ranks keys (best {lsc[16]:0}, {lsc[23]:0.0} s analysed)");
+    ve.DeviceAction(vt, vd, 1, 0, 0);
+    Render(1024);
+    float sAfter = ve.DeviceGetParam(vt, vd, 1), srcAfter = ve.DeviceGetParam(vt, vd, 8);
+    Check((Math.Abs(sAfter - 0.25f) < 1e-3f || Math.Abs(sAfter - 0.5f) < 1e-3f) && Math.Abs(srcAfter - 0.5f) < 1e-3f,
+          $"Learn commits a Major/Minor key and switches to Manual (scale {sAfter:0.00}, source {srcAfter:0.00})");
+    int keyAfter = (int)Math.Round(ve.DeviceGetParam(vt, vd, 0) * 11);
+    Check(new[] { 9, 2, 4, 5, 0 }.Contains(keyAfter), $"learned key holds the sung A ({keyAfter})");
+
+    // MCP: the corrector's reading.
+    var vtools = new Nota.Mcp.Tools.DeviceTools(ve, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    ve.DeviceSetParam(vt, vd, 2, 1f);
+    Render(N);
+    var rd = vtools.ReadAutoShift(vt, vd).Result;
+    Check(rd.Voiced && rd.DetectedNote == "A3" && Math.Abs(rd.DetectedCents - 40) < 6 && rd.TargetNote == "A3" && rd.ScaleNotes.Length == 7
+          && rd.History.Length == 16 && rd.SampleRate > 1000 && rd.LatencySamples > 0 && rd.Best is not null && rd.SungPitchClasses[9] > 0.99,
+          $"MCP read_auto_shift reports pitch, target, scale, key guess and history ({rd.DetectedNote} {rd.DetectedCents:+0} ¢ → {rd.TargetNote}, {rd.Scale}, best {rd.Best?.Key} {rd.Best?.Scale})");
+
+    // Every factory preset names only real params and renders finite.
+    var cat = new FactoryPresetCatalog();
+    int asPresets = 0; bool namesOk = true, presetsFinite = true;
+    var names = new HashSet<string>();
+    for (int p = 0; p < ve.DeviceParamCount(vt, vd); p++) names.Add(ve.DeviceParamName(vt, vd, p));
+    foreach (var info in cat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 10) continue;
+        var doc = cat.Document(info.Id);
+        if (doc is null) continue;
+        asPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!names.Contains(k)) { namesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        cat.ApplyInPlace(ve, info.Id, vt, vd);
+        var pb = Render(8192);
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > 4f) { presetsFinite = false; Console.WriteLine($"    preset {info.DisplayName} not finite"); break; }
+    }
+    Check(asPresets >= 25 && namesOk && presetsFinite, $"{asPresets} Auto Shift factory presets, all params known, all render finite");
 }
 
 // ===================== Nota Beat Repeat (effect kind 11) ==================

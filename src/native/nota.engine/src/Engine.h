@@ -824,6 +824,8 @@ private:
                                double blockStart, double spb, bool playing, bool arrangementActive);
     // Pre-pass: fill blockMidi_/blockMidiN_ for every non-session instrument track.
     void computeBlockMidi(Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
+    // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
+    void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
     int  applyMidiEffects(Track& t, MidiEv* evs, int n, MidiEv* scratch,
                           int32_t frames, double beatStart, double spb, bool playing);
