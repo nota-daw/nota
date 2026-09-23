@@ -51,6 +51,30 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Auto Filter shows the cutoff moving, not just where it is set.** The card moves onto
+  the Lens / Compressor / Delay frame — a SHAPE column (cutoff and resonance faders, with a
+  mark where the modulation has them now), a centre panel with **Filter**, **Envelope** and
+  **LFO** tabs, a **Mod / Output** panel and a status strip:
+  - **Filter** — the response you drag (sideways for the cutoff, up and down for the
+    resonance) over the input's spectrum, the band the envelope and LFO can walk the cutoff
+    over, and the response where they have it right now.
+  - **Envelope** — the input's envelope and the cutoff it drives over the last 0.6–2 s, so
+    attack, hold and release read as shapes; the onsets in the window are counted.
+  - **LFO** — the LFO's movement over two bars (or a few cycles in free time) with a playhead
+    at its live phase; the right channel is drawn when stereo phase is on.
+  - **New in the engine:** a **modulation target** (the cutoff, the resonance or both),
+    **Hold** gets a length (12 ms … 400 ms, or ∞ as before), **Smooth** slews the modulation,
+    the LFO has a **start phase** and **Retrig** (it restarts on each input onset and at play).
+    The envelope's **Up / Down** flips the amount's sign; the sidechain key's source and gain
+    live behind its switch.
+  - **30 factory presets**, up from six, level-matched to the dry signal — wahs, swells,
+    synced wobbles and gates, random steps, stereo swirls and sidechain pumps. The five new
+    parameters are appended, so older projects open unchanged and every one of them
+    automates (grouped under *Env*, *LFO* and *Mod* in the lane menu), MIDI-learns, saves in
+    a preset and is reachable over MCP; `get_device_text` returns the status line, the live
+    reading and a guide to the parameter values, `device_action` restarts the LFO or resets
+    the envelope, and the new `read_filter_motion` returns the modulated cutoff with its
+    note, the envelope and LFO state and the cutoff's range over the last two seconds.
 - **Nota Compressor shows its dynamics, not just its settings.** The card moves onto the
   Lens / Delay / Reverb frame — a LEVEL column (threshold against the live key level ·
   make-up), a centre panel with **Curve**, **Motion** and **Sidechain** tabs, a

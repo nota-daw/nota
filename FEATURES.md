@@ -348,8 +348,13 @@ and user presets, automation, persistence and cloning.
   (Stereo/Left/Right/Swap), bass mono, mute, phase invert; goniometer/vectorscope,
   correlation meter, meters, Gain match.
 - **Nota Valve** (5, formerly Amplifier) — tube amplifier and saturator.
-- **Nota Auto Filter** (6) — LP/BP/HP/NO, 12/24 slope, Clean/Analog, ENV + LFO modulation
-  (with tempo sync and stereo phase), sidechain; an interactive response graph.
+- **Nota Auto Filter** (7) — LP/BP/HP/Notch with morph, 12/24 slope, Clean/Analog, drive;
+  an envelope follower (attack, release, timed or infinite hold, on the input or a sidechain
+  key) and an LFO (5 waves, morph, free or tempo-synced, start phase, stereo phase, Retrig on
+  onsets) driving the cutoff, the resonance or both, with Smooth. Tabs: Filter (draggable
+  response over the spectrum, modulation range) / Envelope (cutoff over time) / LFO (motion
+  over two bars) and Mod / Output, with a SHAPE column and a status strip. 30 factory
+  presets. MCP: `read_filter_motion`.
 - **Nota Auto Shift** (7) — real-time vocal pitch correction: pitch detection, Key +
   Scale, Follow scale device, correction amount and speed, Range (guards against octave
   jumps), Formant, Mix; a PITCH TRACE visualiser.

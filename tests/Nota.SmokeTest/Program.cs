@@ -6777,23 +6777,131 @@ Console.WriteLine("-- Auto Filter (effect kind 7) --");
     Check(afdi >= 0, "add Auto Filter device");
     Check(afeng.TrackDeviceBuiltinKind(aft, afdi) == 7, "device reports builtin kind 7");
     int afpc = afeng.DeviceParamCount(aft, afdi);
-    Check(afpc == 21, $"Auto Filter exposes 21 params ({afpc})");
+    Check(afpc == 26, $"Auto Filter exposes 26 params ({afpc})");
+    const int AfFreq = 0, AfRes = 1, AfType = 2, AfSlope = 3, AfEnvAmt = 5, AfEnvOn = 15, AfLfoAmt = 9, AfLfoRate = 10,
+        AfLfoWave = 11, AfLfoSync = 19, AfTarget = 21, AfHoldTime = 22, AfSmooth = 23, AfOffset = 24, AfRetrig = 25;
+    Check(afeng.DeviceParamName(aft, afdi, AfTarget) == "Mod Target" && afeng.DeviceParamName(aft, afdi, AfHoldTime) == "Env Hold Time"
+          && afeng.DeviceParamName(aft, afdi, AfSmooth) == "Mod Smooth" && afeng.DeviceParamName(aft, afdi, AfOffset) == "LFO Offset"
+          && afeng.DeviceParamName(aft, afdi, AfRetrig) == "LFO Retrig", "appended params: Mod Target · Env Hold Time · Mod Smooth · LFO Offset · LFO Retrig");
+    Check(Math.Abs(afeng.DeviceParamDefault(aft, afdi, AfHoldTime) - 1f) < 1e-6f, "Env Hold Time defaults to ∞, so an old project's Hold still freezes");
     Check(afeng.DeviceAcceptsSidechain(aft, afdi), "Auto Filter accepts a sidechain");
-    afeng.DeviceSetParam(aft, afdi, 0, 0.35f);   // Freq
-    afeng.DeviceSetParam(aft, afdi, 1, 0.6f);    // Res
-    Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, 1) - 0.6f) < 1e-3f, "device param set/get round-trips");
-    var afbuf = new float[2048 * 2];
-    afeng.SetBpm(120); afeng.Seek(0); afeng.Play();
-    afeng.RenderOffline(afbuf, 2048);
-    afeng.StopTransport();
-    Check(Rms(afbuf, 2048) > 1e-4f, $"Auto Filter passes audio (rms={Rms(afbuf, 2048):0.0000})");
-    // Real-time viz feed: the pre-filter scope (UI spectrum) + the live modulated cutoff.
-    var afscope = new float[2048];
-    int afn = afeng.DeviceScope(aft, afdi, afscope, 2048);
-    float afe = 0; for (int s = 0; s < afn; s++) afe += Math.Abs(afscope[s]);
-    Check(afn == 2048 && afe > 0f, $"Auto Filter scope feeds the spectrum ({afn} samples, energy {afe:0.0})");
+    afeng.DeviceSetParam(aft, afdi, AfFreq, 0.35f);
+    afeng.DeviceSetParam(aft, afdi, AfRes, 0.6f);
+    Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, AfRes) - 0.6f) < 1e-3f, "device param set/get round-trips");
+    var afbuf = new float[4096 * 2];
+    void AfRender(int n = 4096) { afeng.SetBpm(120); afeng.Seek(0); afeng.Play(); for (int k = 0; k < n; k += 4096) afeng.RenderOffline(afbuf, 4096); afeng.StopTransport(); }
+    bool Finite(float[] b) { foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 8f) return false; return true; }
+    AfRender();
+    Check(Rms(afbuf, 4096) > 1e-4f, $"Auto Filter passes audio (rms={Rms(afbuf, 4096):0.0000})");
+
+    // Scope layout: 16 telemetry values, two 2048-point histories, the 2048-sample spectrum ring.
+    const int afTele = 16, afHist = 2048, afRing = 2048;
+    var afscope = new float[afTele + 2 * afHist + afRing];
+    int afn = afeng.DeviceScope(aft, afdi, afscope, afscope.Length);
+    float afe = 0; for (int k = 0; k < afRing; k++) afe += Math.Abs(afscope[afTele + 2 * afHist + k]);
+    Check(afn == afscope.Length && afe > 0f, $"Auto Filter scope carries telemetry + histories + the spectrum ring ({afn} values, energy {afe:0.0})");
+    Check(afscope[9] > 1000 && afscope[13] == afHist, $"telemetry reports sample rate and history length ({afscope[9]:0}, {afscope[13]:0})");
+    Check(afscope[11] >= 1, $"the onset detector counts the clip's start ({afscope[11]:0})");
     float liveCut = afeng.DeviceGainReduction(aft, afdi);
     Check(liveCut > 0f && liveCut < 1f, $"Auto Filter publishes live modulated cutoff ({liveCut:0.00})");
+
+    // Every type × slope renders audible + finite.
+    int afBad = 0;
+    for (int ty = 0; ty < 4; ty++)
+        for (int sl = 0; sl < 2; sl++)
+        {
+            afeng.DeviceSetParam(aft, afdi, AfType, ty / 3f); afeng.DeviceSetParam(aft, afdi, AfSlope, sl);
+            afeng.DeviceSetParam(aft, afdi, AfFreq, ty == 2 ? 0.2f : 0.7f);
+            AfRender();
+            if (!Finite(afbuf) || Rms(afbuf, 4096) < 1e-5f) afBad++;
+        }
+    Check(afBad == 0, $"every filter type and slope renders audible + finite ({afBad} failed)");
+    afeng.DeviceSetParam(aft, afdi, AfType, 0f); afeng.DeviceSetParam(aft, afdi, AfSlope, 0f);
+
+    // Envelope → Freq opens the cutoff above its base; → Reso leaves the cutoff and lifts the resonance.
+    afeng.DeviceSetParam(aft, afdi, AfFreq, 0.3f); afeng.DeviceSetParam(aft, afdi, AfRes, 0.2f);
+    afeng.DeviceSetParam(aft, afdi, AfEnvOn, 1f); afeng.DeviceSetParam(aft, afdi, AfEnvAmt, 1f); afeng.DeviceSetParam(aft, afdi, AfLfoAmt, 0f);
+    afeng.DeviceSetParam(aft, afdi, AfTarget, 0f);
+    AfRender();
+    float cutUp = afeng.DeviceGainReduction(aft, afdi);
+    Check(cutUp > 0.4f, $"ENV → Freq opens the cutoff above its base ({cutUp:0.00} > 0.30)");
+    afeng.DeviceSetParam(aft, afdi, AfTarget, 0.5f);
+    AfRender();
+    afeng.DeviceScope(aft, afdi, afscope, afscope.Length);
+    Check(Math.Abs(afscope[0] - 0.3f) < 0.01f && afscope[2] > 0.4f, $"ENV → Reso keeps the cutoff and lifts the resonance (cut {afscope[0]:0.00}, res {afscope[2]:0.00})");
+    afeng.DeviceSetParam(aft, afdi, AfTarget, 0f);
+    // History: the cutoff history shows the envelope moving it.
+    float hmax = 0; for (int k = 0; k < afHist; k++) hmax = Math.Max(hmax, afscope[afTele + afHist + k]);
+    Check(hmax > 0.29f, $"cutoff history is written (max {hmax:0.00})");
+
+    // Mod Smooth slows the movement: after one short block the smoothed cutoff lags behind.
+    afeng.DeviceSetParam(aft, afdi, AfSmooth, 1f);
+    afeng.SetBpm(120); afeng.Seek(0); afeng.Play(); afeng.RenderOffline(afbuf, 512); afeng.StopTransport();
+    float cutSlow = afeng.DeviceGainReduction(aft, afdi);
+    afeng.DeviceSetParam(aft, afdi, AfSmooth, 0f);
+    Check(cutSlow < cutUp, $"Mod Smooth slews the modulation ({cutSlow:0.00} < {cutUp:0.00})");
+
+    // LFO: synced, every wave stable; the device action restarts it at its start phase.
+    afeng.DeviceSetParam(aft, afdi, AfEnvAmt, 0.5f);
+    afeng.DeviceSetParam(aft, afdi, AfLfoAmt, 0.6f); afeng.DeviceSetParam(aft, afdi, AfLfoSync, 1f); afeng.DeviceSetParam(aft, afdi, AfLfoRate, 3f / 7f);
+    int lfoBad = 0;
+    for (int wv = 0; wv < 5; wv++) { afeng.DeviceSetParam(aft, afdi, AfLfoWave, wv / 4f); AfRender(); if (!Finite(afbuf) || Rms(afbuf, 4096) < 1e-5f) lfoBad++; }
+    Check(lfoBad == 0, $"every LFO wave renders stable ({lfoBad} failed)");
+    afeng.DeviceSetParam(aft, afdi, AfLfoSync, 0f); afeng.DeviceSetParam(aft, afdi, AfLfoRate, 0.2f);
+    afeng.DeviceSetParam(aft, afdi, AfOffset, 0.25f); afeng.DeviceSetParam(aft, afdi, AfRetrig, 1f);
+    afeng.DeviceAction(aft, afdi, 0, 0, 0);
+    afeng.SetBpm(120); afeng.Seek(0); afeng.Play(); afeng.RenderOffline(afbuf, 64); afeng.StopTransport();
+    afeng.DeviceScope(aft, afdi, afscope, afscope.Length);
+    Check(Math.Abs(afscope[5] - 0.25f) < 0.02f, $"LFO restart puts the phase at the start offset ({afscope[5] * 360:0}° ≈ 90°)");
+    Check(Finite(afbuf), "retriggered LFO stays finite");
+
+    // Status + guide text.
+    string aftext = afeng.DeviceText(aft, afdi, 0);
+    Check(aftext.StartsWith("LP 12 dB/oct") && aftext.Contains("LFO S&H"), $"status text names the filter and the LFO (got '{aftext}')");
+    Check(afeng.DeviceText(aft, afdi, 1).StartsWith("cutoff ") && afeng.DeviceText(aft, afdi, 2).Contains("Mod Target"), "live reading and parameter guide texts");
+
+    // MCP: the filter-motion reading.
+    var afTools = new Nota.Mcp.Tools.DeviceTools(afeng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    AfRender(16384);
+    var fm = afTools.ReadFilterMotion(aft, afdi).Result;
+    Check(fm.CutoffHz >= 30 && fm.CutoffHz <= 18000 && fm.SampleRate > 1000 && fm.Summary.Contains("LFO") && fm.CutoffNote.Length > 0 && fm.CutoffMaxLast2sHz >= fm.CutoffMinLast2sHz,
+          $"MCP read_filter_motion reports the cutoff, its note and the range ({fm.CutoffHz:0} Hz {fm.CutoffNote}, {fm.CutoffMinLast2sHz:0}…{fm.CutoffMaxLast2sHz:0})");
+
+    // Clone: duplicating the track keeps the appended params.
+    afeng.DeviceSetParam(aft, afdi, AfHoldTime, 0.3f);
+    int afcopy = afeng.DuplicateTrack(aft);
+    Check(afcopy > 0 && Math.Abs(afeng.DeviceGetParam(afcopy, afdi, AfHoldTime) - 0.3f) < 1e-3f && Math.Abs(afeng.DeviceGetParam(afcopy, afdi, AfOffset) - 0.25f) < 1e-3f,
+          "duplicate track clones the Auto Filter's appended params");
+
+    // Automation drives an appended param.
+    int aflane = afeng.AddAutomationLane(aft, AutomationTarget.DeviceParam, afdi, AfTarget);
+    afeng.SetAutomationPoints(aft, aflane, new[] { new AutomationPoint(0, 1f), new AutomationPoint(16, 1f) });
+    AfRender();
+    Check(afeng.DeviceGetParam(aft, afdi, AfTarget) > 0.9f, $"automation drives Mod Target ({afeng.DeviceGetParam(aft, afdi, AfTarget):0.00})");
+    afeng.RemoveAutomationLane(aft, aflane);
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>();
+        for (int k = 0; k < afpc; k++) names.Add(afeng.DeviceParamName(aft, afdi, k));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 7).ToList();
+        Check(mine.Count >= 25, $"Auto Filter ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Auto Filter preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(afeng, p.Id, aft, afdi).Length != 0) { pf++; continue; }
+            AfRender();
+            if (!Finite(afbuf) || Rms(afbuf, 4096) < 1e-5f) pf++;
+        }
+        Check(pf == 0, $"every Auto Filter preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(afeng, "autofilter/Clav Wah", aft, afdi);
+        Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, AfType) - 0.333f) < 1e-3f && afeng.DeviceGetParam(aft, afdi, AfHoldTime) < 0.2f, "Clav Wah preset: BP with a 12 ms hold");
+        cat.ApplyInPlace(afeng, "autofilter/Clean Sweep", aft, afdi);
+        Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, AfHoldTime) - 1f) < 1e-3f, "unnamed params reset to defaults between presets");
+    }
 }
 
 // ===================== Nota Vintage (effect kind 8) ========================

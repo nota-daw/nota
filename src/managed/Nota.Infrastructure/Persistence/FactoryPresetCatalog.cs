@@ -1210,14 +1210,46 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("amp", 6, "Heavy Chug",    ("Model", 5f), ("Gain", 8.0f), ("Bass", 7f), ("Middle", 3.5f), ("Treble", 6f), ("Presence", 7f), ("Output", 4f),   ("Mix", 1f), ("Cabinet", 3f), ("Gate", 0.4f), ("Axis", 0.3f));
         Fx("amp", 6, "Bass Amp",      ("Model", 6f), ("Gain", 3.0f), ("Bass", 7f), ("Middle", 5f),   ("Treble", 4f), ("Presence", 3f), ("Output", 5f),   ("Mix", 1f), ("Cabinet", 4f));
 
-        // ---- Auto Filter (kind 7) — all params normalized 0..1. Type 0 LP/.33 BP/.67 HP/
-        //      1 Notch; Slope 0=12dB/1=24dB; Env Amt 0.5=0 (bipolar); LFO Wave 0..1 in .25 steps.
-        Fx("autofilter", 7, "Envelope Wah",   ("Type", 0f),    ("Freq", 0.32f), ("Res", 0.55f), ("Env Amt", 0.85f), ("Env Attack", 0.08f), ("Env Release", 0.40f), ("Drive", 0.18f), ("Dry/Wet", 1f));
-        Fx("autofilter", 7, "Slow LFO Sweep", ("Type", 0f),    ("Freq", 0.48f), ("Res", 0.35f), ("Env Amt", 0.5f),  ("LFO Amt", 0.7f),  ("LFO Rate", 0.22f), ("LFO Wave", 0f),   ("Dry/Wet", 1f));
-        Fx("autofilter", 7, "24 dB Low Cut",  ("Type", 0.667f),("Slope", 1f),   ("Freq", 0.22f), ("Res", 0.12f),    ("Env Amt", 0.5f),  ("Dry/Wet", 1f));
-        Fx("autofilter", 7, "Sidechain Duck", ("Type", 0f),    ("Freq", 0.72f), ("Res", 0.20f), ("Env Amt", 0.14f), ("Env Attack", 0.05f), ("Env Release", 0.45f), ("Dry/Wet", 1f));
-        Fx("autofilter", 7, "S&H Random",     ("Type", 0f),    ("Freq", 0.50f), ("Res", 0.42f), ("LFO Amt", 0.62f), ("LFO Rate", 0.42f), ("LFO Wave", 1f),   ("Dry/Wet", 1f));
-        Fx("autofilter", 7, "Notch Motion",   ("Type", 1f),    ("Freq", 0.55f), ("Res", 0.30f), ("Morph", 0.4f),   ("LFO Amt", 0.5f),  ("LFO Rate", 0.3f),  ("LFO Wave", 1f), ("Dry/Wet", 1f));
+        // ---- Auto Filter (kind 7) — all params normalized 0..1. Freq 30·600^v Hz (.55 ≈ 1 k);
+        //      Res Q 0.5+14.5v; Type 0 LP/.333 BP/.667 HP/1 Notch; Slope 0=12/1=24 dB; Env Amt
+        //      0.5 = 0 (bipolar); Env Attack 0.1·5000^v ms; Env Release 2000^v ms; Env Hold Time
+        //      400v² ms (1 = ∞); LFO Rate free 0.01·4000^v Hz, Sync round(v·7) → 2/1…1/64 (.429 =
+        //      1/4, .571 = 1/8, .714 = 1/16); LFO Wave .25 steps; Mod Target 0 Freq/.5 Reso/1 Both;
+        //      Mod Smooth 120v² ms; LFO Stereo 0.5 = 90°; LFO Offset 0..360°. Unnamed → default.
+        // Sweeps and static tone
+        Fx("autofilter", 7, "Clean Sweep",     ("Type", 0f), ("Freq", 0.548f), ("Res", 0.015f), ("Env Amt", 0.5f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "24 dB Low Cut",   ("Type", 0.667f), ("Slope", 1f), ("Freq", 0.22f), ("Res", 0.12f), ("Env Amt", 0.5f), ("Gain", 0.34f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Telephone",       ("Type", 0.333f), ("Slope", 1f), ("Freq", 0.62f), ("Res", 0.18f), ("Drive", 0.35f), ("Circuit", 1f), ("Gain", 0.344f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Warm Analog LP",  ("Type", 0f), ("Slope", 1f), ("Freq", 0.70f), ("Res", 0.22f), ("Drive", 0.25f), ("Circuit", 1f), ("Gain", 0.3125f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Resonant Peak",   ("Type", 0f), ("Freq", 0.60f), ("Res", 0.72f), ("Circuit", 1f), ("Gain", 0.44f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Notch Carve",     ("Type", 1f), ("Freq", 0.55f), ("Res", 0.10f), ("Dry/Wet", 1f));
+        // Envelope — the input plays the filter
+        Fx("autofilter", 7, "Envelope Wah",    ("Type", 0f), ("Freq", 0.32f), ("Res", 0.55f), ("Env Amt", 0.85f), ("Env Attack", 0.08f), ("Env Release", 0.40f), ("Drive", 0.18f), ("Gain", 0.4f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Clav Wah",        ("Type", 0.333f), ("Slope", 1f), ("Freq", 0.37f), ("Res", 0.44f), ("Env Amt", 0.69f), ("Env Attack", 0.163f), ("Env Release", 0.447f), ("Env Hold", 1f), ("Env Hold Time", 0.173f), ("Mod Smooth", 0.258f), ("Gain", 0.229f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Funk Quack",      ("Type", 0.333f), ("Freq", 0.34f), ("Res", 0.62f), ("Env Amt", 0.92f), ("Env Attack", 0.10f), ("Env Release", 0.52f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Bass Auto-Wah",   ("Type", 0f), ("Slope", 1f), ("Freq", 0.24f), ("Res", 0.40f), ("Env Amt", 0.80f), ("Env Attack", 0.20f), ("Env Release", 0.58f), ("Drive", 0.20f), ("Circuit", 1f), ("Gain", 0.17f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Reverse Wah",     ("Type", 0f), ("Freq", 0.78f), ("Res", 0.38f), ("Env Amt", 0.18f), ("Env Attack", 0.30f), ("Env Release", 0.62f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Drum Snap",       ("Type", 0.667f), ("Freq", 0.30f), ("Res", 0.25f), ("Env Amt", 0.82f), ("Env Attack", 0.05f), ("Env Release", 0.35f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Swell Opener",    ("Type", 0f), ("Slope", 1f), ("Freq", 0.30f), ("Res", 0.20f), ("Env Amt", 0.90f), ("Env Attack", 0.78f), ("Env Release", 0.85f), ("Mod Smooth", 0.40f), ("Gain", 0.3125f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Resonance Bloom", ("Type", 0f), ("Freq", 0.55f), ("Res", 0.15f), ("Mod Target", 0.5f), ("Env Amt", 0.90f), ("Env Attack", 0.35f), ("Env Release", 0.65f), ("Circuit", 1f), ("Gain", 0.42f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Hold & Release",  ("Type", 0f), ("Freq", 0.40f), ("Res", 0.45f), ("Env Amt", 0.80f), ("Env Attack", 0.20f), ("Env Release", 0.70f), ("Env Hold", 1f), ("Env Hold Time", 0.55f), ("Dry/Wet", 1f));
+        // LFO — motion and rhythm
+        Fx("autofilter", 7, "Slow LFO Sweep",  ("Type", 0f), ("Freq", 0.48f), ("Res", 0.35f), ("Env Amt", 0.5f), ("LFO Amt", 0.7f), ("LFO Rate", 0.22f), ("LFO Wave", 0f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Pad Motion",      ("Type", 0f), ("Freq", 0.64f), ("Res", 0.28f), ("LFO Sync", 1f), ("LFO Rate", 0.429f), ("LFO Amt", 0.32f), ("LFO Wave", 0f), ("LFO Morph", 0.40f), ("Drive", 0.36f), ("LFO Retrig", 1f), ("Gain", 0.39f), ("Dry/Wet", 0.82f));
+        Fx("autofilter", 7, "Wobble 1/8",      ("Type", 0f), ("Slope", 1f), ("Freq", 0.35f), ("Res", 0.55f), ("LFO Sync", 1f), ("LFO Rate", 0.571f), ("LFO Amt", 0.60f), ("LFO Wave", 0f), ("Drive", 0.40f), ("Circuit", 1f), ("Gain", 0.125f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Dubstep Wub 1/16",("Type", 0f), ("Slope", 1f), ("Freq", 0.30f), ("Res", 0.62f), ("LFO Sync", 1f), ("LFO Rate", 0.714f), ("LFO Amt", 0.72f), ("LFO Wave", 0.25f), ("Drive", 0.55f), ("Circuit", 1f), ("LFO Retrig", 1f), ("Gain", 0.104f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Trance Gate",     ("Type", 0f), ("Slope", 1f), ("Freq", 0.45f), ("Res", 0.20f), ("LFO Sync", 1f), ("LFO Rate", 0.714f), ("LFO Amt", 0.85f), ("LFO Wave", 0.75f), ("LFO Morph", 0.2f), ("Mod Smooth", 0.12f), ("Gain", 0.38f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "S&H Random",      ("Type", 0f), ("Freq", 0.50f), ("Res", 0.42f), ("LFO Amt", 0.62f), ("LFO Rate", 0.42f), ("LFO Wave", 1f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Glide Random",    ("Type", 0.333f), ("Freq", 0.55f), ("Res", 0.40f), ("LFO Sync", 1f), ("LFO Rate", 0.571f), ("LFO Amt", 0.55f), ("LFO Wave", 1f), ("Mod Smooth", 0.45f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Saw Ramp Bar",    ("Type", 0f), ("Slope", 1f), ("Freq", 0.45f), ("Res", 0.35f), ("LFO Sync", 1f), ("LFO Rate", 0.143f), ("LFO Amt", 0.55f), ("LFO Wave", 0.5f), ("LFO Retrig", 1f), ("Gain", 0.07f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Stereo Swirl",    ("Type", 0.333f), ("Freq", 0.58f), ("Res", 0.35f), ("LFO Amt", 0.45f), ("LFO Rate", 0.42f), ("LFO Wave", 0f), ("LFO Stereo", 1f), ("Dry/Wet", 0.9f));
+        Fx("autofilter", 7, "Notch Motion",    ("Type", 1f), ("Freq", 0.55f), ("Res", 0.30f), ("Morph", 0.4f), ("LFO Amt", 0.5f), ("LFO Rate", 0.3f), ("LFO Wave", 1f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Phaser-ish Notch",("Type", 1f), ("Freq", 0.55f), ("Res", 0.25f), ("LFO Amt", 0.55f), ("LFO Rate", 0.33f), ("LFO Wave", 0.25f), ("LFO Stereo", 0.5f), ("Dry/Wet", 0.6f));
+        Fx("autofilter", 7, "Reso Pulse",      ("Type", 0f), ("Freq", 0.62f), ("Res", 0.30f), ("Mod Target", 0.5f), ("LFO Sync", 1f), ("LFO Rate", 0.571f), ("LFO Amt", 0.70f), ("LFO Wave", 0.5f), ("Circuit", 1f), ("Dry/Wet", 1f));
+        // Sidechain and combined
+        Fx("autofilter", 7, "Sidechain Duck",  ("Type", 0f), ("Freq", 0.72f), ("Res", 0.20f), ("Env Amt", 0.14f), ("Env Attack", 0.05f), ("Env Release", 0.45f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Kick Pump HP",    ("Type", 0.667f), ("Slope", 1f), ("Freq", 0.15f), ("Res", 0.15f), ("Env Amt", 0.85f), ("Env Attack", 0.08f), ("Env Release", 0.62f), ("Mod Smooth", 0.2f), ("Gain", 0.38f), ("Dry/Wet", 1f));
+        Fx("autofilter", 7, "Talking Filter",  ("Type", 0.333f), ("Slope", 1f), ("Freq", 0.45f), ("Res", 0.55f), ("Mod Target", 1f), ("Env Amt", 0.75f), ("Env Attack", 0.25f), ("Env Release", 0.55f), ("LFO Amt", 0.25f), ("LFO Rate", 0.60f), ("LFO Wave", 0.25f), ("Morph", 0.3f), ("Gain", 0.22f), ("Dry/Wet", 1f));
 
         // ---- Nota Vintage (kind 8) — all params normalized 0..1. Mode 0 Vinyl/.2 Cassette/
         //      .4 Reel/.6 VHS/.8 Tube/1 Analog; Tone 0.5 = neutral tilt; Output 0.5 = 0 dB.
