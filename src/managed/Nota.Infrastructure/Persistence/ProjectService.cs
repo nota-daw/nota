@@ -425,6 +425,8 @@ public sealed class ProjectService
                 {
                     int pc = engine.DeviceParamCount(trackId, di);
                     for (int p = 0; p < d.Params.Length && p < pc; p++) engine.DeviceSetParam(trackId, di, p, d.Params[p]);
+                    // Nota EQ-3 appended Range (the fader law); a save without it was made in the Classic ±15 dB law.
+                    if (d.BuiltinKind == 16 && d.Params.Length <= 10 && pc > 10) engine.DeviceSetParam(trackId, di, 10, 0f);
                     if (d.State is { } devRel)
                     {
                         var blob = ReadBlob(bundleDir, devRel);

@@ -4364,8 +4364,8 @@ Console.WriteLine("-- Nota Strata --");
 // ============================ Nota EQ-3 ====================================
 Console.WriteLine("-- Nota EQ-3 --");
 {
-    // EQ-3 = 3-band performance EQ (kind 16). Bands: 0 Low 1 Mid 2 High (0.5 = 0 dB),
-    // 3/4/5 kills, 6/7 crossovers, 8 slope, 9 output gain.
+    // EQ-3 = 3-band isolator (kind 16). Bands: 0 Low 1 Mid 2 High (Isolator law: 0.8 = 0 dB),
+    // 3/4/5 kills, 6/7 crossovers, 8 slope, 9 output gain, 10 Range (appended).
     int qt = engine.AddInstrumentTrack();
     engine.AddMidiClip(qt, 0.0, 4.0);
     engine.SetClipNotes(qt, 0, new[] { new NotaNote(45, 0.0, 3.0, 0.9f) });   // low note → energy in all bands
@@ -4373,25 +4373,26 @@ Console.WriteLine("-- Nota EQ-3 --");
     Check(q3 >= 0, "add built-in Nota EQ-3");
     Check(engine.DeviceName(qt, q3) == "Nota EQ-3", $"name is Nota EQ-3 (got '{engine.DeviceName(qt, q3)}')");
     Check(engine.TrackDeviceBuiltinKind(qt, q3) == 16, $"builtin kind is 16 (got {engine.TrackDeviceBuiltinKind(qt, q3)})");
-    Check(engine.DeviceParamCount(qt, q3) == 10, $"Nota EQ-3 exposes 10 params (got {engine.DeviceParamCount(qt, q3)})");
+    Check(engine.DeviceParamCount(qt, q3) == 11 && engine.DeviceParamName(qt, q3, 10) == "Range", $"Nota EQ-3 exposes 11 params, Range appended (got {engine.DeviceParamCount(qt, q3)})");
+    Check(engine.DeviceGetParam(qt, q3, 10) > 0.5f && Math.Abs(engine.DeviceGetParam(qt, q3, 0) - 0.8f) < 1e-4, "a new EQ-3 is in the Isolator range at 0 dB (0.8)");
 
     // Param round-trip.
     engine.DeviceSetParam(qt, q3, 0, 0.75f);
     Check(Math.Abs(engine.DeviceGetParam(qt, q3, 0) - 0.75f) < 1e-4, "EQ-3 param set/get round-trips");
 
     // Flat (defaults) passes audio finite + audible.
-    engine.DeviceSetParam(qt, q3, 0, 0.5f);
+    engine.DeviceSetParam(qt, q3, 0, 0.8f);
     var qb = new float[8192 * 2];
     engine.Seek(0); engine.Play(); engine.RenderOffline(qb, 8192); engine.StopTransport();
     bool qfin = true; foreach (var s in qb) if (!float.IsFinite(s)) { qfin = false; break; }
     Check(qfin && Rms(qb, 8192) > 0.001f, $"EQ-3 passes audio flat (rms {Rms(qb, 8192):F3})");
 
-    // Analyzer scope feeds the UI spectrum.
-    var qsc = new float[2048];
+    // Telemetry + the output spectrum feed the card.
+    var qsc = new float[16 + 96];
     engine.Seek(0); engine.Play(); engine.RenderOffline(qb, 8192);
     int qn = engine.DeviceScope(qt, q3, qsc, qsc.Length);
     engine.StopTransport();
-    Check(qn > 0, $"EQ-3 scope returns samples (got {qn})");
+    Check(qn == 112 && qsc[5] > 1000 && qsc[1] > -60 && qsc[7] > 0.5f, $"EQ-3 scope returns the telemetry and the spectrum ({qn}, sr {qsc[5]}, out {qsc[1]:F1} dBFS)");
 
     // Killing the low band drops low-frequency energy: render bass-heavy note with low kill.
     float rmsFullQ = Rms(qb, 8192);
@@ -4421,6 +4422,125 @@ Console.WriteLine("-- Nota EQ-3 --");
     engine.SetAutomationPoints(qt, qlane, new[] { new AutomationPoint(0.0, 0.2f), new AutomationPoint(2.0, 0.9f) });
     engine.Seek(1.99); engine.Play(); engine.RenderOffline(qb, 4096); engine.StopTransport();
     Check(engine.DeviceGetParam(qt, q3, 0) > 0.7f, $"automation drives EQ-3 Low ({engine.DeviceGetParam(qt, q3, 0):F2})");
+}
+{
+    // The 440 Hz smoke sine through EQ-3 on an audio track: flat sum at a crossover, kill depth,
+    // the ranges, texts, MCP and presets.
+    using var qe = new NotaEngine();
+    qe.SetBpm(120);
+    int qt = qe.AddAudioTrack();
+    qe.AddAudioClip(qt, wav, 0.0);
+    int qd = qe.AddBuiltinDevice(qt, 16);
+    float[] Render(int frames) { var b = new float[frames * 2]; qe.Seek(0); qe.Play(); qe.RenderOffline(b, frames); qe.StopTransport(); return b; }
+    double Level() { var b = Render(22050); double a = 0; for (int i = 11025 * 2; i < 22050 * 2; i++) a += b[i] * b[i]; return 10 * Math.Log10(a / (11025 * 2) + 1e-30); }
+    qe.SetDeviceBypassed(qt, qd, true);
+    double dry = Level();
+    qe.SetDeviceBypassed(qt, qd, false);
+
+    // Unity: the bands sum flat — also with a crossover right on the sine, at either slope.
+    float x440 = (float)(Math.Log(440.0 / 50) / Math.Log(40)), x440h = (float)(Math.Log(880.0 / 500) / Math.Log(36));
+    foreach (float sl in new[] { 0f, 1f })
+    {
+        qe.DeviceSetParam(qt, qd, 8, sl);
+        qe.DeviceSetParam(qt, qd, 6, x440); qe.DeviceSetParam(qt, qd, 7, x440h);
+        double a = Level();
+        qe.DeviceSetParam(qt, qd, 6, (float)(Math.Log(200.0 / 50) / Math.Log(40)));
+        qe.DeviceSetParam(qt, qd, 7, (float)(Math.Log(520.0 / 500) / Math.Log(36)));
+        double b = Level();
+        Check(Math.Abs(a - dry) < 0.3 && Math.Abs(b - dry) < 0.3,
+              $"EQ-3 at unity sums flat at {(sl > 0.5f ? 48 : 24)} dB/oct (crossover on the sine {a - dry:F2} dB, between close crossovers {b - dry:F2} dB)");
+    }
+    qe.DeviceSetParam(qt, qd, 6, 0.4363f); qe.DeviceSetParam(qt, qd, 7, 0.4491f);
+
+    // Mid kill takes the sine (in the mid band) away; 48 dB/oct deeper than 24.
+    qe.DeviceSetParam(qt, qd, 4, 1f);
+    qe.DeviceSetParam(qt, qd, 8, 0f); double k24 = Level() - dry;
+    qe.DeviceSetParam(qt, qd, 8, 1f); double k48 = Level() - dry;
+    Check(k24 < -15 && k48 < k24 - 10, $"mid kill removes a 440 Hz sine ({k24:F1} dB at 24, {k48:F1} dB at 48 dB/oct)");
+    qe.DeviceSetParam(qt, qd, 4, 0f); qe.DeviceSetParam(qt, qd, 8, 0f);
+
+    // Isolator law: every band at its floor is −24 dB; +6 at the top.
+    for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, b, 0f);
+    double floor = Level() - dry;
+    for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, b, 1f);
+    double top = Level() - dry;
+    Check(Math.Abs(floor + 24) < 0.5 && Math.Abs(top - 6) < 0.5, $"Isolator range: −24 … +6 dB ({floor:F1} / {top:+0.0})");
+    // Classic law: 0.5 = 0 dB, 0 = −15 dB.
+    qe.DeviceSetParam(qt, qd, 10, 0f);
+    for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, b, 0.5f);
+    double cFlat = Level() - dry;
+    for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, b, 0f);
+    double cFloor = Level() - dry;
+    Check(Math.Abs(cFlat) < 0.3 && Math.Abs(cFloor + 15) < 0.5, $"Classic range: 0.5 = 0 dB, 0 = −15 dB ({cFlat:+0.0;-0.0} / {cFloor:F1})");
+    qe.DeviceSetParam(qt, qd, 10, 1f);
+    for (int b = 0; b < 3; b++) qe.DeviceSetParam(qt, qd, b, 0.8f);
+
+    // Output gain and the telemetry: band levels, the gain in effect, crossovers in use.
+    qe.DeviceSetParam(qt, qd, 9, 0.5f - 6f / 48);
+    double og = Level() - dry;
+    Check(Math.Abs(og + 6) < 0.3, $"output gain −6 dB ({og:F1})");
+    qe.DeviceSetParam(qt, qd, 9, 0.5f);
+    qe.DeviceSetParam(qt, qd, 3, 1f);
+    Render(4096);                          // the kill's 5 ms glide
+    qe.DeviceAction(qt, qd, 0, 0, 0);      // fresh meters
+    Render(8192);
+    var qs = new float[112];
+    int qn = qe.DeviceScope(qt, qd, qs, qs.Length);
+    Check(qn == 112 && qs[3] > qs[2] + 20 && qs[3] > -30 && qs[11] < 0.01f && Math.Abs(qs[12] - 1) < 0.01f && Math.Abs(qs[9] - 250) < 5 && Math.Abs(qs[10] - 2500) < 30,
+          $"telemetry: band levels L {qs[2]:F0} / M {qs[3]:F1} dBFS, low gain {qs[11]:F3} (killed), crossovers {qs[9]:F0} / {qs[10]:F0} Hz");
+    int pk = 0; for (int b = 1; b < 96; b++) if (qs[16 + b] > qs[16 + pk]) pk = b;
+    double pkHz = 20 * Math.Pow(1000, (pk + 0.5) / 96);
+    Check(qs[7] > 0.5f && pkHz > 380 && pkHz < 520, $"the output spectrum peaks at the sine (~{pkHz:0} Hz)");
+
+    // Texts.
+    string t0 = qe.DeviceText(qt, qd, 0), t1 = qe.DeviceText(qt, qd, 1), tg = qe.DeviceText(qt, qd, 2);
+    Check(t0.Contains("LR4") && t0.Contains("low kill") && t0.Contains("isolator") && t1.Contains("gain now") && tg.Contains("Range"),
+          $"device texts: status '{t0[..Math.Min(70, t0.Length)]}…', live, guide");
+    qe.DeviceSetParam(qt, qd, 3, 0f);
+
+    // MCP: set in dB / Hz, read it back; switching the range keeps the dB.
+    var qtools = new Nota.Mcp.Tools.DeviceTools(qe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var r1 = qtools.SetEq3(qt, qd, lowDb: -6, midDb: 3, highKill: true, lowMidHz: 300, midHighHz: 4000, slope: 48, outputDb: -2).Result;
+    Check(Math.Abs(r1.Bands[0].GainDb + 6) < 0.05 && Math.Abs(r1.Bands[1].GainDb - 3) < 0.05 && r1.Bands[2].Killed && Math.Abs(r1.LowMidHz - 300) < 1
+          && Math.Abs(r1.MidHighHz - 4000) < 2 && r1.SlopeDbPerOct == 48 && Math.Abs(r1.OutputDb + 2) < 0.05 && r1.Range == "Isolator",
+          $"MCP set_eq3 edits in dB and Hz ({r1.Bands[0].GainDb} / {r1.Bands[1].GainDb} dB, {r1.LowMidHz} / {r1.MidHighHz} Hz)");
+    var r2 = qtools.SetEq3(qt, qd, range: "Classic").Result;
+    Check(r2.Range == "Classic" && Math.Abs(r2.Bands[0].GainDb + 6) < 0.05 && Math.Abs(r2.Bands[1].GainDb - 3) < 0.05 && r2.MaxGainDb == 15,
+          $"MCP set_eq3 range Classic keeps each band's dB ({r2.Bands[0].GainDb} / {r2.Bands[1].GainDb})");
+    var r3 = qtools.SetEq3(qt, qd, midHighHz: 500).Result;
+    Check(r3.LowMidHz <= r3.MidHighHz / 2 + 1, $"MCP set_eq3 keeps low/mid at most half mid/high ({r3.LowMidHz} / {r3.MidHighHz})");
+    Render(8192);
+    var rr = qtools.ReadEq3(qt, qd).Result;
+    Check(rr.Spectrum.Length == 24 && rr.SpectrumValid && rr.Summary.Length > 0 && rr.Live.Length > 0 && rr.SampleRate > 1000 && rr.OutputPeakDb > -60,
+          $"MCP read_eq3 reports the settings, levels and spectrum (out {rr.OutputPeakDb} dBFS)");
+
+    // A preset from before Range (no "Range" named) loads in the Classic law.
+    var legacy = new PresetDocument { Type = "builtin-effect", BuiltinKind = 16, NamedParams = new Dictionary<string, float> { ["Low"] = 0.5f, ["Mid"] = 0.5f, ["High"] = 0.7f } };
+    PresetService.ApplyInPlace(legacy, qe, qt, qd);
+    Check(qe.DeviceGetParam(qt, qd, 10) < 0.5f, "a pre-Range EQ-3 preset loads in the Classic ±15 dB law");
+
+    // Every factory preset names only real params and renders finite + audible.
+    var qcat = new FactoryPresetCatalog();
+    int qPresets = 0; bool qNamesOk = true, qPresetsOk = true;
+    var qNames = new HashSet<string>();
+    for (int p = 0; p < qe.DeviceParamCount(qt, qd); p++) qNames.Add(qe.DeviceParamName(qt, qd, p));
+    foreach (var info in qcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 16) continue;
+        var doc = qcat.Document(info.Id);
+        if (doc is null) continue;
+        qPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!qNames.Contains(k)) { qNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        if (!doc.NamedParams.ContainsKey("Range")) { qNamesOk = false; Console.WriteLine($"    {info.DisplayName} names no Range"); }
+        qcat.ApplyInPlace(qe, info.Id, qt, qd);
+        var pb = Render(22050);
+        bool ok = true;
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > 4f) { ok = false; break; }
+        if (!ok) { qPresetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / over"); }
+    }
+    Check(qPresets >= 25 && qNamesOk && qPresetsOk, $"{qPresets} EQ-3 factory presets, all params known, all render finite");
+    qcat.ApplyInPlace(qe, "eq3/Init", qt, qd);
+    Check(qe.DeviceGetParam(qt, qd, 10) > 0.5f && Math.Abs(qe.DeviceGetParam(qt, qd, 1) - 0.8f) < 1e-4, "the Init preset is Isolator, flat");
 }
 
 // ============================ Nota Shutter =================================

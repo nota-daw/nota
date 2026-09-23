@@ -55,6 +55,34 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota EQ-3 is redrawn as a DJ isolator.** The card follows the new mockup on the
+  700 × 260 frame. The crossover slider row is gone; you now drag the crossovers on the graph:
+  - **Band strips.** LOW, MID and HIGH each get a strip in their own colour with the band's
+    frequency span, a fader from −24 to +6 dB, the value and a KILL. The fader moves by
+    relative drag in 0.5 dB steps with a 0 dB detent; hold Shift for 0.1 dB steps.
+    Double-click returns it to 0 dB and lifts the kill.
+  - **Graph.** Each band's own curve is drawn thin in its colour, the sum in brass, and the
+    output spectrum (now from the engine's FFT) behind them. The two crossovers are dashed
+    lines with handles along the top. Drag a handle left or right; the low/mid crossover stays
+    at most half the mid/high one. Drag anywhere else to ride the gain of the band under the
+    pointer. Double-click a handle or a band to reset it.
+  - **Over the graph.** The crossover readouts, Output (drag, double-click resets), Range and
+    Slope (24 / 48 dB). A status strip closes the card: slope, crossovers, kills, range,
+    output, then sample rate, latency and CPU.
+  - **Range** is a new parameter. It picks the fader throw: +6 (−24 … +6 dB, the default for
+    a new EQ-3) or ±15 (the classic range). Switching it keeps each band's dB. Projects,
+    racks and presets saved before it open in the ±15 range and sound exactly as before.
+  - **30 factory presets**: DJ kills, bass swaps and isolations, scoops and smiles, clean-up
+    curves, and character presets (telephone, AM radio, megaphone). The six earlier presets
+    keep their names.
+  - **MCP: `read_eq3` and `set_eq3`.** `read_eq3` reports the settings, each band's gain,
+    kill, level and gain now, the in / out peaks and the output spectrum. `set_eq3` plays the
+    EQ in dB and Hz in one call, recorded like a hand edit. `get_device_text` gives a summary,
+    a live reading and a parameter guide, and `device_action` 0 resets the meters.
+- **Nota EQ-3 now sums flat.** The 48 dB/oct slope is now a true Linkwitz-Riley 8.
+  Before, it left a 6 dB dip at each crossover. The low band is also phase-aligned with the
+  mid/high split, so with every band at 0 dB the output matches the input at any crossover
+  setting and either slope.
 - **Nota Dynamic EQ-8 is redrawn around its graph, and each band gets its own key.** The card
   follows the new mockup on the 700 × 260 frame: the response graph takes almost the whole
   width, a row of eight band chips sits over it, the selected band is edited in a panel on the

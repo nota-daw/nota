@@ -18,4 +18,7 @@ internal static class ControlExtensions
     /// </summary>
     public static void BindResource(this Control control, AvaloniaProperty property, string key)
         => control.Bind(property, control.GetResourceObservable(key));
+
+    /// <summary>Adds <paramref name="child"/> to a DockPanel, docked to <paramref name="dock"/>.</summary>
+    public static Control AddDock(this DockPanel dp, Control child, Dock dock) { DockPanel.SetDock(child, dock); dp.Children.Add(child); return child; }
 }

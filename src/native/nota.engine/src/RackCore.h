@@ -626,6 +626,7 @@ public:
                     if (dev) dev->setParam(static_cast<int32_t>(p), pv);
                 }
                 if (dev) {
+                    dev->paramsRestored(static_cast<int32_t>(pc));
                     if (dsPtr && dsLen > 0) dev->setState(dsPtr, static_cast<int32_t>(dsLen));
                     dev->setBypassed(byp);
                     c.devices.push_back(dev);

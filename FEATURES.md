@@ -424,9 +424,12 @@ and user presets, automation, persistence and cloning.
   (Tube/Diode/Tape/Fuzz/Digital/Fold), Serial/Parallel/Mid-Side/Multiband routings,
   Amount/Tone/Wet, Bias/Width, LFO→Drive and Env→Tone; a transfer curve and a harmonics
   chart; **OVERSAMPLE** (Off/2×/4×/8×).
-- **Nota EQ-3** (16) — 3-band performance EQ: Low/Mid/High faders with a 0 dB detent and
-  KILL buttons, two crossover frequencies, 24/48 dB/oct slope (Linkwitz-Riley); a response
-  curve with a real-time spectrum.
+- **Nota EQ-3** (16) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
+  Classic ±15 dB range) with a 0 dB detent and KILL buttons, two crossovers, 24 / 48 dB/oct
+  Linkwitz-Riley slopes (phase-aligned, flat at unity), output gain. A response graph with each
+  band's curve, the brass sum and the output spectrum (engine FFT) — drag the crossover handles,
+  or ride a band's gain in its zone; a status strip; 30 factory presets; MCP `read_eq3`,
+  `set_eq3`.
 - **Nota Level** (18) — automatic loudness matching (LUFS): LUFS measurement (BS.1770),
   AUTO/MATCH, true-peak safe, sidechain (match to reference); loudness history and
   IN/OUT/TP/correlation meters.

@@ -122,6 +122,15 @@ public static class PresetService
 
     /// <summary>Applies a preset. Effect presets add to <paramref name="targetTrackId"/> (must be &gt; 0);
     /// instrument presets always create a new track. Returns "" on success or a user-facing warning.</summary>
+    // Nota EQ-3 (kind 16) appended Range, the fader law. A preset saved before it names no
+    // Range (or holds only the first 10 values) and was made in the Classic ±15 dB law.
+    private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
+    {
+        if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
+        bool legacy = doc.NamedParams is { Count: > 0 } named ? !named.ContainsKey("Range") : doc.Params.Length <= 10;
+        if (legacy) engine.DeviceSetParam(trackId, deviceIndex, 10, 0f);
+    }
+
     public static string Apply(PresetDocument doc, IAudioEngine engine, int targetTrackId)
     {
         switch (doc.Type)
@@ -141,6 +150,7 @@ public static class PresetService
                 else
                     for (int i = 0; i < doc.Params.Length; i++)
                         engine.DeviceSetParam(targetTrackId, di, i, doc.Params[i]);
+                LegacyRange(doc, engine, targetTrackId, di);
                 return "";
             }
             case "builtin-midi-effect":
@@ -247,6 +257,7 @@ public static class PresetService
                     for (int i = 0; i < doc.Params.Length && i < pc; i++)
                         engine.DeviceSetParam(trackId, deviceIndex, i, doc.Params[i]);
                 }
+                LegacyRange(doc, engine, trackId, deviceIndex);
                 return "";
             }
             case "builtin-midi-effect":

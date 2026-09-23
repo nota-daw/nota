@@ -105,6 +105,11 @@ public:
     // audio thread applies it at the next quantize boundary. Most devices ignore it.
     virtual void deviceAction(int32_t /*id*/, int32_t /*iarg*/, float /*farg*/) {}
 
+    // A loader (a rack's saved state) has just restored the first `count` params from a save.
+    // A device whose layout grew by appended params can put them back to what an older save
+    // meant (Nota EQ-3: Range → Classic). Message thread.
+    virtual void paramsRestored(int32_t /*count*/) {}
+
     // Per-layer waveform envelope for multi-layer devices (the looper): fill up to
     // maxSamples peak bins of layer's buffer, oldest→newest, returning the count.
     virtual int32_t layerWave(int32_t /*layer*/, float* /*out*/, int32_t /*maxSamples*/) const { return 0; }

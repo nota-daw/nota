@@ -903,15 +903,49 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("eq", 0, "Telephone",      ("1 Type", 0f), ("1 Freq", 450f), ("2 Freq", 1200f), ("2 Gain", 6f), ("2 Q", 1.2f), ("4 Type", 5f), ("4 Freq", 3000f));
         Fx("eq", 0, "Low Cut",        ("1 Type", 0f), ("1 Freq", 80f), ("1 Q", 0.7f));
 
-        // ---- EQ-3 (kind 16) — performance EQ, all params normalized 0..1. Band gains are
-        //      bipolar (0.5 = 0 dB, ±15 dB); "<band> Kill" = 1 mutes the band; crossovers
-        //      "Low Freq" (50..2000 Hz) / "High Freq" (500..18000 Hz); "Slope" 0 = 24 / 1 = 48 dB.
-        Fx("eq3", 16, "DJ Kill Bass",  ("Low Kill", 1f));
-        Fx("eq3", 16, "Kill Highs",    ("High Kill", 1f));
-        Fx("eq3", 16, "Bass Boost",    ("Low", 0.7f), ("High", 0.57f));
-        Fx("eq3", 16, "Mid Scoop",     ("Mid", 0.3f), ("Low", 0.6f), ("High", 0.6f));
-        Fx("eq3", 16, "Telephone",     ("Low Kill", 1f), ("High Kill", 1f), ("Mid", 0.6f), ("Low Freq", 0.49f), ("High Freq", 0.5f));
-        Fx("eq3", 16, "Warm Up",       ("Low", 0.6f), ("High", 0.36f), ("Slope", 1f));
+        // ---- Nota EQ-3 (kind 16) — three-band isolator, all params normalized 0..1 (unnamed ones
+        //      reset to their defaults: flat, 250 Hz / 2.5 kHz, 24 dB/oct). Eq3(…) presets are in the
+        //      Isolator law (Range 1): band gain dB = −24 + 30v (0.8 = 0 dB, 0.9 = +3, 1 = +6, 0.6 = −6,
+        //      0.4 = −12, 0 = −24); "<band> Kill" 1 removes the band; "Low Freq" 50·40^v Hz (0.188 =
+        //      100, 0.298 = 150, 0.376 = 200, 0.436 = 250, 0.486 = 300, 0.564 = 400, 0.812 = 1 k);
+        //      "High Freq" 500·36^v Hz (0.387 = 2 k, 0.449 = 2.5 k, 0.5 = 3 k, 0.58 = 4 k, 0.774 = 8 k);
+        //      "Slope" 0 = 24 / 1 = 48 dB/oct; "Gain" output (v − 0.5)·48 dB. A preset without "Range"
+        //      loads in the Classic ±15 dB law (PresetService), so Eq3 always names it.
+        // Start
+        Eq3("Init");
+        Eq3("Isolator 48", ("Low Freq", 0.4857f), ("High Freq", 0.5f), ("Slope", 1f));
+        // DJ
+        Eq3("DJ Kill Bass", ("Low Kill", 1f));
+        Eq3("Kill Mids", ("Mid Kill", 1f));
+        Eq3("Kill Highs", ("High Kill", 1f));
+        Eq3("Bass Swap", ("High", 0.8833f), ("Low Kill", 1f), ("Low Freq", 0.3472f), ("High Freq", 0.518f));
+        Eq3("Bass Only", ("Mid Kill", 1f), ("High Kill", 1f), ("Low Freq", 0.2978f), ("Slope", 1f));
+        Eq3("Mids Only", ("Low Kill", 1f), ("High Kill", 1f), ("Low Freq", 0.4363f), ("High Freq", 0.4491f));
+        Eq3("Highs Only", ("Low Kill", 1f), ("Mid Kill", 1f), ("High Freq", 0.5803f));
+        Eq3("Transition Build", ("Low", 0.4f), ("Mid", 0.7f), ("High", 0.8667f), ("Low Freq", 0.3758f), ("High Freq", 0.5f), ("Slope", 1f));
+        Eq3("Breakdown Thin", ("Low", 0.0f), ("Mid", 0.6f), ("Low Freq", 0.4857f), ("Slope", 1f));
+        // Shape
+        Eq3("Scoop", ("Low", 0.85f), ("Mid", 0.3333f), ("Low Freq", 0.5637f), ("High Freq", 0.3575f), ("Slope", 1f));
+        Eq3("Mid Scoop", ("Low", 0.9f), ("Mid", 0.6f), ("High", 0.9f));
+        Eq3("Deep Scoop", ("Mid", 0.0f), ("Low Freq", 0.4857f), ("High Freq", 0.4491f), ("Slope", 1f));
+        Eq3("Smile", ("Low", 0.9333f), ("Mid", 0.6667f), ("High", 0.9333f), ("Low Freq", 0.3758f), ("High Freq", 0.5803f));
+        Eq3("Bass Boost", ("Low", 1.0f), ("High", 0.8667f), ("Low Freq", 0.2978f));
+        Eq3("Warm Up", ("Low", 0.9f), ("High", 0.65f), ("Slope", 1f));
+        Eq3("Air Lift", ("High", 0.9667f), ("High Freq", 0.6934f));
+        Eq3("Presence", ("Mid", 0.9f), ("Low Freq", 0.8121f), ("High Freq", 0.6425f));
+        // Clean-up
+        Eq3("Sub Tighten", ("Low", 0.6f), ("Low Freq", 0.1593f));
+        Eq3("Mud Cut", ("Mid", 0.6f), ("Low Freq", 0.3758f), ("High Freq", 0.0509f));
+        Eq3("Vocal Focus", ("Low", 0.5333f), ("Mid", 0.8667f), ("High", 0.7333f), ("Low Freq", 0.3758f), ("High Freq", 0.5803f));
+        Eq3("Kick Focus", ("Low", 0.9f), ("Mid", 0.6f), ("Low Freq", 0.2373f), ("High Freq", 0.3869f));
+        Eq3("Hat Sizzle", ("Mid", 0.4667f), ("High", 0.9f), ("Low Kill", 1f), ("High Freq", 0.7737f), ("Slope", 1f));
+        Eq3("Club Master", ("Low", 0.8667f), ("High", 0.85f), ("Low Freq", 0.1879f), ("High Freq", 0.7737f), ("Gain", 0.4688f));
+        // Character
+        Eq3("Telephone", ("Mid", 0.9f), ("Low Kill", 1f), ("High Kill", 1f), ("Low Freq", 0.5637f), ("High Freq", 0.5f), ("Slope", 1f));
+        Eq3("AM Radio", ("Low Kill", 1f), ("High Kill", 1f), ("Low Freq", 0.4857f), ("High Freq", 0.4491f), ("Gain", 0.5625f));
+        Eq3("Lo-Fi Dull", ("High", 0.2f), ("High Freq", 0.5f), ("Slope", 1f));
+        Eq3("Megaphone", ("Mid", 0.9333f), ("High", 0.0f), ("Low Kill", 1f), ("Low Freq", 0.6736f), ("High Freq", 0.4491f), ("Slope", 1f), ("Gain", 0.4583f));
+        Fx("eq3", 16, "Classic Flat", ("Range", 0f), ("Low", 0.5f), ("Mid", 0.5f), ("High", 0.5f));
 
         // ---- Nota Forge (kind 17) — multi-stage saturation, all params normalized 0..1.
         //      Stage type: 0 Tube/0.2 Diode/0.4 Tape/0.6 Fuzz/0.8 Digital/1 Fold; gains/bias
@@ -1839,6 +1873,10 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-effect", kind, isInstrument: false, isMidi: false, ps);
+
+    // Nota EQ-3 in the Isolator law — names Range, so it isn't read as a pre-Range preset.
+    private void Eq3(string name, params (string Name, float Value)[] ps)
+        => Fx("eq3", 16, name, [("Range", 1f), .. ps]);
 
     private void Midi(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-midi-effect", kind, isInstrument: false, isMidi: true, ps);
