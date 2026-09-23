@@ -3804,7 +3804,13 @@ Console.WriteLine("-- Nota Ceiling --");
     Check(le.DeviceName(lt, ld) == "Nota Ceiling", $"name is Nota Ceiling (got '{le.DeviceName(lt, ld)}')");
     Check(le.TrackDeviceBuiltinKind(lt, ld) == 14, $"builtin kind is 14 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
     int lpc = le.DeviceParamCount(lt, ld);
-    Check(lpc == 7, $"Nota Ceiling exposes 7 params (got {lpc})");
+    Check(lpc == 11, $"Nota Ceiling exposes 11 params (got {lpc})");
+    string[] lnames = { "Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead", "StereoLink", "True Peak", "Delta", "SC HP", "Target" };
+    bool lnamesOk = lpc == lnames.Length;
+    for (int p = 0; p < Math.Min(lpc, lnames.Length); p++) lnamesOk &= le.DeviceParamName(lt, ld, p) == lnames[p];
+    Check(lnamesOk, "the original seven params keep their order; True Peak, Delta, SC HP, Target are appended");
+    Check(le.DeviceParamDefault(lt, ld, 7) == 0f && le.DeviceParamDefault(lt, ld, 8) == 0f && Math.Abs(le.DeviceParamDefault(lt, ld, 9) - 20f) < 1e-3f
+          && Math.Abs(le.DeviceParamDefault(lt, ld, 10) + 14f) < 1e-3f, "appended params default to the old sound (sample peak, no delta, SC HP off, target −14)");
 
     // Param round-trip (Ceiling = 0, Gain = 1).
     le.DeviceSetParam(lt, ld, 0, -2.5f);
@@ -3820,11 +3826,18 @@ Console.WriteLine("-- Nota Ceiling --");
     float ceilLin = (float)Math.Pow(10, -6.0 / 20.0);
     Check(lfin && Rms(lb, 8192) > 0.001f, $"Ceiling passes audio (rms {Rms(lb, 8192):F3})");
     Check(peak <= ceilLin + 1e-3f, $"output stays under the −6 dB ceiling (peak {20 * Math.Log10(Math.Max(1e-6f, peak)):F2} dB)");
-    var sc = new float[8];
-    int sn = le.DeviceScope(lt, ld, sc, 8);
-    Check(sn == 7, $"Ceiling scope returns 7 meters (got {sn})");
-    Check(sc[2] > 1.0f, $"limiter reports gain reduction (GR {sc[2]:F2} dB)");
+    const int CeTele = 40, CeLvl = 64, CeLoud = 120, CeScope = CeTele + 7 * CeLvl + 3 * CeLoud;
+    var sc = new float[CeScope];
+    int sn = le.DeviceScope(lt, ld, sc, CeScope);
+    Check(sn == CeScope, $"Ceiling scope returns the telemetry, the 4 s level and the 60 s loudness windows ({sn} of {CeScope})");
+    Check(le.DeviceScope(lt, ld, new float[7], 7) == 7, "a 7-slot reader still gets the original meters");
+    Check(sc[2] > 1.0f && sc[9] >= sc[2] - 0.01f, $"limiter reports gain reduction and holds its max (GR {sc[2]:F2}, max {sc[9]:F2} dB)");
     Check(le.DeviceGainReduction(lt, ld) > 0.5f, "GR surfaces on the shell meter");
+    bool cellsOk = false;
+    for (int i = 0; i < CeLvl; i++) cellsOk |= sc[CeTele + 2 * CeLvl + i] > 1f && sc[CeTele + i] > sc[CeTele + CeLvl + i];
+    Check(cellsOk, "the level window has cells where the input tops the output and the reduction shows");
+    Check(sc[13] > 0.05f && sc[23] > -6f, $"over-the-ceiling share and the window's input peak ({sc[13] * 100:0} %, {sc[23]:F1} dB)");
+    Check(sc[20] > 1000 && sc[22] > 0, $"sample rate and latency reported ({sc[20]}, {sc[22]} smp)");
 
     // Each character renders finite + audible.
     le.DeviceSetParam(lt, ld, 1, 12f);
@@ -3837,15 +3850,22 @@ Console.WriteLine("-- Nota Ceiling --");
         Check(mfin && Rms(mb, 8192) > 0.001f, $"Ceiling character {c} renders finite + audible (rms {Rms(mb, 8192):F3})");
     }
     le.DeviceSetParam(lt, ld, 4, 0f);
+    Check(le.DeviceParamCount(lt, ld) == 11, "param count stable after render");
 
-    // Sidechain: the limiter accepts a source (Compressor plumbing).
-    Check(le.DeviceParamCount(lt, ld) == 7, "param count stable after render");
+    // Reset peaks (action 0) clears the holds.
+    le.DeviceAction(lt, ld, 0, 0, 0);
+    { var z = new float[64 * 2]; le.Seek(3.9); le.RenderOffline(z, 64); }
+    le.DeviceScope(lt, ld, sc, CeScope);
+    Check(sc[9] < 0.01f && sc[7] < -100f && sc[19] == 0, $"device_action 0 resets the peaks (max GR {sc[9]:F2}, peak in {sc[7]:F1}, clips {sc[19]})");
 
-    // Clone: duplicate track preserves params.
+    // Clone: duplicate track preserves params (appended ones too).
     le.DeviceSetParam(lt, ld, 2, 220f);   // Release
+    le.DeviceSetParam(lt, ld, 9, 150f);   // SC HP
     int lt2 = le.DuplicateTrack(lt);
     int ld2 = le.TrackDeviceCount(lt2) - 1;
-    Check(lt2 > 0 && Math.Abs(le.DeviceGetParam(lt2, ld2, 2) - 220f) < 1e-2, "duplicate track clones Ceiling params");
+    Check(lt2 > 0 && Math.Abs(le.DeviceGetParam(lt2, ld2, 2) - 220f) < 1e-2 && Math.Abs(le.DeviceGetParam(lt2, ld2, 9) - 150f) < 1e-2,
+          "duplicate track clones Ceiling params");
+    le.DeviceSetParam(lt, ld, 9, 20f);
 
     // Automation: a device-param lane drives Gain (raw dB points).
     int llane = le.AddAutomationLane(lt, AutomationTarget.DeviceParam, ld, 1);
@@ -3855,6 +3875,137 @@ Console.WriteLine("-- Nota Ceiling --");
     le.Seek(1.99); le.Play(); le.RenderOffline(lab, 4096); le.StopTransport();
     float lafter = le.DeviceGetParam(lt, ld, 1);
     Check(lafter > 12f, $"automation drives Ceiling Gain ({lafter:F2} dB)");
+    int llane2 = le.AddAutomationLane(lt, AutomationTarget.DeviceParam, ld, 7);
+    le.SetAutomationPoints(lt, llane2, new[] { new AutomationPoint(0.0, 1f), new AutomationPoint(4.0, 1f) });
+    le.Seek(1.0); le.Play(); le.RenderOffline(lab, 1024); le.StopTransport();
+    Check(le.DeviceGetParam(lt, ld, 7) > 0.5f, "automation drives an appended param (True Peak)");
+}
+{
+    // A sine at fs/4 sampled 45° off its peaks: every sample sits 3 dB under the wave's real
+    // (inter-sample) peak — what a sample-peak limiter misses and True Peak must catch.
+    string tpwav = Path.Combine(Path.GetTempPath(), "nota_smoke_ceiling_tp.wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(tpwav, 2.0, 44100, i =>
+    {
+        double v = 0.5 * Math.Sin(2 * Math.PI * 11025 * i / 44100.0 + Math.PI / 4);
+        return (v, v);
+    });
+    using var ce = new NotaEngine();
+    ce.SetBpm(120);
+    int ct = ce.AddAudioTrack();
+    ce.AddAudioClip(ct, tpwav, 0.0);
+    int cd = ce.AddBuiltinDevice(ct, 14);
+    const int CeTele = 40, CeLvl = 64, CeLoud = 120, CeScope = CeTele + 7 * CeLvl + 3 * CeLoud;
+    var csc = new float[CeScope];
+    float[] Render(int frames) { var b = new float[frames * 2]; ce.Seek(0); ce.Play(); ce.RenderOffline(b, frames); ce.StopTransport(); return b; }
+    float TpHold(bool tp)
+    {
+        ce.DeviceSetParam(ct, cd, 7, tp ? 1f : 0f);
+        Render(8192);                       // settle the envelope on the new detector
+        ce.DeviceAction(ct, cd, 0, 0, 0);
+        Render(22050);
+        ce.DeviceScope(ct, cd, csc, CeScope);
+        return csc[10];
+    }
+    ce.DeviceSetParam(ct, cd, 0, -1f);
+    ce.DeviceSetParam(ct, cd, 1, 12f);
+    float tpOff = TpHold(false), tpOn = TpHold(true);
+    Check(tpOff > 0.5f && tpOn < tpOff - 1.5f && tpOn < 0.5f,
+          $"True Peak holds the inter-sample peak near the ceiling ({tpOff:F1} dBTP sample-peak mode → {tpOn:F1} dBTP)");
+    ce.DeviceSetParam(ct, cd, 7, 0f);
+
+    // Delta: without limiting the difference is silent; driven, it carries what is removed.
+    ce.DeviceSetParam(ct, cd, 0, 0f);
+    ce.DeviceSetParam(ct, cd, 1, 0f);
+    ce.DeviceSetParam(ct, cd, 8, 1f);
+    Render(22050);
+    var d0 = Render(22050);
+    ce.DeviceSetParam(ct, cd, 1, 18f);
+    Render(8192);
+    var d1 = Render(22050);
+    Check(Rms(d0, 22050) < 1e-3f && Rms(d1, 22050) > 0.05f, $"Delta plays what it removes (clean {Rms(d0, 22050):F4}, driven {Rms(d1, 22050):F3})");
+    ce.DeviceSetParam(ct, cd, 8, 0f);
+
+    // SC HP: a 11 kHz tone passes a 500 Hz key high-pass, so the reduction is unchanged — but a
+    // 440 Hz tone (the smoke sine) loses level in the key and the reduction eases.
+    int st = ce.AddAudioTrack();
+    ce.AddAudioClip(st, wav, 0.0);
+    int sd = ce.AddBuiltinDevice(st, 14);
+    ce.SetTrackMute(ct, true);
+    ce.DeviceSetParam(st, sd, 1, 12f);
+    float Gr(float hp)
+    {
+        ce.DeviceSetParam(st, sd, 9, hp);
+        Render(8192);
+        ce.DeviceAction(st, sd, 0, 0, 0);
+        Render(22050);
+        ce.DeviceScope(st, sd, csc, CeScope);
+        return csc[9];
+    }
+    float grFlat = Gr(20f), grHp = Gr(500f);
+    Check(grFlat > 3f && grHp < grFlat - 1f, $"SC HP takes the lows out of the detector (GR {grFlat:F1} → {grHp:F1} dB)");
+    ce.DeviceSetParam(st, sd, 9, 20f);
+
+    // Loudness (measured before the track fader): the unlimited 440 Hz sine reads a steady
+    // loudness, and 6 dB less Gain reads 6 LU less (the K-weighting is flat at 440 Hz).
+    ce.DeviceSetParam(st, sd, 1, 0f);
+    ce.DeviceSetParam(st, sd, 0, 0f);
+    float Integrated(float gain)
+    {
+        ce.DeviceSetParam(st, sd, 1, gain);
+        Render(4096);
+        ce.DeviceAction(st, sd, 1, 0, 0);
+        Render(44100);
+        ce.DeviceScope(st, sd, csc, CeScope);
+        return csc[5];
+    }
+    float i6 = Integrated(-6f), i0 = Integrated(0f);
+    Check(i0 > -12f && i0 < 0f && Math.Abs(i0 - i6 - 6f) < 0.3f && Math.Abs(csc[3] - i0) < 1f,
+          $"integrated loudness reads the sine and follows the level ({i0:F1} LUFS, −6 dB → {i6:F1})");
+    Check(csc[11] >= 0 && csc[12] > 0 && csc[30] > 0.5f, $"LRA, PLR and the measured time are reported ({csc[11]:F1} LU, {csc[12]:F1} dB, {csc[30]:F1} s)");
+    bool loudCells = false;
+    for (int i = 0; i < CeLoud; i++) loudCells |= csc[CeTele + 7 * CeLvl + CeLoud + i] > -60f;
+    Check(loudCells, "the 60 s loudness window fills");
+    ce.DeviceAction(st, sd, 1, 0, 0);
+    { var z = new float[64 * 2]; ce.Seek(0); ce.Play(); ce.RenderOffline(z, 64); ce.StopTransport(); }
+    ce.DeviceScope(st, sd, csc, CeScope);
+    Check(csc[5] < -100f && csc[11] == 0f, $"device_action 1 resets the loudness (I {csc[5]:F1}, LRA {csc[11]:F1})");
+
+    // Texts.
+    ce.DeviceSetParam(st, sd, 7, 1f);
+    ce.DeviceSetParam(st, sd, 10, -16f);
+    string t0 = ce.DeviceText(st, sd, 0), t1 = ce.DeviceText(st, sd, 1), t2 = ce.DeviceText(st, sd, 2);
+    Check(t0.StartsWith("Clean") && t0.Contains("TP") && t0.Contains("target -16") && t1.Contains("LUFS") && t1.Contains("LRA") && t2.Contains("SC HP"),
+          $"device texts: status '{t0[..Math.Min(60, t0.Length)]}…', live, guide");
+
+    // MCP reading.
+    ce.DeviceSetParam(st, sd, 1, 12f);
+    Render(44100);
+    var cetools = new Nota.Mcp.Tools.DeviceTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var cr = cetools.ReadCeiling(st, sd).Result;
+    Check(cr.Character == "Clean" && cr.TruePeakMode && cr.TargetLufs == -16 && cr.Level.Length == 16 && cr.Loudness.Length == 20
+          && cr.MaxReductionHoldDb > 1 && cr.IntegratedLufs > -70 && cr.SampleRate > 1000 && cr.Summary.Length > 0 && cr.Live.Length > 0
+          && cr.Level.Any(c => c.ReductionDb > 1),
+          $"MCP read_ceiling reports the reduction, loudness and windows (GR max {cr.MaxReductionHoldDb}, I {cr.IntegratedLufs}, {cr.FromTargetLu:+0.0;-0.0} LU)");
+
+    // Every factory preset names only real params and renders finite, under its ceiling.
+    var cecat = new FactoryPresetCatalog();
+    int cePresets = 0; bool ceNamesOk = true, cePresetsOk = true;
+    var ceNames = new HashSet<string>();
+    for (int p = 0; p < ce.DeviceParamCount(st, sd); p++) ceNames.Add(ce.DeviceParamName(st, sd, p));
+    foreach (var info in cecat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 14) continue;
+        var doc = cecat.Document(info.Id);
+        if (doc is null) continue;
+        cePresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!ceNames.Contains(k)) { ceNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        cecat.ApplyInPlace(ce, info.Id, st, sd);
+        Render(4096);
+        var pb = Render(22050);
+        float lim = (float)Math.Pow(10, ce.DeviceGetParam(st, sd, 0) / 20.0) * (ce.DeviceGetParam(st, sd, 8) > 0.5f ? 8f : 1.0001f);
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > lim) { cePresetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / over ({v})"); break; }
+    }
+    Check(cePresets >= 25 && ceNamesOk && cePresetsOk, $"{cePresets} Ceiling factory presets, all params known, all render finite and under the ceiling");
 }
 
 // ============================ Nota Strata ==================================

@@ -58,8 +58,10 @@ public sealed class Knob : Control
     /// <summary>Brass value arc instead of neutral grey.</summary>
     public bool Accent { get; init; }
 
-    /// <summary>Overrides the value-arc colour (e.g. teal for modulation knobs).</summary>
-    public IBrush? ArcColor { get; init; }
+    /// <summary>Overrides the value-arc colour (e.g. teal for modulation knobs); may change live
+    /// (a knob that turns into a modulation depth when its mode switches).</summary>
+    public IBrush? ArcColor { get => _arc; set { if (ReferenceEquals(_arc, value)) return; _arc = value; InvalidateVisual(); } }
+    private IBrush? _arc;
 
     /// <summary>Drawn as inactive (no brass) while still taking input — see Inactive.</summary>
     public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }

@@ -1601,13 +1601,45 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("dyneq", 13, "Warm Master",    ("2 Type", 1f), ("2 Freq", 110f), ("2 Gain", 1.8f), ("7 Freq", 10000f), ("7 Mode", 1f), ("7 Thr", -18f), ("7 Rng", -3f), ("7 Atk", 20f), ("7 Rel", 250f));
         Fx("dyneq", 13, "Punch Tighten",  ("3 Freq", 800f), ("3 Q", 1.2f), ("3 Mode", 1f), ("3 Thr", -22f), ("3 Rng", -5f), ("3 Atk", 3f), ("3 Rel", 90f));
 
-        // ---- Nota Ceiling (kind 14) — raw units. Character 0 Clean/1 Punch/2 Glue.
-        Fx("ceiling", 14, "Master Safe",   ("Ceiling", -1.0f), ("Gain", 0f),   ("Release", 120f), ("Character", 0f), ("Lookahead", 3f),   ("StereoLink", 100f));
-        Fx("ceiling", 14, "Loud Master",   ("Ceiling", -1.0f), ("Gain", 4.5f), ("Release", 100f), ("Character", 0f), ("Lookahead", 3f),   ("StereoLink", 100f));
-        Fx("ceiling", 14, "Streaming −1",  ("Ceiling", -1.0f), ("Gain", 2f),   ("Release", 150f), ("Character", 2f), ("Lookahead", 4f),   ("StereoLink", 100f), ("AutoRelease", 1f));
-        Fx("ceiling", 14, "Drum Punch",    ("Ceiling", -0.3f), ("Gain", 6f),   ("Release", 60f),  ("Character", 1f), ("Lookahead", 1.5f), ("StereoLink", 60f));
-        Fx("ceiling", 14, "Glue Bus",      ("Ceiling", -0.5f), ("Gain", 3f),   ("Release", 250f), ("Character", 2f), ("Lookahead", 5f),   ("StereoLink", 100f), ("AutoRelease", 1f));
-        Fx("ceiling", 14, "Transparent Safety", ("Ceiling", 0f), ("Gain", 0f), ("Release", 80f),  ("Character", 0f), ("Lookahead", 2f),   ("StereoLink", 100f));
+        // ---- Nota Ceiling (kind 14) — look-ahead limiter, raw units (unnamed params reset to their
+        //      defaults: Ceiling −1 dB, Gain 0, Release 120 ms, Look-ahead 3 ms, Link 100 %, SC HP
+        //      20 Hz = off, Target −14 LUFS). Character 0 Clean / 1 Punch / 2 Glue; AutoRelease,
+        //      True Peak, Delta 1 = on. Target only moves the loudness meters, not the sound.
+        Fx("ceiling", 14, "Init");
+        // Mastering
+        Fx("ceiling", 14, "Master Safe",        ("Ceiling", -1.0f), ("Gain", 0f),   ("Release", 120f), ("Character", 0f), ("Lookahead", 3f),   ("StereoLink", 100f));
+        Fx("ceiling", 14, "Transparent Safety", ("Ceiling", 0f),    ("Gain", 0f),   ("Release", 80f),  ("Character", 0f), ("Lookahead", 2f),   ("StereoLink", 100f));
+        Fx("ceiling", 14, "Loud Master",        ("Ceiling", -1.0f), ("Gain", 4.5f), ("Release", 100f), ("Character", 0f), ("Lookahead", 3f),   ("StereoLink", 100f));
+        Fx("ceiling", 14, "Streaming −1",       ("Ceiling", -1.0f), ("Gain", 2f),   ("Release", 150f), ("Character", 2f), ("Lookahead", 4f),   ("StereoLink", 100f), ("AutoRelease", 1f));
+        Fx("ceiling", 14, "Streaming −14",      ("Ceiling", -1.0f), ("Gain", 5f),   ("Release", 600f), ("Character", 2f), ("Lookahead", 5f),   ("True Peak", 1f), ("Target", -14f));
+        Fx("ceiling", 14, "Apple Music −16",    ("Ceiling", -1.0f), ("Gain", 3f),   ("Release", 300f), ("Character", 2f), ("Lookahead", 5f),   ("True Peak", 1f), ("AutoRelease", 1f), ("Target", -16f));
+        Fx("ceiling", 14, "Podcast −16",        ("Ceiling", -1.0f), ("Gain", 6f),   ("Release", 150f), ("Character", 0f), ("Lookahead", 5f),   ("True Peak", 1f), ("AutoRelease", 1f), ("SC HP", 80f), ("Target", -16f));
+        Fx("ceiling", 14, "Broadcast R128 −23", ("Ceiling", -1.0f), ("Gain", 0f),   ("Release", 250f), ("Character", 0f), ("Lookahead", 5f),   ("True Peak", 1f), ("Target", -23f));
+        Fx("ceiling", 14, "Club Master −8",     ("Ceiling", -0.3f), ("Gain", 9f),   ("Release", 60f),  ("Character", 0f), ("Lookahead", 2f),   ("True Peak", 1f), ("AutoRelease", 1f), ("SC HP", 40f), ("Target", -8f));
+        Fx("ceiling", 14, "CD Brickwall",       ("Ceiling", -0.1f), ("Gain", 6f),   ("Release", 50f),  ("Character", 0f), ("Lookahead", 1.5f), ("Target", -9f));
+        Fx("ceiling", 14, "Gentle Master",      ("Ceiling", -1.0f), ("Gain", 1.5f), ("Release", 300f), ("Character", 2f), ("Lookahead", 6f),   ("AutoRelease", 1f), ("True Peak", 1f));
+        Fx("ceiling", 14, "Vinyl Pre-Master",   ("Ceiling", -3.0f), ("Gain", 1f),   ("Release", 200f), ("Character", 2f), ("Lookahead", 5f),   ("True Peak", 1f), ("SC HP", 60f), ("Target", -16f));
+        Fx("ceiling", 14, "Bass-Heavy Master",  ("Ceiling", -1.0f), ("Gain", 4f),   ("Release", 180f), ("Character", 0f), ("Lookahead", 4f),   ("True Peak", 1f), ("AutoRelease", 1f), ("SC HP", 120f));
+        Fx("ceiling", 14, "Wide Mix Unlinked",  ("Ceiling", -1.0f), ("Gain", 3f),   ("Release", 120f), ("Character", 0f), ("Lookahead", 3f),   ("StereoLink", 30f));
+        // Buses and tracks
+        Fx("ceiling", 14, "Drum Punch",         ("Ceiling", -0.3f), ("Gain", 6f),   ("Release", 60f),  ("Character", 1f), ("Lookahead", 1.5f), ("StereoLink", 60f));
+        Fx("ceiling", 14, "Drum Bus",           ("Ceiling", -0.3f), ("Gain", 9f),   ("Release", 60f),  ("Character", 1f), ("Lookahead", 1f),   ("StereoLink", 60f), ("True Peak", 1f), ("AutoRelease", 1f), ("SC HP", 90f));
+        Fx("ceiling", 14, "Glue Bus",           ("Ceiling", -0.5f), ("Gain", 3f),   ("Release", 250f), ("Character", 2f), ("Lookahead", 5f),   ("StereoLink", 100f), ("AutoRelease", 1f));
+        Fx("ceiling", 14, "Mix Bus Glue",       ("Ceiling", -1.0f), ("Gain", 2f),   ("Release", 400f), ("Character", 2f), ("Lookahead", 6f),   ("AutoRelease", 1f), ("SC HP", 50f));
+        Fx("ceiling", 14, "Kick Clipper",       ("Ceiling", -1.0f), ("Gain", 6f),   ("Release", 20f),  ("Character", 1f), ("Lookahead", 0f));
+        Fx("ceiling", 14, "Snare Crack",        ("Ceiling", -1.0f), ("Gain", 8f),   ("Release", 30f),  ("Character", 1f), ("Lookahead", 0.5f), ("StereoLink", 80f));
+        Fx("ceiling", 14, "808 Safety",         ("Ceiling", -1.0f), ("Gain", 2f),   ("Release", 250f), ("Character", 0f), ("Lookahead", 8f));
+        Fx("ceiling", 14, "Vocal Peak Catcher", ("Ceiling", -3.0f), ("Gain", 3f),   ("Release", 80f),  ("Character", 0f), ("Lookahead", 2f),   ("AutoRelease", 1f));
+        Fx("ceiling", 14, "Guitar Wall",        ("Ceiling", -1.0f), ("Gain", 6f),   ("Release", 200f), ("Character", 2f), ("Lookahead", 3f),   ("SC HP", 100f));
+        Fx("ceiling", 14, "Synth Lead Tamer",   ("Ceiling", -2.0f), ("Gain", 4f),   ("Release", 90f),  ("Character", 0f), ("Lookahead", 2f),   ("StereoLink", 70f));
+        Fx("ceiling", 14, "Headroom −6",        ("Ceiling", -6.0f), ("Gain", 0f),   ("Release", 150f), ("Character", 0f), ("Lookahead", 3f),   ("True Peak", 1f));
+        // Live and effects
+        Fx("ceiling", 14, "Live Zero Latency",  ("Ceiling", -0.5f), ("Gain", 0f),   ("Release", 100f), ("Character", 2f), ("Lookahead", 0f));
+        Fx("ceiling", 14, "Soft Clip Warmth",   ("Ceiling", -1.0f), ("Gain", 4f),   ("Release", 50f),  ("Character", 2f), ("Lookahead", 0f));
+        Fx("ceiling", 14, "Pumping Smash",      ("Ceiling", -1.0f), ("Gain", 14f),  ("Release", 400f), ("Character", 2f), ("Lookahead", 0f),   ("SC HP", 20f));
+        Fx("ceiling", 14, "Brickwall Crush",    ("Ceiling", -1.0f), ("Gain", 20f),  ("Release", 25f),  ("Character", 0f), ("Lookahead", 1f));
+        Fx("ceiling", 14, "Lo-Fi Squash",       ("Ceiling", -6.0f), ("Gain", 24f),  ("Release", 10f),  ("Character", 1f), ("Lookahead", 0f),   ("StereoLink", 0f));
+        Fx("ceiling", 14, "Hear the Squash",    ("Ceiling", -1.0f), ("Gain", 8f),   ("Release", 120f), ("Character", 0f), ("Lookahead", 3f),   ("Delta", 1f));
 
         // ---- Nota Strata (kind 15) — looper settings only (recorded audio isn't a preset).
         //      Quantize 0 Off / 1 Bar / 2 1-4.

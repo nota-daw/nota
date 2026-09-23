@@ -400,9 +400,12 @@ and user presets, automation, persistence and cloning.
 - **Nota Crush** (12) — bit crusher: Bit Depth, Sample Rate, Drive, Wet, Anti-Alias;
   Digital/Analog/Fold modes; GRIT (Dither/Jitter/Noise); an OUTPUT filter; quantizer and
   aliasing-spectrum visualisers.
-- **Nota Ceiling** (14) — look-ahead brickwall limiter: drive, ceiling, release (with
-  auto), Clean/Punch/Glue characters, lookahead, stereo link, sidechain; a LIVE strip with
-  GR, input/output history, LUFS-S / LUFS-I / true peak.
+- **Nota Ceiling** (14) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
+  program-dependent auto stage), Clean / Punch / Glue characters, look-ahead, stereo link,
+  True Peak (4× inter-sample detection), Delta (hear what it removes), a key high-pass and an
+  external key; a BS.1770 / R128 loudness meter (LUFS M / S / I, LRA, PLR, true peak) against
+  a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target), a LIMIT
+  column, Meters / Detector panels; 32 factory presets; MCP `read_ceiling`.
 - **Nota Dynamic EQ-8** (13) — 8-band parametric with dynamics: each band Static/Duck/Lift,
   threshold, range, attack/release, sidechain, Solo band; a dual curve (static plus
   momentary) and a band table with GR.

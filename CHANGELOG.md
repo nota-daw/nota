@@ -55,6 +55,36 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Ceiling shows its level, its reduction and its loudness, and gains True Peak, Delta, a
+  key high-pass and a loudness target.** The card moves onto the 700 × 260 frame of Beat Repeat
+  and Shutter — a LIMIT column (input with the ceiling, reduction, output), a centre panel with
+  **Level**, **Reduction** and **Loudness** tabs, a **Meters** / **Detector** panel and a status
+  strip. The slider row over the graph becomes Gain / Ceiling / Release knobs under it,
+  Character a switch over it, Look-ahead and Link move to the right panel:
+  - **Level** — the last 4 s: the input, the part over the ceiling in red and the output, with
+    the reduction under it; drag the ceiling line. Shows how far in went to out and how much
+    of the time the input was over the ceiling.
+  - **Reduction** — the reduction over 4 s, scaled to its depth, with its mean; teal where a
+    transient got through to the clip (Punch lets the attack by). Shows the release the auto
+    stage is actually using and how many transients reached the clip.
+  - **Loudness** — momentary, short-term and integrated LUFS over the last 60 s around a
+    **Target** (−23 broadcast … −8 very loud; drag the line for any value), with the loudness
+    range (LRA) and PLR. Meters shows the integrated reading against the target.
+  - New **True peak**: the detector reads the 4× inter-sample peak, so the ceiling holds in
+    dBTP. New **Delta**: hear only what the limiter removes. New **SC HP**: take the lows out
+    of the detector so the bass stops pumping the mix. The key source picker stays.
+  - Auto release now slows smoothly as the reduction deepens (×1 at 1 dB up to ×5 at 7 dB)
+    instead of jumping at 2 dB. Peak holds, max GR and the clip count live in the engine;
+    **Reset peaks** clears them, **Reset** on the Loudness tab starts the loudness again.
+  - **32 factory presets**, up from six — mastering for streaming, Apple Music, podcast,
+    broadcast R128, club and CD, bus and drum limiting, track peak catchers, zero-latency live
+    use and squash effects. The four new parameters are appended and default to the old sound,
+    so older projects and presets open unchanged. Every parameter automates, MIDI-learns,
+    saves in a preset and is reachable over MCP. `get_device_text` returns the status line, the
+    live reading and a guide to the parameter values, `device_action` 0 resets the peaks and 1
+    the loudness, and the new `read_ceiling` returns the reduction, the peaks and their holds,
+    true peak, LUFS M / S / I with the distance to the target, LRA, PLR, the release in use,
+    the clip count and both windows.
 - **Nota Beat Repeat shows what it captures and repeats, and gains a triplet grid, a filter
   type and a Repeat you can latch.** The card moves onto the 700 × 260 frame of Shutter and
   Auto Shift — a REPEAT column (the input and the repeats' level, the repeat count), a centre
@@ -315,6 +345,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Nota Ceiling's integrated loudness and true peak.** The integrated LUFS gated 100 ms
+  slices instead of the 400 ms blocks BS.1770 asks for, so quiet passages were weighed wrong;
+  it now gates overlapping 400 ms blocks. The true-peak meter interpolated with a spline that
+  read inter-sample peaks up to 1 dB low; it now uses a 4× windowed-sinc interpolator.
 - **Nota Beat Repeat's first pass and filter width.** With Pitch above 0 the capture pass
   read ahead of the audio just written, so the first slice of every burst played stale audio
   from seconds earlier; the capture now plays through as it is and the pitch applies to the
