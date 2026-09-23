@@ -55,6 +55,35 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota EQ-8 is redrawn with slopes, mid/side and global controls.** The card follows the new
+  mockup on the 700 × 260 frame, laid out like Dynamic EQ-8:
+  - **Band chips and graph.** A row of eight chips (number, type, channel, frequency) sits over
+    the response graph. Drag a node for frequency and gain, use the wheel for Q. Double-click a
+    node to switch its band on or off; double-click empty space to switch on a free band there.
+    Right-click a node for its type, slope, channel and on.
+  - **Slope.** Low cut and high cut now go 12, 24 or 48 dB/oct. The steeper slopes are
+    Butterworth, and Q still sets the resonance.
+  - **Channel.** Each band works on the stereo signal, the Mid, the Side, or the left or right
+    channel alone. When any band works on the Side, the graph draws the Side curve in teal
+    next to the Mid.
+  - **Global.** Scale multiplies every shelf and bell gain (0 … 200 %). Output is ±12 dB.
+    Auto gain takes back the average lift of the shelves and bells, so you hear edits at the
+    same loudness.
+  - **Analyzer.** The spectra now come from the engine. Pre shows the input; Post shows the
+    output over a dimmer input; Off hides both.
+  - **Selected band panel.** Type, FREQ / GAIN / Q (RESO on the cuts), SLOPE, CHANNEL and the
+    GLOBAL controls. A status strip shows the summary, the output with the auto gain in
+    effect, the sample rate and CPU.
+  - **Compatibility.** Projects, racks and presets saved before this open unchanged: the new
+    params default to 12 dB/oct, stereo, 100 %, 0 dB and auto gain off.
+  - **34 factory presets.** They cover mix, vocal, drums, instruments, mid/side, left/right
+    and repair (hum removal). The four earlier presets keep their names.
+  - **MCP: `read_eq8`, `set_eq8_band` and `set_eq8`.** `read_eq8` reports the settings, every
+    band, the in / out peaks and both spectra. `set_eq8_band` edits a band, and `set_eq8` sets
+    Scale, Output, Auto gain and the analyzer. Both record like hand edits.
+    `get_device_text` gives a summary, a live reading and a parameter guide, and
+    `device_action` 0 resets the meters. In the automation menu, the params are grouped by
+    band.
 - **Nota EQ-3 is redrawn as a DJ isolator.** The card follows the new mockup on the
   700 × 260 frame. The crossover slider row is gone; you now drag the crossovers on the graph:
   - **Band strips.** LOW, MID and HIGH each get a strip in their own colour with the band's

@@ -823,9 +823,10 @@ NOTA_API float       nota_device_param_default(const NotaEngine* engine, int32_t
 NOTA_API float       nota_instrument_param_default(const NotaEngine* engine, int32_t track_id, int32_t param_index);
 NOTA_API float       nota_midi_effect_param_default(const NotaEngine* engine, int32_t track_id, int32_t index, int32_t param_index);
 
-/* Real-time analyzer feed: copies up to max_samples of the device's recent mono
- * signal into out (oldest->newest), returning the count written. Non-zero only for
- * the built-in EQ-8 (its pre-EQ spectrum ring). Lock-free; torn reads are fine. */
+/* Real-time analyzer feed: copies up to max_samples of the device's live readings
+ * into out, returning the count written. Each device defines its own layout (e.g.
+ * Nota EQ-8: a telemetry block, then its pre and post spectra); 0 for devices
+ * without one. Lock-free; torn reads are fine. */
 NOTA_API int32_t     nota_device_scope(const NotaEngine* engine, int32_t track_id, int32_t device_index, float* out, int32_t max_samples);
 /* Interactive-device command channel (the looper's Record/Overdub/Play/Stop/Undo/
  * Clear and per-layer mute/gain). The engine applies it at the next quantize boundary. */

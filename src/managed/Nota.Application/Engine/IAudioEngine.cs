@@ -357,9 +357,10 @@ public interface IAudioEngine : IDisposable
     int MidiEffectCcDestDevice(int trackId, int index);
     int MidiEffectCcDestParam(int trackId, int index);
     float MidiEffectCcDepth(int trackId, int index);
-    /// <summary>Copies up to maxSamples of the device's recent mono signal into
-    /// outSamples (oldest→newest); returns the count written. Non-zero only for the
-    /// built-in EQ-8 (real-time spectrum). Lock-free.</summary>
+    /// <summary>Copies up to maxSamples of the device's live readings into outSamples; returns
+    /// the count written. Each device defines its own layout (the analysers: a telemetry block,
+    /// then spectra — e.g. Nota EQ-8's in / out peaks, auto gain, then its pre and post
+    /// spectra); zero for devices without one. Lock-free.</summary>
     int DeviceScope(int trackId, int deviceIndex, float[] outSamples, int maxSamples);
     /// <summary>Interactive-device command channel (the looper's transport + per-layer mute/gain).
     /// Applied at the next quantize boundary by the engine.</summary>

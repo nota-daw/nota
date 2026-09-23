@@ -94,10 +94,10 @@ public:
     // writes an atomic, UI reads lock-free (like the per-track level meters).
     virtual float gainReductionDb() const { return 0.0f; }
 
-    // Real-time analyzer feed: copy up to maxSamples of a recently-seen mono signal
-    // into out (oldest→newest), returning the count written. Non-zero only for
-    // devices with a scope (the built-in EQ-8's pre-EQ spectrum). Audio thread
-    // writes a ring, UI reads lock-free; torn reads are acceptable for a visualizer.
+    // Real-time analyzer feed: copy up to maxSamples of the device's live readings into
+    // out, returning the count written. Each device defines its own layout (a telemetry
+    // block, then spectra — see Eq.h / DynamicEq.h); 0 for devices without one. Audio
+    // thread writes, UI / MCP read lock-free; torn reads are acceptable for a visualizer.
     virtual int32_t scopeRead(float* /*out*/, int32_t /*maxSamples*/) const { return 0; }
 
     // Interactive-device command channel (the looper's Record/Overdub/Play/Stop/

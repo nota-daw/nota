@@ -3195,7 +3195,7 @@ Check(m4Dry > 1e-4f, $"instrument audible (rms={m4Dry:0.0000})");
 int eqDev = engine.AddBuiltinDevice(fxT, 0); // 0 = EQ-8 (flat by default = passthrough)
 Check(eqDev >= 0, "add built-in EQ-8");
 Check(engine.DeviceName(fxT, eqDev) == "Nota EQ-8", "EQ-8 device name");
-Check(engine.DeviceParamCount(fxT, eqDev) == 40, "EQ-8 exposes 40 params (8 bands × 5)");
+Check(engine.DeviceParamCount(fxT, eqDev) == 60, "EQ-8 exposes 60 params (8 bands × 5, slopes, channels, globals)");
 engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through flat EQ-8 (rms={Rms(buf, frames):0.0000})");
@@ -5540,7 +5540,7 @@ Console.WriteLine("-- EQ-8 --");
     engine.AddMidiClip(et, 0.0, 4.0);
     engine.SetClipNotes(et, 0, new[] { new NotaNote(69, 0.0, 3.0, 0.9f) });   // A4 = 440 Hz + harmonics
     int eq = engine.AddBuiltinDevice(et, 0);
-    Check(engine.DeviceParamCount(et, eq) == 40, "EQ-8 has 40 params on a fresh track");
+    Check(engine.DeviceParamCount(et, eq) == 60, "EQ-8 has 60 params on a fresh track");
 
     // Band 3 (index 2) is a bell; param base = 2*5. On=+0, Type=+1, Freq=+2, Gain=+3, Q=+4.
     int b2 = 2 * 5;
@@ -5559,13 +5559,170 @@ Console.WriteLine("-- EQ-8 --");
     float cut = Rms(eb, 8192);
     Check(boosted > cut * 1.2f, $"EQ-8 bell shapes level (boost {boosted:0.000} > cut {cut:0.000})");
 
-    // Analyzer scope: after audio has passed, the pre-EQ ring returns non-silent samples.
+    // Analyzer: after audio has passed, the scope returns the telemetry and both spectra.
     engine.DeviceSetParam(et, eq, b2 + 3, 0f);
     engine.Seek(0); engine.Play(); engine.RenderOffline(eb, 8192); engine.StopTransport();
-    var scope = new float[2048];
-    int got = engine.DeviceScope(et, eq, scope, 2048);
-    float srms = Rms(scope, 1024);
-    Check(got == 2048 && srms > 1e-5f, $"EQ-8 analyzer scope returns signal ({got} samples, rms {srms:0.0000})");
+    var scope = new float[16 + 2 * 96];
+    int got = engine.DeviceScope(et, eq, scope, scope.Length);
+    Check(got == scope.Length && scope[3] > 1000 && scope[5] > 0.5f, $"EQ-8 scope returns the telemetry and both spectra ({got}, sr {scope[3]})");
+}
+{
+    // Nota EQ-8 on a deterministic stereo clip — a centred 440 Hz sine (all Mid, no Side) — so
+    // gains, scale, channels, slopes, output and auto gain read in exact dB.
+    string cwav = Path.Combine(Path.GetTempPath(), "nota_smoke_eq8_centre_" + Guid.NewGuid().ToString("N") + ".wav");
+    Nota.SmokeTest.WavWriter.WriteStereo(cwav, 2.0, 44100, i => { double v = 0.3 * Math.Sin(2 * Math.PI * 440 * i / 44100.0); return (v, v); });
+    using var qe = new NotaEngine();
+    qe.SetBpm(120);
+    int qt = qe.AddAudioTrack();
+    qe.AddAudioClip(qt, cwav, 0.0);
+    int qd = qe.AddBuiltinDevice(qt, 0);
+    const int On = 0, Type = 1, Freq = 2, Gain = 3, Q = 4, SlopeB = 40, ChanB = 48, Scale = 56, Output = 57, AutoG = 58, Ana = 59;
+    float[] Render(int frames) { var b = new float[frames * 2]; qe.Seek(0); qe.Play(); qe.RenderOffline(b, frames); qe.StopTransport(); return b; }
+    (double L, double R) LevelLR()
+    {
+        var b = Render(22050); double l = 0, r = 0;
+        for (int i = 11025; i < 22050; i++) { l += b[i * 2] * b[i * 2]; r += b[i * 2 + 1] * b[i * 2 + 1]; }
+        return (10 * Math.Log10(l / 11025 + 1e-30), 10 * Math.Log10(r / 11025 + 1e-30));
+    }
+    double Level() { var (l, r) = LevelLR(); return 10 * Math.Log10((Math.Pow(10, l / 10) + Math.Pow(10, r / 10)) / 2); }
+    void Band(int b, float on, float type, float hz, float db, float q, float slope = 0, float ch = 0)
+    {
+        int o = b * 5;
+        qe.DeviceSetParam(qt, qd, o + On, on); qe.DeviceSetParam(qt, qd, o + Type, type); qe.DeviceSetParam(qt, qd, o + Freq, hz);
+        qe.DeviceSetParam(qt, qd, o + Gain, db); qe.DeviceSetParam(qt, qd, o + Q, q);
+        qe.DeviceSetParam(qt, qd, SlopeB + b, slope); qe.DeviceSetParam(qt, qd, ChanB + b, ch);
+    }
+    qe.SetDeviceBypassed(qt, qd, true);
+    double dry = Level();
+    qe.SetDeviceBypassed(qt, qd, false);
+
+    // Defaults: the appended params mean the original EQ-8, and a fresh one is transparent.
+    Check(qe.DeviceParamName(qt, qd, SlopeB) == "1 Slope" && qe.DeviceParamName(qt, qd, ChanB + 7) == "8 Channel" && qe.DeviceParamName(qt, qd, Scale) == "Scale"
+          && qe.DeviceParamName(qt, qd, Output) == "Output" && qe.DeviceParamName(qt, qd, AutoG) == "Auto Gain" && qe.DeviceParamName(qt, qd, Ana) == "Analyzer",
+          "EQ-8 appended param names");
+    Check(Math.Abs(qe.DeviceParamDefault(qt, qd, Scale) - 100) < 1e-3 && qe.DeviceParamDefault(qt, qd, SlopeB) == 0 && qe.DeviceParamDefault(qt, qd, ChanB) == 0
+          && qe.DeviceParamDefault(qt, qd, AutoG) == 0 && qe.DeviceParamDefault(qt, qd, Output) == 0 && Math.Abs(qe.DeviceParamDefault(qt, qd, Ana) - 1) < 1e-3,
+          "EQ-8 appended defaults: slope 12, stereo, scale 100 %, output 0, auto off, analyzer Post");
+    double flat = Level() - dry;
+    Check(Math.Abs(flat) < 0.1, $"a fresh EQ-8 is transparent ({flat:+0.00;-0.00} dB)");
+
+    // A +6 dB bell on the sine, then Scale.
+    for (int b = 0; b < 8; b++) qe.DeviceSetParam(qt, qd, b * 5 + On, 0f);
+    Band(2, 1, 2, 440, 6, 1);
+    double bell = Level() - dry;
+    qe.DeviceSetParam(qt, qd, Scale, 50); double half = Level() - dry;
+    qe.DeviceSetParam(qt, qd, Scale, 0); double none = Level() - dry;
+    qe.DeviceSetParam(qt, qd, Scale, 200); double twice = Level() - dry;
+    qe.DeviceSetParam(qt, qd, Scale, 100);
+    Check(Math.Abs(bell - 6) < 0.3 && Math.Abs(half - 3) < 0.3 && Math.Abs(none) < 0.1 && Math.Abs(twice - 12) < 0.4,
+          $"Scale multiplies the gain (100 % {bell:+0.0}, 50 % {half:+0.0}, 0 % {none:+0.0}, 200 % {twice:+0.0} dB)");
+
+    // Channels: the centred sine lives in the Mid — a Side band leaves it, a Mid band takes it.
+    qe.DeviceSetParam(qt, qd, ChanB + 2, 2); double side = Level() - dry;
+    qe.DeviceSetParam(qt, qd, ChanB + 2, 1); double mid = Level() - dry;
+    qe.DeviceSetParam(qt, qd, ChanB + 2, 3); var lOnly = LevelLR();
+    qe.SetDeviceBypassed(qt, qd, true); var dryLR = LevelLR(); qe.SetDeviceBypassed(qt, qd, false);
+    Check(Math.Abs(side) < 0.1 && Math.Abs(mid - 6) < 0.3 && Math.Abs(lOnly.L - dryLR.L - 6) < 0.3 && Math.Abs(lOnly.R - dryLR.R) < 0.1,
+          $"channels: Side {side:+0.0}, Mid {mid:+0.0}, Left L {lOnly.L - dryLR.L:+0.0} / R {lOnly.R - dryLR.R:+0.0} dB");
+    qe.DeviceSetParam(qt, qd, ChanB + 2, 0);
+
+    // Slopes: a high-pass an octave above the sine cuts deeper at 24 and 48 dB/oct.
+    Band(2, 1, 0, 880, 0, 0.71f, 0); double k12 = Level() - dry;
+    qe.DeviceSetParam(qt, qd, SlopeB + 2, 1); double k24 = Level() - dry;
+    qe.DeviceSetParam(qt, qd, SlopeB + 2, 2); double k48 = Level() - dry;
+    Check(k12 < -9 && k24 < k12 - 8 && k48 < k24 - 15, $"cut slopes 12 / 24 / 48 dB/oct at an octave: {k12:F1} / {k24:F1} / {k48:F1} dB");
+    bool fin = true; foreach (var v in Render(8192)) if (!float.IsFinite(v)) { fin = false; break; }
+    qe.DeviceSetParam(qt, qd, Q + 10, 12f); foreach (var v in Render(8192)) if (!float.IsFinite(v)) { fin = false; break; }
+    Check(fin, "a resonant 48 dB/oct cut renders finite");
+    Band(2, 0, 2, 440, 0, 1);
+
+    // Output and auto gain (a +6 dB low shelf lifts the average; auto takes it back).
+    qe.DeviceSetParam(qt, qd, Output, -6); double outDb = Level() - dry;
+    qe.DeviceSetParam(qt, qd, Output, 0);
+    Check(Math.Abs(outDb + 6) < 0.2, $"Output −6 dB ({outDb:F2})");
+    Band(0, 1, 1, 1000, 6, 0.71f);
+    double shelf = Level() - dry;
+    qe.DeviceSetParam(qt, qd, AutoG, 1);
+    double comp = Level() - dry;
+    var ts = new float[16];
+    qe.DeviceScope(qt, qd, ts, 16);
+    Check(comp < shelf - 1.5 && ts[2] < -1.5 && ts[2] > -6, $"auto gain takes back the shelf's average lift ({shelf:+0.0} → {comp:+0.0} dB, auto {ts[2]:+0.0;-0.0})");
+    qe.DeviceSetParam(qt, qd, AutoG, 0);
+
+    // Spectra: pre and post peak at the sine; the shelf lifts post over pre.
+    qe.DeviceAction(qt, qd, 0, 0, 0);
+    Render(8192);
+    var sc = new float[16 + 2 * 96];
+    int sn = qe.DeviceScope(qt, qd, sc, sc.Length);
+    int pkPre = 0, pkPost = 0;
+    for (int b = 1; b < 96; b++) { if (sc[16 + b] > sc[16 + pkPre]) pkPre = b; if (sc[112 + b] > sc[112 + pkPost]) pkPost = b; }
+    double hzPre = 20 * Math.Pow(1000, (pkPre + 0.5) / 96), lift = sc[112 + pkPost] - sc[16 + pkPre];
+    Check(sn == sc.Length && sc[5] > 0.5f && hzPre > 380 && hzPre < 520 && pkPre == pkPost && lift > 3 && sc[1] > sc[0] + 3,
+          $"spectra: pre / post peak at the sine (~{hzPre:0} Hz), post {lift:+0.0} dB over pre; out peak {sc[1]:F1} over in {sc[0]:F1} dBFS");
+
+    // Texts.
+    qe.DeviceSetParam(qt, qd, ChanB + 0, 1);
+    string t0 = qe.DeviceText(qt, qd, 0), t1 = qe.DeviceText(qt, qd, 1), tg = qe.DeviceText(qt, qd, 2);
+    Check(t0.Contains("bands on") && t0.Contains("Low shelf") && t0.Contains("mid") && t1.Contains("auto gain") && tg.Contains("Channel") && tg.Contains("Slope"),
+          $"device texts: status '{t0[..Math.Min(70, t0.Length)]}…', live, guide");
+
+    // Clone + automation.
+    qe.DeviceSetParam(qt, qd, SlopeB + 7, 2); qe.DeviceSetParam(qt, qd, Scale, 75);
+    int qtD = qe.DuplicateTrack(qt); int qdD = qe.TrackDeviceCount(qtD) - 1;
+    Check(qtD > 0 && qe.DeviceGetParam(qtD, qdD, SlopeB + 7) == 2 && qe.DeviceGetParam(qtD, qdD, ChanB) == 1 && Math.Abs(qe.DeviceGetParam(qtD, qdD, Scale) - 75) < 1e-3,
+          "duplicate track clones EQ-8 slope, channel and scale");
+    int lane = qe.AddAutomationLane(qt, AutomationTarget.DeviceParam, qd, Scale);
+    Check(lane >= 0, "add EQ-8 Scale automation lane");
+    qe.SetAutomationPoints(qt, lane, new[] { new AutomationPoint(0.0, 0f), new AutomationPoint(2.0, 200f) });
+    { var ab = new float[4096 * 2]; qe.Seek(1.99); qe.Play(); qe.RenderOffline(ab, 4096); qe.StopTransport(); }
+    Check(qe.DeviceGetParam(qt, qd, Scale) > 150, $"automation drives EQ-8 Scale ({qe.DeviceGetParam(qt, qd, Scale):F0} %)");
+    qe.RemoveAutomationLane(qt, lane);
+    qe.DeviceSetParam(qt, qd, Scale, 100);
+
+    // MCP: edit a band and the globals, read it all back.
+    var tools = new Nota.Mcp.Tools.DeviceTools(qe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var mb = tools.SetEq8Band(qt, qd, 5, on: true, type: "High cut", freqHz: 6000, q: 0.9, slope: 48, channel: "Side").Result;
+    Check(mb.On && mb.Type == "High cut" && Math.Abs(mb.FreqHz - 6000) < 1 && mb.SlopeDbPerOct == 48 && mb.Channel == "Side" && Math.Abs(mb.Q - 0.9) < 0.01,
+          $"MCP set_eq8_band edits a band ({mb.Type} {mb.FreqHz} Hz {mb.SlopeDbPerOct} dB/oct {mb.Channel})");
+    var mg = tools.SetEq8(qt, qd, scalePercent: 50, outputDb: -2, autoGain: true, analyzer: "Pre").Result;
+    Check(Math.Abs(mg.ScalePercent - 50) < 0.05 && Math.Abs(mg.OutputDb + 2) < 0.05 && mg.AutoGain && mg.Analyzer == "Pre"
+          && Math.Abs(mg.Bands[0].EffectiveGainDb - 3) < 0.05, $"MCP set_eq8 sets the globals (scale {mg.ScalePercent} %, effective B1 {mg.Bands[0].EffectiveGainDb} dB)");
+    Render(8192);
+    var mr = tools.ReadEq8(qt, qd).Result;
+    Check(mr.SpectrumValid && mr.InputSpectrum.Length == 24 && mr.OutputSpectrum.Length == 24 && mr.Summary.Length > 0 && mr.Live.Length > 0
+          && mr.SampleRate > 1000 && mr.OutputPeakDb > -60, $"MCP read_eq8 reports settings, levels and spectra (out {mr.OutputPeakDb} dBFS)");
+    bool threw = false;
+    try { tools.SetEq8Band(qt, qd, 1, channel: "Centre").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+    Check(threw, "MCP set_eq8_band rejects an unknown channel");
+
+    // An original-EQ-8 preset (the 40 band params only) keeps the appended params at their defaults.
+    var legacy = new PresetDocument { Type = "builtin-effect", BuiltinKind = 0, NamedParams = new Dictionary<string, float> { ["1 Type"] = 1f, ["1 Freq"] = 110f, ["1 Gain"] = 5f } };
+    PresetService.ApplyInPlace(legacy, qe, qt, qd);
+    Check(qe.DeviceGetParam(qt, qd, Scale) == 100 && qe.DeviceGetParam(qt, qd, AutoG) == 0 && qe.DeviceGetParam(qt, qd, Output) == 0
+          && qe.DeviceGetParam(qt, qd, SlopeB + 4) == 0 && qe.DeviceGetParam(qt, qd, ChanB + 4) == 0, "an original EQ-8 preset loads with scale 100 %, stereo, 12 dB/oct");
+
+    // Every factory preset names only real params and renders finite.
+    var cat = new FactoryPresetCatalog();
+    int nPresets = 0; bool namesOk = true, presetsOk = true;
+    var names = new HashSet<string>();
+    for (int p = 0; p < qe.DeviceParamCount(qt, qd); p++) names.Add(qe.DeviceParamName(qt, qd, p));
+    foreach (var info in cat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 0) continue;
+        var doc = cat.Document(info.Id);
+        if (doc is null) continue;
+        nPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!names.Contains(k)) { namesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        cat.ApplyInPlace(qe, info.Id, qt, qd);
+        var pb = Render(22050);
+        bool ok = true;
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > 4f) { ok = false; break; }
+        if (!ok) { presetsOk = false; Console.WriteLine($"    preset {info.DisplayName} not finite / over"); }
+    }
+    Check(nPresets >= 25 && namesOk && presetsOk, $"{nPresets} EQ-8 factory presets, all params known, all render finite");
+    cat.ApplyInPlace(qe, "eq/Vocal Wide", qt, qd);
+    Check(qe.DeviceGetParam(qt, qd, ChanB + 1) == 1 && qe.DeviceGetParam(qt, qd, ChanB + 6) == 2 && qe.DeviceGetParam(qt, qd, SlopeB) == 1
+          && qe.DeviceGetParam(qt, qd, 5 * 5 + On) == 0 && qe.DeviceGetParam(qt, qd, AutoG) == 1, "the Vocal Wide preset sets Mid / Side bands, a 24 dB cut and auto gain");
 }
 
 // ============================ Nota Arp (MIDI FX) ===========================

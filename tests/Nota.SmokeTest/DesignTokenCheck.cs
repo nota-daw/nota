@@ -300,7 +300,6 @@ internal static class DesignTokenCheck
         if (root is null) { yield return (false, "repo root located"); yield break; }
         var app = Path.Combine(root, "src/managed/Nota.App");
         var views = Directory.EnumerateFiles(Path.Combine(app, "Controls"), "*.cs")
-            .Append(Path.Combine(app, "EqCurve.cs"))
             .Select(f => (Path: Path.GetRelativePath(app, f), Text: File.ReadAllText(f))).ToArray();
         // Deliberate exceptions: MixBar is a level strip, not a graph window; RhythmWaveViz
         // draws the waveform itself as a shape, which is data, not a fill under a curve.

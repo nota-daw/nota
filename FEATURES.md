@@ -326,7 +326,13 @@ and user presets, automation, persistence and cloning.
   overlay). Cables are parameters: saved, preset-able and automatable. 28 factory presets.
 
 ### Audio effects
-- **Nota EQ-8** (kind 0) — 8-band parametric.
+- **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
+  Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
+  slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
+  shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
+  numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
+  analyzer switched Pre / Post / Off), band chips, a panel for the selected band; 34 factory
+  presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
   auto-gain, Range, MIX; a sidechain key (internal or another track, pre/post tap, External

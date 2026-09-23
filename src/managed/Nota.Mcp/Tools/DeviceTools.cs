@@ -67,10 +67,10 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));
 
-    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen). Reverb (kind 2): id 0 = a one-line summary (algorithm, RT60, pre-delay, diffusion, mix, early reflections / vintage, or that the tail is frozen). Compressor (kind 1): id 0 = a one-line summary (character, threshold, ratio, knee, attack / release, detector, range, mix, the reduction right now, external key / unlinked / Listen) — or use read_dynamics for the numbers. Auto Filter (kind 7): id 0 = a one-line summary (type, slope, cutoff, Q, what the envelope and LFO drive and by how much, drive, mix, sidechain key), 1 = the live reading (modulated cutoff with its note, resonance, envelope level, LFO value and phase, onsets counted), 2 = a guide to what each 0..1 parameter value means — or use read_filter_motion for the numbers. Nota Vintage (kind 8): id 0 = a one-line summary (character, drive, tone model and shelves, wow / flutter with their rates, noise, crackle, wear, stage, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, asymmetry, wow and flutter in cents, band-limit, hiss level, auto-comp gain), 2 = a guide to what each 0..1 parameter value means — or use read_vintage for the numbers. Nota Valve (kind 6): id 0 = a one-line summary (model, gain, the tone stack with the middle's frequency, bright / deep, even-only, cabinet with mic, distance, axis and position, low / high cut, gate, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, estimated aliasing, drive, gate open / closed, auto-comp gain, the cab's loss at 4 kHz vs on-axis), 2 = a guide to the parameter values and units — or use read_valve for the numbers. Nota Utility (kind 4): id 0 = a one-line summary (channel mode, width and its L/R or M/S law, mono below with its slope, balance, phase, mute, gain, auto match and its reference, true-peak limit), 1 = the live reading (in / out LUFS-S, peak and RMS, true peak, the delta in the meter's unit, correlation, width, energy balance, auto-match gain, limiter reduction), 2 = a guide to the parameter values and units — or use read_utility for the numbers. Nota Shutter (kind 19): id 0 = a one-line summary (Gate / Duck, threshold, return, shape with attack / hold / release, floor, lookahead, retrigger, internal / external key, the key filter band, peak hold, Listen), 1 = the live reading (state, gain, reduction now and peak, in / out / detector levels, the share of the window it was open, openings in the last bar and since reset, key level, latency), 2 = a guide to what each 0..1 parameter value means — or use read_shutter for the numbers. Nota Auto Shift (kind 10): id 0 = a one-line summary (key and scale or the MIDI target settings, key source, amount, speed, range, human, shift and fine, formant preserve and shift, mix, detection range and sensitivity, skip sibilants, follow), 1 = the live reading (detected note and cents, frequency, clarity, target and correction, ratio, input level, MIDI note held, share sung in scale, the best and runner-up key, Learn running, latency), 2 = a guide to what each 0..1 parameter value means — or use read_auto_shift for the numbers. Nota Beat Repeat (kind 11): id 0 = a one-line summary (mode, interval, grid, offset, gate, chance, variation, pitch and pitch decay, decay, volume, the repeat filter with its type, band and narrowing, mix, Repeat held, latch), 1 = the live reading (idle / capturing / repeating, the pass of how many, the slice in ms and beats, the repeat's gain, pitch and filter, in / repeat / out levels, bar and beat, bursts and skipped intervals since reset), 2 = a guide to what each 0..1 parameter value means — or use read_beat_repeat for the numbers. Nota Dynamic EQ-8 (kind 13): id 0 = a one-line summary (bands on and dynamic, the Dynamic switch, each band on with its type, frequency, gain, Q and — for a dynamic band — mode, threshold, range, attack / release and key, solo, output, whether a key track is routed), 1 = the live reading (in / out peaks, whether a key arrives, each band's detector level and — for a dynamic band — its threshold and the gain it has now of its range, CPU), 2 = a guide to the parameter layout and units — or use read_dynamic_eq for the numbers and set_dynamic_eq_band to edit a band. Nota Ceiling (kind 14): id 0 = a one-line summary (character, gain, ceiling and whether it is true-peak, release or auto, look-ahead, stereo link, key high-pass, key track, the loudness target, Delta), 1 = the live reading (gain reduction now, its mean and deepest over the last 4 s and since reset, in / out peaks and their holds, true peak, the share of time over the ceiling, the release in use and its range, transients that reached the clip, LUFS M / S / I and the distance to the target, LRA, PLR, latency), 2 = a guide to the parameter values and units — or use read_ceiling for the numbers. Nota Crush (kind 12): id 0 = a one-line summary (mode, bits, rate with the hold, drive, wet, dither / jitter / noise, post filter, output, anti-alias, auto gain, DC filter), 1 = the live reading (in / out peak and RMS, crest, peak holds, bits with the level count and quantisation noise, the reduced rate, hold and Nyquist, THD+N, images above the Nyquist, the driven peak and folds, auto gain, CPU), 2 = a guide to what each 0..1 parameter value means — or use read_crush for the numbers. Nota EQ-3 (kind 16): id 0 = a one-line summary (slope, the two crossovers, each band's gain or kill, the fader range, output), 1 = the live reading (in / out peaks, each band's level after its gain and the gain in effect now, the crossovers in use, CPU), 2 = a guide to what each 0..1 parameter value means — or use read_eq3 for the numbers and set_eq3 to play it in dB and Hz.")]
+    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen). Reverb (kind 2): id 0 = a one-line summary (algorithm, RT60, pre-delay, diffusion, mix, early reflections / vintage, or that the tail is frozen). Compressor (kind 1): id 0 = a one-line summary (character, threshold, ratio, knee, attack / release, detector, range, mix, the reduction right now, external key / unlinked / Listen) — or use read_dynamics for the numbers. Auto Filter (kind 7): id 0 = a one-line summary (type, slope, cutoff, Q, what the envelope and LFO drive and by how much, drive, mix, sidechain key), 1 = the live reading (modulated cutoff with its note, resonance, envelope level, LFO value and phase, onsets counted), 2 = a guide to what each 0..1 parameter value means — or use read_filter_motion for the numbers. Nota Vintage (kind 8): id 0 = a one-line summary (character, drive, tone model and shelves, wow / flutter with their rates, noise, crackle, wear, stage, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, asymmetry, wow and flutter in cents, band-limit, hiss level, auto-comp gain), 2 = a guide to what each 0..1 parameter value means — or use read_vintage for the numbers. Nota Valve (kind 6): id 0 = a one-line summary (model, gain, the tone stack with the middle's frequency, bright / deep, even-only, cabinet with mic, distance, axis and position, low / high cut, gate, mix, output, oversampling, auto-comp), 1 = the live reading (in / out peaks, THD with the 2nd and 3rd harmonics, estimated aliasing, drive, gate open / closed, auto-comp gain, the cab's loss at 4 kHz vs on-axis), 2 = a guide to the parameter values and units — or use read_valve for the numbers. Nota Utility (kind 4): id 0 = a one-line summary (channel mode, width and its L/R or M/S law, mono below with its slope, balance, phase, mute, gain, auto match and its reference, true-peak limit), 1 = the live reading (in / out LUFS-S, peak and RMS, true peak, the delta in the meter's unit, correlation, width, energy balance, auto-match gain, limiter reduction), 2 = a guide to the parameter values and units — or use read_utility for the numbers. Nota Shutter (kind 19): id 0 = a one-line summary (Gate / Duck, threshold, return, shape with attack / hold / release, floor, lookahead, retrigger, internal / external key, the key filter band, peak hold, Listen), 1 = the live reading (state, gain, reduction now and peak, in / out / detector levels, the share of the window it was open, openings in the last bar and since reset, key level, latency), 2 = a guide to what each 0..1 parameter value means — or use read_shutter for the numbers. Nota Auto Shift (kind 10): id 0 = a one-line summary (key and scale or the MIDI target settings, key source, amount, speed, range, human, shift and fine, formant preserve and shift, mix, detection range and sensitivity, skip sibilants, follow), 1 = the live reading (detected note and cents, frequency, clarity, target and correction, ratio, input level, MIDI note held, share sung in scale, the best and runner-up key, Learn running, latency), 2 = a guide to what each 0..1 parameter value means — or use read_auto_shift for the numbers. Nota Beat Repeat (kind 11): id 0 = a one-line summary (mode, interval, grid, offset, gate, chance, variation, pitch and pitch decay, decay, volume, the repeat filter with its type, band and narrowing, mix, Repeat held, latch), 1 = the live reading (idle / capturing / repeating, the pass of how many, the slice in ms and beats, the repeat's gain, pitch and filter, in / repeat / out levels, bar and beat, bursts and skipped intervals since reset), 2 = a guide to what each 0..1 parameter value means — or use read_beat_repeat for the numbers. Nota Dynamic EQ-8 (kind 13): id 0 = a one-line summary (bands on and dynamic, the Dynamic switch, each band on with its type, frequency, gain, Q and — for a dynamic band — mode, threshold, range, attack / release and key, solo, output, whether a key track is routed), 1 = the live reading (in / out peaks, whether a key arrives, each band's detector level and — for a dynamic band — its threshold and the gain it has now of its range, CPU), 2 = a guide to the parameter layout and units — or use read_dynamic_eq for the numbers and set_dynamic_eq_band to edit a band. Nota Ceiling (kind 14): id 0 = a one-line summary (character, gain, ceiling and whether it is true-peak, release or auto, look-ahead, stereo link, key high-pass, key track, the loudness target, Delta), 1 = the live reading (gain reduction now, its mean and deepest over the last 4 s and since reset, in / out peaks and their holds, true peak, the share of time over the ceiling, the release in use and its range, transients that reached the clip, LUFS M / S / I and the distance to the target, LRA, PLR, latency), 2 = a guide to the parameter values and units — or use read_ceiling for the numbers. Nota Crush (kind 12): id 0 = a one-line summary (mode, bits, rate with the hold, drive, wet, dither / jitter / noise, post filter, output, anti-alias, auto gain, DC filter), 1 = the live reading (in / out peak and RMS, crest, peak holds, bits with the level count and quantisation noise, the reduced rate, hold and Nyquist, THD+N, images above the Nyquist, the driven peak and folds, auto gain, CPU), 2 = a guide to what each 0..1 parameter value means — or use read_crush for the numbers. Nota EQ-3 (kind 16): id 0 = a one-line summary (slope, the two crossovers, each band's gain or kill, the fader range, output), 1 = the live reading (in / out peaks, each band's level after its gain and the gain in effect now, the crossovers in use, CPU), 2 = a guide to what each 0..1 parameter value means — or use read_eq3 for the numbers and set_eq3 to play it in dB and Hz. Nota EQ-8 (kind 0): id 0 = a one-line summary (bands on, scale, each band on with its type, frequency, gain, Q, slope for the cuts and channel when not stereo, output, auto gain, analyzer), 1 = the live reading (in / out peaks, the auto gain in effect, CPU), 2 = a guide to the parameter layout and units — or use read_eq8 for the numbers, set_eq8_band to edit a band and set_eq8 for the globals.")]
     public Task<string> GetDeviceText(int trackId, int deviceIndex, int id) => Read(() => E.DeviceText(trackId, deviceIndex, id));
 
-    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Reverb (kind 2): id 0 kills the tail (empties the reverb's buffers, so whatever is still ringing — or frozen — stops). Auto Filter (kind 7): id 0 restarts the LFO (from its start phase; in Sync the cycle is re-anchored to the current beat), id 1 resets the envelope follower (drops a held peak). Nota Vintage (kind 8): id 0 resets the wear (restarts the wow and flutter at their zero phase and silences a ringing crackle). Nota Valve (kind 6): id 0 resets the amp (clears the filters, the gate and the auto-comp). Nota Utility (kind 4): id 0 gain match — moves Gain once so the output meets the reference (the input's level, or Target when Match To = 1) over the last 3 s in the Meter's unit; id 1 resets the meters (level history, holds and the auto-match ride). Nota Shutter (kind 19): id 0 resets the meters (peak reduction, the opening count, the history); id 1 sets the history window read_shutter and the card show (intArg 0 = 250 ms, 1 = 1 s, 2 = 4 s). Nota Auto Shift (kind 10): id 0 resets the analysis (the sung-note histogram and the pitch history); id 1 is Learn — intArg 1 starts listening (clears the histogram), 0 stops and sets Key + Scale (Major / Minor) to the best match and Key Source to Manual, 2 cancels. Nota Beat Repeat (kind 11): id 0 resets (stops the repeat, clears the timeline, the meters and the burst count); id 1 fires a repeat now, as if the interval hit (ignores Chance; while the transport plays — to hold one, set the Repeat param to 1). Nota Ceiling (kind 14): id 0 resets the peaks (the peak and true-peak holds, the max reduction, the clip count and the 4 s level window); id 1 resets the loudness (integrated, LRA, the 60 s window) and the peaks. Nota Crush (kind 12): id 0 resets the meters (the peak holds and the spectrum average). Nota EQ-3 (kind 16): id 0 resets the meters (the peaks and the spectrum average). Devices without a command ignore the call.")]
+    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Reverb (kind 2): id 0 kills the tail (empties the reverb's buffers, so whatever is still ringing — or frozen — stops). Auto Filter (kind 7): id 0 restarts the LFO (from its start phase; in Sync the cycle is re-anchored to the current beat), id 1 resets the envelope follower (drops a held peak). Nota Vintage (kind 8): id 0 resets the wear (restarts the wow and flutter at their zero phase and silences a ringing crackle). Nota Valve (kind 6): id 0 resets the amp (clears the filters, the gate and the auto-comp). Nota Utility (kind 4): id 0 gain match — moves Gain once so the output meets the reference (the input's level, or Target when Match To = 1) over the last 3 s in the Meter's unit; id 1 resets the meters (level history, holds and the auto-match ride). Nota Shutter (kind 19): id 0 resets the meters (peak reduction, the opening count, the history); id 1 sets the history window read_shutter and the card show (intArg 0 = 250 ms, 1 = 1 s, 2 = 4 s). Nota Auto Shift (kind 10): id 0 resets the analysis (the sung-note histogram and the pitch history); id 1 is Learn — intArg 1 starts listening (clears the histogram), 0 stops and sets Key + Scale (Major / Minor) to the best match and Key Source to Manual, 2 cancels. Nota Beat Repeat (kind 11): id 0 resets (stops the repeat, clears the timeline, the meters and the burst count); id 1 fires a repeat now, as if the interval hit (ignores Chance; while the transport plays — to hold one, set the Repeat param to 1). Nota Ceiling (kind 14): id 0 resets the peaks (the peak and true-peak holds, the max reduction, the clip count and the 4 s level window); id 1 resets the loudness (integrated, LRA, the 60 s window) and the peaks. Nota Crush (kind 12): id 0 resets the meters (the peak holds and the spectrum average). Nota EQ-3 (kind 16): id 0 resets the meters (the peaks and the spectrum average). Nota EQ-8 (kind 0): id 0 resets the meters (the peaks and the spectrum averages). Devices without a command ignore the call.")]
     public Task DeviceAction(int trackId, int deviceIndex, [Description("Command id — see the device's list in this description")] int id,
         int intArg = 0, float floatArg = 0) => Mutate(() => E.DeviceAction(trackId, deviceIndex, id, intArg, floatArg));
 
@@ -751,6 +751,136 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         }
         if (outputDb is { } o) S(9, 0.5 + Math.Clamp(o, -24, 24) / 48);
         return Eq3Read(trackId, deviceIndex, false);
+    });
+
+    public sealed record Eq8Band(int Band, bool On, string Type, double FreqHz, double GainDb, double EffectiveGainDb, double Q,
+        int SlopeDbPerOct, string Channel);
+    public sealed record Eq8Reading(string Summary, string Live, double ScalePercent, double OutputDb, bool AutoGain, double AutoGainNowDb,
+        string Analyzer, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
+        bool SpectrumValid, DynEqSpectrumBand[] InputSpectrum, DynEqSpectrumBand[] OutputSpectrum);
+
+    private static readonly string[] Eq8Channels = { "Stereo", "Mid", "Side", "Left", "Right" };
+    private static readonly string[] Eq8Analyzer = { "Pre", "Post", "Off" };
+
+    private Eq8Band Eq8BandRead(int trackId, int deviceIndex, int b)
+    {
+        int pc = E.DeviceParamCount(trackId, deviceIndex);
+        float Pm(int p) => p < pc ? E.DeviceGetParam(trackId, deviceIndex, p) : p == 56 ? 100f : 0f;
+        int o = b * 5, ty = Math.Clamp((int)Math.Round(Pm(o + 1)), 0, 5);
+        bool gain = ty is 1 or 2 or 4, cut = ty is 0 or 5;
+        double scale = Math.Clamp(Pm(56), 0, 200) / 100;
+        return new Eq8Band(b + 1, Pm(o) > 0.5f, DynEqTypes[ty], Math.Round(Pm(o + 2)), gain ? Math.Round(Pm(o + 3), 1) : 0,
+            gain ? Math.Round(Pm(o + 3) * scale, 1) : 0, Math.Round(Pm(o + 4), 2),
+            cut ? 12 << Math.Clamp((int)Math.Round(Pm(40 + b)), 0, 2) : 12, Eq8Channels[Math.Clamp((int)Math.Round(Pm(48 + b)), 0, 4)]);
+    }
+
+    private Eq8Reading Eq8Read(int trackId, int deviceIndex, bool spectrum)
+    {
+        if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
+        const int tele = 16, spec = 96;
+        var sc = new float[tele + 2 * spec];
+        int n = E.DeviceScope(trackId, deviceIndex, sc, spectrum ? sc.Length : tele);
+        float V(int i) => n > i ? sc[i] : 0f;
+        float Db(int i) => n > i ? sc[i] : -120f;
+        static double R1(double v) => Math.Round(v, 1);
+        int pc = E.DeviceParamCount(trackId, deviceIndex);
+        float Pm(int p) => p < pc ? E.DeviceGetParam(trackId, deviceIndex, p) : p == 56 ? 100f : p == 59 ? 1f : 0f;
+        var bands = new Eq8Band[8];
+        for (int b = 0; b < 8; b++) bands[b] = Eq8BandRead(trackId, deviceIndex, b);
+        bool valid = spectrum && n >= sc.Length && V(5) > 0.5f;
+        DynEqSpectrumBand[] Spec(int at)
+        {
+            var sp = new List<DynEqSpectrumBand>();
+            if (valid)
+                for (int k = 0; k < 24; k++)
+                {
+                    double pw = 0;
+                    for (int b = 4 * k; b < 4 * k + 4; b++) pw += Math.Pow(10, sc[at + b] / 10);
+                    sp.Add(new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), R1(Math.Max(-120, 10 * Math.Log10(Math.Max(1e-12, pw))))));
+                }
+            return sp.ToArray();
+        }
+        return new Eq8Reading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1), R1(Pm(56)), R1(Pm(57)),
+            Pm(58) >= 0.5f, R1(V(2)), Eq8Analyzer[Math.Clamp((int)Math.Round(Pm(59)), 0, 2)], R1(Db(0)), R1(Db(1)), V(3), bands,
+            valid, Spec(tele), Spec(tele + spec));
+    }
+
+    [McpServerTool(Name = "read_eq8"), Description(
+        "Read a Nota EQ-8 (built-in effect kind 0 — eight-band parametric EQ): Scale (% applied to every shelf and bell gain), "
+        + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off), in / out "
+        + "peaks; per band: on, type, frequency, gain, the effective gain after Scale, Q (the resonance on the cuts), slope "
+        + "(12 / 24 / 48 dB/oct, cuts only) and channel (Stereo / Mid / Side / Left / Right); plus the input and output spectra "
+        + "in 24 log bands (dB). Levels read −120 while silent; they move only while audio runs through the track. "
+        + "set_eq8_band edits a band, set_eq8 the globals.")]
+    public Task<Eq8Reading> ReadEq8(int trackId, int deviceIndex) => Read(() => Eq8Read(trackId, deviceIndex, true));
+
+    [McpServerTool(Name = "set_eq8_band"), Description(
+        "Edit one band of a Nota EQ-8 (built-in effect kind 0) in one call — only the fields you pass change; each change is "
+        + "recorded like a hand edit. type: \"Low cut\" | \"Low shelf\" | \"Bell\" | \"Notch\" | \"High shelf\" | \"High cut\" "
+        + "(only shelves and bells take gain). slope: 12, 24 or 48 dB/oct (cuts only). channel: \"Stereo\" | \"Mid\" | \"Side\" | "
+        + "\"Left\" | \"Right\". Setting any field of an off band does not switch it on — pass on true. Returns the band as read back.")]
+    public Task<Eq8Band> SetEq8Band(int trackId, int deviceIndex, [Description("Band 1..8")] int band,
+        bool? on = null, string? type = null, [Description("20..20000 Hz")] double? freqHz = null, [Description("−18..+18 dB")] double? gainDb = null,
+        [Description("0.1..18 (0.71 = flat on the cuts)")] double? q = null, [Description("12, 24 or 48")] int? slope = null,
+        string? channel = null) => Mutate(() =>
+    {
+        if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
+        if (band < 1 || band > 8) throw new ArgumentException("band is 1..8");
+        int o = (band - 1) * 5, pc = E.DeviceParamCount(trackId, deviceIndex);
+        void S(int p, double v)
+        {
+            if (p >= pc) return;
+            E.BeginAutomationWrite(trackId, AutomationTarget.DeviceParam, deviceIndex, p, "");
+            E.DeviceSetParam(trackId, deviceIndex, p, (float)v);
+            E.EndAutomationWrite(trackId, AutomationTarget.DeviceParam, deviceIndex, p, "");
+        }
+        int Idx(string[] names, string v, string what)
+        {
+            int i = Array.FindIndex(names, s => string.Equals(s, v.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (i < 0) throw new ArgumentException($"{what} must be one of: {string.Join(", ", names)}");
+            return i;
+        }
+        if (type is not null) S(o + 1, Idx(DynEqTypes, type, "type"));
+        if (freqHz is { } f) S(o + 2, Math.Clamp(f, 20, 20000));
+        if (gainDb is { } g) S(o + 3, Math.Clamp(g, -18, 18));
+        if (q is { } qq) S(o + 4, Math.Clamp(qq, 0.1, 18));
+        if (slope is { } sl)
+        {
+            if (sl is not (12 or 24 or 48)) throw new ArgumentException("slope is 12, 24 or 48");
+            S(40 + band - 1, sl == 12 ? 0 : sl == 24 ? 1 : 2);
+        }
+        if (channel is not null) S(48 + band - 1, Idx(Eq8Channels, channel, "channel"));
+        if (on is { } onv) S(o, onv ? 1 : 0);
+        return Eq8BandRead(trackId, deviceIndex, band - 1);
+    });
+
+    [McpServerTool(Name = "set_eq8"), Description(
+        "Set the global controls of a Nota EQ-8 (built-in effect kind 0) — only the fields you pass change; each change is recorded "
+        + "like a hand edit. scalePercent 0..200 multiplies every shelf and bell gain (100 = as set, 0 = flat). outputDb ±12. "
+        + "autoGain adds the opposite of the average level of the shelves and bells (cuts and notches do not count; ±12 dB max). analyzer \"Pre\" | \"Post\" | \"Off\" picks the "
+        + "spectrum the card draws. Returns the device as read back (without the spectra).")]
+    public Task<Eq8Reading> SetEq8(int trackId, int deviceIndex, [Description("0..200 %")] double? scalePercent = null,
+        [Description("−12..+12 dB")] double? outputDb = null, bool? autoGain = null, string? analyzer = null) => Mutate(() =>
+    {
+        if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
+        int pc = E.DeviceParamCount(trackId, deviceIndex);
+        void S(int p, double v)
+        {
+            if (p >= pc) return;
+            E.BeginAutomationWrite(trackId, AutomationTarget.DeviceParam, deviceIndex, p, "");
+            E.DeviceSetParam(trackId, deviceIndex, p, (float)v);
+            E.EndAutomationWrite(trackId, AutomationTarget.DeviceParam, deviceIndex, p, "");
+        }
+        if (scalePercent is { } sp) S(56, Math.Clamp(sp, 0, 200));
+        if (outputDb is { } od) S(57, Math.Clamp(od, -12, 12));
+        if (autoGain is { } ag) S(58, ag ? 1 : 0);
+        if (analyzer is not null)
+        {
+            int i = Array.FindIndex(Eq8Analyzer, s => string.Equals(s, analyzer.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (i < 0) throw new ArgumentException("analyzer must be Pre, Post or Off");
+            S(59, i);
+        }
+        return Eq8Read(trackId, deviceIndex, false);
     });
 
     public sealed record AnalyzerBand(double Hz, double Db);

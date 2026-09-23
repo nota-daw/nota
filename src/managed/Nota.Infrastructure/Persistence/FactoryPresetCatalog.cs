@@ -895,13 +895,60 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("fdecay", 0.5f), ("fsustain", 0.15f), ("adecay", 0.55f), ("asustain", 0.3f)),
             Cab(1, 1, 16, 0.4f)));
 
-        // ---- EQ-8 (kind 0) — 8 bands × (On/Type/Freq/Gain/Q), param names "<band> <field>",
-        //      band 1 = low shelf, 2/3 = bells, 4 = high shelf (defaults). Type: 0 LowCut,
-        //      1 LowShelf, 2 Bell, 3 Notch, 4 HighShelf, 5 HighCut.
-        Fx("eq", 0, "Bass Boost",     ("1 Type", 1f), ("1 Freq", 110f), ("1 Gain", 5f));
-        Fx("eq", 0, "Air & Presence", ("3 Freq", 3000f), ("3 Gain", 2.5f), ("4 Type", 4f), ("4 Freq", 9000f), ("4 Gain", 5f));
-        Fx("eq", 0, "Telephone",      ("1 Type", 0f), ("1 Freq", 450f), ("2 Freq", 1200f), ("2 Gain", 6f), ("2 Q", 1.2f), ("4 Type", 5f), ("4 Freq", 3000f));
-        Fx("eq", 0, "Low Cut",        ("1 Type", 0f), ("1 Freq", 80f), ("1 Q", 0.7f));
+        // ---- Nota EQ-8 (kind 0) — raw units. Eq8(…) spells out every band it uses with B(band, type,
+        //      Hz, dB, Q, slope, channel); a band it does not name is switched off. Type: 0 Low cut,
+        //      1 Low shelf, 2 Bell, 3 Notch, 4 High shelf, 5 High cut. Slope (cuts): 0 = 12, 1 = 24,
+        //      2 = 48 dB/oct. Channel: 0 St, 1 Mid, 2 Side, 3 L, 4 R. Globals: Scale %, Output dB,
+        //      Auto Gain. The first four keep the names of the original EQ-8 presets.
+        const int HP = 0, LS = 1, BL = 2, NT = 3, HS = 4, LP = 5, S12 = 0, S24 = 1, S48 = 2, M = 1, SD = 2, L = 3, R = 4;
+        // Start + tone
+        Eq8("Init", B(1, LS, 100, 0, 0.7f), B(2, BL, 300, 0, 0.7f), B(3, BL, 2000, 0, 0.7f), B(4, HS, 8000, 0, 0.7f));
+        Eq8("Bass Boost", B(1, LS, 110, 5, 0.7f));
+        Eq8("Air & Presence", B(3, BL, 3000, 2.5f, 0.7f), B(4, HS, 9000, 5, 0.7f));
+        Eq8("Telephone", B(1, HP, 450, 0, 0.7f), B(2, BL, 1200, 6, 1.2f), B(4, LP, 3000, 0, 0.7f));
+        Eq8("Low Cut", B(1, HP, 80, 0, 0.7f));
+        Eq8("Sub Rumble Filter", B(1, HP, 25, 0, 0.71f, S48));
+        Eq8("Smile Curve", B(1, LS, 90, 3, 0.71f), B(3, BL, 800, -2, 0.7f), B(7, HS, 9000, 3, 0.71f));
+        Eq8("Loudness Contour", [("Auto Gain", 1f)], B(1, LS, 100, 4, 0.71f), B(7, HS, 10000, 3, 0.71f));
+        // Mix
+        Eq8("Mix", B(1, LS, 110, -4, 0.6f), B(3, BL, 1300, 3, 0.9f), B(6, BL, 4172, -4.5f, 0.7f));
+        Eq8("Clean Mix Bus", B(1, HP, 30, 0, 0.71f, S24), B(2, BL, 250, -1.5f, 0.9f), B(7, HS, 12000, 1.5f, 0.71f));
+        Eq8("Mud Cut", B(1, HP, 60, 0, 0.71f), B(2, BL, 300, -3.5f, 1.2f));
+        Eq8("Pad Tuck", [("Output", -1f)], B(1, HP, 200, 0, 0.71f, S24), B(4, BL, 1000, -2, 0.6f), B(8, LP, 10000, 0, 0.71f, S24));
+        // Vocal
+        Eq8("Vocal Wide", [("Output", -1f), ("Auto Gain", 1f)],
+            B(1, HP, 100, 0, 0.71f, S24), B(2, BL, 300, -3, 1.6f, ch: M), B(3, BL, 2800, 2, 1.1f, ch: M),
+            B(4, HP, 220, 0, 0.71f, S12, SD), B(5, BL, 5000, -2, 4f, ch: M), B(7, HS, 9000, 4, 0.71f, ch: SD));
+        Eq8("Vocal Presence", B(1, HP, 90, 0, 0.71f, S24), B(2, BL, 250, -2, 1f), B(4, BL, 3500, 3, 0.9f), B(7, HS, 10000, 2, 0.71f));
+        Eq8("De-Box Vocal", B(1, HP, 80, 0, 0.71f), B(3, BL, 500, -4, 1.4f), B(5, BL, 2500, 1.5f, 1f));
+        Eq8("Sibilance Tamer", B(6, BL, 6500, -6, 4f), B(7, HS, 11000, -1.5f, 0.71f));
+        Eq8("Podcast Voice", B(1, HP, 80, 0, 0.71f, S24), B(2, BL, 200, 1.5f, 0.8f), B(3, BL, 400, -2.5f, 1.2f),
+            B(5, BL, 3000, 2, 1f), B(8, LP, 14000, 0, 0.71f));
+        // Drums
+        Eq8("Kick Punch", B(1, HP, 30, 0, 0.71f, S24), B(2, BL, 60, 4, 1.2f), B(3, BL, 350, -5, 1.5f), B(5, BL, 4000, 3, 1f));
+        Eq8("Snare Crack", B(1, HP, 80, 0, 0.71f), B(2, BL, 200, 3, 1.2f), B(4, BL, 900, -3, 1.5f), B(6, BL, 5000, 3, 1f));
+        Eq8("Overheads Air", B(1, HP, 250, 0, 0.71f, S24), B(4, BL, 1000, -1.5f, 0.8f), B(7, HS, 10000, 4, 0.71f));
+        Eq8("Hi-Hat Clean", B(1, HP, 400, 0, 0.71f, S48), B(6, BL, 8000, -2, 2f));
+        // Instruments
+        Eq8("Bass Definition", B(1, HP, 35, 0, 0.71f, S24), B(2, BL, 100, 2.5f, 1f), B(3, BL, 250, -3, 1.3f),
+            B(4, BL, 800, 2, 1.2f), B(8, LP, 8000, 0, 0.71f));
+        Eq8("Acoustic Guitar", B(1, HP, 80, 0, 0.71f, S24), B(2, BL, 200, -3, 1f), B(5, BL, 5000, 2, 1f), B(7, HS, 12000, 2, 0.71f));
+        Eq8("Electric Guitar Cab", B(1, HP, 90, 0, 0.71f, S24), B(3, BL, 400, -2, 1f), B(5, BL, 2500, 2, 1.2f), B(8, LP, 7000, 0, 0.71f, S24));
+        Eq8("Piano Clarity", B(1, HP, 40, 0, 0.71f), B(3, BL, 300, -2, 0.8f), B(5, BL, 3000, 2, 0.8f), B(7, HS, 10000, 1.5f, 0.71f));
+        // Mid / Side, left / right
+        Eq8("Master Tilt", [("Scale", 60f)],
+            B(1, HP, 28, 0, 0.71f, S48), B(2, LS, 80, 2, 0.71f), B(3, BL, 250, -1.5f, 0.8f), B(4, BL, 2500, -1, 0.7f),
+            B(5, HS, 10000, 2.5f, 0.6f), B(8, LP, 20000, 0, 0.71f, S24));
+        Eq8("Mono Low End", B(1, HP, 20, 0, 0.71f), B(2, HP, 120, 0, 0.71f, S24, SD));
+        Eq8("Wide Air", B(6, BL, 3000, -1, 0.8f, ch: SD), B(7, HS, 8000, 3, 0.71f, ch: SD));
+        Eq8("Focus Center", B(3, BL, 2000, 2, 1f, ch: M), B(4, BL, 2000, -1.5f, 0.8f, ch: SD), B(5, LS, 250, -2, 0.71f, ch: SD));
+        Eq8("Double-Track Split", B(3, BL, 800, 2, 1.2f, ch: L), B(4, BL, 1600, 2, 1.2f, ch: R),
+            B(5, BL, 1600, -1.5f, 1.2f, ch: L), B(6, BL, 800, -1.5f, 1.2f, ch: R));
+        // Repair + character
+        Eq8("Hum Removal 50 Hz", B(1, NT, 50, 0, 8f), B(2, NT, 100, 0, 8f), B(3, NT, 150, 0, 8f), B(4, NT, 200, 0, 8f));
+        Eq8("Hum Removal 60 Hz", B(1, NT, 60, 0, 8f), B(2, NT, 120, 0, 8f), B(3, NT, 180, 0, 8f), B(4, NT, 240, 0, 8f));
+        Eq8("Lo-Fi Radio", [("Output", 2f)], B(1, HP, 300, 0, 0.71f, S48), B(4, BL, 1500, 4, 1f), B(8, LP, 4000, 0, 0.71f, S48));
+        Eq8("Band Pass", B(1, HP, 500, 0, 1.5f, S24), B(8, LP, 2000, 0, 1.5f, S24));
 
         // ---- Nota EQ-3 (kind 16) — three-band isolator, all params normalized 0..1 (unnamed ones
         //      reset to their defaults: flat, 250 Hz / 2.5 kHz, 24 dB/oct). Eq3(…) presets are in the
@@ -1877,6 +1924,29 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     // Nota EQ-3 in the Isolator law — names Range, so it isn't read as a pre-Range preset.
     private void Eq3(string name, params (string Name, float Value)[] ps)
         => Fx("eq3", 16, name, [("Range", 1f), .. ps]);
+
+    // A Nota EQ-8 band for Eq8(…): number 1..8, type, Hz, dB, Q, slope (cuts), channel.
+    private static (int N, int Type, float Hz, float Db, float Q, int Slope, int Ch) B(int n, int type, float hz, float db, float q,
+        int slope = 0, int ch = 0) => (n, type, hz, db, q, slope, ch);
+
+    private void Eq8(string name, params (int N, int Type, float Hz, float Db, float Q, int Slope, int Ch)[] bands)
+        => Eq8(name, [], bands);
+
+    // Every band is spelled out: the ones named are on as given, the rest are switched off — so a
+    // preset never inherits the default bands. Globals (Scale, Output, Auto Gain) are extra pairs.
+    private void Eq8(string name, (string Name, float Value)[] globals, params (int N, int Type, float Hz, float Db, float Q, int Slope, int Ch)[] bands)
+    {
+        var ps = new List<(string, float)>(globals);
+        var used = new bool[9];
+        foreach (var b in bands)
+        {
+            used[b.N] = true;
+            ps.Add(($"{b.N} On", 1f)); ps.Add(($"{b.N} Type", b.Type)); ps.Add(($"{b.N} Freq", b.Hz));
+            ps.Add(($"{b.N} Gain", b.Db)); ps.Add(($"{b.N} Q", b.Q)); ps.Add(($"{b.N} Slope", b.Slope)); ps.Add(($"{b.N} Channel", b.Ch));
+        }
+        for (int n = 1; n <= 8; n++) if (!used[n]) ps.Add(($"{n} On", 0f));
+        Fx("eq", 0, name, ps.ToArray());
+    }
 
     private void Midi(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-midi-effect", kind, isInstrument: false, isMidi: true, ps);
