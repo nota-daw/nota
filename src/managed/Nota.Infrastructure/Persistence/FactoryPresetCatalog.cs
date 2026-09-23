@@ -1201,14 +1201,53 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("util", 4, "Trim −6 dB",     ("Gain", -6f));
         Fx("util", 4, "Swap L/R",       ("Channel Mode", 3f));
 
-        // ---- Amplifier (kind 6) — Model 0..6, Gain/tone/Output 0..10, Mix 0..1;
-        //      Cabinet 0 Match/1 1×12/2 2×12/3 4×12/4 1×15; Mic 0 Dyn/1 Cond/2 Rib; Axis/Gate 0..1
-        Fx("amp", 6, "Clean Combo",   ("Model", 0f), ("Gain", 2.0f), ("Bass", 5f), ("Middle", 5f),   ("Treble", 6f), ("Presence", 5f), ("Output", 5f),   ("Mix", 1f), ("Cabinet", 1f), ("Mic", 1f));
-        Fx("amp", 6, "Blues Breakup", ("Model", 2f), ("Gain", 5.0f), ("Bass", 5f), ("Middle", 6f),   ("Treble", 5f), ("Presence", 5f), ("Output", 5f),   ("Mix", 1f), ("Cabinet", 2f));
-        Fx("amp", 6, "Rock Crunch",   ("Model", 3f), ("Gain", 6.0f), ("Bass", 6f), ("Middle", 5f),   ("Treble", 6f), ("Presence", 6f), ("Output", 4.5f), ("Mix", 1f), ("Cabinet", 3f));
-        Fx("amp", 6, "Lead Sustain",  ("Model", 4f), ("Gain", 7.5f), ("Bass", 5f), ("Middle", 7f),   ("Treble", 6f), ("Presence", 6f), ("Output", 4.5f), ("Mix", 1f), ("Cabinet", 3f), ("Gate", 0.25f));
-        Fx("amp", 6, "Heavy Chug",    ("Model", 5f), ("Gain", 8.0f), ("Bass", 7f), ("Middle", 3.5f), ("Treble", 6f), ("Presence", 7f), ("Output", 4f),   ("Mix", 1f), ("Cabinet", 3f), ("Gate", 0.4f), ("Axis", 0.3f));
-        Fx("amp", 6, "Bass Amp",      ("Model", 6f), ("Gain", 3.0f), ("Bass", 7f), ("Middle", 5f),   ("Treble", 4f), ("Presence", 3f), ("Output", 5f),   ("Mix", 1f), ("Cabinet", 4f));
+        // ---- Nota Valve (kind 6) — the first 14 params keep their raw units: Model 0 Clean/1 Boost/
+        //      2 Blues/3 Rock/4 Lead/5 Heavy/6 Bass; Gain / Bass / Middle / Treble / Presence / Output
+        //      0..10 (tone and Output 5 = flat / 0 dB); Mix 0..1; Cab On 0/1; Cabinet 0 Match/1 1×12/
+        //      2 2×12/3 4×12/4 1×15; Mic 0 Dyn/1 Cond/2 Ribbon; Axis / Gate 0..1; Oversampling .333 2×/
+        //      .667 4×. The appended ones are 0..1: Mid Freq 200·10^v Hz (.301 = 400, .398 = 500, .512 =
+        //      650, .602 = 800, .699 = 1 k, .875 = 1.5 k); Mic Distance 1·30^v cm (.204 = 2, .323 = 3,
+        //      .473 = 5, .611 = 8); Mic Position 0 cap/1 edge; Low Cut 0 off, else 20·15^v Hz (.256 = 40,
+        //      .512 = 80, .594 = 100, .662 = 120); High Cut 1 off, else 2000·10^v Hz (.176 = 3 k, .398 =
+        //      5 k, .477 = 6 k, .602 = 8 k); toggles 1 = on. Unnamed → default. Output level-matched.
+        // Clean
+        Fx("amp", 6, "Clean Combo",       ("Model", 0f), ("Gain", 2.0f), ("Treble", 6f), ("Cabinet", 1f), ("Mic", 1f), ("Output", 4.12f));
+        Fx("amp", 6, "Jazz Box",          ("Model", 0f), ("Gain", 2.5f), ("Bass", 6f), ("Middle", 4.5f), ("Treble", 4f), ("Presence", 3.5f), ("Cabinet", 1f), ("Mic", 2f), ("Mic Distance", 0.611f), ("High Cut", 0.602f), ("Output", 4.25f));
+        Fx("amp", 6, "Glassy Clean",      ("Model", 0f), ("Gain", 2.0f), ("Treble", 6.5f), ("Presence", 6f), ("Bright", 1f), ("Cabinet", 2f), ("Mic", 1f), ("Axis", 0.1f), ("Output", 4.12f));
+        Fx("amp", 6, "Funk Snap",         ("Model", 0f), ("Gain", 3.0f), ("Middle", 6f), ("Mid Freq", 0.699f), ("Treble", 6.5f), ("Bright", 1f), ("Cabinet", 1f), ("Low Cut", 0.594f), ("Output", 3.5f));
+        Fx("amp", 6, "Country Twang",     ("Model", 1f), ("Gain", 3.5f), ("Bass", 4.5f), ("Middle", 4f), ("Mid Freq", 0.398f), ("Treble", 7f), ("Presence", 6.5f), ("Bright", 1f), ("Cabinet", 2f), ("Mic", 1f), ("Output", 4.33f));
+        // Edge of breakup · blues
+        Fx("amp", 6, "Blues Breakup",     ("Model", 2f), ("Gain", 5.0f), ("Middle", 6f), ("Cabinet", 2f), ("Output", 4.17f));
+        Fx("amp", 6, "Edge of Breakup",   ("Model", 1f), ("Gain", 5.5f), ("Middle", 5.5f), ("Cabinet", 2f), ("Axis", 0.2f), ("Output", 3.71f));
+        Fx("amp", 6, "Texas Blues",       ("Model", 2f), ("Gain", 6.0f), ("Middle", 6.5f), ("Mid Freq", 0.602f), ("Treble", 5.5f), ("Cabinet", 2f), ("Mic Distance", 0.323f), ("Output", 4.46f));
+        Fx("amp", 6, "Smooth Blues Lead", ("Model", 2f), ("Gain", 7.5f), ("Middle", 6f), ("Treble", 4.5f), ("Mic", 2f), ("Axis", 0.3f), ("Oversampling", 0.333f), ("Output", 5.33f));
+        Fx("amp", 6, "Even Warmth",       ("Model", 2f), ("Gain", 6.0f), ("Even Only", 1f), ("Deep", 1f), ("Auto Comp", 1f), ("Cabinet", 2f), ("Oversampling", 0.333f), ("Output", 5f));
+        // Rock
+        Fx("amp", 6, "Rock Crunch",       ("Model", 3f), ("Gain", 6.0f), ("Bass", 6f), ("Treble", 6f), ("Presence", 6f), ("Cabinet", 3f), ("Output", 6.29f));
+        Fx("amp", 6, "Classic Stack",     ("Model", 3f), ("Gain", 6.5f), ("Bass", 6f), ("Middle", 6.5f), ("Treble", 6f), ("Presence", 6f), ("Cabinet", 3f), ("Mic Distance", 0.323f), ("Oversampling", 0.333f), ("Output", 5.71f));
+        Fx("amp", 6, "Arena Rhythm",      ("Model", 3f), ("Gain", 7.0f), ("Bass", 5.5f), ("Treble", 6f), ("Deep", 1f), ("Cabinet", 3f), ("Gate", 0.2f), ("Oversampling", 0.333f), ("Output", 6.67f));
+        Fx("amp", 6, "Indie Jangle",      ("Model", 1f), ("Gain", 4.0f), ("Middle", 4.5f), ("Mid Freq", 0.699f), ("Treble", 6.5f), ("Bright", 1f), ("Cabinet", 2f), ("Mic", 1f), ("Mic Distance", 0.611f), ("Output", 3.75f));
+        Fx("amp", 6, "Garage Fuzz",       ("Model", 3f), ("Gain", 9.5f), ("Bass", 6f), ("Middle", 7f), ("Mid Freq", 0.699f), ("Treble", 4f), ("Cabinet", 1f), ("Low Cut", 0.594f), ("High Cut", 0.398f), ("Oversampling", 0.333f), ("Output", 7.08f));
+        // Lead
+        Fx("amp", 6, "Lead Sustain",      ("Model", 4f), ("Gain", 7.5f), ("Middle", 7f), ("Treble", 6f), ("Presence", 6f), ("Cabinet", 3f), ("Gate", 0.25f), ("Output", 6.92f));
+        Fx("amp", 6, "Singing Lead",      ("Model", 4f), ("Gain", 8.0f), ("Middle", 7f), ("Mid Freq", 0.602f), ("Treble", 5.5f), ("Deep", 1f), ("Cabinet", 3f), ("Axis", 0.25f), ("Gate", 0.2f), ("Oversampling", 0.667f), ("Output", 7.38f));
+        Fx("amp", 6, "Shred Lead",        ("Model", 4f), ("Gain", 9.0f), ("Middle", 6.5f), ("Mid Freq", 0.699f), ("Presence", 6.5f), ("Cabinet", 3f), ("Low Cut", 0.512f), ("Gate", 0.35f), ("Oversampling", 0.667f), ("Output", 8.12f));
+        // Heavy
+        Fx("amp", 6, "Heavy Chug",        ("Model", 5f), ("Gain", 8.0f), ("Bass", 7f), ("Middle", 3.5f), ("Treble", 6f), ("Presence", 7f), ("Cabinet", 3f), ("Gate", 0.4f), ("Axis", 0.3f), ("Output", 9.58f));
+        Fx("amp", 6, "Modern Metal",      ("Model", 5f), ("Gain", 8.5f), ("Bass", 6f), ("Middle", 3.5f), ("Treble", 6.5f), ("Presence", 7f), ("Deep", 1f), ("Cabinet", 3f), ("Mic Distance", 0.204f), ("Low Cut", 0.512f), ("Gate", 0.45f), ("Oversampling", 0.667f), ("Output", 9.29f));
+        Fx("amp", 6, "Doom Sludge",       ("Model", 5f), ("Gain", 9.0f), ("Bass", 8f), ("Middle", 6f), ("Mid Freq", 0.301f), ("Treble", 3.5f), ("Presence", 3f), ("Deep", 1f), ("Cabinet", 3f), ("Mic", 2f), ("High Cut", 0.398f), ("Oversampling", 0.333f), ("Output", 8.04f));
+        Fx("amp", 6, "Djent Tight",       ("Model", 5f), ("Gain", 7.5f), ("Bass", 4.5f), ("Middle", 6f), ("Mid Freq", 0.602f), ("Treble", 6f), ("Presence", 7f), ("Cabinet", 3f), ("Low Cut", 0.662f), ("Gate", 0.5f), ("Oversampling", 0.667f), ("Output", 8.25f));
+        // Bass
+        Fx("amp", 6, "Bass Amp",          ("Model", 6f), ("Gain", 3.0f), ("Bass", 7f), ("Treble", 4f), ("Presence", 3f), ("Cabinet", 4f), ("Output", 3.58f));
+        Fx("amp", 6, "Bass Growl",        ("Model", 6f), ("Gain", 7.0f), ("Bass", 6.5f), ("Middle", 6.5f), ("Mid Freq", 0.602f), ("Cabinet", 4f), ("Oversampling", 0.333f), ("Output", 4.25f));
+        Fx("amp", 6, "Bass DI Clean",     ("Model", 6f), ("Gain", 2.0f), ("Cab On", 0f), ("Bass", 6f), ("Treble", 5.5f), ("Low Cut", 0.256f), ("Output", 3.54f));
+        Fx("amp", 6, "Bass Drive Blend",  ("Model", 6f), ("Gain", 9.0f), ("Bass", 6f), ("Cabinet", 4f), ("Mix", 0.5f), ("Oversampling", 0.333f), ("Output", 5.46f));
+        // Beyond guitar
+        Fx("amp", 6, "Lo-Fi Radio Amp",   ("Model", 0f), ("Gain", 5.0f), ("Middle", 7f), ("Mid Freq", 0.875f), ("Cabinet", 1f), ("Mic", 1f), ("Low Cut", 1f), ("High Cut", 0.176f), ("Output", 3.5f));
+        Fx("amp", 6, "Keys Grit",         ("Model", 1f), ("Gain", 5.0f), ("Treble", 5.5f), ("Cabinet", 2f), ("Mix", 0.7f), ("Oversampling", 0.333f), ("Output", 4.17f));
+        Fx("amp", 6, "Vocal Tube Color",  ("Model", 0f), ("Gain", 4.0f), ("Even Only", 1f), ("Cab On", 0f), ("Auto Comp", 1f), ("Mix", 0.6f), ("Oversampling", 0.333f));
+        Fx("amp", 6, "Drum Crunch",       ("Model", 3f), ("Gain", 6.0f), ("Cab On", 0f), ("Auto Comp", 1f), ("Mix", 0.4f), ("Oversampling", 0.333f));
+        Fx("amp", 6, "Parallel Grind",    ("Model", 5f), ("Gain", 7.0f), ("Cabinet", 3f), ("Auto Comp", 1f), ("Mix", 0.35f), ("Oversampling", 0.667f));
 
         // ---- Auto Filter (kind 7) — all params normalized 0..1. Freq 30·600^v Hz (.55 ≈ 1 k);
         //      Res Q 0.5+14.5v; Type 0 LP/.333 BP/.667 HP/1 Notch; Slope 0=12/1=24 dB; Env Amt

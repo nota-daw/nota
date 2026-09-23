@@ -389,10 +389,10 @@ public sealed partial class ArrangementView
                     // Nota Chamber (45 params) groups by its section prefix ("IR", "Algo", "EQ" …),
                     // Nota Prism (52) by band ("Low", "Mid", "High", "Crossover") and Nota Lens (37) by
                     // view ("Spectrum", "Scope", "Waterfall", "Cursor"), the Compressor its key
-                    // ("SC HP", "SC Gain" …), the Auto Filter its sources ("Env", "LFO", "Mod") and Nota
-                    // Vintage its tone and wow ("Tone Low", "Wow Rate" …):
+                    // ("SC HP", "SC Gain" …), the Auto Filter its sources ("Env", "LFO", "Mod"), Nota
+                    // Vintage its tone and wow ("Tone Low", "Wow Rate" …) and Nota Valve its mic ("Mic Distance" …):
                     // a word shared by two or more params becomes a submenu.
-                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 7 or 8 or 20 or 21 or 22;
+                    bool grouped = e.TrackDeviceBuiltinKind(t.Id, d) is 1 or 6 or 7 or 8 or 20 or 21 or 22;
                     var names = new string[builtinPc];
                     for (int p = 0; p < builtinPc; p++) names[p] = e.DeviceParamName(t.Id, d, p);
                     static string Head(string n) { int sp = n.IndexOf(' '); return sp > 0 ? n[..sp] : ""; }

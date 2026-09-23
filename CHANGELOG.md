@@ -51,6 +51,35 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Valve shows the amp it runs, not just its knobs.** The card moves onto the Vintage /
+  Auto Filter / Lens frame — a STAGE column (gain and output faders), a centre panel with
+  **Amp**, **Cab** and **Harmonics** tabs, a **Cabinet / Output** panel and a status strip.
+  The seven models are now a list in the tab's head row instead of a row of buttons, and the
+  cabinet and mic get a tab of their own with a real response instead of chips with no
+  feedback:
+  - **Amp** — the tone stack's response (read from the engine, so it is the real one) against
+    the stack flat; drag sideways for the middle's frequency, up and down for the middle.
+  - **Cab** — the cabinet as the mic hears it against the same mic on axis at the cap, and how
+    much the placement costs at 4 kHz; drag sideways to move the mic off axis, up to bring it
+    closer.
+  - **Harmonics** — the harmonics the preamp adds at the input's level (f … 7f), the THD and an
+    estimate of the aliasing at the current oversampling.
+  - **New in the engine:** a **sweepable middle** (200 Hz … 2 kHz), **Bright** and **Deep**
+    switches, an **even-harmonics-only** preamp, cabinets with their own **low resonance and
+    presence peak**, **mic distance** (proximity bass up close, thinner far away) and **cap /
+    edge position**, a stronger **off-axis** roll-off, **low and high cuts** and **auto gain
+    compensation**. The panel's gate switch turns the gate on at its last threshold.
+  - **31 factory presets**, up from six, level-matched to the dry signal — cleans, blues,
+    rock, leads, heavy, bass and a few for keys, vocals and drums. The first fourteen
+    parameters keep their units and the nine new ones are appended and default to the old
+    sound, so older projects open with the same settings (a project that used one of the
+    four fixed cabinets or the mic off axis now hears the cab's peaks and the stronger
+    off-axis roll-off); every one of them automates (the mic ones grouped
+    in the lane menu), MIDI-learns, saves in a preset and is reachable over MCP.
+    `get_device_text` returns the status line, the live reading and a guide to the parameter
+    values, `device_action` 0 resets the amp, and the new `read_valve` returns the THD with
+    the harmonics, the aliasing estimate, the gate state, the auto-comp gain, the cabinet's
+    loss at 4 kHz and the tone stack's and cabinet's responses.
 - **Nota Vintage shows what the era does to the signal, not just its knobs.** The card moves
   onto the Auto Filter / Lens / Compressor frame — a STATE column (drive and wear faders), a
   centre panel with **Curve**, **Wear** and **Output** tabs, a **Tone / Output** panel and a

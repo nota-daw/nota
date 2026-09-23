@@ -3075,7 +3075,7 @@ Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engin
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
 Check(Math.Abs(engine.DeviceGetParam(fxT, delDev, 12) - 0.5f) < 0.001f, "Delay param round-trips");
 int ampDev = engine.AddBuiltinDevice(fxT, 6);
-Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 14, "add built-in Nota Valve (14 params)");
+Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 23, "add built-in Nota Valve (23 params)");
 Check(Math.Abs(engine.DeviceGetParam(fxT, ampDev, 0) - 2f) < 0.001f, $"Nota Valve defaults to Blues model (Model={engine.DeviceGetParam(fxT, ampDev, 0)})");
 Check(engine.DeviceParamName(fxT, ampDev, 8) == "Cab On" && engine.DeviceParamName(fxT, ampDev, 9) == "Cabinet"
       && engine.DeviceParamName(fxT, ampDev, 11) == "Axis" && engine.DeviceParamName(fxT, ampDev, 12) == "Gate", "mockup-2m params present (Cab On/Cabinet/Axis/Gate)");
@@ -6901,6 +6901,185 @@ Console.WriteLine("-- Auto Filter (effect kind 7) --");
         Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, AfType) - 0.333f) < 1e-3f && afeng.DeviceGetParam(aft, afdi, AfHoldTime) < 0.2f, "Clav Wah preset: BP with a 12 ms hold");
         cat.ApplyInPlace(afeng, "autofilter/Clean Sweep", aft, afdi);
         Check(Math.Abs(afeng.DeviceGetParam(aft, afdi, AfHoldTime) - 1f) < 1e-3f, "unnamed params reset to defaults between presets");
+    }
+}
+
+// ===================== Nota Valve (effect kind 6) ==========================
+Console.WriteLine("-- Nota Valve (effect kind 6) --");
+{
+    using var aveng = new NotaEngine();
+    int avt = aveng.AddAudioTrack();
+    aveng.AddAudioClip(avt, wav, 0.0);
+    int avd = aveng.AddBuiltinDevice(avt, 6);
+    Check(avd >= 0 && aveng.DeviceName(avt, avd) == "Nota Valve" && aveng.TrackDeviceBuiltinKind(avt, avd) == 6, "add Nota Valve (kind 6)");
+    int avpc = aveng.DeviceParamCount(avt, avd);
+    Check(avpc == 23, $"Nota Valve exposes 23 params ({avpc})");
+    const int AModel = 0, AGain = 1, AMiddle = 3, AOutput = 6, AMix = 7, ACabOn = 8, ACab = 9, AMic = 10, AAxis = 11, AGate = 12, AOs = 13,
+        AMidFreq = 14, ADist = 15, APos = 16, ALowCut = 17, AHighCut = 18, AEven = 19, AComp = 20, ABright = 21, ADeep = 22;
+    Check(aveng.DeviceParamName(avt, avd, AMidFreq) == "Mid Freq" && aveng.DeviceParamName(avt, avd, ADist) == "Mic Distance"
+          && aveng.DeviceParamName(avt, avd, APos) == "Mic Position" && aveng.DeviceParamName(avt, avd, ALowCut) == "Low Cut"
+          && aveng.DeviceParamName(avt, avd, AHighCut) == "High Cut" && aveng.DeviceParamName(avt, avd, AEven) == "Even Only"
+          && aveng.DeviceParamName(avt, avd, AComp) == "Auto Comp" && aveng.DeviceParamName(avt, avd, ABright) == "Bright"
+          && aveng.DeviceParamName(avt, avd, ADeep) == "Deep",
+          "appended params: Mid Freq · Mic Distance / Position · Low / High Cut · Even Only · Auto Comp · Bright · Deep");
+    // The first 14 keep their raw units; the appended ones are 0..1 and default to the old sound.
+    Check(Math.Abs(aveng.DeviceParamMax(avt, avd, AGain) - 10f) < 1e-6f && Math.Abs(aveng.DeviceParamMax(avt, avd, AModel) - 6f) < 1e-6f
+          && Math.Abs(aveng.DeviceParamMax(avt, avd, AMidFreq) - 1f) < 1e-6f, "old params keep raw ranges, new ones are 0..1");
+    Check(Math.Abs(aveng.DeviceParamDefault(avt, avd, AMidFreq) - 0.5119f) < 1e-3f && aveng.DeviceParamDefault(avt, avd, ALowCut) < 0.01f
+          && aveng.DeviceParamDefault(avt, avd, AHighCut) > 0.99f && aveng.DeviceParamDefault(avt, avd, APos) < 0.5f
+          && aveng.DeviceParamDefault(avt, avd, AEven) < 0.5f && aveng.DeviceParamDefault(avt, avd, AComp) < 0.5f
+          && aveng.DeviceParamDefault(avt, avd, ABright) < 0.5f && aveng.DeviceParamDefault(avt, avd, ADeep) < 0.5f,
+          "appended params default to the old sound (650 Hz mid, no cuts, cap, no even / comp / bright / deep)");
+    aveng.DeviceSetParam(avt, avd, AGain, 7.5f);
+    Check(Math.Abs(aveng.DeviceGetParam(avt, avd, AGain) - 7.5f) < 1e-3f, "device param set/get round-trips (raw units)");
+    aveng.DeviceSetParam(avt, avd, AGain, 3f);
+
+    var abuf = new float[4096 * 2];
+    void ARender(int n = 4096) { aveng.SetBpm(120); aveng.Seek(0); aveng.Play(); for (int k = 0; k < n; k += 4096) aveng.RenderOffline(abuf, 4096); aveng.StopTransport(); }
+    bool AFinite(float[] b) { foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 8f) return false; return true; }
+
+    // Every model × cabinet × mic renders audible + finite.
+    int aBad = 0;
+    for (int m = 0; m < 7; m++)
+        for (int c = 0; c < 5; c++)
+        {
+            aveng.DeviceSetParam(avt, avd, AModel, m); aveng.DeviceSetParam(avt, avd, ACab, c); aveng.DeviceSetParam(avt, avd, AMic, c % 3);
+            ARender();
+            if (!(Rms(abuf, 4096) > 1e-4f && AFinite(abuf))) aBad++;
+        }
+    Check(aBad == 0, $"every model / cabinet / mic renders audible + stable ({aBad} failed)");
+    aveng.DeviceSetParam(avt, avd, AModel, 3f); aveng.DeviceSetParam(avt, avd, ACab, 3f); aveng.DeviceSetParam(avt, avd, AMic, 0f);
+
+    // Every new switch and range end renders audible + finite.
+    int aSw = 0;
+    foreach (var (p, v) in new[] { (AMidFreq, 0f), (AMidFreq, 1f), (ADist, 0f), (ADist, 1f), (APos, 1f), (ALowCut, 1f), (AHighCut, 0f),
+                                   (AEven, 1f), (AComp, 1f), (ABright, 1f), (ADeep, 1f), (AOs, 1f), (ACabOn, 0f), (AAxis, 1f), (AGate, 0.3f) })
+    {
+        aveng.DeviceSetParam(avt, avd, p, v);
+        ARender();
+        if (!(Rms(abuf, 4096) > 1e-4f && AFinite(abuf))) aSw++;
+        aveng.DeviceSetParam(avt, avd, p, aveng.DeviceParamDefault(avt, avd, p));
+    }
+    Check(aSw == 0, $"every mid / mic / cut / switch setting renders stable ({aSw} failed)");
+
+    // Scope: telemetry + the four responses.
+    const int aTele = 32, aResp = 96;
+    var asc = new float[aTele + 4 * aResp];
+    ARender(16384);
+    int an = aveng.DeviceScope(avt, avd, asc, asc.Length);
+    Check(an == asc.Length && asc[3] > 1000 && (int)asc[26] == aResp, $"Valve scope carries telemetry + responses ({an} values, sr {asc[3]:0})");
+    Check(asc[0] > 0.01f && asc[1] > 0.01f, $"input / output peaks are metered ({asc[0]:0.00} → {asc[1]:0.00})");
+    Check(asc[4] > 0.01f && asc[5] == 0f && asc[6] < 0f, $"THD and harmonics are measured (THD {asc[4] * 100:0.0} %, 2nd {asc[6]:0} dB)");
+    float At(int at, double hz) { double t = Math.Log(hz / asc[24]) / Math.Log(asc[25] / asc[24]) * (aResp - 1); return asc[at + (int)Math.Round(Math.Clamp(t, 0, aResp - 1))]; }
+    // Middle +: the tone response peaks near Mid Freq; the flat reference stays put.
+    aveng.DeviceSetParam(avt, avd, AMiddle, 10f); aveng.DeviceSetParam(avt, avd, AMidFreq, 0.699f);   // 1 kHz
+    aveng.DeviceScope(avt, avd, asc, asc.Length);
+    double boost = At(aTele, 1000) - At(aTele + aResp, 1000);
+    Check(boost > 8 && Math.Abs(asc[20] - 1000) < 5, $"Middle boosts the tone stack at Mid Freq (+{boost:0.0} dB at {asc[20]:0} Hz)");
+    aveng.DeviceSetParam(avt, avd, AMiddle, 5f); aveng.DeviceSetParam(avt, avd, AMidFreq, aveng.DeviceParamDefault(avt, avd, AMidFreq));
+    // Off-axis darkens the cab against its on-axis reference; on-axis there is no loss.
+    aveng.DeviceScope(avt, avd, asc, asc.Length);
+    float loss0 = asc[19];
+    aveng.DeviceSetParam(avt, avd, AAxis, 0.6f); aveng.DeviceScope(avt, avd, asc, asc.Length);
+    Check(Math.Abs(loss0) < 0.05f && asc[19] < -3f && At(aTele + 2 * aResp, 6000) < At(aTele + 3 * aResp, 6000),
+          $"off-axis darkens the cabinet ({loss0:0.0} → {asc[19]:0.0} dB at 4 kHz)");
+    aveng.DeviceSetParam(avt, avd, AAxis, 0f);
+    // Closer mic = more proximity bass.
+    aveng.DeviceSetParam(avt, avd, ADist, 0f); aveng.DeviceScope(avt, avd, asc, asc.Length);
+    Check(At(aTele + 2 * aResp, 150) - At(aTele + 3 * aResp, 150) > 2, "a close mic lifts the lows (proximity)");
+    aveng.DeviceSetParam(avt, avd, ADist, aveng.DeviceParamDefault(avt, avd, ADist));
+    // Oversampling lowers the aliasing estimate.
+    aveng.DeviceSetParam(avt, avd, AGain, 9f); aveng.DeviceScope(avt, avd, asc, asc.Length);
+    float alias1 = asc[15];
+    aveng.DeviceSetParam(avt, avd, AOs, 1f); aveng.DeviceScope(avt, avd, asc, asc.Length);
+    Check(asc[15] < alias1 - 10 && (int)asc[18] == 8, $"oversampling lowers the aliasing estimate ({alias1:0} → {asc[15]:0} dB at 8×)");
+    aveng.DeviceSetParam(avt, avd, AOs, 0f);
+
+    // Even Only: the 3rd harmonic falls away, the 2nd stays.
+    float odd3 = asc[7];
+    aveng.DeviceSetParam(avt, avd, AEven, 1f); aveng.DeviceScope(avt, avd, asc, asc.Length);
+    Check(asc[7] < -80f && asc[6] > -60f && odd3 > -60f, $"Even Only drops the odd harmonics (3rd {odd3:0} → {asc[7]:0} dB, 2nd {asc[6]:0} dB)");
+    aveng.DeviceSetParam(avt, avd, AEven, 0f);
+
+    // Auto Comp pulls a hot / quiet amp toward the input level; Mix 0 = the dry signal.
+    aveng.SetDeviceBypassed(avt, avd, true); ARender(); float aDry = Rms(abuf, 4096); aveng.SetDeviceBypassed(avt, avd, false);
+    aveng.DeviceSetParam(avt, avd, AOutput, 10f);
+    ARender(); float aHot = Rms(abuf, 4096);
+    aveng.DeviceSetParam(avt, avd, AOutput, 5f); aveng.DeviceSetParam(avt, avd, AComp, 1f);
+    ARender(16384); float aComped = Rms(abuf, 4096);
+    Check(Math.Abs(20 * Math.Log10(aComped / aDry)) < 2.5 && Math.Abs(20 * Math.Log10(aHot / aDry)) > 3,
+          $"Auto Comp matches the dry level ({20 * Math.Log10(aHot / aDry):+0.0;-0.0;0.0} dB at +12 → {20 * Math.Log10(aComped / aDry):+0.0;-0.0;0.0} dB)");
+    aveng.DeviceSetParam(avt, avd, AComp, 0f);
+    aveng.DeviceSetParam(avt, avd, AMix, 0f);
+    ARender(); float aMix0 = Rms(abuf, 4096);
+    Check(Math.Abs(aMix0 - aDry) < aDry * 0.02f, $"Mix 0 passes the dry signal ({aMix0:0.000} vs {aDry:0.000})");
+    aveng.DeviceSetParam(avt, avd, AMix, 1f);
+
+    // Texts + the reset action.
+    aveng.DeviceSetParam(avt, avd, AGate, 0.4f);
+    string atext = aveng.DeviceText(avt, avd, 0);
+    Check(atext.StartsWith("Rock") && atext.Contains("4x12 Closed") && atext.Contains("gate"), $"status text names the model, cab and gate (got '{atext}')");
+    Check(aveng.DeviceText(avt, avd, 1).Contains("THD") && aveng.DeviceText(avt, avd, 2).Contains("Mic Distance"), "live reading and parameter guide texts");
+    aveng.DeviceAction(avt, avd, 0, 0, 0);
+    ARender(); Check(AFinite(abuf) && Rms(abuf, 4096) > 1e-4f, "the reset action keeps the output audible and finite");
+
+    // MCP: the amp reading.
+    var atools = new Nota.Mcp.Tools.DeviceTools(aveng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    ARender(16384);
+    var ar = atools.ReadValve(avt, avd).Result;
+    Check(ar.Model == "Rock" && ar.SampleRate > 1000 && ar.HarmonicsDb.Length == 6 && ar.ToneStack.Length == 8 && ar.Cabinet.Length == 8
+          && ar.Summary.StartsWith("Rock") && ar.GateThresholdDb < -40 && ar.ThdPercent > 0,
+          $"MCP read_valve reports the model, THD, responses and gate ({ar.Model}, THD {ar.ThdPercent:0.0} %, alias {ar.AliasingDb:0} dB)");
+    aveng.DeviceSetParam(avt, avd, AGate, 0f);
+
+    // Duplicate the track → cloneDevice(kind 6) must carry the params, appended ones too.
+    aveng.DeviceSetParam(avt, avd, ADeep, 1f); aveng.DeviceSetParam(avt, avd, ALowCut, 0.5f);
+    int acopy = aveng.DuplicateTrack(avt);
+    Check(acopy > 0 && Math.Abs(aveng.DeviceGetParam(acopy, avd, AModel) - 3f) < 1e-3f && aveng.DeviceGetParam(acopy, avd, ADeep) > 0.9f
+          && Math.Abs(aveng.DeviceGetParam(acopy, avd, ALowCut) - 0.5f) < 1e-3f, "duplicate track clones Valve params (appended ones too)");
+    aveng.RemoveTrack(acopy);
+    aveng.DeviceSetParam(avt, avd, ADeep, 0f); aveng.DeviceSetParam(avt, avd, ALowCut, 0f);
+
+    // Automation drives an appended param and a raw-unit one.
+    int alane = aveng.AddAutomationLane(avt, AutomationTarget.DeviceParam, avd, AMidFreq);
+    aveng.SetAutomationPoints(avt, alane, new[] { new AutomationPoint(0, 0.9f), new AutomationPoint(16, 0.9f) });
+    int alane2 = aveng.AddAutomationLane(avt, AutomationTarget.DeviceParam, avd, AGain);
+    aveng.SetAutomationPoints(avt, alane2, new[] { new AutomationPoint(0, 0.8f), new AutomationPoint(16, 0.8f) });
+    ARender();
+    Check(Math.Abs(aveng.DeviceGetParam(avt, avd, AMidFreq) - 0.9f) < 0.01f, $"automation drives Mid Freq ({aveng.DeviceGetParam(avt, avd, AMidFreq):0.00})");
+    Check(aveng.DeviceGetParam(avt, avd, AGain) > 0.5f, $"automation drives Gain ({aveng.DeviceGetParam(avt, avd, AGain):0.00})");
+    aveng.RemoveAutomationLane(avt, alane2);
+    aveng.RemoveAutomationLane(avt, alane);
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place, renders and sits near the dry level.
+    {
+        var names = new HashSet<string>();
+        for (int k = 0; k < avpc; k++) names.Add(aveng.DeviceParamName(avt, avd, k));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 6).ToList();
+        Check(mine.Count >= 25, $"Nota Valve ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Valve preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        aveng.SetDeviceBypassed(avt, avd, true); ARender(16384); float dryRef = Rms(abuf, 4096); aveng.SetDeviceBypassed(avt, avd, false);
+        int pf = 0; var loud = new List<string>();
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(aveng, p.Id, avt, avd).Length != 0) { pf++; continue; }
+            ARender(16384);
+            float r = Rms(abuf, 4096);
+            if (!AFinite(abuf) || r < 1e-4f) pf++;
+            double db = 20 * Math.Log10(r / dryRef);
+            if (Environment.GetEnvironmentVariable("NOTA_VALVE_LEVELS") == "1") Console.WriteLine($"   level {p.DisplayName,-20} {db:+0.0;-0.0;0.0} dB (out {aveng.DeviceGetParam(avt, avd, AOutput):0.00})");
+            if (Math.Abs(db) > 4) loud.Add($"{p.DisplayName} {db:+0.0;-0.0;0.0} dB");
+        }
+        Check(pf == 0, $"every Valve preset applies and renders ({pf} failed)");
+        Check(loud.Count == 0, $"every Valve preset sits within ±4 dB of the dry level{(loud.Count > 0 ? " — " + string.Join(", ", loud) : "")}");
+        cat.ApplyInPlace(aveng, "amp/Modern Metal", avt, avd);
+        Check(Math.Abs(aveng.DeviceGetParam(avt, avd, AModel) - 5f) < 1e-3f && aveng.DeviceGetParam(avt, avd, ADeep) > 0.5f && aveng.DeviceGetParam(avt, avd, AGate) > 0.4f,
+              "Modern Metal preset: Heavy + Deep + gate");
+        cat.ApplyInPlace(aveng, "amp/Clean Combo", avt, avd);
+        Check(aveng.DeviceGetParam(avt, avd, ADeep) < 0.5f && aveng.DeviceGetParam(avt, avd, AGate) < 0.001f && aveng.DeviceGetParam(avt, avd, AHighCut) > 0.99f,
+              "unnamed params reset to defaults between presets");
     }
 }
 

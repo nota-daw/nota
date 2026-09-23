@@ -347,7 +347,15 @@ and user presets, automation, persistence and cloning.
 - **Nota Utility** (4) — gain, L/R balance, stereo width (mid/side 0–400%), channel mode
   (Stereo/Left/Right/Swap), bass mono, mute, phase invert; goniometer/vectorscope,
   correlation meter, meters, Gain match.
-- **Nota Valve** (5, formerly Amplifier) — tube amplifier and saturator.
+- **Nota Valve** (6, formerly Amplifier) — guitar amp: 7 models (Clean / Boost / Blues /
+  Rock / Lead / Heavy / Bass), gain, a Bass / Middle / Treble / Presence tone stack with a
+  sweepable middle, Bright and Deep, an even-harmonics-only preamp; a cabinet (Match / 1×12 /
+  2×12 / 4×12 / 1×15 with their resonance and presence peak) heard through a Dynamic /
+  Condenser / Ribbon mic at a distance, off axis, at the cap or the edge; low / high cut,
+  noise gate, auto gain compensation, mix, output, oversampling. Tabs: Amp (the tone stack's
+  response, drag the middle) / Cab (the cabinet against on-axis, drag the mic) / Harmonics
+  (f … 7f, THD, aliasing) and Cabinet / Output, with a STAGE column and a status strip.
+  31 factory presets. MCP: `read_valve`.
 - **Nota Auto Filter** (7) — LP/BP/HP/Notch with morph, 12/24 slope, Clean/Analog, drive;
   an envelope follower (attack, release, timed or infinite hold, on the input or a sidechain
   key) and an LFO (5 waves, morph, free or tempo-synced, start phase, stereo phase, Retrig on

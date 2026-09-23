@@ -24,7 +24,7 @@ internal sealed class DeviceCardFactory
         [2] = new ReverbDeviceBody(),
         [3] = new DelayDeviceBody(),
         [4] = new UtilityDeviceBody(),
-        [6] = new AmpDeviceBody(),
+        [6] = new ValveDeviceBody(),
         [7] = new AutoFilterDeviceBody(),
         [8] = new VintageDeviceBody(),
         [9] = new AutoPanDeviceBody(),
