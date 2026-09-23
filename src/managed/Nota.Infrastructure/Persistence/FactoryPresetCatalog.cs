@@ -932,14 +932,57 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("autogain", 18, "Fast Leveler",      ("Target", 0.611f), ("Scale", 0f),   ("Response", 0f), ("Max Gain", 0.5f), ("Safe", 1f));
         Fx("autogain", 18, "Match Reference",   ("Scale", 1f), ("Response", 1f), ("Window", 0.84f), ("Max Gain", 0.75f), ("Safe", 1f));
 
-        // ---- Nota Shutter (kind 19) — noise gate, all params normalized 0..1. Threshold
-        //      0..1 → −70..0 dB; Return 0..1 → 0..24 dB; Floor 0 = mute; Lookahead 0/0.5/1 = 0/1/5 ms.
-        Fx("shutter", 19, "Tight Drums",     ("Threshold", 0.457f), ("Return", 0.125f), ("Attack", 0.175f), ("Hold", 0.588f), ("Release", 0.63f), ("Floor", 0f));
-        Fx("shutter", 19, "Gentle Cleanup",  ("Threshold", 0.34f),  ("Return", 0.25f),  ("Attack", 0.4f),   ("Hold", 0.7f),   ("Release", 0.8f),  ("Floor", 0.4f));
-        Fx("shutter", 19, "Vocal Gate",      ("Threshold", 0.5f),   ("Return", 0.3f),   ("Attack", 0.3f),   ("Hold", 0.75f),  ("Release", 0.72f), ("Floor", 0.3f), ("Det HP", 0.45f));
-        Fx("shutter", 19, "Hard Slice",      ("Threshold", 0.6f),   ("Return", 0.1f),   ("Attack", 0.05f),  ("Hold", 0.3f),   ("Release", 0.3f),  ("Floor", 0f));
-        Fx("shutter", 19, "Kick Duck",       ("Threshold", 0.42f),  ("Flip", 1f),       ("Attack", 0.2f),   ("Hold", 0.5f),   ("Release", 0.55f), ("Floor", 0.55f));
-        Fx("shutter", 19, "Trance Gate",     ("Threshold", 0.55f),  ("Return", 0.08f),  ("Attack", 0.15f),  ("Hold", 0.45f),  ("Release", 0.4f),  ("Floor", 0f), ("Lookahead", 1f));
+        // ---- Nota Shutter (kind 19) — noise gate / ducker, all params normalized 0..1 (unnamed ones
+        //      reset to their defaults). Threshold −70 + 70v dB (.286 = −50, .357 = −45, .4 = −42,
+        //      .457 = −38, .5 = −35, .543 = −32, .571 = −30, .6 = −28, .629 = −26, .714 = −20);
+        //      Return 24v dB (.042 = 1, .083 = 2, .125 = 3, .167 = 4, .229 = 5.5, .25 = 6, .333 = 8,
+        //      .417 = 10); Attack 0.01·10000^v ms (.075 = 0.02, .175 = 0.05, .25 = 0.1, .425 = 0.5,
+        //      .5 = 1, .52 = 1.2, .575 = 2, .675 = 5, .75 = 10, .825 = 20, .869 = 30); Hold 0.1·5000^v
+        //      ms (.27 = 1, .459 = 5, .541 = 10, .588 = 15, .622 = 20, .67 = 30, .704 = 40, .73 = 50,
+        //      .785 = 80, .811 = 100, .859 = 150, .892 = 200, .94 = 300); Release 2000^v ms (.303 = 10,
+        //      .394 = 20, .447 = 30, .515 = 50, .576 = 80, .606 = 100, .63 = 120, .659 = 150, .697 =
+        //      200, .721 = 240, .75 = 300, .788 = 400, .818 = 500, .879 = 800, .909 = 1000); Floor 0 =
+        //      −∞, else −70 + 70v dB (.429 = −40, .543 = −32, .571 = −30, .657 = −24, .714 = −20,
+        //      .743 = −18, .786 = −15, .829 = −12, .857 = −10, .886 = −8); Lookahead 0/.5/1 = 0/1/5 ms;
+        //      Flip 1 = Duck; Det HP 20·100^v Hz (.088 = 30, .151 = 40, .239 = 60, .301 = 80, .349 =
+        //      100, .438 = 150, .588 = 300, 1 = 2 k); Det LP 200·100^v Hz (.088 = 300, .301 = 800,
+        //      .438 = 1.5 k, .548 = 2.5 k, .651 = 4 k, .699 = 5 k, .801 = 8 k, .952 = 16 k); Shape
+        //      0 Linear/.5 Log/1 Snap; toggles 1 = on (Det Filter and External Key default on).
+        Fx("shutter", 19, "Init",                ("Threshold", 0.457f));
+        // Drums
+        Fx("shutter", 19, "Tight Drums",         ("Threshold", 0.457f), ("Return", 0.125f), ("Attack", 0.175f), ("Hold", 0.588f), ("Release", 0.63f), ("Floor", 0f));
+        Fx("shutter", 19, "Kick Gate",           ("Threshold", 0.571f), ("Return", 0.167f), ("Attack", 0.175f), ("Hold", 0.67f), ("Release", 0.576f), ("Det HP", 0.088f), ("Det LP", 0.088f), ("Peak Hold", 1f));
+        Fx("shutter", 19, "Snare Gate",          ("Threshold", 0.6f), ("Return", 0.208f), ("Attack", 0.25f), ("Hold", 0.704f), ("Release", 0.659f), ("Floor", 0.657f), ("Det HP", 0.438f), ("Det LP", 0.699f));
+        Fx("shutter", 19, "Tom Gate",            ("Threshold", 0.4f), ("Return", 0.229f), ("Attack", 0.52f), ("Hold", 0.704f), ("Release", 0.721f), ("Floor", 0.743f), ("Shape", 0f), ("Peak Hold", 1f), ("Det HP", 0.239f), ("Det LP", 0.438f));
+        Fx("shutter", 19, "Hi-Hat Cleanup",      ("Threshold", 0.5f), ("Return", 0.125f), ("Attack", 0.175f), ("Hold", 0.459f), ("Release", 0.447f), ("Floor", 0.714f), ("Det HP", 1f), ("Det LP", 0.952f));
+        Fx("shutter", 19, "Overhead Tamer",      ("Threshold", 0.357f), ("Return", 0.25f), ("Attack", 0.5f), ("Hold", 0.73f), ("Release", 0.788f), ("Floor", 0.829f));
+        Fx("shutter", 19, "Room Mic Gate",       ("Threshold", 0.429f), ("Return", 0.25f), ("Attack", 0.575f), ("Hold", 0.785f), ("Release", 0.818f), ("Floor", 0.786f));
+        Fx("shutter", 19, "Hard Slice",          ("Threshold", 0.6f), ("Return", 0.1f), ("Attack", 0.05f), ("Hold", 0.3f), ("Release", 0.3f), ("Floor", 0f));
+        Fx("shutter", 19, "Gated Reverb",        ("Threshold", 0.571f), ("Return", 0.083f), ("Attack", 0.175f), ("Hold", 0.892f), ("Release", 0.394f), ("Floor", 0f), ("Shape", 1f), ("Retrigger", 1f));
+        Fx("shutter", 19, "Drum Trigger",        ("Threshold", 0.543f), ("Return", 0.125f), ("Attack", 0.075f), ("Hold", 0.622f), ("Release", 0.515f), ("Floor", 0f), ("Shape", 1f), ("Retrigger", 1f));
+        // Voice
+        Fx("shutter", 19, "Vocal Gate",          ("Threshold", 0.5f), ("Return", 0.3f), ("Attack", 0.3f), ("Hold", 0.75f), ("Release", 0.72f), ("Floor", 0.3f), ("Det HP", 0.45f));
+        Fx("shutter", 19, "Gentle Cleanup",      ("Threshold", 0.34f), ("Return", 0.25f), ("Attack", 0.4f), ("Hold", 0.7f), ("Release", 0.8f), ("Floor", 0.4f));
+        Fx("shutter", 19, "Podcast Voice",       ("Threshold", 0.286f), ("Return", 0.333f), ("Attack", 0.675f), ("Hold", 0.859f), ("Release", 0.75f), ("Floor", 0.829f), ("Det HP", 0.349f), ("Det LP", 0.801f));
+        Fx("shutter", 19, "Breath Softener",     ("Threshold", 0.5f), ("Return", 0.25f), ("Attack", 0.575f), ("Hold", 0.73f), ("Release", 0.659f), ("Floor", 0.886f), ("Det HP", 0.588f), ("Det LP", 0.651f));
+        Fx("shutter", 19, "Dialogue Room Tone",  ("Threshold", 0.357f), ("Return", 0.333f), ("Attack", 0.675f), ("Hold", 0.892f), ("Release", 0.818f), ("Floor", 0.857f), ("Det HP", 0.349f), ("Det LP", 0.699f));
+        Fx("shutter", 19, "Soft Expander",       ("Threshold", 0.429f), ("Return", 0.417f), ("Attack", 0.5f), ("Hold", 0.73f), ("Release", 0.75f), ("Floor", 0.857f), ("Det Filter", 0f));
+        // Instruments
+        Fx("shutter", 19, "Guitar Noise Gate",   ("Threshold", 0.214f), ("Return", 0.25f), ("Attack", 0.25f), ("Hold", 0.622f), ("Release", 0.606f), ("Floor", 0f), ("Det LP", 0.651f), ("Peak Hold", 1f));
+        Fx("shutter", 19, "High-Gain Chug",      ("Threshold", 0.357f), ("Return", 0.125f), ("Attack", 0.175f), ("Hold", 0.459f), ("Release", 0.394f), ("Floor", 0f), ("Lookahead", 1f), ("Shape", 1f), ("Peak Hold", 1f));
+        Fx("shutter", 19, "Bass DI Gate",        ("Threshold", 0.286f), ("Return", 0.25f), ("Attack", 0.425f), ("Hold", 0.67f), ("Release", 0.63f), ("Floor", 0.571f), ("Det HP", 0.088f), ("Det LP", 0.301f), ("Peak Hold", 1f));
+        Fx("shutter", 19, "Pad Tail Cut",        ("Threshold", 0.314f), ("Return", 0.167f), ("Attack", 0.75f), ("Hold", 0.811f), ("Release", 0.879f), ("Floor", 0.429f), ("Det Filter", 0f));
+        // Rhythmic · creative
+        Fx("shutter", 19, "Trance Gate",         ("Threshold", 0.55f), ("Return", 0.08f), ("Attack", 0.15f), ("Hold", 0.45f), ("Release", 0.4f), ("Floor", 0f), ("Lookahead", 1f));
+        Fx("shutter", 19, "Stutter Chop",        ("Threshold", 0.714f), ("Return", 0.042f), ("Attack", 0.175f), ("Hold", 0.27f), ("Release", 0.303f), ("Floor", 0f), ("Shape", 1f), ("Retrigger", 1f));
+        Fx("shutter", 19, "Soft Pulse",          ("Threshold", 0.571f), ("Return", 0.125f), ("Attack", 0.825f), ("Hold", 0.541f), ("Release", 0.697f), ("Floor", 0.657f));
+        Fx("shutter", 19, "Reverse Swell",       ("Threshold", 0.571f), ("Flip", 1f), ("Attack", 0.869f), ("Hold", 0.73f), ("Release", 0.909f), ("Floor", 0.429f), ("Shape", 0f));
+        // Ducking — route a key in the Sidechain tab
+        Fx("shutter", 19, "Kick Duck",           ("Threshold", 0.42f), ("Flip", 1f), ("Attack", 0.2f), ("Hold", 0.5f), ("Release", 0.55f), ("Floor", 0.55f));
+        Fx("shutter", 19, "Sidechain Pump",      ("Threshold", 0.629f), ("Return", 0.25f), ("Flip", 1f), ("Attack", 0.5f), ("Hold", 0.541f), ("Release", 0.721f), ("Floor", 0.543f), ("Lookahead", 1f));
+        Fx("shutter", 19, "Bass Under Kick",     ("Threshold", 0.571f), ("Flip", 1f), ("Attack", 0.425f), ("Hold", 0.622f), ("Release", 0.63f), ("Floor", 0.857f), ("Det HP", 0.088f), ("Det LP", 0.088f));
+        Fx("shutter", 19, "Voice-Over Duck",     ("Threshold", 0.429f), ("Return", 0.25f), ("Flip", 1f), ("Attack", 0.75f), ("Hold", 0.94f), ("Release", 0.879f), ("Floor", 0.829f), ("Det HP", 0.438f), ("Det LP", 0.651f));
+        Fx("shutter", 19, "Key Tuning (Listen)", ("Threshold", 0.457f), ("Listen", 1f), ("Det HP", 0.349f), ("Det LP", 0.349f));
 
         // ---- Nota Chamber (kind 20) — hybrid reverb, all params normalized 0..1 (unnamed params
         //      reset to their defaults). IR = index/16 (0 Concert Hall · .0625 Stone Vault · .125

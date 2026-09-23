@@ -411,8 +411,11 @@ and user presets, automation, persistence and cloning.
   AUTO/MATCH, true-peak safe, sidechain (match to reference); loudness history and
   IN/OUT/TP/correlation meters.
 - **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
-  Attack/Hold/Release, Floor, Lookahead, Flip (ducker), band-pass sidechain with Listen; a
-  signal graph, IN/GR meters, LED.
+  Attack/Hold/Release with a Linear / Log / Snap shape, Floor (range), Lookahead, Flip
+  (ducker), Retrigger (trigger mode), a 12 dB/oct detector band-pass (switchable) with Listen,
+  Peak hold, internal or external key; Signal / Envelope / Sidechain graphs (drag the
+  threshold, the envelope nodes and the key filter), a STATE column, a state box, meters
+  with peak GR and openings per bar; 30 factory presets; MCP `read_shutter`.
 - **Nota Chamber** (20) — hybrid reverb: a zero-latency convolution engine (16 synthesised
   IRs — halls, rooms, plates, spring, spaces, FX — or your own WAV/FLAC/MP3, mono / stereo /
   4-ch true stereo, dropped on the IR view) with Start/Decay trims, Attack, Size, Reverse,

@@ -3997,74 +3997,222 @@ Console.WriteLine("-- Nota EQ-3 --");
 // ============================ Nota Shutter =================================
 Console.WriteLine("-- Nota Shutter --");
 {
-    // Shutter = noise gate (kind 19). Own engine (it silences the signal, which would skew
-    // the shared master mix used by later tests).
-    using var ge = new NotaEngine();
-    ge.SetBpm(120); ge.SetTimeSignature(4, 4);
-    int gt = ge.AddInstrumentTrack();
-    ge.AddMidiClip(gt, 0.0, 4.0);
-    ge.SetClipNotes(gt, 0, new[] { new NotaNote(57, 0.0, 3.5, 0.5f) });   // sustained, moderate level
-    int gd = ge.AddBuiltinDevice(gt, 19);
-    Check(gd >= 0, "add built-in Nota Shutter");
-    Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
-    Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
-    Check(ge.DeviceParamCount(gt, gd) == 11, $"Nota Shutter exposes 11 params (got {ge.DeviceParamCount(gt, gd)})");
+    // Shutter = noise gate / ducker (kind 19). Own engine (it silences the signal, which would
+    // skew the shared master mix used by later tests). Audio: smooth 50 ms tone bursts peaking at
+    // −6 dBFS every 250 ms over a −54 dBFS hiss (8 openings a 4/4 bar at 120 BPM), and a steady tone
+    // after 0.5 s of silence (the gate keeps its state across a seek, so the silence re-arms it).
+    const int SThreshold = 0, SReturn = 1, SAttack = 2, SHold = 3, SRelease = 4, SFloor = 5, SLook = 6, SFlip = 7, SDetHP = 8,
+        SDetLP = 9, SListen = 10, SShape = 11, SRetrig = 12, SDetFilter = 13, SPeakHold = 14, SExtKey = 15;
+    const int TState = 5, TOpenRatio = 7, TTrigBar = 8, TTrig = 9, TLatency = 12, TExtKey = 13, TWindow = 20, TScope = 24 + 3 * 128;
+    string burstWav = Path.Combine(Path.GetTempPath(), "nota_smoke_shutter_bursts_" + Guid.NewGuid().ToString("N") + ".wav");
+    string toneWav = Path.Combine(Path.GetTempPath(), "nota_smoke_shutter_tone_" + Guid.NewGuid().ToString("N") + ".wav");
+    var rng = new Random(7);
+    Nota.SmokeTest.WavWriter.WriteStereo(burstWav, 4.0, 44100, i =>
+    {
+        double t = i / 44100.0;
+        double ph = t % 0.25;
+        double v = ph < 0.05 ? 0.5 * Math.Pow(Math.Sin(Math.PI * ph / 0.05), 2) * Math.Sin(2 * Math.PI * 220 * t) : 0.002 * (rng.NextDouble() * 2 - 1);
+        return (v, v);
+    });
+    Nota.SmokeTest.WavWriter.WriteStereo(toneWav, 4.0, 44100, i =>
+    {
+        double t = i / 44100.0;
+        double v = t < 0.5 ? 0 : 0.4 * Math.Min(1, (t - 0.5) / 0.005) * Math.Sin(2 * Math.PI * 330 * t);
+        return (v, v);
+    });
+    try
+    {
+        using var ge = new NotaEngine();
+        ge.SetBpm(120); ge.SetTimeSignature(4, 4);
+        int gt = ge.AddAudioTrack();
+        ge.AddAudioClip(gt, burstWav, 0.0);
+        int gd = ge.AddBuiltinDevice(gt, 19);
+        Check(gd >= 0, "add built-in Nota Shutter");
+        Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
+        Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
+        Check(ge.DeviceParamCount(gt, gd) == 16, $"Nota Shutter exposes 16 params (got {ge.DeviceParamCount(gt, gd)})");
+        string[] appended = { "Shape", "Retrigger", "Det Filter", "Peak Hold", "External Key" };
+        bool namesOk = true;
+        for (int k = 0; k < appended.Length; k++) namesOk &= ge.DeviceParamName(gt, gd, 11 + k) == appended[k];
+        Check(namesOk && ge.DeviceParamName(gt, gd, 0) == "Threshold" && ge.DeviceParamName(gt, gd, 10) == "Listen", "Shutter keeps params 0..10 and appends Shape … External Key");
+        // Appended params default to the old sound: Log shape, no retrigger, key filter in, no peak hold, a routed key used.
+        Check(Math.Abs(ge.DeviceParamDefault(gt, gd, SShape) - 0.5f) < 1e-4 && ge.DeviceParamDefault(gt, gd, SRetrig) < 0.5f
+              && ge.DeviceParamDefault(gt, gd, SDetFilter) > 0.5f && ge.DeviceParamDefault(gt, gd, SPeakHold) < 0.5f && ge.DeviceParamDefault(gt, gd, SExtKey) > 0.5f,
+              "Shutter's appended params default to the original behaviour");
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.6f);
+        Check(Math.Abs(ge.DeviceGetParam(gt, gd, SThreshold) - 0.6f) < 1e-4, "Shutter param set/get round-trips");
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
 
-    // Param round-trip.
-    ge.DeviceSetParam(gt, gd, 0, 0.6f);   // Threshold
-    Check(Math.Abs(ge.DeviceGetParam(gt, gd, 0) - 0.6f) < 1e-4, "Shutter param set/get round-trips");
+        var gb = new float[4096 * 2];
+        var gsc = new float[TScope];
+        bool fin = true;
+        // Renders the first `blocks` × 4096 frames; returns the RMS after the first four (the gate
+        // keeps its state across the seek, so the start still shows the previous setting).
+        float Run(int blocks = 24)
+        {
+            double acc = 0; long nfr = 0;
+            ge.Seek(0); ge.Play();
+            for (int k = 0; k < blocks; k++)
+            {
+                ge.RenderOffline(gb, 4096);
+                foreach (var v in gb) if (!float.IsFinite(v)) fin = false;
+                if (k < Math.Min(4, blocks - 1)) continue;
+                foreach (var v in gb) acc += v * v;
+                nfr += gb.Length;
+            }
+            ge.StopTransport();
+            ge.DeviceScope(gt, gd, gsc, gsc.Length);
+            return (float)Math.Sqrt(acc / Math.Max(1, nfr));
+        }
+        ge.SetDeviceBypassed(gt, gd, true); float dryRms = Run(); ge.SetDeviceBypassed(gt, gd, false);
 
-    var gb = new float[8192 * 2];
-    var gsc = new float[5];
-    // Open: threshold below the signal → gate stays open, audio passes.
-    ge.DeviceSetParam(gt, gd, 0, 0.05f);  // threshold very low
-    ge.DeviceSetParam(gt, gd, 5, 0f);     // floor mute
-    ge.Seek(0); ge.Play(); for (int k = 0; k < 6; k++) ge.RenderOffline(gb, 8192); ge.StopTransport();
-    bool gfin = true; foreach (var s in gb) if (!float.IsFinite(s)) { gfin = false; break; }
-    float openRms = Rms(gb, 8192);
-    Check(gfin && openRms > 0.001f, $"Shutter passes audio when open (rms {openRms:F3})");
-    int gn = ge.DeviceScope(gt, gd, gsc, gsc.Length);
-    Check(gn == 5, $"Shutter scope returns 5 meters (got {gn})");
+        float defRms = Run();
+        Check(fin && defRms > dryRms * 0.8f, $"Shutter passes the bursts at the default threshold ({defRms:F4} vs dry {dryRms:F4})");
+        Check(ge.DeviceScope(gt, gd, gsc, gsc.Length) == TScope, $"Shutter scope returns {TScope} values");
+        Check(gsc[TTrig] >= 6 && gsc[TTrigBar] >= 6 && gsc[TTrigBar] <= 10, $"Shutter counts the openings ({gsc[TTrig]:0} total, {gsc[TTrigBar]:0} in the last bar ≈ 8)");
+        Check(gsc[TOpenRatio] > 0.05 && gsc[TOpenRatio] < 0.8, $"Shutter's open share follows the bursts ({gsc[TOpenRatio]:0.00})");
 
-    // Shut: threshold above the signal + mute floor → gate closes, output near-silent.
-    ge.DeviceSetParam(gt, gd, 0, 0.98f);  // threshold very high (above the note)
-    ge.DeviceSetParam(gt, gd, 4, 0.2f);   // fast release
-    ge.Seek(0); ge.Play(); for (int k = 0; k < 6; k++) ge.RenderOffline(gb, 8192); ge.StopTransport();
-    bool gfin2 = true; foreach (var s in gb) if (!float.IsFinite(s)) { gfin2 = false; break; }
-    float shutRms = Rms(gb, 8192);
-    Check(gfin2, "Shutter renders finite when gating");
-    Check(shutRms < openRms * 0.5f, $"gate closes below threshold (shut {shutRms:F4} < open {openRms:F4})");
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.98f);
+        float shutRms = Run();
+        Check(fin && shutRms < dryRms * 0.02f, $"gate closes below the threshold (shut {shutRms:F5} < dry {dryRms:F4})");
+        Check(Math.Round(gsc[TState]) == 0, $"Shutter reports closed ({gsc[TState]:0})");
+        ge.DeviceSetParam(gt, gd, SFloor, 0.714f);   // −20 dB
+        float floorRms = Run();
+        Check(floorRms > dryRms * 0.07f && floorRms < dryRms * 0.14f, $"Floor −20 dB leaves a tenth ({floorRms / dryRms:0.000})");
+        ge.DeviceSetParam(gt, gd, SFloor, 0f);
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
 
-    // Duck (Flip) renders finite + audible.
-    ge.DeviceSetParam(gt, gd, 0, 0.3f); ge.DeviceSetParam(gt, gd, 7, 1f); ge.DeviceSetParam(gt, gd, 5, 0.5f);
-    ge.Seek(0); ge.Play(); ge.RenderOffline(gb, 8192); ge.StopTransport();
-    bool dfin = true; foreach (var s in gb) if (!float.IsFinite(s)) { dfin = false; break; }
-    Check(dfin, "Shutter duck (flip) renders finite");
-    ge.DeviceSetParam(gt, gd, 7, 0f);
+        // Duck: the bursts pull themselves down to the floor.
+        ge.DeviceSetParam(gt, gd, SFlip, 1f); ge.DeviceSetParam(gt, gd, SFloor, 0.714f);
+        float duckRms = Run();
+        Check(fin && duckRms < dryRms * 0.5f && duckRms > 0, $"Duck turns the signal down while it is above the threshold ({duckRms / dryRms:0.00})");
+        ge.DeviceSetParam(gt, gd, SFlip, 0f); ge.DeviceSetParam(gt, gd, SFloor, 0f);
 
-    // Sidechain: an external key source is accepted and keys the detector.
-    int keyT = ge.AddInstrumentTrack();
-    ge.AddMidiClip(keyT, 0.0, 4.0);
-    ge.SetClipNotes(keyT, 0, new[] { new NotaNote(45, 0.0, 3.5, 1.0f) });
-    ge.SetDeviceSidechainSource(gt, gd, keyT);
-    Check(ge.DeviceSidechainSource(gt, gd) == keyT, "Shutter accepts an external key source");
-    ge.DeviceSetParam(gt, gd, 0, 0.2f);
-    ge.Seek(0); ge.Play(); ge.RenderOffline(gb, 8192); ge.StopTransport();
-    bool sfin = true; foreach (var s in gb) if (!float.IsFinite(s)) { sfin = false; break; }
-    Check(sfin, "Shutter with external key renders finite");
-    ge.SetDeviceSidechainSource(gt, gd, -1);
+        // Detector filter: with the band at 2 k … 2.5 k the 220 Hz bursts barely reach the detector.
+        ge.DeviceSetParam(gt, gd, SDetHP, 1f); ge.DeviceSetParam(gt, gd, SDetLP, 0.548f);
+        float filtOn = Run();
+        ge.DeviceSetParam(gt, gd, SDetFilter, 0f);
+        float filtOff = Run();
+        Check(filtOn < filtOff * 0.5f, $"Det Filter keeps the gate shut on an out-of-band key ({filtOn:F4} vs full band {filtOff:F4})");
+        ge.DeviceSetParam(gt, gd, SDetFilter, 1f); ge.DeviceSetParam(gt, gd, SDetHP, 0.301f);
 
-    // Clone: duplicating the track carries Shutter params.
-    ge.DeviceSetParam(gt, gd, 2, 0.66f);   // Attack
-    int gtD = ge.DuplicateTrack(gt); int gdD = ge.TrackDeviceCount(gtD) - 1;
-    Check(gtD > 0 && Math.Abs(ge.DeviceGetParam(gtD, gdD, 2) - 0.66f) < 1e-3, "duplicate track clones Shutter params");
+        // Peak hold and Listen render.
+        ge.DeviceSetParam(gt, gd, SPeakHold, 1f);
+        Check(Run() > 0.001f && fin, "Peak Hold renders finite and audible");
+        ge.DeviceSetParam(gt, gd, SPeakHold, 0f);
+        ge.DeviceSetParam(gt, gd, SListen, 1f); ge.DeviceSetParam(gt, gd, SThreshold, 0.98f);
+        float listenRms = Run();
+        Check(fin && listenRms > dryRms * 0.5f, $"Listen outputs the filtered key even with the gate shut ({listenRms:F4})");
+        ge.DeviceSetParam(gt, gd, SListen, 0f); ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
 
-    // Automation drives Threshold.
-    int glane = ge.AddAutomationLane(gt, AutomationTarget.DeviceParam, gd, 0);
-    Check(glane >= 0, "add Shutter Threshold automation lane");
-    ge.SetAutomationPoints(gt, glane, new[] { new AutomationPoint(0.0, 0.2f), new AutomationPoint(2.0, 0.9f) });
-    ge.Seek(1.99); ge.Play(); ge.RenderOffline(gb, 4096); ge.StopTransport();
-    Check(ge.DeviceGetParam(gt, gd, 0) > 0.7f, $"automation drives Shutter Threshold ({ge.DeviceGetParam(gt, gd, 0):F2})");
+        // Lookahead: 5 ms reported as latency.
+        ge.DeviceSetParam(gt, gd, SLook, 1f); Run(2);
+        Check(Math.Abs(gsc[TLatency] - 220) <= 2, $"Lookahead 5 ms = 220 samples of latency ({gsc[TLatency]:0})");
+        ge.DeviceSetParam(gt, gd, SLook, 0.5f);
+
+        // Text + actions (MCP surface).
+        string t0 = ge.DeviceText(gt, gd, 0), t1 = ge.DeviceText(gt, gd, 1), t2 = ge.DeviceText(gt, gd, 2);
+        Check(t0.StartsWith("Gate") && t0.Contains("threshold") && t1.Contains("GR") && t2.Contains("Shape"), $"Shutter device text 0/1/2 ('{t0}')");
+        ge.DeviceAction(gt, gd, 1, 0, 0); Run(1);
+        Check(Math.Abs(gsc[TWindow] - 0.25f) < 1e-3, $"device_action 1 sets the window to 250 ms ({gsc[TWindow]:0.00} s)");
+        ge.DeviceAction(gt, gd, 1, 1, 0);
+        ge.DeviceAction(gt, gd, 0, 0, 0);
+        ge.Seek(3.9); ge.Play(); ge.RenderOffline(gb, 512); ge.StopTransport(); ge.DeviceScope(gt, gd, gsc, gsc.Length);
+        Check(gsc[TTrig] == 0, $"device_action 0 resets the opening count ({gsc[TTrig]:0})");
+
+        // Retrigger (trigger mode) on a steady tone: one opening, then hold + release shut it.
+        int tt = ge.AddAudioTrack();
+        ge.AddAudioClip(tt, toneWav, 0.0);
+        int td = ge.AddBuiltinDevice(tt, 19);
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.98f);   // the burst track shuts itself: only the tone reaches the master
+        var tb = new float[4096 * 2];
+        float RunTone()
+        {
+            double acc = 0; long nfr = 0;
+            ge.Seek(0); ge.Play();
+            for (int k = 0; k < 10; k++) { ge.RenderOffline(tb, 4096); foreach (var v in tb) { if (!float.IsFinite(v)) fin = false; acc += v * v; } nfr += tb.Length; }
+            ge.StopTransport();
+            ge.DeviceScope(tt, td, gsc, gsc.Length);
+            return (float)Math.Sqrt(acc / Math.Max(1, nfr));
+        }
+        ge.DeviceSetParam(tt, td, SHold, 0.27f); ge.DeviceSetParam(tt, td, SRelease, 0.303f);
+        float toneOpen = RunTone();
+        ge.DeviceSetParam(tt, td, SRetrig, 1f);
+        float toneRetrig = RunTone();
+        Check(toneOpen > 0.1f && toneRetrig < toneOpen * 0.3f, $"Retrigger fires one opening on a held tone ({toneRetrig:F4} vs {toneOpen:F4})");
+
+        // Shapes: one retriggered opening on the held tone, released over 300 ms — the curve decides the energy.
+        ge.DeviceSetParam(tt, td, SRelease, 0.75f);
+        var shapeRms = new float[3];
+        for (int k = 0; k < 3; k++) { ge.DeviceSetParam(tt, td, SShape, k / 2f); shapeRms[k] = RunTone(); }
+        Check(fin && shapeRms.All(r => r > 0.001f), "every Shape renders finite and audible");
+        // Over the same 300 ms: a straight ramp gives the least, the one-pole (300 ms time constant) more, Snap stays up longest.
+        Check(shapeRms[1] > shapeRms[0] * 1.1f && shapeRms[2] > shapeRms[1] * 1.1f,
+              $"Linear < Log < Snap on the release ({shapeRms[0]:F4} linear / {shapeRms[1]:F4} log / {shapeRms[2]:F4} snap)");
+        ge.DeviceSetParam(tt, td, SShape, 0.5f); ge.DeviceSetParam(tt, td, SRelease, 0.63f);
+        ge.DeviceSetParam(tt, td, SRetrig, 0f);
+
+        // External key: the tone track gated by the bursts; External Key off keys off itself again.
+        ge.SetDeviceSidechainSource(tt, td, gt);
+        ge.SetDeviceSidechainTapPre(tt, td, true);      // the key before the burst track's own (shut) gate
+        Check(ge.DeviceSidechainSource(tt, td) == gt, "Shutter accepts an external key source");
+        float keyed = RunTone();
+        Check(gsc[TExtKey] > 0.5f && fin && keyed > 0.01f && keyed < toneOpen * 0.8f, $"the external key opens and shuts the gate ({keyed:F4} vs {toneOpen:F4})");
+        ge.DeviceSetParam(tt, td, SExtKey, 0f);
+        float unkeyed = RunTone();
+        Check(gsc[TExtKey] < 0.5f && unkeyed > toneOpen * 0.95f, $"External Key off keys off the track itself ({unkeyed:F4})");
+        ge.DeviceSetParam(tt, td, SExtKey, 1f);
+        ge.SetDeviceSidechainSource(tt, td, -1);
+        ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
+
+        // Clone: duplicating the track carries the params, the appended ones too.
+        ge.DeviceSetParam(gt, gd, SAttack, 0.66f); ge.DeviceSetParam(gt, gd, SShape, 1f); ge.DeviceSetParam(gt, gd, SRetrig, 1f);
+        int gtD = ge.DuplicateTrack(gt); int gdD = ge.TrackDeviceCount(gtD) - 1;
+        Check(gtD > 0 && Math.Abs(ge.DeviceGetParam(gtD, gdD, SAttack) - 0.66f) < 1e-3 && ge.DeviceGetParam(gtD, gdD, SShape) > 0.99f
+              && ge.DeviceGetParam(gtD, gdD, SRetrig) > 0.5f, "duplicate track clones Shutter params");
+        ge.DeviceSetParam(gt, gd, SShape, 0.5f); ge.DeviceSetParam(gt, gd, SRetrig, 0f);
+
+        // Automation drives Threshold and an appended param (Floor is original; Shape is new).
+        int glane = ge.AddAutomationLane(gt, AutomationTarget.DeviceParam, gd, SThreshold);
+        Check(glane >= 0, "add Shutter Threshold automation lane");
+        ge.SetAutomationPoints(gt, glane, new[] { new AutomationPoint(0.0, 0.2f), new AutomationPoint(2.0, 0.9f) });
+        int slane = ge.AddAutomationLane(gt, AutomationTarget.DeviceParam, gd, SShape);
+        ge.SetAutomationPoints(gt, slane, new[] { new AutomationPoint(0.0, 1f), new AutomationPoint(8.0, 1f) });
+        ge.Seek(1.99); ge.Play(); ge.RenderOffline(gb, 4096); ge.StopTransport();
+        Check(ge.DeviceGetParam(gt, gd, SThreshold) > 0.7f, $"automation drives Shutter Threshold ({ge.DeviceGetParam(gt, gd, SThreshold):F2})");
+        Check(ge.DeviceGetParam(gt, gd, SShape) > 0.99f, $"automation drives Shutter Shape ({ge.DeviceGetParam(gt, gd, SShape):F2})");
+        ge.RemoveAutomationLane(gt, slane); ge.RemoveAutomationLane(gt, glane);
+
+        // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+        {
+            var names = new HashSet<string>();
+            for (int k = 0; k < ge.DeviceParamCount(gt, gd); k++) names.Add(ge.DeviceParamName(gt, gd, k));
+            var cat = new FactoryPresetCatalog();
+            var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 19).ToList();
+            Check(mine.Count >= 25, $"Nota Shutter ships ≥ 25 factory presets ({mine.Count})");
+            var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+            Check(bad.Count == 0, $"every Shutter preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+            int pf = 0;
+            foreach (var p in mine)
+            {
+                fin = true;
+                if (cat.ApplyInPlace(ge, p.Id, gt, gd).Length != 0) { pf++; continue; }
+                Run(4);
+                if (!fin) pf++;
+            }
+            Check(pf == 0, $"every Shutter preset applies and renders finite ({pf} failed)");
+            cat.ApplyInPlace(ge, "shutter/Tom Gate", gt, gd);
+            Check(ge.DeviceGetParam(gt, gd, SShape) < 0.01f && ge.DeviceGetParam(gt, gd, SPeakHold) > 0.5f && ge.DeviceGetParam(gt, gd, SFloor) > 0.7f,
+                  "Tom Gate preset: Linear shape, peak hold, −18 dB floor");
+            cat.ApplyInPlace(ge, "shutter/Init", gt, gd);
+            Check(Math.Abs(ge.DeviceGetParam(gt, gd, SShape) - 0.5f) < 1e-4 && ge.DeviceGetParam(gt, gd, SPeakHold) < 0.5f && ge.DeviceGetParam(gt, gd, SFloor) < 0.001f,
+                  "Init preset resets the leftovers to the defaults");
+        }
+    }
+    finally
+    {
+        try { File.Delete(burstWav); File.Delete(toneWav); } catch { }
+    }
 }
 
 // ============================ Nota Chamber =================================

@@ -55,6 +55,37 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Shutter shows the gate working, and gains a shape, trigger mode and a real key
+  switch.** The card moves onto the 700 × 260 frame of Utility, Valve and Vintage — a STATE
+  column (the input, or the key when a sidechain drives it, with the threshold tick, and the
+  reduction), a centre panel with **Signal**, **Envelope** and **Sidechain** tabs, a
+  **Detector** / **Meters** panel and a status strip. The threshold and return no longer sit
+  in a strip above everything — they are lines on the graph where the gate acts:
+  - **Signal** — the input and what passes over the last 250 ms, 1 s or 4 s (click the
+    window in the tab bar), with the threshold and the close level to drag up and down, Gate /
+    Duck, Lookahead, **Live** to freeze the picture, and how much of the window was open.
+  - **Envelope** — one opening drawn from attack, hold, release, shape and floor (upside
+    down for Duck); drag the nodes for the times and the floor for the range. New **Shape**:
+    Linear ramps, Log (the classic one-pole) or Snap (stays open, then shuts hard). New
+    **Retrig**: trigger mode, where each hit fires one attack → hold → release however long
+    the sound lasts — for gated reverbs and chopped pads. Openings per bar are counted.
+  - **Sidechain** — the key source list, the detector's band-pass (now 12 dB/oct) with its
+    HP / LP nodes over the reduction, Listen, and **SC EQ** to switch the band-pass out.
+  - **Detector / Meters** — source, threshold, return, floor and a state box (closed, attack,
+    open, hold, release with the gain); in / out / GR with the peak, SC HP / LP, range,
+    Listen and **Reset**. New switches: **External sidechain** (keep a routed key but listen
+    to the track itself) and **Peak hold** (the detector holds peaks, so low notes don't
+    chatter the gate).
+  - **30 factory presets**, up from six — drums (kick, snare, toms, hats, overheads, room,
+    gated reverb, drum trigger), voice (podcast, breaths, dialogue), guitar and bass, pads,
+    rhythmic chops and ducking (sidechain pump, bass under kick, voice-over). The five new
+    parameters are appended and default to the old behaviour, so older projects open
+    unchanged; every one of them automates (the detector's grouped under *Det* in the lane
+    menu), MIDI-learns, saves in a preset and is reachable over MCP. `get_device_text`
+    returns the status line, the live reading and a guide to the parameter values,
+    `device_action` 0 resets the meters and 1 sets the window, and the new `read_shutter`
+    returns the state, the gain and reduction, the levels, the open share, the openings per
+    bar and the window's history.
 - **Nota Physical's editor is now the almanac's card, with a voice mode, a resonator mix and
   the partials it actually rings.** The card moves onto the 700 × 260 frame the other
   instruments use — an **Exciter** / **Resonator** tab panel with a one-line reading of the
@@ -214,6 +245,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Nota Shutter's detector and Duck.** The detector's follower let go of the key within a
+  sample instead of over 3 ms, so the gate leaned on Hold to stay open on low notes; it now
+  follows the key as intended, and the level meters decay smoothly. In Duck, Attack now sets
+  how fast the signal goes down and Release how fast it comes back (they were swapped).
 - **Nota Physical's 1→2 structure no longer blows up.** Resonator 1 fed resonator 2 at full
   gain, so a partial landing on one of resonator 2's rang it up by thousands of times and the
   track clipped. Resonator 2 now works as a set of resonant band-passes at the level of its
