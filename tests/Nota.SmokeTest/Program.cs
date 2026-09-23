@@ -8080,18 +8080,24 @@ Console.WriteLine("-- Nota Beat Repeat (effect kind 11) --");
 {
     using var breng = new NotaEngine();
     int brt = breng.AddAudioTrack();
-    breng.AddAudioClip(brt, wav, 0.0);   // 440 Hz sine
+    breng.AddAudioClip(brt, wav, 0.0);   // 440 Hz sine, 1 s
     breng.SetBpm(120);
+    breng.SetTimeSignature(4, 4);
+    float[] Render(int frames) { var b = new float[frames * 2]; breng.Seek(0); breng.Play(); breng.RenderOffline(b, frames); breng.StopTransport(); return b; }
     // Dry reference (no device yet).
-    var dry = new float[44100 * 2];
-    breng.Seek(0); breng.Play(); breng.RenderOffline(dry, 44100); breng.StopTransport();
+    var dry = Render(44100);
 
     int brdi = breng.AddBuiltinDevice(brt, 11);
     Check(brdi >= 0, "add Nota Beat Repeat device");
     Check(breng.DeviceName(brt, brdi) == "Nota Beat Repeat", $"device is Nota Beat Repeat (got '{breng.DeviceName(brt, brdi)}')");
     Check(breng.TrackDeviceBuiltinKind(brt, brdi) == 11, "device reports builtin kind 11");
     int brpc = breng.DeviceParamCount(brt, brdi);
-    Check(brpc == 16, $"Nota Beat Repeat exposes 16 params ({brpc})");
+    Check(brpc == 20, $"Nota Beat Repeat exposes 20 params ({brpc})");
+    Check(breng.DeviceParamName(brt, brdi, 15) == "Repeat" && breng.DeviceParamName(brt, brdi, 16) == "Latch" && breng.DeviceParamName(brt, brdi, 17) == "Triplet"
+          && breng.DeviceParamName(brt, brdi, 18) == "Filter Type" && breng.DeviceParamName(brt, brdi, 19) == "Filter Narrow",
+          "appended params: Repeat (was Latch), Latch, Triplet, Filter Type, Filter Narrow");
+    Check(Math.Abs(breng.DeviceParamDefault(brt, brdi, 18) - 0.5f) < 1e-3f && breng.DeviceParamDefault(brt, brdi, 17) == 0f && breng.DeviceParamDefault(brt, brdi, 19) == 0f,
+          "appended params default to the old sound (band-pass, straight grid, no narrowing)");
     breng.DeviceSetParam(brt, brdi, 5, 0.7f);   // Gate
     Check(Math.Abs(breng.DeviceGetParam(brt, brdi, 5) - 0.7f) < 1e-3f, "device param set/get round-trips");
 
@@ -8103,23 +8109,173 @@ Console.WriteLine("-- Nota Beat Repeat (effect kind 11) --");
     breng.DeviceSetParam(brt, brdi, 5, 1.0f);   // Gate full
     breng.DeviceSetParam(brt, brdi, 6, 1.0f);   // Pitch +12
     breng.DeviceSetParam(brt, brdi, 13, 1.0f);  // Mode = Gate
-    var wet = new float[44100 * 2];
-    breng.Seek(0); breng.Play(); breng.RenderOffline(wet, 44100); breng.StopTransport();
+    var wet = Render(44100);
     double diff = 0; bool finite = true;
     for (int s = 0; s < 44100 * 2; s++) { diff += Math.Abs(dry[s] - wet[s]); if (!float.IsFinite(wet[s]) || Math.Abs(wet[s]) > 8f) finite = false; }
     Check(diff > 10.0 && finite, $"synced beat repeats alter the audio (sum|delta| {diff:0})");
     float phase = breng.DeviceGainReduction(brt, brdi);
     Check(phase >= 0f && phase < 2f, $"publishes interval phase for the viz ({phase:0.00})");
-    var brslots = new float[64];
-    int brn = breng.DeviceScope(brt, brdi, brslots, brslots.Length);
-    bool slotsOk = brn == 64; for (int s = 0; s < brn; s++) if (!float.IsFinite(brslots[s]) || brslots[s] < 0f || brslots[s] > 1f) slotsOk = false;
-    Check(slotsOk, $"publishes 64-slot timeline envelope for the viz (n={brn})");
-    breng.DeviceSetParam(brt, brdi, 14, 0.5f);   // Mix
-    breng.DeviceSetParam(brt, brdi, 15, 1.0f);   // Latch
-    Check(Math.Abs(breng.DeviceGetParam(brt, brdi, 14) - 0.5f) < 1e-3f && Math.Abs(breng.DeviceGetParam(brt, brdi, 15) - 1.0f) < 1e-3f, "Mix/Latch params round-trip");
 
+    // Telemetry layout: 32 live values, 3 × 64 timeline cells, a 128-column interval waveform.
+    const int brTele = 32, brCells = 64, brWave = 128, brScope = brTele + 3 * brCells + brWave;
+    var brsc = new float[brScope];
+    int brn = breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    bool scOk = brn == brScope;
+    for (int s = 0; s < brn; s++) if (!float.IsFinite(brsc[s])) scOk = false;
+    int repCells = 0, capCells = 0;
+    for (int c = 0; c < brCells; c++) { int k = (int)Math.Round(brsc[brTele + brCells + c]); if (k == 2) repCells++; if (k == 1) capCells++; if (k < 0 || k > 2) scOk = false; }
+    double waveMax = 0; for (int c = 0; c < brWave; c++) waveMax = Math.Max(waveMax, brsc[brTele + 3 * brCells + c]);
+    Check(scOk && repCells > 0 && capCells > 0 && waveMax > 0.05, $"telemetry: {brn} values, timeline shows capture ({capCells}) and repeats ({repCells}), waveform peak {waveMax:0.00}");
+    double sr = brsc[15] > 1000 ? brsc[15] : 44100;
+    Check(Math.Abs(brsc[9] - 0.5f) < 1e-3f && Math.Abs(brsc[10] - 0.25f) < 1e-3f && Math.Abs(brsc[12] - 120f) < 0.5f && Math.Abs(brsc[26] - 4f) < 1e-3f,
+          $"telemetry reports interval {brsc[9]} beats, slice {brsc[10]} beats, {brsc[12]:0.#} BPM, {brsc[26]} beats a bar");
+
+    // The capture pass plays the input through untouched, even with the pitch up (it used to read
+    // ahead of the write head); the next pass repeats that slice.
+    breng.DeviceSetParam(brt, brdi, 13, 0.5f);  // Insert
+    breng.DeviceSetParam(brt, brdi, 6, 1.0f);   // Pitch +12 on the repeats
+    var ins = Render(44100);
+    int spb = (int)Math.Round(sr * 0.5), trig = spb / 2, slice = spb / 4;   // Interval 1/8 = half a beat; Grid 1/16 = a quarter beat
+    double capErr = 0; for (int i = trig + 16; i < trig + slice - 16; i++) capErr = Math.Max(capErr, Math.Abs(ins[i * 2] - dry[i * 2]));
+    Check(capErr < 1e-4, $"capture pass is the dry input with Pitch +12 (max |delta| {capErr:0.000000})");
+    breng.DeviceSetParam(brt, brdi, 6, 0.5f);   // Pitch 0 → the repeat is a copy of the slice
+    ins = Render(44100);
+    double repErr = 0; int fade = (int)(sr * 0.004) + 4;   // the 3 ms dry → repeat crossfade
+    for (int i = trig + slice + fade; i < trig + 2 * slice - fade; i++) repErr = Math.Max(repErr, Math.Abs(ins[i * 2] - dry[(i - slice) * 2]));
+    Check(repErr < 1e-3, $"first repeat replays the captured slice (max |delta| {repErr:0.00000})");
+
+    // Chance 0 in Gate mode: nothing fires, nothing sounds.
+    breng.DeviceSetParam(brt, brdi, 4, 0f);
+    breng.DeviceSetParam(brt, brdi, 13, 1f);
+    var silent = Render(22050);
+    Check(Rms(silent, 22050) < 1e-4f, $"Gate mode with Chance 0 is silent (rms {Rms(silent, 22050):0.000000})");
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(brsc[29] >= 1, $"skipped intervals are counted ({brsc[29]:0})");
+
+    // Repeat holds a burst (no end, whatever the gate) while on, and stops when released.
+    breng.DeviceSetParam(brt, brdi, 15, 1f);
+    breng.DeviceSetParam(brt, brdi, 5, 0f);     // Gate 0 would end a normal burst after one slice
+    var held = Render(22050);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(brsc[3] > 1.5f && brsc[18] > 0.5f && brsc[5] == 0f && brsc[4] >= 3 && Rms(held, 22050) > 0.01f,
+          $"Repeat holds the burst (state {brsc[3]}, pass {brsc[4]}, passes {brsc[5]}, rms {Rms(held, 22050):0.000})");
+    breng.DeviceSetParam(brt, brdi, 15, 0f);
+    Render(4096);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(brsc[3] < 0.5f && brsc[18] < 0.5f, $"releasing Repeat ends the burst (state {brsc[3]})");
+
+    // Triplet grid, the legacy 1/8T value, and bars that follow the time signature.
+    breng.DeviceSetParam(brt, brdi, 4, 1f);
+    breng.DeviceSetParam(brt, brdi, 13, 0.5f);
+    breng.DeviceSetParam(brt, brdi, 17, 1f);    // Triplet on 1/16
+    Render(22050);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(Math.Abs(brsc[10] - 1f / 6f) < 1e-3f, $"Triplet turns 1/16 into 1/16T ({brsc[10]:0.0000} beats)");
+    breng.DeviceSetParam(brt, brdi, 17, 0f);
+    breng.DeviceSetParam(brt, brdi, 2, 0.8f);   // legacy 1/8T
+    Render(22050);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(Math.Abs(brsc[10] - 1f / 3f) < 1e-3f, $"legacy Grid 1/8T still means a third of a beat ({brsc[10]:0.0000})");
+    breng.DeviceSetParam(brt, brdi, 2, 0.4f);
+    breng.SetTimeSignature(3, 4);
+    breng.DeviceSetParam(brt, brdi, 0, 0.6f);   // 1 bar
+    Render(4096);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(Math.Abs(brsc[9] - 3f) < 1e-3f && Math.Abs(brsc[8] - 6f) < 1e-3f, $"1 bar in 3/4 is 3 beats, the timeline two bars ({brsc[9]}, {brsc[8]})");
+    breng.SetTimeSignature(4, 4);
+
+    // Variation: the slice lands on a doubling / halving of the grid.
+    breng.DeviceSetParam(brt, brdi, 0, 0f);
+    breng.DeviceSetParam(brt, brdi, 3, 0.5f);   // ±3 steps
+    bool varOk = true; var seen = new HashSet<float>();
+    for (int r = 0; r < 6; r++)
+    {
+        Render(22050);
+        breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+        double k = Math.Log2(brsc[10] / 0.25);
+        if (Math.Abs(k - Math.Round(k)) > 1e-3 || Math.Abs(k) > 3.001) varOk = false;
+        seen.Add(brsc[10]);
+    }
+    Check(varOk, $"Variation keeps the slice on the grid ladder ({string.Join(", ", seen)})");
+    breng.DeviceSetParam(brt, brdi, 3, 0f);
+
+    // Filter types on the repeats: all finite; a high-pass at 8 kHz takes the 440 Hz repeats down.
+    float RepRms()
+    {
+        breng.DeviceSetParam(brt, brdi, 13, 1f);   // Gate: only the burst sounds
+        var b = Render(44100);
+        breng.DeviceSetParam(brt, brdi, 13, 0.5f);
+        foreach (var v in b) if (!float.IsFinite(v)) return float.NaN;
+        return Rms(b, 44100);
+    }
+    breng.DeviceSetParam(brt, brdi, 5, 1f);     // Gate: the whole interval → capture + a repeat
+    float rNone = RepRms();
+    breng.DeviceSetParam(brt, brdi, 10, 1f);
+    bool typesFinite = true; float rHp = 0;
+    foreach (float t in new[] { 0f, 0.5f, 1f })
+    {
+        breng.DeviceSetParam(brt, brdi, 18, t);
+        breng.DeviceSetParam(brt, brdi, 11, t >= 1f ? 0.862f : 0.5f);
+        breng.DeviceSetParam(brt, brdi, 19, 1f);
+        float r = RepRms();
+        if (!float.IsFinite(r)) typesFinite = false;
+        if (t >= 1f) rHp = r;
+    }
+    Check(typesFinite && rHp < rNone * 0.8f, $"LP / BP / HP repeat filters render finite; HP 8 kHz lowers the burst (rms {rHp:0.000} vs {rNone:0.000})");
+    breng.DeviceSetParam(brt, brdi, 10, 0f);
+    breng.DeviceSetParam(brt, brdi, 19, 0f);
+    breng.DeviceSetParam(brt, brdi, 18, 0.5f);
+
+    // Device actions: 1 fires a repeat now (Chance 0), 0 resets the counters.
+    breng.DeviceSetParam(brt, brdi, 4, 0f);
+    breng.DeviceSetParam(brt, brdi, 0, 1f);     // 4 bars: no interval inside the render
+    breng.DeviceAction(brt, brdi, 1, 0, 0);
+    Render(2048);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(brsc[23] >= 1 && brsc[3] > 0.5f, $"device_action 1 fires a repeat (bursts {brsc[23]}, state {brsc[3]})");
+    breng.DeviceAction(brt, brdi, 0, 0, 0);
+    Render(512);
+    breng.DeviceScope(brt, brdi, brsc, brsc.Length);
+    Check(brsc[23] == 0 && brsc[29] == 0, $"device_action 0 resets the counters ({brsc[23]}, {brsc[29]})");
+
+    // Texts.
+    string t0 = breng.DeviceText(brt, brdi, 0), t1 = breng.DeviceText(brt, brdi, 1), t2 = breng.DeviceText(brt, brdi, 2);
+    Check(t0.StartsWith("Insert") && t0.Contains("every 4 bars") && t0.Contains("grid 1/16") && t1.Contains("pass") && t2.Contains("Filter Width"),
+          $"device texts: status '{t0[..Math.Min(60, t0.Length)]}…', live, guide");
+
+    // MCP reading.
+    breng.DeviceSetParam(brt, brdi, 4, 1f);
+    breng.DeviceSetParam(brt, brdi, 0, 0.2f);
+    Render(44100);
+    var brtools = new Nota.Mcp.Tools.DeviceTools(breng, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    var brr = brtools.ReadBeatRepeat(brt, brdi).Result;
+    Check(brr.Mode == "Insert" && brr.Timeline.Length == 32 && brr.SampleRate > 1000 && Math.Abs(brr.IntervalBeats - 1) < 1e-3 && brr.Bursts > 0
+          && brr.Timeline.Any(s => s.Kind == "repeat") && brr.Summary.Length > 0 && brr.Live.Length > 0,
+          $"MCP read_beat_repeat reports mode, interval, bursts and the timeline ({brr.Mode}, {brr.IntervalBeats} beats, {brr.Bursts} bursts)");
+
+    // Every factory preset names only real params and renders finite.
+    var brcat = new FactoryPresetCatalog();
+    int brPresets = 0; bool brNamesOk = true, brPresetsFinite = true;
+    var brNames = new HashSet<string>();
+    for (int p = 0; p < brpc; p++) brNames.Add(breng.DeviceParamName(brt, brdi, p));
+    foreach (var info in brcat.All())
+    {
+        if (info.IsInstrument || info.IsMidiEffect || info.BuiltinKind != 11) continue;
+        var doc = brcat.Document(info.Id);
+        if (doc is null) continue;
+        brPresets++;
+        foreach (var k in doc.NamedParams!.Keys) if (!brNames.Contains(k)) { brNamesOk = false; Console.WriteLine($"    unknown param '{k}' in {info.DisplayName}"); }
+        brcat.ApplyInPlace(breng, info.Id, brt, brdi);
+        var pb = Render(22050);
+        foreach (var v in pb) if (!float.IsFinite(v) || Math.Abs(v) > 4f) { brPresetsFinite = false; Console.WriteLine($"    preset {info.DisplayName} not finite"); break; }
+    }
+    Check(brPresets >= 25 && brNamesOk && brPresetsFinite, $"{brPresets} Beat Repeat factory presets, all params known, all render finite");
+
+    breng.DeviceSetParam(brt, brdi, 5, 1.0f);
+    breng.DeviceSetParam(brt, brdi, 17, 1.0f);
     int brcopy = breng.DuplicateTrack(brt);
-    Check(brcopy > 0 && Math.Abs(breng.DeviceGetParam(brcopy, brdi, 5) - 1.0f) < 1e-3f, "duplicate track clones Beat Repeat params");
+    Check(brcopy > 0 && Math.Abs(breng.DeviceGetParam(brcopy, brdi, 5) - 1.0f) < 1e-3f && breng.DeviceGetParam(brcopy, brdi, 17) > 0.5f,
+          "duplicate track clones Beat Repeat params (appended ones too)");
 }
 
 // ===================== built-in Volt project round-trip ===================

@@ -389,8 +389,12 @@ and user presets, automation, persistence and cloning.
   mix, output, oversampling. Tabs: Curve (the transfer curve, the input on it) / Wear (pitch
   drift over 4 s in cents) / Output (harmonics against the hiss floor) and Tone / Output, with
   a STATE column and a status strip. 30 factory presets. MCP: `read_vintage`.
-- **Nota Beat Repeat** (9) — beat repeat with Mix/Insert/Gate modes, Chance, Gate, Repeat,
-  Latch, INTERVAL/GRID, Pitch/Decay/Volume, FILTER, Mix; a TIMELINE visualiser.
+- **Nota Beat Repeat** (11) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
+  time signature), Offset, Grid with Triplet, Variation, Chance, Gate; Mix / Insert / Gate
+  modes; Pitch and Pitch Decay, Decay, Volume; a repeat filter (LP / BP / HP, width in
+  octaves, optionally narrowing with each repeat); Repeat (hold or Latch) and Mix. Timeline /
+  Slices / Filter graphs (drag the offset, the gate and the filter), a REPEAT column, a state
+  box and meters; 31 factory presets; MCP `read_beat_repeat`.
 - **Nota Orbit** (10, formerly Auto Pan) — auto-pan and tremolo, L/R phase (0° = tremolo …
   180° = pan), 5 LFO shapes, Shape, Mix.
 - **Nota Crush** (12) — bit crusher: Bit Depth, Sample Rate, Drive, Wet, Anti-Alias;

@@ -55,6 +55,39 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Beat Repeat shows what it captures and repeats, and gains a triplet grid, a filter
+  type and a Repeat you can latch.** The card moves onto the 700 × 260 frame of Shutter and
+  Auto Shift — a REPEAT column (the input and the repeats' level, the repeat count), a centre
+  panel with **Timeline**, **Slices** and **Filter** tabs, a **Character** / **Output** panel
+  and a status strip. Interval and Grid move out of the button grid into the row over the
+  graph; Chance, Gate, Offset and Variation become knobs under it:
+  - **Timeline** — two intervals on the grid, each step a bar of the input level: dry steps
+    dim, the captured slice in full brass, every repeat a step dimmer as it decays, with the
+    trigger points, bar numbers and the playhead.
+  - **Slices** — the last interval's sound with the gate shaded from the offset and the
+    captured slice in brass; drag the offset line or the gate's end. New **Triplet** switch
+    turns any grid into triplets (the old 1/8T and 1/16T settings still load as they were).
+  - **Filter** — the repeat filter's curve, now **LP**, **BP** or **HP**, with Width in real
+    octaves; drag the node for the frequency and a band edge for the width. New **Narrow with
+    repeats**: each repeat narrows the band and follows the pitch down.
+  - **Character / Output** — pitch, pitch decay, decay and volume; a state box (waiting,
+    capture, repeat n of N, held); in / repeat / out meters, Mix, **Repeat** and **Reset**.
+    New **Latch** makes the Repeat button stay on after a click. Repeat now holds the slice
+    it caught until you let go, instead of catching a new one every gate.
+  - Bars follow the time signature (1 bar in 3/4 is three beats). Variation now lets the grid
+    float up to six doubling / halving steps per trigger. Slice edges are faded so repeats
+    don't click.
+  - **31 factory presets**, up from six — stutters, glitch, pitch drops (Tape Drop, Dive
+    Bomb), filtered repeats, drum and vocal chops, and performance presets for the Repeat
+    button. The four new parameters are appended and default to the old sound, so older
+    projects open unchanged. Parameter 15 is renamed from *Latch* to **Repeat** (it always
+    meant "repeat now"), so a user preset saved with the old *Latch* on now turns on the new
+    Latch switch instead. Every parameter automates (the filter's grouped under *Filter* in
+    the lane menu), MIDI-learns, saves in a preset and is reachable over MCP.
+    `get_device_text` returns the status line, the live reading and a guide to the parameter
+    values, `device_action` 0 resets and 1 fires a repeat now, and the new `read_beat_repeat`
+    returns the state, the pass, the slice, the repeat's gain / pitch / filter, the levels,
+    bar and beat, and the timeline.
 - **Nota Auto Shift is a full vocal tuner: it keeps the voice's character, learns the key and
   can follow a MIDI part.** The card moves onto the 700 × 260 frame of Shutter, Utility and
   Valve — a PITCH column (where the voice sits and the correction now), a centre panel with
@@ -282,6 +315,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Nota Beat Repeat's first pass and filter width.** With Pitch above 0 the capture pass
+  read ahead of the audio just written, so the first slice of every burst played stale audio
+  from seconds earlier; the capture now plays through as it is and the pitch applies to the
+  repeats. The filter's Width was labelled in octaves but raised the Q, so turning it up made
+  the band narrower; it is now the band in octaves (Filtered Chops is retuned to match).
 - **Nota Auto Shift's timing, Mix and Follow.** The shifter delayed the voice by about 16 ms
   without telling the engine, so a tuned vocal sat late against the other tracks; the delay is
   now reported and compensated. Mix blended that delayed voice with an undelayed dry one, which

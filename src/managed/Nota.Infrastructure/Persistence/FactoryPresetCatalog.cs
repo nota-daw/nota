@@ -1526,14 +1526,63 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("autoshift", 10, "MIDI Scale Follow",  ("Key Source", 1f), ("MIDI Mode", 1f), ("MIDI Latch", 1f), ("Amount", 0.9f), ("Speed", 0.25f), ("Human", 0.3f), ("Formant", 1f));
         Fx("autoshift", 10, "MIDI Melody Replace",("Key Source", 1f), ("MIDI Oct Lock", 1f), ("Range", 1f), ("Amount", 1f), ("Speed", 0.1f), ("MIDI Glide", 0.273f), ("Formant", 1f));
 
-        // ---- Nota Beat Repeat (kind 11) — all params normalized 0..1. Interval 0 1/8..1 4 Bar
-        //      (.6=1 Bar); Grid 0 1/4..1 1/16T (.4=1/16); Mode 0 Mix/.5 Insert/1 Gate.
-        Fx("beatrepeat", 11, "Classic Stutter", ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.5f), ("Chance", 1f),   ("Mode", 0.5f), ("Volume", 0.5f));
-        Fx("beatrepeat", 11, "Glitch Gate",     ("Interval", 0.4f), ("Grid", 0.6f), ("Gate", 0.7f), ("Chance", 0.6f), ("Variation", 0.3f), ("Mode", 1f), ("Volume", 0.5f));
-        Fx("beatrepeat", 11, "Pitch Drop",      ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.6f), ("Chance", 1f),   ("Pitch", 0.5f), ("Pitch Decay", 0.6f), ("Mode", 0.5f), ("Volume", 0.5f));
-        Fx("beatrepeat", 11, "Filtered Chops",  ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.5f), ("Chance", 1f),   ("Filter On", 1f), ("Filter Freq", 0.4f), ("Filter Width", 0.6f), ("Mode", 0.5f), ("Volume", 0.5f));
-        Fx("beatrepeat", 11, "Triplet Tumble",  ("Interval", 0.6f), ("Grid", 0.8f), ("Gate", 0.6f), ("Chance", 0.8f), ("Variation", 0.4f), ("Decay", 0.3f), ("Mode", 0.5f), ("Volume", 0.5f));
-        Fx("beatrepeat", 11, "Half-Bar Roll",   ("Interval", 0.4f), ("Grid", 0.2f), ("Gate", 1f),   ("Chance", 1f),   ("Decay", 0.4f), ("Mode", 0f), ("Volume", 0.5f));
+        // ---- Nota Beat Repeat (kind 11) — tempo-synced repeater, all params normalized 0..1 (unnamed
+        //      ones reset to their defaults). Interval 0 1/8 · .2 1/4 · .4 1/2 · .6 1 bar · .8 2 bars ·
+        //      1 4 bars; Grid 0 1/4 · .2 1/8 · .4 1/16 · .6 1/32 (Triplet 1 = triplets); Offset / Gate
+        //      n/16 = n × .0625; Variation n steps = n/6 (.167 = 1, .333 = 2, .5 = 3); Pitch .5 + st/24
+        //      (0 = −12, .208 = −7, .292 = −5, .375 = −3, .792 = +7, 1 = +12); Pitch Decay st/6 per repeat
+        //      (.083 = 0.5, .167 = 1, .333 = 2); Volume .5 + dB/24 (.333 = −4, .375 = −3, .417 = −2,
+        //      .583 = +2); Decay = the per-repeat fade (0..55 %); Filter Freq 50·360^v Hz (.353 = 400,
+        //      .422 = 600, .5 = 949, .55 = 1.3 k, .6 = 1.7 k, .664 = 2.5 k, .813 = 6 k); Filter Width
+        //      .5 + 3v oct (.1 = 0.8, .167 = 1, .333 = 1.5, .5 = 2); Filter Type 0 LP / .5 BP / 1 HP;
+        //      Mode 0 Mix / .5 Insert / 1 Gate; Latch 1 = the Repeat button latches.
+        Fx("beatrepeat", 11, "Init",                ("Interval", 0.6f));
+        // Stutters
+        Fx("beatrepeat", 11, "Classic Stutter",     ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.5f), ("Chance", 1f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Half-Bar Roll",       ("Interval", 0.4f), ("Grid", 0.2f), ("Gate", 1f), ("Chance", 1f), ("Decay", 0.4f), ("Mode", 0f));
+        Fx("beatrepeat", 11, "Snare Stutter",       ("Interval", 0.2f), ("Offset", 0.25f), ("Grid", 0.4f), ("Gate", 0.25f), ("Chance", 0.6f), ("Variation", 0.333f),
+            ("Pitch", 0.375f), ("Pitch Decay", 0.2f), ("Decay", 0.14f), ("Volume", 0.417f), ("Mode", 0.5f), ("Latch", 1f));
+        Fx("beatrepeat", 11, "End-of-Bar Fill",     ("Interval", 0.6f), ("Offset", 0.75f), ("Grid", 0.6f), ("Gate", 0.25f), ("Chance", 1f), ("Decay", 0.2f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Build-Up Roll",       ("Interval", 0.8f), ("Offset", 0.5f), ("Grid", 0.4f), ("Gate", 0.5f), ("Mode", 0.5f),
+            ("Filter On", 1f), ("Filter Type", 1f), ("Filter Freq", 0.422f), ("Filter Width", 0.333f), ("Filter Narrow", 1f));
+        Fx("beatrepeat", 11, "Stutter Mix",         ("Interval", 0.6f), ("Grid", 0.2f), ("Gate", 0.375f), ("Decay", 0.45f), ("Volume", 0.375f), ("Mode", 0f), ("Mix", 0.8f));
+        // Glitch
+        Fx("beatrepeat", 11, "Glitch Gate",         ("Interval", 0.4f), ("Grid", 0.6f), ("Gate", 0.7f), ("Chance", 0.6f), ("Variation", 0.333f), ("Mode", 1f));
+        Fx("beatrepeat", 11, "Triplet Tumble",      ("Interval", 0.6f), ("Grid", 0.2f), ("Triplet", 1f), ("Gate", 0.6f), ("Chance", 0.8f), ("Variation", 0.333f), ("Decay", 0.3f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Random Glitch",       ("Interval", 0.2f), ("Grid", 0.4f), ("Gate", 0.5f), ("Chance", 0.35f), ("Variation", 0.5f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Micro Buzz",          ("Interval", 0.4f), ("Grid", 0.6f), ("Variation", 0.167f), ("Gate", 0.5f), ("Chance", 0.7f), ("Decay", 0.1f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Buffer Shuffle",      ("Interval", 0.2f), ("Grid", 0.4f), ("Variation", 0.667f), ("Chance", 0.8f), ("Gate", 1f), ("Decay", 0.1f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Sparse Surprise",     ("Interval", 1f), ("Offset", 0.75f), ("Grid", 0.2f), ("Gate", 0.25f), ("Chance", 0.5f), ("Variation", 0.333f), ("Pitch Decay", 0.167f), ("Mode", 0.5f));
+        // Pitch
+        Fx("beatrepeat", 11, "Pitch Drop",          ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.6f), ("Chance", 1f), ("Pitch Decay", 0.6f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Tape Drop",           ("Interval", 0.6f), ("Grid", 0.2f), ("Gate", 0.5f), ("Pitch", 0.292f), ("Pitch Decay", 0.7f), ("Mode", 0f),
+            ("Filter On", 1f), ("Filter Type", 0.5f), ("Filter Freq", 0.5f), ("Filter Width", 0.5f), ("Filter Narrow", 1f));
+        Fx("beatrepeat", 11, "Octave Up Flutter",   ("Interval", 0.4f), ("Grid", 0.6f), ("Gate", 0.375f), ("Pitch", 1f), ("Decay", 0.3f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Fifth Echo",          ("Interval", 0.6f), ("Offset", 0.5f), ("Grid", 0.2f), ("Gate", 0.5f), ("Pitch", 0.792f), ("Decay", 0.35f), ("Volume", 0.375f), ("Mode", 0f));
+        Fx("beatrepeat", 11, "Dive Bomb",           ("Interval", 0.6f), ("Offset", 0.5f), ("Grid", 0.6f), ("Gate", 0.5f), ("Pitch Decay", 1f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Chipmunk Roll",       ("Interval", 0.8f), ("Offset", 0.5f), ("Grid", 0.4f), ("Gate", 0.75f), ("Pitch", 1f), ("Pitch Decay", 0.167f), ("Mode", 0.5f));
+        // Filter
+        Fx("beatrepeat", 11, "Filtered Chops",      ("Interval", 0.6f), ("Grid", 0.4f), ("Gate", 0.5f), ("Chance", 1f), ("Filter On", 1f), ("Filter Freq", 0.4f), ("Filter Width", 0.1f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Telephone Repeats",   ("Interval", 0.6f), ("Grid", 0.2f), ("Gate", 0.5f), ("Decay", 0.3f), ("Mode", 0f),
+            ("Filter On", 1f), ("Filter Type", 0.5f), ("Filter Freq", 0.55f), ("Filter Width", 0.333f));
+        Fx("beatrepeat", 11, "Low-Pass Fade",       ("Interval", 0.6f), ("Grid", 0.2f), ("Gate", 0.75f), ("Pitch Decay", 0.083f), ("Decay", 0.4f), ("Mode", 0f),
+            ("Filter On", 1f), ("Filter Type", 0f), ("Filter Freq", 0.6f), ("Filter Width", 0.5f), ("Filter Narrow", 1f));
+        Fx("beatrepeat", 11, "High-Pass Riser",     ("Interval", 0.8f), ("Offset", 0.5f), ("Grid", 0.4f), ("Gate", 1f), ("Mode", 0.5f),
+            ("Filter On", 1f), ("Filter Type", 1f), ("Filter Freq", 0.5f), ("Filter Width", 0.333f), ("Filter Narrow", 1f));
+        Fx("beatrepeat", 11, "Radio Stutter",       ("Interval", 0.4f), ("Grid", 0.6f), ("Gate", 0.25f), ("Chance", 0.7f), ("Variation", 0.167f), ("Volume", 0.583f), ("Mode", 0.5f),
+            ("Filter On", 1f), ("Filter Type", 0.5f), ("Filter Freq", 0.6f), ("Filter Width", 0.1f));
+        // Drums · vocals
+        Fx("beatrepeat", 11, "Hat Roll",            ("Interval", 0.2f), ("Offset", 0.5f), ("Grid", 0.6f), ("Gate", 0.5f), ("Chance", 0.5f), ("Volume", 0.375f), ("Mode", 0f),
+            ("Filter On", 1f), ("Filter Type", 1f), ("Filter Freq", 0.813f), ("Filter Width", 0.5f));
+        Fx("beatrepeat", 11, "Kick Stutter",        ("Interval", 0.6f), ("Grid", 0.2f), ("Gate", 0.125f), ("Mode", 0.5f),
+            ("Filter On", 1f), ("Filter Type", 0f), ("Filter Freq", 0.422f), ("Filter Width", 0.5f));
+        Fx("beatrepeat", 11, "Vocal Chop",          ("Interval", 0.4f), ("Offset", 0.5f), ("Grid", 0.2f), ("Gate", 0.5f), ("Chance", 0.5f), ("Variation", 0.167f), ("Decay", 0.25f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Vocal Echo Tail",     ("Interval", 0.6f), ("Offset", 0.875f), ("Grid", 0.2f), ("Gate", 0.125f), ("Decay", 0.55f), ("Volume", 0.333f), ("Mode", 0f), ("Mix", 0.7f),
+            ("Filter On", 1f), ("Filter Type", 0.5f), ("Filter Freq", 0.6f), ("Filter Width", 0.5f));
+        // Performance — play the Repeat button (or automate Repeat)
+        Fx("beatrepeat", 11, "Hold to Stutter",     ("Chance", 0f), ("Grid", 0.4f), ("Mode", 0.5f));
+        Fx("beatrepeat", 11, "Latch Freeze",        ("Chance", 0f), ("Grid", 0.2f), ("Mode", 0.5f), ("Latch", 1f));
+        Fx("beatrepeat", 11, "Gate Only Bursts",    ("Interval", 0.6f), ("Offset", 0.5f), ("Grid", 0.4f), ("Gate", 0.5f), ("Mode", 1f));
 
         // ---- Nota Crush (kind 12) — all params normalized 0..1. Mode 0 Digital/.5 Analog/1 Fold.
         Fx("crush", 12, "Broken Radio",    ("Bits", 0.35f), ("Rate", 0.30f), ("Mode", 0f),    ("Dither", 0.15f), ("Jitter", 0.10f), ("Noise Floor", 0.05f), ("Post Filter", 0.70f), ("Dry/Wet", 0.78f), ("Output", 0.5f));
