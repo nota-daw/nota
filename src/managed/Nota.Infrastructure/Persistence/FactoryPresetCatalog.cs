@@ -1066,20 +1066,90 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                                                ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.45f), ("Scale Top", 0.4f), ("Scale Range", 0.667f),
                                                ("Spectrum Peak Hold", 1f), ("Spectrum Peak Time", 0.6772f));
 
-        // ---- Compressor (kind 1) — Thresh -60..0, Ratio 1..20, Attack .1..100 ms, Release 5..1000 ms, Makeup 0..24 dB
-        // Character: Clean 0 / Glue 1 / Punch 2 / Opto 3 / FET 4.
-        Fx("comp", 1, "Drum Glue",   ("Character", 1f), ("Thresh", -18f), ("Ratio", 3f),  ("Attack", 30f),  ("Release", 200f), ("Knee", 8f),  ("AutoGain", 1f), ("Mix", 100f));
-        Fx("comp", 1, "Drum Punch",  ("Character", 2f), ("Thresh", -24f), ("Ratio", 4f),  ("Attack", 8f),   ("Release", 90f),  ("Knee", 2f),  ("Makeup", 5f));
-        Fx("comp", 1, "Vocal Opto",  ("Character", 3f), ("Thresh", -20f), ("Ratio", 3f),  ("Attack", 12f),  ("Release", 180f), ("Knee", 8f),  ("AutoRelease", 1f), ("Makeup", 4f));
-        Fx("comp", 1, "Bus Parallel",("Character", 0f), ("Thresh", -30f), ("Ratio", 6f),  ("Attack", 5f),   ("Release", 120f), ("Mix", 45f),  ("Makeup", 3f));
-        Fx("comp", 1, "FET Slam",    ("Character", 4f), ("Thresh", -16f), ("Ratio", 8f),  ("Attack", 1f),   ("Release", 80f),  ("Knee", 1f),  ("Lookahead", 2f), ("Makeup", 4f));
-        Fx("comp", 1, "Brick Limit", ("Character", 4f), ("Thresh", -8f),  ("Ratio", 20f), ("Attack", 0.5f), ("Release", 50f),  ("Lookahead", 4f), ("Range", 12f), ("Makeup", 2f));
+        // ---- Compressor (kind 1) — 31 presets, raw units: Thresh −60..0 dB, Ratio 1..20, Attack .1..100 ms,
+        //      Release 5..1000 ms, Makeup 0..24 dB, Knee 0..24 dB, Mix 0..100 %, Lookahead 0..10 ms,
+        //      Range 0..48 dB (48 = off), SC HP 20..2000 Hz (20 = off), SC LP 200..20000 Hz (20000 = off),
+        //      SC Gain ±24 dB, Hold 0..500 ms, SC Q .5..4. Character: Clean 0 / Glue 1 / Punch 2 / Opto 3 /
+        //      FET 4 · Detection: Peak 0 / RMS 1 / Auto 2. External Key and Stereo Link default on. The
+        //      sidechain presets need a key source picked on the card's Sidechain tab (or set_device_sidechain).
+        // Drums
+        Fx("comp", 1, "Drum Glue",         ("Character", 1f), ("Thresh", -18f), ("Ratio", 3f),  ("Attack", 30f),  ("Release", 200f), ("Knee", 8f),  ("AutoGain", 1f), ("Mix", 100f));
+        Fx("comp", 1, "Drum Punch",        ("Character", 2f), ("Thresh", -24f), ("Ratio", 4f),  ("Attack", 8f),   ("Release", 90f),  ("Knee", 2f),  ("Makeup", 5f));
+        Fx("comp", 1, "Snare Punch",       ("Character", 2f), ("Thresh", -28.5f), ("Ratio", 8f), ("Attack", 1.4f), ("Release", 60f), ("Knee", 2f),  ("Range", 12f), ("Mix", 64f), ("AutoGain", 1f));
+        Fx("comp", 1, "Kick Tighten",      ("Character", 2f), ("Thresh", -20f), ("Ratio", 4f),  ("Attack", 15f),  ("Release", 60f),  ("Knee", 3f),  ("Makeup", 3f));
+        Fx("comp", 1, "Room Smash",        ("Character", 4f), ("Thresh", -35f), ("Ratio", 20f), ("Attack", 0.5f), ("Release", 120f), ("Knee", 0f),  ("Makeup", 10f), ("Mix", 35f));
+        Fx("comp", 1, "Overheads Tame",    ("Character", 3f), ("Thresh", -22f), ("Ratio", 2.5f), ("Attack", 20f), ("Release", 250f), ("Knee", 10f), ("Detection", 1f), ("SC HP", 200f), ("Makeup", 2f));
+        Fx("comp", 1, "Hat Smooth",        ("Character", 0f), ("Thresh", -26f), ("Ratio", 3f),  ("Attack", 3f),   ("Release", 80f),  ("Knee", 4f),  ("SC HP", 1500f), ("Makeup", 2f));
+        // Bus / master
+        Fx("comp", 1, "Bus Glue",          ("Character", 1f), ("Thresh", -18f), ("Ratio", 3f),  ("Attack", 30f),  ("Release", 200f), ("Knee", 8f),  ("Lookahead", 2.9f), ("AutoRelease", 1f), ("Makeup", 3f));
+        Fx("comp", 1, "Bus Parallel",      ("Character", 0f), ("Thresh", -30f), ("Ratio", 6f),  ("Attack", 5f),   ("Release", 120f), ("Mix", 45f),  ("Makeup", 3f));
+        Fx("comp", 1, "Mix Bus Gentle",    ("Character", 1f), ("Thresh", -14f), ("Ratio", 1.5f), ("Attack", 30f), ("Release", 300f), ("Knee", 10f), ("Detection", 2f), ("AutoRelease", 1f), ("SC HP", 90f), ("Makeup", 1.5f));
+        Fx("comp", 1, "Master Leveler",    ("Character", 3f), ("Thresh", -16f), ("Ratio", 2f),  ("Attack", 40f),  ("Release", 400f), ("Knee", 12f), ("Detection", 1f), ("AutoRelease", 1f), ("Range", 6f), ("Makeup", 2f));
+        Fx("comp", 1, "Brick Limit",       ("Character", 4f), ("Thresh", -8f),  ("Ratio", 20f), ("Attack", 0.5f), ("Release", 50f),  ("Lookahead", 4f), ("Range", 12f), ("Makeup", 2f));
+        Fx("comp", 1, "Peak Catcher",      ("Character", 0f), ("Thresh", -6f),  ("Ratio", 20f), ("Attack", 0.1f), ("Release", 40f),  ("Knee", 0f),  ("Lookahead", 5f), ("Range", 6f));
+        // Vocals
+        Fx("comp", 1, "Vocal Opto",        ("Character", 3f), ("Thresh", -20f), ("Ratio", 3f),  ("Attack", 12f),  ("Release", 180f), ("Knee", 8f),  ("AutoRelease", 1f), ("Makeup", 4f));
+        Fx("comp", 1, "Vocal Leveler",     ("Character", 3f), ("Thresh", -24f), ("Ratio", 3f),  ("Attack", 15f),  ("Release", 220f), ("Knee", 10f), ("Detection", 1f), ("AutoRelease", 1f), ("AutoGain", 1f));
+        Fx("comp", 1, "Vocal Presence",    ("Character", 4f), ("Thresh", -20f), ("Ratio", 4f),  ("Attack", 2f),   ("Release", 60f),  ("Knee", 3f),  ("Makeup", 4f), ("Mix", 70f));
+        Fx("comp", 1, "Rap Vocal",         ("Character", 4f), ("Thresh", -22f), ("Ratio", 6f),  ("Attack", 1f),   ("Release", 70f),  ("Knee", 2f),  ("Makeup", 5f));
+        Fx("comp", 1, "De-Esser",          ("Character", 0f), ("Thresh", -30f), ("Ratio", 6f),  ("Attack", 0.5f), ("Release", 40f),  ("Knee", 2f),  ("Lookahead", 1f), ("Range", 8f), ("SC HP", 2000f), ("SC LP", 12000f), ("SC Q", 1.2f));
+        // Bass and instruments
+        Fx("comp", 1, "Bass Even",         ("Character", 3f), ("Thresh", -22f), ("Ratio", 4f),  ("Attack", 20f),  ("Release", 150f), ("Knee", 6f),  ("Detection", 1f), ("Makeup", 4f));
+        Fx("comp", 1, "Bass Pluck",        ("Character", 2f), ("Thresh", -26f), ("Ratio", 5f),  ("Attack", 8f),   ("Release", 80f),  ("Knee", 2f),  ("Makeup", 5f));
+        Fx("comp", 1, "Acoustic Guitar",   ("Character", 1f), ("Thresh", -20f), ("Ratio", 2.5f), ("Attack", 18f), ("Release", 180f), ("Knee", 8f),  ("Detection", 1f), ("SC HP", 100f), ("Makeup", 3f));
+        Fx("comp", 1, "Guitar Sustain",    ("Character", 4f), ("Thresh", -30f), ("Ratio", 8f),  ("Attack", 5f),   ("Release", 400f), ("Knee", 4f),  ("Makeup", 8f));
+        Fx("comp", 1, "Piano Smooth",      ("Character", 3f), ("Thresh", -18f), ("Ratio", 2f),  ("Attack", 25f),  ("Release", 300f), ("Knee", 10f), ("Detection", 2f), ("AutoRelease", 1f), ("Makeup", 2f));
+        Fx("comp", 1, "Pad Breathe",       ("Character", 0f), ("Thresh", -30f), ("Ratio", 3f),  ("Attack", 50f),  ("Release", 600f), ("Knee", 12f), ("Detection", 1f), ("Mix", 60f));
+        Fx("comp", 1, "Wide Dual Mono",    ("Character", 0f), ("Thresh", -20f), ("Ratio", 3f),  ("Attack", 10f),  ("Release", 150f), ("Knee", 6f),  ("Stereo Link", 0f), ("Makeup", 2f));
+        Fx("comp", 1, "Lo-fi Squash",      ("Character", 4f), ("Thresh", -40f), ("Ratio", 20f), ("Attack", 0.1f), ("Release", 30f),  ("Knee", 0f),  ("Makeup", 18f), ("Mix", 50f));
+        // Sidechain — pick the key source on the Sidechain tab
+        Fx("comp", 1, "Kick Duck",         ("Character", 0f), ("Thresh", -21.6f), ("Ratio", 6f), ("Attack", 0.5f), ("Release", 120f), ("Knee", 2f), ("SC HP", 120f), ("SC LP", 8000f), ("SC Gain", 2f), ("Hold", 18f), ("Range", 9f), ("Makeup", 2.4f));
+        Fx("comp", 1, "EDM Pump",          ("Character", 0f), ("Thresh", -30f), ("Ratio", 20f), ("Attack", 0.1f), ("Release", 180f), ("Knee", 0f),  ("SC LP", 200f), ("Hold", 30f));
+        Fx("comp", 1, "Gentle Duck",       ("Character", 1f), ("Thresh", -24f), ("Ratio", 3f),  ("Attack", 10f),  ("Release", 250f), ("Knee", 8f),  ("SC LP", 400f), ("Hold", 10f));
+        Fx("comp", 1, "Voice-over Duck",   ("Character", 3f), ("Thresh", -30f), ("Ratio", 4f),  ("Attack", 20f),  ("Release", 500f), ("Knee", 10f), ("Detection", 1f), ("Range", 10f), ("SC HP", 150f), ("SC LP", 5000f));
+        Fx("comp", 1, "Bass Under Kick",   ("Character", 2f), ("Thresh", -24f), ("Ratio", 4f),  ("Attack", 1f),   ("Release", 90f),  ("Knee", 3f),  ("SC LP", 150f), ("Hold", 20f), ("Range", 8f));
 
-        // ---- Reverb (kind 2) — all params normalized 0..1. Algorithm: Hall 0 / Room .33 / Plate .66 / Chamber 1.
-        Fx("reverb", 2, "Small Room",  ("Algorithm", 0.33f), ("Decay", 0.32f), ("HF Damp", 0.55f), ("Size", 0.35f), ("Diffusion", 0.6f), ("Dry/Wet", 0.2f));
-        Fx("reverb", 2, "Long Hall",   ("Algorithm", 0.0f),  ("Decay", 0.72f), ("HF Damp", 0.4f),  ("Pre-Delay", 0.12f), ("Size", 0.85f), ("Width", 0.8f), ("Dry/Wet", 0.32f));
-        Fx("reverb", 2, "Bright Plate",("Algorithm", 0.66f), ("Decay", 0.5f),  ("HF Damp", 0.15f), ("High Cut", 1.0f), ("Diffusion", 0.8f), ("Dry/Wet", 0.3f));
-        Fx("reverb", 2, "Shimmer Freeze",("Algorithm", 0.0f), ("Freeze", 1.0f), ("Mod Rate", 0.4f), ("Mod Depth", 0.6f), ("Width", 1.0f), ("Dry/Wet", 0.5f));
+        // ---- Reverb (kind 2) — 30 presets, all params normalized 0..1. Algorithm: Hall 0 / Room .333 /
+        //      Plate .667 / Chamber 1. Decay = ln(RT60 / 0.2) / ln(60) (1.9 s ≈ .55) · Pre-Delay = ms / 200 ·
+        //      Low Cut = log(Hz / 20) / log(50) · High Cut = log(Hz / 1000) / log(20) (1 = 20 kHz) ·
+        //      Mod Rate = log(Hz / .05) / log(100) · Bass Mono = log(Hz / 30) / log(16.7) (0 = off) ·
+        //      Dry Level and Output are 0 dB at .707 and .5. Early Refl / Mod on Tail / Latency Comp default on.
+        // Rooms
+        Fx("reverb", 2, "Small Room",     ("Algorithm", 0.333f), ("Decay", 0.32f), ("HF Damp", 0.55f), ("Size", 0.35f), ("Diffusion", 0.6f), ("Dry/Wet", 0.2f));
+        Fx("reverb", 2, "Tight Room",     ("Algorithm", 0.333f), ("Decay", 0.17f), ("HF Damp", 0.6f),  ("Pre-Delay", 0.02f), ("Size", 0.2f), ("Diffusion", 0.7f), ("Width", 0.5f), ("Dry/Wet", 0.18f));
+        Fx("reverb", 2, "Drum Room",      ("Algorithm", 0.333f), ("Decay", 0.34f), ("HF Damp", 0.35f), ("Pre-Delay", 0.03f), ("Size", 0.5f), ("Diffusion", 0.75f), ("Low Cut", 0.35f), ("Width", 0.75f), ("Dry/Wet", 0.25f));
+        Fx("reverb", 2, "Vocal Booth",    ("Algorithm", 0.333f), ("Decay", 0.12f), ("HF Damp", 0.7f),  ("Size", 0.1f), ("Diffusion", 0.5f), ("High Cut", 0.7f), ("Width", 0.35f), ("Dry/Wet", 0.15f));
+        Fx("reverb", 2, "Live Room",      ("Algorithm", 0.333f), ("Decay", 0.44f), ("HF Damp", 0.45f), ("Pre-Delay", 0.05f), ("Size", 0.65f), ("Diffusion", 0.65f), ("Low Cut", 0.3f), ("Width", 0.7f), ("Dry/Wet", 0.24f));
+        // Halls
+        Fx("reverb", 2, "Wide Hall",      ("Algorithm", 0f), ("Decay", 0.55f), ("HF Damp", 0.5f),  ("Pre-Delay", 0.1f), ("Size", 0.6f), ("Diffusion", 0.6f), ("Width", 0.8f), ("Dry/Wet", 0.3f));
+        Fx("reverb", 2, "Long Hall",      ("Algorithm", 0f), ("Decay", 0.72f), ("HF Damp", 0.4f),  ("Pre-Delay", 0.12f), ("Size", 0.85f), ("Width", 0.8f), ("Dry/Wet", 0.32f));
+        Fx("reverb", 2, "Concert Hall",   ("Algorithm", 0f), ("Decay", 0.64f), ("HF Damp", 0.55f), ("Pre-Delay", 0.14f), ("Size", 0.9f), ("Diffusion", 0.7f), ("Low Cut", 0.3f), ("High Cut", 0.77f), ("Width", 0.75f), ("Dry/Wet", 0.28f));
+        Fx("reverb", 2, "Cathedral",      ("Algorithm", 0f), ("Decay", 0.9f),  ("HF Damp", 0.6f),  ("Pre-Delay", 0.2f), ("Size", 1f), ("Diffusion", 0.8f), ("Low Cut", 0.35f), ("High Cut", 0.65f), ("Width", 0.9f), ("Mod Depth", 0.3f), ("Dry/Wet", 0.35f));
+        Fx("reverb", 2, "Dark Hall",      ("Algorithm", 0f), ("Decay", 0.66f), ("HF Damp", 0.85f), ("Pre-Delay", 0.08f), ("Size", 0.75f), ("High Cut", 0.45f), ("Width", 0.7f), ("Dry/Wet", 0.3f));
+        // Plates
+        Fx("reverb", 2, "Bright Plate",   ("Algorithm", 0.667f), ("Decay", 0.5f),  ("HF Damp", 0.15f), ("High Cut", 1.0f), ("Diffusion", 0.8f), ("Dry/Wet", 0.3f));
+        Fx("reverb", 2, "Vocal Plate",    ("Algorithm", 0.667f), ("Decay", 0.44f), ("HF Damp", 0.35f), ("Pre-Delay", 0.1f), ("Diffusion", 0.8f), ("Low Cut", 0.46f), ("High Cut", 0.83f), ("Mod Rate", 0.3f), ("Mod Depth", 0.25f), ("Early Refl", 0f), ("Dry/Wet", 0.26f));
+        Fx("reverb", 2, "Snare Plate",    ("Algorithm", 0.667f), ("Decay", 0.36f), ("HF Damp", 0.2f),  ("Pre-Delay", 0.04f), ("Size", 0.45f), ("Diffusion", 0.9f), ("Low Cut", 0.59f), ("Early Refl", 0f), ("Width", 0.7f), ("Dry/Wet", 0.3f));
+        Fx("reverb", 2, "Gold Plate",     ("Algorithm", 0.667f), ("Decay", 0.58f), ("HF Damp", 0.3f),  ("Pre-Delay", 0.06f), ("Diffusion", 0.85f), ("Low Cut", 0.4f), ("High Cut", 0.9f), ("Mod Rate", 0.39f), ("Mod Depth", 0.35f), ("Early Refl", 0f), ("Width", 0.75f), ("Dry/Wet", 0.3f));
+        Fx("reverb", 2, "Vintage Plate",  ("Algorithm", 0.667f), ("Decay", 0.5f),  ("HF Damp", 0.4f),  ("Pre-Delay", 0.05f), ("Diffusion", 0.8f), ("Low Cut", 0.4f), ("High Cut", 0.6f), ("Vintage", 1f), ("Early Refl", 0f), ("Dry/Wet", 0.3f));
+        // Chambers
+        Fx("reverb", 2, "Echo Chamber",   ("Algorithm", 1f), ("Decay", 0.5f),  ("HF Damp", 0.45f), ("Pre-Delay", 0.08f), ("Size", 0.6f), ("Diffusion", 0.65f), ("Low Cut", 0.35f), ("Dry/Wet", 0.28f));
+        Fx("reverb", 2, "Studio Chamber", ("Algorithm", 1f), ("Decay", 0.42f), ("HF Damp", 0.55f), ("Pre-Delay", 0.06f), ("Size", 0.5f), ("Diffusion", 0.7f), ("Low Cut", 0.4f), ("High Cut", 0.75f), ("Width", 0.65f), ("Dry/Wet", 0.24f));
+        Fx("reverb", 2, "Stone Chamber",  ("Algorithm", 1f), ("Decay", 0.62f), ("HF Damp", 0.3f),  ("Pre-Delay", 0.13f), ("Size", 0.84f), ("Diffusion", 0.72f), ("Width", 0.7f), ("Dry/Wet", 0.3f));
+        // Creative and frozen
+        Fx("reverb", 2, "Shimmer Freeze", ("Algorithm", 0.0f), ("Freeze", 1.0f), ("Mod Rate", 0.4f), ("Mod Depth", 0.6f), ("Width", 1.0f), ("Dry/Wet", 0.5f));
+        Fx("reverb", 2, "Stone Hold",     ("Algorithm", 1f), ("Freeze", 1f), ("HF Damp", 0.34f), ("Pre-Delay", 0.13f), ("Size", 0.84f), ("Diffusion", 0.72f), ("Dry Level", 0f), ("Dry/Wet", 1f), ("Output", 0.38f));
+        Fx("reverb", 2, "Infinite Pad",   ("Algorithm", 0f), ("Decay", 1f), ("HF Damp", 0.55f), ("Pre-Delay", 0.1f), ("Size", 1f), ("Diffusion", 0.9f), ("Low Cut", 0.46f), ("High Cut", 0.6f), ("Mod Rate", 0.3f), ("Mod Depth", 0.45f), ("Width", 1f), ("Dry/Wet", 0.55f));
+        Fx("reverb", 2, "Ambient Wash",   ("Algorithm", 0f), ("Decay", 0.83f), ("HF Damp", 0.5f), ("Pre-Delay", 0.25f), ("Size", 0.95f), ("Diffusion", 0.85f), ("Low Cut", 0.46f), ("Mod Rate", 0.3f), ("Mod Depth", 0.4f), ("Width", 0.9f), ("Dry/Wet", 0.45f));
+        Fx("reverb", 2, "Lo-Fi Cloud",    ("Algorithm", 1f), ("Decay", 0.7f), ("HF Damp", 0.6f), ("Pre-Delay", 0.1f), ("Size", 0.8f), ("Low Cut", 0.5f), ("High Cut", 0.37f), ("Vintage", 1f), ("Mod Rate", 0.45f), ("Mod Depth", 0.6f), ("Dry/Wet", 0.4f));
+        Fx("reverb", 2, "Seasick",        ("Algorithm", 0f), ("Decay", 0.66f), ("Size", 0.7f), ("Mod Rate", 0.6f), ("Mod Depth", 1f), ("Vintage", 1f), ("Width", 0.9f), ("Dry/Wet", 0.38f));
+        Fx("reverb", 2, "Still Water",    ("Algorithm", 0f), ("Decay", 0.7f), ("HF Damp", 0.45f), ("Pre-Delay", 0.15f), ("Size", 0.85f), ("Mod on Tail", 0f), ("Mod Depth", 0.5f), ("Width", 0.8f), ("Dry/Wet", 0.35f));
+        Fx("reverb", 2, "Short Burst",    ("Algorithm", 0f), ("Decay", 0.2f), ("HF Damp", 0.2f), ("Size", 1f), ("Diffusion", 1f), ("Early Refl", 0f), ("Width", 1f), ("Dry/Wet", 0.35f));
+        Fx("reverb", 2, "Slap Space",     ("Algorithm", 0.333f), ("Decay", 0.25f), ("Pre-Delay", 0.4f), ("Size", 0.4f), ("Diffusion", 0.4f), ("Early Refl", 1f), ("Dry/Wet", 0.25f));
+        // Sends (wet only, for a return track)
+        Fx("reverb", 2, "Send · Hall",    ("Wet Only", 1f), ("Algorithm", 0f), ("Decay", 0.58f), ("HF Damp", 0.5f), ("Pre-Delay", 0.12f), ("Size", 0.75f), ("Low Cut", 0.46f), ("High Cut", 0.77f), ("Bass Mono", 0.49f), ("Width", 0.8f), ("Dry/Wet", 1f));
+        Fx("reverb", 2, "Send · Plate",   ("Wet Only", 1f), ("Algorithm", 0.667f), ("Decay", 0.47f), ("HF Damp", 0.3f), ("Pre-Delay", 0.08f), ("Diffusion", 0.85f), ("Low Cut", 0.52f), ("Bass Mono", 0.57f), ("Early Refl", 0f), ("Dry/Wet", 1f));
+        Fx("reverb", 2, "Send · Room",    ("Wet Only", 1f), ("Algorithm", 0.333f), ("Decay", 0.3f), ("HF Damp", 0.5f), ("Pre-Delay", 0.03f), ("Size", 0.45f), ("Low Cut", 0.46f), ("Bass Mono", 0.49f), ("Dry/Wet", 1f));
 
         // ---- Delay (kind 3) — 29 presets, all params normalized 0..1. Div: 1/16 0 · 1/8T .143 ·
         //      1/8 .286 · 1/8. .429 · 1/4T .571 · 1/4 .714 · 1/4. .857 · 1/2 1. Time L/R = ms / 2000.

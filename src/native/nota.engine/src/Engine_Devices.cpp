@@ -775,7 +775,12 @@ void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramI
     // A modulated param's UI edit sets the stored base (the atomic is driven by the
     // modulation each block); set the atomic too for immediate feedback.
     routeCvBaseEdit(0, trackId, deviceIndex, paramIndex, value);
-    if (auto* d = deviceAt(trackId, deviceIndex)) d->setParam(paramIndex, value);
+    if (auto* d = deviceAt(trackId, deviceIndex)) {
+        // A param can change the device's latency (the Compressor's look-ahead): keep PDC in step.
+        const int32_t latBefore = d->latencySamples();
+        d->setParam(paramIndex, value);
+        if (d->latencySamples() != latBefore) recomputePdc();
+    }
 }
 float Engine::deviceGainReduction(int32_t trackId, int32_t deviceIndex) const {
     auto* d = deviceAt(trackId, deviceIndex);

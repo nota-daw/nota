@@ -3067,7 +3067,7 @@ Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ + Compressor chain (rms
 
 // -- M6-3: Reverb / Delay / Utility built-ins --
 int revDev = engine.AddBuiltinDevice(fxT, 2);
-Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 14, "add built-in Reverb (14 params)");
+Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 21, "add built-in Reverb (21 params)");
 int delDev = engine.AddBuiltinDevice(fxT, 3);
 Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
@@ -3229,6 +3229,301 @@ Console.WriteLine("-- Nota Delay --");
     var ab = new float[4096 * 2];
     de.Seek(1.99); de.Play(); de.RenderOffline(ab, 4096); de.StopTransport();
     Check(de.DeviceGetParam(dt, dd, Feedback) > 0.7f, $"automation drives Delay Feedback ({de.DeviceGetParam(dt, dd, Feedback):F2})");
+}
+
+// ============================ Nota Compressor ===============================
+Console.WriteLine("-- Nota Compressor --");
+{
+    using var ce = new NotaEngine();
+    ce.SetBpm(120); ce.SetTimeSignature(4, 4);
+    int ct = ce.AddInstrumentTrack();
+    ce.AddMidiClip(ct, 0.0, 8.0);
+    ce.SetClipNotes(ct, 0, new[] { new NotaNote(48, 0.0, 8.0, 1.0f) });
+    int cd = ce.AddBuiltinDevice(ct, 1);
+    const int Thresh = 0, Ratio = 1, Attack = 2, Release = 3, Lookahead = 7, Detection = 8, Character = 12,
+              ScHP = 13, ScListen = 15, ScGain = 16, Hold = 17, ScQ = 18, External = 19, StereoLink = 20;
+    Check(cd >= 0 && ce.TrackDeviceBuiltinKind(ct, cd) == 1 && ce.DeviceName(ct, cd) == "Nota Compressor"
+          && ce.DeviceParamCount(ct, cd) == 21, $"add built-in Nota Compressor (kind 1, 21 params — got {ce.DeviceParamCount(ct, cd)})");
+    Check(ce.DeviceParamName(ct, cd, ScGain) == "SC Gain" && ce.DeviceParamName(ct, cd, Hold) == "Hold"
+          && ce.DeviceParamName(ct, cd, ScQ) == "SC Q" && ce.DeviceParamName(ct, cd, External) == "External Key"
+          && ce.DeviceParamName(ct, cd, StereoLink) == "Stereo Link", "Compressor names its appended params");
+    Check(ce.DeviceParamName(ct, cd, Thresh) == "Thresh" && ce.DeviceParamName(ct, cd, ScListen) == "SC Listen",
+          "Compressor keeps its original param names (old projects load)");
+    Check(ce.DeviceGetParam(ct, cd, External) >= 0.5f && ce.DeviceGetParam(ct, cd, StereoLink) >= 0.5f
+          && Math.Abs(ce.DeviceGetParam(ct, cd, ScQ) - 0.7071f) < 1e-3 && ce.DeviceParamMax(ct, cd, Detection) == 2f,
+          "Compressor appended params default to the old behaviour (external key on, linked, Butterworth) + Detection has Auto");
+    ce.DeviceSetParam(ct, cd, Hold, 42f);
+    Check(Math.Abs(ce.DeviceGetParam(ct, cd, Hold) - 42f) < 1e-4, "Compressor param set/get round-trips");
+    ce.DeviceSetParam(ct, cd, Hold, 0f);
+
+    float[] Render(int frames = 24000)
+    {
+        var b = new float[frames * 2];
+        ce.Seek(0); ce.Play(); ce.RenderOffline(b, frames); ce.StopTransport();
+        return b;
+    }
+    static bool Finite(float[] b) { foreach (var v in b) if (!float.IsFinite(v) || Math.Abs(v) > 8f) return false; return true; }
+
+    ce.DeviceSetParam(ct, cd, Thresh, 0f);
+    float open = Rms(Render(), 24000);
+    ce.DeviceSetParam(ct, cd, Thresh, -40f);
+    ce.DeviceSetParam(ct, cd, Ratio, 10f);
+    ce.DeviceSetParam(ct, cd, Attack, 1f);
+    ce.DeviceSetParam(ct, cd, Release, 50f);
+    var squashed = Render();
+    float sq = Rms(squashed, 24000);
+    float grNow = ce.DeviceGainReduction(ct, cd);
+    Check(Finite(squashed) && open > 1e-3f && sq < open * 0.5f && grNow > 3f,
+          $"Compressor pulls a loud note down (rms {sq:F4} vs {open:F4}, GR {grNow:F1} dB)");
+
+    // Every detector and voicing renders finite and still compresses.
+    for (int d = 0; d < 3; d++)
+    {
+        ce.DeviceSetParam(ct, cd, Detection, d);
+        var b = Render();
+        Check(Finite(b) && Rms(b, 24000) < open * 0.7f, $"Compressor detection {new[] { "Peak", "RMS", "Auto" }[d]} renders + compresses (rms {Rms(b, 24000):F4})");
+    }
+    ce.DeviceSetParam(ct, cd, Detection, 0f);
+    for (int c = 0; c < 5; c++)
+    {
+        ce.DeviceSetParam(ct, cd, Character, c);
+        var b = Render();
+        Check(Finite(b) && Rms(b, 24000) > 1e-4f, $"Compressor character {c} renders finite + audible");
+    }
+    ce.DeviceSetParam(ct, cd, Character, 0f);
+    ce.DeviceSetParam(ct, cd, StereoLink, 0f);
+    var unlinked = Render();
+    Check(Finite(unlinked) && Rms(unlinked, 24000) < open * 0.7f, "Compressor unlinked (dual mono) renders + compresses");
+    ce.DeviceSetParam(ct, cd, StereoLink, 1f);
+    ce.DeviceSetParam(ct, cd, Hold, 200f);
+    var held = Render();
+    Check(Finite(held) && Rms(held, 24000) > 1e-4f, "Compressor with Hold renders finite + audible");
+    ce.DeviceSetParam(ct, cd, Hold, 0f);
+
+    // Telemetry: levels, the envelope rings, the key samples.
+    var sc = new float[14 + 2 * 2048 + 2048];
+    int scn = ce.DeviceScope(ct, cd, sc, sc.Length);
+    double ringGr = 0; for (int i = 14 + 2048; i < 14 + 4096; i++) ringGr = Math.Max(ringGr, sc[i]);
+    double keyE = 0; for (int i = 14 + 4096; i < sc.Length; i++) keyE += sc[i] * sc[i];
+    Check(scn == sc.Length && sc[8] > 1000 && sc[0] > 0.01f && sc[2] > 0.001f && ringGr > 3 && keyE > 0,
+          $"Compressor scope reports levels, sample rate, the reduction envelope and the key (n {scn}, sr {sc[8]:0}, ring GR {ringGr:F1})");
+    Check(ce.DeviceScope(ct, cd, sc, 14) == 14, "Compressor scope returns just the telemetry when asked for 14 values");
+
+    // Look-ahead is reported as latency (PDC) and follows the param.
+    ce.DeviceSetParam(ct, cd, Lookahead, 5f);
+    int lat = ce.TrackLatencySamples(ct);
+    Check(Math.Abs(lat - 0.005 * sc[8]) <= 1.5, $"Compressor look-ahead reports its latency ({lat} smp at {sc[8]:0} Hz)");
+    ce.DeviceSetParam(ct, cd, Lookahead, 0f);
+    Check(ce.TrackLatencySamples(ct) == 0, "Compressor latency returns to 0 without look-ahead");
+
+    // Listen: the output is the key; a steep high-pass on a low note leaves little of it.
+    ce.DeviceSetParam(ct, cd, ScListen, 1f);
+    float keyOpen = Rms(Render(), 24000);
+    ce.DeviceSetParam(ct, cd, ScHP, 2000f);
+    ce.DeviceSetParam(ct, cd, ScQ, 0.7071f);
+    float keyCut = Rms(Render(), 24000);
+    Check(keyOpen > 1e-3f && keyCut < keyOpen * 0.5f, $"Listen monitors the key, and SC HP filters it ({keyCut:F4} vs {keyOpen:F4})");
+    ce.DeviceSetParam(ct, cd, ScListen, 0f);
+    ce.DeviceSetParam(ct, cd, ScHP, 20f);
+
+    // SC Gain drives the detector: less key, less reduction.
+    ce.DeviceSetParam(ct, cd, Thresh, -30f);
+    Render();
+    float grBase = ce.DeviceGainReduction(ct, cd);
+    ce.DeviceSetParam(ct, cd, ScGain, -18f);
+    Render();
+    float grLow = ce.DeviceGainReduction(ct, cd);
+    Check(grLow < grBase - 3, $"SC Gain lowers the reduction ({grLow:F1} vs {grBase:F1} dB)");
+    ce.DeviceSetParam(ct, cd, ScGain, 0f);
+
+    // External key: a loud source keys a silent target; External Key off falls back to self.
+    int src = ce.AddInstrumentTrack();
+    ce.AddMidiClip(src, 0.0, 8.0);
+    ce.SetClipNotes(src, 0, new[] { new NotaNote(36, 0.0, 8.0, 1.0f) });
+    int tgt = ce.AddAudioTrack();                     // no audio of its own: only the key can drive it
+    int td = ce.AddBuiltinDevice(tgt, 1);
+    ce.DeviceSetParam(tgt, td, Thresh, -40f);
+    ce.DeviceSetParam(tgt, td, Ratio, 10f);
+    ce.DeviceSetParam(tgt, td, Attack, 1f);
+    ce.SetDeviceSidechainSource(tgt, td, src);
+    Render(32000);
+    float grExt = ce.DeviceGainReduction(tgt, td);
+    var xsc = new float[14 + 2 * 2048 + 2048];
+    ce.DeviceScope(tgt, td, xsc, xsc.Length);
+    double xkey = 0; for (int i = 14 + 4096; i < xsc.Length; i++) xkey += xsc[i] * xsc[i];
+    Check(xsc[12] > 0.5f && xkey > 1e-6, $"Compressor scope carries the external key for the card's spectrum (energy {xkey:E2})");
+    ce.DeviceSetParam(tgt, td, External, 0f);
+    Render(32000);
+    float grOwn = ce.DeviceGainReduction(tgt, td);
+    Check(grExt > 3 && grOwn < 0.5f, $"External Key switches the detector to the sidechain source ({grExt:F1} vs {grOwn:F1} dB)");
+    ce.DeviceSetParam(tgt, td, External, 1f);
+
+    // MCP: sidechain routing + the dynamics reading + the status line.
+    var dtools = new Nota.Mcp.Tools.DeviceTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+    dtools.SetDeviceSidechain(tgt, td, -1, tapPre: true).Wait();
+    var scr = dtools.GetDeviceSidechain(tgt, td).Result;
+    Check(scr.Accepts && scr.SourceTrackId == -1 && scr.TapPre, "MCP set/get_device_sidechain round-trips (source cleared, tap pre)");
+    dtools.SetDeviceSidechain(tgt, td, src, tapPre: false).Wait();
+    Check(dtools.GetDeviceSidechain(tgt, td).Result.SourceTrackId == src, "MCP set_device_sidechain routes the key source");
+    Render(32000);
+    var dyn = dtools.ReadDynamics(tgt, td).Result;
+    Check(dyn.GainReductionDb > 1 && dyn.ExternalKey && dyn.SampleRate > 1000 && dyn.Summary.Contains("threshold") && dyn.HitsLast2s >= 1,
+          $"MCP read_dynamics reports the reduction, external key and summary (GR {dyn.GainReductionDb:F1}, hits {dyn.HitsLast2s})");
+    string ctext = ce.DeviceText(tgt, td, 0);
+    Check(ctext.Contains("external key"), $"Compressor status text says the external key drives it (got '{ctext}')");
+
+    // Clone: duplicating the track keeps the appended params.
+    ce.DeviceSetParam(ct, cd, Hold, 33f);
+    int t2 = ce.DuplicateTrack(ct);
+    int cd2 = ce.TrackDeviceCount(t2) - 1;
+    Check(t2 > 0 && Math.Abs(ce.DeviceGetParam(t2, cd2, Hold) - 33f) < 1e-3, "duplicate track clones the Compressor's params");
+
+    // Automation: a device-param lane drives the threshold (lane values are the raw dB).
+    int lane = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cd, Thresh);
+    Check(lane >= 0, "add Compressor Thresh automation lane");
+    ce.SetAutomationPoints(ct, lane, new[] { new AutomationPoint(0.0, -40f), new AutomationPoint(2.0, -6f) });   // raw dB
+    var ab = new float[4096 * 2];
+    ce.Seek(1.99); ce.Play(); ce.RenderOffline(ab, 4096); ce.StopTransport();
+    float thrAuto = ce.DeviceGetParam(ct, cd, Thresh);
+    Check(thrAuto > -12f, $"automation drives the Compressor threshold ({thrAuto:F1} dB)");
+}
+
+// ============================ Nota Reverb ===================================
+Console.WriteLine("-- Nota Reverb --");
+{
+    using var re = new NotaEngine();
+    re.SetBpm(120); re.SetTimeSignature(4, 4);
+    int rt = re.AddInstrumentTrack();
+    re.AddMidiClip(rt, 0.0, 4.0);
+    re.SetClipNotes(rt, 0, new[] { new NotaNote(60, 0.0, 0.25, 1.0f) });
+    int rd = re.AddBuiltinDevice(rt, 2);
+    const int Decay = 0, HFDamp = 1, PreDelay = 2, Size = 3, Algorithm = 10, Freeze = 11, DryWet = 12, Output = 13,
+              DryLevel = 14, EarlyRefl = 15, ModOnTail = 16, Vintage = 17, BassMono = 18, WetOnly = 19, LatencyComp = 20;
+    Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 21, "add built-in Nota Reverb (kind 2, 21 params)");
+    Check(re.DeviceParamName(rt, rd, Decay) == "Decay" && re.DeviceParamName(rt, rd, Output) == "Output"
+          && re.DeviceParamName(rt, rd, DryLevel) == "Dry Level" && re.DeviceParamName(rt, rd, EarlyRefl) == "Early Refl"
+          && re.DeviceParamName(rt, rd, ModOnTail) == "Mod on Tail" && re.DeviceParamName(rt, rd, Vintage) == "Vintage"
+          && re.DeviceParamName(rt, rd, BassMono) == "Bass Mono" && re.DeviceParamName(rt, rd, WetOnly) == "Wet Only"
+          && re.DeviceParamName(rt, rd, LatencyComp) == "Latency Comp",
+          "Reverb keeps its 14 params in place and names the appended ones");
+    Check(re.DeviceParamDefault(rt, rd, EarlyRefl) > 0.5f && re.DeviceParamDefault(rt, rd, ModOnTail) > 0.5f
+          && re.DeviceParamDefault(rt, rd, Vintage) < 0.5f && re.DeviceParamDefault(rt, rd, WetOnly) < 0.5f,
+          "Reverb switch defaults (early reflections + mod on tail on, vintage + wet only off)");
+    re.DeviceSetParam(rt, rd, Size, 0.42f);
+    Check(Math.Abs(re.DeviceGetParam(rt, rd, Size) - 0.42f) < 1e-4, "Reverb param set/get round-trips");
+    re.DeviceSetParam(rt, rd, Size, 0.6f);
+
+    float[] Render(int frames = 60000)
+    {
+        var b = new float[frames * 2];
+        re.Seek(0); re.Play(); re.RenderOffline(b, frames); re.StopTransport();
+        return b;
+    }
+    static bool Finite(float[] b) { foreach (var s in b) if (!float.IsFinite(s) || Math.Abs(s) > 8f) return false; return true; }
+    static double Energy(float[] b, int from, int to)
+    {
+        double sum = 0; int n = 0;
+        for (int i = from * 2; i < Math.Min(b.Length, to * 2); i++) { sum += b[i] * b[i]; n++; }
+        return n > 0 ? Math.Sqrt(sum / n) : 0;
+    }
+
+    // Wet only: the tail is all that is left, and it rings on after the 125 ms note.
+    re.DeviceSetParam(rt, rd, WetOnly, 1f);
+    var wet = Render();
+    Check(Finite(wet) && Energy(wet, 20000, 40000) > 1e-4, $"Reverb tail rings on after the note (rms {Energy(wet, 20000, 40000):F4})");
+
+    // Decay is a real RT60: a long decay leaves far more in the late tail than a short one.
+    re.DeviceSetParam(rt, rd, Decay, 0.3f);    // ≈ 0.7 s
+    var shortT = Render();
+    re.DeviceSetParam(rt, rd, Decay, 0.8f);    // ≈ 5.2 s
+    var longT = Render();
+    Check(Energy(longT, 44000, 60000) > Energy(shortT, 44000, 60000) * 4,
+          $"Decay lengthens the tail ({Energy(longT, 44000, 60000):F5} vs {Energy(shortT, 44000, 60000):F5})");
+    re.DeviceSetParam(rt, rd, Decay, 0.55f);
+
+    // Early reflections change the first 100 ms; every algorithm and switch renders finite + audible.
+    re.DeviceSetParam(rt, rd, EarlyRefl, 0f);
+    var noEr = Render(12000);
+    re.DeviceSetParam(rt, rd, EarlyRefl, 1f);
+    var er = Render(12000);
+    double erDiff = 0; for (int i = 0; i < er.Length; i++) { double d = er[i] - noEr[i]; erDiff += d * d; }
+    Check(Math.Sqrt(erDiff / er.Length) > 1e-4, "Early reflections add to the early response");
+    for (int a = 0; a < 4; a++)
+    {
+        re.DeviceSetParam(rt, rd, Algorithm, a / 3f);
+        var b = Render(30000);
+        Check(Finite(b) && Energy(b, 10000, 30000) > 1e-5, $"Reverb algorithm {a} renders finite + audible");
+    }
+    re.DeviceSetParam(rt, rd, Algorithm, 0f);
+    foreach (var (p, v, what) in new[] { (ModOnTail, 0f, "mod on early part"), (Vintage, 1f, "vintage"),
+                                         (BassMono, 0.6f, "bass mono"), (HFDamp, 1f, "full damping"), (PreDelay, 1f, "200 ms pre-delay") })
+    {
+        float was = re.DeviceGetParam(rt, rd, p);
+        re.DeviceSetParam(rt, rd, p, v);
+        var b = Render(30000);
+        Check(Finite(b) && Energy(b, 10000, 30000) > 1e-5, $"Reverb {what} renders finite + audible (rms {Energy(b, 10000, 30000):F4})");
+        re.DeviceSetParam(rt, rd, p, was);
+    }
+
+    // Freeze holds the tail instead of letting it decay, and Kill tail empties it.
+    re.DeviceSetParam(rt, rd, Decay, 0.3f);
+    var nf = new float[8000 * 2];
+    re.Seek(0); re.Play(); re.RenderOffline(nf, 8000);          // the note goes into the tank first…
+    re.DeviceSetParam(rt, rd, Freeze, 1f);                       // …then the tail is held
+    var held = new float[60000 * 2];
+    re.RenderOffline(held, 60000); re.StopTransport();
+    double early = Energy(held, 0, 10000), late = Energy(held, 50000, 60000);
+    Check(Finite(held) && early > 1e-5 && late > early * 0.5, $"Freeze holds the tail (late {late:F5} vs early {early:F5})");
+    re.DeviceAction(rt, rd, 0, 0, 0);                            // Kill tail
+    var killed = new float[8000 * 2];
+    re.RenderOffline(killed, 8000);
+    Check(Rms(killed, 8000) < 1e-5, $"Kill tail empties the reverb (rms {Rms(killed, 8000):F6})");
+    re.DeviceSetParam(rt, rd, Freeze, 0f);
+    re.DeviceSetParam(rt, rd, Decay, 0.55f);
+    re.DeviceSetParam(rt, rd, WetOnly, 0f);
+
+    // Dry Level trims the dry path.
+    re.DeviceSetParam(rt, rd, DryWet, 0f);
+    re.DeviceSetParam(rt, rd, DryLevel, 0.70711f);
+    float unity = Rms(Render(8000), 8000);
+    re.DeviceSetParam(rt, rd, DryLevel, 0f);
+    float silent = Rms(Render(8000), 8000);
+    Check(unity > 1e-3 && silent < unity * 0.05f, $"Reverb Dry Level trims the dry path ({silent:F4} vs {unity:F4})");
+    re.DeviceSetParam(rt, rd, DryLevel, 0.70711f);
+
+    // Latency Comp pulls the tail forward by the diffuser's group delay — a different signal.
+    re.DeviceSetParam(rt, rd, DryWet, 1f);
+    re.DeviceSetParam(rt, rd, PreDelay, 0.25f);    // 50 ms, room to absorb the ~7 ms diffuser
+    re.DeviceSetParam(rt, rd, LatencyComp, 1f);
+    var comped = Render(20000);
+    re.DeviceSetParam(rt, rd, LatencyComp, 0f);
+    var raw = Render(20000);
+    double lcDiff = 0; for (int i = 0; i < raw.Length; i++) { double d = comped[i] - raw[i]; lcDiff += d * d; }
+    Check(Finite(comped) && Math.Sqrt(lcDiff / raw.Length) > 1e-5, "Reverb Latency Comp moves the tail");
+    re.DeviceSetParam(rt, rd, LatencyComp, 1f);
+
+    // Telemetry + the MCP status line.
+    var sc = new float[11];
+    int scn = re.DeviceScope(rt, rd, sc, sc.Length);
+    Check(scn == 11 && sc[4] > 1000 && sc[8] > 100 && Math.Abs(sc[6] - 1.9) < 0.1,
+          $"Reverb scope reports sample rate, diffuser delay and RT60 ({sc[4]:0} Hz, {sc[8]:0} smp, {sc[6]:0.00} s)");
+    string text = re.DeviceText(rt, rd, 0);
+    Check(text.Contains("Hall") && text.Contains("RT60"), $"Reverb status text names the algorithm and RT60 (got '{text}')");
+
+    // Clone: duplicating the track keeps the appended params.
+    re.DeviceSetParam(rt, rd, Vintage, 1f);
+    int t2 = re.DuplicateTrack(rt);
+    int rd2 = re.TrackDeviceCount(t2) - 1;
+    Check(t2 > 0 && re.DeviceGetParam(t2, rd2, Vintage) > 0.5f, "duplicate track clones the Reverb's params");
+    re.DeviceSetParam(rt, rd, Vintage, 0f);
+
+    // Automation: a device-param lane drives Decay.
+    int lane = re.AddAutomationLane(rt, AutomationTarget.DeviceParam, rd, Decay);
+    Check(lane >= 0, "add Reverb Decay automation lane");
+    re.SetAutomationPoints(rt, lane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    var ab = new float[4096 * 2];
+    re.Seek(1.99); re.Play(); re.RenderOffline(ab, 4096); re.StopTransport();
+    Check(re.DeviceGetParam(rt, rd, Decay) > 0.8f, $"automation drives Reverb Decay ({re.DeviceGetParam(rt, rd, Decay):F2})");
 }
 
 // ============================ Nota Crush ====================================
@@ -5720,6 +6015,7 @@ Console.WriteLine("-- Built-in instrument presets + factory catalog --");
     factory.Apply(engine, glue.Id, compTrack);
     int lastDev = engine.TrackDeviceCount(compTrack) - 1;
     Check(lastDev >= 0 && engine.TrackDeviceBuiltinKind(compTrack, lastDev) == 1, "factory effect preset added a Compressor device");
+    Check(all.Count(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 1) >= 25, $"at least 25 Compressor factory presets ({all.Count(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 1)})");
 }
 
 // ===================== M7-7: crash recovery ================================

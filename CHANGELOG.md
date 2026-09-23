@@ -44,6 +44,34 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the summary line, the scope measurements, the A/B cursor readings, 31 third-octave band
   levels and the strongest spectral peaks with note names. `get_device_text` on a Lens
   returns the same reports as text.
+- **MCP: sidechain routing and `read_dynamics`.** `set_device_sidechain` / `get_device_sidechain`
+  route a key into a Compressor (or any device that takes one) — source track, pre/post tap,
+  detector gain — so an assistant can set up ducking on its own. `read_dynamics` returns
+  what a Nota Compressor is doing: gain reduction, input / output peak and RMS, the key
+  level, the effective attack and release, look-ahead latency and how often it kicked in.
+
+### Changed
+- **Nota Compressor shows its dynamics, not just its settings.** The card moves onto the
+  Lens / Delay / Reverb frame — a LEVEL column (threshold against the live key level ·
+  make-up), a centre panel with **Curve**, **Motion** and **Sidechain** tabs, a
+  **Dynamics / Output** panel and a status strip:
+  - **Curve** — the transfer curve you drag (sideways for the threshold, up and down for the
+    ratio) beside four seconds of gain-reduction history with its peak, plus the average /
+    peak reduction and the crest factor in and out.
+  - **Motion** — the reduction envelope against the input over a window short enough to
+    read attack and release as shapes, with the effective timings after the character
+    voicing and the measured transient and recovery of the last hit.
+  - **Sidechain** — pick the key source and its pre/post tap, see the key's spectrum under
+    its filters and drag the HP / LP handles (up and down sets Q); **Listen** hears the key.
+  - **New in the engine:** an **Auto** detector (RMS body, still catches spikes), 2-pole key
+    filters with **Q**, **SC Gain**, **Hold**, an **External key** switch and **Stereo
+    link** (off = each channel compresses on its own). **Look-ahead now reports its
+    latency**, so delay compensation keeps the other tracks in time.
+  - **31 factory presets**, up from six — drums, bus, vocals (with a de-esser), bass and
+    instruments, and sidechain ducking. The five new parameters are appended, so older
+    projects open unchanged and every one of them automates (grouped under *SC* in the
+    lane menu), MIDI-learns, saves in a preset and is reachable over MCP; `get_device_text`
+    returns the compressor's status line.
 
 ## [0.40.0] — 2026-09-18
 
@@ -288,6 +316,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   restart — and the choice is remembered.
 
 ### Changed
+- **Nota Reverb moves onto the Chamber frame and grows the parts it was missing.** A TAIL
+  column (decay · HF damp), a centre panel with **Space** and **Tone · Mod** tabs over a
+  live decay-tail window, a **Levels / Output** panel and a status strip. The window
+  replays the sound: the impulse flashes at the pre-delay, the early reflections light in
+  turn and the RT60 curve draws itself while the reverb is sounding. Drag the teal marker
+  for the pre-delay or the tail for the decay.
+  - **Decay is now a true RT60**: the number on the knob is the time the tail takes to fall
+    60 dB, whatever the size or algorithm. Older projects keep their settings, but long
+    decays ring a little differently than before.
+  - **Early reflections**, spaced by the algorithm (a hall's walls far apart, a plate's a
+    tight cluster) and the size, and an **input diffuser** for a denser onset.
+    **Latency comp.** shortens the pre-delay by the diffuser's group delay, so the tail
+    starts on the set pre-delay.
+  - **Mod on tail** chooses where the modulation goes (the tail itself, or only the early
+    part so the tail stays still), and **Vintage** gives it an early-digital colour.
+  - **An output stage:** separate **dry level**, **bass mono** on the tail and **Wet only**
+    for a return track. **Kill tail** empties the reverb at once, even when frozen.
+  - **30 factory presets**, up from four. The seven new parameters are appended, so every
+    one of them automates, MIDI-learns, saves in a preset and is reachable over MCP;
+    `get_device_text` returns the reverb's status line, and `device_action` kills the tail.
 - **Nota Delay is a full delay, not a time-and-feedback box.** The card moves onto the same
   frame as Nota Chamber — a LOOP column (feedback · spread), a centre panel with **Time**
   and **Loop · Wow** tabs over a live repeat window, a **Levels / Output** panel and a

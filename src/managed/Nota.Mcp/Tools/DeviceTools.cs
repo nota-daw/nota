@@ -67,12 +67,58 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));
 
-    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen).")]
+    [McpServerTool(Name = "get_device_text"), Description("Read a device's resource text. Nota Chamber: id 0 = current IR name, 1 = its category, 2 = the loaded user IR's name, 10 = the built-in IR list (name, category, seconds per line; the IR param selects entry round(v × 16), 1.0 = the user IR). Nota Lens: id 0 = the analysis summary, 1 = the third-octave band table, 2 = the scope measurements, 3 = the strongest spectral peaks, 4 = the A/B cursor measurements — or use read_analyzer, which returns all of it parsed. Delay (kind 3): id 0 = a one-line summary of what it is doing now (sync division or free times, ping-pong, feedback, mix, or that it is frozen). Reverb (kind 2): id 0 = a one-line summary (algorithm, RT60, pre-delay, diffusion, mix, early reflections / vintage, or that the tail is frozen). Compressor (kind 1): id 0 = a one-line summary (character, threshold, ratio, knee, attack / release, detector, range, mix, the reduction right now, external key / unlinked / Listen) — or use read_dynamics for the numbers.")]
     public Task<string> GetDeviceText(int trackId, int deviceIndex, int id) => Read(() => E.DeviceText(trackId, deviceIndex, id));
 
-    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Devices without a command ignore the call.")]
+    [McpServerTool(Name = "device_action"), Description("Run a device's own command — the few things that are actions rather than parameters. Delay (kind 3): id 0 clears the loop (empties the delay buffer, so whatever is still circulating stops; useful after Freeze). Reverb (kind 2): id 0 kills the tail (empties the reverb's buffers, so whatever is still ringing — or frozen — stops). Devices without a command ignore the call.")]
     public Task DeviceAction(int trackId, int deviceIndex, [Description("Command id — see the device's list in this description")] int id,
         int intArg = 0, float floatArg = 0) => Mutate(() => E.DeviceAction(trackId, deviceIndex, id, intArg, floatArg));
+
+    public sealed record Sidechain(bool Accepts, int SourceTrackId, bool TapPre, float GainDb, float Mix);
+
+    [McpServerTool(Name = "get_device_sidechain"), Description("Read a device's sidechain routing: whether it can take a key at all (the Compressor, Ceiling, and plugins with a sidechain bus), the source track id (-1 = the device keys off its own track), whether the source is tapped pre-FX (true) or post-fader (false), the detector gain in dB and the effect's sidechain dry/wet mix (0..1).")]
+    public Task<Sidechain> GetDeviceSidechain(int trackId, int deviceIndex) => Read(() => new Sidechain(
+        E.DeviceAcceptsSidechain(trackId, deviceIndex), E.DeviceSidechainSource(trackId, deviceIndex),
+        E.DeviceSidechainTapPre(trackId, deviceIndex), E.DeviceSidechainGain(trackId, deviceIndex), E.DeviceSidechainMix(trackId, deviceIndex)));
+
+    [McpServerTool(Name = "set_device_sidechain"), Description("Route a sidechain key into a device — e.g. duck a bass or pad under the kick with a Compressor (kind 1): pass the kick track as sourceTrackId, then shape the key with the Compressor's params (SC HP / SC LP / SC Q / SC Gain / Hold; External Key must be on, which is its default). sourceTrackId -1 clears the source (the device keys off its own track). Optional: tapPre (true = the source before its effects and fader, false = after), gainDb (extra detector gain, ±24 dB). Leave an optional argument out to keep its current value. No effect on devices that take no sidechain.")]
+    public Task SetDeviceSidechain(int trackId, int deviceIndex, [Description("Key source track id, or -1 for none")] int sourceTrackId,
+        bool? tapPre = null, float? gainDb = null) => Mutate(() =>
+    {
+        E.SetDeviceSidechainSource(trackId, deviceIndex, sourceTrackId);
+        if (tapPre is { } pre) E.SetDeviceSidechainTapPre(trackId, deviceIndex, pre);
+        if (gainDb is { } g) E.SetDeviceSidechainGain(trackId, deviceIndex, Math.Clamp(g, -24f, 24f));
+    });
+
+    public sealed record DynamicsReading(string Summary, double GainReductionDb, double InputPeakDb, double InputRmsDb,
+        double OutputPeakDb, double OutputRmsDb, double KeyPeakDb, bool ExternalKey, double AttackMs, double ReleaseMs,
+        int LatencySamples, double SampleRate, int HitsLast2s, double DeepestReductionLast2sDb);
+
+    [McpServerTool(Name = "read_dynamics"), Description(
+        "Read what a Nota Compressor (built-in effect kind 1) is doing right now: the gain reduction (dB, positive = "
+        + "reduced), input / output peak and 300 ms RMS levels (dBFS), the detector key's peak level (after the key "
+        + "filters and SC Gain — compare it with the threshold), whether an external sidechain key is driving it, the "
+        + "effective attack / release in ms (after the Character voicing and auto-release), the look-ahead latency, "
+        + "how many times the reduction kicked in (rose through 1 dB) and the deepest reduction over the last 2 s, and "
+        + "the one-line summary. Levels are only live while audio plays through the track.")]
+    public Task<DynamicsReading> ReadDynamics(int trackId, int deviceIndex) => Read(() =>
+    {
+        const int kScope = 14, envN = 2048;
+        var sc = new float[kScope + 2 * envN];
+        int n = E.DeviceScope(trackId, deviceIndex, sc, sc.Length);
+        static double Db(float lin) => lin > 1e-6f ? Math.Round(20 * Math.Log10(lin), 1) : -120;
+        int hits = 0; bool armed = true; double deepest = 0;
+        if (n >= sc.Length)
+            for (int i = kScope + envN; i < kScope + 2 * envN; i++)
+            {
+                deepest = Math.Max(deepest, sc[i]);
+                if (armed && sc[i] > 1) { hits++; armed = false; }
+                else if (!armed && sc[i] < 0.5f) armed = true;
+            }
+        float V(int i) => n > i ? sc[i] : 0f;
+        return new DynamicsReading(E.DeviceText(trackId, deviceIndex, 0), Math.Round(V(4), 2), Db(V(0)), Db(V(2)), Db(V(1)), Db(V(3)),
+            Db(V(5)), V(12) > 0.5f, Math.Round(V(6), 2), Math.Round(V(7), 1), (int)V(10), V(8), hits, Math.Round(deepest, 1));
+    });
 
     public sealed record AnalyzerBand(double Hz, double Db);
     public sealed record AnalyzerPeak(double Hz, double Db, string Note);
