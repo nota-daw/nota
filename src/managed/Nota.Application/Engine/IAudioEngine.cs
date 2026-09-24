@@ -300,6 +300,12 @@ public interface IAudioEngine : IDisposable
     bool SetTrackSamplerRoot(int trackId, int rootNote);
     /// <summary>Live Sampler playback position (0..1 of the sample, -1 = silent) for the UI cursor.</summary>
     float SamplerPlayPosition(int trackId);
+    /// <summary>The file name (no extension) a sample was loaded from, or "" when unknown —
+    /// the engine keeps only the audio, so the name is remembered here on load and carried
+    /// by the project (SamplerDto.Name). Used by the Sampler's "Detect from file name".</summary>
+    string SampleName(long sampleId);
+    /// <summary>Remember the source name of a sample (a project reload restores it).</summary>
+    void SetSampleName(long sampleId, string name);
     int AddMidiClip(int trackId, double startBeat, double lengthBeats);
 
     // --- Hosted plugins (M3-3) ---------------------------------------------

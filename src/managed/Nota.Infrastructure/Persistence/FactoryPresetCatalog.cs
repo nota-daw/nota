@@ -57,6 +57,51 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("synth", 0, "Filter Sweep",   ("wave", 0f),     ("attack", 0.35f), ("decay", 0.70f), ("sustain", 0.75f), ("release", 0.70f), ("cutoff", 0.30f), ("resonance", 0.45f), ("filenv", 0.92f), ("unison", 0.333f), ("detune", 0.57f), ("gain", 0.74f));
         Inst("synth", 0, "Band Motion",    ("wave", 0.333f), ("pulsewidth", 0.44f), ("attack", 0.28f), ("decay", 0.62f), ("sustain", 0.70f), ("release", 0.62f), ("filtype", 1f), ("cutoff", 0.58f), ("resonance", 0.50f), ("filenv", 0.74f), ("unison", 0.333f), ("detune", 0.60f), ("spread", 0.65f), ("gain", 0.74f));
 
+        // ---- Nota Sampler (kind 1) — 30 sounds for whatever sample is loaded (a preset shapes the
+        //      sound; Start / End and the loop points stay with the sample unless it names them).
+        //      loopmode: Off 0 / Fwd .5 / Ping 1 (+ reverse 1 = Rev) · filtertype: Off 0 / LP .333 /
+        //      HP .667 / BP 1 · voicemode: Poly 0 / Mono .5 / Choke 1. attack .5 ms·8000^v; decay /
+        //      release 2 ms·3000^v (.3 ≈ 22 ms, .6 ≈ 240 ms, .8 ≈ 1.2 s); cutoff 20 Hz·1000^v
+        //      (.6 ≈ 1.3 k, .8 ≈ 5 k); transpose ±24 st at .5 (.25 = −12, .75 = +12); gain ±24 dB
+        //      at .5; glide 1 ms·2000^v (.6 ≈ 95 ms); envamount ±6 oct at .5 (.75 = +3 oct).
+        // Basics
+        Inst("sampler", 1, "Init");
+        Inst("sampler", 1, "One-Shot",        ("release", 0.20f));
+        Inst("sampler", 1, "Gated Hold",      ("loopmode", 0.5f), ("loopxfade", 0.25f), ("release", 0.02f), ("voicemode", 0.5f));
+        // Keys and plucks
+        Inst("sampler", 1, "Brass Pluck",     ("decay", 0.55f), ("sustain", 0f),    ("release", 0.45f), ("filtertype", 0.333f), ("cutoff", 0.72f), ("resonance", 0.18f), ("envcutoff", 1f), ("envamount", 0.75f));
+        Inst("sampler", 1, "Soft Keys",       ("attack", 0.15f), ("decay", 0.70f), ("sustain", 0.45f), ("release", 0.60f), ("filtertype", 0.333f), ("cutoff", 0.70f), ("keytrack", 0.5f), ("velamount", 0.8f));
+        Inst("sampler", 1, "Music Box",       ("transpose", 0.75f), ("decay", 0.72f), ("sustain", 0f), ("release", 0.55f), ("filtertype", 0.333f), ("cutoff", 0.85f));
+        Inst("sampler", 1, "Mallet",          ("decay", 0.60f), ("sustain", 0f),    ("release", 0.50f), ("filtertype", 0.333f), ("cutoff", 0.62f), ("resonance", 0.25f), ("envcutoff", 1f), ("envamount", 0.80f));
+        Inst("sampler", 1, "Harp Pluck",      ("decay", 0.68f), ("sustain", 0f),    ("release", 0.60f), ("filtertype", 0.333f), ("cutoff", 0.78f), ("keytrack", 0.6f));
+        Inst("sampler", 1, "Lo-Fi Keys",      ("detune", 0.45f), ("attack", 0.20f), ("decay", 0.60f), ("sustain", 0.60f), ("release", 0.50f), ("filtertype", 0.333f), ("cutoff", 0.60f), ("resonance", 0.15f), ("gain", 0.55f), ("velamount", 0.6f));
+        // Pads and loops
+        Inst("sampler", 1, "Warm Pad",        ("loopmode", 0.5f), ("loopxfade", 0.50f), ("attack", 0.70f), ("decay", 0.70f), ("sustain", 0.85f), ("release", 0.78f), ("filtertype", 0.333f), ("cutoff", 0.60f));
+        Inst("sampler", 1, "Glass Pad",       ("loopmode", 0.5f), ("loopxfade", 0.60f), ("transpose", 0.75f), ("attack", 0.65f), ("sustain", 0.90f), ("release", 0.80f), ("filtertype", 0.667f), ("cutoff", 0.45f));
+        Inst("sampler", 1, "Ping-Pong Drone", ("loopmode", 1f),   ("attack", 0.75f), ("sustain", 1f),    ("release", 0.85f), ("filtertype", 0.333f), ("cutoff", 0.55f), ("resonance", 0.20f), ("detune", 0.56f));
+        Inst("sampler", 1, "Reverse Swell",   ("loopmode", 0.5f), ("reverse", 1f),   ("loopxfade", 0.40f), ("attack", 0.80f), ("sustain", 0.90f), ("release", 0.70f));
+        Inst("sampler", 1, "Tape Sustain",    ("loopmode", 0.5f), ("loopxfade", 0.80f), ("attack", 0.30f), ("release", 0.60f), ("filtertype", 0.333f), ("cutoff", 0.66f), ("detune", 0.47f), ("gain", 0.55f));
+        Inst("sampler", 1, "Filter Keys",     ("loopmode", 0.5f), ("loopxfade", 0.50f), ("pitchtrack", 0f), ("filtertype", 0.333f), ("cutoff", 0.45f), ("resonance", 0.60f), ("keytrack", 1f), ("attack", 0.30f), ("release", 0.55f));
+        // Bass
+        Inst("sampler", 1, "Mono Bass",       ("voicemode", 0.5f), ("transpose", 0.25f), ("decay", 0.60f), ("sustain", 0.60f), ("release", 0.25f), ("filtertype", 0.333f), ("cutoff", 0.55f), ("resonance", 0.25f), ("envcutoff", 1f), ("envamount", 0.70f));
+        Inst("sampler", 1, "Slide Bass",      ("voicemode", 0.5f), ("glide", 0.60f), ("transpose", 0.25f), ("sustain", 0.70f), ("release", 0.30f), ("filtertype", 0.333f), ("cutoff", 0.50f), ("resonance", 0.40f), ("envcutoff", 1f), ("envamount", 0.75f));
+        Inst("sampler", 1, "Sub Drop",        ("voicemode", 0.5f), ("glide", 0.70f), ("transpose", 0.25f), ("release", 0.45f), ("filtertype", 0.333f), ("cutoff", 0.42f));
+        Inst("sampler", 1, "Acid Slice",      ("voicemode", 0.5f), ("glide", 0.50f), ("decay", 0.50f), ("sustain", 0.20f), ("release", 0.30f), ("filtertype", 0.333f), ("cutoff", 0.38f), ("resonance", 0.70f), ("envcutoff", 1f), ("envamount", 0.85f));
+        // Drums and one-shots
+        Inst("sampler", 1, "Drum Hit",        ("voicemode", 1f),  ("pitchtrack", 0f), ("release", 0.20f));
+        Inst("sampler", 1, "Choke Hat",       ("voicemode", 1f),  ("pitchtrack", 0f), ("decay", 0.45f), ("sustain", 0f), ("release", 0.15f), ("filtertype", 0.667f), ("cutoff", 0.70f));
+        Inst("sampler", 1, "Tuned Perc",      ("decay", 0.55f), ("sustain", 0f),    ("release", 0.40f), ("filtertype", 1f), ("cutoff", 0.70f), ("resonance", 0.30f), ("keytrack", 1f));
+        Inst("sampler", 1, "Chop",            ("voicemode", 1f),  ("attack", 0.10f), ("release", 0.12f), ("velamount", 0.7f));
+        Inst("sampler", 1, "Soft Velocity",   ("velamount", 0.4f), ("attack", 0.10f), ("release", 0.30f));
+        // Character
+        Inst("sampler", 1, "Telephone",       ("filtertype", 1f),  ("cutoff", 0.66f), ("resonance", 0.35f), ("gain", 0.60f));
+        Inst("sampler", 1, "Dark Room",       ("filtertype", 0.333f), ("cutoff", 0.50f), ("resonance", 0.05f), ("keytrack", 0.3f), ("sustain", 0.80f), ("release", 0.70f));
+        Inst("sampler", 1, "Octave Up",       ("transpose", 0.75f));
+        Inst("sampler", 1, "Half Speed",      ("transpose", 0.25f), ("filtertype", 0.333f), ("cutoff", 0.80f));
+        // Motion
+        Inst("sampler", 1, "Envelope Sweep",  ("attack", 0.75f), ("decay", 0.70f), ("sustain", 0.50f), ("release", 0.60f), ("filtertype", 0.333f), ("cutoff", 0.35f), ("resonance", 0.45f), ("envcutoff", 1f), ("envamount", 1f));
+        Inst("sampler", 1, "Legato Lead",     ("voicemode", 0.5f), ("glide", 0.55f), ("attack", 0.30f), ("sustain", 0.90f), ("release", 0.50f), ("filtertype", 0.333f), ("cutoff", 0.75f), ("keytrack", 0.5f));
+
         // ---- Nota Physical (kind 2) — 32 modal patches: mallets, bells, percussion, plucked
         //      and blown, textures. Type (r1type / r2type): Beam 0 / Marimba .2 / String .4 /
         //      Membrane .6 / Plate .8 / Pipe 1 · noisetype LP 0 / BP .5 / HP 1 · structure

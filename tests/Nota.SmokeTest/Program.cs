@@ -3004,7 +3004,7 @@ Console.WriteLine("-- Sampler --");
     Check(t > 0 && se.TrackInstrumentKind(t) == 1, "AddSamplerInstrumentTrack → kind 1");
     Check(se.DeviceName(t, -1) == "Nota Sampler", $"instrument is Nota Sampler (got '{se.DeviceName(t, -1)}')");
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 21, $"Nota Sampler exposes 21 params (got {pc})");
+    Check(pc == 27, $"Nota Sampler exposes 27 params (got {pc})");
     se.AddMidiClip(t, 0.0, 4.0);
     se.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
 
@@ -3067,6 +3067,165 @@ Console.WriteLine("-- Sampler --");
     se.AddMidiClip(t2, 0.0, 4.0); se.SetClipNotes(t2, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
     se.Seek(0); se.Play(); se.RenderOffline(sb, 16384); se.StopTransport();
     Check(Rms(sb, 16384) > 0.001f, "AddSamplerTrack (one-shot) still audible");
+
+    // ---- the 2026-09 redesign: gain, glide, pitch keytrack, env → cutoff, output, telemetry ----
+    {
+        using var ne = new NotaEngine();
+        ne.SetBpm(120); ne.SetTimeSignature(4, 4);
+        int st = ne.AddSamplerInstrumentTrack();
+        Check(ne.SetTrackSamplerSample(st, sampPath, 60), "redesign: load the sample");
+        Check(ne.SampleName(ne.TryGetSamplerInfo(st, out var nsi) ? nsi.SampleId : 0) == System.IO.Path.GetFileNameWithoutExtension(sampPath),
+            "the engine remembers the sample's file name");
+        int npc = ne.PluginParamCount(st, -1);
+        var ni = new System.Collections.Generic.Dictionary<string, int>();
+        for (int i = 0; i < npc; i++) ni[ne.PluginParamId(st, -1, i)] = i;
+        bool idsOk = new[] { "gain", "glide", "pitchtrack", "envcutoff", "envamount", "output" }.All(ni.ContainsKey);
+        Check(idsOk && ni["gain"] == 21 && ni["output"] == 26, "new params append after velamount (gain 21 … output 26)");
+        Check(Math.Abs(ne.InstrumentParamDefault(st, ni["gain"]) - 0.5f) < 1e-4 && ne.InstrumentParamDefault(st, ni["glide"]) == 0f
+              && ne.InstrumentParamDefault(st, ni["pitchtrack"]) == 1f && ne.InstrumentParamDefault(st, ni["envcutoff"]) == 0f
+              && ne.InstrumentParamDefault(st, ni["output"]) == 1f, "new params default to the old sound (0 dB, no glide, chromatic, env off, output 100 %)");
+        Check(ne.PluginParamName(st, -1, ni["cutoff"]) == "Filter Cutoff" && ne.PluginParamName(st, -1, ni["start"]) == "Sample Start",
+            $"sampler names group by head for the automation menu (cutoff → '{ne.PluginParamName(st, -1, ni["cutoff"])}')");
+        void P(string id, float v) => ne.PluginParamSet(st, -1, ni[id], v);
+        void Reset() { for (int i = 0; i < npc; i++) ne.PluginParamSet(st, -1, i, ne.InstrumentParamDefault(st, i)); }
+        float[] Render(NotaNote[] notes, int frames = 16384)
+        {
+            ne.SetClipNotes(st, 0, notes);
+            var b = new float[frames * 2];
+            ne.Seek(0); ne.Play(); ne.RenderOffline(b, frames); ne.StopTransport();
+            return b;
+        }
+        static double Diff(float[] a, float[] b) { double d = 0; for (int i = 0; i < a.Length; i++) { double x = a[i] - b[i]; d += x * x; } return Math.Sqrt(d / a.Length); }
+        ne.AddMidiClip(st, 0.0, 4.0);
+        var one = new[] { new NotaNote(60, 0.0, 3.0, 0.9f) };
+        float baseRms = Rms(Render(one), 16384);
+        P("gain", SamplerModel.GainNorm(-12));
+        float quiet = Rms(Render(one), 16384);
+        Check(quiet < baseRms * 0.35f && quiet > baseRms * 0.15f, $"Gain −12 dB lowers the level ×0.25 ({quiet:F4} vs {baseRms:F4})");
+        Reset(); P("output", 0f);
+        Check(Rms(Render(one), 16384) < 1e-6f, "Output 0 silences the sampler");
+        Reset();
+        // Pitch keytrack 0: every key plays the root's pitch.
+        P("pitchtrack", 0f);
+        var k60 = Render(one); var k72 = Render(new[] { new NotaNote(72, 0.0, 3.0, 0.9f) });
+        Check(Diff(k60, k72) < 1e-4, "Keytrack 0 %: C5 plays exactly like the root");
+        Reset();
+        Check(Diff(Render(one), Render(new[] { new NotaNote(72, 0.0, 3.0, 0.9f) })) > 1e-3, "Keytrack 100 %: C5 plays an octave up");
+        // Env → Cutoff: with a low LP the envelope opens the filter.
+        P("filtertype", 0.333f); P("cutoff", 0.3f);
+        var closed = Render(one);
+        P("envcutoff", 1f); P("envamount", 1f);
+        var opened = Render(one);
+        Check(Rms(opened, 16384) > Rms(closed, 16384) * 1.2f, $"Env → Cutoff opens a low-pass ({Rms(opened, 16384):F4} > {Rms(closed, 16384):F4})");
+        Reset();
+        // Glide (Mono, legato): overlapping notes slide instead of retriggering → a different render.
+        var legato = new[] { new NotaNote(60, 0.0, 1.0, 0.9f), new NotaNote(67, 0.5, 1.5, 0.9f) };
+        P("voicemode", 0.5f);
+        var hard = Render(legato);
+        P("glide", 0.6f);
+        var slid = Render(legato);
+        bool fin = slid.All(float.IsFinite);
+        Check(fin && Rms(slid, 16384) > 0.001f && Diff(hard, slid) > 1e-3, "Mono + Glide slides legato (audible, finite, differs from a retrigger)");
+        Reset();
+        // Telemetry: a looping held note reports a voice, its envelope and note.
+        P("loopmode", 0.5f); P("filtertype", 0.333f); P("cutoff", 0.7f);
+        ne.SetClipNotes(st, 0, new[] { new NotaNote(64, 0.0, 4.0, 0.9f) });
+        var tb = new float[512 * 2];
+        ne.Seek(0); ne.Play();
+        for (int k = 0; k < 20; k++) ne.RenderOffline(tb, 512);
+        var sc = new float[SamplerModel.ScopeLength];
+        int sn = ne.InstrumentScope(st, sc);
+        var snap = new SamplerModel.Snapshot();
+        SamplerModel.Parse(sc.AsSpan(0, Math.Max(0, sn)), snap);
+        ne.StopTransport();
+        Check(sn == SamplerModel.ScopeLength && snap.Live && snap.Voices == 1 && snap.Env > 0.5 && Math.Abs(snap.Note - 64) < 1e-3
+              && snap.Stage is 1 or 2 && snap.PlayPos is >= 0 and <= 1 && Math.Abs(snap.CutoffHz - SamplerModel.CutoffHz(0.7f)) < 1,
+            $"telemetry: 1 voice, env {snap.Env:F2}, stage {snap.Stage}, note {snap.Note:F2}, cutoff {snap.CutoffHz:F0} Hz (got {sn} floats)");
+        // A ping-pong loop survives a sample reload (the loop flag used to force forward / off).
+        P("loopmode", 1f);
+        ne.SetTrackSamplerSample(st, sampPath, 60);
+        Check(ne.PluginParamGet(st, -1, ni["loopmode"]) == 1f, "reloading the sample keeps a ping-pong loop");
+        P("loopmode", 0.5f);
+        ne.SetTrackSamplerSample(st, sampPath, 60);
+        Check(ne.PluginParamGet(st, -1, ni["loopmode"]) == 0.5f, "reloading the sample keeps a forward loop");
+        Reset();
+
+        // The name round-trips through a project (the bundle stores sample-N.wav).
+        var nw = new System.Collections.Generic.List<string>();
+        var ndoc = ProjectService.Capture(ne, new TransportState(120.0, 1.0, false, false), nw);
+        string nb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "nota-sampname-" + System.Guid.NewGuid().ToString("N") + ".nota");
+        ProjectService.Save(ndoc, nb, ne);
+        using (var ne2 = new NotaEngine())
+        {
+            ProjectService.Apply(ProjectService.Load(nb), ne2, nb);
+            string got = "";
+            for (int i = 0; i < ne2.TrackCount; i++)
+                if (ne2.TryGetTrackInfo(i, out var ti2) && ti2.IsInstrument && ne2.TrackInstrumentKind(ti2.Id) == 1 && ne2.TryGetSamplerInfo(ti2.Id, out var s2))
+                    got = ne2.SampleName(s2.SampleId);
+            Check(got == System.IO.Path.GetFileNameWithoutExtension(sampPath), $"the sample's file name survives a project reload (got '{got}')");
+        }
+        try { System.IO.Directory.Delete(nb, true); } catch { /* best-effort */ }
+
+        // Presets: ≥ 25 factory presets, every id real, each applies in place (keeping the
+        // trim) and plays the sample finite; the browser path builds a Sampler, not a Synth.
+        var ids = new HashSet<string>(ni.Keys);
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 1).ToList();
+        Check(mine.Count >= 25, $"Nota Sampler ships ≥ 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Sampler preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        var broken = new List<string>();
+        foreach (var p in mine)
+        {
+            P("start", 0.1f);
+            if (cat.ApplyInPlace(ne, p.Id, st, -1).Length != 0) { broken.Add($"{p.DisplayName} (apply)"); continue; }
+            if (Math.Abs(ne.PluginParamGet(st, -1, ni["start"]) - 0.1f) > 1e-4) broken.Add($"{p.DisplayName} (lost the trim)");
+            var pb = Render(new[] { new NotaNote(60, 0.0, 1.0, 0.9f), new NotaNote(64, 0.25, 1.0, 0.9f) });
+            float r = Rms(pb, 16384), pk = pb.Max(Math.Abs);
+            if (!pb.All(float.IsFinite) || r < 0.0005f || pk > 2f) broken.Add($"{p.DisplayName} ({r:F4}/{pk:F2})");
+        }
+        Check(broken.Count == 0, $"every Sampler preset keeps the trim and plays finite{(broken.Count > 0 ? " — " + string.Join(", ", broken) : "")}");
+        int before = ne.TrackCount;
+        Check(cat.Apply(ne, mine[3].Id, 0).Length == 0 && ne.TrackCount == before + 1, "a Sampler preset from the browser adds a track");
+        bool madeSampler = ne.TryGetTrackInfo(ne.TrackCount - 1, out var lti) && ne.TrackInstrumentKind(lti.Id) == 1;
+        Check(madeSampler, "… and that track is a Sampler (it used to fall back to a Synth)");
+        Check(PresetService.Capture(ne, st, -1, "Mine") is { Type: "builtin-instrument", BuiltinKind: 1 }, "a user preset can be saved from the Sampler");
+
+        // MCP: read_sampler / set_sampler.
+        var mcp = new Nota.Mcp.Tools.SampleTools(ne, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Reset();
+        var rd = mcp.ReadSampler(st).Result;
+        Check(rd is not null && rd.HasSample && rd.Values.Root == "C4" && rd.Values.Loop == "Off" && Math.Abs(rd.DurationSec - 0.5) < 1e-3
+              && rd.Guide.Contains("pitchtrack") && rd.SampleName.Length > 0, $"read_sampler reads the sample and its settings ({rd?.Summary})");
+        Check(mcp.ReadSampler(ne.AddInstrumentTrack()).Result is null, "read_sampler returns null for another instrument");
+        string res = mcp.SetSampler(st, loop: "Ping", startSec: 0.05, gainDb: -6, root: "A3", attackMs: 20, filter: "LP", cutoffHz: 2000,
+            envOctaves: 2, voices: "Mono", glideMs: 80, panPercent: -50).Result;
+        var rd2 = mcp.ReadSampler(st).Result!;
+        Check(!res.StartsWith("error") && rd2.Values.Loop == "Ping" && Math.Abs(rd2.Values.StartSec - 0.05) < 0.002 && Math.Abs(rd2.Values.GainDb + 6) < 0.1
+              && rd2.Values.RootMidi == 57 && Math.Abs(rd2.Values.AttackMs - 20) < 0.5 && rd2.Values.Filter == "LP" && Math.Abs(rd2.Values.CutoffHz - 2000) < 2
+              && rd2.Values.EnvToCutoff && Math.Abs(rd2.Values.EnvOctaves - 2) < 0.01 && rd2.Values.Voices == "Mono" && Math.Abs(rd2.Values.GlideMs - 80) < 1
+              && Math.Abs(rd2.Values.PanPercent + 50) < 1, $"set_sampler shapes the Sampler in real units ({res})");
+        string trim = mcp.SetSampler(st, trimSilence: true, snapToZero: true).Result;
+        Check(!trim.StartsWith("error"), $"set_sampler trims silence and snaps to zero ({trim})");
+        string err = mcp.SetSampler(st, loop: "Sideways", root: "H9").Result;
+        Check(err.StartsWith("error") && err.Contains("Sideways") && err.Contains("H9"), $"set_sampler names the values it cannot use ({err})");
+    }
+
+    // SamplerModel: notes from file names, silence, zero crossings.
+    Check(SamplerModel.DetectRoot("Piano_C4.wav") == 60 && SamplerModel.DetectRoot("Str Eb3 soft") == 51 && SamplerModel.DetectRoot("bass-F#1-rr2") == 30
+          && SamplerModel.DetectRoot("a-1 test") == 9 && SamplerModel.DetectRoot("Break 2") == -1 && SamplerModel.DetectRoot("kick") == -1 && SamplerModel.DetectRoot("mix2") == -1,
+        "DetectRoot finds the note in a file name (C4 = 60) and nothing where there is none");
+    Check(SamplerModel.ParseNote("A4") == 69 && SamplerModel.ParseNote("60") == 60 && SamplerModel.ParseNote("Bb2") == 46 && SamplerModel.ParseNote("X3") == -1, "ParseNote reads names and MIDI numbers");
+    {
+        var sil = new float[1000];
+        for (int i = 200; i < 700; i++) sil[i] = (float)Math.Sin(i * 0.3);
+        var tr = SamplerModel.TrimSilence(sil, 1, 1000);
+        Check(tr is { } tt && Math.Abs(tt.Start * 999 - 201) < 3 && Math.Abs(tt.End * 999 - 700) < 3, $"TrimSilence finds where the sound starts and ends ({tr})");
+        double z = SamplerModel.SnapZero(sil, 1, 1000, 0.3);
+        long zf = (long)Math.Round(z * 999);
+        Check(Math.Sign(sil[zf - 1]) != Math.Sign(sil[zf]) || sil[zf] == 0 || sil[zf - 1] == 0, $"SnapZero lands on a zero crossing (frame {zf})");
+        Check(SamplerModel.LoopIndex(0.5f, 1f) == 3 && SamplerModel.LoopValues(3) == (0.5f, 1f) && SamplerModel.LoopIndex(1f, 0f) == 2, "Loop Rev = a forward loop played in reverse");
+    }
 
     try { System.IO.File.Delete(sampPath); System.IO.Directory.Delete(bundle, true); } catch { /* best-effort */ }
 }
@@ -7607,7 +7766,7 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
 
     // Rich Sampler editing per pad: chain param id/count/default + Sampler info/root all
     // reachable so the full editor works inside a Drum Rack pad (not just the track).
-    Check(re.RackChainInstrumentParamCount(t, p2) == 21, "sampler pad exposes 21 chain params");
+    Check(re.RackChainInstrumentParamCount(t, p2) == 27, "sampler pad exposes 27 chain params");
     Check(re.RackChainInstrumentParamId(t, p2, 4) == "start", $"chain param id maps (got '{re.RackChainInstrumentParamId(t, p2, 4)}')");
     Check(re.RackChainSamplerInfo(t, p2, out var cinfo) && cinfo.SampleId != 0 && cinfo.RootNote == 40, "chain sampler info (sample + root) readable");
     // Load a (new) sample into an existing chain Sampler (the pop-out drop path).

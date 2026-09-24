@@ -34,11 +34,13 @@ public static class PresetService
                 return string.IsNullOrEmpty(doc.PluginId) ? null : doc;
             }
             // Built-in instrument: capture the normalized plugin-params by id. Skip kinds whose
-            // state isn't fully recallable from params alone — Sampler (1) & Grain (10) need the
-            // sample, Rhythm (12) its patterns/samples, and the Instrument/Drum racks (3/4) their
-            // chains. Everything else (Synth, Physical, Aurora, Volt, Bass, Pendulum, Operator,
-            // Flux, …) is a param-only synth and saves cleanly.
-            if (ik is 1 or 3 or 4 or 10 or 12) return null;
+            // state isn't fully recallable from params alone — Grain (10) needs the sample,
+            // Rhythm (12) its patterns/samples, and the Instrument/Drum racks (3/4) their chains.
+            // The Sampler (1) saves its sound — envelope, filter, pitch, loop, voices — and
+            // applying it keeps whatever sample is loaded (like its factory presets). Everything
+            // else (Synth, Physical, Aurora, Volt, Bass, Pendulum, Operator, Flux, …) is a
+            // param-only synth and saves cleanly.
+            if (ik is 3 or 4 or 10 or 12) return null;
             {
                 int pc = engine.PluginParamCount(trackId, -1);
                 if (pc <= 0) return null;
@@ -171,6 +173,7 @@ public static class PresetService
             {
                 int t = doc.BuiltinKind switch
                 {
+                    1 => engine.AddSamplerInstrumentTrack(),
                     2 => engine.AddPhysicalSynthTrack(),
                     5 => engine.AddWavetableSynthTrack(),
                     6 => engine.AddVoltSynthTrack(),
@@ -230,11 +233,15 @@ public static class PresetService
             case "builtin-instrument":
             {
                 int pc = engine.PluginParamCount(trackId, -1);
+                // The Sampler's trim and loop points belong to the loaded sample, not the
+                // sound: a preset that doesn't name them leaves them where they are.
+                bool sampler = engine.TrackInstrumentKind(trackId) == 1;
                 for (int i = 0; i < pc; i++)
                 {
                     string id = engine.PluginParamId(trackId, -1, i);
-                    float v = doc.NamedParams is { Count: > 0 } && doc.NamedParams.TryGetValue(id, out var pv)
-                        ? pv : engine.InstrumentParamDefault(trackId, i);
+                    bool named = doc.NamedParams is { Count: > 0 } && doc.NamedParams.ContainsKey(id);
+                    if (!named && sampler && id is "start" or "end" or "loopstart" or "loopend") continue;
+                    float v = named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i);
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
                 return "";

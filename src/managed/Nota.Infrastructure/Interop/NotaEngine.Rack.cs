@@ -29,10 +29,20 @@ public sealed partial class NotaEngine
     }
 
     public int RackAddSamplerChain(int trackId, string path, int rootNote, bool loop)
-    { ThrowIfDisposed(); return NativeMethods.RackAddSamplerChain(_handle, trackId, path, rootNote, loop ? 1 : 0); }
+    {
+        ThrowIfDisposed();
+        int c = NativeMethods.RackAddSamplerChain(_handle, trackId, path, rootNote, loop ? 1 : 0);
+        if (c >= 0 && RackChainSamplerInfo(trackId, c, out var si)) RememberSampleName(si.SampleId, path);
+        return c;
+    }
 
     public bool RackSetChainSamplerSample(int trackId, int chain, string path, int rootNote)
-    { ThrowIfDisposed(); return NativeMethods.RackSetChainSamplerSample(_handle, trackId, chain, path, rootNote) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.RackSetChainSamplerSample(_handle, trackId, chain, path, rootNote) != 0;
+        if (ok && RackChainSamplerInfo(trackId, chain, out var si)) RememberSampleName(si.SampleId, path);
+        return ok;
+    }
 
     public void RackOpenChainInstrumentEditor(int trackId, int chain)
     { ThrowIfDisposed(); NativeMethods.RackOpenChainInstrumentEditor(_handle, trackId, chain); }

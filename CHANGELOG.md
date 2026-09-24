@@ -19,6 +19,39 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Sampler's editor is now the almanac's card, with the new mockup's features.** The card
+  moves onto the 700 × 260 frame the other instruments use: a **Sample** / **Pitch** / **Env** /
+  **Filter** tab panel with a one-line reading beside the tabs, a fixed 186 px rail and a
+  status strip:
+  - **Sample** — the waveform with Start / End and the loop (drag them, double-click resets),
+    the crossfade zone drawn in, Loop Off / Fwd / Ping / Rev, Crossfade, a new **Gain** (±24 dB
+    before the envelope), **Snap to zero** and a new **Trim silence** (Start and End to where
+    the sound begins and fades out).
+  - **Pitch** — a keyboard C2 … C6 that follows the root: click a key to make it the root; the
+    key that plays the sample at its own pitch is outlined and the note sounding now is teal.
+    Transpose, Detune, a new pitch **Keytrack** (100 % chromatic … 0 % every key plays the
+    root), the root stepper and **Detect from file name** ("Piano_C4.wav" → C4).
+  - **Env** — the amp envelope as a graph you drag (attack, decay + sustain, release), with
+    the loudest voice riding it in teal; A / D / S / R and a Vel → Vol switch.
+  - **Filter** — the filter's real response (the engine's SVF) — drag for cutoff and
+    resonance, the cutoff the voice actually hears shown in teal; Type, Cutoff, Reso,
+    Keytrack and a new **Env → Cutoff** with its depth (±6 octaves).
+  - **Rail** — Poly 16 / Mono / Choke, Volume, Pan, a new **Glide** (a slide from the last note;
+    in Mono it is legato — no retrigger, and a released key slides back to the one still
+    held), a new **Output** level, Vel → Vol and the output meter.
+  The same editor opens for a Sampler inside a Drum Rack pad or an Instrument Rack chain.
+- **Nota Sampler ships 30 factory presets** — plucks and keys, looped pads, bass with glide,
+  choked drum hits, lo-fi and telephone colours, envelope sweeps. A preset shapes the sound
+  and leaves the loaded sample and its Start / End / loop points alone (unless it names them),
+  and the Sampler can now be saved as a user preset too.
+- **MCP: `read_sampler` and `set_sampler`.** Read a Sampler track — a summary, a guide to every
+  parameter, the sample (file name, length), the root its file name suggests, where the sound
+  starts and fades out, every setting in real units and the live voice (play position,
+  envelope stage, note, the cutoff it hears) — and shape it in seconds, dB, semitones, Hz and
+  words ("Ping", "LP", "Mono", root "A3"), including Trim silence, Snap to zero and Detect
+  root. `add_sampler_track` / `load_sampler_sample` take `detectRoot`; `get_sampler_info`
+  returns the file name.
+
 - **Nota Pendulum's editor is now the almanac's card, and it shows the balls the engine is
   actually swinging.** The card moves onto the 700 × 260 frame the other instruments use — a
   **Balls** / **Voice** tab panel with a one-line reading beside the tabs, a fixed 186 px ball
@@ -156,6 +189,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Sampler's automation menu is grouped.** Its parameters list under **Sample**, **Loop**,
+  **Pitch**, **Env**, **Filter**, **Voice** and **Out** (e.g. Filter › Cutoff, Loop ›
+  Crossfade); the ids are unchanged, so existing lanes and projects keep working. The six new
+  parameters are appended and default to the old sound.
 - **Nota Pendulum's automation menu is grouped.** Its parameters list under **Balls**,
   **Motion**, **Voice**, **Spread** and **Scale** (e.g. Motion › Rate, Spread › Humanize); the
   ids are unchanged, so existing lanes and projects keep working.
@@ -681,6 +718,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **A Sampler's loop could change kind on its own.** Reloading a sample turned a ping-pong
+  loop into a forward one and a forward loop into a one-shot, and a sampler created with the
+  loop flag (e.g. from a kit) played ping-pong instead of forward. The loop kind now survives.
+- **A Sampler preset from the browser made a Synth track.** It now makes a Sampler.
 - **Nota Dynamic EQ-8's key track did nothing.** The device never stored the sidechain source
   it was given, so a chosen key track was forgotten at once and every band kept listening to
   its own track. The key is now kept, saved with the project and heard by the bands set to

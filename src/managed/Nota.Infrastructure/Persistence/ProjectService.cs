@@ -107,6 +107,7 @@ public sealed class ProjectService
                         sd.RootNote = si.RootNote;
                         sd.Loop = si.Loop != 0;
                         if (si.SampleId != 0) sd.Sample = RegisterSample(doc, engine, si.SampleId, warnings) ?? "";
+                        if (si.SampleId != 0) sd.Name = engine.SampleName(si.SampleId);
                     }
                     int pc = engine.PluginParamCount(ti.Id, -1);
                     sd.Params = new float[pc];
@@ -493,6 +494,7 @@ public sealed class ProjectService
                     {
                         int pc = engine.PluginParamCount(id, -1);
                         for (int p = 0; p < sd.Params.Length && p < pc; p++) engine.PluginParamSet(id, -1, p, sd.Params[p]);
+                        if (sd.Name.Length > 0 && engine.TryGetSamplerInfo(id, out var nsi)) engine.SetSampleName(nsi.SampleId, sd.Name);
                     }
                 }
                 else if (t.Instrument is { Kind: 10, Sampler: { } gd })   // Nota Grain: sample + params

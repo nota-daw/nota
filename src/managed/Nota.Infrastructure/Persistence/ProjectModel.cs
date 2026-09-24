@@ -198,6 +198,9 @@ public sealed class SamplerDto
     public string Sample { get; set; } = "";  // relative bundle path ("" = empty Sampler)
     public int RootNote { get; set; } = 60;
     public bool Loop { get; set; }
+    /// <summary>The file name the sample came from (no extension) — the bundle stores it as
+    /// sample-N.wav, so this keeps the Sampler's "Detect from file name" working after a reload.</summary>
+    public string Name { get; set; } = "";
     /// <summary>Normalized plugin-param values (vol/pan/start/end/loop/ADSR/filter…). Empty = defaults.</summary>
     public float[] Params { get; set; } = System.Array.Empty<float>();
 

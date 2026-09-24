@@ -257,9 +257,12 @@ and user presets, automation, persistence and cloning.
   stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
   Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
   Osc · Env · Filter tabs with draggable envelope and filter graphs. 25 factory presets.
-- **Nota Sampler** — sampler (one-shot and loop), voice modes Poly 16 / Mono / Choke, loop
-  crossfade, reverse loop, filter key-tracking, Vel→Vol; Sample · Pitch · Env · Filter
-  tabs; an editable waveform.
+- **Nota Sampler** — sampler (one-shot and loop: Off / Fwd / Ping / Rev), voice modes
+  Poly 16 / Mono / Choke, Glide (legato in Mono), loop crossfade, sample Gain, pitch
+  Keytrack, filter key-tracking and Env → Cutoff, Vel→Vol, Output; Sample · Pitch · Env ·
+  Filter tabs over an editable waveform, a clickable keyboard for the root, a draggable
+  envelope and a draggable filter response, with Snap to zero, Trim silence and Detect
+  from file name; 30 factory presets; MCP `read_sampler` / `set_sampler`.
 - **Nota Grain** — granular sampler: a read Position that Scans through the file, Freezes
   or follows the keyboard, grains of a chosen size, density and window shape (Hann /
   Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
@@ -690,8 +693,9 @@ Coverage:
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings, rack volume and glide; for the Drum Rack, per-pad
   choke/tune/decay and kit swing/humanize.
-- **Samples**: create a Sampler or Grain with a file, load a sample onto a track or into a
-  rack chain, and read sample info.
+- **Samples**: create a Sampler or Grain with a file (optionally taking the root from the file
+  name), load a sample onto a track or into a rack chain, read sample info, and read / shape a
+  Sampler in real units (`read_sampler`, `set_sampler`).
 - **Mixer**: sends to returns, the return list, track and master meters, record source.
 - **Plugins**: list the AU/VST3 catalogue, look up by id, add as an instrument or insert
   effect, open and close the editor, read and write parameters and state.

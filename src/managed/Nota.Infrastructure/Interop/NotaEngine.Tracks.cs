@@ -499,6 +499,7 @@ public sealed partial class NotaEngine
         ThrowIfDisposed();
         var id = NativeMethods.AddSamplerTrack(_handle, path, rootNote, loop ? 1 : 0);
         if (id <= 0) throw new NotaEngineException($"Failed to load sampler from {path}.");
+        if (TryGetSamplerInfo(id, out var si)) RememberSampleName(si.SampleId, path);
         return id;
     }
 
@@ -513,7 +514,27 @@ public sealed partial class NotaEngine
 
     /// <summary>Loads a sample file into an existing Sampler track, keeping its params. Returns success.</summary>
     public bool SetTrackSamplerSample(int trackId, string path, int rootNote = 60)
-    { ThrowIfDisposed(); return NativeMethods.SetTrackSamplerSample(_handle, trackId, path, rootNote) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.SetTrackSamplerSample(_handle, trackId, path, rootNote) != 0;
+        if (ok && TryGetSamplerInfo(trackId, out var si)) RememberSampleName(si.SampleId, path);
+        return ok;
+    }
+
+    // Source names of loaded samples (the native buffer keeps only the audio).
+    private readonly Dictionary<long, string> _sampleNames = new();
+
+    private void RememberSampleName(long sampleId, string path)
+    {
+        if (sampleId == 0) return;
+        lock (_sampleNames) _sampleNames[sampleId] = System.IO.Path.GetFileNameWithoutExtension(path);
+    }
+
+    public string SampleName(long sampleId)
+    { lock (_sampleNames) return _sampleNames.TryGetValue(sampleId, out var n) ? n : ""; }
+
+    public void SetSampleName(long sampleId, string name)
+    { if (sampleId != 0) lock (_sampleNames) _sampleNames[sampleId] = name ?? ""; }
 
     public bool SetTrackSamplerRoot(int trackId, int rootNote)
     { ThrowIfDisposed(); return NativeMethods.SetTrackSamplerRoot(_handle, trackId, rootNote) != 0; }

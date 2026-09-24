@@ -9,6 +9,13 @@
 // the Instrument plugin-param interface (normalized 0..1) so they automate/persist like
 // the Nota Synth. `setSample` + kind 1 stay unchanged for Drum/Instrument Rack
 // compatibility; the defaults reproduce the old one-shot behavior. Params are APPEND-ONLY.
+//
+// The 2026-09 redesign appends: sample Gain (±24 dB before the envelope), Glide (a slide
+// from the last note; in Mono it is legato — the voice keeps playing and slides, and a
+// released note slides back to the one still held), pitch Keytrack (how far the key moves
+// the pitch: 100 % chromatic, 0 % every key plays the root), Env → Cutoff (on/off + a
+// bipolar ±6 octave depth from the amp envelope) and an Output level after the voices.
+// Telemetry (scopeRead) gives the editor the loudest voice's envelope and cutoff.
 
 #pragma once
 
@@ -27,7 +34,8 @@ class Sampler final : public Instrument {
 public:
     enum Param { Volume = 0, Pan, Transpose, Detune, Start, End, Reverse, LoopMode,
                  LoopStart, LoopEnd, Attack, Decay, Sustain, Release, FilterType, Cutoff, Resonance,
-                 VoiceMode, LoopXfade, FilterKeyTrack, VelAmount, kNumParams };
+                 VoiceMode, LoopXfade, FilterKeyTrack, VelAmount,
+                 Gain, Glide, PitchTrack, EnvCutoff, EnvAmount, Output, kNumParams };
 
     Sampler() {
         pn_[Volume].store(1.0f);   pn_[Pan].store(0.5f);
@@ -40,6 +48,28 @@ public:
         pn_[FilterType].store(0.0f); pn_[Cutoff].store(1.0f); pn_[Resonance].store(0.0f);
         pn_[VoiceMode].store(0.0f);  pn_[LoopXfade].store(0.1f); pn_[FilterKeyTrack].store(0.0f);
         pn_[VelAmount].store(1.0f);
+        pn_[Gain].store(0.5f);       pn_[Glide].store(0.0f);      pn_[PitchTrack].store(1.0f);   // 0 dB · no glide · chromatic
+        pn_[EnvCutoff].store(0.0f);  pn_[EnvAmount].store(0.75f); pn_[Output].store(1.0f);       // env → cutoff off (+3 oct when on)
+    }
+
+    // ---- value maps (mirrored by SamplerModel.cs) -------------------------------------
+    static double gainDb(float v)       { return (std::clamp(v, 0.0f, 1.0f) - 0.5) * 48.0; }           // ±24 dB
+    static double glideSeconds(float v) { return v <= 0.001f ? 0.0 : 0.001 * std::pow(2000.0, std::clamp(v, 0.0f, 1.0f)); }  // 1 ms … 2 s
+    static double envOctaves(float v)   { return (std::clamp(v, 0.0f, 1.0f) - 0.5) * 12.0; }           // ±6 oct
+
+    // ---- telemetry --------------------------------------------------------------------
+    // [0] sounding voices · [1] play position 0..1 of the loudest voice (−1 silent) ·
+    // [2] its envelope level 0..1 · [3] its stage (0 A · 1 D · 2 S · 3 R, −1 none) ·
+    // [4] its note (fractional while gliding, −1 none) · [5] its cutoff in Hz after key
+    // tracking and the envelope (−1 filter off / silent) · [6] output peak since the last
+    // read, linear · [7] notes held (Mono stack depth).
+    static constexpr int kTele = 8;
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        if (!out || maxN <= 0) return 0;
+        const int n = std::min<int>(maxN, kTele);
+        for (int i = 0; i < n; ++i) out[i] = tele_[i].load(std::memory_order_relaxed);
+        if (n > 6) tele_[6].store(0.0f, std::memory_order_relaxed);   // peak-hold: a read clears it
+        return n;
     }
 
     int32_t kind() const override { return 1; }
@@ -49,11 +79,13 @@ public:
     std::shared_ptr<SampleBuffer> sample() const { return sample_; }
     int32_t rootNote() const { return rootNote_.load(std::memory_order_relaxed); }
     void    setRoot(int32_t r) { rootNote_.store(std::clamp(r, 0, 127), std::memory_order_relaxed); }
-    bool    loopEnabled() const { return pn_[LoopMode].load(std::memory_order_relaxed) > 0.5f; }
+    bool    loopEnabled() const { return loopModeOf() > 0; }
     void setSample(std::shared_ptr<SampleBuffer> s, int32_t rootNote, bool loop) {
         sample_ = std::move(s);
         rootNote_.store(std::clamp(rootNote, 0, 127), std::memory_order_relaxed);
-        pn_[LoopMode].store(loop ? 1.0f : 0.0f, std::memory_order_relaxed);   // Drum Rack loop flag → forward loop
+        // The loop flag only corrects a disagreeing mode: on → forward (0.5) unless already
+        // looping (ping-pong 1.0 stays), off → one-shot. A reload keeps the loop kind.
+        if (loop != loopEnabled()) pn_[LoopMode].store(loop ? 0.5f : 0.0f, std::memory_order_relaxed);
     }
 
     void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
@@ -70,13 +102,19 @@ public:
     std::string pluginParamId(int32_t i) const override {
         static const char* ids[] = { "volume", "pan", "transpose", "detune", "start", "end", "reverse", "loopmode",
                                      "loopstart", "loopend", "attack", "decay", "sustain", "release", "filtertype", "cutoff", "resonance",
-                                     "voicemode", "loopxfade", "keytrack", "velamount" };
+                                     "voicemode", "loopxfade", "keytrack", "velamount",
+                                     "gain", "glide", "pitchtrack", "envcutoff", "envamount", "output" };
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
-        static const char* nm[] = { "Volume", "Pan", "Transpose", "Detune", "Start", "End", "Reverse", "Loop",
-                                    "Loop Start", "Loop End", "Attack", "Decay", "Sustain", "Release", "Filter", "Cutoff", "Resonance",
-                                    "Voices", "Loop Xfade", "Key Track", "Vel→Vol" };
+        // Display names group by their head in the automation menu (Sample › Start,
+        // Filter › Cutoff …); the ids are what persists, so names may change.
+        static const char* nm[] = { "Out Volume", "Out Pan", "Pitch Transpose", "Pitch Detune", "Sample Start", "Sample End",
+                                    "Sample Reverse", "Loop Mode", "Loop Start", "Loop End",
+                                    "Env Attack", "Env Decay", "Env Sustain", "Env Release",
+                                    "Filter Type", "Filter Cutoff", "Filter Resonance",
+                                    "Voice Mode", "Loop Crossfade", "Filter Keytrack", "Voice Velocity",
+                                    "Sample Gain", "Voice Glide", "Pitch Keytrack", "Filter Env On", "Filter Env Amount", "Out Level" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override { return (i >= 0 && i < kNumParams) ? pn_[i].load(std::memory_order_relaxed) : 0.0f; }
@@ -97,24 +135,46 @@ public:
     void noteOn(int32_t pitch, float velocity) override {
         if (!sample_ || sample_->empty()) return;
         const int vm = voiceModeOf();
-        if (vm == 1) { for (auto& v : voices_) if (v.active && v.stage != Stage::Release) v.stage = Stage::Release; }  // Mono: release others
-        else if (vm == 2) { for (auto& v : voices_) v.active = false; }                                                // Choke: hard cut
+        const bool glide = pn_[Glide].load(std::memory_order_relaxed) > 0.001f;
+        const double from = lastNote_ >= 0 ? static_cast<double>(lastNote_) : static_cast<double>(pitch);
+        lastNote_ = pitch;
+        if (vm == 1) {
+            pushHeld(pitch);
+            if (glide) {   // legato: the sounding voice keeps its place and envelope and slides
+                for (auto& v : voices_)
+                    if (v.active && v.stage != Stage::Release) { v.pitch = pitch; v.velocity = velocity; return; }
+            }
+            for (auto& v : voices_) if (v.active && v.stage != Stage::Release) v.stage = Stage::Release;  // Mono: release others
+        } else if (vm == 2) {
+            for (auto& v : voices_) v.active = false;                                                     // Choke: hard cut
+        }
         Voice* v = findFreeVoice();
         const double startF = std::clamp(pn_[Start].load(std::memory_order_relaxed), 0.0f, 1.0f) * sample_->frames;
         const double endF   = std::clamp(pn_[End].load(std::memory_order_relaxed), 0.0f, 1.0f) * sample_->frames;
         const bool rev = pn_[Reverse].load(std::memory_order_relaxed) > 0.5f;
         v->active = true; v->stage = Stage::Attack; v->env = 0.0f;
         v->pitch = pitch; v->velocity = velocity; v->dir = rev ? -1 : 1;
+        v->note = glide ? from : static_cast<double>(pitch);
         v->pos = rev ? std::max(startF, endF - 1.0) : startF;
         v->ic1L = v->ic2L = v->ic1R = v->ic2R = 0.0;
     }
     void noteOff(int32_t pitch) override {
+        if (voiceModeOf() == 1) {
+            const bool top = heldN_ > 0 && held_[heldN_ - 1] == pitch;
+            popHeld(pitch);
+            // Legato glide back to the note still held underneath.
+            if (top && heldN_ > 0 && pn_[Glide].load(std::memory_order_relaxed) > 0.001f) {
+                const int32_t back = held_[heldN_ - 1];
+                for (auto& v : voices_)
+                    if (v.active && v.stage != Stage::Release && v.pitch == pitch) { v.pitch = back; lastNote_ = back; return; }
+            }
+        }
         for (auto& v : voices_) if (v.active && v.pitch == pitch && v.stage != Stage::Release) v.stage = Stage::Release;
     }
-    void allNotesOff() override { for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { for (auto& v : voices_) v.active = false; heldN_ = 0; }
 
     void render(float* out, int32_t frames) override {
-        if (!sample_ || sample_->empty()) return;
+        if (!sample_ || sample_->empty()) { publishIdle(); return; }
         const double N = static_cast<double>(sample_->frames);
         double startF = std::clamp(pn_[Start].load(std::memory_order_relaxed), 0.0f, 1.0f) * N;
         double endF   = std::clamp(pn_[End].load(std::memory_order_relaxed), 0.0f, 1.0f) * N;
@@ -132,8 +192,11 @@ public:
         const int32_t root = rootNote_.load(std::memory_order_relaxed);
         const double pitchOff = (pn_[Transpose].load(std::memory_order_relaxed) - 0.5) * 48.0
                               + (pn_[Detune].load(std::memory_order_relaxed) - 0.5) * 1.0;   // ±50 cents
+        const double pTrack = pn_[PitchTrack].load(std::memory_order_relaxed);
         const double srcRatio = sample_->sourceSampleRate / sampleRate_;
-        const float gain = pn_[Volume].load(std::memory_order_relaxed);
+        const float gain = pn_[Volume].load(std::memory_order_relaxed)
+                         * static_cast<float>(std::pow(10.0, gainDb(pn_[Gain].load(std::memory_order_relaxed)) / 20.0))
+                         * pn_[Output].load(std::memory_order_relaxed);
         const double pan = pn_[Pan].load(std::memory_order_relaxed) * 2.0 - 1.0;
         const float gl = static_cast<float>(std::cos((pan + 1.0) * kPi / 4.0));
         const float gr = static_cast<float>(std::sin((pan + 1.0) * kPi / 4.0));
@@ -144,23 +207,39 @@ public:
         const float sustain = pn_[Sustain].load(std::memory_order_relaxed);
         const float velAmt  = pn_[VelAmount].load(std::memory_order_relaxed);   // 1 = full velocity→volume, 0 = flat
 
-        // Filter (TPT SVF). Cutoff can key-track the note relative to the root.
+        // Glide: a one-pole slide of the voice's note toward its key (time ≈ to 63 %).
+        const double glideSec = glideSeconds(pn_[Glide].load(std::memory_order_relaxed));
+        const double glideK = glideSec > 0.0 ? 1.0 - std::exp(-static_cast<double>(kCtl) / (glideSec * sampleRate_)) : 1.0;
+
+        // Filter (TPT SVF). Cutoff can key-track the note relative to the root and follow
+        // the amp envelope; coefficients refresh every kCtl samples.
         const int fType = std::clamp(static_cast<int>(std::lround(pn_[FilterType].load(std::memory_order_relaxed) * 3.0f)), 0, 3);
         const double baseCut = expMap(pn_[Cutoff].load(std::memory_order_relaxed), 20.0, 20000.0);
         const double kTrack = pn_[FilterKeyTrack].load(std::memory_order_relaxed);
         const double k  = 2.0 - 1.9 * pn_[Resonance].load(std::memory_order_relaxed);
+        const bool envOn = pn_[EnvCutoff].load(std::memory_order_relaxed) > 0.5f;
+        const double envOct = envOn ? envOctaves(pn_[EnvAmount].load(std::memory_order_relaxed)) : 0.0;
 
         int nActive = 0;
+        float peak = 0.0f;
         for (auto& v : voices_) {
             if (!v.active) continue;
             ++nActive;
-            const double inc = std::pow(2.0, (v.pitch - root + pitchOff) / 12.0) * srcRatio;
-            // Per-voice filter coefficients (key-tracking shifts cutoff by note).
-            double fc = baseCut;
-            if (fType > 0 && kTrack > 0.0) fc = baseCut * std::pow(2.0, kTrack * (v.pitch - root) / 12.0);
-            const double g  = std::tan(kPi * std::clamp(fc, 20.0, sampleRate_ * 0.49) / sampleRate_);
-            const double a1 = 1.0 / (1.0 + g * (g + k)), a2 = g * a1, a3 = g * a2;
+            double inc = 0.0, a1 = 0.0, a2 = 0.0, a3 = 0.0;
             for (int32_t i = 0; i < frames; ++i) {
+                if ((i % kCtl) == 0) {   // control rate: glide, pitch, filter coefficients
+                    v.note += (v.pitch - v.note) * glideK;
+                    if (std::abs(v.pitch - v.note) < 1e-4) v.note = v.pitch;
+                    inc = std::pow(2.0, ((v.note - root) * pTrack + pitchOff) / 12.0) * srcRatio;
+                    if (fType > 0) {
+                        double fc = baseCut;
+                        if (kTrack > 0.0) fc *= std::pow(2.0, kTrack * (v.note - root) / 12.0);
+                        if (envOn) fc *= std::pow(2.0, envOct * v.env);
+                        v.cutoff = std::clamp(fc, 20.0, sampleRate_ * 0.49);
+                        const double g = std::tan(kPi * v.cutoff / sampleRate_);
+                        a1 = 1.0 / (1.0 + g * (g + k)); a2 = g * a1; a3 = g * a2;
+                    }
+                }
                 // envelope
                 switch (v.stage) {
                     case Stage::Attack:  v.env += atkRate; if (v.env >= 1.0f) { v.env = 1.0f; v.stage = Stage::Decay; } break;
@@ -198,11 +277,20 @@ public:
                 }
             }
         }
-        // Publish the loudest active voice's position + the voice count for the UI.
-        float bestEnv = -1.0f; double bestPos = 0.0; bool any = false;
-        for (auto& v : voices_) if (v.active && v.env > bestEnv) { bestEnv = v.env; bestPos = v.pos; any = true; }
-        playPos_.store(any ? static_cast<float>(bestPos / N) : -1.0f, std::memory_order_relaxed);
+        for (int32_t i = 0; i < frames * 2; ++i) peak = std::max(peak, std::abs(out[i]));
+        // Publish the loudest active voice + the voice count for the UI.
+        const Voice* best = nullptr;
+        for (auto& v : voices_) if (v.active && (!best || v.env > best->env)) best = &v;
+        playPos_.store(best ? static_cast<float>(best->pos / N) : -1.0f, std::memory_order_relaxed);
         activeVoices_.store(nActive, std::memory_order_relaxed);
+        tele_[0].store(static_cast<float>(nActive), std::memory_order_relaxed);
+        tele_[1].store(best ? static_cast<float>(best->pos / N) : -1.0f, std::memory_order_relaxed);
+        tele_[2].store(best ? best->env : 0.0f, std::memory_order_relaxed);
+        tele_[3].store(best ? static_cast<float>(static_cast<int>(best->stage)) : -1.0f, std::memory_order_relaxed);
+        tele_[4].store(best ? static_cast<float>(best->note) : -1.0f, std::memory_order_relaxed);
+        tele_[5].store(best && fType > 0 ? static_cast<float>(best->cutoff) : -1.0f, std::memory_order_relaxed);
+        if (peak > tele_[6].load(std::memory_order_relaxed)) tele_[6].store(peak, std::memory_order_relaxed);
+        tele_[7].store(static_cast<float>(heldN_), std::memory_order_relaxed);
     }
 
 private:
@@ -211,7 +299,7 @@ private:
     struct Voice {
         bool    active = false;
         int32_t pitch = 0, dir = 1;
-        double  pos = 0.0;
+        double  pos = 0.0, note = 0.0, cutoff = 20000.0;
         float   velocity = 0.0f, env = 0.0f;
         double  ic1L = 0, ic2L = 0, ic1R = 0, ic2R = 0;
         Stage   stage = Stage::Attack;
@@ -245,6 +333,30 @@ private:
         return static_cast<float>(v1);                                // band-pass
     }
 
+    void publishIdle() {
+        playPos_.store(-1.0f, std::memory_order_relaxed);
+        activeVoices_.store(0, std::memory_order_relaxed);
+        tele_[0].store(0.0f, std::memory_order_relaxed); tele_[1].store(-1.0f, std::memory_order_relaxed);
+        tele_[2].store(0.0f, std::memory_order_relaxed); tele_[3].store(-1.0f, std::memory_order_relaxed);
+        tele_[4].store(-1.0f, std::memory_order_relaxed); tele_[5].store(-1.0f, std::memory_order_relaxed);
+    }
+    // Mono note stack (most recent last) for legato glide back to a still-held key.
+    void pushHeld(int32_t p) {
+        popHeld(p);
+        if (heldN_ == kHeld) { std::memmove(held_, held_ + 1, sizeof(int32_t) * (kHeld - 1)); --heldN_; }
+        held_[heldN_++] = p;
+    }
+    void popHeld(int32_t p) {
+        for (int i = 0; i < heldN_; ++i)
+            if (held_[i] == p) { std::memmove(held_ + i, held_ + i + 1, sizeof(int32_t) * (heldN_ - i - 1)); --heldN_; return; }
+    }
+
+    static constexpr int kCtl = 16;    // control-rate block (glide, pitch, filter coefficients)
+    static constexpr int kHeld = 16;
+    int32_t held_[kHeld] = {};
+    int     heldN_ = 0;
+    int32_t lastNote_ = -1;
+    mutable std::atomic<float> tele_[kTele] = {};
     static constexpr int kVoices = 16;
     Voice  voices_[kVoices];
     std::shared_ptr<SampleBuffer> sample_;
