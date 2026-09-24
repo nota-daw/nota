@@ -181,12 +181,17 @@ td:first-child{{color:var(--text-primary)}}
 .states figure .btn{{align-self:flex-start}}
 .transport+.note{{margin-top:8px}}
 /* transport */
-.transport{{display:flex;align-items:center;gap:12px;height:42px;padding:0 10px;background:var(--surface-abyss);border:1px solid var(--border-default);border-radius:var(--r-panel);box-shadow:var(--sunken);overflow-x:auto}}
-.tp{{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-tile);background:var(--surface-raised);border:1px solid var(--border-default);box-shadow:var(--raised)}}
-.tp.play{{width:46px;background:var(--accent);border-color:var(--accent)}}
-.tp .stop{{width:10px;height:10px;border-radius:1px;background:var(--text-strong)}}
-.tp .play-tri{{width:0;height:0;border-left:11px solid var(--text-on-accent);border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:2px}}
-.tp .rec{{width:11px;height:11px;border-radius:50%;background:var(--record)}}
+.transport{{display:flex;align-items:center;gap:14px;height:60px;padding:0 14px;background:var(--bg-sunken);border:1px solid var(--border-default);border-radius:var(--r-panel);overflow-x:auto}}
+.transport .seg{{background:var(--surface-card);border:0;box-shadow:none;padding:3px}}
+.console{{flex:none;display:flex;align-items:center;gap:5px;height:42px;padding:0 14px 0 12px;background:var(--surface-abyss);border:1px solid var(--border-default);border-radius:var(--r-panel);box-shadow:var(--sunken)}}
+.console .vr{{margin:0 7px}}
+.tp{{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-tile);background:var(--surface-raised);border:1px solid var(--border-strong);box-shadow:var(--raised)}}
+.tp.play{{width:40px}}
+.tp.play.on{{background:var(--accent);border-color:var(--accent);box-shadow:none}}
+.tp .stop{{width:9px;height:9px;border-radius:1px;background:var(--text-strong)}}
+.tp .play-tri{{width:0;height:0;border-left:10px solid var(--text-strong);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:2px}}
+.tp.play.on .play-tri{{border-left-color:var(--text-on-accent)}}
+.tp .rec{{width:10px;height:10px;border-radius:50%;background:var(--record)}}
 .tp.rec-on{{background:var(--record);border-color:var(--record)}} .tp.rec-on .rec{{background:var(--record-ink)}}
 .readout{{flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}}
 .readout b{{font:500 13px/1 var(--font-mono);color:var(--accent-bright)}}
@@ -320,7 +325,7 @@ ul.plain{{margin:0;padding-left:18px;color:var(--text-secondary)}} ul.plain li{{
   <div class="tbl"><table>
     <tr><th>Element</th><th>px</th><th>Token</th></tr>
     <tr><td>Device card</td><td class="mono">700 × 260</td><td><code>DeviceCardKit.CardH</code></td></tr>
-    <tr><td>Transport strip · buttons · Play</td><td class="mono">42 · 34 · 46</td><td><code>Control.Console / Transport / Play</code></td></tr>
+    <tr><td>Transport island · console · buttons · Play</td><td class="mono">60 · 42 · 28 · 40</td><td><code>Control.TransportBar / Console / Transport / Play</code></td></tr>
     <tr><td>Shell button, field</td><td class="mono">26</td><td><code>Control.Shell</code></td></tr>
     <tr><td>Tab segment in its container</td><td class="mono">24 in 30</td><td><code>Control.Seg / SegGroup</code></td></tr>
     <tr><td>Filter chip</td><td class="mono">20</td><td><code>Control.Chip</code></td></tr>
@@ -375,13 +380,14 @@ ul.plain{{margin:0;padding-left:18px;color:var(--text-secondary)}} ul.plain li{{
   <h3>Transport · shapes, not an icon font</h3>
   <div class="transport">
     <div class="seg"><button aria-pressed="true">Arrangement</button><button aria-pressed="false">Session</button><button aria-pressed="false">Modular</button></div>
-    <span class="tp"><i class="stop"></i></span><span class="tp play"><i class="play-tri"></i></span><span class="tp"><i class="rec"></i></span><span class="tp rec-on"><i class="rec"></i></span>
-    <span class="vr"></span>
-    <span class="readout"><b>12.3.04</b><span>BARS</span></span>
-    <span class="vr"></span>
+    <span class="console">
+      <span class="tp"><i class="stop"></i></span><span class="tp play"><i class="play-tri"></i></span><span class="tp play on"><i class="play-tri"></i></span><span class="tp"><i class="rec"></i></span><span class="tp rec-on"><i class="rec"></i></span>
+      <span class="vr"></span>
+      <span class="readout"><b class="n">12.3.04</b><span>BARS</span></span>
+    </span>
     <span class="readout"><b class="n">120.00</b><span>BPM</span></span><span class="readout"><b class="n">4/4</b><span>SIG</span></span><span class="readout"><b class="n">1/4</b><span>GRID</span></span>
   </div>
-  <p class="note">Play is 46 wide against 34 — found by hand, not by eye. Record at rest is neutral with a red disc; engaged it is solid Record with a pale disc.</p>
+  <p class="note">The bar is an island on the gutter (60, Well); stop, play, record, position and loop share one 42 recess on Void inside it. Play is 40 wide against 28 and turns solid brass only while the transport runs. Record at rest is neutral with a red disc; engaged it is solid Record with a pale disc.</p>
 </section>
 
 <section id="states">

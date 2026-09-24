@@ -34,9 +34,10 @@
       <sys:Double x:Key="Control.Seg">24</sys:Double>         <!-- tab segment -->
       <sys:Double x:Key="Control.Shell">26</sys:Double>       <!-- shell button, field, dropdown -->
       <sys:Double x:Key="Control.SegGroup">30</sys:Double>    <!-- segment container: 24 + 2 pad + 1 border -->
-      <sys:Double x:Key="Control.Transport">34</sys:Double>   <!-- transport button -->
-      <sys:Double x:Key="Control.Play">46</sys:Double>        <!-- Play is wider on purpose: found by hand -->
-      <sys:Double x:Key="Control.Console">42</sys:Double>     <!-- transport module -->
+      <sys:Double x:Key="Control.Transport">28</sys:Double>   <!-- transport button -->
+      <sys:Double x:Key="Control.Play">40</sys:Double>        <!-- Play is the one wide transport button -->
+      <sys:Double x:Key="Control.Console">42</sys:Double>     <!-- transport module: the recess inside the bar -->
+      <sys:Double x:Key="Control.TransportBar">60</sys:Double> <!-- the transport island -->
       <sys:Double x:Key="Control.KnobSecondary">34</sys:Double>
       <sys:Double x:Key="Control.KnobRegular">36</sys:Double>
       <sys:Double x:Key="Control.KnobMain">44</sys:Double>
@@ -335,7 +336,7 @@
   </Style>
   <Style Selector="Button:pressed /template/ Border#PART_Lift, Button:disabled /template/ Border#PART_Lift,
                    Button.primary /template/ Border#PART_Lift, Button.ghost /template/ Border#PART_Lift,
-                   Button.tp-play /template/ Border#PART_Lift, Button.cell /template/ Border#PART_Lift">
+                   Button.tp-play.playing /template/ Border#PART_Lift, Button.cell /template/ Border#PART_Lift">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
   <!-- Disabled: the ground drops to the panel colour and the text to Ink 6 — never opacity. -->
@@ -468,20 +469,35 @@
   <Style Selector="ToggleButton.tp-icon.rec:checked">
     <Setter Property="Foreground" Value="{DynamicResource Brush.RecordInk}"/>
   </Style>
+  <!-- Play: a raised button like its neighbours at rest; while the transport runs it is
+       the one solid brass control on the bar (brass means active). -->
   <Style Selector="Button.tp-play">
     <Setter Property="Width" Value="{StaticResource Control.Play}"/>
     <Setter Property="Height" Value="{StaticResource Control.Transport}"/>
     <Setter Property="Padding" Value="0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="Button.tp-play.playing">
     <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
-    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
   </Style>
-  <!-- Play button turns green in the Session context -->
-  <Style Selector="Button.tp-play.session">
-    <Setter Property="Background" Value="{DynamicResource Brush.Success}"/>
+  <Style Selector="Button.tp-play.playing:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
   </Style>
-  <Style Selector="Button.tp-play.session:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <!-- Play turns green in the Session context -->
+  <Style Selector="Button.tp-play.playing.session">
     <Setter Property="Background" Value="{DynamicResource Brush.Success}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}"/>
+  </Style>
+  <Style Selector="Button.tp-play.playing.session:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Success}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}"/>
   </Style>
 
   <!-- Bordered pill chips (Metro / Snap / add-track etc.), 28px -->
@@ -548,17 +564,25 @@
   <!-- Transport console (mockup 1b): a recess cut into the chrome holding the
        transport buttons, the position readout and the loop range, so playback reads
        as one object instead of three neighbours. -->
-  <!-- The transport strip: one 42px recess on Void across the bottom of the window. -->
+  <!-- The transport bar: an island like the browser and the arrangement — a 60px rounded
+       strip on Well floating on the gutter, with the console cut into it. -->
   <Style Selector="Border.transport">
+    <Setter Property="Height" Value="{StaticResource Control.TransportBar}"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.BgSunken}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Panel}"/>
+  </Style>
+  <!-- Transport · position · loop: one 42px recess on Void inside the bar. -->
+  <Style Selector="Border.console">
+    <Setter Property="Height" Value="{StaticResource Control.Console}"/>
+    <Setter Property="Padding" Value="12,0,14,0"/>
     <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAbyss}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
-    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Panel}"/>
     <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Sunken}"/>
-  </Style>
-  <!-- Transport · position · loop: grouped inside the strip; the strip is the recess. -->
-  <Style Selector="Border.console">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="Padding" Value="0,0,4,0"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
 
@@ -596,6 +620,21 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
     <Setter Property="Padding" Value="2"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- On the bar, the view switch and the master well sit one step up, on Card: the bar
+       itself is already Well, so a Well-coloured group would vanish into it. -->
+  <Style Selector="Border.transport Border.segmented">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceCard}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="BoxShadow" Value="none"/>
+    <Setter Property="Padding" Value="3"/>
+  </Style>
+  <Style Selector="Border.transport Border.tp-well">
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceCard}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <Style Selector="ToggleButton.seg">

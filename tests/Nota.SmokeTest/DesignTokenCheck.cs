@@ -394,8 +394,10 @@ internal static class DesignTokenCheck
         yield return (off.Length == 0, off.Length == 0 ? "device cards are 700 wide (documented exceptions aside)" : $"cards off the 700 format: {string.Join(", ", off)}");
 
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
-        yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.Console\\}\""),
-            "transport is a 42px strip at the top of the window");
+        yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
+            "transport is a 60px island at the top of the window");
+        yield return (Regex.IsMatch(main, "<Border Grid.Column=\"1\" Classes=\"console\">"),
+            "transport console is the 42px recess inside it");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
         yield return (Regex.IsMatch(browser, @"const double RowH = 2[6-8];"), "browser list rows are 26–28px");

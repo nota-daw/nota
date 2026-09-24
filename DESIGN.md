@@ -93,7 +93,7 @@ reflection and pinned by hand where the reflection read poorly.
 
 | Key | Almanac | Graphite | Paper | Use |
 |---|---|---|---|---|
-| `Brush.SurfaceAbyss` | Void | `#0A0908` | `#D8D1BE` | Deepest recess — the transport strip |
+| `Brush.SurfaceAbyss` | Void | `#0A0908` | `#D8D1BE` | Deepest recess — the transport console |
 | `Brush.BgApp` | App | `#0B0A09` | `#DCD6C5` | Window ground, plugin body |
 | `Brush.Gutter` | Gutter | `#0C0B09` | `#E0DAC9` | The gaps panels float in |
 | `Brush.BgSunken` | Well | `#100F0D` | `#E4DFD1` | Graph windows, fields, slider tracks (`ChromeBg`, `SurfaceActive` alias it) |
@@ -194,7 +194,7 @@ now points at the new hue.
 | Size (`Control.*` / `NotaSize`) | px |
 |---|---|
 | Device card | 700 × 260 |
-| Transport strip (`Console`) | 42 · buttons 34 · Play 46 |
+| Transport island (`TransportBar`) · console (`Console`) | 60 · 42 · buttons 28 · Play 40 |
 | Shell button / field (`Shell`) | 26 |
 | Tab segment (`Seg`) in container (`SegGroup`) | 24 in 30 |
 | Filter chip (`Chip`) | 20 |
@@ -376,7 +376,7 @@ redesign) and the host-plugin / parameter-list stubs (230, 190). Rhythm moved on
 
 ```
 ┌ header 36 ─ project name, centred ─────────────────────────────────────┐
-│ transport 42 ─ view switch · console · tempo · signature · grid · …  CPU│
+│ transport 60 ─ view switch · console · tempo · signature · grid · …  CPU│
 ├─────────────┬──────────────────────────────────────────────────────────┤
 │ browser     │ canvas (arrangement · session · modular)                 │
 ├─────────────┴──────────────────────────────────────────────────────────┤
@@ -385,12 +385,16 @@ redesign) and the host-plugin / parameter-list stubs (230, 190). Rhythm moved on
 
 - **Header 36** — frameless; macOS traffic lights in a left inset, the project name
   (`Heading`) centred; Windows reserves 180 px for the caption buttons.
-- **Transport 42, under the header** (`Border.transport` on Void, hairline below). It reads
-  left to right: view switch (Arrangement · Session · Modular) · the console (stop / play /
-  record, position, loop) · tempo `120.00`, signature, grid · the switches (metronome,
-  follow, snap, automation) · `+ Track` — then, pinned right, MIDI, CPU and master. Launch
-  quantize appears only in Session. Transport buttons are not focusable, so Space / R / L /
-  Return always reach the window.
+- **Transport 60, under the header** — an island like the browser and the canvas
+  (`Border.transport`: Well, hairline, radius 6, 12 px from the window edges). Stop / play /
+  record, position and loop share the console, one 42 recess on Void inside it
+  (`Border.console`); the view switch and the master well sit on Card. It reads left to
+  right: view switch (Arrangement · Session · Modular) · the console · tempo `120.00`,
+  signature, grid · the switches (metronome, follow, snap, automation) — then, pinned right,
+  MIDI, CPU and master. Buttons are 28, Play 40; Play is raised at rest and solid brass only
+  while the transport runs. There is no add-track button — tracks come from the browser.
+  Launch quantize appears only in Session. Transport buttons are not focusable, so
+  Space / R / L / Return always reach the window.
 - **Body** — the browser on the left and the canvas float as panels on `Gutter` with 12 px
   gaps; the canvas is always sunken relative to panels. The splitter is a transparent grab
   strip inside the gap.
@@ -410,7 +414,7 @@ redesign) and the host-plugin / parameter-list stubs (230, 190). Rhythm moved on
 | `RunType` | Fonts bundled and matched; no font names in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; Knob / Switch / Slider sizes |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter ballistics; meter 11/5; playhead without glow |
-| `RunLayout` | Header 22; cards 700 except the listed exceptions; transport 42 at the top; rows 26–28 |
+| `RunLayout` | Header 22; cards 700 except the listed exceptions; transport 60 island at the top with its 42 console; rows 26–28 |
 | `RunNumbers` | Display culture installed; no hyphen minus; no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |
 
