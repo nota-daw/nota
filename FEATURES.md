@@ -489,6 +489,13 @@ and user presets, automation, persistence and cloning.
   comb-response graph of L and R (drag the notch for Delay, up / down for Feedback), the delay
   of both channels over two cycles, the first notch's sweep and null depth, and a status
   strip; 31 factory presets; MCP `read_flanger` / `set_flanger`.
+- **Nota Phaser** (24) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
+  delay-free feedback: Center 50 Hz – 5 kHz, Depth ±3 oct, bipolar Feedback ±95 % (negative flips
+  the wet polarity: the notches move and widen), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or
+  synced (4/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A
+  live all-pass response of L and R with the notches ticked (drag for Center, up / down for
+  Feedback), the corner of both channels over two cycles, the sweep and null depth, and a status
+  strip; 35 factory presets; MCP `read_phaser` / `set_phaser`.
 - **Nota Chorus** — modulation (chorus) effect.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.

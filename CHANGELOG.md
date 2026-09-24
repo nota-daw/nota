@@ -19,6 +19,31 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Phaser.** A new built-in audio effect (kind 24): a chain of all-pass stages whose
+  corner an LFO sweeps, cutting moving notches into the spectrum — from a gentle 4-stage swirl to a
+  deep, whistling 12-stage sweep. The card follows the new mockup on the 700 × 260 frame:
+  - **LFO.** Sine, Tri or Saw; a free rate from 0.02 to 8 Hz or a synced note value from 4/1 to
+    1/16 with dotted and triplet values, locked to the bar while the transport plays. The rate
+    reads large with its period, and **Stereo** offsets the right channel's sweep by up to 180°.
+  - **All-pass response.** The live frequency response of both channels, left in brass and right
+    in teal, with the corner dashed and every notch ticked on the top edge. Drag the graph left or
+    right to move Center, up or down for Feedback; double-click resets both. Under it, the corner
+    frequency of both channels over two LFO cycles with a running head.
+  - **Stages.** 2, 4, 6, 8 or 12 stages (half as many notches), Center (50 Hz – 5 kHz), Depth up
+    to ±3 octaves, a bipolar Feedback (±95 %) and Mix, plus the range the corner sweeps with the
+    first notch and how deep the notches cut. The loop is solved without a unit delay, so the
+    sound matches the drawn curve; negative feedback flips the wet polarity, moving and widening
+    the notches (one fewer). Changing the stage count fades instead of clicking. The header names
+    the mode: positive, negative, resonant or clean.
+  - A status line says what you'll hear — stages, notches and the corner's sweep in Hz and
+    octaves, or a warning when the phaser whistles or Mix is at zero.
+  All ten controls are device parameters, so automation, MIDI learn, A/B compare and project save
+  work as everywhere else. **35 factory presets**, from Script 45 and Small Stone to Deep Space,
+  Hollow Step, Whistler and Rotary Fast.
+- **MCP: `read_phaser` and `set_phaser`.** Read what a Nota Phaser is doing (the settings in units,
+  the live corner per channel, the notches and their sweep, the null depth and the peaks) and set
+  it in units — stages, waveform, rate or division, stereo degrees, center in Hz, depth in
+  octaves, feedback and mix in percent.
 - **Nota Flanger.** A new built-in audio effect (kind 23): a comb filter on a short delay
   that an LFO sweeps up and down — the classic jet whoosh, a hollow tube tone, or a metallic
   ring. The card follows the new mockup on the 700 × 260 frame:

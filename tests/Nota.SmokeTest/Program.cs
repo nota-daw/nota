@@ -9038,6 +9038,234 @@ Console.WriteLine("-- Nota Flanger (effect kind 23) --");
     }
 }
 
+// ===================== Nota Phaser (effect kind 24) =====================
+Console.WriteLine("-- Nota Phaser (effect kind 24) --");
+{
+    // Params (Phaser.h): 0 Rate, 1 Center, 2 Depth, 3 Feedback, 4 Mix, 5 Waveform, 6 Sync, 7 Division, 8 Stereo, 9 Stages.
+    // Scope: 0 in, 1 out L, 2 out R (dBFS) · 3 / 4 fc L / R Hz · 5 window phase · 6 rate Hz · 7 BPM · 8 playing ·
+    // 9 locked · 10 sample rate · 11 center Hz · 12 / 13 fc min / max · 14 notch Hz · 15 / 16 notch sweep ·
+    // 17 null dB · 18 peak dB · 19 division beats · 20 bar beats · 21 CPU · 22 signal · 23 cycles · 24 stages · 25 notches.
+    using var pe = new NotaEngine();
+    int pt = pe.AddAudioTrack();
+    pe.AddAudioClip(pt, wav, 0.0);                      // 1 s sine @ 440 Hz
+    int pdi = pe.AddBuiltinDevice(pt, 24);
+    Check(pdi >= 0, "add Nota Phaser device");
+    Check(pe.DeviceName(pt, pdi) == "Nota Phaser", $"device is Nota Phaser (got '{pe.DeviceName(pt, pdi)}')");
+    Check(pe.TrackDeviceBuiltinKind(pt, pdi) == 24, "device reports builtin kind 24");
+    int ppc = pe.DeviceParamCount(pt, pdi);
+    Check(ppc == 10, $"Nota Phaser exposes 10 params ({ppc})");
+    var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pdi, i)).ToArray();
+    Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages", $"param layout ({string.Join(",", pnames)})");
+    Check(Math.Abs(pe.DeviceParamDefault(pt, pdi, 1) - 0.602f) < 1e-3f && Math.Abs(pe.DeviceParamDefault(pt, pdi, 3) - (0.5f + 0.4f / 1.9f)) < 1e-3f
+          && Math.Abs(pe.DeviceParamDefault(pt, pdi, 9) - 0.25f) < 1e-3f, "defaults: 800 Hz, feedback +40 %, 4 stages (Script 45)");
+    pe.DeviceSetParam(pt, pdi, 2, 0.42f);
+    Check(Math.Abs(pe.DeviceGetParam(pt, pdi, 2) - 0.42f) < 1e-4f, "device param set/get round-trips");
+
+    var pbuf = new float[4096 * 2];
+    var psc = new float[32];
+    bool PFinite() { foreach (var v in pbuf) if (!float.IsFinite(v) || Math.Abs(v) > 8f) return false; return true; }
+    void PRender(int frames = 4096, double at = 0.2) { pe.Seek(at); pe.Play(); pe.RenderOffline(pbuf, frames); pe.StopTransport(); }
+    int PScope() => pe.DeviceScope(pt, pdi, psc, psc.Length);
+    float PTail() { double sum = 0; for (int i = 2048 * 2; i < 4096 * 2; i++) sum += pbuf[i] * (double)pbuf[i]; return (float)Math.Sqrt(sum / (2048 * 2)); }
+    pe.SetBpm(120);
+
+    // Every waveform and stage count renders audible + finite, incl. extreme feedback both ways.
+    for (int wv = 0; wv < 3; wv++)
+        foreach (float fbn in new[] { 0f, 0.5f, 1f })
+        {
+            pe.DeviceSetParam(pt, pdi, 5, wv / 2f);
+            pe.DeviceSetParam(pt, pdi, 3, fbn);
+            PRender();
+            Check(Rms(pbuf, 4096) > 1e-3f && PFinite(), $"Phaser wave {wv} feedback {(fbn - 0.5f) * 190:+0;-0} % is audible + stable");
+        }
+    for (int st = 0; st < 5; st++)
+    {
+        pe.DeviceSetParam(pt, pdi, 9, st / 4f);
+        PRender(); PScope();
+        int n = new[] { 2, 4, 6, 8, 12 }[st];
+        Check(Rms(pbuf, 4096) > 1e-3f && PFinite() && (int)psc[24] == n, $"{n} stages render audible + stable (scope {psc[24]:0})");
+    }
+
+    // The notches are real: 4 static stages, no feedback, dry = wet. With fc = 440 Hz the chain's lag at 440 Hz is
+    // 2π (a peak); with the corner where tan(π·440/sr) = tan(πfc/sr)·tan(π/8) the lag is π — the first notch.
+    double psr = 48000;
+    PScope(); if (psc[10] > 0) psr = psc[10];
+    float CenterNorm(double hz) => (float)(Math.Log(hz / 50) / Math.Log(100));
+    double notchFc = psr / Math.PI * Math.Atan(Math.Tan(Math.PI * 440 / psr) / Math.Tan(Math.PI / 8));
+    pe.DeviceSetParam(pt, pdi, 9, 0.25f);                               // 4 stages
+    pe.DeviceSetParam(pt, pdi, 2, 0f);                                  // Depth 0 → static
+    pe.DeviceSetParam(pt, pdi, 3, 0.5f);                                // no feedback
+    pe.DeviceSetParam(pt, pdi, 4, 0.5f);                                // dry = wet
+    pe.DeviceSetParam(pt, pdi, 1, CenterNorm(notchFc));
+    PRender(); PRender();
+    float pNotch = PTail();
+    PScope();
+    Check(Math.Abs(psc[14] - 440f) < 3f && (int)psc[25] == 2, $"scope: first notch {psc[14]:0} Hz at fc {psc[3]:0} Hz, {psc[25]:0} notches");
+    Check(psc[17] < -30f, $"dry = wet without feedback nulls deep ({psc[17]:0.0} dB)");
+    pe.DeviceSetParam(pt, pdi, 1, CenterNorm(440));
+    PRender(); PRender();
+    float pPass = PTail();
+    Check(pNotch < pPass * 0.1f, $"440 Hz falls into the first notch ({20 * Math.Log10(pNotch / Math.Max(1e-9f, pPass)):0.0} dB vs the peak)");
+    // Negative feedback flips the wet polarity: the 2π lag becomes a notch, π a peak.
+    pe.DeviceSetParam(pt, pdi, 3, 0.5f - 0.6f / 1.9f);                  // −60 %
+    PRender(); PRender();
+    float negNotch = PTail();
+    pe.DeviceSetParam(pt, pdi, 1, CenterNorm(notchFc));
+    PRender(); PRender();
+    float negPeak = PTail();
+    Check(negNotch < negPeak * 0.2f, $"negative feedback moves the notch ({20 * Math.Log10(negNotch / Math.Max(1e-9f, negPeak)):0.0} dB)");
+    PScope();
+    Check((int)psc[25] == 1 && psc[17] < -12f, $"scope: negative feedback cuts one notch fewer ({psc[25]:0}, {psc[17]:0.0} dB)");
+    pe.DeviceSetParam(pt, pdi, 3, 0.5f + 0.9f / 1.9f);                  // +90 %
+    PScope();
+    Check(psc[18] > 10f, $"feedback +90 % raises the peaks ({psc[18]:+0.0} dB)");
+    pe.DeviceSetParam(pt, pdi, 3, 0.5f);
+
+    // Mix 0 is dry.
+    pe.DeviceSetParam(pt, pdi, 4, 0f);
+    PRender(); PRender();
+    float pdry = PTail();
+    pe.SetDeviceBypassed(pt, pdi, true); PRender(); float pbyp = PTail(); pe.SetDeviceBypassed(pt, pdi, false);
+    Check(Math.Abs(pdry - pbyp) < pbyp * 0.01f, $"Mix 0 passes the dry signal ({pdry:0.0000} vs bypass {pbyp:0.0000})");
+    pe.DeviceSetParam(pt, pdi, 4, 0.5f);
+
+    // Depth + Stereo: the LFO sweeps fc ±3 oct, and the right channel runs offset from the left.
+    pe.DeviceSetParam(pt, pdi, 1, 0.602f);
+    pe.DeviceSetParam(pt, pdi, 2, 1f);
+    pe.DeviceSetParam(pt, pdi, 0, 1f);                                  // 8 Hz
+    pe.DeviceSetParam(pt, pdi, 8, 1f);                                  // 180°
+    pe.DeviceSetParam(pt, pdi, 5, 0f);                                  // Sine: half a cycle later is the mirror
+    PRender(3001); PRender(3001);
+    PScope();
+    Check(Math.Abs(psc[12] - psc[11] / 8f) < 1f && Math.Abs(psc[13] - psc[11] * 8f) < 5f,
+          $"sweep range = Center · 2^(±3 · Depth) ({psc[12]:0} … {psc[13]:0} Hz)");
+    double lc = Math.Log2(psc[11]);
+    Check(Math.Abs((Math.Log2(psc[3]) - lc) + (Math.Log2(psc[4]) - lc)) < 0.05 && Math.Abs(psc[3] - psc[4]) > 10f,
+          $"Stereo 180°: the channels swing opposite (fcL {psc[3]:0}, fcR {psc[4]:0} Hz)");
+    pe.DeviceSetParam(pt, pdi, 8, 0f);
+    PRender(3001);
+    PScope();
+    Check(Math.Abs(psc[3] - psc[4]) < 1e-2f, $"Stereo 0°: both channels sweep together ({psc[3]:0.0} / {psc[4]:0.0})");
+
+    // Sync: the rate follows the tempo and the LFO locks to the song position.
+    pe.DeviceSetParam(pt, pdi, 6, 1f);
+    pe.DeviceSetParam(pt, pdi, 7, 5f / 8f);                             // 1/4 → 2 Hz at 120 BPM
+    PRender(); PScope();
+    Check(Math.Abs(psc[6] - 2f) < 1e-3f && psc[9] > 0.5f, $"Sync 1/4 at 120 BPM runs at 2 Hz, locked ({psc[6]:0.000})");
+    Check(pe.DeviceText(pt, pdi, 0).Contains("sync 1/4"), $"status names the division ('{pe.DeviceText(pt, pdi, 0)}')");
+    pe.DeviceSetParam(pt, pdi, 7, 0f);                                  // 4/1 → 0.125 Hz
+    PRender(); PScope();
+    Check(Math.Abs(psc[6] - 0.125f) < 1e-4f, $"Sync 4/1 at 120 BPM runs at 0.125 Hz ({psc[6]:0.0000})");
+    pe.SetBpm(90);
+    pe.DeviceSetParam(pt, pdi, 7, 5f / 8f);
+    PRender(); PScope();
+    Check(Math.Abs(psc[6] - 1.5f) < 1e-3f, $"the synced rate follows a tempo change (90 BPM → {psc[6]:0.000} Hz)");
+    pe.SetBpm(120);
+    pe.DeviceSetParam(pt, pdi, 6, 0f);
+
+    // A stage change mid-signal fades instead of clicking: no sample-to-sample jump beyond the sine's own slope.
+    pe.DeviceSetParam(pt, pdi, 2, 0f);
+    pe.DeviceSetParam(pt, pdi, 9, 0f);
+    PRender();
+    pe.Seek(0.3); pe.Play(); pe.RenderOffline(pbuf, 512);
+    pe.DeviceSetParam(pt, pdi, 9, 1f);
+    pe.RenderOffline(pbuf, 4096); pe.StopTransport();
+    float jump = 0f; for (int i = 2; i < 4096 * 2; i += 2) jump = Math.Max(jump, Math.Abs(pbuf[i] - pbuf[i - 2]));
+    Check(jump < 0.12f && PFinite(), $"switching 2 → 12 stages doesn't click (max step {jump:0.000})");
+
+    // Actions: restart the LFO, clear a whistling loop.
+    pe.DeviceSetParam(pt, pdi, 0, 1f);
+    PRender(); PScope();
+    Check(psc[23] >= 1f, $"free run: cycles run ({psc[23]:0})");
+    pe.DeviceAction(pt, pdi, 0, 0, 0f);
+    PRender(32); PScope();
+    Check(psc[23] < 1f && psc[5] < 0.05f, $"device_action 0 restarts the LFO (cycle {psc[23]:0}, phase {psc[5]:0.000})");
+    pe.DeviceSetParam(pt, pdi, 1, 0f);                                  // 50 Hz: the loop rings longest
+    pe.DeviceSetParam(pt, pdi, 3, 1f);                                  // +95 %
+    pe.DeviceSetParam(pt, pdi, 4, 1f);                                  // wet only
+    pe.DeviceSetParam(pt, pdi, 9, 1f);                                  // 12 stages
+    PRender(4096, 0.9);
+    PRender(256, 3.0); float pring = Rms(pbuf, 256);
+    PRender(4096, 0.9);
+    pe.DeviceAction(pt, pdi, 1, 0, 0f);
+    PRender(256, 3.0); float pcleared = Rms(pbuf, 256);
+    Check(pring > 1e-5f && pcleared < 1e-7f, $"device_action 1 clears the ringing stages (ring {pring:0.0e0} → {pcleared:0.0e0})");
+    for (int i = 0; i < ppc; i++) pe.DeviceSetParam(pt, pdi, i, pe.DeviceParamDefault(pt, pdi, i));
+
+    Check(pe.DeviceText(pt, pdi, 1).Contains("notch") && pe.DeviceText(pt, pdi, 2).Contains("1/4T") && pe.DeviceText(pt, pdi, 2).Contains("= 12"),
+          "device text 1 = live reading, 2 = parameter guide with the division and stage tables");
+
+    // Clone.
+    pe.DeviceSetParam(pt, pdi, 3, 0.2f);
+    pe.DeviceSetParam(pt, pdi, 9, 0.75f);
+    int pdup = pe.DuplicateTrack(pt);
+    Check(pdup > 0 && pe.TrackDeviceBuiltinKind(pdup, pdi) == 24 && Math.Abs(pe.DeviceGetParam(pdup, pdi, 3) - 0.2f) < 1e-4f
+          && Math.Abs(pe.DeviceGetParam(pdup, pdi, 9) - 0.75f) < 1e-4f, "duplicate track clones the Phaser params");
+    pe.RemoveTrack(pdup);
+
+    // Automation drives Center and Stages.
+    int plane = pe.AddAutomationLane(pt, AutomationTarget.DeviceParam, pdi, 1);
+    Check(plane >= 0, "add Phaser Center automation lane");
+    pe.SetAutomationPoints(pt, plane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    int plane2 = pe.AddAutomationLane(pt, AutomationTarget.DeviceParam, pdi, 9);
+    pe.SetAutomationPoints(pt, plane2, new[] { new AutomationPoint(0.0, 0f), new AutomationPoint(2.0, 1f) });
+    pe.Seek(1.99); pe.Play(); pe.RenderOffline(pbuf, 4096); pe.StopTransport();
+    PScope();
+    Check(pe.DeviceGetParam(pt, pdi, 1) > 0.8f && (int)psc[24] == 12, $"automation drives Phaser Center ({pe.DeviceGetParam(pt, pdi, 1):F2}) and Stages ({psc[24]:0})");
+    pe.RemoveAutomationLane(pt, plane2);
+    pe.RemoveAutomationLane(pt, plane);
+    for (int i = 0; i < ppc; i++) pe.DeviceSetParam(pt, pdi, i, pe.DeviceParamDefault(pt, pdi, i));
+
+    // MCP: listed, read and set in units.
+    {
+        var ptools = new Nota.Mcp.Tools.DeviceTools(pe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Check(ptools.ListDeviceKinds().Any(k => k.Kind == 24 && k.Name == "Nota Phaser"), "MCP lists Nota Phaser (kind 24)");
+        PRender();
+        var r0 = ptools.ReadPhaser(pt, pdi).Result;
+        Check(r0.Waveform == "Sine" && !r0.Sync && r0.Stages == 4 && r0.Notches == 2 && Math.Abs(r0.CenterHz - 800) < 2
+              && Math.Abs(r0.FeedbackPercent - 40) < 0.6 && r0.Mode == "positive" && Math.Abs(r0.StereoDeg - 90) < 0.6
+              && Math.Abs(r0.RateHz - 0.4) < 0.01 && r0.Summary.Length > 0 && r0.Live.Length > 0,
+              $"MCP read_phaser reports the defaults ({r0.Stages} st, {r0.CenterHz} Hz, {r0.FeedbackPercent} %, {r0.Mode})");
+        var r1 = ptools.SetPhaser(pt, pdi, stages: 12, waveform: "tri", division: "1/4T", centerHz: 1500, depthOctaves: 1.5,
+            feedbackPercent: -60, mixPercent: 60, stereoDeg: 180).Result;
+        Check(r1.Stages == 12 && r1.Notches == 5 && r1.Waveform == "Triangle" && r1.Sync && r1.Division == "1/4T"
+              && Math.Abs(r1.CenterHz - 1500) < 2 && Math.Abs(r1.DepthOctaves - 1.5) < 0.01 && Math.Abs(r1.FeedbackPercent + 60) < 0.6
+              && r1.Mode == "negative" && Math.Abs(r1.MixPercent - 60) < 0.1 && r1.StereoDeg == 180,
+              $"MCP set_phaser writes in units ({r1.Stages} st, {r1.Division}, {r1.CenterHz} Hz, {r1.FeedbackPercent} %)");
+        var r2 = ptools.SetPhaser(pt, pdi, rateHz: 0.5).Result;
+        Check(!r2.Sync && Math.Abs(0.02 * Math.Pow(400, pe.DeviceGetParam(pt, pdi, 0)) - 0.5) < 1e-3, "set_phaser rateHz switches to free run");
+        bool threw = false, threw2 = false;
+        try { ptools.SetPhaser(pt, pdi, division: "1/5").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+        try { ptools.SetPhaser(pt, pdi, stages: 5).GetAwaiter().GetResult(); } catch (ArgumentException) { threw2 = true; }
+        Check(threw && threw2, "set_phaser rejects an unknown division or stage count");
+        for (int i = 0; i < ppc; i++) pe.DeviceSetParam(pt, pdi, i, pe.DeviceParamDefault(pt, pdi, i));
+    }
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>(pnames);
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 24).ToList();
+        Check(mine.Count >= 25, $"Nota Phaser ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Phaser preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(pe, p.Id, pt, pdi).Length != 0) { pf++; continue; }
+            PRender();
+            if (!PFinite() || Rms(pbuf, 4096) < 1e-3f) pf++;
+        }
+        Check(pf == 0, $"every Phaser preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(pe, "phaser/Deep Space", pt, pdi);
+        Check(pe.DeviceGetParam(pt, pdi, 6) > 0.5f && Math.Abs(pe.DeviceGetParam(pt, pdi, 7) - 2f / 8f) < 1e-3f
+              && Math.Abs(pe.DeviceGetParam(pt, pdi, 9) - 1f) < 1e-3f, "Deep Space preset: synced 1/1, 12 stages");
+        cat.ApplyInPlace(pe, "phaser/Script 45", pt, pdi);
+        bool isDefault = Enumerable.Range(0, ppc).All(i => Math.Abs(pe.DeviceGetParam(pt, pdi, i) - pe.DeviceParamDefault(pt, pdi, i)) < 2e-3f);
+        Check(isDefault, "Script 45 preset = the device defaults");
+    }
+}
+
 // ===================== Nota Auto Shift (effect kind 10) ===================
 Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
 {

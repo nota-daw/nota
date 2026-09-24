@@ -1694,6 +1694,52 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fl("Bass Swirl",         FSine, 4.0f, 0.50f,  0.40f, 0.35f,   0, hz: 0.15f);
         Fl("Pad Space",          FSine, 3.0f, 0.90f,  0.50f, 0.50f, 180, hz: 0.07f);
 
+        // ---- Nota Phaser (kind 24) — LFO-swept all-pass stages. Written in units through Ph(): stages
+        //      (2 / 4 / 6 / 8 / 12), waveform (FSine / FTri / FSaw), Center Hz 50..5000, Depth 0..1 (= ±3 oct),
+        //      Feedback −0.95..+0.95, Mix 0..1 (0.5 = the deepest notches), Stereo 0..180°, and either a free
+        //      rate in Hz (0.02..8) or a Sync division (4/1 2/1 1/1 1/2 1/4D 1/4 1/4T 1/8 1/16).
+        // Classic
+        Ph("Script 45",          4, FSine,  800, 0.70f,  0.40f, 0.50f,  90, hz: 0.40f);
+        Ph("Slow Swirl",         4, FSine,  700, 0.80f,  0.30f, 0.50f,  90, hz: 0.12f);
+        Ph("Small Stone",        4, FTri,   900, 0.75f,  0.60f, 0.50f,  90, hz: 0.50f);
+        Ph("Two-Stage Shimmer",  2, FSine, 1200, 0.60f,  0.20f, 0.50f, 120, hz: 0.80f);
+        Ph("Vintage Six",        6, FTri,   650, 0.70f,  0.50f, 0.50f,  90, hz: 0.30f);
+        Ph("Eight Stage Sweep",  8, FSine,  700, 0.75f,  0.50f, 0.50f,  90, hz: 0.20f);
+        Ph("Gentle Motion",      4, FSine, 1000, 0.40f,  0.10f, 0.35f,  60, hz: 0.25f);
+        Ph("Wide Stereo",        6, FSine,  800, 0.70f,  0.40f, 0.50f, 180, hz: 0.20f);
+        Ph("Mono Swoosh",        4, FTri,   800, 0.80f,  0.50f, 0.50f,   0, hz: 0.30f);
+        // Deep / resonant
+        Ph("Deep Space",        12, FTri,   600, 0.80f,  0.75f, 0.50f, 180, div: "1/1");
+        Ph("Whistler",           8, FSine, 1000, 0.70f,  0.90f, 0.50f,  90, hz: 0.15f);
+        Ph("Resonant Twelve",   12, FSine,  500, 0.60f,  0.88f, 0.50f,  90, hz: 0.10f);
+        Ph("Jet Phase",         12, FTri,   800, 1.00f,  0.80f, 0.50f,  45, hz: 0.06f);
+        Ph("Laser Sweep",        8, FSaw,  1500, 1.00f,  0.85f, 0.50f,   0, hz: 3.00f);
+        // Negative feedback
+        Ph("Hollow Step",        6, FSaw,  1500, 0.40f, -0.60f, 0.50f,   0, div: "1/4");
+        Ph("Hollow Drift",       8, FSine,  700, 0.70f, -0.50f, 0.50f, 120, hz: 0.18f);
+        Ph("Inverse Twelve",    12, FTri,   900, 0.60f, -0.70f, 0.50f,  90, hz: 0.25f);
+        Ph("Nasal Tube",         4, FSine, 2000, 0.50f, -0.80f, 0.50f,  90, hz: 0.35f);
+        // Synced
+        Ph("Quarter Pulse",      4, FTri,   900, 0.70f,  0.50f, 0.50f,  90, div: "1/4");
+        Ph("Two-Bar Sweep",      8, FSine,  700, 0.90f,  0.60f, 0.50f,  90, div: "2/1");
+        Ph("Four-Bar Rise",     12, FSaw,   600, 1.00f,  0.60f, 0.50f, 180, div: "4/1");
+        Ph("Eighth Chop",        6, FSaw,  1200, 0.60f,  0.50f, 0.55f,   0, div: "1/8");
+        Ph("Dotted Wander",      6, FSine,  800, 0.70f,  0.40f, 0.50f, 120, div: "1/4D");
+        Ph("Triplet Flutter",    4, FTri,  1500, 0.40f,  0.30f, 0.45f,  90, div: "1/4T");
+        Ph("Half-Bar Swell",     8, FSine,  700, 0.80f,  0.55f, 0.50f,  90, div: "1/2");
+        // Fast / FX
+        Ph("Rotary Fast",        4, FSine, 1100, 0.35f,  0.20f, 0.50f,  90, hz: 6.00f);
+        Ph("Rotary Slow",        4, FSine, 1000, 0.40f,  0.20f, 0.50f,  90, hz: 0.80f);
+        Ph("Bubble Trouble",     6, FTri,  1800, 0.50f,  0.70f, 0.55f,  60, hz: 4.00f);
+        Ph("Static Notch",       8, FSine, 1000, 0.00f,  0.60f, 0.50f,   0, hz: 0.20f);
+        // Sources
+        Ph("Guitar Classic",     4, FSine,  800, 0.70f,  0.45f, 0.50f,  90, hz: 0.50f);
+        Ph("Electric Piano",     4, FSine,  900, 0.55f,  0.25f, 0.40f, 120, hz: 0.30f);
+        Ph("Pad Drift",          8, FSine,  600, 0.90f,  0.40f, 0.50f, 180, hz: 0.07f);
+        Ph("Drum Bus Swirl",     6, FTri,  1500, 0.60f,  0.30f, 0.35f,  90, div: "2/1");
+        Ph("Bass Motion",        4, FSine,  250, 0.50f,  0.30f, 0.35f,   0, hz: 0.20f);
+        Ph("Vocal Air",          2, FSine, 2500, 0.50f,  0.20f, 0.30f, 120, hz: 0.25f);
+
         // ---- Nota Auto Shift (kind 10) — pitch correction, all params normalized 0..1 (unnamed ones
         //      reset to their defaults). Key round(11v) (0 C, .182 D, .364 E, .455 F, .636 G, .818 A);
         //      Scale 0 Chromatic/.25 Major/.5 Minor/.75 Penta Maj/1 Penta Min; Custom Scale 1 = the
@@ -2091,6 +2137,24 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("Delay", (float)(Math.Log(Math.Clamp(delayMs, 0.1f, 8f) / 0.1) / Math.Log(80))),
             ("Depth", depth), ("Feedback", 0.5f + Math.Clamp(fb, -0.95f, 0.95f) / 1.9f), ("Mix", mix),
             ("Waveform", wave / 2f), ("Sync", div is null ? 0f : 1f), ("Division", d / 8f), ("Stereo", stereoDeg / 180f));
+    }
+
+    // Nota Phaser Sync divisions (Phaser::kDivNames) and stage counts, and its presets in units.
+    private static readonly string[] PhDivs = { "4/1", "2/1", "1/1", "1/2", "1/4D", "1/4", "1/4T", "1/8", "1/16" };
+    private static readonly int[] PhStages = { 2, 4, 6, 8, 12 };
+
+    private void Ph(string name, int stages, int wave, float centerHz, float depth, float fb, float mix, float stereoDeg, float hz = 0.4f, string? div = null)
+    {
+        int d = div is null ? 2 : Array.IndexOf(PhDivs, div);
+        if (d < 0) throw new ArgumentException($"unknown Phaser division {div}");
+        int st = Array.IndexOf(PhStages, stages);
+        if (st < 0) throw new ArgumentException($"Phaser stages must be 2, 4, 6, 8 or 12 ({stages})");
+        Fx("phaser", 24, name,
+            ("Rate", (float)(Math.Log(Math.Clamp(hz, 0.02f, 8f) / 0.02) / Math.Log(400))),
+            ("Center", (float)(Math.Log(Math.Clamp(centerHz, 50f, 5000f) / 50.0) / Math.Log(100))),
+            ("Depth", depth), ("Feedback", 0.5f + Math.Clamp(fb, -0.95f, 0.95f) / 1.9f), ("Mix", mix),
+            ("Waveform", wave / 2f), ("Sync", div is null ? 0f : 1f), ("Division", d / 8f), ("Stereo", stereoDeg / 180f),
+            ("Stages", st / 4f));
     }
 
     // Nota Forge stage types (the S* Type step, × 1/5).
