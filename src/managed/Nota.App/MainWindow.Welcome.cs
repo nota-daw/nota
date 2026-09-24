@@ -49,6 +49,14 @@ public partial class MainWindow
         if (PendingRecovery is not null)
             win.Closed += (_, _) => { try { _recovery.ClearRecovery(); } catch { } };
 
+        // Look for a newer release in the background; the banner appears if one turns up
+        // while the launcher is still open.
+        _ = UpdateChecker.CheckAsync().ContinueWith(t =>
+        {
+            if (t.Result is { } update)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (win.IsVisible) win.ShowUpdateAvailable(update); });
+        }, TaskScheduler.Default);
+
         await win.ShowDialog(this);
     }
 

@@ -3,7 +3,8 @@
 //
 // Welcome screen — the launcher shown on startup (see MainWindow.ShowWelcomeAsync).
 // Brand header, New / Open actions, a list of recent projects, and shortcuts to
-// Settings and What's New. New / Open / a recent project close the launcher and hand
+// Settings and What's New, plus banners for crash recovery and a newer release on
+// GitHub. New / Open / a recent project close the launcher and hand
 // off to the main window; Settings and What's New open as child dialogs so the user
 // stays on the launcher.
 
@@ -172,12 +173,18 @@ public sealed class WelcomeWindow : NotaWindow
         Grid.SetRow(footer, 4);
         root.Children.Add(footer);
 
-        // Crash-recovery prompt rides on top as a dismissible banner (same wording as the
-        // standalone recovery dialog). Absent when there's no surviving snapshot.
-        Control body = root;
+        // Banners (crash recovery, available update) stack above the content. The update
+        // banner arrives asynchronously — see ShowUpdateAvailable.
+        _banners = new StackPanel();
+        var outer = new DockPanel();
+        DockPanel.SetDock(_banners, Dock.Top);
+        outer.Children.Add(_banners);
+        outer.Children.Add(root);
+
+        // Crash-recovery prompt (same wording as the standalone recovery dialog). Absent
+        // when there's no surviving snapshot.
         if (recoveryMessage is not null && onRecover is not null)
         {
-            var outer = new DockPanel();
             Border banner = null!;
             banner = RecoveryBanner(
                 recoveryMessage,
@@ -185,25 +192,43 @@ public sealed class WelcomeWindow : NotaWindow
                 onDismiss: () =>
                 {
                     onDismissRecovery?.Invoke();
-                    (banner.Parent as Panel)?.Children.Remove(banner);
+                    _banners.Children.Remove(banner);
                 });
-            DockPanel.SetDock(banner, Dock.Top);
-            outer.Children.Add(banner);
-            outer.Children.Add(root);
-            body = outer;
+            _banners.Children.Add(banner);
         }
 
-        SetBody(body);
+        SetBody(outer);
     }
 
-    // A dismissible alert card offering to restore a crashed session. Accent-tinted so it
-    // reads as an action prompt, not an error.
+    private readonly StackPanel _banners;
+
+    /// <summary>Show a "new version available" banner with a Download button that opens
+    /// the release page in the browser. Called once the background update check resolves.</summary>
+    public void ShowUpdateAvailable(AvailableUpdate update)
+    {
+        Border banner = null!;
+        banner = Banner(
+            "A new version of Nota is available",
+            $"Nota {update.Version} is out — you have {AppInfo.Version}.",
+            actionLabel: "Download",
+            onAction: () => _ = Launcher.LaunchUriAsync(new Uri(update.Url)),
+            onDismiss: () => _banners.Children.Remove(banner));
+        _banners.Children.Add(banner);
+    }
+
+    // Offer to restore a crashed session.
     private static Border RecoveryBanner(string message, Action onRecover, Action onDismiss)
+        => Banner("Unsaved work available", message, "Recover", onRecover, onDismiss);
+
+    // A dismissible alert card with one action. Accent-tinted so it reads as an action
+    // prompt, not an error.
+    private static Border Banner(string title, string message, string actionLabel,
+                                 Action onAction, Action onDismiss)
     {
         var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock
         {
-            Text = "Unsaved work available",
+            Text = title,
             FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
@@ -219,11 +244,11 @@ public sealed class WelcomeWindow : NotaWindow
 
         var recover = new Button
         {
-            Content = "Recover",   // not solid brass: "New project" is this window's primary action
+            Content = actionLabel,   // not solid brass: "New project" is this window's primary action
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 0, 0),
         };
-        recover.Click += (_, _) => onRecover();
+        recover.Click += (_, _) => onAction();
         Grid.SetColumn(recover, 1);
 
         var dismiss = new Button

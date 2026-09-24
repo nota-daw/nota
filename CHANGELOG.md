@@ -19,6 +19,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **New-version notice on the welcome screen.** When a newer Nota release is on GitHub,
+  the launcher shows a banner with the version number and a **Download** button that opens
+  the release page. Without an internet connection nothing is shown.
 - **Macros for the Drum Rack and Nota Rhythm, and every kit comes with its own.** The Drum
   Rack has a new **Macro** tab and Rhythm a **MACRO** mode in its centre panel (click MACRO
   next to VOICE). Each shows eight knobs over the whole kit, each with its name and where it
