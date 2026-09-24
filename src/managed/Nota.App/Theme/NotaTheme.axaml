@@ -77,6 +77,7 @@
           <SolidColorBrush x:Key="Brush.SurfaceCard">#171613</SolidColorBrush>   <!-- Card: a section inside a device -->
           <SolidColorBrush x:Key="Brush.SurfaceRaised">#1C1A16</SolidColorBrush> <!-- Raised: button at rest -->
           <SolidColorBrush x:Key="Brush.SurfaceHover">#252219</SolidColorBrush>  <!-- Hover: button or list row under the pointer -->
+          <SolidColorBrush x:Key="Brush.SurfaceHoverClear">#00252219</SolidColorBrush> <!-- Hover at zero alpha: resting row, so the fade doesn't pass through white -->
           <SolidColorBrush x:Key="Brush.TrackOff">#26231E</SolidColorBrush>      <!-- Track off: the track of an off toggle -->
           <!-- Pressed goes *into* the recess rather than to a fourth raised step. -->
           <SolidColorBrush x:Key="Brush.SurfaceActive">#100F0D</SolidColorBrush>
@@ -177,6 +178,7 @@
           <SolidColorBrush x:Key="Brush.SurfaceCard">#EFEADE</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.SurfaceRaised">#F8F5EC</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.SurfaceHover">#E7E1D0</SolidColorBrush>
+          <SolidColorBrush x:Key="Brush.SurfaceHoverClear">#00E7E1D0</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.TrackOff">#DBD4C0</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.SurfaceActive">#D5CEBB</SolidColorBrush>
           <SolidColorBrush x:Key="Brush.LaneB">#E7E2D4</SolidColorBrush>
@@ -353,7 +355,8 @@
   </Style>
 
   <Style Selector="Button.ghost">
-    <Setter Property="Background" Value="Transparent"/>
+    <!-- Hover colour at zero alpha, not Transparent (#00FFFFFF): see ListBoxItem. -->
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHoverClear}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
@@ -566,7 +569,7 @@
     <Setter Property="Height" Value="34"/>
     <Setter Property="Padding" Value="7,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
-    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHoverClear}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
@@ -914,6 +917,9 @@
     <Setter Property="MinHeight" Value="{StaticResource Control.Shell}"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
+    <!-- Not Transparent: that is #00FFFFFF, and the 120ms brush fade to a dark hover
+         would pass through a translucent white — a visible flash on every hover. -->
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHoverClear}"/>
   </Style>
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.SurfaceSelected}"/>
