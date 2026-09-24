@@ -75,6 +75,8 @@ public sealed partial class ArrangementView
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
         public float[]? Peaks;
         public int PeakCount;
+        /// <summary>Clip gain (linear) — peaks are raw material, the lane scales them by this.</summary>
+        public float Gain = 1f;
         public NotaNote[]? Notes;
         public string Name = "";
         /// <summary>True when no clip on the same track ends where this one begins — the head

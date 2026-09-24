@@ -1388,7 +1388,7 @@ public sealed partial class ArrangementView
         // Draw the clip being resized from its full-material peaks, mapping each timeline
         // beat through the committed window so the SAME audio stays anchored and dragging
         // reveals/hides real content (point 2) rather than squashing the window peaks.
-        private void DrawResizeWaveform(DrawingContext ctx, Rect r, IBrush brush)
+        private void DrawResizeWaveform(DrawingContext ctx, Rect r, IBrush brush, float gain)
         {
             double mid = r.Y + r.Height / 2, amp = r.Height / 2 - 1;
             double ppb = _o._pixelsPerBeat, scroll = _o._scrollBeats;
@@ -1407,6 +1407,7 @@ public sealed partial class ArrangementView
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, _rpPeaks![b * 2]); max = Math.Max(max, _rpPeaks[b * 2 + 1]); }
                     if (min > max) continue;
+                    min = Math.Clamp(min * gain, -1f, 1f); max = Math.Clamp(max * gain, -1f, 1f);
                     AddRect(g, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
             ctx.DrawGeometry(brush, null, geo);
@@ -1418,7 +1419,7 @@ public sealed partial class ArrangementView
             if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && ReferenceEquals(c, _dragClip)
                 && _rpPeaks is not null && _rpCount > 0 && _rpMTotal > 0 && _origLen > 0 && r.Height > 0 && r.Width > 0)
             {
-                DrawResizeWaveform(ctx, r, brush);
+                DrawResizeWaveform(ctx, r, brush, c.Gain);
                 return;
             }
             if (c.Peaks is null || c.PeakCount <= 0 || r.Height <= 0 || r.Width <= 0) return;
@@ -1437,6 +1438,8 @@ public sealed partial class ArrangementView
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, c.Peaks[b * 2]); max = Math.Max(max, c.Peaks[b * 2 + 1]); }
                     if (min > max) continue;
+                    // Clip gain scales the drawn waveform, matching the clip editor.
+                    min = Math.Clamp(min * c.Gain, -1f, 1f); max = Math.Clamp(max * c.Gain, -1f, 1f);
                     AddRect(g, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
             ctx.DrawGeometry(brush, null, geo);
