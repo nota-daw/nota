@@ -297,6 +297,13 @@ public interface IAudioEngine : IDisposable
     void RhythmVoiceDeviceParamSet(int trackId, int voice, int dev, int param, float value);
     bool RhythmVoiceDeviceBypassed(int trackId, int voice, int dev);
     void RhythmSetVoiceDeviceBypassed(int trackId, int voice, int dev, bool bypassed);
+    // Voice-device telemetry — mirrors DeviceGainReduction / DeviceScope / DeviceLayerWave /
+    // DeviceText / DeviceAction for an effect on a Rhythm voice.
+    float RhythmVoiceDeviceGainReduction(int trackId, int voice, int dev);
+    int RhythmVoiceDeviceScope(int trackId, int voice, int dev, float[] outSamples, int maxSamples);
+    int RhythmVoiceDeviceLayerWave(int trackId, int voice, int dev, int layer, float[] outSamples, int maxSamples);
+    string RhythmVoiceDeviceText(int trackId, int voice, int dev, int id);
+    void RhythmVoiceDeviceAction(int trackId, int voice, int dev, int id, int iarg, float farg);
     /// <summary>The factory kit a Rhythm's voices were loaded from ("" = none) — display only, saved with the track.</summary>
     string RhythmKitName(int trackId);
     void RhythmSetKitName(int trackId, string name);

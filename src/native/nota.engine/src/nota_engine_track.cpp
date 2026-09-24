@@ -8,6 +8,7 @@
 #include "nota_engine_internal.h"
 
 #include <algorithm>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -183,6 +184,29 @@ int32_t nota_rhythm_voice_device_bypassed(const NotaEngine* e, int32_t t, int32_
 }
 void nota_rhythm_set_voice_device_bypassed(NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t bypassed) {
     if (nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr) dev->setBypassed(bypassed != 0);
+}
+float nota_rhythm_voice_device_gain_reduction(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->gainReductionDb() : 0.0f;
+}
+int32_t nota_rhythm_voice_device_scope(const NotaEngine* e, int32_t t, int32_t v, int32_t d, float* out, int32_t n) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->scopeRead(out, n) : 0;
+}
+int32_t nota_rhythm_voice_device_layer_wave(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t layer, float* out, int32_t n) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->layerWave(layer, out, n) : 0;
+}
+int32_t nota_rhythm_voice_device_text(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t id, char* out, int32_t cap) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr;
+    const std::string s = dev ? dev->deviceText(id) : std::string{};
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;   // full length (probe with a null buffer, then fetch)
+}
+void nota_rhythm_voice_device_action(NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t id, int32_t iarg, float farg) {
+    if (nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr) dev->deviceAction(id, iarg, farg);
 }
 const char* nota_rhythm_kit_name(const NotaEngine* e, int32_t t) {
     static std::string s; s = e ? CENG(e)->rhythmKitName(t) : std::string{}; return s.c_str();

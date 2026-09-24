@@ -11280,6 +11280,23 @@ Console.WriteLine("-- Kit FX --");
         "Rhythm voices carry the kit's FX (kick Forge, snare Reverb, closed hat Delay)");
     int dev = re.RhythmAddVoiceDevice(rt, 6, 1);   // a compressor on the tom
     Check(dev == 0 && re.RhythmVoiceDeviceName(rt, 6, 0).Length > 0, "a device can be added to a voice");
+    // Voice-device telemetry (what its pop-out card draws): a compressor on a playing voice
+    // reports its own live levels.
+    using (var te = new NotaEngine())
+    {
+        int tt = svc.CreateRhythmTrack(te, "kompakt", out _);
+        te.InstrumentAction(tt, RhythmModel.A_ClearBank, 0, 0);
+        int tc = te.RhythmAddVoiceDevice(tt, 6, 1);
+        te.InstrumentAction(tt, RhythmModel.A_ToggleStep, 6 * 16, 0);
+        te.InstrumentAction(tt, RhythmModel.A_SetVel, 6 * 16, 1f);
+        te.Seek(0); te.Play();
+        var tblk = new float[512 * 2];
+        for (int done = 0; done < SR / 10; done += 512) te.RenderOffline(tblk, 512);
+        te.StopTransport();
+        var tsc = new float[14];
+        int tn = te.RhythmVoiceDeviceScope(tt, 6, tc, tsc, tsc.Length);
+        Check(tn == 14 && tsc[8] > 1000 && tsc[0] > 0.001f, $"a voice compressor's scope reports live levels (n {tn}, sr {tsc[8]:0}, in {tsc[0]:0.000})");
+    }
     int thr = Enumerable.Range(0, re.RhythmVoiceDeviceParamCount(rt, 6, 0)).First(p => re.RhythmVoiceDeviceParamName(rt, 6, 0, p) == "Thresh");
     re.RhythmVoiceDeviceParamSet(rt, 6, 0, thr, -30f);
     re.RhythmSetVoiceDeviceBypassed(rt, 1, 0, true);

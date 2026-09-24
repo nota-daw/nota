@@ -420,6 +420,12 @@ NOTA_API float       nota_rhythm_voice_device_param_get(const NotaEngine* engine
 NOTA_API void        nota_rhythm_voice_device_param_set(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param, float value);
 NOTA_API int32_t     nota_rhythm_voice_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
 NOTA_API void        nota_rhythm_set_voice_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t bypassed);
+/* Voice-device telemetry: same semantics as nota_device_gain_reduction / _scope / _layer_wave / _text / _action. */
+NOTA_API float       nota_rhythm_voice_device_gain_reduction(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API int32_t     nota_rhythm_voice_device_scope(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, float* out, int32_t max_samples);
+NOTA_API int32_t     nota_rhythm_voice_device_layer_wave(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t layer, float* out, int32_t max_samples);
+NOTA_API int32_t     nota_rhythm_voice_device_text(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t id, char* out, int32_t cap);
+NOTA_API void        nota_rhythm_voice_device_action(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t id, int32_t iarg, float farg);
 NOTA_API const char* nota_rhythm_kit_name(const NotaEngine* engine, int32_t track_id);
 NOTA_API void        nota_rhythm_set_kit_name(NotaEngine* engine, int32_t track_id, const char* name);
 /* Nota Rhythm macros. The eight values are the instrument's macro1..macro8 plugin params; these edit

@@ -800,9 +800,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Fixed
 - **A rack chain's pop-out GUI showed a frozen picture.** Opening **GUI** on an effect or
-  instrument inside an Instrument Rack, Drum Rack or Audio Effect Rack chain showed its real
-  editor, but its meters, scopes, curves and held keys never moved. They now follow that
-  device's own signal live.
+  instrument inside an Instrument Rack, Drum Rack or Audio Effect Rack chain, or on an effect
+  on a Nota Rhythm voice, showed its real editor, but its meters, scopes, curves and held keys
+  never moved. They now follow that device's own signal live.
 - **Rack macro mappings came loose when a chain's effects changed.** Removing or reordering
   an effect in an Instrument Rack, Drum Rack or Audio Effect Rack chain left the macros
   mapped to whichever device now sat at the old position. A mapping now moves with its

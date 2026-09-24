@@ -713,6 +713,23 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceBypassed(_handle, trackId, voice, dev) != 0; }
     public void RhythmSetVoiceDeviceBypassed(int trackId, int voice, int dev, bool bypassed)
     { ThrowIfDisposed(); NativeMethods.RhythmSetVoiceDeviceBypassed(_handle, trackId, voice, dev, bypassed ? 1 : 0); }
+    public float RhythmVoiceDeviceGainReduction(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceGainReduction(_handle, trackId, voice, dev); }
+    public int RhythmVoiceDeviceScope(int trackId, int voice, int dev, float[] outSamples, int maxSamples)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceScope(_handle, trackId, voice, dev, outSamples, maxSamples); }
+    public int RhythmVoiceDeviceLayerWave(int trackId, int voice, int dev, int layer, float[] outSamples, int maxSamples)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceLayerWave(_handle, trackId, voice, dev, layer, outSamples, maxSamples); }
+    public void RhythmVoiceDeviceAction(int trackId, int voice, int dev, int id, int iarg, float farg)
+    { ThrowIfDisposed(); NativeMethods.RhythmVoiceDeviceAction(_handle, trackId, voice, dev, id, iarg, farg); }
+    public string RhythmVoiceDeviceText(int trackId, int voice, int dev, int id)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RhythmVoiceDeviceText(_handle, trackId, voice, dev, id, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.RhythmVoiceDeviceText(_handle, trackId, voice, dev, id, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
     public string RhythmKitName(int trackId)
     { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmKitName(_handle, trackId)) ?? ""; }
     public void RhythmSetKitName(int trackId, string name)

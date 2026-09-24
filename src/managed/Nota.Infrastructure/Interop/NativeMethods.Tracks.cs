@@ -371,6 +371,17 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_bypassed")]
     internal static partial int RhythmVoiceDeviceBypassed(IntPtr engine, int trackId, int voice, int dev);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_gain_reduction")]
+    internal static partial float RhythmVoiceDeviceGainReduction(IntPtr engine, int trackId, int voice, int dev);
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_scope")]
+    internal static partial int RhythmVoiceDeviceScope(IntPtr engine, int trackId, int voice, int dev, [Out] float[] outSamples, int maxSamples);
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_layer_wave")]
+    internal static partial int RhythmVoiceDeviceLayerWave(IntPtr engine, int trackId, int voice, int dev, int layer, [Out] float[] outSamples, int maxSamples);
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_text")]
+    internal static partial int RhythmVoiceDeviceText(IntPtr engine, int trackId, int voice, int dev, int id, [Out] byte[]? outBytes, int cap);
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_action")]
+    internal static partial void RhythmVoiceDeviceAction(IntPtr engine, int trackId, int voice, int dev, int id, int iarg, float farg);
+
     [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_voice_device_bypassed")]
     internal static partial void RhythmSetVoiceDeviceBypassed(IntPtr engine, int trackId, int voice, int dev, int bypassed);
 

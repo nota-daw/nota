@@ -217,6 +217,11 @@ internal sealed class RhythmVoiceAccess(IAudioEngine e, int t) : IRackAccess
     public void SetChainDeviceBypassed(int c, int d, bool b) => e.RhythmSetVoiceDeviceBypassed(t, c, d, b);
     public int ChainDeviceBuiltinKind(int c, int d) => e.RhythmVoiceDeviceBuiltinKind(t, c, d);
     public void OpenChainDeviceEditor(int c, int d) { }
+    public float ChainDeviceGainReduction(int c, int d) => e.RhythmVoiceDeviceGainReduction(t, c, d);
+    public int ChainDeviceScope(int c, int d, float[] o, int n) => e.RhythmVoiceDeviceScope(t, c, d, o, n);
+    public int ChainDeviceLayerWave(int c, int d, int l, float[] o, int n) => e.RhythmVoiceDeviceLayerWave(t, c, d, l, o, n);
+    public string ChainDeviceText(int c, int d, int id) => e.RhythmVoiceDeviceText(t, c, d, id);
+    public void ChainDeviceAction(int c, int d, int id, int iarg, float farg) => e.RhythmVoiceDeviceAction(t, c, d, id, iarg, farg);
     public float ChainGain(int c) => 1f; public void SetChainGain(int c, float v) { }
     public float ChainPan(int c) => 0f; public void SetChainPan(int c, float v) { }
     public bool ChainMute(int c) => false; public void SetChainMute(int c, bool b) { }
