@@ -300,6 +300,20 @@ public interface IAudioEngine : IDisposable
     /// <summary>The factory kit a Rhythm's voices were loaded from ("" = none) — display only, saved with the track.</summary>
     string RhythmKitName(int trackId);
     void RhythmSetKitName(int trackId, string name);
+    /// <summary>Nota Rhythm macros: their names and mappings (the values are the macro1..8 plugin
+    /// params). In a mapping, Chain is the voice; DeviceIndex -1 targets one of the Rhythm's own
+    /// params (ParamIndex = its plugin-param index, 0..1), ≥ 0 a device on that voice's FX chain
+    /// (the device's own units).</summary>
+    string RhythmMacroName(int trackId, int macro);
+    void RhythmSetMacroName(int trackId, int macro, string name);
+    int RhythmAddMacroMapping(int trackId, int macro, int voice, int device, int param, float lo, float hi);
+    int RhythmMacroMappingCount(int trackId);
+    bool RhythmTryGetMacroMapping(int trackId, int index, out RackMacroMapping mapping, out int curve);
+    bool RhythmRemoveMacroMapping(int trackId, int index);
+    bool RhythmSetMacroMappingRange(int trackId, int index, float lo, float hi);
+    bool RhythmSetMacroMappingCurve(int trackId, int index, int curve);
+    /// <summary>Drops every mapping and custom name (the macro values stay).</summary>
+    void RhythmClearMacros(int trackId);
     /// <summary>Live Nota Grain read positions (0..1) of active voices into outPos; returns the count.</summary>
     int GrainPlayPositions(int trackId, float[] outPos);
     /// <summary>Active synth-voice count for a built-in instrument, or -1 if unsupported.</summary>

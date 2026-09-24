@@ -26,8 +26,16 @@
 // The 7 per-voice knobs (Tune/Decay/Punch/Tone/Drive/Level/Pan) + 4 globals ride the plugin-
 // param interface (normalized 0..1) → automation / persist / clone for free. Appended after
 // them (param order is the persisted layout — append only): per-voice sample Start / Length /
-// Reverse, then Glue (a bus compressor on the kit sum). The step patterns are structural
-// state (getState/setState blob + the action() UI channel), not params. A step is on/off with
+// Reverse, then Glue (a bus compressor on the kit sum), then eight Macros.
+//
+//   Macros: eight knobs over the whole kit (params macro1..macro8, so they automate and learn
+//   like any other). A mapping drives one target across [min, max] in the target's own units —
+//   one of the machine's own params (a voice's Decay, Glue …; normalized) or a param of a
+//   voice's FX device (the device's units) — so one knob can open every snare and clap reverb
+//   at once. Mappings live in the FX snapshot (they follow their device when the chain is
+//   edited) and are saved after the kit label, tagged, with the macros' names.
+//
+// The step patterns are structural state (getState/setState blob + the action() UI channel), not params. A step is on/off with
 // a velocity (a "quiet" step is just a low one) and an accent flag. The voice FX chains and a
 // kit label follow the pattern data in the same blob, tagged, so an older reader stops before
 // them. Header-only, allocation-free on the audio thread. Name & DSP are Nota's own.
@@ -58,11 +66,21 @@ public:
     static constexpr int kPX = 3;                       // appended per-voice params (sample region)
     static constexpr int kLegacyParams = kVoices * kPV + 4;   // RTH1 blobs carry exactly these
     static constexpr int kExtra = kLegacyParams;              // first appended per-voice param
-    static constexpr int kNumParams = kExtra + kVoices * kPX + 1;   // + Glue
+    static constexpr int kNumParamsV2 = kExtra + kVoices * kPX + 1;   // + Glue (RTH2 blobs)
+    static constexpr int kMacros = 8;
+    static constexpr int kNumParams = kNumParamsV2 + kMacros;         // + Macro 1..8 (RTH3)
 
     enum VP { Tune = 0, Decay, Punch, Tone, Drive, Level, Pan };
     enum XP { Start = 0, Length, Reverse };
-    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume, Glue = kExtra + kVoices * kPX };
+    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume, Glue = kExtra + kVoices * kPX, Macro0 = kNumParamsV2 };
+
+    // A macro mapping. device -1: param is one of the machine's own params (voice = the voice it
+    // belongs to, -1 for a global); device ≥ 0: param of that device on the voice's FX chain.
+    struct MacroMap {
+        int32_t macro = 0, voice = 0, device = -1, param = 0;
+        float   lo = 0.0f, hi = 1.0f;
+        int32_t curve = 0;   // 0 Linear, 1 Exp, 2 Log, 3 S-curve (the rack's curves)
+    };
     // scopeRead layout: the playing step (-1 stopped), the current bank, an edit revision that
     // bumps on every pattern change (so an editor re-reads the blob after an MCP edit), the
     // sounding-voice count, the glue gain reduction (dB, ≥ 0), then per voice a trigger flash
@@ -87,6 +105,7 @@ public:
         setP(5, Decay, 0.5f);                           // Open hat — long
         pn_[Swing].store(0.0f); pn_[Humanize].store(0.0f); pn_[Accent].store(0.7f); pn_[Volume].store(0.8f);
         pn_[Glue].store(0.0f);
+        for (int m = 0; m < kMacros; ++m) pn_[Macro0 + m].store(0.0f);
         for (auto& p : pendingTrig_) p.store(-1.0f, std::memory_order_relaxed);
         for (auto& sc : scope_) sc.store(0.0f, std::memory_order_relaxed);
         scope_[S_Step].store(-1.0f, std::memory_order_relaxed);
@@ -125,6 +144,7 @@ public:
     // "Master › Glue". Ids never change.
     std::string pluginParamId(int32_t i) const override {
         if (i < 0 || i >= kNumParams) return {};
+        if (i >= Macro0) return "macro" + std::to_string(i - Macro0 + 1);
         if (i == Glue) return "glue";
         if (i >= kExtra) { static const char* x[] = {"start","length","reverse"}; int k = i - kExtra; return "v" + std::to_string(k / kPX) + "_" + x[k % kPX]; }
         if (i >= kVoices * kPV) { static const char* g[] = {"swing","humanize","accent","volume"}; return g[i - kVoices * kPV]; }
@@ -133,6 +153,7 @@ public:
     }
     std::string pluginParamName(int32_t i) const override {
         if (i < 0 || i >= kNumParams) return {};
+        if (i >= Macro0) return "Macro " + std::to_string(i - Macro0 + 1);
         if (i == Glue) return "Master Glue";
         if (i >= kExtra) { static const char* x[] = {"Start","Length","Reverse"}; int k = i - kExtra; return std::string(kVoiceNames[k / kPX]) + " " + x[k % kPX]; }
         if (i >= kVoices * kPV) { static const char* g[] = {"Perform Swing","Perform Humanize","Perform Accent","Master Volume"}; return g[i - kVoices * kPV]; }
@@ -140,7 +161,12 @@ public:
         return std::string(kVoiceNames[i / kPV]) + " " + pn[i % kPV];
     }
     float pluginParamGet(int32_t i) const override { return (i >= 0 && i < kNumParams) ? pn_[i].load(std::memory_order_relaxed) : 0.0f; }
-    void pluginParamSet(int32_t i, float v) override { if (i >= 0 && i < kNumParams) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
+    void pluginParamSet(int32_t i, float v) override {
+        if (i < 0 || i >= kNumParams) return;
+        v = std::clamp(v, 0.0f, 1.0f);
+        pn_[i].store(v, std::memory_order_relaxed);
+        if (i >= Macro0) applyMacro(i - Macro0, v);
+    }
     int32_t pluginParamIndexOfId(const std::string& id) const override {
         for (int32_t i = 0; i < kNumParams; ++i) if (pluginParamId(i) == id) return i;
         return -1;
@@ -208,6 +234,12 @@ public:
         auto ns = copyFx();
         if (v < 0 || v >= kVoices || d < 0 || d >= static_cast<int>(ns->chain[v].size())) return false;
         ns->chain[v].erase(ns->chain[v].begin() + d);
+        auto& mv = ns->maps;   // a mapping follows its device: the removed one's go, later ones shift
+        for (auto it = mv.begin(); it != mv.end();) {
+            if (it->voice == v && it->device == d) { it = mv.erase(it); continue; }
+            if (it->voice == v && it->device > d) --it->device;
+            ++it;
+        }
         commitFx(ns);
         return true;
     }
@@ -222,6 +254,12 @@ public:
         auto x = c[from];
         c.erase(c.begin() + from);
         c.insert(c.begin() + to, x);
+        for (auto& m : ns->maps) {
+            if (m.voice != v || m.device < 0) continue;
+            if (m.device == from) m.device = to;
+            else if (from < to && m.device > from && m.device <= to) --m.device;
+            else if (to < from && m.device >= to && m.device < from) ++m.device;
+        }
         commitFx(ns);
         return true;
     }
@@ -229,8 +267,68 @@ public:
         auto ns = copyFx();
         if (v < 0 || v >= kVoices || ns->chain[v].empty()) return;
         ns->chain[v].clear();
+        std::erase_if(ns->maps, [v](const MacroMap& m) { return m.voice == v && m.device >= 0; });
         commitFx(ns);
     }
+    // ---- macros (message thread; the audio thread reads the mappings in the FX snapshot) ----
+    std::string macroName(int m) const {
+        if (m < 0 || m >= kMacros) return {};
+        return macroNames_[m].empty() ? "Macro " + std::to_string(m + 1) : macroNames_[m];
+    }
+    void setMacroName(int m, const std::string& n) { if (m >= 0 && m < kMacros) macroNames_[m] = n.substr(0, 32); }
+    // Adds a mapping and applies the macro's current value to it. Returns its index, -1 when the
+    // target doesn't exist (a macro can't drive a macro).
+    int32_t addMacroMapping(int macro, int voice, int device, int param, float lo, float hi) {
+        if (macro < 0 || macro >= kMacros) return -1;
+        if (device < 0) { if (param < 0 || param >= Macro0) return -1; }
+        else if (!voiceDevice(voice, device) || param < 0 || param >= voiceDevice(voice, device)->paramCount()) return -1;
+        auto ns = copyFx();
+        ns->maps.push_back({macro, device < 0 ? paramVoice(param) : voice, device, param, lo, hi, 0});
+        const int32_t idx = static_cast<int32_t>(ns->maps.size()) - 1;
+        commitFx(ns);
+        applyMacro(macro, get(Macro0 + macro));
+        return idx;
+    }
+    int32_t macroMappingCount() const { FxState* fx = fxLive_.load(std::memory_order_acquire); return fx ? static_cast<int32_t>(fx->maps.size()) : 0; }
+    bool macroMapping(int i, MacroMap& out) const {
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        if (!fx || i < 0 || i >= static_cast<int>(fx->maps.size())) return false;
+        out = fx->maps[i];
+        return true;
+    }
+    bool removeMacroMapping(int i) {
+        auto ns = copyFx();
+        if (i < 0 || i >= static_cast<int>(ns->maps.size())) return false;
+        ns->maps.erase(ns->maps.begin() + i);
+        commitFx(ns);
+        return true;
+    }
+    bool setMacroMappingRange(int i, float lo, float hi) {
+        auto ns = copyFx();
+        if (i < 0 || i >= static_cast<int>(ns->maps.size())) return false;
+        ns->maps[i].lo = lo; ns->maps[i].hi = hi;
+        const int m = ns->maps[i].macro;
+        commitFx(ns);
+        applyMacro(m, get(Macro0 + m));
+        return true;
+    }
+    bool setMacroMappingCurve(int i, int curve) {
+        auto ns = copyFx();
+        if (i < 0 || i >= static_cast<int>(ns->maps.size())) return false;
+        ns->maps[i].curve = std::clamp(curve, 0, 3);
+        const int m = ns->maps[i].macro;
+        commitFx(ns);
+        applyMacro(m, get(Macro0 + m));
+        return true;
+    }
+    // Every mapping and name back to empty (a kit load starts the macros over). Values stay.
+    void clearMacros() {
+        auto ns = copyFx();
+        ns->maps.clear();
+        commitFx(ns);
+        for (auto& n : macroNames_) n.clear();
+    }
+
     // The factory kit the voices came from ("" = none / hand-built) — display metadata only.
     const std::string& kitName() const { return kit_; }
     void setKitName(const std::string& k) { kit_ = k.substr(0, 64); }
@@ -265,6 +363,17 @@ public:
         }
         putU32(b, static_cast<uint32_t>(kit_.size()));
         b.insert(b.end(), kit_.begin(), kit_.end());
+        // Macro mappings + names, tagged "RMC1".
+        putU32(b, kMacMagic);
+        const int nm = fx ? static_cast<int>(fx->maps.size()) : 0;
+        putU32(b, static_cast<uint32_t>(nm));
+        for (int i = 0; i < nm; ++i) {
+            const auto& m = fx->maps[i];
+            putU32(b, (uint32_t)m.macro); putU32(b, (uint32_t)m.voice); putU32(b, (uint32_t)m.device); putU32(b, (uint32_t)m.param);
+            uint32_t u; std::memcpy(&u, &m.lo, 4); putU32(b, u); std::memcpy(&u, &m.hi, 4); putU32(b, u);
+            putU32(b, (uint32_t)m.curve);
+        }
+        for (int m = 0; m < kMacros; ++m) { putU32(b, static_cast<uint32_t>(macroNames_[m].size())); b.insert(b.end(), macroNames_[m].begin(), macroNames_[m].end()); }
         return b;
     }
     void setState(const uint8_t* data, int32_t size) override {
@@ -274,6 +383,7 @@ public:
         off = 4;
         int nParams;
         if (magic == kMagic) nParams = kNumParams;
+        else if (magic == kMagicV2) nParams = kNumParamsV2;
         else if (magic == kMagicV1) nParams = kLegacyParams;
         else return;   // unknown — keep defaults
         rev_.fetch_add(1, std::memory_order_relaxed);
@@ -308,10 +418,34 @@ public:
                 }
             }
             uint32_t kl = 0;
-            if (getU32(kl) && kl <= 64 && off + (int)kl <= size) kit.assign(reinterpret_cast<const char*>(data + off), kl);
+            if (getU32(kl) && kl <= 64 && off + (int)kl <= size) { kit.assign(reinterpret_cast<const char*>(data + off), kl); off += (int)kl; }
+        }
+        // Macro mappings + names. Absent before RMC1: no mappings, default names.
+        std::string names[kMacros];
+        if (getU32(tag) && tag == kMacMagic) {
+            uint32_t n = 0;
+            if (getU32(n))
+                for (uint32_t i = 0; i < n && i < 4096; ++i) {
+                    uint32_t f[7];
+                    bool ok = true;
+                    for (auto& x : f) ok = ok && getU32(x);
+                    if (!ok) break;
+                    MacroMap m;
+                    m.macro = (int32_t)f[0]; m.voice = (int32_t)f[1]; m.device = (int32_t)f[2]; m.param = (int32_t)f[3];
+                    std::memcpy(&m.lo, &f[4], 4); std::memcpy(&m.hi, &f[5], 4); m.curve = std::clamp((int32_t)f[6], 0, 3);
+                    const bool target = m.device < 0 ? (m.param >= 0 && m.param < Macro0)
+                                                     : (m.voice >= 0 && m.voice < kVoices && m.device < (int)ns->chain[m.voice].size());
+                    if (m.macro >= 0 && m.macro < kMacros && target && std::isfinite(m.lo) && std::isfinite(m.hi)) ns->maps.push_back(m);
+                }
+            for (int m = 0; m < kMacros; ++m) {
+                uint32_t l = 0;
+                if (!getU32(l) || l > 32 || off + (int)l > size) break;
+                names[m].assign(reinterpret_cast<const char*>(data + off), l); off += (int)l;
+            }
         }
         commitFx(ns);
         kit_ = kit;
+        for (int m = 0; m < kMacros; ++m) macroNames_[m] = names[m];
     }
     std::shared_ptr<Instrument> clone() const override {
         auto r = std::make_shared<RhythmMachine>();
@@ -336,8 +470,10 @@ public:
                     c->setBypassed(d->bypassed());
                     ns->chain[v].push_back(std::move(c));
                 }
+        if (FxState* fx = fxLive_.load(std::memory_order_acquire)) ns->maps = fx->maps;
         r->commitFx(ns);
         r->kit_ = kit_;
+        for (int m = 0; m < kMacros; ++m) r->macroNames_[m] = macroNames_[m];
         return r;
     }
 
@@ -478,12 +614,45 @@ public:
 
 private:
     static constexpr uint32_t kMagicV1 = 0x31485452;   // "RTH1" — 60 params
-    static constexpr uint32_t kMagic   = 0x32485452;   // "RTH2" — + sample region, Glue
+    static constexpr uint32_t kMagicV2 = 0x32485452;   // "RTH2" — + sample region, Glue
+    static constexpr uint32_t kMagic   = 0x33485452;   // "RTH3" — + Macro 1..8
     static constexpr uint32_t kFxMagic = 0x31584652;   // "RFX1" — voice FX chains + kit label, after the pattern
+    static constexpr uint32_t kMacMagic = 0x31434D52;  // "RMC1" — macro mappings + names, after the kit label
     static constexpr int kChunk = 256;                  // render chunk = the voice FX's max block
     static constexpr int kMaxFx = 8;                    // devices per voice chain
 
-    struct FxState { std::vector<std::shared_ptr<Device>> chain[kVoices]; };
+    struct FxState { std::vector<std::shared_ptr<Device>> chain[kVoices]; std::vector<MacroMap> maps; };
+
+    // The voice a param belongs to (-1 for the globals).
+    static int paramVoice(int p) {
+        if (p < kVoices * kPV) return p / kPV;
+        if (p >= kExtra && p < Glue) return (p - kExtra) / kPX;
+        return -1;
+    }
+    static float macroCurve(float v, int32_t curve) {
+        v = std::clamp(v, 0.0f, 1.0f);
+        switch (curve) {
+            case 1:  return v * v;
+            case 2:  return std::sqrt(v);
+            case 3:  return v * v * (3.0f - 2.0f * v);
+            default: return v;
+        }
+    }
+    // Push macro m's value to its targets. Any thread (automation plays on the audio thread):
+    // it only reads the live snapshot and stores atomics / device params.
+    void applyMacro(int m, float value) {
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        if (!fx) return;
+        for (const auto& mp : fx->maps) {
+            if (mp.macro != m) continue;
+            const float t = mp.lo + macroCurve(value, mp.curve) * (mp.hi - mp.lo);
+            if (mp.device < 0) {
+                if (mp.param >= 0 && mp.param < Macro0) pn_[mp.param].store(std::clamp(t, 0.0f, 1.0f), std::memory_order_relaxed);
+            } else if (mp.voice >= 0 && mp.voice < kVoices && mp.device < static_cast<int>(fx->chain[mp.voice].size())) {
+                if (auto& d = fx->chain[mp.voice][mp.device]) d->setParam(mp.param, t);
+            }
+        }
+    }
     std::shared_ptr<FxState> copyFx() const { return fxAuthoring_ ? std::make_shared<FxState>(*fxAuthoring_) : std::make_shared<FxState>(); }
     // Publish a new FX snapshot. The last few stay alive so a block still reading an older
     // one never sees it freed (the RackCore scheme).
@@ -688,6 +857,7 @@ private:
     std::vector<std::shared_ptr<FxState>> fxStates_;      // recent snapshots kept alive
     std::atomic<FxState*>                 fxLive_{nullptr};
     std::string kit_;                                     // factory kit label (message thread)
+    std::string macroNames_[kMacros];                     // custom macro names ("" = "Macro N"; message thread)
     float mix_[kChunk * 2];                               // audio thread: the chunk's sum
     float vbuf_[kVoices][kChunk * 2];                     // audio thread: FX voices, pre-chain
 };

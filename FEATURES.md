@@ -318,10 +318,13 @@ and user presets, automation, persistence and cloning.
   contour or sample region, Perform rail with an output meter, a full-width step strip with
   a velocity lane. Each voice has its own **FX** chain of built-in effects (the voice's FX
   tab). Its kits are the 25 factory drum kits it shares with the Drum Rack — samples and
-  per-voice effects — from the card's kit picker or the browser; MCP `get_rhythm`,
+  per-voice effects — from the card's kit picker or the browser. Eight **macros** (the
+  centre panel's MACRO mode) drive voice params and the voices' effects; each kit loads with
+  its own. MCP `get_rhythm`,
   `set_rhythm_pattern` (text rows), `set_rhythm_voice`, `set_rhythm_perform`,
   `copy_rhythm_bank`, `audition_rhythm_voice`, `get_rhythm_voice_fx` / `add_rhythm_voice_fx` /
-  `set_rhythm_voice_fx`, `add_rhythm_kit_track`.
+  `set_rhythm_voice_fx`, `add_rhythm_kit_track`, `get_rhythm_macros` / `set_rhythm_macro` /
+  `map_rhythm_macro` / `unmap_rhythm_macro`.
 - **Nota Pentad** — 5-voice analog poly in the Prophet-5 mould: Osc A (saw + pulse, hard
   sync) and Osc B (saw + triangle + pulse, Lo-Freq, keyboard off), noise, a 24 dB/oct
   resonant filter that self-oscillates and tracks the keyboard, two analog-curve ADSRs,
@@ -536,10 +539,12 @@ and user presets, automation, persistence and cloning.
 - **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains
   with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
   a zone map, rack output (Volume/Glide), Fold/Save.
-- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer and Chain views,
+- **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
-  oscillogram with a playhead, and each pad's own effect chain. A **kit picker** in the
+  oscillogram with a playhead, and each pad's own effect chain. Eight **macros** over the kit
+  map onto pad controls (Volume / Pan / Tune / Decay), pad instruments and the pads' effects,
+  with draggable ranges per receiver. A **kit picker** in the
   card header loads any factory kit in place and names the kit a rack holds. Its clips can
   be stepped in the detail panel's **Pattern** tab (see below).
 - **25 factory kits** under Nota Drum Rack and Nota Rhythm in the browser and in their cards' kit pickers:
@@ -553,7 +558,8 @@ and user presets, automation, persistence and cloning.
   garage), *Mirrorball* (70s disco), *Pit* (orchestral percussion), *Hyper* (hyperpop) and
   *Crate* (90s boom bap). 16 pads each on the General MIDI map (36–51), hats choked together,
   with the kit's own swing and humanize, and each pad's own effects (kick saturation, snare and
-  clap reverb, hat and percussion delay, scaled to the kit). Load onto a new track or drop onto
+  clap reverb, hat and percussion delay, scaled to the kit), and the kit's own macros (Tune,
+  Decay, Hats, Drive / Tape, Room, Echo, 808 / Sub, as the kit has them). Load onto a new track or drop onto
   an existing Drum Rack or Rhythm to replace its pads / voices. The one-shots are synthesized on first launch rather than
   shipped as audio (nothing added to the installer) and appear in the Files tab under
   **Nota Kits**, ready to drag anywhere a sample goes.

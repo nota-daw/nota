@@ -4,7 +4,7 @@
 // IDrumKits over the code-defined kit catalog: renders a kit's one-shots on demand
 // (KitLibrary) and assembles a Drum Rack from them — one Sampler chain per pad, with
 // the pad's trigger note, choke group, pan, gain, name and effects (KitFx), plus the
-// kit's swing and humanize. Loading a kit is an ordinary sequence of engine calls, so the
+// kit's swing, humanize and macros (KitMacros). Loading a kit is an ordinary sequence of engine calls, so the
 // result is an ordinary Drum Rack the user can take apart pad by pad.
 //
 // The same kits load into Nota Rhythm: each of its eight voices takes the kit's pad on the
@@ -120,6 +120,7 @@ public sealed class DrumKitService : IDrumKits
         KitLibrary.Ensure(kit);
 
         var missing = new List<string>();
+        var loaded = new List<(int Slot, KitPad Pad)>();
         foreach (var pad in kit.Pads)
         {
             var path = KitLibrary.PathOf(kit, pad);
@@ -139,10 +140,12 @@ public sealed class DrumKitService : IDrumKits
             KitFx.Apply(KitFx.For(kit, pad), k => engine.RackAddChainDevice(track, c, k),
                 d => engine.RackChainDeviceParamCount(track, c, d), (d, p) => engine.RackChainDeviceParamName(track, c, d, p),
                 (d, p, v) => engine.RackChainDeviceParamSet(track, c, d, p, v));
+            loaded.Add((chain, pad));
         }
 
         engine.RackSetSwing(track, kit.Swing);
         engine.RackSetHumanize(track, kit.Humanize);
+        ApplyRackMacros(engine, track, kit, loaded);
 
         warning = missing.Count == 0
             ? ""
@@ -175,7 +178,9 @@ public sealed class DrumKitService : IDrumKits
         void Set(string id, float v) { if (idx.TryGetValue(id, out int i)) engine.PluginParamSet(track, -1, i, v); }
 
         var missing = new List<string>();
+        var loaded = new List<(int Slot, KitPad Pad)>();
         var pads = RhythmVoicePads(kit);
+        engine.RhythmClearMacros(track);   // the old kit's mappings would point at devices about to go
         for (int v = 0; v < RhythmModel.Voices; v++)
         {
             while (engine.RhythmVoiceDeviceCount(track, v) > 0) engine.RhythmRemoveVoiceDevice(track, v, 0);
@@ -195,14 +200,95 @@ public sealed class DrumKitService : IDrumKits
             KitFx.Apply(KitFx.For(kit, pad), k => engine.RhythmAddVoiceDevice(track, vv, k),
                 d => engine.RhythmVoiceDeviceParamCount(track, vv, d), (d, p) => engine.RhythmVoiceDeviceParamName(track, vv, d, p),
                 (d, p, x) => engine.RhythmVoiceDeviceParamSet(track, vv, d, p, x));
+            loaded.Add((v, pad));
         }
         Set("swing", kit.Swing);
         Set("humanize", kit.Humanize);
         engine.RhythmSetKitName(track, kit.Id);
+        ApplyRhythmMacros(engine, track, kit, loaded, idx);
 
         warning = missing.Count == 0
             ? ""
             : $"{kit.Name}: {missing.Count} voice(s) couldn't be loaded ({string.Join(", ", missing)}).";
+    }
+
+    // ---- macros -----------------------------------------------------------------------------
+
+    // The kit's macros on a Drum Rack: names and values first, then the mappings (a mapping applies
+    // its macro's value at once, and every range puts that value on the pad's current setting).
+    // Pad Tune / Decay are the pad's own controls; the effects are the pad chain's devices.
+    private static void ApplyRackMacros(IAudioEngine engine, int track, KitDefinition kit, List<(int Slot, KitPad Pad)> pads)
+    {
+        var (macros, plan) = KitMacros.Resolve(kit, pads,
+            t => t.Param switch
+            {
+                MacroParam.Tune => engine.RackChainTune(track, t.Slot),
+                MacroParam.Decay => engine.RackChainDecay(track, t.Slot),
+                _ => engine.RackChainDeviceParamGet(track, t.Slot, t.Device, t.FxParamIndex),
+            },
+            (chain, kind, name) => FindFx(kind, name, engine.RackChainDeviceCount(track, chain),
+                d => engine.RackChainDeviceBuiltinKind(track, chain, d), d => engine.RackChainDeviceParamCount(track, chain, d),
+                (d, p) => engine.RackChainDeviceParamName(track, chain, d, p)));
+        for (int m = 0; m < KitMacros.Count; m++)
+        {
+            var km = macros.FirstOrDefault(x => x.Slot == m);
+            engine.RackSetMacroName(track, m, km?.Name ?? "");
+            engine.RackMacroSet(track, m, km?.Value ?? 0f);
+        }
+        foreach (var it in plan)
+        {
+            var t = it.Target;
+            if (t.Param == MacroParam.Fx) engine.RackAddMacroMapping(track, it.Macro, t.Slot, t.Device, t.FxParamIndex, it.Lo, it.Hi);
+            else engine.RackAddMacroMapping(track, it.Macro, t.Slot, RackMacroMapping.PadControls,
+                t.Param == MacroParam.Tune ? RackMacroMapping.PadTune : RackMacroMapping.PadDecay, it.Lo, it.Hi);
+        }
+    }
+
+    // The kit's macros on a Rhythm: the voices' Tune / Decay params (Tune given in semitones —
+    // a sample voice's ±12 st over 0..1) and the voices' FX. The macro values are its macro1..8.
+    private static void ApplyRhythmMacros(IAudioEngine engine, int track, KitDefinition kit, List<(int Slot, KitPad Pad)> voices,
+                                          Dictionary<string, int> idx)
+    {
+        int P(int v, MacroParam p) => idx.TryGetValue(RhythmModel.Id(v, p == MacroParam.Tune ? "tune" : "decay"), out int i) ? i : -1;
+        var (macros, plan) = KitMacros.Resolve(kit, voices,
+            t => t.Param switch
+            {
+                MacroParam.Tune => RhythmModel.SampleSemis(engine.PluginParamGet(track, -1, P(t.Slot, t.Param))),
+                MacroParam.Decay => engine.PluginParamGet(track, -1, P(t.Slot, t.Param)),
+                _ => engine.RhythmVoiceDeviceParamGet(track, t.Slot, t.Device, t.FxParamIndex),
+            },
+            (v, kind, name) => FindFx(kind, name, engine.RhythmVoiceDeviceCount(track, v),
+                d => engine.RhythmVoiceDeviceBuiltinKind(track, v, d), d => engine.RhythmVoiceDeviceParamCount(track, v, d),
+                (d, p) => engine.RhythmVoiceDeviceParamName(track, v, d, p)));
+        for (int m = 0; m < KitMacros.Count; m++)
+        {
+            var km = macros.FirstOrDefault(x => x.Slot == m);
+            engine.RhythmSetMacroName(track, m, km?.Name ?? "");
+            if (idx.TryGetValue(RhythmModel.MacroId(m), out int mi)) engine.PluginParamSet(track, -1, mi, km?.Value ?? 0f);
+        }
+        foreach (var it in plan)
+        {
+            var t = it.Target;
+            if (t.Param == MacroParam.Fx) { engine.RhythmAddMacroMapping(track, it.Macro, t.Slot, t.Device, t.FxParamIndex, it.Lo, it.Hi); continue; }
+            int p = P(t.Slot, t.Param);
+            if (p < 0) continue;
+            float lo = it.Lo, hi = it.Hi;
+            if (t.Param == MacroParam.Tune) { lo = RhythmModel.SampleSemisNorm(lo); hi = RhythmModel.SampleSemisNorm(hi); }
+            engine.RhythmAddMacroMapping(track, it.Macro, t.Slot, -1, p, lo, hi);
+        }
+    }
+
+    // A chain's first device of a built-in kind, and a param of it by name.
+    private static (int, int) FindFx(int kind, string param, int count, Func<int, int> kindOf, Func<int, int> paramCount, Func<int, int, string> paramName)
+    {
+        for (int d = 0; d < count; d++)
+        {
+            if (kindOf(d) != kind) continue;
+            int n = paramCount(d);
+            for (int p = 0; p < n; p++) if (paramName(d, p) == param) return (d, p);
+            return (d, -1);
+        }
+        return (-1, -1);
     }
 
     /// <summary>A kit voice's Level: the kit's own gain on the headroom Rhythm leaves a voice.</summary>

@@ -89,12 +89,23 @@ public:
     struct MacroMapping {
         int32_t macro       = 0;
         int32_t chainIndex  = 0;
-        int32_t deviceIndex = -1;   // -1 = the chain's instrument, else a device
+        int32_t deviceIndex = -1;   // -1 = the chain's instrument, kPadControls = the pad itself, else a device
         int32_t paramIndex  = 0;
         float   rangeMin    = 0.0f;
         float   rangeMax    = 1.0f;
         int32_t curve       = 0;    // 0 Linear, 1 Exp, 2 Log, 3 S-curve
     };
+
+    // A mapping with this deviceIndex targets the chain's own controls (a Drum Rack pad's
+    // strip) rather than a child: paramIndex is a PadParam, in the control's own units.
+    static constexpr int32_t kPadControls = -2;
+    enum PadParam : int32_t { PadVolume = 0, PadPan, PadTune, PadDecay, kPadParams };
+    static const char* padParamName(int32_t p) {
+        static const char* n[kPadParams] = { "Volume", "Pan", "Tune", "Decay" };
+        return (p >= 0 && p < kPadParams) ? n[p] : "";
+    }
+    static float padParamMin(int32_t p) { return p == PadPan ? -1.0f : p == PadTune ? -48.0f : 0.0f; }
+    static float padParamMax(int32_t p) { return p == PadVolume ? 2.0f : p == PadTune ? 48.0f : 1.0f; }
 
     struct RackState {
         std::vector<RackChain>    chains;
@@ -264,6 +275,13 @@ public:
         auto& d = ns->chains[chain].devices;
         if (dev < 0 || dev >= static_cast<int32_t>(d.size())) return false;
         d.erase(d.begin() + dev);
+        // Mappings follow their device: the removed one's go, the ones after it shift down.
+        auto& mv = ns->mappings;
+        for (auto it = mv.begin(); it != mv.end();) {
+            if (it->chainIndex == chain && it->deviceIndex == dev) { it = mv.erase(it); continue; }
+            if (it->chainIndex == chain && it->deviceIndex > dev) --it->deviceIndex;
+            ++it;
+        }
         commit(ns);
         return true;
     }
@@ -278,6 +296,12 @@ public:
         auto x = d[from];
         d.erase(d.begin() + from);
         d.insert(d.begin() + to, x);
+        for (auto& m : ns->mappings) {
+            if (m.chainIndex != chain || m.deviceIndex < 0) continue;
+            if (m.deviceIndex == from) m.deviceIndex = to;
+            else if (from < to && m.deviceIndex > from && m.deviceIndex <= to) --m.deviceIndex;
+            else if (to < from && m.deviceIndex >= to && m.deviceIndex < from) ++m.deviceIndex;
+        }
         commit(ns);
         return true;
     }
@@ -687,7 +711,16 @@ protected:
             const float target = m.rangeMin + applyCurve(value, m.curve) * (m.rangeMax - m.rangeMin);
             if (m.chainIndex < 0 || m.chainIndex >= static_cast<int32_t>(st->chains.size())) continue;
             auto& c = st->chains[m.chainIndex];
-            if (m.deviceIndex < 0) {
+            if (m.deviceIndex == kPadControls) {
+                auto& k = *c.ctl;
+                switch (m.paramIndex) {
+                    case PadVolume: k.gain.store(std::clamp(target, 0.0f, 4.0f), std::memory_order_relaxed); break;
+                    case PadPan:    k.pan.store(std::clamp(target, -1.0f, 1.0f), std::memory_order_relaxed); break;
+                    case PadTune:   k.tune.store(std::clamp(static_cast<int32_t>(std::lround(target)), -48, 48), std::memory_order_relaxed); break;
+                    case PadDecay:  k.decay.store(std::clamp(target, 0.0f, 1.0f), std::memory_order_relaxed); break;
+                    default: break;
+                }
+            } else if (m.deviceIndex < 0) {
                 if (c.instrument) c.instrument->pluginParamSet(m.paramIndex, target);
             } else if (m.deviceIndex < static_cast<int32_t>(c.devices.size())) {
                 if (c.devices[m.deviceIndex]) c.devices[m.deviceIndex]->setParam(m.paramIndex, target);

@@ -422,6 +422,21 @@ NOTA_API int32_t     nota_rhythm_voice_device_bypassed(const NotaEngine* engine,
 NOTA_API void        nota_rhythm_set_voice_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t bypassed);
 NOTA_API const char* nota_rhythm_kit_name(const NotaEngine* engine, int32_t track_id);
 NOTA_API void        nota_rhythm_set_kit_name(NotaEngine* engine, int32_t track_id, const char* name);
+/* Nota Rhythm macros. The eight values are the instrument's macro1..macro8 plugin params; these edit
+ * their names and mappings. A mapping drives a target over [lo, hi] in the target's own units: device
+ * -1 = one of the Rhythm's own params (param = its plugin-param index, 0..1), device >= 0 = param of
+ * that device on voice's FX chain. add returns the mapping index or -1; clear drops every mapping and
+ * name (the values stay). */
+NOTA_API const char* nota_rhythm_macro_name(const NotaEngine* engine, int32_t track_id, int32_t macro);
+NOTA_API void        nota_rhythm_set_macro_name(NotaEngine* engine, int32_t track_id, int32_t macro, const char* name);
+NOTA_API int32_t     nota_rhythm_add_macro_mapping(NotaEngine* engine, int32_t track_id, int32_t macro, int32_t voice, int32_t device, int32_t param, float lo, float hi);
+NOTA_API int32_t     nota_rhythm_macro_mapping_count(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t     nota_rhythm_macro_mapping_info(const NotaEngine* engine, int32_t track_id, int32_t index, int32_t* macro, int32_t* voice,
+                                                    int32_t* device, int32_t* param, float* lo, float* hi, int32_t* curve);
+NOTA_API int32_t     nota_rhythm_remove_macro_mapping(NotaEngine* engine, int32_t track_id, int32_t index);
+NOTA_API int32_t     nota_rhythm_set_macro_mapping_range(NotaEngine* engine, int32_t track_id, int32_t index, float lo, float hi);
+NOTA_API int32_t     nota_rhythm_set_macro_mapping_curve(NotaEngine* engine, int32_t track_id, int32_t index, int32_t curve);
+NOTA_API void        nota_rhythm_clear_macros(NotaEngine* engine, int32_t track_id);
 /* Adds an instrument track with the built-in sampler loaded from a file.
  * Returns id (>0), or 0 on failure (decode error). */
 NOTA_API int32_t nota_engine_add_sampler_track(NotaEngine* engine, const char* path_utf8,

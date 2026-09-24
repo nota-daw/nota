@@ -13,8 +13,12 @@
 //                     there (several fill the pads after it). Fold hides the empty pads.
 //             Mixer — the bank's loaded pads as rows: volume, pan, mute · solo · choke.
 //             Chain — the selected pad's device chain: its instrument and insert effects.
+//             Macro — the kit's eight macros (MacroPanel): a knob each, the name, and where
+//                     it goes; a kit loads with its own (KitMacros), mapped onto the pads'
+//                     controls and their effects.
 //   Pad 186   the selected pad: its one-shot, volume · pan · tune · decay, the choke
-//             group, and its instrument's editor.
+//             group, and its instrument's editor. In Macro, the selected macro instead: its
+//             receivers with their ranges, and Map · Rename · Clear.
 //   Status    the selection and the kit, in words.
 //
 // A pad's colour is its track-palette slot; brass means selection only, and a pad that is
@@ -36,11 +40,12 @@ namespace Nota.App;
 
 internal sealed partial class RackCardView
 {
-    private static int _drumView;          // 0 Pads, 1 Mixer, 2 Chain
+    private static int _drumView;          // 0 Pads, 1 Mixer, 2 Chain, 3 Macro
+    private static int _drumMacro;         // Macro: the selected macro, 0..7
     private static int _drumBank;          // 0..3 → C1..C4 (notes 36 + bank × 16)
     private static bool _drumFold;         // Pads: hide the empty pads
 
-    private static readonly string[] DrumViews = { "Pads", "Mixer", "Chain" };
+    private static readonly string[] DrumViews = { "Pads", "Mixer", "Chain", "Macro" };
     private static readonly string[] BankNames = { "C1", "C2", "C3", "C4" };
     private static readonly string[] ChokeNames = { "Off", "1", "2", "3", "4" };
     private const double DrumPadW = 186, DrumTabH = 20, DrumStripH = 22, DrumStatusH = 18, MixRowH = 13;
@@ -64,13 +69,17 @@ internal sealed partial class RackCardView
         var readout = DrumMono("", TextTertiary, NotaType.Axis);
         readout.Margin = new Thickness(0, 0, 8, 0);
         readout.HorizontalAlignment = HorizontalAlignment.Right;
+        var macros = new DrumMacroSurface(this, a);
         Control view = _drumView switch
         {
             1 => DrumMixer(a, readout),
             2 => DrumChain(a),
+            3 => MacroPanel.Grid(_ctx, macros, _drumMacro, m => { _drumMacro = m; DeferRebuild(); }, _irTick, stacked: true),
             _ => DrumGrid(a),
         };
-        if (_drumView != 1)
+        if (_drumView == 3)
+            readout.Text = $"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned";
+        else if (_drumView != 1)
         {
             int inBank = pads.Count(c => InBank(a.ChainTriggerNote(c)));
             readout.Text = $"{BankNames[_drumBank]} · {inBank}/16 loaded";
@@ -82,7 +91,7 @@ internal sealed partial class RackCardView
         Grid.SetRow(strip, 1); left.Children.Add(strip);
         Grid.SetRow(view, 2); left.Children.Add(view);
 
-        var panel = DrumBox(DrumPadPanel(a));
+        var panel = DrumBox(_drumView == 3 ? MacroPanel.Detail(_ctx, macros, _drumMacro, _irTick) : DrumPadPanel(a));
         panel.Width = DrumPadW;
 
         var body = new Grid
@@ -93,7 +102,7 @@ internal sealed partial class RackCardView
         body.Children.Add(DrumBox(left));
         Grid.SetColumn(panel, 1); body.Children.Add(panel);
 
-        var statusHost = DrumStatus(a, pads);
+        var statusHost = DrumStatus(a, pads, macros);
         DockPanel.SetDock(statusHost, Dock.Bottom);
         var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
 
@@ -643,7 +652,7 @@ internal sealed partial class RackCardView
 
     // ---- status strip (18) -----------------------------------------------------------
 
-    private Control DrumStatus(IRackAccess a, List<int> pads)
+    private Control DrumStatus(IRackAccess a, List<int> pads, IMacroSurface macros)
     {
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = DrumMono("", TextSecondary, 8);
@@ -663,6 +672,7 @@ internal sealed partial class RackCardView
         string Summary()
         {
             string bank = $"Bank {BankNames[_drumBank]}";
+            if (_drumView == 3) return MacroPanel.Status(E, macros, _drumMacro);
             if (_drumView == 1)
             {
                 var inBank = pads.Where(c => InBank(a.ChainTriggerNote(c))).ToList();
@@ -903,5 +913,170 @@ internal sealed partial class RackCardView
             e.Handled = true; click();
         };
         return b;
+    }
+
+    // ---- the kit macros (MacroPanel), over the rack's macros ------------------------------
+
+    // The rack's eight macros ride its plugin params (index = macro). A pad is a slot; its
+    // targets are its own controls (volume · pan · tune · decay), its instrument's params and
+    // its effects' params.
+    private sealed class DrumMacroSurface(RackCardView v, IRackAccess a) : IMacroSurface
+    {
+        private IAudioEngine E => v.E;
+        public int TrackId => v.T;
+        public int AutomationDevice => a.AutomationDeviceIndex;
+        public int MacroParamIndex(int m) => m;
+        public string MacroName(int m) => a.MacroName(m);
+        public void SetMacroName(int m, string n) => a.SetMacroName(m, n);
+        public string SlotNoun => "pads";
+        public IReadOnlyList<int> Slots() => LoadedPads(a);
+        public string SlotName(int c) => v.PadName(a, c);
+        public IBrush SlotHue(int c) => PadHue(c);
+        public int MappingCount() => a.MappingCount();
+        public bool TryGetMapping(int i, out RackMacroMapping m) => a.TryGetMapping(i, out m);
+        public int AddMapping(int m, int c, int d, int p, float lo, float hi) => a.AddMacroMapping(m, c, d, p, lo, hi);
+        public bool RemoveMapping(int i) => a.RemoveMapping(i);
+        public bool SetMappingRange(int i, float lo, float hi) => a.SetMappingRange(i, lo, hi);
+
+        public (string Param, string Device) TargetLabel(RackMacroMapping m) => m.DeviceIndex switch
+        {
+            RackMacroMapping.PadControls => (PadParam(m.ParamIndex), ""),
+            < 0 => (a.ChainInstrumentParamName(m.Chain, m.ParamIndex), InstrumentWord(a, m.Chain)),
+            _ => (a.ChainDeviceParamName(m.Chain, m.DeviceIndex, m.ParamIndex), a.ChainDeviceName(m.Chain, m.DeviceIndex)),
+        };
+        public (float Min, float Max) TargetRange(RackMacroMapping m) => m.DeviceIndex switch
+        {
+            // Tune's ±48 st would squeeze a musical range into a sliver: the bar shows ±24.
+            RackMacroMapping.PadControls => m.ParamIndex == RackMacroMapping.PadTune ? (-24f, 24f) : PadRange(m.ParamIndex),
+            < 0 => (0f, 1f),
+            _ => (a.ChainDeviceParamMin(m.Chain, m.DeviceIndex, m.ParamIndex), a.ChainDeviceParamMax(m.Chain, m.DeviceIndex, m.ParamIndex)),
+        };
+        public float TargetValue(RackMacroMapping m) => m.DeviceIndex switch
+        {
+            RackMacroMapping.PadControls => m.ParamIndex switch
+            {
+                RackMacroMapping.PadVolume => a.ChainGain(m.Chain),
+                RackMacroMapping.PadPan => a.ChainPan(m.Chain),
+                RackMacroMapping.PadTune => E.RackChainTune(TrackId, m.Chain),
+                _ => E.RackChainDecay(TrackId, m.Chain),
+            },
+            < 0 => a.ChainInstrumentParamGet(m.Chain, m.ParamIndex),
+            _ => a.ChainDeviceParamGet(m.Chain, m.DeviceIndex, m.ParamIndex),
+        };
+        public string FormatTarget(RackMacroMapping m, float x)
+        {
+            if (m.DeviceIndex >= 0) { var (lo, hi) = TargetRange(m); return MacroPanel.FormatDeviceParam(lo, hi, x); }
+            if (m.DeviceIndex != RackMacroMapping.PadControls) return $"{Math.Round(x * 100):0}";
+            return m.ParamIndex switch
+            {
+                RackMacroMapping.PadVolume => x <= 0.001f ? "−∞" : (20 * Math.Log10(x)).ToString("+0;−0;0", NotaNum.Culture),
+                RackMacroMapping.PadPan => PanText(x),
+                RackMacroMapping.PadTune => Math.Round(x).ToString("+0;−0;0", NotaNum.Culture),
+                _ => $"{Math.Round(x * 100):0}",
+            };
+        }
+        public string TargetUnit(RackMacroMapping m)
+        {
+            if (m.DeviceIndex >= 0) { var (lo, hi) = TargetRange(m); return MacroPanel.DeviceParamUnit(lo, hi); }
+            if (m.DeviceIndex != RackMacroMapping.PadControls) return "%";
+            return m.ParamIndex switch { RackMacroMapping.PadVolume => "dB", RackMacroMapping.PadPan => "", RackMacroMapping.PadTune => "st", _ => "%" };
+        }
+
+        private static string PadParam(int p) => p >= 0 && p < RackMacroMapping.PadParamNames.Length ? RackMacroMapping.PadParamNames[p] : "?";
+        private static (float, float) PadRange(int p) => p >= 0 && p < 4 ? (RackMacroMapping.PadParamMin[p], RackMacroMapping.PadParamMax[p]) : (0f, 1f);
+        // What a new pad-control mapping sweeps: a musical span rather than the whole control.
+        private static (float, float) PadDefault(int p) => p switch
+        {
+            RackMacroMapping.PadVolume => (0f, 1f),
+            RackMacroMapping.PadPan => (-1f, 1f),
+            RackMacroMapping.PadTune => (-12f, 12f),
+            _ => (0f, 1f),
+        };
+
+        public void FillMapMenu(MenuFlyout menu, int macro, Action changed)
+        {
+            var pads = LoadedPads(a);
+            if (pads.Count == 0) { menu.Items.Add(new MenuItem { Header = "No pads to map", IsEnabled = false }); return; }
+
+            // Every pad at once: its own controls, or the same effect on each pad that has it.
+            var all = new MenuItem { Header = $"All {pads.Count} pads" };
+            for (int p = 0; p < 4; p++)
+            {
+                int pp = p;
+                var (lo, hi) = PadDefault(p);
+                var mi = new MenuItem { Header = PadParam(p) };
+                mi.Click += (_, _) => { foreach (int c in pads) MacroPanel.Map(this, macro, c, RackMacroMapping.PadControls, pp, lo, hi); changed(); };
+                all.Items.Add(mi);
+            }
+            var kinds = new List<(int Kind, string Name, int Chain, int Dev)>();
+            foreach (int c in pads)
+                for (int d = 0; d < a.ChainDeviceCount(c); d++)
+                {
+                    int k = a.ChainDeviceBuiltinKind(c, d);
+                    if (k >= 0 && kinds.All(x => x.Kind != k)) kinds.Add((k, a.ChainDeviceName(c, d), c, d));
+                }
+            if (kinds.Count > 0) all.Items.Add(new Separator());
+            foreach (var (kind, dname, c0, d0) in kinds)
+            {
+                // The pads holding this effect; each maps its first one.
+                var holders = pads.Select(c => (c, d: FirstOfKind(c, kind))).Where(x => x.d >= 0).ToList();
+                var fx = new MenuItem { Header = $"Every {dname} ({holders.Count} pad{(holders.Count == 1 ? "" : "s")})" };
+                for (int p = 0; p < a.ChainDeviceParamCount(c0, d0); p++)
+                {
+                    int pp = p;
+                    var mi = new MenuItem { Header = a.ChainDeviceParamName(c0, d0, p) };
+                    mi.Click += (_, _) =>
+                    {
+                        foreach (var (c, d) in holders)
+                            MacroPanel.Map(this, macro, c, d, pp, a.ChainDeviceParamMin(c, d, pp), a.ChainDeviceParamMax(c, d, pp));
+                        changed();
+                    };
+                    fx.Items.Add(mi);
+                }
+                all.Items.Add(fx);
+            }
+            menu.Items.Add(all);
+            menu.Items.Add(new Separator());
+
+            // One pad: its controls, its instrument, each of its effects.
+            foreach (int c in pads)
+            {
+                var pad = new MenuItem { Header = $"{v.PadName(a, c)}  ·  {NoteName(a.ChainTriggerNote(c))}" };
+                var ctl = new MenuItem { Header = "Pad" };
+                for (int p = 0; p < 4; p++)
+                {
+                    var (lo, hi) = PadDefault(p);
+                    ctl.Items.Add(MacroPanel.Target(this, PadParam(p), macro, c, RackMacroMapping.PadControls, p, lo, hi, changed,
+                        MacroPanel.IsMapped(this, macro, c, RackMacroMapping.PadControls, p)));
+                }
+                pad.Items.Add(ctl);
+                int ipc = a.ChainInstrumentParamCount(c);
+                if (ipc > 0)
+                {
+                    var inst = new MenuItem { Header = InstrumentWord(a, c) };
+                    for (int p = 0; p < ipc; p++)
+                        inst.Items.Add(MacroPanel.Target(this, a.ChainInstrumentParamName(c, p), macro, c, -1, p, 0f, 1f, changed,
+                            MacroPanel.IsMapped(this, macro, c, -1, p)));
+                    pad.Items.Add(inst);
+                }
+                for (int d = 0; d < a.ChainDeviceCount(c); d++)
+                {
+                    int dpc = a.ChainDeviceParamCount(c, d);
+                    if (dpc <= 0) continue;
+                    var dev = new MenuItem { Header = a.ChainDeviceName(c, d) };
+                    for (int p = 0; p < dpc; p++)
+                        dev.Items.Add(MacroPanel.Target(this, a.ChainDeviceParamName(c, d, p), macro, c, d, p,
+                            a.ChainDeviceParamMin(c, d, p), a.ChainDeviceParamMax(c, d, p), changed, MacroPanel.IsMapped(this, macro, c, d, p)));
+                    pad.Items.Add(dev);
+                }
+                menu.Items.Add(pad);
+            }
+        }
+
+        private int FirstOfKind(int c, int kind)
+        {
+            for (int d = 0; d < a.ChainDeviceCount(c); d++) if (a.ChainDeviceBuiltinKind(c, d) == kind) return d;
+            return -1;
+        }
     }
 }

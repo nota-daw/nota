@@ -190,6 +190,27 @@ const char* nota_rhythm_kit_name(const NotaEngine* e, int32_t t) {
 void nota_rhythm_set_kit_name(NotaEngine* e, int32_t t, const char* name) {
     if (e) ENG(e)->setRhythmKitName(t, name ? name : "");
 }
+const char* nota_rhythm_macro_name(const NotaEngine* e, int32_t t, int32_t m) {
+    static std::string s; s = e ? CENG(e)->rhythmMacroName(t, m) : std::string{}; return s.c_str();
+}
+void nota_rhythm_set_macro_name(NotaEngine* e, int32_t t, int32_t m, const char* name) {
+    if (e) ENG(e)->setRhythmMacroName(t, m, name ? name : "");
+}
+int32_t nota_rhythm_add_macro_mapping(NotaEngine* e, int32_t t, int32_t m, int32_t v, int32_t d, int32_t p, float lo, float hi) {
+    return e ? ENG(e)->rhythmAddMacroMapping(t, m, v, d, p, lo, hi) : -1;
+}
+int32_t nota_rhythm_macro_mapping_count(const NotaEngine* e, int32_t t) { return e ? CENG(e)->rhythmMacroMappingCount(t) : 0; }
+int32_t nota_rhythm_macro_mapping_info(const NotaEngine* e, int32_t t, int32_t i, int32_t* m, int32_t* v, int32_t* d, int32_t* p,
+                                       float* lo, float* hi, int32_t* curve) {
+    int32_t a = 0, b = 0, c = -1, pp = 0, cv = 0; float l = 0.0f, h = 1.0f;
+    if (!e || !CENG(e)->rhythmMacroMappingInfo(t, i, a, b, c, pp, l, h, cv)) return 0;
+    if (m) *m = a; if (v) *v = b; if (d) *d = c; if (p) *p = pp; if (lo) *lo = l; if (hi) *hi = h; if (curve) *curve = cv;
+    return 1;
+}
+int32_t nota_rhythm_remove_macro_mapping(NotaEngine* e, int32_t t, int32_t i) { return (e && ENG(e)->rhythmRemoveMacroMapping(t, i)) ? 1 : 0; }
+int32_t nota_rhythm_set_macro_mapping_range(NotaEngine* e, int32_t t, int32_t i, float lo, float hi) { return (e && ENG(e)->rhythmSetMacroMappingRange(t, i, lo, hi)) ? 1 : 0; }
+int32_t nota_rhythm_set_macro_mapping_curve(NotaEngine* e, int32_t t, int32_t i, int32_t curve) { return (e && ENG(e)->rhythmSetMacroMappingCurve(t, i, curve)) ? 1 : 0; }
+void nota_rhythm_clear_macros(NotaEngine* e, int32_t t) { if (e) ENG(e)->rhythmClearMacros(t); }
 int32_t nota_track_set_grain_sample(NotaEngine* e, int32_t track_id, const char* path, int32_t root) {
     if (!e || !path) return 0;
     return ENG(e)->setTrackGrainSample(track_id, std::string(path), root) ? 1 : 0;

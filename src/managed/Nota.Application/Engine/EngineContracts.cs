@@ -181,7 +181,18 @@ public enum GamepadAxis
 
 /// <summary>An Instrument Rack macro mapping: macro <paramref name="Macro"/> drives the target
 /// param over [<paramref name="RangeMin"/>, <paramref name="RangeMax"/>] in the target's own units.
-/// <paramref name="DeviceIndex"/> &lt; 0 targets the chain's instrument (plugin-param index);
-/// otherwise the device at that chain position (generic-param index).</summary>
+/// <paramref name="DeviceIndex"/> -1 targets the chain's instrument (plugin-param index), -2
+/// (<see cref="PadControls"/>) the chain's own strip — a Drum Rack pad's Volume / Pan / Tune /
+/// Decay; otherwise the device at that chain position (generic-param index).</summary>
 public readonly record struct RackMacroMapping(
-    int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax);
+    int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax)
+{
+    /// <summary>DeviceIndex of a mapping onto the chain's own controls (RackCore::kPadControls).</summary>
+    public const int PadControls = -2;
+    /// <summary>The pad controls a mapping can drive, by ParamIndex, with their ranges (gain is linear,
+    /// pan −1..1, tune in semitones, decay 0..1 with 1 = hold).</summary>
+    public static readonly string[] PadParamNames = { "Volume", "Pan", "Tune", "Decay" };
+    public static readonly float[] PadParamMin = { 0f, -1f, -48f, 0f };
+    public static readonly float[] PadParamMax = { 2f, 1f, 48f, 1f };
+    public const int PadVolume = 0, PadPan = 1, PadTune = 2, PadDecay = 3;
+}

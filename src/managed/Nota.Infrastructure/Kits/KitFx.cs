@@ -158,8 +158,9 @@ public static class KitFx
     // The devices' exponential knobs: value = lo · (hi / lo)^norm.
     private static float Exp(double v, double lo, double hi) => (float)Math.Clamp(Math.Log(v / lo) / Math.Log(hi / lo), 0, 1);
 
-    // Dry gain is (1 - mix) · 2 · level²; this level keeps it at 1.
-    private static float UnityDry(double mix) => (float)Math.Clamp(Math.Sqrt(0.5 / (1 - mix)), 0, 1);
+    /// <summary>The Dry Level that keeps a reverb's or delay's dry at unity for a given mix: dry
+    /// gain is (1 - mix) · 2 · level².</summary>
+    public static float UnityDry(double mix) => (float)Math.Clamp(Math.Sqrt(0.5 / (1 - mix)), 0, 1);
 
     /// <summary>Builds <paramref name="fx"/> through a chain's device surface: <paramref name="add"/>
     /// appends a device of a kind and returns its index (-1 on failure); the rest address the

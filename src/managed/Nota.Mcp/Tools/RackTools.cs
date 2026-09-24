@@ -124,8 +124,10 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     });
 
     [McpServerTool(Name = "add_macro_mapping"), Description(
-        "Map a macro (0..7) onto a parameter. deviceIndex = -1 targets the chain instrument, else the "
-        + "chain's device index. range is the param's normalized 0..1 span the macro sweeps. Returns mapping index.")]
+        "Map a macro (0..7) onto a parameter. deviceIndex = -1 targets the chain instrument, -2 the chain's own controls "
+        + "(a Drum Rack pad: paramIndex 0 Volume (linear gain), 1 Pan (-1..1), 2 Tune (semitones), 3 Decay (0..1, 1 = hold)), "
+        + "else the chain's device index (a built-in effect on the pad; range in the device's units). range is the span the "
+        + "macro sweeps, in the target's units (0..1 for an instrument param). Returns mapping index.")]
     public Task<int> AddMacroMapping(int trackId, int macro, int chain, int deviceIndex, int paramIndex, float rangeMin = 0f, float rangeMax = 1f)
         => Mutate(() => E.RackAddMacroMapping(trackId, macro, chain, deviceIndex, paramIndex, rangeMin, rangeMax));
 

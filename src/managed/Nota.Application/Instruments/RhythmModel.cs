@@ -27,9 +27,14 @@ public static class RhythmModel
     public const int S_Step = 0, S_Bank = 1, S_Rev = 2, S_Active = 3, S_Glue = 4, S_Flash0 = 5, S_Pos0 = S_Flash0 + Voices,
         ScopeLength = S_Pos0 + Voices;
 
-    // State magics: RTH1 carries the first 60 params, RTH2 all of them.
-    private const uint MagicV1 = 0x31485452, MagicV2 = 0x32485452;
+    // State magics: RTH1 carries the first 60 params, RTH2 up to Glue, RTH3 all of them (+ the macros).
+    private const uint MagicV1 = 0x31485452, MagicV2 = 0x32485452, MagicV3 = 0x33485452;
     public const int LegacyParams = Voices * 7 + 4;
+    public const int Macros = 8;
+    /// <summary>The param count of an RTH2 blob — everything before the macros.</summary>
+    public const int ParamsV2 = LegacyParams + Voices * 3 + 1;
+    /// <summary>Plugin-param id of macro <paramref name="m"/> (0-based).</summary>
+    public static string MacroId(int m) => $"macro{m + 1}";
 
     public static readonly string[] VoiceNames = { "Kick", "Snare", "Clap", "Rim", "Closed Hat", "Open Hat", "Tom", "Perc" };
     public static readonly string[] ShortNames = { "KICK", "SNR", "CLAP", "RIM", "CH", "OH", "TOM", "PERC" };
@@ -98,13 +103,14 @@ public static class RhythmModel
     }
 
     /// <summary>Read the blob: [magic][params][bank, voice, 2][on, vel, acc per bank/voice/step].
-    /// <paramref name="paramCount"/> is the instrument's current count (RTH2); an RTH1 blob holds 60.</summary>
+    /// <paramref name="paramCount"/> is the instrument's current count (RTH3); RTH2 holds all but the
+    /// macros, RTH1 the first 60.</summary>
     public static Pattern Parse(byte[] st, int paramCount)
     {
         var p = new Pattern();
         if (st.Length < 4) return p;
         uint magic = BitConverter.ToUInt32(st, 0);
-        int n = magic == MagicV1 ? LegacyParams : magic == MagicV2 ? paramCount : -1;
+        int n = magic == MagicV1 ? LegacyParams : magic == MagicV2 ? ParamsV2 : magic == MagicV3 ? paramCount : -1;
         if (n < 0) return p;
         int off = 4 + n * 4;
         if (off + 2 <= st.Length) { p.CurrentBank = Math.Min((int)st[off], Banks - 1); p.SelectedVoice = Math.Min((int)st[off + 1], Voices - 1); }
@@ -174,5 +180,6 @@ public static class RhythmModel
         + "reverse (≥ .5 plays the region backwards). Globals: swing (delays odd 16ths, 1 = half a step), humanize (velocity "
         + "jitter), accent (how much louder an accented step plays, up to 2×), glue (bus compressor: 0 off … 1 heavy), "
         + "volume (master). Steps: 16 per bar at 1/16 in four banks A–D; a step has a velocity 0..1 (below 0.45 it is a quiet "
-        + "step) and an accent flag. Closed Hat chokes Open Hat.";
+        + "step) and an accent flag. Closed Hat chokes Open Hat. Macros macro1..macro8 (0..1): each drives its mapped targets "
+        + "(voice params or params of a voice's FX devices) across their ranges; a factory kit sets them up.";
 }

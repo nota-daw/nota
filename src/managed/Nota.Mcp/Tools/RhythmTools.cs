@@ -8,7 +8,8 @@
 // Decay / Punch / Tone / Drive / Level / Pan, and for a sample voice Start / Length / Reverse)
 // and the groove (Swing / Humanize / Accent / Glue / Volume) are plugin parameters — set them with
 // set_rhythm_voice / set_rhythm_perform, or get_instrument_params / set_instrument_param_by_id.
-// A voice plays its built-in synth engine or a loaded one-shot sample.
+// A voice plays its built-in synth engine or a loaded one-shot sample. Eight macros drive voice
+// params and the voices' effects (get_rhythm_macros / set_rhythm_macro / map_rhythm_macro).
 
 using System.ComponentModel;
 using System.Text;
@@ -186,6 +187,84 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         if (semitones is { } st) Set("tune", RM.SampleSemisNorm(st));
         if (reverse is { } r) Set("reverse", r ? 1f : 0f);
         return VoiceLine(trackId, v);
+    });
+
+    public sealed record RhythmMacro(int Index, string Name, float Value, RhythmMacroTarget[] Targets);
+    public sealed record RhythmMacroTarget(int Mapping, string Voice, string Target, float RangeMin, float RangeMax, int Device, int Param);
+
+    [McpServerTool(Name = "get_rhythm_macros"), Description(
+        "The Rhythm's eight macros: name, value 0..1 and every target — a voice param (device -1, param = its plugin-param "
+        + "index, range 0..1) or a param of a voice's effect (device ≥ 0, range in the device's units). A factory kit loads "
+        + "its own (Tune, Decay, Hats, Drive/Tape, Room, Echo, 808 …).")]
+    public Task<RhythmMacro[]> GetRhythmMacros(int trackId) => Read(() =>
+    {
+        var ids = Ids(trackId);
+        var all = new List<RhythmMacro>();
+        int n = E.RhythmMacroMappingCount(trackId);
+        for (int m = 0; m < RM.Macros; m++)
+        {
+            var targets = new List<RhythmMacroTarget>();
+            for (int i = 0; i < n; i++)
+            {
+                if (!E.RhythmTryGetMacroMapping(trackId, i, out var mm, out _) || mm.Macro != m) continue;
+                string what = mm.DeviceIndex < 0 ? E.PluginParamId(trackId, -1, mm.ParamIndex)
+                    : $"{E.RhythmVoiceDeviceName(trackId, mm.Chain, mm.DeviceIndex)} › {E.RhythmVoiceDeviceParamName(trackId, mm.Chain, mm.DeviceIndex, mm.ParamIndex)}";
+                targets.Add(new RhythmMacroTarget(i, mm.Chain >= 0 ? RM.VoiceNames[mm.Chain] : "kit", what, mm.RangeMin, mm.RangeMax, mm.DeviceIndex, mm.ParamIndex));
+            }
+            float val = ids.TryGetValue(RM.MacroId(m), out var pi) ? E.PluginParamGet(trackId, -1, pi) : 0f;
+            all.Add(new RhythmMacro(m, E.RhythmMacroName(trackId, m), val, targets.ToArray()));
+        }
+        return all.ToArray();
+    });
+
+    [McpServerTool(Name = "set_rhythm_macro"), Description("Turn a Rhythm macro (0..7) to value 0..1 (drives every target), and/or rename it.")]
+    public Task<string> SetRhythmMacro(int trackId, int macro, float? value = null, string? name = null) => Mutate(() =>
+    {
+        if (E.TrackInstrumentKind(trackId) != RM.Kind) return $"error: track {trackId} is not a Nota Rhythm";
+        if (macro is < 0 or >= RM.Macros) return "error: macro 0..7";
+        if (name is not null) E.RhythmSetMacroName(trackId, macro, name);
+        if (value is { } v && Ids(trackId).TryGetValue(RM.MacroId(macro), out var pi)) E.PluginParamSet(trackId, -1, pi, Math.Clamp(v, 0f, 1f));
+        return $"{E.RhythmMacroName(trackId, macro)}";
+    });
+
+    [McpServerTool(Name = "map_rhythm_macro"), Description(
+        "Map a Rhythm macro (0..7) onto a target. Voice param: voice = 0..7 or its name, param = the param id suffix "
+        + "(tune, decay, punch, tone, drive, level, pan, start, length), device omitted; a kit setting: voice = kit, param = "
+        + "swing | humanize | accent | glue | volume. A voice effect: device = its index on the voice's FX chain, param = the "
+        + "device's param name (e.g. Dry/Wet). rangeMin/rangeMax: the span swept (0..1 for voice params, device units for "
+        + "effects; omitted = the whole param). Returns the mapping index or an error.")]
+    public Task<string> MapRhythmMacro(int trackId, int macro, string voice, string param, int device = -1,
+        float? rangeMin = null, float? rangeMax = null) => Mutate(() =>
+    {
+        if (E.TrackInstrumentKind(trackId) != RM.Kind) return $"error: track {trackId} is not a Nota Rhythm";
+        bool kit = voice.Trim().Equals("kit", StringComparison.OrdinalIgnoreCase);
+        int v = kit ? -1 : VoiceIndex(voice);
+        if (!kit && v < 0) return $"error: voice '{voice}'";
+        int p; float lo = rangeMin ?? 0f, hi = rangeMax ?? 1f;
+        if (device < 0)
+        {
+            if (!Ids(trackId).TryGetValue(kit ? param : RM.Id(v, param), out p)) return $"error: no param '{param}'";
+        }
+        else
+        {
+            if (kit || device >= E.RhythmVoiceDeviceCount(trackId, v)) return $"error: voice {voice} has no effect {device}";
+            p = Enumerable.Range(0, E.RhythmVoiceDeviceParamCount(trackId, v, device)).FirstOrDefault(i => E.RhythmVoiceDeviceParamName(trackId, v, device, i) == param, -1);
+            if (p < 0) return $"error: {E.RhythmVoiceDeviceName(trackId, v, device)} has no '{param}'";
+            lo = rangeMin ?? E.RhythmVoiceDeviceParamMin(trackId, v, device, p);
+            hi = rangeMax ?? E.RhythmVoiceDeviceParamMax(trackId, v, device, p);
+        }
+        int idx = E.RhythmAddMacroMapping(trackId, macro, v, device, p, lo, hi);
+        return idx >= 0 ? idx.ToString() : "error: could not map";
+    });
+
+    [McpServerTool(Name = "unmap_rhythm_macro"), Description("Remove a Rhythm macro mapping by its index (from get_rhythm_macros), or every mapping of a macro with macro = 0..7 and index = -1.")]
+    public Task<int> UnmapRhythmMacro(int trackId, int index = -1, int macro = -1) => Mutate(() =>
+    {
+        if (index >= 0) return E.RhythmRemoveMacroMapping(trackId, index) ? 1 : 0;
+        int removed = 0;
+        for (int i = E.RhythmMacroMappingCount(trackId) - 1; i >= 0; i--)
+            if (E.RhythmTryGetMacroMapping(trackId, i, out var m, out _) && m.Macro == macro && E.RhythmRemoveMacroMapping(trackId, i)) removed++;
+        return removed;
     });
 
     [McpServerTool(Name = "set_rhythm_perform"), Description(

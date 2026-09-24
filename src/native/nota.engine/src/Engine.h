@@ -527,6 +527,17 @@ public:
     Device* rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) const;
     std::string rhythmKitName(int32_t trackId) const;
     void    setRhythmKitName(int32_t trackId, const std::string& name);
+    // Nota Rhythm macros: names + mappings (the values are the macro1..8 plugin params).
+    std::string rhythmMacroName(int32_t trackId, int32_t macro) const;
+    void    setRhythmMacroName(int32_t trackId, int32_t macro, const std::string& name);
+    int32_t rhythmAddMacroMapping(int32_t trackId, int32_t macro, int32_t voice, int32_t device, int32_t param, float lo, float hi);
+    int32_t rhythmMacroMappingCount(int32_t trackId) const;
+    bool    rhythmMacroMappingInfo(int32_t trackId, int32_t index, int32_t& macro, int32_t& voice, int32_t& device,
+                                   int32_t& param, float& lo, float& hi, int32_t& curve) const;
+    bool    rhythmRemoveMacroMapping(int32_t trackId, int32_t index);
+    bool    rhythmSetMacroMappingRange(int32_t trackId, int32_t index, float lo, float hi);
+    bool    rhythmSetMacroMappingCurve(int32_t trackId, int32_t index, int32_t curve);
+    void    rhythmClearMacros(int32_t trackId);
     bool    setTrackGrainSample(int32_t trackId, const std::string& path, int32_t rootNote);
     int32_t addSamplerTrack(const std::string& path, int32_t rootNote, bool loop);
     int32_t addSamplerInstrumentTrack();                                        // empty Sampler (sample loaded later)

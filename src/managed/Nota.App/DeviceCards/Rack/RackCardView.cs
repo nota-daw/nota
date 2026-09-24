@@ -615,10 +615,12 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     private Control IrMappingRow(IRackAccess a, int mappingIndex, RackMacroMapping mm)
     {
-        string dev = mm.DeviceIndex < 0 ? a.ChainInstrumentName(mm.Chain) : a.ChainDeviceName(mm.Chain, mm.DeviceIndex);
-        string pn = mm.DeviceIndex < 0 ? a.ChainInstrumentParamName(mm.Chain, mm.ParamIndex) : a.ChainDeviceParamName(mm.Chain, mm.DeviceIndex, mm.ParamIndex);
+        bool pad = mm.DeviceIndex == RackMacroMapping.PadControls && mm.ParamIndex is >= 0 and < 4;
+        string dev = pad ? $"Chain {mm.Chain + 1}" : mm.DeviceIndex < 0 ? a.ChainInstrumentName(mm.Chain) : a.ChainDeviceName(mm.Chain, mm.DeviceIndex);
+        string pn = pad ? RackMacroMapping.PadParamNames[mm.ParamIndex] : mm.DeviceIndex < 0 ? a.ChainInstrumentParamName(mm.Chain, mm.ParamIndex) : a.ChainDeviceParamName(mm.Chain, mm.DeviceIndex, mm.ParamIndex);
         float pMin = 0, pMax = 1;
-        if (mm.DeviceIndex >= 0) { pMin = a.ChainDeviceParamMin(mm.Chain, mm.DeviceIndex, mm.ParamIndex); pMax = a.ChainDeviceParamMax(mm.Chain, mm.DeviceIndex, mm.ParamIndex); }
+        if (pad) { pMin = RackMacroMapping.PadParamMin[mm.ParamIndex]; pMax = RackMacroMapping.PadParamMax[mm.ParamIndex]; }
+        else if (mm.DeviceIndex >= 0) { pMin = a.ChainDeviceParamMin(mm.Chain, mm.DeviceIndex, mm.ParamIndex); pMax = a.ChainDeviceParamMax(mm.Chain, mm.DeviceIndex, mm.ParamIndex); }
         double span = Math.Max(1e-6, pMax - pMin);
         double fLo = Math.Clamp((mm.RangeMin - pMin) / span, 0, 1), fHi = Math.Clamp((mm.RangeMax - pMin) / span, 0, 1);
         var name = new TextBlock { Text = $"{dev} · {pn}", FontSize = 9, Foreground = IrTxt, Width = 122, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
@@ -1271,7 +1273,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             { count++; lastChain = mm.Chain; lastDev = mm.DeviceIndex; lastParam = mm.ParamIndex; }
         if (count == 1)
         {
-            string pn = lastDev < 0
+            string pn = lastDev == RackMacroMapping.PadControls && lastParam is >= 0 and < 4
+                ? RackMacroMapping.PadParamNames[lastParam]
+                : lastDev < 0
                 ? a.ChainInstrumentParamName(lastChain, lastParam)
                 : a.ChainDeviceParamName(lastChain, lastDev, lastParam);
             text = $"→ C{lastChain + 1} {pn}";

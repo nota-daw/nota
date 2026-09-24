@@ -10954,7 +10954,7 @@ Console.WriteLine("-- Nota Rhythm --");
     Check(re.TrackInstrumentKind(t) == 12, $"instrument kind is 12 ({re.TrackInstrumentKind(t)})");
     Check(re.DeviceName(t, -1) == "Nota Rhythm", $"name is Nota Rhythm ('{re.DeviceName(t, -1)}')");
     int pc = re.PluginParamCount(t, -1);
-    Check(pc == 85, $"param count 85 (got {pc})");
+    Check(pc == 93, $"param count 93 — 85 + eight macros (got {pc})");
     int RIdx(NotaEngine e, int tr, string id) { for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) return i; return -1; }
     Check(re.PluginParamName(t, -1, RIdx(re, t, "v4_decay")) == "Closed Hat Decay" && re.PluginParamName(t, -1, RIdx(re, t, "swing")) == "Perform Swing"
           && re.PluginParamName(t, -1, RIdx(re, t, "glue")) == "Master Glue" && re.PluginParamName(t, -1, RIdx(re, t, "v2_start")) == "Clap Start",
@@ -11004,7 +11004,7 @@ Console.WriteLine("-- Nota Rhythm --");
         var v1 = new List<byte>();
         v1.AddRange(BitConverter.GetBytes(0x31485452u));
         v1.AddRange(v2.Skip(4).Take(60 * 4));
-        v1.AddRange(v2.Skip(4 + 85 * 4));
+        v1.AddRange(v2.Skip(4 + 93 * 4));
         using var old = new NotaEngine();
         int to = old.AddRhythmTrack();
         old.InstrumentAction(to, 4, 0, 0);   // clear, so the steps must come from the blob
@@ -11013,7 +11013,7 @@ Console.WriteLine("-- Nota Rhythm --");
         Check(Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_tune")) - 0.9f) < 0.02f && op.On[0, 0, 0] && op.On[0, 0, 4] && op.On[0, 4, 2]
               && Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_length")) - 1f) < 1e-4f,
             "an RTH1 blob (older projects) restores params and steps; new params keep defaults");
-        var legacy = RhythmModel.Parse(v1.ToArray(), 85);
+        var legacy = RhythmModel.Parse(v1.ToArray(), 93);
         Check(legacy.On[0, 0, 0] && legacy.On[0, 4, 2] && !legacy.On[0, 1, 0], "RhythmModel.Parse reads an RTH1 blob");
     }
 
@@ -11308,6 +11308,160 @@ Console.WriteLine("-- Kit FX --");
     double side = 0, mid = 0;
     for (int i = 0; i < clap.Length / 2; i++) { double l = clap[2 * i], r = clap[2 * i + 1]; side += (l - r) * (l - r); mid += (l + r) * (l + r); }
     Check(side > mid * 0.005, $"a stereo kit sample plays in stereo on a Rhythm voice (side/mid {side / Math.Max(mid, 1e-12):0.000})");
+}
+// ============ Kit macros: Drum Rack + Rhythm ============
+// Every factory kit loads with its own macros, mapped onto pad controls and onto the pads'
+// built-in effects; a fresh kit sounds exactly as its recipe (each macro sits on the value its
+// targets load with).
+Console.WriteLine("-- Kit macros --");
+{
+    var svc = new DrumKitService();
+    static float Lerp(RackMacroMapping m, float v) => m.RangeMin + v * (m.RangeMax - m.RangeMin);
+
+    // ---- Drum Rack ----
+    using var e = new NotaEngine();
+    int t = svc.CreateTrack(e, "kompakt", out _);
+    int Chain(int note) { for (int c = 0; c < e.RackChainCount(t); c++) if (e.RackChainTriggerNote(t, c) == note) return c; return -1; }
+    int Param(int c, int d, string name) => Enumerable.Range(0, e.RackChainDeviceParamCount(t, c, d)).First(p => e.RackChainDeviceParamName(t, c, d, p) == name);
+    var names = Enumerable.Range(0, 8).Select(m => e.RackMacroName(t, m)).ToArray();
+    Check(names.Take(6).SequenceEqual(new[] { "Tune", "Decay", "Hats", "Drive", "Room", "Echo" }) && names[7] == "Macro 8",
+        $"a Drum Rack kit loads its macros ({string.Join(", ", names)})");
+    float RackTarget(RackMacroMapping m) => m.DeviceIndex switch
+    {
+        RackMacroMapping.PadControls => m.ParamIndex == RackMacroMapping.PadTune ? e.RackChainTune(t, m.Chain) : e.RackChainDecay(t, m.Chain),
+        _ => e.RackChainDeviceParamGet(t, m.Chain, m.DeviceIndex, m.ParamIndex),
+    };
+    var maps = Enumerable.Range(0, e.RackMappingCount(t)).Select(i => { e.RackTryGetMapping(t, i, out var m); return m; }).ToList();
+    Check(maps.Count > 30 && maps.All(m => Math.Abs(RackTarget(m) - Lerp(m, e.RackMacroGet(t, m.Macro))) < 1e-3f),
+        $"the kit's macros sit on the values the pads load with ({maps.Count} mappings)");
+    Check(maps.Any(m => m.Macro == 4 && m.Chain == Chain(38) && m.DeviceIndex == 0) && maps.Any(m => m.Macro == 3 && m.Chain == Chain(36) && m.DeviceIndex == 0),
+        "the Room and Drive macros map onto the pads' own Reverb and Forge");
+
+    int sn = Chain(38), dw = Param(sn, 0, "Dry/Wet");
+    float wet0 = e.RackChainDeviceParamGet(t, sn, 0, dw);
+    e.RackMacroSet(t, 4, 1f);
+    Check(Math.Abs(e.RackChainDeviceParamGet(t, sn, 0, dw) - 2 * wet0) < 1e-3f, $"turning Room opens the snare reverb ({wet0:0.00} → {e.RackChainDeviceParamGet(t, sn, 0, dw):0.00})");
+    e.RackMacroSet(t, 1, 0f);
+    e.RackMacroSet(t, 0, 1f);
+    Check(e.RackChainDecay(t, Chain(36)) < 0.3f && e.RackChainDecay(t, Chain(42)) > 0.99f && e.RackChainTune(t, Chain(36)) == 12,
+        "Decay gates the drums but not the hats; Tune moves the pads' pitch");
+
+    // A mapping follows its device: one put in front shifts it, removing it drops the mapping.
+    e.RackAddChainDevice(t, sn, 1);
+    e.RackMoveChainDevice(t, sn, 1, 0);
+    bool Follows(int dev) => Enumerable.Range(0, e.RackMappingCount(t)).Any(i => e.RackTryGetMapping(t, i, out var m) && m.Macro == 4 && m.Chain == sn && m.DeviceIndex == dev);
+    Check(Follows(1) && !Follows(0), "a macro mapping follows its device when the chain is reordered");
+    e.RackRemoveChainDevice(t, sn, 1);
+    Check(!Follows(1) && !Follows(0), "removing a device drops the macro mappings onto it");
+
+    // Save / copy: the mappings (pad controls too) ride the rack.
+    int n0 = e.RackMappingCount(t);
+    int dup = e.DuplicateTrack(t);
+    Check(dup > 0 && e.RackMappingCount(dup) == n0 && e.RackMacroName(dup, 4) == "Room", "duplicating a Drum Rack copies its macros and mappings");
+    e.RackMacroSet(dup, 1, 1f);
+    Check(e.RackChainDecay(dup, Chain(36)) > 0.99f && e.RackChainDecay(t, Chain(36)) < 0.3f, "the copy's macros drive the copy's pads");
+
+    // Another kit replaces them. Aether's snare and clap carry their room in the sample, so no
+    // reverb and no Room macro; Neon has an 808.
+    svc.LoadInto(e, t, "aether", out _);
+    Check(e.RackMacroName(t, 4) == "Macro 5" && e.RackMacroName(t, 1) == "Decay" && Enumerable.Range(0, e.RackMappingCount(t)).All(i => e.RackTryGetMapping(t, i, out var m) && m.Chain < e.RackChainCount(t)),
+        "loading another kit replaces the macros");
+    int neon = svc.CreateTrack(e, "neon", out _);
+    Check(e.RackMacroName(neon, 6) == "808", "a kit with an 808 gets a macro for it");
+    bool allKits = true;
+    foreach (var k in svc.All())
+    {
+        int kt = svc.CreateTrack(e, k.Id, out _);
+        int mc = e.RackMappingCount(kt);
+        for (int i = 0; i < mc && allKits; i++)
+        {
+            e.RackTryGetMapping(kt, i, out var m);
+            float cur = m.DeviceIndex == RackMacroMapping.PadControls
+                ? (m.ParamIndex == RackMacroMapping.PadTune ? e.RackChainTune(kt, m.Chain) : e.RackChainDecay(kt, m.Chain))
+                : e.RackChainDeviceParamGet(kt, m.Chain, m.DeviceIndex, m.ParamIndex);
+            if (Math.Abs(cur - Lerp(m, e.RackMacroGet(kt, m.Macro))) > 1e-3f || !float.IsFinite(m.RangeMax)) { allKits = false; Console.WriteLine($"   {k.Id}: macro {m.Macro} mapping {i} off"); }
+        }
+        if (mc < 10) { allKits = false; Console.WriteLine($"   {k.Id}: only {mc} mappings"); }
+        e.RemoveTrack(kt);
+    }
+    Check(allKits, "every factory kit loads macros that leave its sound as the recipe made it");
+
+    // ---- Rhythm ----
+    using var re = new NotaEngine();
+    int rt = svc.CreateRhythmTrack(re, "kompakt", out _);
+    var ids = Enumerable.Range(0, re.PluginParamCount(rt, -1)).ToDictionary(i => re.PluginParamId(rt, -1, i), i => i);
+    float G(string id) => re.PluginParamGet(rt, -1, ids[id]);
+    void S(string id, float v) => re.PluginParamSet(rt, -1, ids[id], v);
+    var rnames = Enumerable.Range(0, 8).Select(m => re.RhythmMacroName(rt, m)).ToArray();
+    Check(ids.ContainsKey("macro1") && ids.ContainsKey("macro8") && rnames.Take(6).SequenceEqual(names.Take(6)),
+        $"a Rhythm kit loads the same macros ({string.Join(", ", rnames)})");
+    float RTarget(NotaEngine x, int tr, RackMacroMapping m) => m.DeviceIndex < 0 ? x.PluginParamGet(tr, -1, m.ParamIndex) : x.RhythmVoiceDeviceParamGet(tr, m.Chain, m.DeviceIndex, m.ParamIndex);
+    var rmaps = Enumerable.Range(0, re.RhythmMacroMappingCount(rt)).Select(i => { re.RhythmTryGetMacroMapping(rt, i, out var m, out _); return m; }).ToList();
+    Check(rmaps.Count >= 20 && rmaps.All(m => Math.Abs(RTarget(re, rt, m) - Lerp(m, G($"macro{m.Macro + 1}"))) < 1e-3f)
+          && rmaps.Any(m => m.Macro == 4 && m.Chain == 1 && m.DeviceIndex == 0),
+        $"the Rhythm's macros sit on its voices' values, and reach the voices' effects ({rmaps.Count} mappings)");
+    int rdw = Enumerable.Range(0, re.RhythmVoiceDeviceParamCount(rt, 1, 0)).First(p => re.RhythmVoiceDeviceParamName(rt, 1, 0, p) == "Dry/Wet");
+    float rwet0 = re.RhythmVoiceDeviceParamGet(rt, 1, 0, rdw);
+    S("macro5", 1f); S("macro2", 0f);
+    Check(Math.Abs(re.RhythmVoiceDeviceParamGet(rt, 1, 0, rdw) - 2 * rwet0) < 1e-3f && G("v0_decay") < 0.3f && G("v4_decay") > 0.99f,
+        "turning a Rhythm macro moves the voice FX and voice params");
+
+    // Heard: Decay at the bottom shortens the kick.
+    float[] Kick(NotaEngine x, int tr)
+    {
+        x.InstrumentAction(tr, RhythmModel.A_ClearBank, 0, 0);
+        x.InstrumentAction(tr, RhythmModel.A_ToggleStep, 0, 0);
+        x.InstrumentAction(tr, RhythmModel.A_SetVel, 0, 1f);
+        x.Seek(0); x.Play();
+        var buf = new float[44100 * 2]; var blk = new float[512 * 2];
+        for (int done = 0; done < 44100; done += 512) { x.RenderOffline(blk, 512); Array.Copy(blk, 0, buf, done * 2, Math.Min(512, 44100 - done) * 2); }
+        x.StopTransport();
+        return buf;
+    }
+    static double Tail(float[] b) { double q = 0; for (int i = 44100 / 4 * 2; i < b.Length; i++) q += b[i] * b[i]; return q; }
+    double shortTail = Tail(Kick(re, rt));
+    S("macro2", 1f);
+    double longTail = Tail(Kick(re, rt));
+    Check(longTail > shortTail * 4 && double.IsFinite(longTail), $"the Decay macro is heard: the kick's tail {10 * Math.Log10(longTail / Math.Max(shortTail, 1e-12)):0} dB longer from bottom to top");
+
+    // Save / load and copy.
+    re.RhythmSetMacroName(rt, 7, "Wash");
+    re.RhythmAddMacroMapping(rt, 7, -1, -1, ids["glue"], 0f, 1f);
+    S("macro8", 0.25f);
+    var blob = re.GetPluginState(rt, -1);
+    using (var le = new NotaEngine())
+    {
+        int lt = le.AddRhythmTrack();
+        le.SetPluginState(lt, -1, blob);
+        Check(le.RhythmMacroMappingCount(lt) == re.RhythmMacroMappingCount(rt) && le.RhythmMacroName(lt, 7) == "Wash" && le.RhythmMacroName(lt, 4) == "Room"
+              && Math.Abs(le.PluginParamGet(lt, -1, ids["macro8"]) - 0.25f) < 1e-4f,
+            "the Rhythm's macros, mappings and names restore from the state blob");
+        le.PluginParamSet(lt, -1, ids["macro5"], 0f);
+        Check(le.RhythmVoiceDeviceParamGet(lt, 1, 0, rdw) < 1e-4f, "a restored macro drives the restored voice FX");
+        // A blob from before the macros (RTH2): no macro floats, no macro section — it loads as it was.
+        int nV2 = RhythmModel.ParamsV2;
+        var v2 = new List<byte>(BitConverter.GetBytes(0x32485452u));
+        v2.AddRange(blob.Skip(4).Take(nV2 * 4));
+        v2.AddRange(blob.Skip(4 + (nV2 + 8) * 4));
+        int macTag = Enumerable.Range(0, v2.Count - 3).Last(i => v2[i] == (byte)'R' && v2[i + 1] == (byte)'M' && v2[i + 2] == (byte)'C' && v2[i + 3] == (byte)'1');
+        int lt2 = le.AddRhythmTrack();
+        le.SetPluginState(lt2, -1, v2.Take(macTag).ToArray());
+        var p2 = RhythmModel.Parse(le.GetPluginState(lt2, -1), le.PluginParamCount(lt2, -1));
+        Check(le.RhythmMacroMappingCount(lt2) == 0 && le.RhythmVoiceDeviceCount(lt2, 1) == 1 && p2.On[0, 0, 0]
+              && Math.Abs(le.PluginParamGet(lt2, -1, ids["glue"]) - re.PluginParamGet(rt, -1, ids["glue"])) < 1e-4f,
+            "an RTH2 Rhythm blob (before macros) loads its params, pattern and FX");
+    }
+    int rdup = re.DuplicateTrack(rt);
+    Check(rdup > 0 && re.RhythmMacroMappingCount(rdup) == re.RhythmMacroMappingCount(rt) && re.RhythmMacroName(rdup, 7) == "Wash",
+        "duplicating a Rhythm copies its macros");
+    re.RhythmRemoveVoiceDevice(rt, 1, 0);
+    bool anyOnRemoved = Enumerable.Range(0, re.RhythmMacroMappingCount(rt)).Any(i => re.RhythmTryGetMacroMapping(rt, i, out var m, out _) && m.Chain == 1 && m.DeviceIndex >= 0);
+    Check(!anyOnRemoved && re.RhythmMacroMappingCount(rdup) > re.RhythmMacroMappingCount(rt), "removing a voice effect drops its macro mappings (the copy keeps its own)");
+    Check(re.RhythmAddMacroMapping(rt, 0, -1, -1, ids["macro2"], 0f, 1f) < 0, "a macro can't be mapped onto a macro");
+    // Yard (dub): tape on the kick and a dub echo — the knobs say so.
+    svc.LoadInto(re, rt, "yard", out _);
+    Check(re.RhythmMacroName(rt, 3) == "Tape" && re.RhythmMacroName(rt, 5) == "Dub" && re.RhythmMacroName(rt, 7) == "Macro 8",
+        $"loading a kit into a Rhythm replaces its macros ({string.Join(", ", Enumerable.Range(0, 8).Select(m => re.RhythmMacroName(rt, m)))})");
 }
 // ============ track groups (submix) ======================================
 Console.WriteLine("-- track groups --");

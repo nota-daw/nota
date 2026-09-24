@@ -14,6 +14,11 @@
 //                 Reverse, and Start · Length · Tune (st) · Decay · Drive · Level. FX — the
 //                 voice's insert chain, the Drum Rack's device slots over RhythmVoiceAccess:
 //                 click a slot for the effect's own card, add from the menu or drop one.
+//                 MACRO (the header's VOICE / MACRO) swaps the whole panel for the kit's eight
+//                 macros (MacroPanel): a knob each, its name and where it goes. They map onto
+//                 voice params and onto the voices' effects; a kit loads with its own
+//                 (KitMacros). Map adds a receiver to the selected macro; right-click a macro
+//                 for its receivers and ranges, rename or clear.
 //   PERFORM 186   Swing · Human · Accent (teal — they shape the playing, not the sound),
 //                 Master and Glue (the bus compressor), the output meter.
 //   STEP          a full-width strip: the selected voice's sixteen steps in bank A–D, a
@@ -27,6 +32,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -51,6 +57,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
     private const double KitW = 104, RailW = 186, StepH = 46, HeadH = 18, StatusH = 18, GraphW = 112;
 
     private static int _voiceTab;   // 0 Sound, 1 FX — kept across rebuilds (a voice click, a kit load)
+    private static bool _macroMode; // the centre shows the macros instead of the voice
+    private static int _macro;      // the selected macro, 0..7
 
     // A kit voice is named after its one-shot ("04 Clap" → "Clap"); a synth voice by its slot.
     private static string VoiceLabel(IAudioEngine engine, int track, int v, bool sample)
@@ -329,8 +337,24 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         ToolTip.SetTip(fileBtn, sampleMode ? $"{sampleName} — click to load another file" : "Load a one-shot into this voice (or drop a file on the voice)");
 
         var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Center };
-        voiceHead.Children.Add(Cap("VOICE"));
-        voiceHead.Children.Add(new TextBlock { Text = VoiceLabel(engine, track, sel, sampleMode), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 84, TextTrimming = TextTrimming.CharacterEllipsis });
+        // VOICE / MACRO: which the centre shows. The lit one is the one on screen.
+        Control ModeCap(string text, bool macro)
+        {
+            bool on = macro == _macroMode;
+            var c = Cap(text, on ? (macro ? AccentBright : NotaPalette.TextStrong) : NotaPalette.TextDisabled);
+            var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = c };
+            ToolTip.SetTip(host, macro ? "The kit's eight macros — knobs over every voice and its effects" : "The selected voice's sound and effects");
+            host.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                if (_macroMode != macro) { _macroMode = macro; ctx.RequestRebuild(); }
+            };
+            return host;
+        }
+        voiceHead.Children.Add(ModeCap("VOICE", false));
+        voiceHead.Children.Add(ModeCap("MACRO", true));
+        if (!_macroMode) voiceHead.Children.Add(new TextBlock { Text = VoiceLabel(engine, track, sel, sampleMode), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 84, TextTrimming = TextTrimming.CharacterEllipsis });
         int fxCount = engine.RhythmVoiceDeviceCount(track, sel);
         var tabSeg = Segments(new[] { "Sound", fxCount > 0 ? $"FX {fxCount}" : "FX" }, () => _voiceTab, i =>
         {
@@ -338,16 +362,25 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             _voiceTab = i; ctx.RequestRebuild();
         }, out _, padX: 6, fontSize: 7);
         ToolTip.SetTip(tabSeg, "Sound: the voice's source and shape · FX: its own effects, before the kit bus");
-        voiceHead.Children.Add(tabSeg);
+        if (!_macroMode) voiceHead.Children.Add(tabSeg);
         var voiceTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        if (_voiceTab == 0) voiceTools.Children.Add(srcSeg);
-        if (_voiceTab == 0) voiceTools.Children.Add(fileBtn);
-        if (_voiceTab == 1)
+        var macros = new RhythmMacroSurface(engine, track, idx, isSample, Dots);
+        if (_macroMode)
+        {
+            voiceTools.Children.Add(Mono($"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned"));
+            Border map = null!;
+            map = MacroPanel.Button("Map", teal: true, () => MacroPanel.ShowMapMenu(ctx, macros, map, _macro));
+            map.Height = 14;
+            ToolTip.SetTip(map, $"Add a receiver to {macros.MacroName(_macro)}: a voice param, a kit setting or a voice's effect");
+            voiceTools.Children.Add(map);
+        }
+        else if (_voiceTab == 0) { voiceTools.Children.Add(srcSeg); voiceTools.Children.Add(fileBtn); }
+        else if (_voiceTab == 1)
         {
             var hint = Mono("signal left → right", NotaPalette.TextDisabled);
             voiceTools.Children.Add(hint);
         }
-        if (sampleMode && _voiceTab == 0)
+        if (sampleMode && _voiceTab == 0 && !_macroMode)
         {
             var revText = new TextBlock { Text = "Reverse", FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             var rev = SmallButton(revText, revText,
@@ -426,7 +459,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
         Control voiceBody;
-        if (_voiceTab == 1)
+        if (_macroMode)
+            voiceBody = MacroPanel.Grid(ctx, macros, _macro, m => { _macro = m; ctx.RequestRebuild(); }, readouts, stacked: false, receiversInMenu: true);
+        else if (_voiceTab == 1)
         {
             var fxStrip = new RackCardView(ctx).BuildEffectStrip(new RhythmVoiceAccess(engine, track), sel);
             voiceBody = new Border { Margin = new Thickness(6, 5), Child = fxStrip };
@@ -633,7 +668,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
 
         // ---- status ----------------------------------------------------------------------------
-        readouts.Add(() => status.Text = RM.Summary(G, pat, sel, sampleMode, sampleName));
+        readouts.Add(() => status.Text = _macroMode ? MacroPanel.Status(engine, macros, _macro) : RM.Summary(G, pat, sel, sampleMode, sampleName));
         var statusBar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
         statusBar.Children.Add(status);
         Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
@@ -682,6 +717,135 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         Refresh();
         Live();
         return root;
+    }
+
+    // ---- the kit macros (MacroPanel), over the Rhythm's own ------------------------------------
+
+    // The macros are the Rhythm's macro1..8 params. A voice is a slot (-1 = the kit itself, for
+    // Swing, Glue …); its targets are its own params and its effects' params.
+    private sealed class RhythmMacroSurface(IAudioEngine e, int track, Dictionary<string, int> idx, bool[] isSample, string[] dots) : IMacroSurface
+    {
+        private static readonly string[] VoiceTargets = { "tune", "decay", "punch", "tone", "drive", "level", "pan", "start", "length" };
+        private static readonly string[] KitTargets = { "swing", "humanize", "accent", "glue", "volume" };
+
+        public int TrackId => track;
+        public int AutomationDevice => -1;
+        public int MacroParamIndex(int m) => idx.TryGetValue(RM.MacroId(m), out int i) ? i : -1;
+        public string MacroName(int m) => e.RhythmMacroName(track, m);
+        public void SetMacroName(int m, string n) => e.RhythmSetMacroName(track, m, n);
+        public string SlotNoun => "voices";
+        public IReadOnlyList<int> Slots() => new[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+        public string SlotName(int v) => v < 0 ? "Kit" : VoiceLabel(e, track, v, isSample[v]);
+        public IBrush SlotHue(int v) => v < 0 ? TextTertiary : NotaPalette.Ink(dots[v]);
+        public int MappingCount() => e.RhythmMacroMappingCount(track);
+        public bool TryGetMapping(int i, out RackMacroMapping m) => e.RhythmTryGetMacroMapping(track, i, out m, out _);
+        public int AddMapping(int m, int v, int d, int p, float lo, float hi) => e.RhythmAddMacroMapping(track, m, v, d, p, lo, hi);
+        public bool RemoveMapping(int i) => e.RhythmRemoveMacroMapping(track, i);
+        public bool SetMappingRange(int i, float lo, float hi) => e.RhythmSetMacroMappingRange(track, i, lo, hi);
+
+        // "v3_decay" → "decay"; a global's id is its own name.
+        private string ParamKey(int p) { string id = e.PluginParamId(track, -1, p); int u = id.IndexOf('_'); return u >= 0 ? id[(u + 1)..] : id; }
+        private static string Title(string key) => key.Length == 0 ? key : char.ToUpperInvariant(key[0]) + key[1..];
+        private bool SampleTune(RackMacroMapping m) => m.DeviceIndex < 0 && m.Chain >= 0 && isSample[m.Chain] && ParamKey(m.ParamIndex) == "tune";
+
+        public (string Param, string Device) TargetLabel(RackMacroMapping m) => m.DeviceIndex < 0
+            ? (Title(ParamKey(m.ParamIndex)), "")
+            : (e.RhythmVoiceDeviceParamName(track, m.Chain, m.DeviceIndex, m.ParamIndex), e.RhythmVoiceDeviceName(track, m.Chain, m.DeviceIndex));
+        public (float Min, float Max) TargetRange(RackMacroMapping m) => m.DeviceIndex < 0
+            ? (0f, 1f)
+            : (e.RhythmVoiceDeviceParamMin(track, m.Chain, m.DeviceIndex, m.ParamIndex), e.RhythmVoiceDeviceParamMax(track, m.Chain, m.DeviceIndex, m.ParamIndex));
+        public float TargetValue(RackMacroMapping m) => m.DeviceIndex < 0
+            ? e.PluginParamGet(track, -1, m.ParamIndex)
+            : e.RhythmVoiceDeviceParamGet(track, m.Chain, m.DeviceIndex, m.ParamIndex);
+        public string FormatTarget(RackMacroMapping m, float x)
+        {
+            if (m.DeviceIndex >= 0) { var (lo, hi) = TargetRange(m); return MacroPanel.FormatDeviceParam(lo, hi, x); }
+            return SampleTune(m) ? Math.Round(RM.SampleSemis(x)).ToString("+0;−0;0", NotaNum.Culture) : $"{Math.Round(x * 100):0}";
+        }
+        public string TargetUnit(RackMacroMapping m)
+        {
+            if (m.DeviceIndex >= 0) { var (lo, hi) = TargetRange(m); return MacroPanel.DeviceParamUnit(lo, hi); }
+            return SampleTune(m) ? "st" : "%";
+        }
+
+        public void FillMapMenu(MenuFlyout menu, int macro, Action changed)
+        {
+            int P(string id) => idx.TryGetValue(id, out int i) ? i : -1;
+
+            // Every voice at once: the same param, or the same effect on each voice that has it.
+            var all = new MenuItem { Header = $"All {RM.Voices} voices" };
+            foreach (var key in VoiceTargets)
+            {
+                var mi = new MenuItem { Header = Title(key) };
+                string k = key;
+                mi.Click += (_, _) =>
+                {
+                    for (int v = 0; v < RM.Voices; v++) if (P(RM.Id(v, k)) is var p and >= 0) MacroPanel.Map(this, macro, v, -1, p, 0f, 1f);
+                    changed();
+                };
+                all.Items.Add(mi);
+            }
+            var kinds = new List<(int Kind, string Name, int Voice, int Dev)>();
+            for (int v = 0; v < RM.Voices; v++)
+                for (int d = 0; d < e.RhythmVoiceDeviceCount(track, v); d++)
+                {
+                    int k = e.RhythmVoiceDeviceBuiltinKind(track, v, d);
+                    if (k >= 0 && kinds.All(x => x.Kind != k)) kinds.Add((k, e.RhythmVoiceDeviceName(track, v, d), v, d));
+                }
+            if (kinds.Count > 0) all.Items.Add(new Separator());
+            foreach (var (kind, dname, v0, d0) in kinds)
+            {
+                var holders = new List<(int V, int D)>();
+                for (int v = 0; v < RM.Voices; v++)
+                    for (int d = 0; d < e.RhythmVoiceDeviceCount(track, v); d++)
+                        if (e.RhythmVoiceDeviceBuiltinKind(track, v, d) == kind) { holders.Add((v, d)); break; }
+                var fx = new MenuItem { Header = $"Every {dname} ({holders.Count} voice{(holders.Count == 1 ? "" : "s")})" };
+                for (int p = 0; p < e.RhythmVoiceDeviceParamCount(track, v0, d0); p++)
+                {
+                    int pp = p;
+                    var mi = new MenuItem { Header = e.RhythmVoiceDeviceParamName(track, v0, d0, p) };
+                    mi.Click += (_, _) =>
+                    {
+                        foreach (var (v, d) in holders)
+                            MacroPanel.Map(this, macro, v, d, pp, e.RhythmVoiceDeviceParamMin(track, v, d, pp), e.RhythmVoiceDeviceParamMax(track, v, d, pp));
+                        changed();
+                    };
+                    fx.Items.Add(mi);
+                }
+                all.Items.Add(fx);
+            }
+            menu.Items.Add(all);
+
+            var kit = new MenuItem { Header = "Kit" };
+            foreach (var key in KitTargets)
+                if (P(key) is var p and >= 0)
+                    kit.Items.Add(MacroPanel.Target(this, Title(key), macro, -1, -1, p, 0f, 1f, changed, MacroPanel.IsMapped(this, macro, -1, -1, p)));
+            menu.Items.Add(kit);
+            menu.Items.Add(new Separator());
+
+            // One voice: its params, each of its effects.
+            for (int v = 0; v < RM.Voices; v++)
+            {
+                var voice = new MenuItem { Header = SlotName(v) };
+                var own = new MenuItem { Header = "Voice" };
+                foreach (var key in VoiceTargets)
+                    if (P(RM.Id(v, key)) is var p and >= 0)
+                        own.Items.Add(MacroPanel.Target(this, Title(key), macro, v, -1, p, 0f, 1f, changed, MacroPanel.IsMapped(this, macro, v, -1, p)));
+                voice.Items.Add(own);
+                for (int d = 0; d < e.RhythmVoiceDeviceCount(track, v); d++)
+                {
+                    int dpc = e.RhythmVoiceDeviceParamCount(track, v, d);
+                    if (dpc <= 0) continue;
+                    var dev = new MenuItem { Header = e.RhythmVoiceDeviceName(track, v, d) };
+                    for (int p = 0; p < dpc; p++)
+                        dev.Items.Add(MacroPanel.Target(this, e.RhythmVoiceDeviceParamName(track, v, d, p), macro, v, d, p,
+                            e.RhythmVoiceDeviceParamMin(track, v, d, p), e.RhythmVoiceDeviceParamMax(track, v, d, p), changed,
+                            MacroPanel.IsMapped(this, macro, v, d, p)));
+                    voice.Items.Add(dev);
+                }
+                menu.Items.Add(voice);
+            }
+        }
     }
 
     // A section: card ground, hairline, radius 6, with an 18px header strip.

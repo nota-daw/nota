@@ -717,6 +717,29 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmKitName(_handle, trackId)) ?? ""; }
     public void RhythmSetKitName(int trackId, string name)
     { ThrowIfDisposed(); NativeMethods.RhythmSetKitName(_handle, trackId, name ?? ""); }
+    public string RhythmMacroName(int trackId, int macro)
+    { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmMacroName(_handle, trackId, macro)) ?? ""; }
+    public void RhythmSetMacroName(int trackId, int macro, string name)
+    { ThrowIfDisposed(); NativeMethods.RhythmSetMacroName(_handle, trackId, macro, name ?? ""); }
+    public int RhythmAddMacroMapping(int trackId, int macro, int voice, int device, int param, float lo, float hi)
+    { ThrowIfDisposed(); return NativeMethods.RhythmAddMacroMapping(_handle, trackId, macro, voice, device, param, lo, hi); }
+    public int RhythmMacroMappingCount(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.RhythmMacroMappingCount(_handle, trackId); }
+    public bool RhythmTryGetMacroMapping(int trackId, int index, out RackMacroMapping mapping, out int curve)
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.RhythmMacroMappingInfo(_handle, trackId, index, out int m, out int v, out int d, out int p, out float lo, out float hi, out curve) != 0;
+        mapping = ok ? new RackMacroMapping(m, v, d, p, lo, hi) : default;
+        return ok;
+    }
+    public bool RhythmRemoveMacroMapping(int trackId, int index)
+    { ThrowIfDisposed(); return NativeMethods.RhythmRemoveMacroMapping(_handle, trackId, index) != 0; }
+    public bool RhythmSetMacroMappingRange(int trackId, int index, float lo, float hi)
+    { ThrowIfDisposed(); return NativeMethods.RhythmSetMacroMappingRange(_handle, trackId, index, lo, hi) != 0; }
+    public bool RhythmSetMacroMappingCurve(int trackId, int index, int curve)
+    { ThrowIfDisposed(); return NativeMethods.RhythmSetMacroMappingCurve(_handle, trackId, index, curve) != 0; }
+    public void RhythmClearMacros(int trackId)
+    { ThrowIfDisposed(); NativeMethods.RhythmClearMacros(_handle, trackId); }
 
     public int GrainPlayPositions(int trackId, float[] outPos)
     { ThrowIfDisposed(); return NativeMethods.TrackGrainPlayPositions(_handle, trackId, outPos, outPos.Length); }

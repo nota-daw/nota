@@ -380,6 +380,35 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_kit_name", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void RhythmSetKitName(IntPtr engine, int trackId, string name);
 
+    // Nota Rhythm macros: names + mappings (the values are the macro1..8 plugin params).
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_macro_name")]
+    internal static partial IntPtr RhythmMacroName(IntPtr engine, int trackId, int macro);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_macro_name", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void RhythmSetMacroName(IntPtr engine, int trackId, int macro, string name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_add_macro_mapping")]
+    internal static partial int RhythmAddMacroMapping(IntPtr engine, int trackId, int macro, int voice, int device, int param, float lo, float hi);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_macro_mapping_count")]
+    internal static partial int RhythmMacroMappingCount(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_macro_mapping_info")]
+    internal static partial int RhythmMacroMappingInfo(IntPtr engine, int trackId, int index, out int macro, out int voice,
+        out int device, out int param, out float lo, out float hi, out int curve);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_remove_macro_mapping")]
+    internal static partial int RhythmRemoveMacroMapping(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_macro_mapping_range")]
+    internal static partial int RhythmSetMacroMappingRange(IntPtr engine, int trackId, int index, float lo, float hi);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_macro_mapping_curve")]
+    internal static partial int RhythmSetMacroMappingCurve(IntPtr engine, int trackId, int index, int curve);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_clear_macros")]
+    internal static partial void RhythmClearMacros(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_grain_play_positions")]
     internal static partial int TrackGrainPlayPositions(IntPtr engine, int trackId, [Out] float[] outPos, int maxN);
 

@@ -617,6 +617,38 @@ std::string Engine::rhythmKitName(int32_t trackId) const {
 void Engine::setRhythmKitName(int32_t trackId, const std::string& name) {
     if (auto* rh = rhythmOf(findTrackAuthoring(trackId))) rh->setKitName(name);
 }
+std::string Engine::rhythmMacroName(int32_t trackId, int32_t macro) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->macroName(macro) : std::string{};
+}
+void Engine::setRhythmMacroName(int32_t trackId, int32_t macro, const std::string& name) {
+    if (auto* rh = rhythmOf(findTrackAuthoring(trackId))) rh->setMacroName(macro, name);
+}
+int32_t Engine::rhythmAddMacroMapping(int32_t trackId, int32_t macro, int32_t voice, int32_t device, int32_t param, float lo, float hi) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->addMacroMapping(macro, voice, device, param, lo, hi) : -1;
+}
+int32_t Engine::rhythmMacroMappingCount(int32_t trackId) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->macroMappingCount() : 0;
+}
+bool Engine::rhythmMacroMappingInfo(int32_t trackId, int32_t index, int32_t& macro, int32_t& voice, int32_t& device,
+                                    int32_t& param, float& lo, float& hi, int32_t& curve) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId));
+    RhythmMachine::MacroMap m;
+    if (!rh || !rh->macroMapping(index, m)) return false;
+    macro = m.macro; voice = m.voice; device = m.device; param = m.param; lo = m.lo; hi = m.hi; curve = m.curve;
+    return true;
+}
+bool Engine::rhythmRemoveMacroMapping(int32_t trackId, int32_t index) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh && rh->removeMacroMapping(index);
+}
+bool Engine::rhythmSetMacroMappingRange(int32_t trackId, int32_t index, float lo, float hi) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh && rh->setMacroMappingRange(index, lo, hi);
+}
+bool Engine::rhythmSetMacroMappingCurve(int32_t trackId, int32_t index, int32_t curve) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh && rh->setMacroMappingCurve(index, curve);
+}
+void Engine::rhythmClearMacros(int32_t trackId) {
+    if (auto* rh = rhythmOf(findTrackAuthoring(trackId))) rh->clearMacros();
+}
 
 int32_t Engine::grainPlayPositions(int32_t trackId, float* out, int32_t maxN) const {
     if (!out || maxN <= 0) return 0;

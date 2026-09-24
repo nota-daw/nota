@@ -19,6 +19,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Macros for the Drum Rack and Nota Rhythm, and every kit comes with its own.** The Drum
+  Rack has a new **Macro** tab and Rhythm a **MACRO** mode in its centre panel (click MACRO
+  next to VOICE). Each shows eight knobs over the whole kit, each with its name and where it
+  goes ("→ Reverb · Snare, Clap"); an unassigned knob shows as an empty dashed slot. The Drum
+  Rack's right panel lists the selected macro's receivers, with each range as a band whose
+  ends you can drag. In Rhythm, right-click a macro to open the same list. **Map** can target
+  a pad's own Volume / Pan / Tune / Decay (or a voice's params, or the kit's Swing / Glue),
+  the pad instrument's params, and **the built-in effects on the chain**. "All pads" and
+  "Every Reverb" map the same target on every pad in one go. The 25 factory kits load with
+  macros made for them: **Tune**, **Decay** (the drums that ring; how short it goes depends
+  on the kit), **Hats**, **Drive** (**Tape** on the lo-fi kits: the kick's saturation),
+  **Room** (the snare and clap reverbs), **Echo** (**Dub** on *Yard*: the hat and percussion
+  delays) and **808**/**Sub** on kits with a bass pad. Every range is built around the value
+  the kit loads with, so a freshly loaded kit sounds exactly as before. Macros automate,
+  MIDI-learn, save with the project and copy with the track. MCP: `get_rhythm_macros`,
+  `set_rhythm_macro`, `map_rhythm_macro`, `unmap_rhythm_macro`; `add_macro_mapping` takes
+  device -2 for a pad's own controls.
 - **Nota Rhythm and the Drum Rack share one set of kits.** Rhythm's own synth presets are
   gone; the 25 factory drum kits now load onto its eight voices too — from the card's kit
   picker, from the kits listed under Nota Rhythm in the browser, or by dropping a kit on a
@@ -782,6 +799,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Rack macro mappings came loose when a chain's effects changed.** Removing or reordering
+  an effect in an Instrument Rack, Drum Rack or Audio Effect Rack chain left the macros
+  mapped to whichever device now sat at the old position. A mapping now moves with its
+  device, and goes away with it.
 - **Tempo-synced effects inside a rack ignored the tempo.** A synced Delay, Auto Filter or
   Auto Pan on a Drum Rack pad, an Instrument Rack chain or an Audio Effect Rack chain ran on
   its free time; racks now pass the song tempo down to their chains.
