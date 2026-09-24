@@ -19,6 +19,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Presets in a rack chain's GUI window.** Opening **GUI** on an instrument or effect
+  inside an Instrument Rack, Drum Rack or a Nota Rhythm voice's effects now shows a header
+  with the device's name and the same **‹ preset ▾ ›** picker as the main device cards, so
+  you can browse and switch presets right there.
 - **New-version notice on the welcome screen.** When a newer Nota release is on GitHub,
   the launcher shows a banner with the version number and a **Download** button that opens
   the release page. Without an internet connection nothing is shown.

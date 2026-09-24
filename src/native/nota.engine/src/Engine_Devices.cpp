@@ -741,6 +741,12 @@ float Engine::deviceParamDefault(int32_t t, int32_t d, int32_t p) const {
     auto fresh = makeBuiltinDevice(dev->builtinKind());
     return fresh ? fresh->getParam(p) : dev->getParam(p);
 }
+// Default of a built-in effect KIND (no instance needed) — for rack chain devices, which
+// have no track/device address of their own.
+float Engine::builtinDeviceParamDefault(int32_t kind, int32_t p) const {
+    auto fresh = makeBuiltinDevice(kind);
+    return fresh ? fresh->getParam(p) : 0.0f;
+}
 float Engine::instrumentParamDefault(int32_t t, int32_t p) const {
     auto tr = findTrackAuthoring(t);
     if (!tr || !tr->instrument) return 0.0f;

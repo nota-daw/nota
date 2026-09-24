@@ -217,7 +217,8 @@ public sealed partial class DeviceChainView : UserControl
                () => { foreach (var r in _rackParamRefreshers) r(); },
                Rebuild,
                c => RackPresetSaveRequested?.Invoke(c),
-               () => _dropGlow.IsVisible = false);
+               () => _dropGlow.IsVisible = false,
+               _factory);
 
     // ---- instrument / sends / add ----------------------------------------
 

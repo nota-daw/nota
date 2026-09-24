@@ -8,6 +8,7 @@
 // builders bring it into scope with `using static Nota.App.DeviceCardKit`.
 
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -319,4 +320,67 @@ internal static class DeviceCardKit
     // A horizontal row of single-select chips over an integer choice (get/set).
     internal static Control ChipRow(string[] options, Func<int> get, Action<int> set)
         => Segments(options, () => Math.Clamp(get(), 0, options.Length - 1), set, out _);
+
+    // Preset picker "‹ Name ▾ ›" — a sunken field (a list you pick from, not a button): the
+    // name opens the factory presets for this kind with the current one checked; ‹ › step to
+    // the previous / next preset, wrapping (from Init, › is the first and ‹ the last).
+    // Clicks are handled so they neither select nor start dragging the card. Shared by the
+    // card shell and the rack chain full-UI popups.
+    internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
+        Action<int> apply, Action<int> step)
+    {
+        const double H = 18;
+        var label = new TextBlock
+        {
+            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
+            Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var chevron = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        DockPanel.SetDock(chevron, Dock.Right);
+        var name = new Border
+        {
+            Width = 132, Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Child = new DockPanel { Children = { chevron, label } },
+        };
+        ToolTip.SetTip(name, "Choose a preset");
+        name.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            var flyout = new MenuFlyout();
+            for (int i = 0; i < presets.Count; i++)
+            {
+                int iv = i;
+                var mi = new MenuItem { Header = presets[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                mi.Click += (_, _) => apply(iv);
+                flyout.Items.Add(mi);
+            }
+            flyout.ShowAt(name);
+        };
+
+        Border Step(int dir)
+        {
+            var g = new Glyph(dir < 0 ? GlyphKind.ChevronLeft : GlyphKind.ChevronRight, 8)
+                { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Width = H, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
+            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
+            b.PointerEntered += (_, _) => g.Foreground = TextPrimary;
+            b.PointerExited += (_, _) => g.Foreground = TextTertiary;
+            b.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                step(dir);
+            };
+            return b;
+        }
+        Border Rule() => new() { Width = 1, Background = NotaPalette.GraphBorder };
+
+        return new Border
+        {
+            Height = H, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Control, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1), Rule(), name, Rule(), Step(+1) } },
+        };
+    }
 }

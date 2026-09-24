@@ -63,6 +63,8 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_device_param_default")]
     internal static partial float DeviceParamDefault(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+    [LibraryImport(Lib, EntryPoint = "nota_builtin_device_param_default")]
+    internal static partial float BuiltinDeviceParamDefault(IntPtr engine, int kind, int paramIndex);
     [LibraryImport(Lib, EntryPoint = "nota_instrument_param_default")]
     internal static partial float InstrumentParamDefault(IntPtr engine, int trackId, int paramIndex);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_param_default")]

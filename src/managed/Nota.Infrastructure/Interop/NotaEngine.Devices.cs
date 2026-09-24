@@ -96,6 +96,9 @@ public sealed partial class NotaEngine
 
     public float DeviceParamDefault(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.DeviceParamDefault(_handle, trackId, deviceIndex, paramIndex); }
+
+    public float BuiltinDeviceParamDefault(int kind, int paramIndex)
+    { ThrowIfDisposed(); return NativeMethods.BuiltinDeviceParamDefault(_handle, kind, paramIndex); }
     public float InstrumentParamDefault(int trackId, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.InstrumentParamDefault(_handle, trackId, paramIndex); }
     public float MidiEffectParamDefault(int trackId, int index, int paramIndex)

@@ -863,6 +863,8 @@ NOTA_API float       nota_device_gain_reduction(const NotaEngine* engine, int32_
 NOTA_API float       nota_device_param_default(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API float       nota_instrument_param_default(const NotaEngine* engine, int32_t track_id, int32_t param_index);
 NOTA_API float       nota_midi_effect_param_default(const NotaEngine* engine, int32_t track_id, int32_t index, int32_t param_index);
+/* Default of a built-in effect kind's parameter, independent of any instance (rack chain devices). */
+NOTA_API float       nota_builtin_device_param_default(const NotaEngine* engine, int32_t kind, int32_t param_index);
 
 /* Real-time analyzer feed: copies up to max_samples of the device's live readings
  * into out, returning the count written. Each device defines its own layout (e.g.

@@ -375,6 +375,8 @@ public interface IAudioEngine : IDisposable
     float DeviceGainReduction(int trackId, int deviceIndex);
     /// <summary>Factory-default value of a parameter, for double-click reset.</summary>
     float DeviceParamDefault(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>Factory default of a built-in effect KIND's parameter (rack chain devices).</summary>
+    float BuiltinDeviceParamDefault(int kind, int paramIndex);
     float InstrumentParamDefault(int trackId, int paramIndex);
     float MidiEffectParamDefault(int trackId, int index, int paramIndex);
 

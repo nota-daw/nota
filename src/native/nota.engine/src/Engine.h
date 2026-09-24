@@ -579,6 +579,7 @@ public:
     // value; hosted plugins → the current value (no reset).
     float       deviceParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float       instrumentParamDefault(int32_t trackId, int32_t paramIndex) const;
+    float       builtinDeviceParamDefault(int32_t kind, int32_t paramIndex) const;
     float       midiEffectParamDefault(int32_t trackId, int32_t index, int32_t paramIndex) const;
     // Live gain reduction (dB) of a dynamics device (built-in Compressor); 0 otherwise.
     float       deviceGainReduction(int32_t trackId, int32_t deviceIndex) const;

@@ -104,69 +104,6 @@ public sealed partial class DeviceChainView
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, double w) { var tb = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, Width = w, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
 
-    // Preset picker "‹ Name ▾ ›" — a sunken field (a list you pick from, not a button): the
-    // name opens the factory presets for this kind with the current one checked; ‹ › step to
-    // the previous / next preset, wrapping (from Init, › is the first and ‹ the last).
-    // Clicks are handled so they neither select nor start dragging the card.
-    private Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step)
-    {
-        const double H = 18;
-        var label = new TextBlock
-        {
-            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
-            Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var chevron = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-        var name = new Border
-        {
-            Width = 132, Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new DockPanel { Children = { Docked(chevron, Dock.Right), label } },
-        };
-        ToolTip.SetTip(name, "Choose a preset");
-        name.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;
-            e.Handled = true;
-            var flyout = new MenuFlyout();
-            for (int i = 0; i < presets.Count; i++)
-            {
-                int iv = i;
-                var mi = new MenuItem { Header = presets[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
-                mi.Click += (_, _) => apply(iv);
-                flyout.Items.Add(mi);
-            }
-            flyout.ShowAt(name);
-        };
-
-        Border Step(int dir)
-        {
-            var g = new Glyph(dir < 0 ? GlyphKind.ChevronLeft : GlyphKind.ChevronRight, 8)
-                { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Width = H, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
-            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
-            b.PointerEntered += (_, _) => g.Foreground = TextPrimary;
-            b.PointerExited += (_, _) => g.Foreground = TextTertiary;
-            b.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                e.Handled = true;
-                step(dir);
-            };
-            return b;
-        }
-        Border Rule() => new() { Width = 1, Background = NotaPalette.GraphBorder };
-
-        return new Border
-        {
-            Height = H, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1), Rule(), name, Rule(), Step(+1) } },
-        };
-    }
-
-    private static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
-
     private Border BuildCardShell(ShellSpec s, Control body)
     {
         int di = s.DeviceIndex;

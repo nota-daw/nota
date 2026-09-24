@@ -27,10 +27,14 @@ internal sealed class DeviceCardContext(
     Action invokeRackParamRefreshers,
     Action requestRebuild,
     Action<int> requestRackPresetSave,
-    Action hideDropGlow)
+    Action hideDropGlow,
+    IFactoryPresets? factory = null)
 {
     public IAudioEngine Engine => engine;
     public int TrackId => trackId;
+
+    /// <summary>The shipped preset library — rack chain full-UI popups list their kind's presets from it.</summary>
+    public IFactoryPresets? Factory => factory;
 
     /// <summary>Register a closure invoked on every UI tick (compressor GR meter, param
     /// faders following automation, …). Kept as a plain list append — no per-frame cost.</summary>

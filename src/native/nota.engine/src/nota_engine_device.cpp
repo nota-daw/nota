@@ -88,6 +88,7 @@ float nota_device_gain_reduction(const NotaEngine* e, int32_t track_id, int32_t 
 float nota_device_param_default(const NotaEngine* e, int32_t t, int32_t d, int32_t p) { return e ? CENG(e)->deviceParamDefault(t, d, p) : 0.0f; }
 float nota_instrument_param_default(const NotaEngine* e, int32_t t, int32_t p) { return e ? CENG(e)->instrumentParamDefault(t, p) : 0.0f; }
 float nota_midi_effect_param_default(const NotaEngine* e, int32_t t, int32_t i, int32_t p) { return e ? CENG(e)->midiEffectParamDefault(t, i, p) : 0.0f; }
+float nota_builtin_device_param_default(const NotaEngine* e, int32_t kind, int32_t p) { return e ? CENG(e)->builtinDeviceParamDefault(kind, p) : 0.0f; }
 int32_t nota_device_scope(const NotaEngine* e, int32_t track_id, int32_t device_index, float* out, int32_t max_samples) {
     return e ? CENG(e)->deviceScope(track_id, device_index, out, max_samples) : 0;
 }
