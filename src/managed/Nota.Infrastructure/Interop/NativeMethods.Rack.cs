@@ -36,6 +36,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_param_default")]
     internal static partial float RackChainInstrumentParamDefault(IntPtr engine, int trackId, int chain, int param);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_scope")]
+    internal static partial int RackChainInstrumentScope(IntPtr engine, int trackId, int chain, [Out] float[] outv, int maxN);
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_voice_count")]
+    internal static partial int RackChainInstrumentVoiceCount(IntPtr engine, int trackId, int chain);
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_held_notes")]
+    internal static partial int RackChainInstrumentHeldNotes(IntPtr engine, int trackId, int chain, [Out] int[] outNotes, int maxN);
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_action")]
+    internal static partial void RackChainInstrumentAction(IntPtr engine, int trackId, int chain, int id, int iarg, float farg);
+
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sampler_info")]
     internal static partial int RackChainSamplerInfo(IntPtr engine, int trackId, int chain, out NotaSamplerInfo info);
 

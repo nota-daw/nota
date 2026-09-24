@@ -101,6 +101,24 @@ public sealed partial class NotaEngine
     public bool RackDevChainDeviceBypassed(int trackId, int deviceIndex, int chain, int dev)
     { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceBypassed(_handle, trackId, deviceIndex, chain, dev) != 0; }
 
+    public float RackDevChainDeviceGainReduction(int trackId, int deviceIndex, int chain, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceGainReduction(_handle, trackId, deviceIndex, chain, dev); }
+    public int RackDevChainDeviceScope(int trackId, int deviceIndex, int chain, int dev, float[] outSamples, int maxSamples)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceScope(_handle, trackId, deviceIndex, chain, dev, outSamples, maxSamples); }
+    public int RackDevChainDeviceLayerWave(int trackId, int deviceIndex, int chain, int dev, int layer, float[] outSamples, int maxSamples)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceLayerWave(_handle, trackId, deviceIndex, chain, dev, layer, outSamples, maxSamples); }
+    public void RackDevChainDeviceAction(int trackId, int deviceIndex, int chain, int dev, int id, int iarg, float farg)
+    { ThrowIfDisposed(); NativeMethods.RackDevChainDeviceAction(_handle, trackId, deviceIndex, chain, dev, id, iarg, farg); }
+    public string RackDevChainDeviceText(int trackId, int deviceIndex, int chain, int dev, int id)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RackDevChainDeviceText(_handle, trackId, deviceIndex, chain, dev, id, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.RackDevChainDeviceText(_handle, trackId, deviceIndex, chain, dev, id, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
+
     public void RackDevSetChainGain(int trackId, int deviceIndex, int chain, float v)
     { ThrowIfDisposed(); NativeMethods.RackDevSetChainGain(_handle, trackId, deviceIndex, chain, v); }
 

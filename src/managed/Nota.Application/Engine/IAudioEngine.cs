@@ -479,6 +479,12 @@ public interface IAudioEngine : IDisposable
     void RackChainInstrumentParamSet(int trackId, int chain, int param, float normalized);
     /// <summary>Factory-default value (0..1) of a chain instrument param, for double-click reset.</summary>
     float RackChainInstrumentParamDefault(int trackId, int chain, int param);
+    // Chain-instrument telemetry — mirrors InstrumentScope / InstrumentVoiceCount /
+    // InstrumentHeldNotes / InstrumentAction for the instrument on a rack chain.
+    int RackChainInstrumentScope(int trackId, int chain, float[] outv);
+    int RackChainInstrumentVoiceCount(int trackId, int chain);
+    int RackChainInstrumentHeldNotes(int trackId, int chain, int[] outNotes);
+    void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg);
     /// <summary>Built-in Sampler settings for a chain instrument. False if it isn't a Sampler.</summary>
     bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info);
     /// <summary>Sets a chain Sampler's root note (lock-free). False if the chain isn't a Sampler.</summary>
@@ -577,6 +583,13 @@ public interface IAudioEngine : IDisposable
     void RackDevChainDeviceParamSet(int trackId, int deviceIndex, int chain, int dev, int param, float value);
     void RackDevSetChainDeviceBypassed(int trackId, int deviceIndex, int chain, int dev, bool bypassed);
     bool RackDevChainDeviceBypassed(int trackId, int deviceIndex, int chain, int dev);
+    // Chain-device telemetry (deviceIndex -1 = the track's Instrument Rack) — mirrors
+    // DeviceGainReduction / DeviceScope / DeviceLayerWave / DeviceText / DeviceAction.
+    float RackDevChainDeviceGainReduction(int trackId, int deviceIndex, int chain, int dev);
+    int RackDevChainDeviceScope(int trackId, int deviceIndex, int chain, int dev, float[] outSamples, int maxSamples);
+    int RackDevChainDeviceLayerWave(int trackId, int deviceIndex, int chain, int dev, int layer, float[] outSamples, int maxSamples);
+    string RackDevChainDeviceText(int trackId, int deviceIndex, int chain, int dev, int id);
+    void RackDevChainDeviceAction(int trackId, int deviceIndex, int chain, int dev, int id, int iarg, float farg);
     void RackDevSetChainGain(int trackId, int deviceIndex, int chain, float v);
     void RackDevSetChainPan(int trackId, int deviceIndex, int chain, float v);
     void RackDevSetChainMute(int trackId, int deviceIndex, int chain, bool mute);

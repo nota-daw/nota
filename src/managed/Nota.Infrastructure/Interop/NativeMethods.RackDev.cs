@@ -99,6 +99,17 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_bypassed")]
     internal static partial int RackDevChainDeviceBypassed(IntPtr engine, int trackId, int deviceIndex, int chain, int dev);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_gain_reduction")]
+    internal static partial float RackDevChainDeviceGainReduction(IntPtr engine, int trackId, int deviceIndex, int chain, int dev);
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_scope")]
+    internal static partial int RackDevChainDeviceScope(IntPtr engine, int trackId, int deviceIndex, int chain, int dev, [Out] float[] outSamples, int maxSamples);
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_layer_wave")]
+    internal static partial int RackDevChainDeviceLayerWave(IntPtr engine, int trackId, int deviceIndex, int chain, int dev, int layer, [Out] float[] outSamples, int maxSamples);
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_text")]
+    internal static partial int RackDevChainDeviceText(IntPtr engine, int trackId, int deviceIndex, int chain, int dev, int id, [Out] byte[]? outBytes, int cap);
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_action")]
+    internal static partial void RackDevChainDeviceAction(IntPtr engine, int trackId, int deviceIndex, int chain, int dev, int id, int iarg, float farg);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_set_chain_gain")]
     internal static partial void RackDevSetChainGain(IntPtr engine, int trackId, int deviceIndex, int chain, float v);
 

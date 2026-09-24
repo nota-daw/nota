@@ -675,6 +675,12 @@ public:
     float     rackChainInstrumentParamGet(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t param) const;
     void      rackChainInstrumentParamSet(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t param, float normalized);
     float     rackChainInstrumentParamDefault(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t param) const;
+    // Live telemetry of a chain instrument (same surface as instrumentScope/… for a track
+    // instrument) — lets its pop-out editor animate its graphs/keys.
+    int32_t   rackChainInstrumentScope(int32_t trackId, int32_t deviceIndex, int32_t chain, float* out, int32_t maxN) const;
+    int32_t   rackChainInstrumentVoiceCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    int32_t   rackChainInstrumentHeldNotes(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t* out, int32_t maxN) const;
+    void      rackChainInstrumentAction(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t id, int32_t iarg, float farg);
     // Chain instrument GUI + preset capture (hosted plugins): open the native editor,
     // read the stable identifier + opaque state. Message thread.
     void        rackOpenChainInstrumentEditor(int32_t trackId, int32_t deviceIndex, int32_t chain);
@@ -699,6 +705,13 @@ public:
     void      rackChainDeviceParamSet(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, int32_t param, float value);
     void      rackSetChainDeviceBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, bool bypassed);
     bool      rackChainDeviceBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev) const;
+    // Live telemetry of a chain device (same surface as deviceScope/deviceText/… for a top-level
+    // device) — lets the chain device's pop-out card draw its meters/curves.
+    float       rackChainDeviceGainReduction(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev) const;
+    int32_t     rackChainDeviceScope(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, float* out, int32_t maxSamples) const;
+    int32_t     rackChainDeviceLayerWave(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, int32_t layer, float* out, int32_t maxSamples) const;
+    std::string rackChainDeviceText(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, int32_t id) const;
+    void        rackChainDeviceAction(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t dev, int32_t id, int32_t iarg, float farg);
     void  rackSetChainGain(int32_t trackId, int32_t deviceIndex, int32_t chain, float v);
     void  rackSetChainPan (int32_t trackId, int32_t deviceIndex, int32_t chain, float v);
     void  rackSetChainMute(int32_t trackId, int32_t deviceIndex, int32_t chain, bool b);

@@ -7577,6 +7577,8 @@ Console.WriteLine("-- Instrument Rack: C ABI + persistence --");
     int c2 = re.RackAddChain(rt, 2);   // Nota Physical
     Check(c2 == 1 && re.RackChainCount(rt) == 2, "second chain added");
     Check(re.RackChainInstrumentKind(rt, 1) == 2, "chain 1 hosts Nota Physical");
+    Check(re.RackChainInstrumentVoiceCount(rt, 1) == 0 && re.RackChainInstrumentHeldNotes(rt, 1, new int[16]) == 0,
+          "chain instrument telemetry reaches the chain's own instrument (idle Physical: 0 voices)");
 
     int dEq = re.RackAddChainDevice(rt, 0, 0);   // EQ on chain 0
     Check(dEq == 0 && re.RackChainDeviceCount(rt, 0) == 1, "EQ device added to chain 0");
@@ -7700,6 +7702,15 @@ Console.WriteLine("-- Audio Effect Rack: engine + C ABI + persistence --");
             re.Seek(0); re.Play(); re.RenderOffline(aeBuf, frames); re.StopTransport();
             Check(float.IsFinite(aeBuf[0]) && Rms(aeBuf, frames) > 1e-5f, $"{mname} mode renders audible + finite (rms={Rms(aeBuf, frames):0.0000})");
         }
+
+        // Chain-device telemetry: a Compressor inside the rack reports its own live scope
+        // (what its pop-out card draws), not the track's top-level device at that index.
+        int cd = re.RackDevAddChainDevice(at, adi, 0, 1);
+        re.Seek(0); re.Play(); re.RenderOffline(aeBuf, frames); re.StopTransport();
+        var csc = new float[14];
+        int cn = re.RackDevChainDeviceScope(at, adi, 0, cd, csc, csc.Length);
+        Check(cn == 14 && csc[8] > 1000 && csc[0] > 0.001f, $"chain compressor scope reports live levels (n {cn}, sr {csc[8]:0}, in {csc[0]:0.000})");
+        Check(re.DeviceScope(at, cd, new float[14], 14) == 0, "top-level scope at the chain device's index stays empty");
     }
     re.RackDevSetDryWet(tr, di, 0.35f);
     re.RackDevSetVolume(tr, di, 1.5f);

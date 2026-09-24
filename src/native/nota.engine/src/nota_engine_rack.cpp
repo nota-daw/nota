@@ -10,6 +10,8 @@
 
 #include "nota_engine_internal.h"
 
+#include <algorithm>
+#include <cstring>
 #include <string>
 
 extern "C" {
@@ -60,6 +62,10 @@ const char* nota_rack_chain_instrument_param_id(const NotaEngine* e, int32_t t, 
 float nota_rack_chain_instrument_param_get(const NotaEngine* e, int32_t t, int32_t c, int32_t p) { return e ? CENG(e)->rackChainInstrumentParamGet(t, -1, c, p) : 0.0f; }
 void nota_rack_chain_instrument_param_set(NotaEngine* e, int32_t t, int32_t c, int32_t p, float v) { if (e) ENG(e)->rackChainInstrumentParamSet(t, -1, c, p, v); }
 float nota_rack_chain_instrument_param_default(const NotaEngine* e, int32_t t, int32_t c, int32_t p) { return e ? CENG(e)->rackChainInstrumentParamDefault(t, -1, c, p) : 0.0f; }
+int32_t nota_rack_chain_instrument_scope(const NotaEngine* e, int32_t t, int32_t c, float* out, int32_t n) { return e ? CENG(e)->rackChainInstrumentScope(t, -1, c, out, n) : 0; }
+int32_t nota_rack_chain_instrument_voice_count(const NotaEngine* e, int32_t t, int32_t c) { return e ? CENG(e)->rackChainInstrumentVoiceCount(t, -1, c) : -1; }
+int32_t nota_rack_chain_instrument_held_notes(const NotaEngine* e, int32_t t, int32_t c, int32_t* out, int32_t n) { return e ? CENG(e)->rackChainInstrumentHeldNotes(t, -1, c, out, n) : 0; }
+void nota_rack_chain_instrument_action(NotaEngine* e, int32_t t, int32_t c, int32_t id, int32_t iarg, float farg) { if (e) ENG(e)->rackChainInstrumentAction(t, -1, c, id, iarg, farg); }
 void nota_rack_open_chain_instrument_editor(NotaEngine* e, int32_t t, int32_t c) { if (e) ENG(e)->rackOpenChainInstrumentEditor(t, -1, c); }
 void nota_rack_open_chain_device_editor(NotaEngine* e, int32_t t, int32_t c, int32_t d) { if (e) ENG(e)->rackOpenChainDeviceEditor(t, -1, c, d); }
 const char* nota_rack_chain_instrument_plugin_id(const NotaEngine* e, int32_t t, int32_t c) {
@@ -177,6 +183,21 @@ float nota_rackdev_chain_device_param_get(const NotaEngine* e, int32_t t, int32_
 void nota_rackdev_chain_device_param_set(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, int32_t p, float v) { if (e) ENG(e)->rackChainDeviceParamSet(t, di, c, d, p, v); }
 void nota_rackdev_set_chain_device_bypassed(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, int32_t b) { if (e) ENG(e)->rackSetChainDeviceBypassed(t, di, c, d, b != 0); }
 int32_t nota_rackdev_chain_device_bypassed(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d) { return (e && CENG(e)->rackChainDeviceBypassed(t, di, c, d)) ? 1 : 0; }
+float nota_rackdev_chain_device_gain_reduction(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d) { return e ? CENG(e)->rackChainDeviceGainReduction(t, di, c, d) : 0.0f; }
+int32_t nota_rackdev_chain_device_scope(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, float* out, int32_t n) { return e ? CENG(e)->rackChainDeviceScope(t, di, c, d, out, n) : 0; }
+int32_t nota_rackdev_chain_device_layer_wave(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, int32_t layer, float* out, int32_t n) { return e ? CENG(e)->rackChainDeviceLayerWave(t, di, c, d, layer, out, n) : 0; }
+int32_t nota_rackdev_chain_device_text(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, int32_t id, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->rackChainDeviceText(t, di, c, d, id);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;   // full length (probe with a null buffer, then fetch)
+}
+void nota_rackdev_chain_device_action(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t d, int32_t id, int32_t iarg, float farg) { if (e) ENG(e)->rackChainDeviceAction(t, di, c, d, id, iarg, farg); }
 
 void  nota_rackdev_set_chain_gain(NotaEngine* e, int32_t t, int32_t di, int32_t c, float v) { if (e) ENG(e)->rackSetChainGain(t, di, c, v); }
 void  nota_rackdev_set_chain_pan (NotaEngine* e, int32_t t, int32_t di, int32_t c, float v) { if (e) ENG(e)->rackSetChainPan(t, di, c, v); }

@@ -1654,8 +1654,11 @@ internal class RackChainEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.InstrumentParamDefault): return Inner.RackChainInstrumentParamDefault((int)args![0]!, Chain, (int)args![1]!);
             case nameof(Nota.Application.IAudioEngine.BeginAutomationWrite):
             case nameof(Nota.Application.IAudioEngine.EndAutomationWrite):   return null;
-            case nameof(Nota.Application.IAudioEngine.InstrumentVoiceCount): return -1;
-            case nameof(Nota.Application.IAudioEngine.InstrumentHeldNotes):  return 0;
+            // Live telemetry comes from the chain instrument, not the track's rack instrument.
+            case nameof(Nota.Application.IAudioEngine.InstrumentScope):      return Inner.RackChainInstrumentScope((int)args![0]!, Chain, (float[])args![1]!);
+            case nameof(Nota.Application.IAudioEngine.InstrumentVoiceCount): return Inner.RackChainInstrumentVoiceCount((int)args![0]!, Chain);
+            case nameof(Nota.Application.IAudioEngine.InstrumentHeldNotes):  return Inner.RackChainInstrumentHeldNotes((int)args![0]!, Chain, (int[])args![1]!);
+            case nameof(Nota.Application.IAudioEngine.InstrumentAction):     Inner.RackChainInstrumentAction((int)args![0]!, Chain, (int)args![1]!, (int)args![2]!, (float)args![3]!); return null;
             default: return m!.Invoke(Inner, args);
         }
     }
@@ -1683,14 +1686,14 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.DeviceName):         return Access.ChainDeviceName(Chain, Dev);
             case nameof(Nota.Application.IAudioEngine.DeviceBypassed):     return Access.ChainDeviceBypassed(Chain, Dev);
             case nameof(Nota.Application.IAudioEngine.SetDeviceBypassed):  Access.SetChainDeviceBypassed(Chain, Dev, (bool)args![2]!); return null;
-            case nameof(Nota.Application.IAudioEngine.DeviceGainReduction):   return 0f;
             case nameof(Nota.Application.IAudioEngine.DeviceLoadFile):        return false;   // chain devices keep params only
-            case nameof(Nota.Application.IAudioEngine.DeviceText):            return "";
-            // No telemetry surface for chain devices — passing through would read the
-            // track's top-level device at the same index.
-            case nameof(Nota.Application.IAudioEngine.DeviceScope):           return 0;
-            case nameof(Nota.Application.IAudioEngine.DeviceLayerWave):       return 0;
-            case nameof(Nota.Application.IAudioEngine.DeviceAction):          return null;   // same: it would command the top-level device
+            // Live telemetry (meters, scopes, curves) comes from the chain device itself —
+            // passing through would read/command the track's top-level device at the same index.
+            case nameof(Nota.Application.IAudioEngine.DeviceGainReduction):   return Access.ChainDeviceGainReduction(Chain, Dev);
+            case nameof(Nota.Application.IAudioEngine.DeviceText):            return Access.ChainDeviceText(Chain, Dev, (int)args![2]!);
+            case nameof(Nota.Application.IAudioEngine.DeviceScope):           return Access.ChainDeviceScope(Chain, Dev, (float[])args![2]!, (int)args![3]!);
+            case nameof(Nota.Application.IAudioEngine.DeviceLayerWave):       return Access.ChainDeviceLayerWave(Chain, Dev, (int)args![2]!, (float[])args![3]!, (int)args![4]!);
+            case nameof(Nota.Application.IAudioEngine.DeviceAction):          Access.ChainDeviceAction(Chain, Dev, (int)args![2]!, (int)args![3]!, (float)args![4]!); return null;
             case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain): return false;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):  return -1;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return 0f;

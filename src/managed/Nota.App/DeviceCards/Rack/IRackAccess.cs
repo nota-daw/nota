@@ -58,6 +58,12 @@ internal interface IRackAccess
     int MappingCurve(int index); bool SetMappingCurve(int index, int curve);
     /// <summary>Whether a chain can take a hosted plug-in effect (not Nota Rhythm's voices).</summary>
     bool HostsPlugins => true;
+    // Live telemetry of a chain device (meters, scopes, curves) for its pop-out card; none by default.
+    float ChainDeviceGainReduction(int chain, int dev) => 0f;
+    int ChainDeviceScope(int chain, int dev, float[] outSamples, int maxSamples) => 0;
+    int ChainDeviceLayerWave(int chain, int dev, int layer, float[] outSamples, int maxSamples) => 0;
+    string ChainDeviceText(int chain, int dev, int id) => "";
+    void ChainDeviceAction(int chain, int dev, int id, int iarg, float farg) { }
 }
 
 internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
@@ -91,6 +97,11 @@ internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
     public void SetChainDeviceBypassed(int c, int d, bool b) => e.RackSetChainDeviceBypassed(t, c, d, b);
     public int ChainDeviceBuiltinKind(int c, int d) => e.RackChainDeviceBuiltinKind(t, c, d);
     public void OpenChainDeviceEditor(int c, int d) => e.RackOpenChainDeviceEditor(t, c, d);
+    public float ChainDeviceGainReduction(int c, int d) => e.RackDevChainDeviceGainReduction(t, -1, c, d);
+    public int ChainDeviceScope(int c, int d, float[] o, int n) => e.RackDevChainDeviceScope(t, -1, c, d, o, n);
+    public int ChainDeviceLayerWave(int c, int d, int l, float[] o, int n) => e.RackDevChainDeviceLayerWave(t, -1, c, d, l, o, n);
+    public string ChainDeviceText(int c, int d, int id) => e.RackDevChainDeviceText(t, -1, c, d, id);
+    public void ChainDeviceAction(int c, int d, int id, int iarg, float farg) => e.RackDevChainDeviceAction(t, -1, c, d, id, iarg, farg);
     public float ChainGain(int c) => e.RackChainGain(t, c);
     public void SetChainGain(int c, float v) => e.RackSetChainGain(t, c, v);
     public float ChainPan(int c) => e.RackChainPan(t, c);
@@ -144,6 +155,11 @@ internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAcc
     public void SetChainDeviceBypassed(int c, int d, bool b) => e.RackDevSetChainDeviceBypassed(t, di, c, d, b);
     public int ChainDeviceBuiltinKind(int c, int d) => e.RackDevChainDeviceBuiltinKind(t, di, c, d);
     public void OpenChainDeviceEditor(int c, int d) => e.RackDevOpenChainDeviceEditor(t, di, c, d);
+    public float ChainDeviceGainReduction(int c, int d) => e.RackDevChainDeviceGainReduction(t, di, c, d);
+    public int ChainDeviceScope(int c, int d, float[] o, int n) => e.RackDevChainDeviceScope(t, di, c, d, o, n);
+    public int ChainDeviceLayerWave(int c, int d, int l, float[] o, int n) => e.RackDevChainDeviceLayerWave(t, di, c, d, l, o, n);
+    public string ChainDeviceText(int c, int d, int id) => e.RackDevChainDeviceText(t, di, c, d, id);
+    public void ChainDeviceAction(int c, int d, int id, int iarg, float farg) => e.RackDevChainDeviceAction(t, di, c, d, id, iarg, farg);
     public float ChainGain(int c) => e.RackDevChainGain(t, di, c);
     public void SetChainGain(int c, float v) => e.RackDevSetChainGain(t, di, c, v);
     public float ChainPan(int c) => e.RackDevChainPan(t, di, c);

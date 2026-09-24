@@ -117,6 +117,15 @@ public sealed partial class NotaEngine
     public float RackChainInstrumentParamDefault(int trackId, int chain, int param)
     { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentParamDefault(_handle, trackId, chain, param); }
 
+    public int RackChainInstrumentScope(int trackId, int chain, float[] outv)
+    { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentScope(_handle, trackId, chain, outv, outv.Length); }
+    public int RackChainInstrumentVoiceCount(int trackId, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentVoiceCount(_handle, trackId, chain); }
+    public int RackChainInstrumentHeldNotes(int trackId, int chain, int[] outNotes)
+    { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentHeldNotes(_handle, trackId, chain, outNotes, outNotes.Length); }
+    public void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg)
+    { ThrowIfDisposed(); NativeMethods.RackChainInstrumentAction(_handle, trackId, chain, id, iarg, farg); }
+
     public bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.RackChainSamplerInfo(_handle, trackId, chain, out info) != 0; }
 

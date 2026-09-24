@@ -945,6 +945,12 @@ NOTA_API const char* nota_rack_chain_instrument_param_id(const NotaEngine* engin
 NOTA_API float       nota_rack_chain_instrument_param_get(const NotaEngine* engine, int32_t track_id, int32_t chain, int32_t param);
 NOTA_API void        nota_rack_chain_instrument_param_set(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t param, float normalized);
 NOTA_API float       nota_rack_chain_instrument_param_default(const NotaEngine* engine, int32_t track_id, int32_t chain, int32_t param);
+// Chain-instrument telemetry: same semantics as nota_track_instrument_scope /
+// _voice_count / nota_track_held_notes / nota_track_instrument_action.
+NOTA_API int32_t     nota_rack_chain_instrument_scope(const NotaEngine* engine, int32_t track_id, int32_t chain, float* out, int32_t max_n);
+NOTA_API int32_t     nota_rack_chain_instrument_voice_count(const NotaEngine* engine, int32_t track_id, int32_t chain);
+NOTA_API int32_t     nota_rack_chain_instrument_held_notes(const NotaEngine* engine, int32_t track_id, int32_t chain, int32_t* out, int32_t max_n);
+NOTA_API void        nota_rack_chain_instrument_action(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t id, int32_t iarg, float farg);
 /* Chain instrument GUI + preset (hosted plugins). */
 NOTA_API void        nota_rack_open_chain_instrument_editor(NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API void        nota_rack_open_chain_device_editor(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t dev);
@@ -1049,6 +1055,13 @@ NOTA_API float       nota_rackdev_chain_device_param_get(const NotaEngine* engin
 NOTA_API void        nota_rackdev_chain_device_param_set(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, int32_t param, float value);
 NOTA_API void        nota_rackdev_set_chain_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, int32_t bypassed);
 NOTA_API int32_t     nota_rackdev_chain_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev);
+// Chain-device telemetry (device_index -1 = the track's Instrument Rack): same semantics
+// as nota_device_gain_reduction / _scope / _layer_wave / _text / _action.
+NOTA_API float       nota_rackdev_chain_device_gain_reduction(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev);
+NOTA_API int32_t     nota_rackdev_chain_device_scope(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, float* out, int32_t max_samples);
+NOTA_API int32_t     nota_rackdev_chain_device_layer_wave(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, int32_t layer, float* out, int32_t max_samples);
+NOTA_API int32_t     nota_rackdev_chain_device_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, int32_t id, char* out, int32_t cap);
+NOTA_API void        nota_rackdev_chain_device_action(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t dev, int32_t id, int32_t iarg, float farg);
 NOTA_API void        nota_rackdev_set_chain_gain(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, float v);
 NOTA_API void        nota_rackdev_set_chain_pan (NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, float v);
 NOTA_API void        nota_rackdev_set_chain_mute(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t b);

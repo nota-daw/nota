@@ -173,6 +173,20 @@ float Engine::rackChainInstrumentParamDefault(int32_t t, int32_t di, int32_t c, 
     auto fresh = RackCore::makeInstrument(inst->kind());    // built-in default == a fresh one's value
     return fresh ? fresh->pluginParamGet(p) : inst->pluginParamGet(p);
 }
+int32_t Engine::rackChainInstrumentScope(int32_t t, int32_t di, int32_t c, float* out, int32_t n) const {
+    if (!out || n <= 0) return 0;
+    auto* r = rackCoreAt(t, di); Instrument* inst = r ? r->chainInstrument(c) : nullptr; return inst ? inst->scopeRead(out, n) : 0;
+}
+int32_t Engine::rackChainInstrumentVoiceCount(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di); Instrument* inst = r ? r->chainInstrument(c) : nullptr; return inst ? inst->activeVoiceCount() : -1;
+}
+int32_t Engine::rackChainInstrumentHeldNotes(int32_t t, int32_t di, int32_t c, int32_t* out, int32_t n) const {
+    if (!out || n <= 0) return 0;
+    auto* r = rackCoreAt(t, di); Instrument* inst = r ? r->chainInstrument(c) : nullptr; return inst ? inst->heldNotes(out, n) : 0;
+}
+void Engine::rackChainInstrumentAction(int32_t t, int32_t di, int32_t c, int32_t id, int32_t iarg, float farg) {
+    auto* r = rackCoreAt(t, di); Instrument* inst = r ? r->chainInstrument(c) : nullptr; if (inst) inst->action(id, iarg, farg);
+}
 void Engine::rackOpenChainInstrumentEditor(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     Instrument* inst = r ? r->chainInstrument(c) : nullptr;
@@ -259,6 +273,21 @@ void Engine::rackSetChainDeviceBypassed(int32_t t, int32_t di, int32_t c, int32_
 }
 bool Engine::rackChainDeviceBypassed(int32_t t, int32_t di, int32_t c, int32_t d) const {
     auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; return dev && dev->bypassed();
+}
+float Engine::rackChainDeviceGainReduction(int32_t t, int32_t di, int32_t c, int32_t d) const {
+    auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; return dev ? dev->gainReductionDb() : 0.0f;
+}
+int32_t Engine::rackChainDeviceScope(int32_t t, int32_t di, int32_t c, int32_t d, float* out, int32_t n) const {
+    auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; return dev ? dev->scopeRead(out, n) : 0;
+}
+int32_t Engine::rackChainDeviceLayerWave(int32_t t, int32_t di, int32_t c, int32_t d, int32_t layer, float* out, int32_t n) const {
+    auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; return dev ? dev->layerWave(layer, out, n) : 0;
+}
+std::string Engine::rackChainDeviceText(int32_t t, int32_t di, int32_t c, int32_t d, int32_t id) const {
+    auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; return dev ? dev->deviceText(id) : std::string{};
+}
+void Engine::rackChainDeviceAction(int32_t t, int32_t di, int32_t c, int32_t d, int32_t id, int32_t iarg, float farg) {
+    auto* r = rackCoreAt(t, di); Device* dev = r ? r->chainDeviceAt(c, d) : nullptr; if (dev) dev->deviceAction(id, iarg, farg);
 }
 
 // ---- per-chain controls --------------------------------------------------
