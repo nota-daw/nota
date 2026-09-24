@@ -18,6 +18,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-09-24
+
+### Highlights
+- **Drum kits grow up.** Nota Rhythm and the Drum Rack now share one library of 25+ kits,
+  each with its own per-pad effects and eight ready-made macros (Tune, Decay, Hats, Drive,
+  Room, Echo…); Rhythm voices get their own effect chains and the kicks, snares and claps
+  are reworked.
+- **Four new effects.** Nota Chorus, Phaser and Flanger for movement, and Nota Lens — a
+  spectrum analyzer and oscilloscope — to see what your sound is doing.
+- **Sampler, Pendulum and Physical redesigned.** New cards with live graphs, grouped
+  automation menus and around 30 factory presets each (Rhythm now ships 29 kits).
+- **Almost every effect redrawn to show what it does.** Compressor, Auto Filter, Vintage,
+  Valve, Utility, Shutter, Auto Shift, Beat Repeat, Ceiling, Crush, the EQs, Level, Forge
+  and Orbit now display the signal working, and many gain new controls — Auto Shift becomes
+  a full vocal tuner, Orbit syncs to tempo, EQ-8 gets slopes and mid/side.
+- **Smaller comforts.** Preset browsing in a rack device's GUI window, a banner on the
+  welcome screen when a new Nota version is out, and a batch of fixes for racks, the
+  Sampler and several effects.
+
 ### Added
 - **Presets in a rack chain's GUI window.** Opening **GUI** on an instrument or effect
   inside an Instrument Rack, Drum Rack or a Nota Rhythm voice's effects now shows a header
