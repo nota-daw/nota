@@ -22,7 +22,7 @@ internal enum GlyphKind
     Play, Stop, Record, RecordRing, Close, Check, Cross,
     ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
     StepLeft, StepRight,           // filled small triangles (◀ ▶ as "move")
-    Edit, Freeze, PopOut, Cycle, Dot, Bypass, Plus, Grip,
+    Edit, Freeze, PopOut, Cycle, Dot, Bypass, Plus, Grip, Minus,
 }
 
 internal sealed class Glyph : Control
@@ -111,6 +111,12 @@ internal sealed class Glyph : Control
                 double d = s * 0.36;
                 ctx.DrawLine(pen, new Point(cx - d, cy), new Point(cx + d, cy));
                 ctx.DrawLine(pen, new Point(cx, cy - d), new Point(cx, cy + d));
+                break;
+            }
+            case GlyphKind.Minus:
+            {
+                double d = s * 0.36;
+                ctx.DrawLine(pen, new Point(cx - d, cy), new Point(cx + d, cy));
                 break;
             }
             case GlyphKind.Grip:

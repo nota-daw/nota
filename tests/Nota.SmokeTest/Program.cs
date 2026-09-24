@@ -2425,6 +2425,103 @@ Console.WriteLine("-- Nota Pendulum --");
     float rms = Rms(nbuf, 16384); bool finite = true;
     foreach (var s in nbuf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { finite = false; break; }
     Check(rms > 0.001f && finite, $"Nota Pendulum arpeggiates a held chord (RMS {rms:F3})");
+
+    // Display names group by head in the automation menu (ids unchanged).
+    Check(pe.PluginParamName(t, -1, rateI) == "Motion Rate", $"pendulum names group by head (rate → '{pe.PluginParamName(t, -1, rateI)}')");
+
+    // Telemetry: the balls, the bar grid and the voices the audio thread is actually playing.
+    {
+        int tt = pe.AddPendulumSynthTrack();
+        pe.AddMidiClip(tt, 0.0, 8.0);
+        pe.SetClipNotes(tt, 0, new[] { new NotaNote(60, 0.0, 8.0, 0.9f), new NotaNote(64, 0.0, 8.0, 0.9f), new NotaNote(67, 0.0, 8.0, 0.9f) });
+        var tb = new float[512 * 2];
+        pe.Seek(0.0); pe.Play();
+        for (int k = 0; k < 120; k++) pe.RenderOffline(tb, 512);   // ~1.4 s @ 44.1k, into bar 1
+        var sc = new float[PendulumModel.ScopeLength];
+        int sn = pe.InstrumentScope(tt, sc);
+        var snap = new PendulumModel.Snapshot();
+        PendulumModel.Parse(sc.AsSpan(0, Math.Max(0, sn)), snap);
+        Check(sn == PendulumModel.ScopeLength && snap.Live, $"pendulum scope carries {PendulumModel.ScopeLength} telemetry floats (got {sn})");
+        Check(snap.Balls == 4 && snap.Held == 3, $"telemetry: 4 balls over a 3-note chord (got {snap.Balls} / {snap.Held})");
+        Check(snap.Voices > 0 && pe.InstrumentVoiceCount(tt) == snap.Voices, $"telemetry voices match the header voice count ({snap.Voices} / {pe.InstrumentVoiceCount(tt)})");
+        Check(snap.LastPitch is 60 or 64 or 67, $"last generated note is a chord tone (got {snap.LastPitch})");
+        Check(snap.StepCount == 16 && snap.BarPos >= 0 && snap.BarPos < 1 && snap.Playing, $"bar clock: 16 steps, position {snap.BarPos:F2}, rolling");
+        int onGrid = 0; bool gridOk = true;
+        for (int i = 0; i < snap.StepCount; i++) if (snap.Steps[i].Pitch >= 0) { onGrid++; if (snap.Steps[i].Pitch is not (60 or 64 or 67) || snap.Steps[i].Age is < 0 or > 1) gridOk = false; }
+        Check(onGrid > 0 && gridOk, $"bar grid holds generated chord tones ({onGrid} steps)");
+        bool ballsOk = true;
+        for (int b = 0; b < 4; b++)
+        {
+            var x = snap.BallState[b];
+            if (x.Phase is < 0 or >= 1 || x.Pos is < 0 or > 1 || x.Dir == 0 || x.ToWall < 0 || x.ToWall > 10 || x.Rate <= 0) ballsOk = false;
+        }
+        Check(ballsOk, "each ball reports phase, position, direction, time to the wall and a forward rate");
+        Check(snap.BallState[3].Rate > snap.BallState[0].Rate, $"spread runs later balls faster ({snap.BallState[0].Rate:F2} → {snap.BallState[3].Rate:F2})");
+        // Reverse: the rate's sign flips every ball's.
+        int ri = -1; for (int i = 0; i < pc; i++) if (pe.PluginParamId(tt, -1, i) == "rate") ri = i;
+        pe.PluginParamSet(tt, -1, ri, 0.25f);
+        pe.RenderOffline(tb, 512);
+        pe.InstrumentScope(tt, sc); PendulumModel.Parse(sc, snap);
+        Check(snap.BallState[0].Rate < 0 && snap.BallState[2].Rate < 0, "a rate left of centre reverses the balls");
+        pe.StopTransport();
+    }
+
+    // Hold latches the chord: it keeps swinging after the keys are released.
+    {
+        static float RmsRange(float[] b, int from, int to) { double sum = 0; for (int i = from * 2; i < to * 2; i++) sum += b[i] * (double)b[i]; return (float)Math.Sqrt(sum / Math.Max(1, (to - from) * 2)); }
+        int th = pe.AddPendulumSynthTrack();
+        int hi = -1; for (int i = 0; i < pc; i++) if (pe.PluginParamId(th, -1, i) == "hold") hi = i;
+        pe.PluginParamSet(th, -1, hi, 1f);
+        pe.AddMidiClip(th, 0.0, 1.0);
+        pe.SetClipNotes(th, 0, new[] { new NotaNote(57, 0.0, 0.5, 0.9f), new NotaNote(60, 0.0, 0.5, 0.9f), new NotaNote(64, 0.0, 0.5, 0.9f) });
+        var hb = new float[44100 * 2 * 3];
+        pe.Seek(0.0); pe.Play(); pe.RenderOffline(hb, 44100 * 3);
+        int hn = pe.InstrumentHeldNotes(th, new int[16]);
+        pe.StopTransport();
+        float tail = RmsRange(hb, 44100 * 2, 44100 * 3);
+        Check(hn == 3 && tail > 0.001f, $"Hold keeps the chord ({hn} notes) sounding after release (tail RMS {tail:F3})");
+    }
+
+    // Factory presets: ≥ 25, every named id real, each applies in place and sounds a held chord.
+    {
+        var ids = new HashSet<string>();
+        for (int i = 0; i < pc; i++) ids.Add(pe.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 8).ToList();
+        Check(mine.Count >= 25, $"Nota Pendulum ships ≥ 25 factory presets (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Pendulum preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        var quiet = new List<string>();
+        foreach (var p in mine)
+        {
+            using var ep = new NotaEngine();
+            ep.SetBpm(120); ep.SetTimeSignature(4, 4);
+            int tp = ep.AddPendulumSynthTrack();
+            if (cat.ApplyInPlace(ep, p.Id, tp, -1).Length != 0) { quiet.Add($"{p.DisplayName} (apply)"); continue; }
+            ep.AddMidiClip(tp, 0.0, 8.0);
+            ep.SetClipNotes(tp, 0, new[] { new NotaNote(48, 0, 8, 0.9f), new NotaNote(55, 0, 8, 0.9f), new NotaNote(60, 0, 8, 0.9f), new NotaNote(64, 0, 8, 0.9f) });
+            var pb = new float[44100 * 2 * 3];
+            ep.Seek(0.0); ep.Play(); ep.RenderOffline(pb, 44100 * 3); ep.StopTransport();
+            float r = Rms(pb, 44100 * 3), pk = pb.Max(Math.Abs);
+            if (!pb.All(float.IsFinite) || r < 0.003f || pk > 2f) quiet.Add($"{p.DisplayName} ({r:F3}/{pk:F2})");
+        }
+        Check(quiet.Count == 0, $"every Pendulum preset sounds a held chord, finite and not clipping hard{(quiet.Count > 0 ? " — " + string.Join(", ", quiet) : "")}");
+    }
+
+    // MCP: read_pendulum / set_pendulum.
+    {
+        var mcp = new Nota.Mcp.Tools.InstrumentTools(pe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        int mt = mcp.AddInstrumentTrack(8).Result;
+        var rd = mcp.ReadPendulum(mt).Result;
+        Check(rd is not null && rd.Balls.Length == 4 && rd.Summary.Contains("4 balls") && rd.Guide.Contains("scalemode"), $"read_pendulum reads a fresh Pendulum ({rd?.Summary})");
+        Check(mcp.ReadPendulum(pe.AddInstrumentTrack()).Result is null, "read_pendulum returns null for another instrument");
+        string res = mcp.SetPendulum(mt, balls: 6, ratePercent: -30, division: "1/8", motion: "Bounce", scale: "A minor penta", wave: "Bell").Result;
+        var rd2 = mcp.ReadPendulum(mt).Result!;
+        Check(!res.StartsWith("error") && rd2.Balls.Length == 6 && res.Contains("sync 1/8") && res.Contains("bounce") && res.Contains("reverse") && res.Contains("A minor penta") && res.Contains("bell"),
+            $"set_pendulum shapes the pattern in musical terms ({res})");
+        string err = mcp.SetPendulum(mt, motion: "Wobble").Result;
+        Check(err.StartsWith("error") && err.Contains("Wobble"), $"set_pendulum names a value it cannot use ({err})");
+    }
 }
 
 // ============================ Nota Operator ================================

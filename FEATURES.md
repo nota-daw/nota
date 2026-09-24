@@ -286,7 +286,9 @@ and user presets, automation, persistence and cloning.
   (±2/±5/±12) and modulation wheels, VEL→FM, VEL→LEVEL, KEY→LEVEL, Glide, Mono.
 - **Nota Pendulum** — a "pendulum" sequencer: swinging balls generate notes, with swing
   curves (Linear/Pendulum/Ease/Bounce), bipolar Rate, a held chord, Scale, Hold, First
-  Note, Reset, Humanize and Pan Spread.
+  Note, Reset, Humanize and Pan Spread. The card draws one lane per ball from the engine's
+  telemetry (direction, the wall it strikes, the time to the next one) over a bar strip of
+  the generated notes; 28 factory presets; MCP `read_pendulum` / `set_pendulum`.
 - **Nota Bass** — mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
   pulse width), a sub oscillator (sine/square/tri, −1/−2 oct), a filter (LP/HP/BP/Notch,
   12/24 dB) with pre-drive, its own envelope, key tracking and LFO, amp envelope, LFO to

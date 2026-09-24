@@ -19,6 +19,35 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Pendulum's editor is now the almanac's card, and it shows the balls the engine is
+  actually swinging.** The card moves onto the 700 × 260 frame the other instruments use — a
+  **Balls** / **Voice** tab panel with a one-line reading beside the tabs, a fixed 186 px ball
+  rail and a status strip:
+  - **Balls** — Free / Sync, the division (or, in Free, the swing time), a bipolar Rate and
+    the Motion curve; then **one lane per ball**: x is pitch, low to high, the chord's degrees
+    as ticks, the wall the ball came from, the wall it strikes ("hit"), and in teal how long
+    until it reaches the wall ahead. Under the lanes, the **bar**: the generated notes land on
+    its 1/16 grid — this bar in brass, the last bar's notes ahead of the playhead in deep
+    brass — so the lanes say why a note, the bar says when.
+  - **Voice** — Keys / Glass / Saw / Sqr / Bell, Tone, Bright, FM and **Length** (the note
+    gate, now on the card), the envelope and Volume, with the last generated note and a level
+    bar per sounding voice.
+  - **Rail** — every ball's division, rate, phase and note, always in view, the one that fired
+    last lit. Under it: the ball count, Sort and Quantize, Hold / First note / Reset on Balls;
+    the spread (rate, detune, pan and — new on the card — the **Humanize amount**), a
+    **Scale** menu (root and mode in one place) and Humanize / Reset on Voice.
+  The header shows the ball count. Everything comes from the engine's telemetry, so the lanes
+  and the bar follow the audio thread (a Pendulum inside a rack chain swings from its
+  parameters instead).
+- **MCP: `read_pendulum` and `set_pendulum`.** Read a Nota Pendulum track — a summary, a guide
+  to every parameter, the held chord, each ball's phase, position, direction, note and time to
+  the wall, and the notes on the bar's grid — and shape it in musical terms: balls, rate in
+  percent, division or free seconds, motion, quantize, sort, spread, hold, first note, wave and
+  a scale like "A minor penta".
+- **Nota Pendulum ships 28 factory presets** (was 6) — music boxes and bells, pentatonic and
+  modal patterns (Pentatonic Rain, Dorian Drift, Mixolydian Sun), saw and square arps, FM
+  glints, reverse and bouncing patterns, a held pad, and slow free-running swings.
+
 - **Nota Chorus.** A new built-in audio effect (kind 25): modulated delay voices in three modes —
   **Classic** (two voices, left and right, on 8 ± 5 ms), **Ensemble** (three voices 120° apart on
   12 ± 6 ms, the string-machine shimmer) and **Vibrato** (the pitch wobble alone, wet only). The card
@@ -127,6 +156,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Pendulum's automation menu is grouped.** Its parameters list under **Balls**,
+  **Motion**, **Voice**, **Spread** and **Scale** (e.g. Motion › Rate, Spread › Humanize); the
+  ids are unchanged, so existing lanes and projects keep working.
 - **Nota Level is redrawn as a full leveler.** The card follows the new mockup on the 700 × 260
   frame, in the language of EQ-8 and Forge:
   - **Correction.** Manual / Auto sit over a fader around 0 dB. Auto rides it in teal. In

@@ -16,12 +16,17 @@
 // Pan Spread fans them across the stereo field; Humanize adds gentle level/pitch jitter;
 // Hold latches the chord and First note restarts the pattern on a new chord; an optional
 // Scale snaps generated notes. Needs the musical clock via Instrument::setTransport
-// (samples-per-beat for Sync/Quantize). All params ride the plugin-param interface
-// (normalized 0..1) → automation / persist / clone free. Header-only, alloc-free.
+// (samples-per-beat for Sync/Quantize) and setTransportInfo (the bar, for the note strip).
+// All params ride the plugin-param interface (normalized 0..1) → automation / persist /
+// clone free. Header-only, alloc-free.
+//
+// Telemetry (scopeRead, kTele floats) for the editor's lanes / note strip and the MCP
+// reader — see the layout above kTele. Mirrored by Nota.Application/PendulumModel.cs.
 
 #pragma once
 
 #include "Instrument.h"
+#include "TransportInfo.h"
 
 #include <algorithm>
 #include <atomic>
@@ -74,13 +79,48 @@ public:
         set(ScaleMode, 0.0f);   // Off
         set(Reset, 0.0f);
         resetPhases();
+        for (int st = 0; st < kMaxSteps; ++st) { stepPitch_[st] = -1; stepBar_[st] = -8; }
+        for (int b = 0; b < kMaxBalls; ++b) { ballPitch_[b] = -1; ballSince_[b] = 1e9; }
+        for (auto& t : tele_) t.store(0.0f, std::memory_order_relaxed);
     }
 
     int32_t kind() const override { return 8; }
     const char* displayName() const override { return "Nota Pendulum"; }
 
     void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
-    void setTransport(double /*beatStart*/, double spb, bool /*playing*/) override { if (spb > 0) spb_ = spb; }
+    void setTransport(double beatStart, double spb, bool playing) override {
+        if (spb > 0) spb_ = spb;
+        playing_ = playing;
+        if (playing && std::isfinite(beatStart)) beat_ = beatStart;   // stopped: the clock free-runs on
+    }
+    void setTransportInfo(const TransportInfo& ti) override {
+        if (ti.tsNum > 0 && ti.tsDenom > 0) beatsPerBar_ = std::clamp(ti.tsNum * 4.0 / ti.tsDenom, 1.0, 8.0);
+    }
+
+    int32_t activeVoiceCount() const override { return activeVoices_.load(std::memory_order_relaxed); }
+
+    // ---- telemetry ----------------------------------------------------------
+    // Head (kHead): [0] sounding voices · [1] balls · [2] held-chord size · [3] last
+    // generated pitch (−1 none yet) · [4] place in the bar 0..1 · [5] steps per bar (1/16
+    // grid) · [6] seconds per swing at the base rate (0 = stopped) · [7] ball that fired
+    // last (−1) · [8] seconds since the last note · [9] notes fired this bar · [10] beats
+    // per bar · [11] transport rolling (0/1).
+    // Then kMaxBalls × kBallStride: phase 0..1 · position 0..1 · direction (+1 → high,
+    // −1 → low, 0 still) · pitch now (−1) · seconds to the wall ahead (−1 never) · seconds
+    // since this ball fired · signed rate (1 = +100 %) · chord degree (−1).
+    // Then kMaxSteps × 2 — the bar grid: pitch (−1 empty) · age in bars (0 this bar, 1 the
+    // last). Then kMaxVoices level of each sounding voice (0 = silent slot).
+    static constexpr int kHead = 12, kBallStride = 8, kMaxSteps = 32, kMaxLevels = 8;
+    static constexpr int kBallsAt = kHead;
+    static constexpr int kStepsAt = kBallsAt + 6 * kBallStride;
+    static constexpr int kLevelsAt = kStepsAt + kMaxSteps * 2;
+    static constexpr int kTele = kLevelsAt + kMaxLevels;
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        if (!out || maxN <= 0) return 0;
+        const int n = std::min<int>(maxN, kTele);
+        for (int i = 0; i < n; ++i) out[i] = tele_[i].load(std::memory_order_relaxed);
+        return n;
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -92,10 +132,15 @@ public:
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
+        // Display names group by their head in the automation menu (Balls › Count …);
+        // the ids are what persists, so names may change.
         static const char* nm[] = {
-            "Balls", "Rate", "Sync", "Division", "Free Rate", "Motion", "Quantize", "Chord Sort", "Spread",
-            "Note Length", "Tone", "Attack", "Release", "Detune", "Volume", "Wave", "Bright", "FM",
-            "Decay", "Pan Spread", "Humanize", "Hold", "First Note", "Scale Root", "Scale", "Reset" };
+            "Balls Count", "Motion Rate", "Motion Sync", "Motion Division", "Motion Time", "Motion Curve",
+            "Balls Quantize", "Balls Sort", "Spread Rate",
+            "Voice Length", "Voice Tone", "Voice Attack", "Voice Release", "Spread Detune", "Volume",
+            "Voice Wave", "Voice Bright", "Voice FM",
+            "Voice Decay", "Spread Pan", "Spread Humanize", "Balls Hold", "Balls Restart", "Scale Root",
+            "Scale Mode", "Balls Reset" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override {
@@ -207,8 +252,13 @@ public:
         const double gridSamp  = quant == 0 ? 0.0 : (quant == 1 ? 0.25 : 0.5) * spb_;
 
         detUp_ = detUp; detDn_ = detDn;
+        const double beatInc = spb_ > 0 ? 1.0 / spb_ : 0.0;
+        const int    steps   = std::clamp((int)std::lround(beatsPerBar_ * 4.0), 1, kMaxSteps);
 
         for (int32_t i = 0; i < frames; ++i) {
+            beat_ += beatInc;
+            sinceNote_ += 1.0;
+            for (int b = 0; b < kMaxBalls; ++b) ballSince_[b] += 1.0;
             // Grid gate for Quantize: evaluate crossings continuously (Off) or on grid ticks.
             bool evaluate = true;
             if (gridSamp > 0.0) { gridAcc_ += 1.0; if (gridAcc_ >= gridSamp) { gridAcc_ -= gridSamp; evaluate = true; } else evaluate = false; }
@@ -228,6 +278,7 @@ public:
                         const float  lvl = 1.0f + (float)(human * 0.4 * rndBi());  // level jitter
                         const double det = 1.0 + human * 0.012 * rndBi();          // micro-detune jitter
                         trigger(pitch, gateLen, (float)pan, lvl, det);
+                        noteFired(b, pitch, steps);
                     }
                 }
             }
@@ -261,6 +312,8 @@ public:
             out[i * 2]     += l * g;
             out[i * 2 + 1] += r * g;
         }
+
+        publish(count, baseInc, spread, motion, steps, rateMult, cycleSamp);
     }
 
 private:
@@ -351,6 +404,66 @@ private:
         }
     }
 
+    // Bar bookkeeping for a generated note: the step it lands on, its bar, who fired it.
+    void noteFired(int ball, int pitch, int steps) {
+        const double bar = std::floor(beat_ / beatsPerBar_);
+        const double inBar = beat_ / beatsPerBar_ - bar;
+        const int st = std::clamp((int)(inBar * steps), 0, steps - 1);
+        stepPitch_[st] = pitch; stepBar_[st] = (int64_t)bar;
+        if ((int64_t)bar != countBar_) { countBar_ = (int64_t)bar; barNotes_ = 0; }
+        ++barNotes_;
+        lastPitch_ = pitch; lastBall_ = ball; sinceNote_ = 0.0; ballSince_[ball] = 0.0;
+        ballPitch_[ball] = pitch;
+    }
+
+    // Once per block: the snapshot the editor and the MCP reader see.
+    void publish(int count, double baseInc, double spread, int motion, int steps, double rateMult, double cycleSamp) {
+        auto put = [this](int i, double v) { tele_[i].store((float)v, std::memory_order_relaxed); };
+        const double sr = sampleRate_;
+        int active = 0, lv = 0;
+        for (const auto& v : voices_) {
+            if (!v.active) continue;
+            ++active;
+            if (lv < kMaxLevels) put(kLevelsAt + lv++, std::clamp(v.env * v.env * v.lvl, 0.0f, 1.0f));
+        }
+        for (; lv < kMaxLevels; ++lv) put(kLevelsAt + lv, 0.0);
+        activeVoices_.store(active, std::memory_order_relaxed);
+
+        const double bar = std::floor(beat_ / beatsPerBar_);
+        if ((int64_t)bar != countBar_) { countBar_ = (int64_t)bar; barNotes_ = 0; }
+        put(0, active); put(1, count); put(2, heldCount_); put(3, lastPitch_);
+        put(4, beat_ / beatsPerBar_ - bar); put(5, steps);
+        put(6, std::fabs(rateMult) > 1e-6 ? cycleSamp / std::fabs(rateMult) / sr : 0.0);
+        put(7, lastBall_); put(8, sinceNote_ / sr); put(9, barNotes_); put(10, beatsPerBar_); put(11, playing_ ? 1 : 0);
+
+        for (int b = 0; b < kMaxBalls; ++b) {
+            const int at = kBallsAt + b * kBallStride;
+            const double inc = baseInc * (1.0 + spread * (double)b * 0.37);
+            const double ph = ballPhase_[b];
+            // Walls sit at phase 0 (low end) and 0.5 (high end) for every swing curve.
+            double dir = 0.0, toWall = -1.0;
+            if (std::fabs(inc) > 1e-12) {
+                const bool up = inc > 0;
+                const bool rising = up ? ph < 0.5 : ph > 0.5;
+                dir = rising ? 1.0 : -1.0;
+                const double next = up ? (ph < 0.5 ? 0.5 : 1.0) : (ph > 0.5 ? 0.5 : 0.0);
+                toWall = std::fabs(next - ph) / std::fabs(inc) / sr;
+            }
+            const int deg = b < count ? lastIdx_[b] : -1;
+            int pitch = -1;
+            if (deg >= 0 && deg < heldCount_) pitch = ballPitch_[b];
+            put(at + 0, ph); put(at + 1, position(ph, motion)); put(at + 2, dir); put(at + 3, pitch);
+            put(at + 4, toWall); put(at + 5, ballSince_[b] / sr);
+            put(at + 6, rateMult * 0.5 * (1.0 + spread * (double)b * 0.37)); put(at + 7, deg);
+        }
+        for (int st = 0; st < kMaxSteps; ++st) {
+            const int64_t age = (int64_t)bar - stepBar_[st];
+            const bool live = st < steps && stepPitch_[st] >= 0 && age >= 0 && age <= 1;
+            put(kStepsAt + st * 2, live ? stepPitch_[st] : -1);
+            put(kStepsAt + st * 2 + 1, live ? (double)age : -1.0);
+        }
+    }
+
     void trigger(int pitch, int gateLen, float pan, float lvl, double detJit) {
         Voice* v = findFreeVoice();
         const double f = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
@@ -379,6 +492,18 @@ private:
     double gridAcc_ = 0.0;
     double detUp_ = 1.0, detDn_ = 1.0;
     uint32_t rng_ = 0x1234567u;
+
+    // Musical clock (follows the transport while it rolls, free-runs when stopped) and
+    // the telemetry state behind scopeRead.
+    double beat_ = 0.0, beatsPerBar_ = 4.0;
+    bool   playing_ = false;
+    int    stepPitch_[kMaxSteps] = {}; int64_t stepBar_[kMaxSteps] = {};
+    int64_t countBar_ = 0; int barNotes_ = 0;
+    int    lastPitch_ = -1, lastBall_ = -1;
+    int    ballPitch_[kMaxBalls] = {};
+    double sinceNote_ = 1e9, ballSince_[kMaxBalls] = {};
+    std::atomic<int32_t> activeVoices_{0};
+    std::atomic<float> tele_[kTele];
 };
 
 } // namespace nota

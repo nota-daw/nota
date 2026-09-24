@@ -114,10 +114,11 @@ internal static class DeviceCardKit
     // solid brass with dark text — a fill, not an outline. 9px inside a device. Two to four
     // choices; more than four is a dropdown. `current` returns the lit index, or −1 when
     // the value sits between choices. `fill` spreads the segments over the full width;
-    // `padX` narrows each segment's side padding where a strip must fit a tight column.
+    // `padX` narrows each segment's side padding where a strip must fit a tight column, and
+    // `fontSize` drops to 8 (never below 7) where a dense control strip needs it.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
     internal static Border Segments(string[] names, Func<int> current, Action<int> pick, out Action sync,
-        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6)
+        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6, double fontSize = NotaType.DeviceSection)
     {
         int n = names.Length;
         var cells = new Border[n];
@@ -128,7 +129,7 @@ internal static class DeviceCardKit
             int iv = i;
             var tb = new TextBlock
             {
-                Text = names[i], FontSize = NotaType.DeviceSection, HorizontalAlignment = HorizontalAlignment.Center,
+                Text = names[i], FontSize = Math.Max(7, fontSize), HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
             };
             var c = new Border
