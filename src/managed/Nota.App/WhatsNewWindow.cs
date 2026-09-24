@@ -5,9 +5,12 @@
 // MainWindow.OnOpenedWhatsNew). Lists the changelog entries the user hasn't seen
 // yet, newest first. Reachable any time from the Help menu too.
 
+using System;
 using System.Collections.Generic;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -125,15 +128,88 @@ public sealed class WhatsNewWindow : NotaWindow
         };
         var body = new TextBlock
         {
-            Text = text,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("Brush.TextSecondary"),
         };
+        AppendInlineMarkdown(body, text);
         Grid.SetColumn(dot, 0);
         Grid.SetColumn(body, 1);
         row.Children.Add(dot);
         row.Children.Add(body);
         return row;
+    }
+
+    // Renders the inline Markdown the changelog uses: **bold**, *italic*,
+    // `code` and [links](url) (link text only). Underscores are left alone —
+    // they show up inside identifiers like `get_rhythm_macros`.
+    private void AppendInlineMarkdown(TextBlock block, string text)
+    {
+        var inlines = block.Inlines ??= new InlineCollection();
+        var buf = new StringBuilder();
+        bool bold = false, italic = false;
+
+        void Flush()
+        {
+            if (buf.Length == 0) return;
+            var run = new Run(buf.ToString());
+            if (bold)
+            {
+                run.FontWeight = FontWeight.SemiBold;
+                run.Foreground = Brush("Brush.TextPrimary");
+            }
+            if (italic) run.FontStyle = FontStyle.Italic;
+            inlines.Add(run);
+            buf.Clear();
+        }
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '\\' && i + 1 < text.Length && "\\`*_[]()#".IndexOf(text[i + 1]) >= 0)
+            {
+                buf.Append(text[++i]);
+            }
+            else if (c == '`' && text.IndexOf('`', i + 1) is var end and > 0)
+            {
+                Flush();
+                var code = new Run(text[(i + 1)..end]) { Foreground = Brush("Brush.TextPrimary") };
+                if (this.TryFindResource("Font.Mono", out var mono) && mono is FontFamily ff)
+                    code.FontFamily = ff;
+                inlines.Add(code);
+                i = end;
+            }
+            else if (c == '*' && i + 1 < text.Length && text[i + 1] == '*'
+                     && (bold || text.IndexOf("**", i + 2, StringComparison.Ordinal) > 0))
+            {
+                Flush();
+                bold = !bold;
+                i++;
+            }
+            else if (c == '*' && (italic || text.IndexOf('*', i + 1) > 0))
+            {
+                Flush();
+                italic = !italic;
+            }
+            else if (c == '[' && text.IndexOf("](", i + 1, StringComparison.Ordinal) is var mid and > 0
+                     && text.IndexOf(')', mid + 2) is var close and > 0)
+            {
+                Flush();
+                AppendLinkText(text[(i + 1)..mid]);
+                i = close;
+            }
+            else buf.Append(c);
+        }
+        Flush();
+
+        void AppendLinkText(string label)
+        {
+            buf.Append(label);
+            var run = new Run(buf.ToString()) { Foreground = Brush("Brush.Accent") };
+            if (bold) run.FontWeight = FontWeight.SemiBold;
+            if (italic) run.FontStyle = FontStyle.Italic;
+            inlines.Add(run);
+            buf.Clear();
+        }
     }
 
     private IBrush Brush(string key)
