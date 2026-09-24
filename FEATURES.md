@@ -496,7 +496,12 @@ and user presets, automation, persistence and cloning.
   live all-pass response of L and R with the notches ticked (drag for Center, up / down for
   Feedback), the corner of both channels over two cycles, the sweep and null depth, and a status
   strip; 35 factory presets; MCP `read_phaser` / `set_phaser`.
-- **Nota Chorus** — modulation (chorus) effect.
+- **Nota Chorus** (25) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
+  (3 voices 120° apart, 12 ± 6 ms) and Vibrato (3 ± 2.5 ms, wet only); sine LFO free (0.02–8 Hz) or
+  synced (4/1 … 1/16 with triplets, locked to the bar), Offset 0–180°, a wet HPF (off / 20 Hz – 2 kHz),
+  Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
+  delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
+  ranges, and a status strip; 34 factory presets; MCP `read_chorus` / `set_chorus`.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 

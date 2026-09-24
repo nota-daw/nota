@@ -9266,6 +9266,224 @@ Console.WriteLine("-- Nota Phaser (effect kind 24) --");
     }
 }
 
+// ===================== Nota Chorus (effect kind 25) =====================
+Console.WriteLine("-- Nota Chorus (effect kind 25) --");
+{
+    // Params (Chorus.h): 0 Rate, 1 Mode, 2 Sync, 3 Division, 4 Offset, 5 HPF, 6 Amount, 7 Feedback, 8 Width, 9 Warmth, 10 Mix.
+    // Scope: 0 in, 1 out L, 2 out R (dBFS) · 3..5 τ per voice ms · 6..8 cents per voice · 9 window phase · 10 rate Hz ·
+    // 11 BPM · 12 playing · 13 locked · 14 sample rate · 15 base ms · 16 / 17 τ min / max · 18 max cents · 19 voices ·
+    // 20 mode · 21 HPF Hz · 22 width % · 23 division beats · 24 bar beats · 25 CPU · 26 signal · 27 cycles.
+    using var ce = new NotaEngine();
+    int ct = ce.AddAudioTrack();
+    ce.AddAudioClip(ct, wav, 0.0);                      // 1 s sine @ 440 Hz
+    int cdi = ce.AddBuiltinDevice(ct, 25);
+    Check(cdi >= 0, "add Nota Chorus device");
+    Check(ce.DeviceName(ct, cdi) == "Nota Chorus", $"device is Nota Chorus (got '{ce.DeviceName(ct, cdi)}')");
+    Check(ce.TrackDeviceBuiltinKind(ct, cdi) == 25, "device reports builtin kind 25");
+    int cpc = ce.DeviceParamCount(ct, cdi);
+    Check(cpc == 11, $"Nota Chorus exposes 11 params ({cpc})");
+    var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cdi, i)).ToArray();
+    Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix", $"param layout ({string.Join(",", cnames)})");
+    Check(Math.Abs(ce.DeviceParamDefault(ct, cdi, 0) - 0.6157f) < 1e-3f && ce.DeviceParamDefault(ct, cdi, 1) == 0f
+          && ce.DeviceParamDefault(ct, cdi, 4) == 1f && Math.Abs(ce.DeviceParamDefault(ct, cdi, 6) - 0.4f) < 1e-4f
+          && ce.DeviceParamDefault(ct, cdi, 8) == 0.5f && ce.DeviceParamDefault(ct, cdi, 10) == 0.5f,
+          "defaults: Classic, 0.80 Hz, offset 180°, Amount 40 %, Width 100 %, Mix 50 % (Wide Duo)");
+    ce.DeviceSetParam(ct, cdi, 6, 0.42f);
+    Check(Math.Abs(ce.DeviceGetParam(ct, cdi, 6) - 0.42f) < 1e-4f, "device param set/get round-trips");
+
+    var cbuf = new float[4096 * 2];
+    var csc = new float[32];
+    bool CFinite() { foreach (var v in cbuf) if (!float.IsFinite(v) || Math.Abs(v) > 8f) return false; return true; }
+    void CRender(int frames = 4096, double at = 0.2) { ce.Seek(at); ce.Play(); ce.RenderOffline(cbuf, frames); ce.StopTransport(); }
+    int CScope() => ce.DeviceScope(ct, cdi, csc, csc.Length);
+    float CTail() { double sum = 0; for (int i = 2048 * 2; i < 4096 * 2; i++) sum += cbuf[i] * (double)cbuf[i]; return (float)Math.Sqrt(sum / (2048 * 2)); }
+    void CDefaults() { for (int i = 0; i < cpc; i++) ce.DeviceSetParam(ct, cdi, i, ce.DeviceParamDefault(ct, cdi, i)); }
+    ce.SetBpm(120);
+
+    // Every mode renders audible + finite, incl. extreme feedback both ways and full warmth.
+    for (int md = 0; md < 3; md++)
+        foreach (float fbn in new[] { 0f, 0.5f, 1f })
+        {
+            ce.DeviceSetParam(ct, cdi, 1, md / 2f);
+            ce.DeviceSetParam(ct, cdi, 7, fbn);
+            ce.DeviceSetParam(ct, cdi, 9, fbn);
+            CRender(); CRender();
+            CScope();
+            Check(Rms(cbuf, 4096) > 1e-3f && CFinite() && (int)csc[20] == md, $"Chorus mode {md} feedback {(fbn - 0.5f) * 180:+0;-0} % is audible + stable");
+        }
+    CDefaults();
+
+    // The sweep: Classic τ = 8 ± 5 · Amount ms, the detune ±1200·log2(1 + dep·2π·rate).
+    CRender(); CScope();
+    double cDep = 5 * 0.4, cRate = 0.02 * Math.Pow(400, ce.DeviceGetParam(ct, cdi, 0));
+    Check(Math.Abs(csc[15] - 8f) < 1e-3f && Math.Abs(csc[16] - (8 - cDep)) < 1e-3f && Math.Abs(csc[17] - (8 + cDep)) < 1e-3f,
+          $"Classic sweeps 8 ± 2 ms at Amount 40 % ({csc[16]:0.00} … {csc[17]:0.00})");
+    double cMax = 1200 * Math.Log2(1 + cDep / 1000 * 2 * Math.PI * cRate);
+    Check(Math.Abs(csc[18] - cMax) < 0.05 && (int)csc[19] == 2, $"max detune ±{csc[18]:0.00} ct (expected {cMax:0.00}), 2 voices");
+    Check(csc[3] >= csc[16] - 1e-3f && csc[3] <= csc[17] + 1e-3f && Math.Abs(csc[6]) <= cMax + 0.05, $"voice L now in range ({csc[3]:0.00} ms, {csc[6]:+0.0} ct)");
+    // Offset 180°: the right voice mirrors the left around the centre; 0°: they move together.
+    Check(Math.Abs(csc[3] + csc[4] - 16f) < 0.02f, $"Offset 180°: L and R mirror around 8 ms ({csc[3]:0.00} / {csc[4]:0.00})");
+    ce.DeviceSetParam(ct, cdi, 4, 0f);
+    CRender(); CRender(); CScope();
+    Check(Math.Abs(csc[3] - csc[4]) < 0.01f, $"Offset 0°: both voices move together ({csc[3]:0.00} / {csc[4]:0.00})");
+    CDefaults();
+
+    // Ensemble: three voices 120° apart around 12 ms (their sines sum to zero).
+    ce.DeviceSetParam(ct, cdi, 1, 0.5f);
+    CRender(); CRender(); CScope();
+    Check((int)csc[19] == 3 && Math.Abs(csc[15] - 12f) < 1e-3f && Math.Abs(csc[3] + csc[4] + csc[5] - 36f) < 0.03f,
+          $"Ensemble: 3 voices around 12 ms ({csc[3]:0.00} / {csc[4]:0.00} / {csc[5]:0.00})");
+    CDefaults();
+
+    // Mix 0 is dry; Vibrato is wet only whatever the Mix says.
+    ce.SetDeviceBypassed(ct, cdi, true); CRender(); var cByp = (float[])cbuf.Clone(); float cBypRms = CTail(); ce.SetDeviceBypassed(ct, cdi, false);
+    float CDiff() { double d = 0; for (int i = 2048 * 2; i < 4096 * 2; i++) d = Math.Max(d, Math.Abs(cbuf[i] - cByp[i])); return (float)d; }
+    ce.DeviceSetParam(ct, cdi, 10, 0f);
+    CRender(); CRender();
+    Check(CDiff() < 1e-3f, $"Mix 0 passes the dry signal (max diff {CDiff():0.00000})");
+    ce.DeviceSetParam(ct, cdi, 1, 1f);                                  // Vibrato, Mix still 0
+    ce.DeviceSetParam(ct, cdi, 6, 0f);                                  // Amount 0: a static 3 ms delay
+    CRender(); CRender();
+    Check(CDiff() > 0.05f && Math.Abs(CTail() - cBypRms) < cBypRms * 0.05f, $"Vibrato ignores Mix: wet only, level kept ({CTail():0.000} vs {cBypRms:0.000})");
+    CDefaults();
+
+    // Width 0 folds the wet to mono: L = R for the mono test tone.
+    ce.DeviceSetParam(ct, cdi, 8, 0f);
+    CRender(); CRender();
+    float lr = 0f; for (int i = 2048; i < 4096; i++) lr = Math.Max(lr, Math.Abs(cbuf[i * 2] - cbuf[i * 2 + 1]));
+    ce.DeviceSetParam(ct, cdi, 8, 0.5f);
+    CRender(); CRender();
+    float lr1 = 0f; for (int i = 2048; i < 4096; i++) lr1 = Math.Max(lr1, Math.Abs(cbuf[i * 2] - cbuf[i * 2 + 1]));
+    Check(lr < 1e-4f && lr1 > 1e-3f, $"Width 0 % is mono, 100 % is stereo (L−R {lr:0.00000} / {lr1:0.0000})");
+
+    // HPF: a 2 kHz high-pass keeps a 440 Hz tone out of the wet.
+    ce.DeviceSetParam(ct, cdi, 10, 1f);
+    CRender(); CRender(); float cWet = CTail();
+    ce.DeviceSetParam(ct, cdi, 5, 1f);
+    CRender(); CRender(); float cHp = CTail();
+    CScope();
+    Check(cHp < cWet * 0.1f && Math.Abs(csc[21] - 2000f) < 1f, $"HPF 2 kHz takes the 440 Hz tone out of the wet ({20 * Math.Log10(cHp / Math.Max(1e-9f, cWet)):0.0} dB)");
+    CDefaults();
+
+    // Sync: the rate follows the tempo and the LFO locks to the song position.
+    ce.DeviceSetParam(ct, cdi, 2, 1f);
+    ce.DeviceSetParam(ct, cdi, 3, 4f / 8f);                             // 1/4 → 2 Hz at 120 BPM
+    CRender(); CScope();
+    Check(Math.Abs(csc[10] - 2f) < 1e-3f && csc[13] > 0.5f, $"Sync 1/4 at 120 BPM runs at 2 Hz, locked ({csc[10]:0.000})");
+    Check(ce.DeviceText(ct, cdi, 0).Contains("sync 1/4"), $"status names the division ('{ce.DeviceText(ct, cdi, 0)}')");
+    ce.DeviceSetParam(ct, cdi, 3, 0f);                                  // 4/1 → 0.125 Hz
+    CRender(); CScope();
+    Check(Math.Abs(csc[10] - 0.125f) < 1e-4f, $"Sync 4/1 at 120 BPM runs at 0.125 Hz ({csc[10]:0.0000})");
+    ce.SetBpm(90);
+    ce.DeviceSetParam(ct, cdi, 3, 4f / 8f);
+    CRender(); CScope();
+    Check(Math.Abs(csc[10] - 1.5f) < 1e-3f, $"the synced rate follows a tempo change (90 BPM → {csc[10]:0.000} Hz)");
+    ce.SetBpm(120);
+    CDefaults();
+
+    // A mode change mid-signal fades instead of clicking.
+    ce.DeviceSetParam(ct, cdi, 10, 1f);
+    CRender();
+    ce.Seek(0.3); ce.Play(); ce.RenderOffline(cbuf, 512);
+    ce.DeviceSetParam(ct, cdi, 1, 0.5f);
+    ce.RenderOffline(cbuf, 4096); ce.StopTransport();
+    float cjump = 0f; for (int i = 2; i < 4096 * 2; i += 2) cjump = Math.Max(cjump, Math.Abs(cbuf[i] - cbuf[i - 2]));
+    Check(cjump < 0.12f && CFinite(), $"switching Classic → Ensemble doesn't click (max step {cjump:0.000})");
+    CDefaults();
+
+    // Actions: restart the LFO, clear a ringing loop.
+    ce.DeviceSetParam(ct, cdi, 0, 1f);
+    CRender(); CScope();
+    Check(csc[27] >= 1f, $"free run: cycles run ({csc[27]:0})");
+    ce.DeviceAction(ct, cdi, 0, 0, 0f);
+    CRender(32); CScope();
+    Check(csc[27] < 1f && csc[9] < 0.05f, $"device_action 0 restarts the LFO (cycle {csc[27]:0}, phase {csc[9]:0.000})");
+    ce.DeviceSetParam(ct, cdi, 7, 1f);                                  // +90 %
+    ce.DeviceSetParam(ct, cdi, 10, 1f);                                 // wet only
+    CRender(4096, 0.9);
+    CRender(256, 1.05); float cring = Rms(cbuf, 256);
+    CRender(4096, 0.9);
+    ce.DeviceAction(ct, cdi, 1, 0, 0f);
+    CRender(256, 1.05); float ccleared = Rms(cbuf, 256);
+    Check(cring > 1e-2f && ccleared < 1e-5f, $"device_action 1 clears the ringing lines (ring {cring:0.0e0} → {ccleared:0.0e0})");
+    CDefaults();
+
+    Check(ce.DeviceText(ct, cdi, 1).Contains("voices") && ce.DeviceText(ct, cdi, 2).Contains("1/8T") && ce.DeviceText(ct, cdi, 2).Contains("Ensemble"),
+          "device text 1 = live reading, 2 = parameter guide with the mode and division tables");
+
+    // Clone.
+    ce.DeviceSetParam(ct, cdi, 7, 0.2f);
+    ce.DeviceSetParam(ct, cdi, 1, 1f);
+    int cdup = ce.DuplicateTrack(ct);
+    Check(cdup > 0 && ce.TrackDeviceBuiltinKind(cdup, cdi) == 25 && Math.Abs(ce.DeviceGetParam(cdup, cdi, 7) - 0.2f) < 1e-4f
+          && ce.DeviceGetParam(cdup, cdi, 1) == 1f, "duplicate track clones the Chorus params");
+    ce.RemoveTrack(cdup);
+    CDefaults();
+
+    // Automation drives Amount and Mode.
+    int clane = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cdi, 6);
+    Check(clane >= 0, "add Chorus Amount automation lane");
+    ce.SetAutomationPoints(ct, clane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    int clane2 = ce.AddAutomationLane(ct, AutomationTarget.DeviceParam, cdi, 1);
+    ce.SetAutomationPoints(ct, clane2, new[] { new AutomationPoint(0.0, 0f), new AutomationPoint(2.0, 1f) });
+    ce.Seek(1.99); ce.Play(); ce.RenderOffline(cbuf, 4096); ce.StopTransport();
+    CScope();
+    Check(ce.DeviceGetParam(ct, cdi, 6) > 0.8f && (int)csc[20] == 2, $"automation drives Chorus Amount ({ce.DeviceGetParam(ct, cdi, 6):F2}) and Mode ({csc[20]:0})");
+    ce.RemoveAutomationLane(ct, clane2);
+    ce.RemoveAutomationLane(ct, clane);
+    CDefaults();
+
+    // MCP: listed, read and set in units.
+    {
+        var ctools = new Nota.Mcp.Tools.DeviceTools(ce, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Check(ctools.ListDeviceKinds().Any(k => k.Kind == 25 && k.Name == "Nota Chorus"), "MCP lists Nota Chorus (kind 25)");
+        CRender();
+        var r0 = ctools.ReadChorus(ct, cdi).Result;
+        Check(r0.Mode == "Classic" && r0.Voices == 2 && !r0.Sync && Math.Abs(r0.RateHz - 0.8) < 0.01 && r0.OffsetDeg == 180 && r0.HpfHz == 0
+              && Math.Abs(r0.AmountPercent - 40) < 0.1 && r0.FeedbackPercent == 0 && r0.WidthPercent == 100 && r0.MixPercent == 50
+              && r0.State == "2 voices" && r0.VoicesNow.Count == 2 && Math.Abs(r0.DelayMinMs - 6) < 0.01 && r0.Summary.Length > 0 && r0.Live.Length > 0,
+              $"MCP read_chorus reports the defaults ({r0.Mode}, {r0.RateHz} Hz, {r0.AmountPercent} %, {r0.State})");
+        var r1 = ctools.SetChorus(ct, cdi, mode: "ensemble", division: "1/8T", hpfHz: 200, amountPercent: 65, feedbackPercent: -30,
+            widthPercent: 160, warmthPercent: 35, mixPercent: 60).Result;
+        Check(r1.Mode == "Ensemble" && r1.Voices == 3 && r1.Sync && r1.Division == "1/8T" && Math.Abs(r1.HpfHz - 200) < 1
+              && Math.Abs(r1.AmountPercent - 65) < 0.1 && Math.Abs(r1.FeedbackPercent + 30) < 0.6 && r1.WidthPercent == 160
+              && Math.Abs(r1.WarmthPercent - 35) < 0.1 && Math.Abs(r1.MixPercent - 60) < 0.1 && r1.OffsetDeg == 120 && r1.State == "3 voices",
+              $"MCP set_chorus writes in units ({r1.Mode}, {r1.Division}, {r1.HpfHz} Hz, {r1.FeedbackPercent} %)");
+        var r2 = ctools.SetChorus(ct, cdi, rateHz: 5.5, mode: "vibrato", hpfHz: 0).Result;
+        Check(!r2.Sync && Math.Abs(0.02 * Math.Pow(400, ce.DeviceGetParam(ct, cdi, 0)) - 5.5) < 1e-3 && r2.MixPercent == 100
+              && r2.State == "wet only" && r2.HpfHz == 0, "set_chorus rateHz switches to free run; Vibrato reads wet only");
+        bool threw = false, threw2 = false;
+        try { ctools.SetChorus(ct, cdi, division: "1/5").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+        try { ctools.SetChorus(ct, cdi, mode: "flanger").GetAwaiter().GetResult(); } catch (ArgumentException) { threw2 = true; }
+        Check(threw && threw2, "set_chorus rejects an unknown division or mode");
+        CDefaults();
+    }
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>(cnames);
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 25).ToList();
+        Check(mine.Count >= 25, $"Nota Chorus ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Chorus preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(ce, p.Id, ct, cdi).Length != 0) { pf++; continue; }
+            CRender();
+            if (!CFinite() || Rms(cbuf, 4096) < 1e-3f) pf++;
+        }
+        Check(pf == 0, $"every Chorus preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(ce, "chorus/String Machine", ct, cdi);
+        Check(Math.Abs(ce.DeviceGetParam(ct, cdi, 1) - 0.5f) < 1e-3f && ce.DeviceGetParam(ct, cdi, 2) > 0.5f
+              && Math.Abs(ce.DeviceGetParam(ct, cdi, 3) - 1f / 8f) < 1e-3f, "String Machine preset: Ensemble, synced 2/1");
+        cat.ApplyInPlace(ce, "chorus/Wide Duo", ct, cdi);
+        bool isDefault = Enumerable.Range(0, cpc).All(i => Math.Abs(ce.DeviceGetParam(ct, cdi, i) - ce.DeviceParamDefault(ct, cdi, i)) < 2e-3f);
+        Check(isDefault, "Wide Duo preset = the device defaults");
+    }
+}
+
 // ===================== Nota Auto Shift (effect kind 10) ===================
 Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
 {

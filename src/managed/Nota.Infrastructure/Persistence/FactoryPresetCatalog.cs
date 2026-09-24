@@ -1740,6 +1740,52 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Ph("Bass Motion",        4, FSine,  250, 0.50f,  0.30f, 0.35f,   0, hz: 0.20f);
         Ph("Vocal Air",          2, FSine, 2500, 0.50f,  0.20f, 0.30f, 120, hz: 0.25f);
 
+        // ---- Nota Chorus (kind 25) — modulated delay voices. Written in units through Ch(): mode
+        //      (CClassic / CEnsemble / CVibrato), Amount 0..1, Feedback −0.9..+0.9, Width % 0..200, Mix 0..1
+        //      (ignored in Vibrato, which is wet only), Offset 0..180°, HPF Hz (0 = off, else 20..2000),
+        //      Warmth 0..1, and either a free rate in Hz (0.02..8) or a Sync division
+        //      (4/1 2/1 1/1 1/2 1/4 1/4T 1/8 1/8T 1/16).
+        // Classic
+        Ch("Wide Duo",           CClassic,  0.40f,  0.00f, 100, 0.50f, 180, hz: 0.80f);
+        Ch("Subtle Thicken",     CClassic,  0.20f,  0.00f, 100, 0.35f,  90, hz: 0.50f);
+        Ch("Lush Chorus",        CClassic,  0.60f,  0.10f, 130, 0.50f, 180, hz: 0.60f, warmth: 0.15f);
+        Ch("Dimension Wide",     CClassic,  0.30f,  0.00f, 150, 0.45f, 180, hz: 0.35f, hpHz: 150);
+        Ch("Dark BBD",           CClassic,  0.55f,  0.15f, 110, 0.50f, 180, hz: 0.60f, warmth: 0.80f);
+        Ch("Slow Drift",         CClassic,  0.70f,  0.00f, 120, 0.45f, 180, hz: 0.12f);
+        Ch("Mono Chorus",        CClassic,  0.45f,  0.00f,   0, 0.50f,   0, hz: 0.80f);
+        Ch("Quadrature",         CClassic,  0.45f,  0.00f, 100, 0.50f,  90, hz: 0.50f);
+        Ch("Fast Shimmer",       CClassic,  0.25f,  0.05f, 120, 0.40f, 180, hz: 3.00f);
+        // Ensemble
+        Ch("String Machine",     CEnsemble, 0.65f,  0.25f, 160, 0.60f, 180, div: "2/1", hpHz: 100, warmth: 0.35f);
+        Ch("Solina Strings",     CEnsemble, 0.75f,  0.00f, 140, 0.65f, 180, hz: 0.60f, warmth: 0.30f);
+        Ch("Tri-Chorus",         CEnsemble, 0.50f,  0.00f, 120, 0.50f, 180, hz: 0.90f);
+        Ch("Wide Ensemble",      CEnsemble, 0.55f,  0.10f, 200, 0.55f, 180, hz: 0.40f, hpHz: 80);
+        Ch("Choir Pad",          CEnsemble, 0.70f,  0.15f, 150, 0.60f, 180, hz: 0.25f, warmth: 0.40f);
+        Ch("Organ Ensemble",     CEnsemble, 0.40f,  0.00f, 110, 0.50f, 180, hz: 1.20f, hpHz: 200);
+        // Vibrato
+        Ch("Tape Wobble",        CVibrato,  0.60f,  0.00f,  40, 1.00f,   0, hz: 5.50f, warmth: 0.50f);
+        Ch("Gentle Vibrato",     CVibrato,  0.35f,  0.00f,  60, 1.00f,   0, hz: 4.50f);
+        Ch("Stereo Vibrato",     CVibrato,  0.45f,  0.00f, 150, 1.00f, 180, hz: 5.00f);
+        Ch("Rotary Throb",       CVibrato,  0.50f,  0.00f, 180, 1.00f, 180, hz: 6.50f, warmth: 0.20f);
+        Ch("Warped Record",      CVibrato,  0.80f,  0.00f,  30, 1.00f,   0, hz: 0.60f, warmth: 0.60f);
+        Ch("Seasick",            CVibrato,  1.00f,  0.00f, 100, 1.00f,  90, hz: 0.35f);
+        // Feedback
+        Ch("Metallic Chorus",    CClassic,  0.40f,  0.70f, 100, 0.50f, 180, hz: 0.40f);
+        Ch("Jet Chorus",         CClassic,  0.80f,  0.60f, 120, 0.50f, 180, hz: 0.15f);
+        Ch("Negative Space",     CClassic,  0.50f, -0.50f, 130, 0.50f, 180, hz: 0.30f);
+        // Synced
+        Ch("Quarter Pulse",      CClassic,  0.50f,  0.10f, 120, 0.50f, 180, div: "1/4");
+        Ch("Bar Swell",          CEnsemble, 0.60f,  0.10f, 140, 0.55f, 180, div: "1/1");
+        Ch("Triplet Shiver",     CClassic,  0.30f,  0.00f, 120, 0.45f, 180, div: "1/8T");
+        Ch("Four-Bar Drift",     CClassic,  0.90f,  0.00f, 130, 0.50f, 180, div: "4/1");
+        // Sources
+        Ch("Vocal Double",       CClassic,  0.15f,  0.00f, 140, 0.35f, 180, hz: 0.40f, hpHz: 200);
+        Ch("Bass Chorus",        CClassic,  0.45f,  0.00f, 110, 0.45f, 180, hz: 0.50f, hpHz: 250);
+        Ch("Electric Piano",     CClassic,  0.45f,  0.05f, 130, 0.45f, 120, hz: 0.70f, warmth: 0.25f);
+        Ch("Clean Guitar",       CClassic,  0.50f,  0.05f, 120, 0.50f, 180, hz: 1.00f, hpHz: 100);
+        Ch("Synth Pad Wide",     CEnsemble, 0.60f,  0.10f, 170, 0.50f, 180, hz: 0.30f, hpHz: 120);
+        Ch("Drum Bus Air",       CClassic,  0.15f,  0.00f, 130, 0.25f, 180, hz: 0.30f, hpHz: 400);
+
         // ---- Nota Auto Shift (kind 10) — pitch correction, all params normalized 0..1 (unnamed ones
         //      reset to their defaults). Key round(11v) (0 C, .182 D, .364 E, .455 F, .636 G, .818 A);
         //      Scale 0 Chromatic/.25 Major/.5 Minor/.75 Penta Maj/1 Penta Min; Custom Scale 1 = the
@@ -2155,6 +2201,23 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("Depth", depth), ("Feedback", 0.5f + Math.Clamp(fb, -0.95f, 0.95f) / 1.9f), ("Mix", mix),
             ("Waveform", wave / 2f), ("Sync", div is null ? 0f : 1f), ("Division", d / 8f), ("Stereo", stereoDeg / 180f),
             ("Stages", st / 4f));
+    }
+
+    // Nota Chorus modes and Sync divisions (Chorus::kModeNames / kDivNames), and its presets in units.
+    private const int CClassic = 0, CEnsemble = 1, CVibrato = 2;
+    private static readonly string[] ChDivs = { "4/1", "2/1", "1/1", "1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16" };
+
+    private void Ch(string name, int mode, float amount, float fb, float widthPct, float mix, float offsetDeg, float hz = 0.8f,
+        string? div = null, float hpHz = 0, float warmth = 0)
+    {
+        int d = div is null ? 2 : Array.IndexOf(ChDivs, div);
+        if (d < 0) throw new ArgumentException($"unknown Chorus division {div}");
+        Fx("chorus", 25, name,
+            ("Rate", (float)(Math.Log(Math.Clamp(hz, 0.02f, 8f) / 0.02) / Math.Log(400))),
+            ("Mode", mode / 2f), ("Sync", div is null ? 0f : 1f), ("Division", d / 8f), ("Offset", offsetDeg / 180f),
+            ("HPF", hpHz <= 0 ? 0f : (float)(Math.Log(Math.Clamp(hpHz, 20f, 2000f) / 20.0) / Math.Log(100))),
+            ("Amount", amount), ("Feedback", 0.5f + Math.Clamp(fb, -0.9f, 0.9f) / 1.8f), ("Width", widthPct / 200f),
+            ("Warmth", warmth), ("Mix", mix));
     }
 
     // Nota Forge stage types (the S* Type step, × 1/5).

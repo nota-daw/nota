@@ -19,6 +19,29 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Chorus.** A new built-in audio effect (kind 25): modulated delay voices in three modes —
+  **Classic** (two voices, left and right, on 8 ± 5 ms), **Ensemble** (three voices 120° apart on
+  12 ± 6 ms, the string-machine shimmer) and **Vibrato** (the pitch wobble alone, wet only). The card
+  follows the new mockup on the 700 × 260 frame:
+  - **LFO.** Hz or Sync, the mode, the rate large with its period, a free rate from 0.02 to 8 Hz or a
+    synced note value from 4/1 to 1/16 with triplets (locked to the bar while the transport plays),
+    **Offset** — the right voice behind the left, 0–180° (Ensemble spreads its voices on its own) —
+    and an **HPF** on the wet input (off, or 20 Hz – 2 kHz) that keeps the lows dry and centred.
+  - **Voices.** Every voice over two LFO cycles — its delay (τ) or its detune in cents (ct) — with a
+    running head; drag up or down for Amount, double-click resets it. Under it, the stereo field:
+    where each voice sits and how far it is detuned right now.
+  - **Voice.** Amount, a bipolar Feedback (±90 %), Width (0–200 %: mono to side +6 dB), Warmth (a
+    darker, gently saturated bucket-brigade line) and Mix (locked to wet in Vibrato), with the largest
+    detune and the delay range. The header names the state: 2 or 3 voices, wet only, or resonant
+    past ±60 % feedback. Changing the mode fades instead of jumping the delay.
+  - A status line says what you'll hear — the detune and delay range, or a warning when Mix is at
+    zero or the feedback rings.
+  All eleven controls are device parameters, so automation, MIDI learn, A/B compare and project save
+  work as everywhere else. **34 factory presets**, from Wide Duo and Dark BBD to String Machine,
+  Solina Strings, Tape Wobble and Rotary Throb.
+- **MCP: `read_chorus` and `set_chorus`.** Read what a Nota Chorus is doing (the settings in units,
+  each voice's delay and detune now, the sweep and the largest detune) and set it in units — mode,
+  rate or division, offset degrees, HPF in Hz, amount, feedback, width, warmth and mix in percent.
 - **Nota Phaser.** A new built-in audio effect (kind 24): a chain of all-pass stages whose
   corner an LFO sweeps, cutting moving notches into the spectrum — from a gentle 4-stage swirl to a
   deep, whistling 12-stage sweep. The card follows the new mockup on the 700 × 260 frame:

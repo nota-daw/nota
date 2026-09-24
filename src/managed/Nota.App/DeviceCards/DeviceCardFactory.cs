@@ -43,6 +43,7 @@ internal sealed class DeviceCardFactory
         [22] = new LensDeviceBody(),
         [23] = new FlangerDeviceBody(),
         [24] = new PhaserDeviceBody(),
+        [25] = new ChorusDeviceBody(),
     };
 
     /// <summary>Resolve the body for a device: -1 = hosted plugin, a mapped built-in kind,
