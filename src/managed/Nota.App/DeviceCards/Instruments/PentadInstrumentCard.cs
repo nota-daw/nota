@@ -124,8 +124,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         static Border Divider(Control child, double top = 5) => new() { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
-        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = 26, double cw = 40)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null);
+        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 40, bool inline = false)
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
         // On/off pill toggle backed by a param (> 0.5 = on).
         Control Toggle(string id, string label, List<Action>? into = null)
@@ -261,9 +261,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             string p = "o" + o;
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols) };
             g.Children.Add(Cell(Lbl(isA ? "A" : "B", 10, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
-            g.Children.Add(Cell(K($"{p}oct", "", v => Feet[Math.Clamp((int)Math.Round(v * 3), 0, 3)], false, 26, 40), 1));
-            g.Children.Add(Cell(K($"{p}semi", "", v => { int s = (int)Math.Round((v - 0.5f) * 24); return s == 0 ? "0\u2009st" : $"{s:+0;−0}\u2009st"; }, false, 26, 40), 2));
-            g.Children.Add(Cell(K($"{p}fine", "", v => { double c = (v - 0.5) * 100; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, false, 26, 40), 3));
+            g.Children.Add(Cell(K($"{p}oct", "", v => Feet[Math.Clamp((int)Math.Round(v * 3), 0, 3)], false, Knob.SizeInline, 40, true), 1));
+            g.Children.Add(Cell(K($"{p}semi", "", v => { int s = (int)Math.Round((v - 0.5f) * 24); return s == 0 ? "0\u2009st" : $"{s:+0;−0}\u2009st"; }, false, Knob.SizeInline, 40, true), 2));
+            g.Children.Add(Cell(K($"{p}fine", "", v => { double c = (v - 0.5) * 100; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, false, Knob.SizeInline, 40, true), 3));
             var chips = isA ? Row(3, WaveChip("oasaw", 0), WaveChip("oapulse", 1)) : Row(3, WaveChip("obsaw", 0), WaveChip("obtri", 2), WaveChip("obpulse", 1));
             var pw = HSlider($"{p}pw", v => Pct(v), 30, () => !On($"{p}pulse"));
             pw.Width = 110;
@@ -284,7 +284,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 hdr.Children.Add(Col(t, i));
             }
             // bottom row: glide · voice mode · voices
-            var glide = Row(4, K("glide", "GLIDE", v => Glide(v), false, 26, 44), Chips("glidemode", new[] { "Off", "On", "Leg" }));
+            var glide = Row(4, K("glide", "GLIDE", v => Glide(v), false, Knob.SizeSecondary, 44), Chips("glidemode", new[] { "Off", "On", "Leg" }));
             var mode = Row(6, Caps("MODE"), Chips("voicemode", new[] { "Poly", "Uni", "Mono" }));
             var strip = new PentadVoiceStrip { Width = 84, Height = 14 }; voiceStrips.Add(strip);
             var voices = Row(6, Caps("VOICES"), strip);
@@ -315,11 +315,12 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
             var keyPct = MonoText("", 7, Txt2);
             readouts.Add(() => keyPct.Text = Pct(G("keytrk")));
-            var key = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEYTRACK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
+            keyPct.HorizontalAlignment = HorizontalAlignment.Center;
+            var key = new StackPanel { Spacing = 3, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEYTRACK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto") };
-            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, 32, 44));
-            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, 32, 44), 1));
-            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", v => Tenths(v), true, 32, 44), 2));
+            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 44));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 44), 1));
+            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", v => Tenths(v), true, Knob.SizeSecondary, 44), 2));
             knobs.Children.Add(Col(key, 3));
             var body = new DockPanel { LastChildFill = true, Children = { Docked(Caps("FILTER"), Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Bottom), graph } };
             return new Border { Width = 196, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 4), Child = body };
@@ -333,7 +334,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             if (amp) head.Children.Add(Docked(Toggle("releaseon", "Release"), Avalonia.Controls.Dock.Right));
             head.Children.Add(Docked(new Border { Margin = new Thickness(6, 0), Child = times }, Avalonia.Controls.Dock.Right));
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
-            var knobs = Row(0, K(pre + "attack", "A", Atk, amp, 24, 29), K(pre + "decay", "D", Dec, amp, 24, 29), K(pre + "sustain", "S", v => Pct(v), amp, 24, 29), K(pre + "release", "R", Dec, amp, 24, 29));
+            var knobs = Row(0, K(pre + "attack", "A", Atk, amp, Knob.SizeInline, 30, true), K(pre + "decay", "D", Dec, amp, Knob.SizeInline, 30, true), K(pre + "sustain", "S", v => Pct(v), amp, Knob.SizeInline, 30, true), K(pre + "release", "R", Dec, amp, Knob.SizeInline, 30, true));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
         }
@@ -394,7 +395,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var lfoWaves = Row(2, WaveChip("lfotri", 2, 20, 14), WaveChip("lfosaw", 0, 20, 14), WaveChip("lfosquare", 3, 20, 14));
             var lfo = new StackPanel { Spacing = 2, Children = {
                 Caps("LFO"),
-                Row(4, K("lforate", "RATE", LfoRate, false, 28, 38), K("lfoamt", "AMOUNT", v => Pct(v), true, 28, 38),
+                Row(4, K("lforate", "RATE", LfoRate, false, Knob.SizeSecondary, 38), K("lfoamt", "AMOUNT", v => Pct(v), true, Knob.SizeSecondary, 38),
                     new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { lfoWaves, Chips("lfosync", new[] { "Free", "Sync" }) } }) } };
             // Wheel mod
             var wmGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), RowSpacing = 3, ColumnSpacing = 6 };
@@ -444,7 +445,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Lbl("L", 7, MutedC, FontWeight.Normal)) } },
                                 new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", 7, MutedC, FontWeight.Normal)) } }, scale);
             meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(10, K("volume", "VOLUME", VolDb, false, 40, 54), meters);
+            var top = Row(10, K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 54), meters);
             var bend = Row(6, new TextBlock { Text = "BEND", FontSize = 7, FontWeight = FontWeight.Bold, Foreground = MutedC, Width = 38, VerticalAlignment = VerticalAlignment.Center },
                 Chips("bendrange", new[] { "2", "5", "7", "12" }, new[] { 1 / 11f, 4 / 11f, 6 / 11f, 1f }), Lbl("st", 7, MutedC, FontWeight.Normal));
             // Velocity → filter: a quick switch over the Velocity Filter amount (0 ↔ 50 %).

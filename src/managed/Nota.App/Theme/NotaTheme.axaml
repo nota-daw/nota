@@ -40,6 +40,7 @@
       <sys:Double x:Key="Control.KnobSecondary">34</sys:Double>
       <sys:Double x:Key="Control.KnobRegular">36</sys:Double>
       <sys:Double x:Key="Control.KnobMain">44</sys:Double>
+      <sys:Double x:Key="Control.KnobInline">24</sys:Double>
       <sys:Double x:Key="Control.ParamCell">53</sys:Double>   <!-- knob 34 + label line 9 + value line 10 -->
 
       <!-- Spacing. Inside a device everything moves in 2px units, in the shell in 4px. -->

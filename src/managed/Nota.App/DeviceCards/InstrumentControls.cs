@@ -23,7 +23,7 @@ internal static class InstrumentControls
     // Same as InstKnob, but the value readout is formatted with <paramref name="fmt"/>
     // (real units — ms / dB / kHz — instead of a bare percentage). The formatter is also
     // handed to the live-follow tick so automation moves keep the units.
-    internal static Control InstKnob(DeviceCardContext ctx, Dictionary<string, int> idx, string id, string name, Action sync, Func<float, string>? fmt, double knobSize = 38, double cellW = 58, IBrush? arc = null)
+    internal static Control InstKnob(DeviceCardContext ctx, Dictionary<string, int> idx, string id, string name, Action sync, Func<float, string>? fmt, double knobSize = 38, double cellW = 58, IBrush? arc = null, bool inline = false)
     {
         if (!idx.TryGetValue(id, out var i)) return new Panel();
         var engine = ctx.Engine;
@@ -31,7 +31,7 @@ internal static class InstrumentControls
         Func<float, string> f = fmt ?? Pct;
         var value = new TextBlock { Text = f(engine.PluginParamGet(track, -1, i)), FontSize = 8, Foreground = TextPrimary };
         value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        var knob = new Knob(engine.PluginParamGet(track, -1, i), 1.0) { Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, i), Width = knobSize, Height = knobSize };
+        var knob = new Knob(engine.PluginParamGet(track, -1, i), 1.0) { Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, i), Inline = inline, Width = knobSize, Height = knobSize };
         int pi = i; string pid = id;
         knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = f((float)v); sync(); };
         knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, pid);

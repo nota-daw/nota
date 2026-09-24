@@ -199,7 +199,7 @@ now points at the new hue.
 | Tab segment (`Seg`) in container (`SegGroup`) | 24 in 30 |
 | Filter chip (`Chip`) | 20 |
 | Switch | 18 × 10, knob 7, inset 1.5 |
-| Knob (`KnobSecondary` / `KnobRegular` / `KnobMain`) | 34 / 36 / 44 |
+| Knob (`KnobSecondary` / `KnobRegular` / `KnobMain`) | 34 / 36 / 44 · `KnobInline` 24 in a table row |
 | Parameter cell (`ParamCell`) | 53 tall |
 | Slider track | 3, handle 6 × 7 |
 | Meter | 11 wide, 5 between channels |
@@ -291,7 +291,7 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 
 | Control | Spec |
 |---|---|
-| `Knob` | 52-grid: groove r21 stroke 5, 270° from −135°, cap r14, pointer 2.4 Brass Light. Sizes snap to 34 / 36 / 44. `IsModified`, `IsDim`, `ArcColor` for a modulation source. |
+| `Knob` | 52-grid: groove r21 stroke 5, 270° from −135°, cap r14, pointer 2.4 Brass Light. Sizes snap to 34 / 36 / 44; `Inline` pins 24 for a knob inside a table row. `IsModified`, `IsDim`, `ArcColor` for a modulation source. |
 | `DeviceCardKit.KnobCell` | Knob → label 7/700 caps → value mono 7, no gap; 53 tall under a 34 knob. Label and value go Brass Light when modified or `emphasised`. |
 | `SwitchTrack` / `DeviceCardKit.Switch` | 18 × 10, knob 7, inset 1.5; on = brass + panel-coloured knob right, off = Track off + Ink 5 knob left. Word to the right, caps 7 in a device, 11 in the shell. |
 | `DeviceCardKit.Segments` | Sunken container; selected = solid brass with dark text. 9 px in a device, 11 in the shell (`ToggleButton.seg` in `Border.segmented`). |
@@ -430,6 +430,9 @@ Decisions taken while aligning the app, kept on purpose:
   Division (8), Arp Rate (8) and Order (8), Aurora Warp (5) and Filter (5), Bass LFO wave (5),
   Monolith Glide range (6), Pendulum Division (5) and Wave (5).
 - **Wide instruments** — Bass, Physical (see § Device cards).
+- **Inline knobs (24)** inside table rows — the oscillator rows and ADSR strips of Consort,
+  Pentad and Monolith (and Monolith's unison pair), as the Consort and Pentad mockups draw
+  them; a 34 knob cannot fit those rows.
 - **Preset picker in the device header.** The almanac allows only name, badge and bypass
   there; switching presets is frequent enough to stay one click away.
 - **Zoom 28 px per beat** by default, not a 16 px bar; the ruler labels every bar once a bar

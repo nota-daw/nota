@@ -51,6 +51,7 @@ internal static class NotaSize
     public const double KnobSecondary = 34;
     public const double KnobRegular = 36;
     public const double KnobMain = 44;
+    public const double KnobInline = 24;  // a knob inside a table row (Consort oscillators, ADSR strip)
     public const double ParamCell = 53;   // knob 34 + label line 9 + value line 10
 }
 

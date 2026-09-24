@@ -11,6 +11,8 @@
 //
 // A knob exists in exactly three sizes — 34 secondary · 36 regular · 44 main. Width and
 // Height are coerced onto that scale, so a call site asking for 30 or 40 gets 34 or 44.
+// The one exception is an `Inline` knob (24) that sits inside a table row, where a
+// section knob cannot fit — the Consort / Pentad / Monolith oscillator rows and ADSR strips.
 
 using System;
 using Avalonia;
@@ -38,12 +40,12 @@ public sealed class Knob : Control
     // The almanac draws the knob in a 52-unit box; everything scales from it.
     private const double Grid = 52, GrooveR = 21, GrooveStroke = 5, CapR = 14, PointerW = 2.4, PointerLen = 12;
 
-    public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain;
+    public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain, SizeInline = NotaSize.KnobInline;
 
     static Knob()
     {
-        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (_, v) => Snap(v)));
-        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (_, v) => Snap(v)));
+        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => o is Knob { _inline: true } ? SizeInline : Snap(v)));
+        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => o is Knob { _inline: true } ? SizeInline : Snap(v)));
     }
 
     /// <summary>Onto the three-size scale: up to 34 is secondary, under 40 regular, else main.</summary>
@@ -54,6 +56,10 @@ public sealed class Knob : Control
         => ReferenceEquals(arc, NotaPalette.Teal) ? NotaPalette.TealBright
          : ReferenceEquals(arc, NotaPalette.Rose) ? NotaPalette.RoseBright
          : arc;
+
+    /// <summary>The 24 px table-row knob, outside the three-size scale (see the header).</summary>
+    public bool Inline { get => _inline; init { _inline = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
+    private readonly bool _inline;
 
     /// <summary>Brass value arc instead of neutral grey.</summary>
     public bool Accent { get; init; }

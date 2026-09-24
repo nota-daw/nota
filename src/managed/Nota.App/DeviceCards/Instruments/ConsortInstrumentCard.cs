@@ -127,15 +127,15 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         static Control Right(Control c) { c.HorizontalAlignment = HorizontalAlignment.Right; return c; }
         static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
-        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = 28, double cw = 44)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null);
+        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 44, bool inline = false)
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
-        // A compact horizontal knob: [knob] value — for the oscillator table.
-        Control MiniKnob(string id, Func<float, string> fmt, double size, double valW, IBrush valColor)
+        // A compact horizontal knob: [inline knob] value — for the oscillator table.
+        Control MiniKnob(string id, Func<float, string> fmt, double valW, IBrush valColor)
         {
             if (I(id) is not (var i and >= 0)) return new Panel();
             var value = MonoText(fmt(G(id)), 8, valColor); value.Width = valW;
-            var knob = new Knob(G(id), 1.0) { Accent = true, Default = engine.InstrumentParamDefault(track, i), Width = size, Height = size };
+            var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, Default = engine.InstrumentParamDefault(track, i) };
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);
@@ -157,7 +157,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control Chips(string id, string[] names, float[]? values = null, double fs = 7, Func<bool>? dim = null)
         {
             var vals = values ?? BuildValues(names.Length);
-            var seg = DeviceCardKit.Segments(names, () => DeviceCardKit.NearestExact(G(id), vals), iv => { SetP(id, vals[iv]); Refresh(); }, out var sync, dim: dim);
+            var seg = DeviceCardKit.Segments(names, () => DeviceCardKit.NearestExact(G(id), vals), iv => { SetP(id, vals[iv]); Refresh(); }, out var sync, dim: dim, padX: 4, fontSize: fs);
             cur.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), id);
             return seg;
@@ -394,8 +394,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             string p = $"o{n}";
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols) };
             g.Children.Add(Cell(Lbl(n.ToString(), 10, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
-            g.Children.Add(Cell(MiniKnob($"{p}oct", Foot, 20, 26, AmberLit), 1, HorizontalAlignment.Left));
-            g.Children.Add(n == 1 ? Cell(MonoText("master", 8, MutedC), 2, HorizontalAlignment.Left) : Cell(MiniKnob($"{p}freq", Freq, 20, 40, TxtC), 2, HorizontalAlignment.Left));
+            g.Children.Add(Cell(MiniKnob($"{p}oct", Foot, 22, AmberLit), 1, HorizontalAlignment.Left));
+            g.Children.Add(n == 1 ? Cell(MonoText("master", 8, MutedC), 2, HorizontalAlignment.Left) : Cell(MiniKnob($"{p}freq", Freq, 38, TxtC), 2, HorizontalAlignment.Left));
             g.Children.Add(Cell(WaveSel($"{p}wave"), 3));
             var jd = new ConsortJackDot(11);
             ToolTip.SetTip(jd, $"Osc {n} pitch input (patch bay)");
@@ -449,10 +449,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 2), Child = curve };
             var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
-            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, 28, 50));
-            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, 28, 46), 1));
-            knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, 28, 50), 2));
-            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, 28, 46), 3));
+            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 50));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 46), 1));
+            knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, Knob.SizeSecondary, 50), 2));
+            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, Knob.SizeSecondary, 46), 3));
             var j1 = new ConsortJackDot(11); var j2 = new ConsortJackDot(11);
             ToolTip.SetTip(j1, "Filt 1 cutoff input"); ToolTip.SetTip(j2, "Filt 2 cutoff input");
             cur.Add(() => { j1.Set(PatchedAt(false, 10)); j2.Set(PatchedAt(false, 11)); });
@@ -476,7 +476,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
             head.Children.Add(Docked(times, Avalonia.Controls.Dock.Right));
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
-            var knobs = Row(0, K(pre + "attack", "A", Atk, amp, 22, 27), K(pre + "decay", "D", Dec, amp, 22, 27), K(pre + "sustain", "S", v => Pct(v), amp, 22, 27), K(pre + "release", "R", Dec, amp, 22, 27));
+            var knobs = Row(0, K(pre + "attack", "A", Atk, amp, Knob.SizeInline, 30, true), K(pre + "decay", "D", Dec, amp, Knob.SizeInline, 30, true), K(pre + "sustain", "S", v => Pct(v), amp, Knob.SizeInline, 30, true), K(pre + "release", "R", Dec, amp, Knob.SizeInline, 30, true));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
         }
@@ -514,10 +514,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             cur.Add(() => { jo.Set(PatchedAt(true, 1)); jr.Set(PatchedAt(false, 1)); });
             var head = new DockPanel { Height = 14, LastChildFill = false, Children = { Docked(Caps("LFO"), Avalonia.Controls.Dock.Left), Docked(Row(4, jo, jr), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 4, 0, 0) };
-            knobs.Children.Add(K("lforate", "RATE", LfoRate, true, 28, 44));
-            knobs.Children.Add(Col(K("lfopitch", "PITCH", LfoCents, true, 28, 44), 1));
-            knobs.Children.Add(Col(K("lfocut", "CUTOFF", v => Pct(v), true, 28, 44), 2));
-            knobs.Children.Add(Col(K("lfopwm", "PWM", v => Pct(v), true, 28, 44), 3));
+            knobs.Children.Add(K("lforate", "RATE", LfoRate, true, Knob.SizeSecondary, 44));
+            knobs.Children.Add(Col(K("lfopitch", "PITCH", LfoCents, true, Knob.SizeSecondary, 44), 1));
+            knobs.Children.Add(Col(K("lfocut", "CUTOFF", v => Pct(v), true, Knob.SizeSecondary, 44), 2));
+            knobs.Children.Add(Col(K("lfopwm", "PWM", v => Pct(v), true, Knob.SizeSecondary, 44), 3));
             // The switch word carries the synced division ("SYNC 1/4"), refreshed with the card.
             var syncT = Switch("Sync", () => On("lfosync"), () => { SetP("lfosync", On("lfosync") ? 0f : 1f); Refresh(); }, out var syncPaint,
                 liveLabel: () => On("lfosync") ? $"Sync {SyncNames[Math.Clamp((int)Math.Round(G("lforate") * 13), 0, 13)]}" : "Sync");
@@ -543,7 +543,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var title = (TextBlock)head.Children[0];
             cur.Add(() => title.Text = On("dlydigital") ? "DELAY · DIGITAL" : "ANALOG DELAY · BBD");
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 2, 0, 3), Child = view };
-            var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, 28, 44), K("dlyspacing", "SPACING", DlySpc, false, 28, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, 28, 46), K("dlymix", "MIX", v => Pct(v), false, 28, 40));
+            var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, Knob.SizeSecondary, 44), K("dlyspacing", "SPACING", DlySpc, false, Knob.SizeSecondary, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, Knob.SizeSecondary, 46), K("dlymix", "MIX", v => Pct(v), false, Knob.SizeSecondary, 40));
             var opts = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Chips("dlyping", new[] { "Ping", "Stereo" }, new[] { 1f, 0f }), Toggle("dlydigital", "Digital") } };
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             bottom.Children.Add(knobs); bottom.Children.Add(Col(Right(opts), 1));
@@ -635,12 +635,13 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 f.ShowAt(rateBox); e.Handled = true;
             };
             if (I("seqrate") is var ri and >= 0) MidiLearn.Bind(rateBox, MidiTarget.PluginParam(track, -1, ri), "seqrate");
-            var bottom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 11, Height = 20, Children = {
-                Row(4, Caps("RATE"), rateBox),
-                Row(4, Caps("SWING"), swingSl),
-                Row(4, Caps("ORDER"), Chips("seqorder", new[] { "Fwd", "Back", "Rnd" })),
-                Toggle("seqlatch", "Latch"),
-                Row(4, Caps("CLK"), gateDot, clkDot) } };
+            var bottom = new DockPanel { LastChildFill = false, Height = 20, Children = {
+                Docked(Row(4, Caps("CLK"), gateDot, clkDot), Avalonia.Controls.Dock.Right),
+                Docked(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = {
+                    Row(4, Caps("RATE"), rateBox),
+                    Row(4, Caps("SWING"), swingSl),
+                    Row(4, Caps("ORDER"), Chips("seqorder", new[] { "Fwd", "Back", "Rnd" })),
+                    Toggle("seqlatch", "Latch") } }, Avalonia.Controls.Dock.Left) } };
             cur = saved;
             return new DockPanel { LastChildFill = true, Margin = new Thickness(7, 3, 7, 2), Children = {
                 Docked(top, Avalonia.Controls.Dock.Top), Docked(grid, Avalonia.Controls.Dock.Top),
@@ -837,7 +838,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Lbl("L", 7, MutedC, FontWeight.Normal)) } },
                                 new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", 7, MutedC, FontWeight.Normal)) } }, scale);
             meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(12, K("volume", "VOLUME", VolDb, false, 40, 56), meters);
+            var top = Row(12, K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 56), meters);
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Avalonia.Controls.Dock.Top),
                 Docked(Divider(new StackPanel { Spacing = 4, Children = {
