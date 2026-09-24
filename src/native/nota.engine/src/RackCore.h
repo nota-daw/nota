@@ -35,27 +35,7 @@
 #include "GrainSynth.h"
 #include "Sampler.h"
 #include "SampleBuffer.h"
-#include "Eq.h"
-#include "Compressor.h"
-#include "Reverb.h"
-#include "Delay.h"
-#include "Utility.h"
-#include "Amp.h"
-#include "AutoFilter.h"
-#include "Vintage.h"
-#include "AutoPan.h"
-#include "AutoShift.h"
-#include "BeatRepeat.h"
-#include "Crush.h"
-#include "DynamicEq.h"
-#include "Ceiling.h"
-#include "Strata.h"
-#include "Eq3.h"
-#include "Forge.h"
-#include "AutoGain.h"
-#include "Shutter.h"
-#include "Chamber.h"
-#include "Prism.h"
+#include "BuiltinDevices.h"
 
 #include <algorithm>
 #include <atomic>
@@ -148,6 +128,17 @@ public:
         for (auto& c : st->chains) {
             if (c.instrument) c.instrument->setTransportInfo(ti);
             for (auto& d : c.devices) if (d) d->setTransportInfo(ti);
+        }
+    }
+
+    // The DAW tempo for tempo-synced chain children (a synced Delay, Auto Filter, Auto Pan …):
+    // without it they ran on their free times inside a rack. Audio thread, once per block.
+    void forwardTempo(double beatStart, double spb, bool playing) {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains) {
+            if (c.instrument) c.instrument->setTransport(beatStart, spb, playing);
+            for (auto& d : c.devices) if (d) d->setTransport(beatStart, spb, playing);
         }
     }
 
@@ -675,32 +666,7 @@ public:
         }
     }
 protected:
-    static std::shared_ptr<Device> makeDevice(int32_t kind) {
-        switch (kind) {
-            case 0:  return std::make_shared<Eq>();
-            case 1:  return std::make_shared<Compressor>();
-            case 2:  return std::make_shared<Reverb>();
-            case 3:  return std::make_shared<Delay>();
-            case 4:  return std::make_shared<Utility>();
-            case 6:  return std::make_shared<Amp>();
-            case 7:  return std::make_shared<AutoFilter>();
-            case 8:  return std::make_shared<Vintage>();
-            case 9:  return std::make_shared<AutoPan>();
-            case 10: return std::make_shared<AutoShift>();
-            case 11: return std::make_shared<BeatRepeat>();
-            case 12: return std::make_shared<Crush>();
-            case 13: return std::make_shared<DynamicEq>();
-            case 14: return std::make_shared<Ceiling>();
-            case 15: return std::make_shared<Strata>();
-            case 16: return std::make_shared<Eq3>();
-            case 17: return std::make_shared<Forge>();
-            case 18: return std::make_shared<AutoGain>();
-            case 19: return std::make_shared<Shutter>();
-            case 20: return std::make_shared<Chamber>();
-            case 21: return std::make_shared<Prism>();
-            default: return nullptr;   // 5 = Effect Rack (nesting) / plugin: not via this factory
-        }
-    }
+    static std::shared_ptr<Device> makeDevice(int32_t kind) { return makeChainDevice(kind); }
 
     // Macro response curve applied to the 0..1 value before mapping to [min,max].
     static float applyCurve(float v, int32_t curve) {

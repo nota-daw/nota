@@ -281,6 +281,25 @@ public interface IAudioEngine : IDisposable
     bool TryGetRhythmVoiceInfo(int trackId, int voice, out NotaSamplerInfo info);
     /// <summary>Per-voice source: 0 = Synth, 1 = Sample.</summary>
     int RhythmVoiceSource(int trackId, int voice);
+    /// <summary>Nota Rhythm per-voice insert chains: built-in effects (rack chain kinds) run on one
+    /// voice before the kit bus. Params are in each device's own units (min..max).</summary>
+    int RhythmVoiceDeviceCount(int trackId, int voice);
+    int RhythmAddVoiceDevice(int trackId, int voice, int kind);
+    bool RhythmRemoveVoiceDevice(int trackId, int voice, int dev);
+    void RhythmMoveVoiceDevice(int trackId, int voice, int from, int to);
+    string RhythmVoiceDeviceName(int trackId, int voice, int dev);
+    int RhythmVoiceDeviceBuiltinKind(int trackId, int voice, int dev);
+    int RhythmVoiceDeviceParamCount(int trackId, int voice, int dev);
+    string RhythmVoiceDeviceParamName(int trackId, int voice, int dev, int param);
+    float RhythmVoiceDeviceParamMin(int trackId, int voice, int dev, int param);
+    float RhythmVoiceDeviceParamMax(int trackId, int voice, int dev, int param);
+    float RhythmVoiceDeviceParamGet(int trackId, int voice, int dev, int param);
+    void RhythmVoiceDeviceParamSet(int trackId, int voice, int dev, int param, float value);
+    bool RhythmVoiceDeviceBypassed(int trackId, int voice, int dev);
+    void RhythmSetVoiceDeviceBypassed(int trackId, int voice, int dev, bool bypassed);
+    /// <summary>The factory kit a Rhythm's voices were loaded from ("" = none) — display only, saved with the track.</summary>
+    string RhythmKitName(int trackId);
+    void RhythmSetKitName(int trackId, string name);
     /// <summary>Live Nota Grain read positions (0..1) of active voices into outPos; returns the count.</summary>
     int GrainPlayPositions(int trackId, float[] outPos);
     /// <summary>Active synth-voice count for a built-in instrument, or -1 if unsupported.</summary>

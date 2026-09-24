@@ -150,6 +150,46 @@ int32_t nota_track_rhythm_voice_info(const NotaEngine* e, int32_t track_id, int3
 int32_t nota_track_rhythm_voice_source(const NotaEngine* e, int32_t track_id, int32_t voice) {
     return e ? CENG(e)->rhythmVoiceSource(track_id, voice) : 0;
 }
+int32_t nota_rhythm_voice_device_count(const NotaEngine* e, int32_t t, int32_t v) { return e ? CENG(e)->rhythmVoiceDeviceCount(t, v) : 0; }
+int32_t nota_rhythm_add_voice_device(NotaEngine* e, int32_t t, int32_t v, int32_t kind) { return e ? ENG(e)->rhythmAddVoiceDevice(t, v, kind) : -1; }
+int32_t nota_rhythm_remove_voice_device(NotaEngine* e, int32_t t, int32_t v, int32_t d) { return (e && ENG(e)->rhythmRemoveVoiceDevice(t, v, d)) ? 1 : 0; }
+int32_t nota_rhythm_move_voice_device(NotaEngine* e, int32_t t, int32_t v, int32_t from, int32_t to) { return (e && ENG(e)->rhythmMoveVoiceDevice(t, v, from, to)) ? 1 : 0; }
+const char* nota_rhythm_voice_device_name(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->displayName() : "";
+}
+int32_t nota_rhythm_voice_device_builtin_kind(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->builtinKind() : -1;
+}
+int32_t nota_rhythm_voice_device_param_count(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->paramCount() : 0;
+}
+const char* nota_rhythm_voice_device_param_name(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->paramName(p) : "";
+}
+float nota_rhythm_voice_device_param_min(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->paramMin(p) : 0.0f;
+}
+float nota_rhythm_voice_device_param_max(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->paramMax(p) : 1.0f;
+}
+float nota_rhythm_voice_device_param_get(const NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return dev ? dev->getParam(p) : 0.0f;
+}
+void nota_rhythm_voice_device_param_set(NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p, float value) {
+    if (nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr) dev->setParam(p, value);
+}
+int32_t nota_rhythm_voice_device_bypassed(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
+    nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr; return (dev && dev->bypassed()) ? 1 : 0;
+}
+void nota_rhythm_set_voice_device_bypassed(NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t bypassed) {
+    if (nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr) dev->setBypassed(bypassed != 0);
+}
+const char* nota_rhythm_kit_name(const NotaEngine* e, int32_t t) {
+    static std::string s; s = e ? CENG(e)->rhythmKitName(t) : std::string{}; return s.c_str();
+}
+void nota_rhythm_set_kit_name(NotaEngine* e, int32_t t, const char* name) {
+    if (e) ENG(e)->setRhythmKitName(t, name ? name : "");
+}
 int32_t nota_track_set_grain_sample(NotaEngine* e, int32_t track_id, const char* path, int32_t root) {
     if (!e || !path) return 0;
     return ENG(e)->setTrackGrainSample(track_id, std::string(path), root) ? 1 : 0;

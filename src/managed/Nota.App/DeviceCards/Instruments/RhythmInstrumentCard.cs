@@ -4,12 +4,16 @@
 // Detail · Devices — the Nota Rhythm editor (instrument kind 12): an eight-voice drum
 // machine in the 700 × 260 card the almanac draws for it. Reading order, left to right:
 //
-//   KIT 104       the voices — a hue dot, the name, SYN / SMP. Click selects and plays the
-//                 voice; drop a file on one to load it as a sample; right-click for more.
-//   VOICE         the selected voice's editor. Synth: the HIT contour (drag it — across is
-//                 Decay, up / down Tune) and Tune · Decay · Punch · Tone · Drive · Level.
-//                 Sample: the file with its Start / End region (drag the lines), Reverse,
-//                 and Start · Length · Tune (st) · Decay · Drive · Level.
+//   KIT 104       the voices — a hue dot, the name (a kit voice takes its sample's name), an
+//                 "fx" mark when it has effects, SYN / SMP. Click selects and plays the voice;
+//                 drop a file on one to load it as a sample; right-click for more. The kit
+//                 itself is the header's preset picker (the factory drum kits).
+//   VOICE         the selected voice, on two tabs. Sound — Synth: the HIT contour (drag it —
+//                 across is Decay, up / down Tune) and Tune · Decay · Punch · Tone · Drive ·
+//                 Level; Sample: the file with its Start / End region (drag the lines),
+//                 Reverse, and Start · Length · Tune (st) · Decay · Drive · Level. FX — the
+//                 voice's insert chain, the Drum Rack's device slots over RhythmVoiceAccess:
+//                 click a slot for the effect's own card, add from the menu or drop one.
 //   PERFORM 186   Swing · Human · Accent (teal — they shape the playing, not the sound),
 //                 Master and Glue (the bus compressor), the output meter.
 //   STEP          a full-width strip: the selected voice's sixteen steps in bank A–D, a
@@ -46,6 +50,19 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
     private const double KitW = 104, RailW = 186, StepH = 46, HeadH = 18, StatusH = 18, GraphW = 112;
 
+    private static int _voiceTab;   // 0 Sound, 1 FX — kept across rebuilds (a voice click, a kit load)
+
+    // A kit voice is named after its one-shot ("04 Clap" → "Clap"); a synth voice by its slot.
+    private static string VoiceLabel(IAudioEngine engine, int track, int v, bool sample)
+    {
+        if (sample && engine.TryGetRhythmVoiceInfo(track, v, out var vi) && vi.SampleId != 0)
+        {
+            string n = System.Text.RegularExpressions.Regex.Replace(engine.SampleName(vi.SampleId), @"^\d+\s+", "");
+            if (n.Length > 0) return n;
+        }
+        return RM.VoiceNames[v];
+    }
+
     // Kit-voice identity hues — one per voice, painted only through NotaPalette.Ink.
     private static readonly string[] Dots = { "#C77F55", "#D8A03D", "#3E8E8E", "#7A6FB0", "#9AA64A", "#58B368", "#5AA0B8", "#B57286" };
 
@@ -72,7 +89,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         for (int v = 0; v < RM.Voices; v++) isSample[v] = engine.RhythmVoiceSource(track, v) == 1;
         long sid = engine.TryGetRhythmVoiceInfo(track, sel, out var vinfo) ? vinfo.SampleId : 0;
         bool sampleMode = isSample[sel] && sid != 0;
-        string sampleName = sid != 0 ? engine.SampleName(sid) : "";
+        string sampleName = sid != 0 ? VoiceLabel(engine, track, sel, true) : "";
         if (sampleName.Length == 0 && sid != 0) sampleName = "sample";
         double sampleSecs = sid != 0 && engine.TryGetSampleInfo(sid, out var sinfo) && sinfo.SampleRate > 0 ? sinfo.Frames / sinfo.SampleRate : 0;
         string P(string p) => RM.Id(sel, p);
@@ -168,6 +185,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         void Loaded(int voice)
         {
             Write(RM.Id(voice, "tune"), 0.5f);
+            Write(RM.Id(voice, "tone"), 1f);   // sample mode has no Tone knob: play the file open
             Write(RM.Id(voice, "start"), 0f);
             Write(RM.Id(voice, "length"), 1f);
             Act(RM.A_SelectVoice, voice);
@@ -219,15 +237,18 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             kitDots[v] = dot;
             var nm = new TextBlock
             {
-                Text = RM.VoiceNames[v], FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
+                Text = VoiceLabel(engine, track, v, isSample[v]), FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
                 Foreground = on ? AccentBright : TextPrimary, VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(5, 0, 4, 0),
             };
             var tag = Mono(isSample[v] ? "SMP" : "SYN", on ? AccentBright : TextTertiary);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(5, 0) };
+            var fxTag = Mono(engine.RhythmVoiceDeviceCount(track, v) > 0 ? "fx" : "", on ? AccentBright : TextTertiary);
+            fxTag.Margin = new Thickness(0, 0, 3, 0);
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(5, 0) };
             row.Children.Add(dot);
             Grid.SetColumn(nm, 1); row.Children.Add(nm);
-            Grid.SetColumn(tag, 2); row.Children.Add(tag);
+            Grid.SetColumn(fxTag, 2); row.Children.Add(fxTag);
+            Grid.SetColumn(tag, 3); row.Children.Add(tag);
             IBrush restBorder = on ? NotaPalette.BorderBrass : Brushes.Transparent;
             var box = new Border
             {
@@ -235,6 +256,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent, BorderBrush = restBorder, Child = row,
             };
             ToolTip.SetTip(box, $"{RM.VoiceNames[v]} · MIDI {DeviceCardKit.NoteName(RM.MidiNotes[v])}\nClick: select and play · drop a file to load it · right-click for more");
+            AttachFxTip(fxTag, v);
             box.PointerPressed += (_, e) =>
             {
                 var pt = e.GetCurrentPoint(box);
@@ -246,6 +268,14 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             };
             AcceptDrops(box, vv, h => box.BorderBrush = h ? Teal : restBorder);
             Grid.SetRow(box, v); kitRows.Children.Add(box);
+        }
+        void AttachFxTip(Control c, int v)
+        {
+            int n = engine.RhythmVoiceDeviceCount(track, v);
+            if (n == 0) return;
+            var names = new List<string>();
+            for (int d = 0; d < n; d++) names.Add(engine.RhythmVoiceDeviceName(track, v, d));
+            ToolTip.SetTip(c, "Effects: " + string.Join(" → ", names));
         }
         void KitMenu(int v, Control anchor)
         {
@@ -300,11 +330,24 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
         var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Center };
         voiceHead.Children.Add(Cap("VOICE"));
-        voiceHead.Children.Add(new TextBlock { Text = RM.VoiceNames[sel], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        voiceHead.Children.Add(new TextBlock { Text = VoiceLabel(engine, track, sel, sampleMode), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 84, TextTrimming = TextTrimming.CharacterEllipsis });
+        int fxCount = engine.RhythmVoiceDeviceCount(track, sel);
+        var tabSeg = Segments(new[] { "Sound", fxCount > 0 ? $"FX {fxCount}" : "FX" }, () => _voiceTab, i =>
+        {
+            if (i == _voiceTab) return;
+            _voiceTab = i; ctx.RequestRebuild();
+        }, out _, padX: 6, fontSize: 7);
+        ToolTip.SetTip(tabSeg, "Sound: the voice's source and shape · FX: its own effects, before the kit bus");
+        voiceHead.Children.Add(tabSeg);
         var voiceTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        voiceTools.Children.Add(srcSeg);
-        voiceTools.Children.Add(fileBtn);
-        if (sampleMode)
+        if (_voiceTab == 0) voiceTools.Children.Add(srcSeg);
+        if (_voiceTab == 0) voiceTools.Children.Add(fileBtn);
+        if (_voiceTab == 1)
+        {
+            var hint = Mono("signal left → right", NotaPalette.TextDisabled);
+            voiceTools.Children.Add(hint);
+        }
+        if (sampleMode && _voiceTab == 0)
         {
             var revText = new TextBlock { Text = "Reverse", FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             var rev = SmallButton(revText, revText,
@@ -382,9 +425,19 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             };
         for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
-        var voiceBody = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Margin = new Thickness(6, 5) };
-        voiceBody.Children.Add(graph);
-        Grid.SetColumn(knobs, 1); voiceBody.Children.Add(knobs);
+        Control voiceBody;
+        if (_voiceTab == 1)
+        {
+            var fxStrip = new RackCardView(ctx).BuildEffectStrip(new RhythmVoiceAccess(engine, track), sel);
+            voiceBody = new Border { Margin = new Thickness(6, 5), Child = fxStrip };
+        }
+        else
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Margin = new Thickness(6, 5) };
+            g.Children.Add(graph);
+            Grid.SetColumn(knobs, 1); g.Children.Add(knobs);
+            voiceBody = g;
+        }
         var voice = Section(voiceHeadRow, voiceBody);
 
         // ---- PERFORM --------------------------------------------------------------------------

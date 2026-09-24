@@ -11067,40 +11067,38 @@ Console.WriteLine("-- Nota Rhythm --");
             $"Glue compresses the kit (RMS {dry.Rms:F3} → {glued.Rms:F3}, peak {dry.Peak:F2} → {glued.Peak:F2})");
     }
 
-    // Factory kits: ≥ 25, every id exists, each plays the pattern finite and unclipped; a kit
-    // keeps the steps and a voice's sample region; a user kit can be saved.
+    // Kits: Rhythm has no presets of its own — its kits are the factory drum kits (the Drum
+    // Rack's). Every kit loads onto the eight voices, plays its pattern finite and unclipped,
+    // keeps the steps, is recognised by name, and a user preset can still be saved.
     {
-        var ids = new HashSet<string>();
-        for (int i = 0; i < pc; i++) ids.Add(re.PluginParamId(t, -1, i));
         var cat = new FactoryPresetCatalog();
-        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 12).ToList();
-        Check(mine.Count >= 25, $"Nota Rhythm ships ≥ 25 factory kits (got {mine.Count})");
-        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
-        Check(bad.Count == 0, $"every Rhythm kit param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        Check(!cat.All().Any(p => p.IsInstrument && p.BuiltinKind == 12), "Nota Rhythm ships no synth presets of its own");
+        var kitSvc = new DrumKitService();
         var quiet = new List<string>();
-        foreach (var p in mine)
+        foreach (var k in kitSvc.All())
         {
             using var ep = new NotaEngine();
             ep.SetBpm(120); ep.SetTimeSignature(4, 4);
             int tp = ep.AddRhythmTrack();
-            if (cat.ApplyInPlace(ep, p.Id, tp, -1).Length != 0) { quiet.Add($"{p.DisplayName} (apply)"); continue; }
+            if (!kitSvc.LoadInto(ep, tp, k.Id, out string w) || w.Length > 0) { quiet.Add($"{k.Name} (load: {w})"); continue; }
+            int smp = 0; for (int v = 0; v < 8; v++) if (ep.RhythmVoiceSource(tp, v) == 1) smp++;
+            if (smp != 8) { quiet.Add($"{k.Name} ({smp}/8 voices)"); continue; }
+            if (kitSvc.Identify(ep, tp) != k.Id) { quiet.Add($"{k.Name} (identify '{kitSvc.Identify(ep, tp)}')"); continue; }
             var pb = new float[44100 * 2 * 2];
             ep.Seek(0.0); ep.Play(); ep.RenderOffline(pb, 44100 * 2); ep.StopTransport();
             float r = Rms(pb, 44100 * 2), pk = pb.Max(Math.Abs);
-            if (!pb.All(float.IsFinite) || r < 0.003f || pk > 2f) quiet.Add($"{p.DisplayName} ({r:F3}/{pk:F2})");
+            if (!pb.All(float.IsFinite) || r < 0.003f || pk > 2f) quiet.Add($"{k.Name} ({r:F3}/{pk:F2})");
         }
-        Check(quiet.Count == 0, $"every Rhythm kit plays its pattern, finite and not clipping hard{(quiet.Count > 0 ? " — " + string.Join(", ", quiet) : "")}");
+        Check(quiet.Count == 0, $"every factory kit loads onto Rhythm's voices, is recognised and plays finite and unclipped{(quiet.Count > 0 ? " — " + string.Join(", ", quiet) : "")}");
 
         using var kp = new NotaEngine();
         int tk = kp.AddRhythmTrack();
-        kp.PluginParamSet(tk, -1, RIdx(kp, tk, "v2_length"), 0.4f);
         kp.InstrumentAction(tk, RhythmModel.A_ToggleStep, 1 * 16 + 3, 0);   // snare on step 4
-        string trap = mine.First(p => p.DisplayName == "Trap").Id;
-        cat.ApplyInPlace(kp, trap, tk, -1);
+        kitSvc.LoadInto(kp, tk, "neon", out _);
         var kpat = RhythmModel.Parse(kp.GetPluginState(tk, -1), kp.PluginParamCount(tk, -1));
-        Check(kpat.On[0, 1, 3] && kpat.On[0, 0, 0] && Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v2_length")) - 0.4f) < 1e-4f
-              && Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v0_tune")) - 0.1f) < 1e-4f,
-            "applying a kit sets the sound and keeps the steps and the sample region");
+        Check(kpat.On[0, 1, 3] && kpat.On[0, 0, 0], "loading a kit keeps the steps");
+        Check(Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v1_tone")) - 1f) < 1e-4f && Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v1_tune")) - 0.5f) < 1e-4f,
+            "a kit voice plays its sample as recorded (tone open, tune centred)");
         var user = PresetService.Capture(kp, tk, -1, "My Kit");
         Check(user is { Type: "builtin-instrument", BuiltinKind: 12 } && user.NamedParams!.ContainsKey("glue"), "a Rhythm kit can be saved as a user preset");
     }
@@ -11182,6 +11180,135 @@ Console.WriteLine("-- Nota Rhythm samples --");
     finally { try { if (File.Exists(smpWav)) File.Delete(smpWav); } catch { } }
 }
 
+
+// ============ Factory kit FX: Drum Rack pad chains + Rhythm voice chains ============
+// A kit brings its effects: saturation on the kick, reverb on snare / clap, synced delay on
+// hats and percussion — as ordinary chain devices, adding to the hit without changing it.
+Console.WriteLine("-- Kit FX --");
+{
+    var svc = new DrumKitService();
+    const int SR = 44100;   // the offline engine's rate
+    static double KRms(float[] b, int from, int to) { double q = 0; to = Math.Min(to, b.Length / 2); for (int i = from; i < to; i++) q += 0.5 * (b[2 * i] * b[2 * i] + b[2 * i + 1] * b[2 * i + 1]); return to > from ? Math.Sqrt(q / (to - from)) : 0; }
+    static double KDb(double x) => 20 * Math.Log10(Math.Max(x, 1e-9));
+    // One hit of `note` from a fresh Drum Rack (or Rhythm) of `kit`, with or without its FX.
+    float[] Hit(string kit, int note, bool fx, bool rhythm = false, double bpm = 120)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(bpm);
+        int t;
+        if (!rhythm)
+        {
+            t = svc.CreateTrack(e, kit, out _);
+            e.RackSetHumanize(t, 0); e.RackSetSwing(t, 0);
+            if (!fx) for (int c = 0; c < e.RackChainCount(t); c++) while (e.RackChainDeviceCount(t, c) > 0) e.RackRemoveChainDevice(t, c, 0);
+            int clip = e.AddMidiClip(t, 0, 8);
+            e.SetClipNotes(t, clip, new[] { new NotaNote(note, 0.0, 0.25, 1.0f) });
+        }
+        else
+        {
+            t = svc.CreateRhythmTrack(e, kit, out _);
+            e.InstrumentAction(t, RhythmModel.A_ClearBank, 0, 0);
+            for (int i = 0; i < e.PluginParamCount(t, -1); i++) if (e.PluginParamId(t, -1, i) is "humanize" or "swing") e.PluginParamSet(t, -1, i, 0f);
+            if (!fx) for (int v = 0; v < 8; v++) while (e.RhythmVoiceDeviceCount(t, v) > 0) e.RhythmRemoveVoiceDevice(t, v, 0);
+            int v0 = Array.IndexOf(RhythmModel.MidiNotes, note);
+            e.InstrumentAction(t, RhythmModel.A_ToggleStep, v0 * 16, 0);
+            e.InstrumentAction(t, RhythmModel.A_SetVel, v0 * 16, 1f);
+        }
+        e.Seek(0); e.Play();
+        int n = SR * 2; var buf = new float[n * 2]; var blk = new float[512 * 2];
+        for (int done = 0; done < n; done += 512) { e.RenderOffline(blk, 512); Array.Copy(blk, 0, buf, done * 2, Math.Min(512, n - done) * 2); }
+        e.StopTransport();
+        return buf;
+    }
+
+    // Which pads get what (Kompakt: kick, snare, closed hat, crash).
+    using (var ke = new NotaEngine())
+    {
+        int kt = svc.CreateTrack(ke, "kompakt", out _);
+        int Chain(int note) { for (int c = 0; c < ke.RackChainCount(kt); c++) if (ke.RackChainTriggerNote(kt, c) == note) return c; return -1; }
+        int[] Kinds(int note) { int c = Chain(note); return Enumerable.Range(0, ke.RackChainDeviceCount(kt, c)).Select(d => ke.RackChainDeviceBuiltinKind(kt, c, d)).ToArray(); }
+        Check(Kinds(36).SequenceEqual(new[] { 17 }) && Kinds(38).SequenceEqual(new[] { 2 }) && Kinds(39).SequenceEqual(new[] { 2 })
+              && Kinds(42).SequenceEqual(new[] { 3 }) && Kinds(46).SequenceEqual(new[] { 3 }) && Kinds(49).Length == 0,
+            "kit pads carry their FX: Forge on the kick, Reverb on snare and clap, Delay on the hats, none on the crash");
+    }
+
+    // The effects add to the hit rather than change it.
+    var snDry = Hit("kompakt", 38, false); var snFx = Hit("kompakt", 38, true);
+    double headD = KDb(KRms(snFx, 0, SR / 10)) - KDb(KRms(snDry, 0, SR / 10));
+    // The tail (0.3–1.5 s) against the hit (first 100 ms): the dry one-shot is long gone there.
+    double tailGain = KDb(KRms(snFx, SR * 3 / 10, SR * 3 / 2)) - KDb(KRms(snFx, 0, SR / 10));
+    double dryTail = KDb(KRms(snDry, SR * 3 / 10, SR * 3 / 2)) - KDb(KRms(snDry, 0, SR / 10));
+    Check(Math.Abs(headD) < 0.3 && tailGain > -45 && tailGain > dryTail + 20,
+        $"the snare's reverb keeps the hit at level and opens a tail (hit {headD:+0.00;-0.00} dB, tail {tailGain:0} dB under the hit)");
+    var kDry = Hit("kompakt", 36, false); var kFx = Hit("kompakt", 36, true);
+    double kickD = KDb(KRms(kFx, 0, SR / 4)) - KDb(KRms(kDry, 0, SR / 4));
+    Check(Math.Abs(kickD) < 1.5 && kFx.All(float.IsFinite), $"the kick's saturation stays level-matched ({kickD:+0.00;-0.00} dB)");
+
+    // A tempo-synced delay inside a pad chain follows the song tempo (dotted 1/8: 0.375 s at
+    // 120 BPM, 0.5 s at 90) — the rack forwards the tempo to its chain devices.
+    // Echo energy around `sec`, relative to the hit (dry: the rim is silent there).
+    double EchoAt(float[] fx, float[] dry, double sec) => KDb(KRms(fx, (int)(sec * SR) - 480, (int)(sec * SR) + 1440)) - KDb(KRms(dry, 0, SR / 20));
+    var rim120 = Hit("kompakt", 37, true); var rimDry = Hit("kompakt", 37, false);
+    var rim90 = Hit("kompakt", 37, true, bpm: 90); var rimDry90 = Hit("kompakt", 37, false, bpm: 90);
+    Check(EchoAt(rim120, rimDry, 0.375) > -40 && EchoAt(rim90, rimDry90, 0.5) > -40 && EchoAt(rim90, rimDry90, 0.375) < EchoAt(rim90, rimDry90, 0.5) - 20,
+        $"a pad's synced delay echoes on the tempo's dotted 1/8 ({EchoAt(rim120, rimDry, 0.375):0} dB at 0.375 s / 120 BPM, {EchoAt(rim90, rimDry90, 0.5):0} dB at 0.5 s / 90, vs the hit)");
+
+    // Rhythm: the same kit, the same FX, on the voices.
+    var rsDry = Hit("kompakt", 38, false, rhythm: true); var rsFx = Hit("kompakt", 38, true, rhythm: true);
+    double rHead = KDb(KRms(rsFx, 0, SR / 10)) - KDb(KRms(rsDry, 0, SR / 10));
+    double rTail = KDb(KRms(rsFx, SR * 3 / 10, SR * 3 / 2)) - KDb(KRms(rsFx, 0, SR / 10));
+    double rDryTail = KDb(KRms(rsDry, SR * 3 / 10, SR * 3 / 2)) - KDb(KRms(rsDry, 0, SR / 10));
+    Check(Math.Abs(rHead) < 0.3 && rTail > -45 && rTail > rDryTail + 20,
+        $"a Rhythm voice's reverb adds a tail and keeps the hit (hit {rHead:+0.00;-0.00} dB, tail {rTail:0} dB under the hit)");
+
+    using var re = new NotaEngine();
+    int rt = svc.CreateRhythmTrack(re, "kompakt", out string rw);
+    Check(rt > 0 && rw.Length == 0 && re.RhythmKitName(rt) == "kompakt", $"a Rhythm track with a factory kit ({(rw.Length == 0 ? "no warnings" : rw)})");
+    int[] VKinds(NotaEngine e, int t, int v) => Enumerable.Range(0, e.RhythmVoiceDeviceCount(t, v)).Select(d => e.RhythmVoiceDeviceBuiltinKind(t, v, d)).ToArray();
+    Check(VKinds(re, rt, 0).SequenceEqual(new[] { 17 }) && VKinds(re, rt, 1).SequenceEqual(new[] { 2 }) && VKinds(re, rt, 4).SequenceEqual(new[] { 3 }),
+        "Rhythm voices carry the kit's FX (kick Forge, snare Reverb, closed hat Delay)");
+    int dev = re.RhythmAddVoiceDevice(rt, 6, 1);   // a compressor on the tom
+    Check(dev == 0 && re.RhythmVoiceDeviceName(rt, 6, 0).Length > 0, "a device can be added to a voice");
+    int thr = Enumerable.Range(0, re.RhythmVoiceDeviceParamCount(rt, 6, 0)).First(p => re.RhythmVoiceDeviceParamName(rt, 6, 0, p) == "Thresh");
+    re.RhythmVoiceDeviceParamSet(rt, 6, 0, thr, -30f);
+    re.RhythmSetVoiceDeviceBypassed(rt, 1, 0, true);
+    re.RhythmAddVoiceDevice(rt, 6, 16);
+    re.RhythmMoveVoiceDevice(rt, 6, 1, 0);
+    Check(VKinds(re, rt, 6).SequenceEqual(new[] { 16, 1 }), "voice devices reorder");
+
+    // Save / load: the chains, their params and bypass, and the kit ride the state blob.
+    var blob = re.GetPluginState(rt, -1);
+    using (var le = new NotaEngine())
+    {
+        int lt = le.AddRhythmTrack();
+        le.SetPluginState(lt, -1, blob);
+        Check(VKinds(le, lt, 6).SequenceEqual(new[] { 16, 1 }) && Math.Abs(le.RhythmVoiceDeviceParamGet(lt, 6, 1, thr) + 30f) < 1e-3f
+              && le.RhythmVoiceDeviceBypassed(lt, 1, 0) && VKinds(le, lt, 0).SequenceEqual(new[] { 17 }) && le.RhythmKitName(lt) == "kompakt",
+            "voice FX (devices, params, bypass) and the kit restore from the state blob");
+        // A blob from before voice FX ends after the source flags: it loads with none.
+        int legacyLen = 4 + le.PluginParamCount(lt, -1) * 4 + 4 + 4 * 8 * 16 * 3 + 8;
+        le.SetPluginState(lt, -1, blob.Take(legacyLen).ToArray());
+        var lp = RhythmModel.Parse(le.GetPluginState(lt, -1), le.PluginParamCount(lt, -1));
+        Check(Enumerable.Range(0, 8).All(v => le.RhythmVoiceDeviceCount(lt, v) == 0) && lp.On[0, 0, 0] && le.RhythmKitName(lt) == "",
+            "an older Rhythm blob (no FX section) still loads its pattern, with no voice FX");
+    }
+    // Loading a sample into a voice (what a project load does after the blob) keeps every chain.
+    var kk = Nota.Infrastructure.Kits.KitCatalog.ById("kompakt")!;
+    Check(re.SetRhythmVoiceSample(rt, 7, Nota.Infrastructure.Kits.KitLibrary.PathOf(kk, kk.Pads[12]))
+          && VKinds(re, rt, 6).SequenceEqual(new[] { 16, 1 }) && re.RhythmVoiceDeviceBypassed(rt, 1, 0) && re.RhythmKitName(rt) == "kompakt",
+        "loading a voice sample keeps the voice FX and the kit");
+    int copy = re.DuplicateTrack(rt);
+    Check(copy > 0 && VKinds(re, copy, 6).SequenceEqual(new[] { 16, 1 }) && VKinds(re, copy, 1).SequenceEqual(new[] { 2 }),
+        "duplicating a Rhythm track copies its voice FX");
+    re.RhythmRemoveVoiceDevice(copy, 6, 0);
+    Check(re.RhythmVoiceDeviceCount(copy, 6) == 1 && re.RhythmVoiceDeviceCount(rt, 6) == 2, "the copy's chains are its own");
+
+    // Stereo one-shots keep their image in Rhythm (the old sample path summed them to mono).
+    var clap = Hit("atelier", 39, false, rhythm: true);
+    double side = 0, mid = 0;
+    for (int i = 0; i < clap.Length / 2; i++) { double l = clap[2 * i], r = clap[2 * i + 1]; side += (l - r) * (l - r); mid += (l + r) * (l + r); }
+    Check(side > mid * 0.005, $"a stereo kit sample plays in stereo on a Rhythm voice (side/mid {side / Math.Max(mid, 1e-12):0.000})");
+}
 // ============ track groups (submix) ======================================
 Console.WriteLine("-- track groups --");
 {

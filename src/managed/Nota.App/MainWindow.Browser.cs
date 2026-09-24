@@ -65,23 +65,29 @@ public partial class MainWindow
         return warn;
     }
 
-    /// <summary>A factory drum-kit row (browser Path "kit:&lt;id&gt;").</summary>
+    /// <summary>A factory drum-kit row: "kit:&lt;id&gt;" under the Drum Rack, "rhythmkit:&lt;id&gt;"
+    /// under Nota Rhythm — the same kits, told apart by the instrument a new track gets.</summary>
     private static bool IsKitRow(BrowserItem item)
-        => item.Kind == BrowserItemKind.Preset && item.Path.StartsWith("kit:", StringComparison.Ordinal);
+        => item.Kind == BrowserItemKind.Preset
+           && (item.Path.StartsWith("kit:", StringComparison.Ordinal) || item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal));
 
-    // Loads a factory kit. Dropped on an existing Drum Rack it replaces that rack's pads;
-    // anywhere else it spawns its own Drum Rack track, the way an instrument preset does.
-    // The kit's samples are synthesized on first use, which is why this can be slow once.
+    private const string RhythmKitPrefix = "rhythmkit:";
+
+    // Loads a factory kit. Dropped on an existing Drum Rack or Nota Rhythm it replaces that
+    // instrument's pads / voices; anywhere else it spawns its own track — a Drum Rack, or a
+    // Rhythm for a row under Rhythm — the way an instrument preset does. The kit's samples
+    // are synthesized on first use, which is why this can be slow once.
     private string ApplyDrumKit(BrowserItem item, int targetTrackId)
     {
-        string id = item.Path["kit:".Length..];
-        if (targetTrackId > 0 && Engine.TrackInstrumentKind(targetTrackId) == 4)
+        bool rhythm = item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal);
+        string id = item.Path[(rhythm ? RhythmKitPrefix.Length : "kit:".Length)..];
+        if (targetTrackId > 0 && Engine.TrackInstrumentKind(targetTrackId) is 4 or RhythmModel.Kind)
         {
             _kits.LoadInto(Engine, targetTrackId, id, out string replaceWarn);
             ShowDevices(targetTrackId);
             return replaceWarn;
         }
-        int track = _kits.CreateTrack(Engine, id, out string warn);
+        int track = rhythm ? _kits.CreateRhythmTrack(Engine, id, out string warn) : _kits.CreateTrack(Engine, id, out warn);
         if (track > 0)
         {
             Engine.AddMidiClip(track, 0.0, 4.0);
@@ -128,6 +134,7 @@ public partial class MainWindow
                         1 => Engine.AddSamplerInstrumentTrack(),
                         _ => Engine.AddInstrumentTrack(),
                     };
+                    if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
                     Engine.AddMidiClip(t, 0.0, 4.0);
                     if (item.BuiltinKind == 1) ShowDevices(t);   // reveal the Sampler card (drop a sample onto it)
                     _lastInstrumentTrackId = t;

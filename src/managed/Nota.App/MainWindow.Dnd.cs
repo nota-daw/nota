@@ -43,6 +43,7 @@ public partial class MainWindow
                     // otherwise add a new track. Racks/Sampler fall through to their own adds.
                     if (CanReplaceInstrument(trackId) && Engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind))
                     {
+                        if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, trackId, _kits.DefaultRhythmKit, out _);
                         _lastInstrumentTrackId = trackId;
                         RefreshDeviceChainIfShowing(trackId);
                         _vm.StatusText = $"Changed instrument to {item.Name} (track {trackId})";
@@ -67,6 +68,7 @@ public partial class MainWindow
                         1 => Engine.AddSamplerInstrumentTrack(),
                         _ => Engine.AddInstrumentTrack(),
                     };
+                    if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
                     Engine.AddMidiClip(t, beat, 4.0);
                     _lastInstrumentTrackId = t;
                     _vm.StatusText = $"Added {item.Name} (track {t})";

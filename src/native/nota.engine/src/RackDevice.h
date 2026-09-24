@@ -30,6 +30,7 @@ public:
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
+    void setTransport(double beatStart, double spb, bool playing) override { forwardTempo(beatStart, spb, playing); }
 
     // ---- in-place processing: Parallel / Series / Select + dry-wet + gain ----
     void process(float* buf, int32_t frames) override {

@@ -165,4 +165,14 @@ public sealed record KitDefinition
     public float Swing { get; init; }
     /// <summary>Drum Rack humanize, 0..1.</summary>
     public float Humanize { get; init; }
+
+    // --- live pad FX (KitFx) — they don't touch the rendered samples ------------------------
+    /// <summary>How much space the kit's pad FX add: scales the reverbs' size, decay and level
+    /// and the delays' level. 1 = a studio-dry kit's modest room; 0 would leave only the kick
+    /// saturation.</summary>
+    public double FxSpace { get; init; } = 1.0;
+    /// <summary>Scales the kick's parallel saturation.</summary>
+    public double FxDrive { get; init; } = 1.0;
+    /// <summary>Tape rather than Tube for the kick saturation — the lo-fi and vintage kits.</summary>
+    public bool FxTape { get; init; }
 }

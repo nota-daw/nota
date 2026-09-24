@@ -343,7 +343,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             mi.Click += (_, _) => { a.AddChainDevice(sc, kk); _ctx.RequestRebuild(); };
             f.Items.Add(mi);
         }
-        if (App.Services?.GetService(typeof(Nota.Application.IPluginCatalog)) is Nota.Application.IPluginCatalog cat && cat.Count > 0)
+        if (a.HostsPlugins && App.Services?.GetService(typeof(Nota.Application.IPluginCatalog)) is Nota.Application.IPluginCatalog cat && cat.Count > 0)
         {
             var sub = new MenuItem { Header = "Plug-ins" };
             for (int i = 0; i < cat.Count; i++)
@@ -1340,8 +1340,20 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private static bool IsEffect(Nota.Presentation.BrowserItem? item) =>
         item is { Kind: Nota.Presentation.BrowserItemKind.BuiltinEffect or Nota.Presentation.BrowserItemKind.PluginEffect };
 
+    /// <summary>One chain's insert effects as a row of device slots, then the add slot — the
+    /// Drum Rack pad's chain strip without its instrument. Nota Rhythm shows a voice's FX with
+    /// it, through <see cref="RhythmVoiceAccess"/>.</summary>
+    public Control BuildEffectStrip(IRackAccess a, int chain)
+    {
+        var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+        for (int d = 0; d < a.ChainDeviceCount(chain); d++) slots.Children.Add(IrDeviceSlot(a, chain, d));
+        slots.Children.Add(IrAddDeviceSlot(a, chain));
+        return new ScrollViewer { Content = slots, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+    }
+
     private void DropEffectOnChain(IRackAccess a, int chain, Nota.Presentation.BrowserItem item)
     {
+        if (item.Kind == Nota.Presentation.BrowserItemKind.PluginEffect && !a.HostsPlugins) return;
         if (item.Kind == Nota.Presentation.BrowserItemKind.BuiltinEffect) a.AddChainDevice(chain, item.BuiltinKind);
         else if (item.Kind == Nota.Presentation.BrowserItemKind.PluginEffect) a.AddPluginChainDevice(chain, item.CatalogIndex);
         _ctx.RequestRebuild();

@@ -56,6 +56,8 @@ internal interface IRackAccess
     float ChainMeter(int chain);
     bool SetMappingRange(int index, float lo, float hi);
     int MappingCurve(int index); bool SetMappingCurve(int index, int curve);
+    /// <summary>Whether a chain can take a hosted plug-in effect (not Nota Rhythm's voices).</summary>
+    bool HostsPlugins => true;
 }
 
 internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
@@ -162,4 +164,57 @@ internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAcc
     public bool SetMappingRange(int i, float lo, float hi) => e.RackDevSetMappingRange(t, di, i, lo, hi);
     public int MappingCurve(int i) => e.RackDevMappingCurve(t, di, i);
     public bool SetMappingCurve(int i, int curve) => e.RackDevSetMappingCurve(t, di, i, curve);
+}
+
+// Nota Rhythm's eight voices as effect-only "chains": each voice's insert chain through the
+// same surface a rack chain has, so the rack's device slots, add menu and full device cards
+// work on a voice unchanged. The instrument / mix / macro members have no Rhythm meaning.
+internal sealed class RhythmVoiceAccess(IAudioEngine e, int t) : IRackAccess
+{
+    public bool HasInstrumentChains => false;
+    public int AutomationDeviceIndex => -1;
+    public bool HostsPlugins => false;
+    public int ChainCount() => RhythmModel.Voices;
+    public int AddChain(int k) => -1;
+    public bool RemoveChain(int c) => false;
+    public bool SetChainInstrument(int c, int k) => false;
+    public int ChainInstrumentKind(int c) => -2;
+    public string ChainInstrumentName(int c) => "";
+    public int ChainInstrumentParamCount(int c) => 0;
+    public string ChainInstrumentParamName(int c, int p) => "";
+    public float ChainInstrumentParamGet(int c, int p) => 0f;
+    public void ChainInstrumentParamSet(int c, int p, float v) { }
+    public int ChainDeviceCount(int c) => e.RhythmVoiceDeviceCount(t, c);
+    public int AddChainDevice(int c, int k) => e.RhythmAddVoiceDevice(t, c, k);
+    public int AddPluginInstrumentChain(int catalogIndex) => -1;
+    public int AddPluginChainDevice(int c, int catalogIndex) => -1;
+    public bool RemoveChainDevice(int c, int d) => e.RhythmRemoveVoiceDevice(t, c, d);
+    public void MoveChainDevice(int c, int f, int to) => e.RhythmMoveVoiceDevice(t, c, f, to);
+    public string ChainDeviceName(int c, int d) => e.RhythmVoiceDeviceName(t, c, d);
+    public int ChainDeviceParamCount(int c, int d) => e.RhythmVoiceDeviceParamCount(t, c, d);
+    public string ChainDeviceParamName(int c, int d, int p) => e.RhythmVoiceDeviceParamName(t, c, d, p);
+    public float ChainDeviceParamMin(int c, int d, int p) => e.RhythmVoiceDeviceParamMin(t, c, d, p);
+    public float ChainDeviceParamMax(int c, int d, int p) => e.RhythmVoiceDeviceParamMax(t, c, d, p);
+    public float ChainDeviceParamGet(int c, int d, int p) => e.RhythmVoiceDeviceParamGet(t, c, d, p);
+    public void ChainDeviceParamSet(int c, int d, int p, float v) => e.RhythmVoiceDeviceParamSet(t, c, d, p, v);
+    public bool ChainDeviceBypassed(int c, int d) => e.RhythmVoiceDeviceBypassed(t, c, d);
+    public void SetChainDeviceBypassed(int c, int d, bool b) => e.RhythmSetVoiceDeviceBypassed(t, c, d, b);
+    public int ChainDeviceBuiltinKind(int c, int d) => e.RhythmVoiceDeviceBuiltinKind(t, c, d);
+    public void OpenChainDeviceEditor(int c, int d) { }
+    public float ChainGain(int c) => 1f; public void SetChainGain(int c, float v) { }
+    public float ChainPan(int c) => 0f; public void SetChainPan(int c, float v) { }
+    public bool ChainMute(int c) => false; public void SetChainMute(int c, bool b) { }
+    public bool ChainSolo(int c) => false; public void SetChainSolo(int c, bool b) { }
+    public int ChainTriggerNote(int c) => c is >= 0 and < RhythmModel.Voices ? RhythmModel.MidiNotes[c] : -1;
+    public void SetChainTriggerNote(int c, int note) { }
+    public int AddMacroMapping(int m, int c, int td, int p, float lo, float hi) => -1;
+    public int MappingCount() => 0;
+    public bool TryGetMapping(int i, out RackMacroMapping m) { m = default; return false; }
+    public bool RemoveMapping(int i) => false;
+    public string MacroName(int i) => "";
+    public void SetMacroName(int i, string name) { }
+    public float ChainMeter(int c) => 0f;
+    public bool SetMappingRange(int i, float lo, float hi) => false;
+    public int MappingCurve(int i) => 0;
+    public bool SetMappingCurve(int i, int curve) => false;
 }

@@ -30,6 +30,7 @@ public:
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
+    void setTransport(double beatStart, double spb, bool playing) override { forwardTempo(beatStart, spb, playing); }
 
     // ---- note fan-out: a note reaches a chain only if it's inside its key/vel zone --
     void noteOn(int32_t pitch, float velocity) override {

@@ -224,9 +224,79 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         int v = Math.Clamp(voice, 0, Voices - 1);
         if (!E.SetRhythmVoiceSample(trackId, v, path)) return false;
         var ids = Ids(trackId);
-        foreach (var (p, val) in new[] { ("tune", 0.5f), ("start", 0f), ("length", 1f) })
+        foreach (var (p, val) in new[] { ("tune", 0.5f), ("tone", 1f), ("start", 0f), ("length", 1f) })
             if (ids.TryGetValue(RM.Id(v, p), out var i)) E.PluginParamSet(trackId, -1, i, val);
         return true;
+    });
+
+    // ---- voice FX: each voice's own insert chain of built-in effects ------------------------
+
+    public sealed record FxParam(string Name, float Value, float Min, float Max);
+    public sealed record FxDeviceInfo(int Index, string Name, int Kind, bool Bypassed, FxParam[] Params);
+
+    [McpServerTool(Name = "get_rhythm_voice_fx"), Description(
+        "The insert effects on one Rhythm voice (0..7 or its name), in signal order: each device's index, name, "
+        + "builtin kind, bypass and params (value with its min..max). A factory kit puts saturation on the kick, a "
+        + "reverb on the snare and clap and a tempo-synced delay on hats and percussion.")]
+    public Task<FxDeviceInfo[]> GetRhythmVoiceFx(int trackId, string voice) => Read(() =>
+    {
+        int v = VoiceIndex(voice);
+        if (v < 0 || E.TrackInstrumentKind(trackId) != RM.Kind) return Array.Empty<FxDeviceInfo>();
+        int n = E.RhythmVoiceDeviceCount(trackId, v);
+        var list = new FxDeviceInfo[n];
+        for (int d = 0; d < n; d++)
+        {
+            int pc = E.RhythmVoiceDeviceParamCount(trackId, v, d);
+            var ps = new FxParam[pc];
+            for (int p = 0; p < pc; p++)
+                ps[p] = new FxParam(E.RhythmVoiceDeviceParamName(trackId, v, d, p), E.RhythmVoiceDeviceParamGet(trackId, v, d, p),
+                    E.RhythmVoiceDeviceParamMin(trackId, v, d, p), E.RhythmVoiceDeviceParamMax(trackId, v, d, p));
+            list[d] = new FxDeviceInfo(d, E.RhythmVoiceDeviceName(trackId, v, d), E.RhythmVoiceDeviceBuiltinKind(trackId, v, d),
+                E.RhythmVoiceDeviceBypassed(trackId, v, d), ps);
+        }
+        return list;
+    });
+
+    [McpServerTool(Name = "add_rhythm_voice_fx"), Description(
+        "Append a built-in effect to a Rhythm voice's insert chain. kind: 0 EQ-8, 1 Compressor, 2 Reverb, 3 Delay, "
+        + "4 Utility, 6 Valve, 7 Auto Filter, 8 Vintage, 9 Orbit, 10 Auto Shift, 11 Beat Repeat, 12 Crush, "
+        + "13 Dynamic EQ, 14 Ceiling, 15 Strata, 16 EQ-3, 17 Forge, 18 Level, 19 Shutter, 20 Chamber, 21 Prism. "
+        + "Returns the new device index, or -1.")]
+    public Task<int> AddRhythmVoiceFx(int trackId, string voice, int kind) => Mutate(() =>
+    {
+        int v = VoiceIndex(voice);
+        return v < 0 || E.TrackInstrumentKind(trackId) != RM.Kind ? -1 : E.RhythmAddVoiceDevice(trackId, v, kind);
+    });
+
+    [McpServerTool(Name = "remove_rhythm_voice_fx"), Description("Remove effect `index` from a Rhythm voice's insert chain.")]
+    public Task<bool> RemoveRhythmVoiceFx(int trackId, string voice, int index) => Mutate(() =>
+    {
+        int v = VoiceIndex(voice);
+        return v >= 0 && E.RhythmRemoveVoiceDevice(trackId, v, index);
+    });
+
+    [McpServerTool(Name = "set_rhythm_voice_fx"), Description(
+        "Set params of effect `index` on a Rhythm voice by name (as get_rhythm_voice_fx lists them, in the device's "
+        + "own units — Reverb / Delay / Forge are 0..1), and/or bypass it. Returns what changed.")]
+    public Task<string> SetRhythmVoiceFx(int trackId, string voice, int index, Dictionary<string, float>? values = null, bool? bypassed = null) => Mutate(() =>
+    {
+        int v = VoiceIndex(voice);
+        if (v < 0 || index < 0 || index >= E.RhythmVoiceDeviceCount(trackId, v)) return $"error: no effect {index} on voice '{voice}'";
+        var done = new List<string>();
+        if (values is { Count: > 0 })
+        {
+            int pc = E.RhythmVoiceDeviceParamCount(trackId, v, index);
+            foreach (var (name, val) in values)
+            {
+                int p = Enumerable.Range(0, pc).FirstOrDefault(i => string.Equals(E.RhythmVoiceDeviceParamName(trackId, v, index, i), name, StringComparison.OrdinalIgnoreCase), -1);
+                if (p < 0) { done.Add($"no param '{name}'"); continue; }
+                float x = Math.Clamp(val, E.RhythmVoiceDeviceParamMin(trackId, v, index, p), E.RhythmVoiceDeviceParamMax(trackId, v, index, p));
+                E.RhythmVoiceDeviceParamSet(trackId, v, index, p, x);
+                done.Add($"{name} = {x:0.###}");
+            }
+        }
+        if (bypassed is { } b) { E.RhythmSetVoiceDeviceBypassed(trackId, v, index, b); done.Add(b ? "bypassed" : "active"); }
+        return $"{E.RhythmVoiceDeviceName(trackId, v, index)}: {string.Join(" · ", done)}";
     });
 
     private string VoiceLine(int trackId, int v)

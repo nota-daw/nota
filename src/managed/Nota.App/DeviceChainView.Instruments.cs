@@ -28,8 +28,24 @@ public sealed partial class DeviceChainView
             Name: _engine.DeviceName(_trackId, -1), Subtitle: strategy.Subtitle, DeviceIndex: -1, Count: 1,
             Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
             PresetKind: kind, IsInstrument: true, Width: strategy.CardWidth, Kind: ChainKind.Instrument,
-            VoiceLabel: strategy.VoiceLabel);
+            VoiceLabel: strategy.VoiceLabel, Presets: kind == Nota.Application.RhythmModel.Kind ? KitPresets() : null);
         return BuildCardShell(spec, body);
+    }
+
+    // The factory drum kits as a card's presets — shared by the Drum Rack (they replace its
+    // pads) and Nota Rhythm (they replace its voices' samples and FX, keeping the steps).
+    private CardPresets? KitPresets()
+    {
+        if (_kits is not { } k) return null;
+        int t = _trackId;
+        var items = new System.Collections.Generic.List<(string, string)>();
+        foreach (var kit in k.All()) items.Add((kit.Id, kit.Name));
+        return new CardPresets(items, () => k.Identify(_engine, t), id =>
+        {
+            k.LoadInto(_engine, t, id, out string warn);
+            _rackSelChain = 0;
+            return warn;
+        });
     }
 
     // The Drum Rack in the shared shell: its presets are the factory kits, which replace the
@@ -37,19 +53,7 @@ public sealed partial class DeviceChainView
     private Control DrumRackCard()
     {
         var body = new RackCardView(NewCardContext()).BuildDrumRackBody(out int pads);
-        CardPresets? kits = null;
-        if (_kits is { } k)
-        {
-            int t = _trackId;
-            var items = new System.Collections.Generic.List<(string, string)>();
-            foreach (var kit in k.All()) items.Add((kit.Id, kit.Name));
-            kits = new CardPresets(items, () => k.Identify(_engine, t), id =>
-            {
-                k.LoadInto(_engine, t, id, out string warn);
-                _rackSelChain = 0;
-                return warn;
-            });
-        }
+        var kits = KitPresets();
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"DRUMS · {pads} PAD{(pads == 1 ? "" : "S")}", DeviceIndex: -1, Count: 1,
             Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,

@@ -20,6 +20,16 @@ internal static class KitVoices
 {
     private const double TwoPi = Math.PI * 2;
 
+    // Layer balances of the kick / snare / clap models, set against measured spectra of
+    // the whole catalog: a kick's attack mostly below 1 kHz with the click about 10 dB
+    // under the body, a snare split roughly evenly between shell (150-400 Hz) and wires
+    // (2.5-10 kHz) with a centroid around 3-4 kHz, a clap with ~15 % of its energy above
+    // 5 kHz. The tails and the drive stay recipe-driven.
+    private const double KickKnock = 0.35, KickClick = 3.0, KickSweepMax = 0.03, KickDrive = 0.7;
+    private const double AcKickShell = 1.1, AcKickBeater = 3.0;
+    private const double SnShell = 1.0, SnWire = 1.6, SnPunchBody = 2.4, SnRattle = 2.5;
+    private const double ClapAir = 0.65;
+
     /// <summary>Renders the dry voice for <paramref name="p"/> into <paramref name="buf"/>
     /// (mono, <paramref name="sr"/> = the oversampled render rate).</summary>
     public static void Render(KitPad p, double[] buf, double sr, Rng rng)
@@ -87,6 +97,20 @@ internal static class KitVoices
         return (i == 0 ? 1.0 : rng.NextGauss()) * t * t;
     }
 
+    // A strike with a controlled area: a half-sine pulse of unit area plus a little noise
+    // for the high modes. Excite's burst sums to a random value several times its peak, and
+    // a mode that rings slower than the burst integrates all of it — so the shell of a snare
+    // came out at a seed-dependent level that buried the wires. Here every mode below
+    // ~1 / duration rings at about unity, which is what the mix gains assume.
+    private static double Strike(int i, double sr, double ms, Rng rng)
+    {
+        int n = Math.Max(2, (int)(sr * ms * 0.001));
+        if (i >= n) return 0;
+        double t = 1.0 - (double)i / n;
+        return Math.PI / (2.0 * n) * Math.Sin(Math.PI * i / n)
+             + 0.3 * Math.Sqrt(5.0 / n) * rng.NextGauss() * t * t;
+    }
+
     // --- kicks -------------------------------------------------------------
 
     private static void Kick(KitPad p, double[] buf, double sr, Rng rng, double freq, bool analog)
@@ -94,15 +118,21 @@ internal static class KitVoices
         double ampC = KitDsp.DecayCoef(p.Decay, sr);
         // The punchy variant drops faster and further: that steep sweep through the
         // low mids is the "thwack" a long analog ring doesn't have.
-        double pitchTau = p.PitchDecay * (analog ? 1.0 : 0.55);
+        // The sweep is capped at a few tens of milliseconds: a kick that spends 100 ms
+        // gliding down through 100-200 Hz is heard as a tom, however low it lands.
+        double pitchTau = Math.Min(p.PitchDecay, KickSweepMax) * (analog ? 0.8 : 0.55);
         double pitchAmt = p.PitchAmt <= 0 ? (analog ? 1.6 : 3.2) : p.PitchAmt;
         double pitchC = Math.Exp(-1.0 / Math.Max(1e-4, pitchTau * sr));
 
-        var knock = new Modal(freq * 4.2, Math.Min(p.Decay * 0.25, 0.09), sr);
-        var clickBp = Biquad.BandPass(analog ? 1400 : 2600, 0.9, sr);
-        var clickHp = Biquad.HighPass(600, 0.7071, sr);
-        var clickN = new NoiseGen(rng, analog ? 9000 : 13000, sr);
-        double clickC = KitDsp.DecayCoef(analog ? 0.004 : 0.008, sr);
+        // The knock is a short upper-body tick, not a ring: held for up to 90 ms at 4.2x the
+        // fundamental it was a ~220 Hz "boing" that the ear heard as the kick's pitch.
+        var knock = new Modal(freq * 3.2, Math.Min(p.Decay * 0.08, 0.03), sr);
+        // The beater click sits in 2.5-4 kHz, where it gives the kick its definition — with
+        // it audible, the body can stay low instead of being pushed into the low mids.
+        var clickBp = Biquad.BandPass(analog ? 2600 : 3800, 0.7, sr);
+        var clickHp = Biquad.HighPass(1100, 0.7071, sr);
+        var clickN = new NoiseGen(rng, 15000, sr);
+        double clickC = KitDsp.DecayCoef(analog ? 0.007 : 0.011, sr);
 
         double env = 1, penv = 1, cenv = 1, ph = 0;
         double sub = 0.55 + p.Body * 0.65;
@@ -112,15 +142,18 @@ internal static class KitVoices
             ph += f / sr; if (ph >= 1) ph -= 1;
             double s = Math.Sin(TwoPi * ph) * env * sub;
 
-            // Upper body ("knock") — the mid ring that survives on a small speaker.
-            double exc = Excite(i, sr, 1.2, rng);
-            s += knock.Process(exc) * p.Tone * 1.4;
+            // Upper body ("knock") — the mid tick that survives on a small speaker.
+            double exc = Strike(i, sr, 0.5, rng);
+            s += knock.Process(exc) * p.Tone * KickKnock;
 
-            // Trigger click: filtered noise, not a bare impulse, so it sits in the tone.
-            double cl = clickHp.Process(clickBp.Process(clickN.Next())) * cenv * p.Click * 2.2;
-            s += cl;
+            // Trigger click: filtered noise, not a bare impulse, so it sits in the tone. It
+            // joins after the drive, as it does in the circuits this models — summed before
+            // it, the saturating body flattened it to nothing.
+            double cl = clickHp.Process(clickBp.Process(clickN.Next())) * cenv * p.Click * KickClick;
 
-            buf[i] = KitDsp.Saturate(s, p.Drive, 0.6) * AttackRamp(i, sr);
+            // Mostly odd-order drive: the even-order bias doubled the fundamental into the
+            // 100-120 Hz range, which is the other half of the "too high" kick.
+            buf[i] = (KitDsp.Saturate(s, p.Drive * KickDrive, 0.2) + Math.Tanh(cl)) * AttackRamp(i, sr);
             env *= ampC; penv *= pitchC; cenv *= clickC;
         }
     }
@@ -130,14 +163,17 @@ internal static class KitVoices
         // A struck shell: three modes with different ring times over a short sub, and a
         // beater transient on top. The mode spacing is inharmonic — a drum shell is not
         // a string, and harmonic ratios here are exactly what sounds synthetic.
+        // The upper shell modes ring for a fraction of the fundamental's time: a real bass
+        // drum's overtones are damped by the front head and the port, and when they rang as
+        // long as the body the kick read as a tom.
         var m1 = new Modal(freq, p.Decay * 0.55, sr);
-        var m2 = new Modal(freq * 1.63, p.Decay * 0.30, sr);
-        var m3 = new Modal(freq * 2.81, p.Decay * 0.14, sr);
-        var beaterBp = Biquad.BandPass(2400 + p.Tone * 3600, 0.8, sr);
-        var beaterHp = Biquad.HighPass(1200, 0.7071, sr);
-        var beaterN = new NoiseGen(rng, 13000, sr);
-        double beatC = KitDsp.DecayCoef(0.007, sr);
-        double subC = KitDsp.DecayCoef(Math.Min(p.Decay * 0.4, 0.16), sr);
+        var m2 = new Modal(freq * 1.63, p.Decay * 0.16, sr);
+        var m3 = new Modal(freq * 2.81, p.Decay * 0.07, sr);
+        var beaterBp = Biquad.BandPass(2400 + p.Tone * 2400, 0.7, sr);
+        var beaterHp = Biquad.HighPass(1100, 0.7071, sr);
+        var beaterN = new NoiseGen(rng, 14000, sr);
+        double beatC = KitDsp.DecayCoef(0.009, sr);
+        double subC = KitDsp.DecayCoef(Math.Min(p.Decay * 0.5, 0.22), sr);
         double pitchC = Math.Exp(-1.0 / Math.Max(1e-4, p.PitchDecay * sr));
 
         double subEnv = 1, benv = 1, penv = 1, ph = 0;
@@ -147,11 +183,11 @@ internal static class KitVoices
             ph += f / sr; if (ph >= 1) ph -= 1;
             double s = Math.Sin(TwoPi * ph) * subEnv * (0.7 + p.Body * 0.5);
 
-            double exc = Excite(i, sr, 2.0, rng);
-            s += (m1.Process(exc) * 1.0 + m2.Process(exc) * 0.5 + m3.Process(exc) * 0.22) * p.Body * 1.6;
-            s += beaterHp.Process(beaterBp.Process(beaterN.Next())) * benv * p.Click * 3.0;
+            double exc = Strike(i, sr, 1.2, rng);
+            s += (m1.Process(exc) * 1.0 + m2.Process(exc) * 0.4 + m3.Process(exc) * 0.15) * p.Body * AcKickShell;
+            double beater = beaterHp.Process(beaterBp.Process(beaterN.Next())) * benv * p.Click * AcKickBeater;
 
-            buf[i] = KitDsp.Saturate(s, p.Drive, 0.4) * AttackRamp(i, sr);
+            buf[i] = (KitDsp.Saturate(s, p.Drive * KickDrive, 0.2) + Math.Tanh(beater)) * AttackRamp(i, sr);
             subEnv *= subC; benv *= beatC; penv *= pitchC;
         }
     }
@@ -181,31 +217,33 @@ internal static class KitVoices
     {
         // Two shell tones a rough fifth-and-a-bit apart plus high-passed noise — the
         // classic two-oscillator analog snare.
-        var t1 = new Modal(freq, p.Decay * (0.45 + p.Body * 0.5), sr);
-        var t2 = new Modal(freq * 1.588, p.Decay * (0.32 + p.Body * 0.4), sr);
-        var nHp = Biquad.HighPass(900 + p.Tone * 2200, 0.7071, sr);
-        var nPk = Biquad.Peaking(4200, 1.1, 4 * p.Tone, sr);
-        var nGen = new NoiseGen(rng, 12000, sr);
+        var t1 = new Modal(freq, p.Decay * (0.3 + p.Body * 0.4), sr);
+        var t2 = new Modal(freq * 1.588, p.Decay * (0.2 + p.Body * 0.3), sr);
+        var nHp = Biquad.HighPass(1100 + p.Tone * 1600, 0.7071, sr);
+        var nPk = Biquad.Peaking(5200, 0.9, 3 + 4 * p.Tone, sr);
+        var nGen = new NoiseGen(rng, 15000, sr);
         double nC = KitDsp.DecayCoef(p.NoiseDecay, sr);
         double snapC = KitDsp.DecayCoef(0.012, sr);
         double nEnv = 1, snap = 1;
         for (int i = 0; i < buf.Length; i++)
         {
-            double exc = Excite(i, sr, 1.0, rng);
+            double exc = Strike(i, sr, 0.8, rng);
             double tone = t1.Process(exc) * 1.0 + t2.Process(exc) * 0.72;
             double n = nPk.Process(nHp.Process(nGen.Next()));
-            double s = tone * (1 - p.Tone) * 1.5
-                     + n * nEnv * p.Noise * 2.0
-                     + n * snap * p.Click * 1.5;
-            buf[i] = KitDsp.Saturate(s, p.Drive, 0.35) * AttackRamp(i, sr);
+            double s = tone * (1 - p.Tone * 0.6) * SnShell
+                     + n * nEnv * p.Noise * SnWire
+                     + n * snap * p.Click * SnWire * 0.8;
+            buf[i] = KitDsp.Saturate(s, p.Drive, 0.25) * AttackRamp(i, sr);
             nEnv *= nC; snap *= snapC;
         }
     }
 
     private static void SnarePunch(KitPad p, double[] buf, double sr, Rng rng, double freq)
     {
-        var t1 = new Modal(freq, p.Decay * 0.3, sr);
-        var t2 = new Modal(freq * 1.47, p.Decay * 0.22, sr);
+        // Body lasts a little longer than in the analog model: the dance snare's weight is a
+        // short tonal thump under the noise, and without it the hit was all hiss.
+        var t1 = new Modal(freq, p.Decay * 0.45, sr);
+        var t2 = new Modal(freq * 1.47, p.Decay * 0.3, sr);
         var nHp = Biquad.HighPass(260, 0.7071, sr);
         var nPk = Biquad.Peaking(2600 + p.Tone * 4200, 0.9, 6, sr);
         var nLp = Biquad.LowPass(7000 + p.Tone * 8000, 0.7071, sr);
@@ -215,8 +253,8 @@ internal static class KitVoices
         double nEnv = 1, bEnv = 1;
         for (int i = 0; i < buf.Length; i++)
         {
-            double exc = Excite(i, sr, 0.8, rng);
-            double tone = (t1.Process(exc) + t2.Process(exc) * 0.6) * p.Body * 1.6;
+            double exc = Strike(i, sr, 0.8, rng);
+            double tone = (t1.Process(exc) + t2.Process(exc) * 0.6) * p.Body * SnPunchBody;
             double raw = nGen.Next();
             double n = nLp.Process(nPk.Process(nHp.Process(raw)));
             double s = tone + n * (nEnv * 1.1 + bEnv * 0.45) * (0.4 + p.Noise);
@@ -229,25 +267,31 @@ internal static class KitVoices
     {
         // Shell modes + snare wires + stick crack. The wires are noise with their own
         // longer, brighter decay; the crack is the 5 ms of broadband the stick makes.
-        var m1 = new Modal(freq, p.Decay * 0.5, sr);
-        var m2 = new Modal(freq * 1.52, p.Decay * 0.35, sr);
-        var m3 = new Modal(freq * 2.34, p.Decay * 0.2, sr);
-        var wireHp = Biquad.HighPass(1600 + p.Tone * 2400, 0.7071, sr);
-        var wirePk = Biquad.Peaking(6500, 1.0, 3 + p.Tone * 5, sr);
-        var crackBp = Biquad.BandPass(3200, 0.7, sr);
-        var nGen = new NoiseGen(rng, 14000, sr);
+        var m1 = new Modal(freq, p.Decay * 0.4, sr);
+        var m2 = new Modal(freq * 1.52, p.Decay * 0.28, sr);
+        var m3 = new Modal(freq * 2.34, p.Decay * 0.16, sr);
+        // The wires have two layers: the bright sizzle, and a lower 1.5-3 kHz rattle that
+        // carries the snare on small speakers — with the sizzle alone it read as a hiss
+        // sitting on a tom.
+        var wireHp = Biquad.HighPass(1500 + p.Tone * 1800, 0.7071, sr);
+        var wirePk = Biquad.Peaking(6000, 0.9, 3 + p.Tone * 4, sr);
+        var rattleBp = Biquad.BandPass(2200, 0.8, sr);
+        var crackBp = Biquad.BandPass(3000, 0.7, sr);
+        var nGen = new NoiseGen(rng, 15000, sr);
         double wireC = KitDsp.DecayCoef(p.NoiseDecay, sr);
-        double crackC = KitDsp.DecayCoef(0.006, sr);
-        double wEnv = 1, cEnv = 1;
+        double rattleC = KitDsp.DecayCoef(p.NoiseDecay * 0.6, sr);
+        double crackC = KitDsp.DecayCoef(0.008, sr);
+        double wEnv = 1, rEnv = 1, cEnv = 1;
         for (int i = 0; i < buf.Length; i++)
         {
-            double exc = Excite(i, sr, 1.6, rng);
-            double shell = (m1.Process(exc) + m2.Process(exc) * 0.6 + m3.Process(exc) * 0.3) * p.Body * 1.5;
+            double exc = Strike(i, sr, 1.0, rng);
+            double shell = (m1.Process(exc) + m2.Process(exc) * 0.6 + m3.Process(exc) * 0.3) * p.Body * SnShell;
             double raw = nGen.Next();
-            double wire = wirePk.Process(wireHp.Process(raw)) * wEnv * p.Noise * 1.6;
-            double crack = crackBp.Process(raw) * cEnv * p.Click * 2.4;
-            buf[i] = KitDsp.Saturate(shell + wire + crack, p.Drive, 0.3) * AttackRamp(i, sr);
-            wEnv *= wireC; cEnv *= crackC;
+            double wire = wirePk.Process(wireHp.Process(raw)) * wEnv * p.Noise * SnWire
+                        + rattleBp.Process(raw) * rEnv * p.Noise * SnWire * SnRattle;
+            double crack = crackBp.Process(raw) * cEnv * p.Click * SnWire * 1.4;
+            buf[i] = KitDsp.Saturate(shell + wire + crack, p.Drive, 0.25) * AttackRamp(i, sr);
+            wEnv *= wireC; rEnv *= rattleC; cEnv *= crackC;
         }
     }
 
@@ -259,10 +303,13 @@ internal static class KitVoices
         // then the room-ish tail that follows. The spacing jitter is what stops a clap
         // from sounding like one flammed noise gate.
         double[] offs = { 0, 0.0105, 0.0205, 0.0295 };
-        var bp = Biquad.BandPass(freq, 0.9 + p.Body * 0.8, sr);
+        var bp = Biquad.BandPass(freq, 0.8 + p.Body * 0.6, sr);
         var hp = Biquad.HighPass(420, 0.7071, sr);
-        var pk = Biquad.Peaking(freq * 2.6, 1.2, 4 * p.Tone, sr);
-        var nGen = new NoiseGen(rng, 9500, sr);
+        var pk = Biquad.Peaking(freq * 2.6, 1.0, 3 + 4 * p.Tone, sr);
+        // The skin-on-skin crack above the band: real claps have plenty of energy up to
+        // ~10 kHz, and a clap that is only the resonant band sounds muffled.
+        var airHp = Biquad.HighPass(Math.Max(2800, freq * 2.4), 0.7071, sr);
+        var nGen = new NoiseGen(rng, 15000, sr);
         double burstC = KitDsp.DecayCoef(0.018, sr);
         double tailC = KitDsp.DecayCoef(p.Decay, sr);
 
@@ -277,7 +324,8 @@ internal static class KitVoices
             if (next < starts.Length && i >= starts[next]) { burst = 1.0 - next * 0.12; next++; }
             if (i == starts[^1]) tail = 1;
             double n = nGen.Next();
-            double s = pk.Process(hp.Process(bp.Process(n))) * (burst * 1.6 + tail * p.Body * 0.8);
+            double s = pk.Process(hp.Process(bp.Process(n))) * (burst * 1.6 + tail * p.Body * 0.8)
+                     + airHp.Process(n) * (burst + tail * p.Body * 0.35) * ClapAir;
             buf[i] = KitDsp.Saturate(s, p.Drive, 0.25) * AttackRamp(i, sr);
             burst *= burstC; tail *= tailC;
         }

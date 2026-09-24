@@ -591,6 +591,33 @@ int32_t Engine::rhythmVoiceSource(int32_t trackId, int32_t voice) const {
     return rh ? rh->voiceSource(voice) : 0;
 }
 
+// Nota Rhythm voice FX. The machine swaps its chains as snapshots itself (like a rack), so
+// these edit the live instrument in place — a clone would drop the running voices.
+static RhythmMachine* rhythmOf(const std::shared_ptr<Track>& t) {
+    return t ? dynamic_cast<RhythmMachine*>(t->instrument.get()) : nullptr;
+}
+int32_t Engine::rhythmVoiceDeviceCount(int32_t trackId, int32_t voice) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->voiceDeviceCount(voice) : 0;
+}
+int32_t Engine::rhythmAddVoiceDevice(int32_t trackId, int32_t voice, int32_t kind) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->addVoiceDevice(voice, kind) : -1;
+}
+bool Engine::rhythmRemoveVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh && rh->removeVoiceDevice(voice, dev);
+}
+bool Engine::rhythmMoveVoiceDevice(int32_t trackId, int32_t voice, int32_t from, int32_t to) {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh && rh->moveVoiceDevice(voice, from, to);
+}
+Device* Engine::rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->voiceDevice(voice, dev) : nullptr;
+}
+std::string Engine::rhythmKitName(int32_t trackId) const {
+    auto* rh = rhythmOf(findTrackAuthoring(trackId)); return rh ? rh->kitName() : std::string{};
+}
+void Engine::setRhythmKitName(int32_t trackId, const std::string& name) {
+    if (auto* rh = rhythmOf(findTrackAuthoring(trackId))) rh->setKitName(name);
+}
+
 int32_t Engine::grainPlayPositions(int32_t trackId, float* out, int32_t maxN) const {
     if (!out || maxN <= 0) return 0;
     auto t = findTrackAuthoring(trackId);

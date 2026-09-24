@@ -283,23 +283,24 @@ public sealed partial class BrowserViewModel : ObservableObject
                 Depth = 1,
             });
         }
-        // Factory drum kits hang under the Drum Rack alongside its presets — a kit is
-        // what a "preset" means for that device.
+        // Factory drum kits hang under the Drum Rack and Nota Rhythm alongside their presets —
+        // a kit is what a "preset" means for those two, and both share the one set of kits.
         if (_kits is not null)
-        {
-            var rack = _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == 4);
-            if (rack is not null)
+            foreach (var (kind, prefix, what) in new[] { (4, "kit:", "pads"), (12, "rhythmkit:", "pads, 8 on the voices") })
+            {
+                var dev = _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == kind);
+                if (dev is null) continue;
                 foreach (var kit in _kits.All())
-                    rack.Children.Add(new BrowserItem
+                    dev.Children.Add(new BrowserItem
                     {
                         Name = kit.Name,
                         Kind = BrowserItemKind.Preset,
                         Sub = "kit",
-                        Tip = $"{kit.Blurb} · {kit.PadCount} pads",
-                        Path = "kit:" + kit.Id,
+                        Tip = $"{kit.Blurb} · {kit.PadCount} {what}",
+                        Path = prefix + kit.Id,
                         Depth = 1,
                     });
-        }
+            }
 
         // Preset groups start collapsed; the user expands a device to reveal its presets.
         foreach (var tree in new[] { _instrTree, _fxTree, _midiTree })

@@ -331,6 +331,55 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_rhythm_voice_source")]
     internal static partial int RhythmVoiceSource(IntPtr engine, int trackId, int voice);
 
+    // Nota Rhythm per-voice insert chains + kit label.
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_count")]
+    internal static partial int RhythmVoiceDeviceCount(IntPtr engine, int trackId, int voice);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_add_voice_device")]
+    internal static partial int RhythmAddVoiceDevice(IntPtr engine, int trackId, int voice, int kind);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_remove_voice_device")]
+    internal static partial int RhythmRemoveVoiceDevice(IntPtr engine, int trackId, int voice, int dev);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_move_voice_device")]
+    internal static partial int RhythmMoveVoiceDevice(IntPtr engine, int trackId, int voice, int from, int to);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_name")]
+    internal static partial IntPtr RhythmVoiceDeviceName(IntPtr engine, int trackId, int voice, int dev);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_builtin_kind")]
+    internal static partial int RhythmVoiceDeviceBuiltinKind(IntPtr engine, int trackId, int voice, int dev);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_count")]
+    internal static partial int RhythmVoiceDeviceParamCount(IntPtr engine, int trackId, int voice, int dev);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_name")]
+    internal static partial IntPtr RhythmVoiceDeviceParamName(IntPtr engine, int trackId, int voice, int dev, int param);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_min")]
+    internal static partial float RhythmVoiceDeviceParamMin(IntPtr engine, int trackId, int voice, int dev, int param);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_max")]
+    internal static partial float RhythmVoiceDeviceParamMax(IntPtr engine, int trackId, int voice, int dev, int param);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_get")]
+    internal static partial float RhythmVoiceDeviceParamGet(IntPtr engine, int trackId, int voice, int dev, int param);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_param_set")]
+    internal static partial void RhythmVoiceDeviceParamSet(IntPtr engine, int trackId, int voice, int dev, int param, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_voice_device_bypassed")]
+    internal static partial int RhythmVoiceDeviceBypassed(IntPtr engine, int trackId, int voice, int dev);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_voice_device_bypassed")]
+    internal static partial void RhythmSetVoiceDeviceBypassed(IntPtr engine, int trackId, int voice, int dev, int bypassed);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_kit_name")]
+    internal static partial IntPtr RhythmKitName(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rhythm_set_kit_name", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void RhythmSetKitName(IntPtr engine, int trackId, string name);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_grain_play_positions")]
     internal static partial int TrackGrainPlayPositions(IntPtr engine, int trackId, [Out] float[] outPos, int maxN);
 

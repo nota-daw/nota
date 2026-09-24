@@ -19,6 +19,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Rhythm and the Drum Rack share one set of kits.** Rhythm's own synth presets are
+  gone; the 25 factory drum kits now load onto its eight voices too — from the card's kit
+  picker, from the kits listed under Nota Rhythm in the browser, or by dropping a kit on a
+  Rhythm track (the steps stay). Each voice takes the kit's pad on its own MIDI note (Kick,
+  Snare, Clap, Rim, both hats, the high tom) plus a percussion pad, so a note plays the same
+  sound in either instrument. A new Rhythm starts on *Kompakt*; a kit voice shows its
+  sample's name in the kit list.
+- **Every kit pad comes with its own effects,** as ordinary devices on the pad's chain (or
+  the Rhythm voice's): parallel Tube saturation on the kick (Tape on the lo-fi kits), a short
+  pre-delayed plate on the snare, a room on the clap, a quiet high-passed 1/16 ping-pong on
+  the closed hats and a dotted-1/8 one on the open hat and percussion. Each kit scales its
+  space and drive to its style, pads with room already in the sample get less reverb, and
+  every effect adds to the hit without changing it (its dry stays at unity; the kick stays
+  level-matched). Toms, cymbals and 808 bass stay dry.
+- **Nota Rhythm: effects per voice.** Each voice has its own insert chain of built-in
+  effects before the kit bus — the voice editor's new **FX** tab shows it with the Drum
+  Rack's device slots: click one for the effect's own card, bypass or remove it, add from
+  the menu or drop an effect from the browser. The chains save with the project and copy
+  with the track; the kit list marks the voices that have effects. MCP:
+  `get_rhythm_voice_fx`, `add_rhythm_voice_fx`, `set_rhythm_voice_fx`,
+  `remove_rhythm_voice_fx`, and `add_rhythm_kit_track`; `load_drum_kit` also takes a Rhythm.
 - **Nota Rhythm's editor is now the almanac's card, with the new mockup's features.** The
   drum machine moves from its 900 px layout onto the 700 × 260 frame: the **kit** on the
   left, the selected **voice** in the middle, a fixed 186 px **Perform** rail, a full-width
@@ -221,6 +242,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **The factory kits' kicks, snares and claps are reworked** (the kits re-render once, on
+  the next launch). Kicks sit lower and read as kicks: the upper "knock" is a short tick
+  instead of a ~220 Hz ring, the pitch sweep is capped at a few tens of milliseconds, the
+  drive is odd-order and the click joins after it, and the kicks tuned at 58–70 Hz come down
+  to 50–54. Snares were mostly shell — the wires sat 20–30 dB down; now shell and wires
+  share the hit (a spectral centroid around 3–4 kHz instead of 1–2) with a 1.5–3 kHz crack,
+  and the dance snares get some body. Claps gain the skin-on-skin air above the band. The
+  "analog glue" no longer adds low-mid box to kicks or rolls the top off snares and claps.
 - **Nota Rhythm's automation menu is grouped** by voice (Kick › Tune, Closed Hat › Decay),
   **Perform** (Swing, Humanize, Accent) and **Master** (Volume, Glue). Ids are unchanged, so
   existing lanes keep working; projects saved before keep their kits and patterns.
@@ -753,6 +782,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     returns the compressor's status line.
 
 ### Fixed
+- **Tempo-synced effects inside a rack ignored the tempo.** A synced Delay, Auto Filter or
+  Auto Pan on a Drum Rack pad, an Instrument Rack chain or an Audio Effect Rack chain ran on
+  its free time; racks now pass the song tempo down to their chains.
+- **A Nota Rhythm sample voice was quietly low-passed and mono.** The synth's Tone setting
+  also filtered a loaded one-shot at ~6 kHz (sample mode has no Tone knob), and a stereo
+  file was summed to mono. A loaded sample now plays open, and in stereo.
 - **A Sampler's loop could change kind on its own.** Reloading a sample turned a ping-pong
   loop into a forward one and a forward loop into a one-shot, and a sampler created with the
   loop flag (e.g. from a kit) played ping-pong instead of forward. The loop kind now survives.

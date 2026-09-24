@@ -94,9 +94,13 @@ public static class KitRenderer
         double w = Math.Clamp(pad.Warmth, 0, 1);
         if (w > 0)
         {
+            // The low-mid bump is box on a kick, and the treble roll-off is exactly what a
+            // snare or clap cannot spare — both are scaled by what the voice is.
+            bool kick = pad.Model is DrumModel.KickAnalog or DrumModel.KickPunch or DrumModel.KickAcoustic or DrumModel.SubHit;
+            bool crack = pad.Model is DrumModel.SnareAnalog or DrumModel.SnarePunch or DrumModel.SnareAcoustic or DrumModel.Clap;
             var shelf = Biquad.LowShelf(160, 1.6 * w, sr);
-            var air = Biquad.HighShelf(9000, -3.2 * w, sr);
-            var body = Biquad.Peaking(420, 0.8, 1.1 * w, sr);
+            var air = Biquad.HighShelf(9000, -3.2 * w * (crack ? 0.35 : 1.0), sr);
+            var body = Biquad.Peaking(420, 0.8, 1.1 * w * (kick ? 0.0 : 1.0), sr);
             for (int i = 0; i < buf.Length; i++)
             {
                 double x = air.Process(body.Process(shelf.Process(buf[i])));

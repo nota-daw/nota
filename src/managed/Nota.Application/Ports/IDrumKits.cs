@@ -35,11 +35,19 @@ public interface IDrumKits
     /// or -1; <paramref name="warning"/> is "" on success.</summary>
     int CreateTrack(IAudioEngine engine, string id, out string warning);
 
-    /// <summary>Replaces the pads of an existing Drum Rack track with the kit.</summary>
+    /// <summary>Creates a Nota Rhythm track with the kit on its eight voices (samples, levels
+    /// and effects). Returns the new track id, or -1.</summary>
+    int CreateRhythmTrack(IAudioEngine engine, string id, out string warning);
+
+    /// <summary>The kit a new Nota Rhythm starts with.</summary>
+    string DefaultRhythmKit { get; }
+
+    /// <summary>Replaces the pads of an existing Drum Rack track — or the voices of a Nota
+    /// Rhythm (its steps are kept) — with the kit.</summary>
     bool LoadInto(IAudioEngine engine, int trackId, string id, out string warning);
 
-    /// <summary>The kit a Drum Rack track was loaded from, recognised by its pads (the
-    /// note and name of each), or "" when no kit fits. A rack stays recognised after a
-    /// pad or two is swapped or renamed, so a saved project reopens with its kit name.</summary>
+    /// <summary>The kit a Drum Rack or Nota Rhythm track was loaded from, or "" when no kit
+    /// fits. A rack is recognised by its pads (the note and name of each), and stays
+    /// recognised after a pad or two is swapped or renamed; a Rhythm remembers its kit.</summary>
     string Identify(IAudioEngine engine, int trackId);
 }

@@ -22,7 +22,7 @@ public static class KitLibrary
 {
     /// <summary>Bump when the synthesis or the post chain changes in a way that should
     /// re-render every shipped kit. Recipe edits are caught by the per-kit hash.</summary>
-    private const int RendererVersion = 1;
+    private const int RendererVersion = 2;
 
     private const string StampFile = ".kit-stamp";
 

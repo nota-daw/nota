@@ -60,6 +60,8 @@ public static partial class KitCatalog
         Id = "volta",
         Name = "Volta",
         Blurb = "warm analog boom · long sub kick, metal hats, cowbell",
+        FxSpace = 1.0,
+        FxDrive = 1.0,
         Swing = 0f,
         Humanize = 0.05f,
         Pads = new List<KitPad>
@@ -92,10 +94,12 @@ public static partial class KitCatalog
         Id = "kompakt",
         Name = "Kompakt",
         Blurb = "punchy analog house · clicky kick, noisy snare, bright hats",
+        FxSpace = 0.9,
+        FxDrive = 1.0,
         Humanize = 0.04f,
         Pads = new List<KitPad>
         {
-            new() { Name = "Kick",       Model = DrumModel.KickPunch,  Note = 36, Freq = 55,  Decay = 0.48, PitchAmt = 3.6, PitchDecay = 0.013, Tone = 0.55, Body = 0.55, Click = 0.55, Drive = 0.35, Warmth = 0.5, Drift = 0.2, Length = 1.1, PeakDb = -1.5 },
+            new() { Name = "Kick",       Model = DrumModel.KickPunch,  Note = 36, Freq = 51,  Decay = 0.48, PitchAmt = 3.0, PitchDecay = 0.013, Tone = 0.55, Body = 0.55, Click = 0.55, Drive = 0.35, Warmth = 0.5, Drift = 0.2, Length = 1.1, PeakDb = -1.5 },
             new() { Name = "Rim",        Model = DrumModel.Rim,        Note = 37, Freq = 448, Decay = 0.04, Tone = 0.62, Body = 0.5,  Drive = 0.3,  Warmth = 0.45, HpHz = 240, Drift = 0.3, Length = 0.25, PeakDb = -9 },
             new() { Name = "Snare",      Model = DrumModel.SnarePunch, Note = 38, Freq = 192, Decay = 0.26, Tone = 0.55, Body = 0.45, Noise = 0.9, NoiseDecay = 0.13, Drive = 0.32, Warmth = 0.45, Drift = 0.2, Length = 0.6, PeakDb = -2.5 },
             new() { Name = "Clap",       Model = DrumModel.Clap,       Note = 39, Freq = 1180,Decay = 0.26, Tone = 0.6,  Body = 0.6,  Drive = 0.25, Warmth = 0.45, Drift = 0.5, Length = 0.7, PeakDb = -4 },
@@ -124,10 +128,13 @@ public static partial class KitCatalog
         Id = "micron",
         Name = "Micron",
         Blurb = "small vintage rhythm box · thin, hissy, band-limited",
+        FxSpace = 0.7,
+        FxDrive = 0.8,
+        FxTape = true,
         Humanize = 0.08f,
         Pads = new List<KitPad>
         {
-            new() { Name = "Kick",       Model = DrumModel.KickAnalog, Note = 36, Freq = 62,  Decay = 0.42, PitchAmt = 1.9, PitchDecay = 0.02, Tone = 0.35, Body = 0.5, Click = 0.35, Drive = 0.28, Warmth = 0.7, LpHz = 6500, Hiss = 0.35, Drift = 0.6, Length = 0.9, PeakDb = -2 },
+            new() { Name = "Kick",       Model = DrumModel.KickAnalog, Note = 36, Freq = 54,  Decay = 0.42, PitchAmt = 1.5, PitchDecay = 0.02, Tone = 0.35, Body = 0.5, Click = 0.35, Drive = 0.28, Warmth = 0.7, LpHz = 6500, Hiss = 0.35, Drift = 0.6, Length = 0.9, PeakDb = -2 },
             new() { Name = "Rim",        Model = DrumModel.Rim,        Note = 37, Freq = 530, Decay = 0.03, Tone = 0.6,  Body = 0.35, Drive = 0.3, Warmth = 0.6, HpHz = 300, LpHz = 9000, Hiss = 0.3, Drift = 0.7, Length = 0.2, PeakDb = -10 },
             new() { Name = "Snare",      Model = DrumModel.SnareAnalog,Note = 38, Freq = 238, Decay = 0.19, Tone = 0.72, Body = 0.35, Noise = 0.85, NoiseDecay = 0.09, Click = 0.35, Drive = 0.3, Warmth = 0.65, LpHz = 8500, Hiss = 0.4, Drift = 0.5, Length = 0.5, PeakDb = -3 },
             new() { Name = "Clap",       Model = DrumModel.Clap,       Note = 39, Freq = 1250,Decay = 0.14, Tone = 0.45, Body = 0.4, Drive = 0.25, Warmth = 0.6, LpHz = 8000, Hiss = 0.35, Drift = 0.6, Length = 0.45, PeakDb = -5 },
@@ -156,10 +163,12 @@ public static partial class KitCatalog
         Id = "linnwood",
         Name = "Linnwood",
         Blurb = "80s PCM drum machine · 8-bit sampled kit, gated snare",
+        FxSpace = 1.1,
+        FxDrive = 0.9,
         Humanize = 0.03f,
         Pads = new List<KitPad>
         {
-            new() { Name = "Kick",       Model = DrumModel.KickAcoustic, Note = 36, Freq = 58, Decay = 0.42, PitchAmt = 0.7, PitchDecay = 0.02, Tone = 0.5, Body = 0.55, Click = 0.45, Drive = 0.25, Warmth = 0.6, Bits = 9, CrushHz = 30000, LpHz = 11000, Drift = 0.15, Length = 0.9, PeakDb = -1.5 },
+            new() { Name = "Kick",       Model = DrumModel.KickAcoustic, Note = 36, Freq = 52, Decay = 0.42, PitchAmt = 0.7, PitchDecay = 0.02, Tone = 0.5, Body = 0.55, Click = 0.45, Drive = 0.25, Warmth = 0.6, Bits = 9, CrushHz = 30000, LpHz = 11000, Drift = 0.15, Length = 0.9, PeakDb = -1.5 },
             new() { Name = "Side Stick", Model = DrumModel.Rim,          Note = 37, Freq = 520, Decay = 0.045, Tone = 0.5, Body = 0.45, Drive = 0.25, Warmth = 0.5, Bits = 9, CrushHz = 30000, HpHz = 260, Length = 0.25, PeakDb = -9 },
             new() { Name = "Snare",      Model = DrumModel.SnareAcoustic,Note = 38, Freq = 196, Decay = 0.38, Tone = 0.5, Body = 0.6, Noise = 0.85, NoiseDecay = 0.2, Click = 0.45, Drive = 0.28, Warmth = 0.55, Bits = 9, CrushHz = 30000, LpHz = 12000, Room = 0.34, RoomSize = 0.55, RoomDecay = 0.20, RoomDamp = 0.4, Width = 0.6, Length = 1.0, PeakDb = -2.5 },
             new() { Name = "Clap",       Model = DrumModel.Clap,         Note = 39, Freq = 1150,Decay = 0.24, Tone = 0.5, Body = 0.55, Drive = 0.22, Warmth = 0.5, Bits = 9, CrushHz = 30000, Room = 0.22, RoomSize = 0.45, Width = 0.7, Length = 0.8, PeakDb = -4 },
@@ -188,10 +197,12 @@ public static partial class KitCatalog
         Id = "atelier",
         Name = "Atelier",
         Blurb = "acoustic studio kit · close-miked, small warm room",
+        FxSpace = 0.7,
+        FxDrive = 0.7,
         Humanize = 0.14f,
         Pads = new List<KitPad>
         {
-            new() { Name = "Kick",       Model = DrumModel.KickAcoustic, Note = 36, Freq = 54, Decay = 0.5, PitchAmt = 0.75, PitchDecay = 0.022, Tone = 0.45, Body = 0.65, Click = 0.5, Drive = 0.18, Warmth = 0.6, Room = 0.18, RoomSize = 0.35, RoomDecay = 0.12, RoomDamp = 0.65, Width = 0.5, Drift = 0.2, Length = 1.1, PeakDb = -1.5 },
+            new() { Name = "Kick",       Model = DrumModel.KickAcoustic, Note = 36, Freq = 50, Decay = 0.5, PitchAmt = 0.75, PitchDecay = 0.022, Tone = 0.45, Body = 0.65, Click = 0.5, Drive = 0.18, Warmth = 0.6, Room = 0.18, RoomSize = 0.35, RoomDecay = 0.12, RoomDamp = 0.65, Width = 0.5, Drift = 0.2, Length = 1.1, PeakDb = -1.5 },
             new() { Name = "Side Stick", Model = DrumModel.Rim,          Note = 37, Freq = 495, Decay = 0.05, Tone = 0.45, Body = 0.5, Drive = 0.15, Warmth = 0.55, HpHz = 240, Room = 0.2, RoomSize = 0.35, Width = 0.6, Drift = 0.3, Length = 0.35, PeakDb = -9 },
             new() { Name = "Snare",      Model = DrumModel.SnareAcoustic,Note = 38, Freq = 188, Decay = 0.4, Tone = 0.5, Body = 0.6, Noise = 0.8, NoiseDecay = 0.19, Click = 0.42, Drive = 0.2, Warmth = 0.55, Room = 0.26, RoomSize = 0.38, RoomDecay = 0.14, RoomDamp = 0.55, Width = 0.65, Drift = 0.25, Length = 1.1, PeakDb = -2.5 },
             new() { Name = "Clap",       Model = DrumModel.Clap,         Note = 39, Freq = 1080,Decay = 0.2, Tone = 0.45, Body = 0.5, Drive = 0.15, Warmth = 0.5, Room = 0.25, RoomSize = 0.4, Width = 0.8, Drift = 0.5, Length = 0.8, PeakDb = -4.5 },
@@ -220,6 +231,9 @@ public static partial class KitCatalog
         Id = "cellar",
         Name = "Cellar",
         Blurb = "dusty vinyl break · filtered, crushed, tape-saturated",
+        FxSpace = 0.8,
+        FxDrive = 1.1,
+        FxTape = true,
         Swing = 0.16f,
         Humanize = 0.12f,
         Pads = new List<KitPad>
@@ -253,9 +267,11 @@ public static partial class KitCatalog
         Id = "neon",
         Name = "Neon",
         Blurb = "modern sub-forward kit · tuned 808 bass, tight snares, roll hats",
+        FxSpace = 1.1,
+        FxDrive = 0.9,
         Pads = new List<KitPad>
         {
-            new() { Name = "Kick",       Model = DrumModel.KickPunch,  Note = 36, Freq = 58, Decay = 0.26, PitchAmt = 4.2, PitchDecay = 0.009, Tone = 0.65, Body = 0.4, Click = 0.7, Drive = 0.4, Warmth = 0.45, HpHz = 30, Length = 0.6, PeakDb = -1.5 },
+            new() { Name = "Kick",       Model = DrumModel.KickPunch,  Note = 36, Freq = 51, Decay = 0.26, PitchAmt = 3.2, PitchDecay = 0.009, Tone = 0.65, Body = 0.4, Click = 0.7, Drive = 0.4, Warmth = 0.45, HpHz = 30, Length = 0.6, PeakDb = -1.5 },
             new() { Name = "808 Bass",   Model = DrumModel.SubHit,     Note = 37, Freq = 46, Decay = 1.9, PitchAmt = 0.45, PitchDecay = 0.022, Tone = 0.42, Drive = 0.4, Warmth = 0.55, Length = 3.0, PeakDb = -1.5 },
             new() { Name = "Snare",      Model = DrumModel.SnarePunch, Note = 38, Freq = 210, Decay = 0.2, Tone = 0.62, Body = 0.4, Noise = 0.95, NoiseDecay = 0.1, Drive = 0.3, Warmth = 0.4, HpHz = 140, Length = 0.5, PeakDb = -2.5 },
             new() { Name = "Clap",       Model = DrumModel.Clap,       Note = 39, Freq = 1320,Decay = 0.18, Tone = 0.7, Body = 0.45, Drive = 0.3, Warmth = 0.4, HpHz = 300, Length = 0.55, PeakDb = -3.5 },
@@ -284,6 +300,8 @@ public static partial class KitCatalog
         Id = "foundry",
         Name = "Foundry",
         Blurb = "industrial metal · struck plate, pipe and hard-clipped kicks",
+        FxSpace = 1.2,
+        FxDrive = 1.4,
         Humanize = 0.06f,
         Pads = new List<KitPad>
         {
@@ -316,6 +334,8 @@ public static partial class KitCatalog
         Id = "terra",
         Name = "Terra",
         Blurb = "hand percussion · congas, bongos, wood and shakers",
+        FxSpace = 0.9,
+        FxDrive = 0.6,
         Swing = 0.1f,
         Humanize = 0.2f,
         Pads = new List<KitPad>
@@ -349,6 +369,8 @@ public static partial class KitCatalog
         Id = "aether",
         Name = "Aether",
         Blurb = "ambient & cinematic · soft, spacious, long tails",
+        FxSpace = 1.6,
+        FxDrive = 0.6,
         Humanize = 0.18f,
         Pads = new List<KitPad>
         {

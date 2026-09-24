@@ -685,6 +685,39 @@ public sealed partial class NotaEngine
     public int RhythmVoiceSource(int trackId, int voice)
     { ThrowIfDisposed(); return NativeMethods.RhythmVoiceSource(_handle, trackId, voice); }
 
+    public int RhythmVoiceDeviceCount(int trackId, int voice)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceCount(_handle, trackId, voice); }
+    public int RhythmAddVoiceDevice(int trackId, int voice, int kind)
+    { ThrowIfDisposed(); return NativeMethods.RhythmAddVoiceDevice(_handle, trackId, voice, kind); }
+    public bool RhythmRemoveVoiceDevice(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RhythmRemoveVoiceDevice(_handle, trackId, voice, dev) != 0; }
+    public void RhythmMoveVoiceDevice(int trackId, int voice, int from, int to)
+    { ThrowIfDisposed(); NativeMethods.RhythmMoveVoiceDevice(_handle, trackId, voice, from, to); }
+    public string RhythmVoiceDeviceName(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmVoiceDeviceName(_handle, trackId, voice, dev)) ?? ""; }
+    public int RhythmVoiceDeviceBuiltinKind(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceBuiltinKind(_handle, trackId, voice, dev); }
+    public int RhythmVoiceDeviceParamCount(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceParamCount(_handle, trackId, voice, dev); }
+    public string RhythmVoiceDeviceParamName(int trackId, int voice, int dev, int param)
+    { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmVoiceDeviceParamName(_handle, trackId, voice, dev, param)) ?? ""; }
+    public float RhythmVoiceDeviceParamMin(int trackId, int voice, int dev, int param)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceParamMin(_handle, trackId, voice, dev, param); }
+    public float RhythmVoiceDeviceParamMax(int trackId, int voice, int dev, int param)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceParamMax(_handle, trackId, voice, dev, param); }
+    public float RhythmVoiceDeviceParamGet(int trackId, int voice, int dev, int param)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceParamGet(_handle, trackId, voice, dev, param); }
+    public void RhythmVoiceDeviceParamSet(int trackId, int voice, int dev, int param, float value)
+    { ThrowIfDisposed(); NativeMethods.RhythmVoiceDeviceParamSet(_handle, trackId, voice, dev, param, value); }
+    public bool RhythmVoiceDeviceBypassed(int trackId, int voice, int dev)
+    { ThrowIfDisposed(); return NativeMethods.RhythmVoiceDeviceBypassed(_handle, trackId, voice, dev) != 0; }
+    public void RhythmSetVoiceDeviceBypassed(int trackId, int voice, int dev, bool bypassed)
+    { ThrowIfDisposed(); NativeMethods.RhythmSetVoiceDeviceBypassed(_handle, trackId, voice, dev, bypassed ? 1 : 0); }
+    public string RhythmKitName(int trackId)
+    { ThrowIfDisposed(); return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(NativeMethods.RhythmKitName(_handle, trackId)) ?? ""; }
+    public void RhythmSetKitName(int trackId, string name)
+    { ThrowIfDisposed(); NativeMethods.RhythmSetKitName(_handle, trackId, name ?? ""); }
+
     public int GrainPlayPositions(int trackId, float[] outPos)
     { ThrowIfDisposed(); return NativeMethods.TrackGrainPlayPositions(_handle, trackId, outPos, outPos.Length); }
 

@@ -402,6 +402,26 @@ NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_
 NOTA_API int32_t nota_track_rhythm_set_voice_sample(NotaEngine* engine, int32_t track_id, int32_t voice, const char* path);
 NOTA_API int32_t nota_track_rhythm_voice_info(const NotaEngine* engine, int32_t track_id, int32_t voice, NotaSamplerInfo* out);
 NOTA_API int32_t nota_track_rhythm_voice_source(const NotaEngine* engine, int32_t track_id, int32_t voice);
+/* Nota Rhythm per-voice insert chains: built-in effects (the rack chain kinds 0..21 except 5) run on
+ * one voice's signal before the kit bus. voice 0..7; dev indexes the voice's chain. add returns the
+ * new index or -1; remove/move return 1 on success. Params use each device's own units (min..max).
+ * The kit label names the factory kit the voices were loaded from ("" = none); display only. */
+NOTA_API int32_t     nota_rhythm_voice_device_count(const NotaEngine* engine, int32_t track_id, int32_t voice);
+NOTA_API int32_t     nota_rhythm_add_voice_device(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t device_kind);
+NOTA_API int32_t     nota_rhythm_remove_voice_device(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API int32_t     nota_rhythm_move_voice_device(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t from_index, int32_t to_index);
+NOTA_API const char* nota_rhythm_voice_device_name(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API int32_t     nota_rhythm_voice_device_builtin_kind(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API int32_t     nota_rhythm_voice_device_param_count(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API const char* nota_rhythm_voice_device_param_name(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param);
+NOTA_API float       nota_rhythm_voice_device_param_min(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param);
+NOTA_API float       nota_rhythm_voice_device_param_max(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param);
+NOTA_API float       nota_rhythm_voice_device_param_get(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param);
+NOTA_API void        nota_rhythm_voice_device_param_set(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t param, float value);
+NOTA_API int32_t     nota_rhythm_voice_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev);
+NOTA_API void        nota_rhythm_set_voice_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t voice, int32_t dev, int32_t bypassed);
+NOTA_API const char* nota_rhythm_kit_name(const NotaEngine* engine, int32_t track_id);
+NOTA_API void        nota_rhythm_set_kit_name(NotaEngine* engine, int32_t track_id, const char* name);
 /* Adds an instrument track with the built-in sampler loaded from a file.
  * Returns id (>0), or 0 on failure (decode error). */
 NOTA_API int32_t nota_engine_add_sampler_track(NotaEngine* engine, const char* path_utf8,

@@ -17,18 +17,26 @@
 //
 //   Bus: the voices sum through Glue (a gentle compressor) into Volume.
 //
+//   Voice FX: every voice has its own insert chain of built-in effects (the same devices a
+//   Drum Rack pad chain holds — BuiltinDevices.h), run on that voice's stereo signal before the
+//   sum, so a snare can have its reverb and a kick its saturation. The chains swap as immutable
+//   snapshots (structural edits on the message thread, the audio thread reads one pointer) and
+//   keep processing after a hit ends, so tails ring out. A voice without a chain skips it.
+//
 // The 7 per-voice knobs (Tune/Decay/Punch/Tone/Drive/Level/Pan) + 4 globals ride the plugin-
 // param interface (normalized 0..1) → automation / persist / clone for free. Appended after
 // them (param order is the persisted layout — append only): per-voice sample Start / Length /
 // Reverse, then Glue (a bus compressor on the kit sum). The step patterns are structural
 // state (getState/setState blob + the action() UI channel), not params. A step is on/off with
-// a velocity (a "quiet" step is just a low one) and an accent flag. Header-only, allocation-
-// free after construction. Name & DSP are Nota's own.
+// a velocity (a "quiet" step is just a low one) and an accent flag. The voice FX chains and a
+// kit label follow the pattern data in the same blob, tagged, so an older reader stops before
+// them. Header-only, allocation-free on the audio thread. Name & DSP are Nota's own.
 
 #pragma once
 
 #include "Instrument.h"
 #include "SampleBuffer.h"
+#include "BuiltinDevices.h"
 
 #include <algorithm>
 #include <atomic>
@@ -84,6 +92,7 @@ public:
         scope_[S_Step].store(-1.0f, std::memory_order_relaxed);
         for (int v = 0; v < kVoices; ++v) scope_[S_Pos0 + v].store(-1.0f, std::memory_order_relaxed);
         clearAll();
+        commitFx(std::make_shared<FxState>());
         // A minimal four-on-the-floor so a fresh instance makes a sound.
         for (int s = 0; s < 16; s += 4) { on_[0][0][s] = 1; vel_[0][0][s] = 200; }
         on_[0][4][2] = on_[0][4][6] = on_[0][4][10] = on_[0][4][14] = 1;   // closed hat off-beats
@@ -93,11 +102,21 @@ public:
     int32_t kind() const override { return 12; }
     const char* displayName() const override { return "Nota Rhythm"; }
 
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override {
+        sampleRate_ = sr > 0 ? sr : 44100.0;
+        if (fxAuthoring_)
+            for (auto& ch : fxAuthoring_->chain) for (auto& d : ch) if (d) d->setSampleRate(sampleRate_, kChunk);
+    }
 
     void setTransport(double beatStart, double spb, bool playing) override {
         if (spb > 0.0) spb_ = spb;
         beatStart_ = beatStart; playing_ = playing;
+        if (FxState* fx = fxLive_.load(std::memory_order_acquire))   // tempo-synced voice FX (a synced Delay)
+            for (auto& ch : fx->chain) for (auto& d : ch) if (d) d->setTransport(beatStart, spb, playing);
+    }
+    void setTransportInfo(const TransportInfo& ti) override {
+        if (FxState* fx = fxLive_.load(std::memory_order_acquire))
+            for (auto& ch : fx->chain) for (auto& d : ch) if (d) d->setTransportInfo(ti);
     }
 
     // ---- parameters -------------------------------------------------------
@@ -164,18 +183,88 @@ public:
     int64_t voiceSampleId(int v) const { return (v >= 0 && v < kVoices && smp_[v]) ? smp_[v]->id : 0; }
     std::shared_ptr<SampleBuffer> voiceSampleBuf(int v) const { return (v >= 0 && v < kVoices) ? smp_[v] : nullptr; }
 
+    // ---- per-voice FX chains (message thread; the audio thread reads the live snapshot) ----
+    int32_t voiceDeviceCount(int v) const {
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        return (fx && v >= 0 && v < kVoices) ? static_cast<int32_t>(fx->chain[v].size()) : 0;
+    }
+    Device* voiceDevice(int v, int d) const {
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        if (!fx || v < 0 || v >= kVoices || d < 0 || d >= static_cast<int>(fx->chain[v].size())) return nullptr;
+        return fx->chain[v][d].get();
+    }
+    int32_t addVoiceDevice(int v, int32_t kind) {
+        if (v < 0 || v >= kVoices || voiceDeviceCount(v) >= kMaxFx) return -1;
+        auto dev = makeChainDevice(kind);
+        if (!dev) return -1;
+        dev->setSampleRate(sampleRate_, kChunk);
+        auto ns = copyFx();
+        ns->chain[v].push_back(std::move(dev));
+        const int32_t idx = static_cast<int32_t>(ns->chain[v].size()) - 1;
+        commitFx(ns);
+        return idx;
+    }
+    bool removeVoiceDevice(int v, int d) {
+        auto ns = copyFx();
+        if (v < 0 || v >= kVoices || d < 0 || d >= static_cast<int>(ns->chain[v].size())) return false;
+        ns->chain[v].erase(ns->chain[v].begin() + d);
+        commitFx(ns);
+        return true;
+    }
+    bool moveVoiceDevice(int v, int from, int to) {
+        auto ns = copyFx();
+        if (v < 0 || v >= kVoices) return false;
+        auto& c = ns->chain[v];
+        const int n = static_cast<int>(c.size());
+        if (from < 0 || from >= n) return false;
+        to = std::clamp(to, 0, n - 1);
+        if (to == from) return true;
+        auto x = c[from];
+        c.erase(c.begin() + from);
+        c.insert(c.begin() + to, x);
+        commitFx(ns);
+        return true;
+    }
+    void clearVoiceDevices(int v) {
+        auto ns = copyFx();
+        if (v < 0 || v >= kVoices || ns->chain[v].empty()) return;
+        ns->chain[v].clear();
+        commitFx(ns);
+    }
+    // The factory kit the voices came from ("" = none / hand-built) — display metadata only.
+    const std::string& kitName() const { return kit_; }
+    void setKitName(const std::string& k) { kit_ = k.substr(0, 64); }
+
     // ---- project state ----------------------------------------------------
     // Layout: [u32 magic]['kNumParams' floats]['bank','sel',2 reserved]['on,vel,acc' per bank/voice/step]
     // ['src' per voice]. RTH1 (before the sample region + Glue) carries kLegacyParams floats.
     std::vector<uint8_t> getState() const override {
         std::vector<uint8_t> b;
         b.reserve(8 + kNumParams * 4 + kBanks * kVoices * kSteps * 3);
-        auto putU32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (i * 8))); };
-        putU32(kMagic);
+        putU32(b, kMagic);
         for (int i = 0; i < kNumParams; ++i) { float v = pn_[i].load(std::memory_order_relaxed); uint8_t t[4]; std::memcpy(t, &v, 4); b.insert(b.end(), t, t + 4); }
         b.push_back(bank_); b.push_back(selVoice_); b.push_back(0); b.push_back(0);
         for (int bk = 0; bk < kBanks; ++bk) for (int v = 0; v < kVoices; ++v) for (int s = 0; s < kSteps; ++s) { b.push_back(on_[bk][v][s]); b.push_back(vel_[bk][v][s]); b.push_back(acc_[bk][v][s]); }
         for (int v = 0; v < kVoices; ++v) b.push_back(src_[v]);   // per-voice source (buffers persist separately)
+        // Voice FX + kit label, tagged "RFX1": per voice a device count, then per device its
+        // builtinKind, bypass flag and params; then the kit label.
+        putU32(b, kFxMagic);
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        for (int v = 0; v < kVoices; ++v) {
+            const auto* ch = fx ? &fx->chain[v] : nullptr;
+            const int n = ch ? static_cast<int>(ch->size()) : 0;
+            b.push_back(static_cast<uint8_t>(n));
+            for (int d = 0; d < n; ++d) {
+                const Device* dev = (*ch)[d].get();
+                putU32(b, static_cast<uint32_t>(dev->builtinKind()));
+                b.push_back(dev->bypassed() ? 1 : 0);
+                const int32_t pc = dev->paramCount();
+                putU32(b, static_cast<uint32_t>(pc));
+                for (int32_t p = 0; p < pc; ++p) { float x = dev->getParam(p); uint32_t u; std::memcpy(&u, &x, 4); putU32(b, u); }
+            }
+        }
+        putU32(b, static_cast<uint32_t>(kit_.size()));
+        b.insert(b.end(), kit_.begin(), kit_.end());
         return b;
     }
     void setState(const uint8_t* data, int32_t size) override {
@@ -195,6 +284,34 @@ public:
             on_[bk][v][s] = data[off]; vel_[bk][v][s] = data[off + 1]; acc_[bk][v][s] = data[off + 2]; off += 3;
         }
         for (int v = 0; v < kVoices; ++v) if (off < size) src_[v] = data[off++];   // source flags (buffers reloaded by the project)
+        // Voice FX + kit label. A blob from before them simply ends here: the voices keep no FX.
+        auto ns = std::make_shared<FxState>();
+        std::string kit;
+        auto getU32 = [&](uint32_t& out) { if (off + 4 > size) return false; out = 0; for (int i = 0; i < 4; ++i) out |= (uint32_t)data[off + i] << (i * 8); off += 4; return true; };
+        uint32_t tag = 0;
+        if (getU32(tag) && tag == kFxMagic) {
+            for (int v = 0; v < kVoices && off < size; ++v) {
+                const int n = data[off++];
+                for (int d = 0; d < n; ++d) {
+                    uint32_t kind = 0, pc = 0;
+                    if (!getU32(kind) || off >= size) break;
+                    const bool byp = data[off++] != 0;
+                    if (!getU32(pc)) break;
+                    auto dev = makeChainDevice(static_cast<int32_t>(kind));
+                    if (dev) dev->setSampleRate(sampleRate_, kChunk);
+                    for (uint32_t p = 0; p < pc; ++p) {
+                        uint32_t u = 0; if (!getU32(u)) break;
+                        float x; std::memcpy(&x, &u, 4);
+                        if (dev && std::isfinite(x)) dev->setParam(static_cast<int32_t>(p), x);
+                    }
+                    if (dev) { dev->paramsRestored(static_cast<int32_t>(pc)); dev->setBypassed(byp); if ((int)ns->chain[v].size() < kMaxFx) ns->chain[v].push_back(std::move(dev)); }
+                }
+            }
+            uint32_t kl = 0;
+            if (getU32(kl) && kl <= 64 && off + (int)kl <= size) kit.assign(reinterpret_cast<const char*>(data + off), kl);
+        }
+        commitFx(ns);
+        kit_ = kit;
     }
     std::shared_ptr<Instrument> clone() const override {
         auto r = std::make_shared<RhythmMachine>();
@@ -204,6 +321,23 @@ public:
         r->rev_.store(rev_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
         for (int v = 0; v < kVoices; ++v) { r->smp_[v] = smp_[v]; r->src_[v] = src_[v]; }   // share sample buffers (immutable)
         r->setSampleRate(sampleRate_);
+        // The voice FX are copied device by device (kind + params + bypass): a clone must not
+        // share DSP state with the original, which keeps playing until the swap.
+        auto ns = std::make_shared<FxState>();
+        if (FxState* fx = fxLive_.load(std::memory_order_acquire))
+            for (int v = 0; v < kVoices; ++v)
+                for (auto& d : fx->chain[v]) {
+                    auto c = d ? makeChainDevice(d->builtinKind()) : nullptr;
+                    if (!c) continue;
+                    c->setSampleRate(sampleRate_, kChunk);
+                    const int32_t pc = d->paramCount();
+                    for (int32_t p = 0; p < pc; ++p) c->setParam(p, d->getParam(p));
+                    c->paramsRestored(pc);
+                    c->setBypassed(d->bypassed());
+                    ns->chain[v].push_back(std::move(c));
+                }
+        r->commitFx(ns);
+        r->kit_ = kit_;
         return r;
     }
 
@@ -226,7 +360,6 @@ public:
         const float swing = get(Swing), human = get(Humanize);
         const float accentG = 1.0f + get(Accent) * 1.0f;   // up to +6 dB-ish
         const float vol = get(Volume) * 1.2f;
-        const double invSr = 1.0 / sampleRate_;
         const double stepBeats = 0.25;   // 1/16
 
         int flash[kVoices] = {0};
@@ -245,56 +378,85 @@ public:
         const float atk = std::exp(-1.0f / (0.005f * (float)sampleRate_)), rel = std::exp(-1.0f / (0.150f * (float)sampleRate_));
         const float avgC = std::exp(-1.0f / (0.7f * (float)sampleRate_));
         float grMax = 0.0f;
-        for (int32_t i = 0; i < frames; ++i) {
-            // --- sequencer clock ---
-            if (playing_ && spb_ > 0.0) {
-                double beat = beatStart_ + (double)i * invSr * (sampleRate_ / spb_) * spb_ * invSr; // = beatStart_ + i/spb_
-                beat = beatStart_ + (double)i / spb_;
-                double pos = beat / stepBeats;              // in 16th-steps
-                long absStep = (long)std::floor(pos);
-                int barStep = (int)(((absStep % kSteps) + kSteps) % kSteps);
-                double frac = pos - std::floor(pos);        // 0..1 within the step
-                double trigFrac = (barStep & 1) ? (double)swing * 0.5 : 0.0;   // swing delays odd 16ths
-                if (absStep != lastAbsStep_) { lastAbsStep_ = absStep; stepArmed_ = true; }
-                if (stepArmed_ && frac >= trigFrac) {
-                    stepArmed_ = false; curStep_ = barStep;
-                    for (int v = 0; v < kVoices; ++v) if (on_[bank_][v][barStep]) {
-                        float vv = vel_[bank_][v][barStep] / 255.0f;
-                        if (acc_[bank_][v][barStep]) vv = std::min(1.0f, vv * accentG);
-                        if (human > 0.0f) vv = std::clamp(vv + (noiseF() * 2.0f - 1.0f) * human * 0.25f, 0.0f, 1.0f);
-                        trigger(v, vv);
-                        flash[v] = 1;
+        // Voices with an FX chain render into their own buffer and run through it; the rest
+        // go straight to the sum. Chunks keep the buffers small and the chain's block bounded.
+        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        bool hasFx[kVoices] = {false};
+        bool anyFx = false;
+        if (fx)
+            for (int v = 0; v < kVoices; ++v) {
+                for (auto& d : fx->chain[v]) if (d && !d->bypassed()) { hasFx[v] = true; break; }
+                anyFx = anyFx || hasFx[v];
+            }
+        for (int32_t base = 0; base < frames; base += kChunk) {
+            const int32_t n = std::min<int32_t>(kChunk, frames - base);
+            std::memset(mix_, 0, sizeof(float) * n * 2);
+            if (anyFx) for (int v = 0; v < kVoices; ++v) if (hasFx[v]) std::memset(vbuf_[v], 0, sizeof(float) * n * 2);
+            for (int32_t j = 0; j < n; ++j) {
+                const int32_t i = base + j;
+                // --- sequencer clock ---
+                if (playing_ && spb_ > 0.0) {
+                    const double beat = beatStart_ + (double)i / spb_;
+                    double pos = beat / stepBeats;              // in 16th-steps
+                    long absStep = (long)std::floor(pos);
+                    int barStep = (int)(((absStep % kSteps) + kSteps) % kSteps);
+                    double frac = pos - std::floor(pos);        // 0..1 within the step
+                    double trigFrac = (barStep & 1) ? (double)swing * 0.5 : 0.0;   // swing delays odd 16ths
+                    if (absStep != lastAbsStep_) { lastAbsStep_ = absStep; stepArmed_ = true; }
+                    if (stepArmed_ && frac >= trigFrac) {
+                        stepArmed_ = false; curStep_ = barStep;
+                        for (int v = 0; v < kVoices; ++v) if (on_[bank_][v][barStep]) {
+                            float vv = vel_[bank_][v][barStep] / 255.0f;
+                            if (acc_[bank_][v][barStep]) vv = std::min(1.0f, vv * accentG);
+                            if (human > 0.0f) vv = std::clamp(vv + (noiseF() * 2.0f - 1.0f) * human * 0.25f, 0.0f, 1.0f);
+                            trigger(v, vv);
+                            flash[v] = 1;
+                        }
                     }
+                } else {
+                    curStep_ = -1;
                 }
-            } else {
-                curStep_ = -1;
+
+                // --- voices ---
+                for (int v = 0; v < kVoices; ++v) {
+                    if (!voices_[v].active) continue;
+                    float sl, sr;
+                    voiceStereo(v, sl, sr);
+                    if (!std::isfinite(sl) || !std::isfinite(sr)) { sl = sr = 0.0f; voices_[v].active = false; }
+                    const float pan = std::clamp(get2(v, Pan) * 2.0f - 1.0f, -1.0f, 1.0f);
+                    const float gl = (pan <= 0.0f ? 1.0f : 1.0f - pan);
+                    const float gr = (pan >= 0.0f ? 1.0f : 1.0f + pan);
+                    float* dst = hasFx[v] ? vbuf_[v] : mix_;
+                    dst[j * 2] += sl * gl; dst[j * 2 + 1] += sr * gr;
+                }
             }
 
-            // --- synth voices ---
-            float l = 0.0f, r = 0.0f;
-            for (int v = 0; v < kVoices; ++v) {
-                if (!voices_[v].active) continue;
-                float s = voiceSample(v);
-                if (!std::isfinite(s)) { s = 0.0f; voices_[v].active = false; }
-                const float pan = std::clamp(get2(v, Pan) * 2.0f - 1.0f, -1.0f, 1.0f);
-                const float gl = (pan <= 0.0f ? 1.0f : 1.0f - pan);
-                const float gr = (pan >= 0.0f ? 1.0f : 1.0f + pan);
-                l += s * gl; r += s * gr;
+            // --- voice FX: every chain runs each chunk, so its tail rings out after the hit ---
+            if (anyFx)
+                for (int v = 0; v < kVoices; ++v) {
+                    if (!hasFx[v]) continue;
+                    for (auto& d : fx->chain[v]) if (d && !d->bypassed()) d->process(vbuf_[v], n);
+                    for (int32_t k = 0; k < n * 2; ++k) mix_[k] += std::isfinite(vbuf_[v][k]) ? vbuf_[v][k] : 0.0f;
+                }
+
+            // --- bus: glue + volume ---
+            for (int32_t j = 0; j < n; ++j) {
+                float l = mix_[j * 2], r = mix_[j * 2 + 1];
+                if (glueOn) {
+                    const float pk = std::max(std::fabs(l), std::fabs(r));
+                    const float lvlDb = pk > 1e-6f ? 20.0f * std::log10(pk) : -120.0f;
+                    const float over = std::max(0.0f, lvlDb - thrDb);
+                    const float target = over * (1.0f - 1.0f / ratio);           // dB of reduction wanted
+                    const float c = target > glueGr_ ? atk : rel;
+                    glueGr_ = target + c * (glueGr_ - target);
+                    glueAvg_ = glueGr_ + avgC * (glueAvg_ - glueGr_);
+                    const float g = std::pow(10.0f, (std::min(glueAvg_ * 0.7f, glueGr_) - glueGr_) * 0.05f);
+                    l *= g; r *= g;
+                    grMax = std::max(grMax, glueGr_);
+                } else { glueGr_ = 0.0f; glueAvg_ = 0.0f; }
+                out[(base + j) * 2]     += l * vol;
+                out[(base + j) * 2 + 1] += r * vol;
             }
-            if (glueOn) {
-                const float pk = std::max(std::fabs(l), std::fabs(r));
-                const float lvlDb = pk > 1e-6f ? 20.0f * std::log10(pk) : -120.0f;
-                const float over = std::max(0.0f, lvlDb - thrDb);
-                const float target = over * (1.0f - 1.0f / ratio);           // dB of reduction wanted
-                const float c = target > glueGr_ ? atk : rel;
-                glueGr_ = target + c * (glueGr_ - target);
-                glueAvg_ = glueGr_ + avgC * (glueAvg_ - glueGr_);
-                const float g = std::pow(10.0f, (std::min(glueAvg_ * 0.7f, glueGr_) - glueGr_) * 0.05f);
-                l *= g; r *= g;
-                grMax = std::max(grMax, glueGr_);
-            } else { glueGr_ = 0.0f; glueAvg_ = 0.0f; }
-            out[i * 2]     += l * vol;
-            out[i * 2 + 1] += r * vol;
         }
 
         // publish telemetry
@@ -317,6 +479,21 @@ public:
 private:
     static constexpr uint32_t kMagicV1 = 0x31485452;   // "RTH1" — 60 params
     static constexpr uint32_t kMagic   = 0x32485452;   // "RTH2" — + sample region, Glue
+    static constexpr uint32_t kFxMagic = 0x31584652;   // "RFX1" — voice FX chains + kit label, after the pattern
+    static constexpr int kChunk = 256;                  // render chunk = the voice FX's max block
+    static constexpr int kMaxFx = 8;                    // devices per voice chain
+
+    struct FxState { std::vector<std::shared_ptr<Device>> chain[kVoices]; };
+    std::shared_ptr<FxState> copyFx() const { return fxAuthoring_ ? std::make_shared<FxState>(*fxAuthoring_) : std::make_shared<FxState>(); }
+    // Publish a new FX snapshot. The last few stay alive so a block still reading an older
+    // one never sees it freed (the RackCore scheme).
+    void commitFx(std::shared_ptr<FxState> ns) {
+        fxAuthoring_ = ns;
+        fxStates_.push_back(ns);
+        if (fxStates_.size() > 16) fxStates_.erase(fxStates_.begin());
+        fxLive_.store(ns.get(), std::memory_order_release);
+    }
+    static void putU32(std::vector<uint8_t>& b, uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (i * 8))); }
     static constexpr double kTwoPi = 6.283185307179586;
     static constexpr const char* kVoiceNames[kVoices] = { "Kick", "Snare", "Clap", "Rim", "Closed Hat", "Open Hat", "Tom", "Perc" };
     static constexpr int kMidiMap[kVoices] = { 36, 38, 39, 37, 42, 46, 45, 41 };
@@ -327,7 +504,7 @@ private:
         double ph = 0.0, ph2 = 0.0;
         float env = 0.0f, env2 = 0.0f;     // amp + secondary (noise/tail) env
         float pitchEnv = 0.0f;
-        float lp = 0.0f, hp = 0.0f, hpPrev = 0.0f;   // one-pole filter states
+        float lp = 0.0f, lp2 = 0.0f, hp = 0.0f, hpPrev = 0.0f;   // one-pole filter states (lp2: a sample's right channel)
         float bp = 0.0f, bp2 = 0.0f;                 // band-pass (SVF) states
         int   burst = 0; float burstT = 0.0f;        // clap multi-burst
         double spos = 0.0; bool splay = false;       // sample-voice playback
@@ -353,7 +530,7 @@ private:
         vc.ph = 0.0; vc.ph2 = 0.0; vc.env = 1.0f; vc.env2 = 1.0f; vc.pitchEnv = 1.0f;
         vc.burst = 0; vc.burstT = 0.0f;
         vc.splay = (src_[v] == Sample && smp_[v] && !smp_[v]->empty());
-        vc.spos = 0.0; vc.lp = 0.0f;
+        vc.spos = 0.0; vc.lp = 0.0f; vc.lp2 = 0.0f;
         if (vc.splay) {
             // The played region: Start .. Start + Length of the file (at least ~1 ms); Reverse
             // plays it back to front.
@@ -366,32 +543,38 @@ private:
         if (v == 4) voices_[5].active = false;   // closed hat chokes open hat (808)
     }
 
-    // One mono sample from a sample-voice one-shot: pitch (Tune) → playback rate, amp env
-    // (Decay), Tone → LP, Drive → tanh, Level. Stops at the end of the buffer.
-    float sampleVoice(int v) {
+    // One stereo frame from a sample-voice one-shot (a stereo file keeps its image): pitch
+    // (Tune) → playback rate, amp env (Decay), Tone → LP, Drive → tanh, Level. Stops at the
+    // end of the region.
+    void sampleVoice(int v, float& outL, float& outR) {
         Voice& vc = voices_[v];
         auto& b = *smp_[v];
         const float tune = get2(v, Tune), decay = get2(v, Decay), tone = get2(v, Tone), drive = get2(v, Drive);
         float l, r; b.readStereo((int64_t)vc.spos, l, r);
-        float s = 0.5f * (l + r);
         const double rate = (b.sourceSampleRate > 0 ? b.sourceSampleRate / sampleRate_ : 1.0) * std::exp2((tune - 0.5) * 2.0);
         // A 64-frame fade into the region's far edge, so a Length cut never clicks.
         const double left = vc.srev ? vc.spos - vc.sBeg : vc.sEnd - vc.spos;
-        if (left < 64.0 * rate) s *= (float)std::max(0.0, left / (64.0 * rate));
+        if (left < 64.0 * rate) { const float f = (float)std::max(0.0, left / (64.0 * rate)); l *= f; r *= f; }
         vc.spos += vc.srev ? -rate : rate;
         // Tone as a gentle one-pole low-pass (0 = dark, 1 = open).
         const float lpc = 0.05f + tone * 0.95f;
-        vc.lp += lpc * (s - vc.lp); s = vc.lp;
-        if (drive > 0.001f) s = std::tanh(s * (1.0f + drive * 3.0f));
+        vc.lp += lpc * (l - vc.lp); vc.lp2 += lpc * (r - vc.lp2);
+        l = vc.lp; r = vc.lp2;
+        if (drive > 0.001f) { const float g = 1.0f + drive * 3.0f; l = std::tanh(l * g); r = std::tanh(r * g); }
         vc.env *= decayCoef(expMap(decay, 0.05f, 2.0f));
         if ((vc.srev ? vc.spos < vc.sBeg : vc.spos >= vc.sEnd) || vc.env < 1e-4f) { vc.active = false; vc.splay = false; }
-        return s * vc.env * vc.vel * get2(v, Level);
+        const float k = vc.env * vc.vel * get2(v, Level);
+        outL = l * k; outR = r * k;
+    }
+
+    void voiceStereo(int v, float& l, float& r) {
+        if (voices_[v].splay) { sampleVoice(v, l, r); return; }
+        l = r = voiceSample(v);
     }
 
     // One mono sample for voice v, advancing its state. Params denormalized inline.
     float voiceSample(int v) {
         Voice& vc = voices_[v];
-        if (vc.splay) return sampleVoice(v);   // sample-source voice (Phase 2)
         const float tune = get2(v, Tune), decay = get2(v, Decay), punch = get2(v, Punch);
         const float tone = get2(v, Tone), drive = get2(v, Drive), level = get2(v, Level);
         const double invSr = 1.0 / sampleRate_;
@@ -500,6 +683,13 @@ private:
 
     std::atomic<float> scope_[kScopeN];
     std::atomic<float> pn_[kNumParams];
+
+    std::shared_ptr<FxState>              fxAuthoring_;   // voice FX (message thread)
+    std::vector<std::shared_ptr<FxState>> fxStates_;      // recent snapshots kept alive
+    std::atomic<FxState*>                 fxLive_{nullptr};
+    std::string kit_;                                     // factory kit label (message thread)
+    float mix_[kChunk * 2];                               // audio thread: the chunk's sum
+    float vbuf_[kVoices][kChunk * 2];                     // audio thread: FX voices, pre-chain
 };
 
 } // namespace nota

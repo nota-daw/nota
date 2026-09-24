@@ -519,6 +519,14 @@ public:
     bool    setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path);  // Phase 2
     bool    rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;     // sample id per voice
     int32_t rhythmVoiceSource(int32_t trackId, int32_t voice) const;                          // 0 Synth, 1 Sample
+    // Nota Rhythm per-voice insert chains (built-in devices) + the kit label.
+    int32_t rhythmVoiceDeviceCount(int32_t trackId, int32_t voice) const;
+    int32_t rhythmAddVoiceDevice(int32_t trackId, int32_t voice, int32_t kind);
+    bool    rhythmRemoveVoiceDevice(int32_t trackId, int32_t voice, int32_t dev);
+    bool    rhythmMoveVoiceDevice(int32_t trackId, int32_t voice, int32_t from, int32_t to);
+    Device* rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) const;
+    std::string rhythmKitName(int32_t trackId) const;
+    void    setRhythmKitName(int32_t trackId, const std::string& name);
     bool    setTrackGrainSample(int32_t trackId, const std::string& path, int32_t rootNote);
     int32_t addSamplerTrack(const std::string& path, int32_t rootNote, bool loop);
     int32_t addSamplerInstrumentTrack();                                        // empty Sampler (sample loaded later)
