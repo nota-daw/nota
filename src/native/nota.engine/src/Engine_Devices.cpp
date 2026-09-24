@@ -22,6 +22,7 @@
 #include "Shutter.h"
 #include "Chamber.h"
 #include "Lens.h"
+#include "Flanger.h"
 #include "Prism.h"
 #include "Ceiling.h"
 #include "Strata.h"
@@ -446,6 +447,7 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
     else if (kind == 20) dev = std::make_shared<Chamber>();
     else if (kind == 21) dev = std::make_shared<Prism>();
     else if (kind == 22) dev = std::make_shared<Lens>();
+    else if (kind == 23) dev = std::make_shared<Flanger>();
     else return -1;
     dev->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0, kMaxBlock);
     if (kind == 5) if (auto* rk = dynamic_cast<RackDevice*>(dev.get())) rk->addChain(-1);  // one pass-through chain
@@ -511,6 +513,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
         case 20: d = std::make_shared<Chamber>(); break;
         case 21: d = std::make_shared<Prism>(); break;
         case 22: d = std::make_shared<Lens>(); break;
+        case 23: d = std::make_shared<Flanger>(); break;
         default: d = src.clone(); break;                                       // hosted plugin
     }
     if (!d) return nullptr;
@@ -588,6 +591,7 @@ static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
         case 20: return std::make_shared<Chamber>();
         case 21: return std::make_shared<Prism>();
         case 22: return std::make_shared<Lens>();
+        case 23: return std::make_shared<Flanger>();
         default: return nullptr;   // Rack / plugin: no simple per-param default
     }
 }

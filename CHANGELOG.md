@@ -19,6 +19,30 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Flanger.** A new built-in audio effect (kind 23): a comb filter on a short delay
+  that an LFO sweeps up and down — the classic jet whoosh, a hollow tube tone, or a metallic
+  ring. The card follows the new mockup on the 700 × 260 frame:
+  - **LFO.** Sine, Tri or Saw; a free rate from 0.02 to 8 Hz or a synced note value from 2/1
+    to 1/16 with dotted and triplet values, locked to the bar while the transport plays. The
+    rate reads large with its period, and **Stereo** offsets the right channel's sweep by up
+    to 180°.
+  - **Comb response.** The live frequency response of both channels, left in brass and right
+    in teal, with the first notch marked. Drag the graph left or right to move the notch
+    (Delay), up or down for Feedback; double-click resets both. Under it, the delay of both
+    channels over two LFO cycles with a running head.
+  - **Delay line.** Delay (0.1–8 ms), Depth, a bipolar Feedback (±95 %) with − / 0 / + snaps,
+    and Mix, plus the range the first notch sweeps and how deep the notches cut. Negative
+    feedback also flips the wet signal's polarity, so the comb mirrors instead of flattening
+    out. The header names the mode: positive, negative, resonant or through.
+  - A status line says what you'll hear — the notch sweep in Hz and the delay range, or a
+    warning when the comb rings or Mix is at zero.
+  All nine controls are device parameters, so automation, MIDI learn, A/B compare and project
+  save work as everywhere else. **31 factory presets**, from Jet Plane and Hollow Bar to Tin
+  Robot, Laser Zap and Vibrato.
+- **MCP: `read_flanger` and `set_flanger`.** Read what a Nota Flanger is doing (the settings in
+  units, the live delay per channel, the notch and its sweep, the null depth and the peaks)
+  and set it in units — waveform, rate or division, stereo degrees, delay in ms, depth,
+  feedback and mix in percent.
 - **MCP: `read_physical`.** Ask a Nota Physical track what it is: a one-line summary of the
   patch, a guide to every parameter's values, the sounding voices, the last struck pitch, the
   output peak and both resonators' 16 partials as the engine tunes them (Hz, level, ring

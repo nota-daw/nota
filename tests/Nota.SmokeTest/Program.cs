@@ -8842,6 +8842,202 @@ Console.WriteLine("-- Nota Orbit (effect kind 9) --");
     }
 }
 
+// ===================== Nota Flanger (effect kind 23) =====================
+Console.WriteLine("-- Nota Flanger (effect kind 23) --");
+{
+    // Params (Flanger.h): 0 Rate, 1 Delay, 2 Depth, 3 Feedback, 4 Mix, 5 Waveform, 6 Sync, 7 Division, 8 Stereo.
+    // Scope: 0 in, 1 out L, 2 out R (dBFS) · 3 / 4 τ L / R ms · 5 window phase · 6 rate Hz · 7 BPM · 8 playing ·
+    // 9 locked · 10 sample rate · 11 base ms · 12 / 13 τ min / max · 14 notch Hz · 15 / 16 notch sweep ·
+    // 17 null dB · 18 peak dB · 19 division beats · 20 bar beats · 21 CPU · 22 signal · 23 cycles.
+    using var fe = new NotaEngine();
+    int ft = fe.AddAudioTrack();
+    fe.AddAudioClip(ft, wav, 0.0);                      // 1 s sine @ 440 Hz
+    int fdi = fe.AddBuiltinDevice(ft, 23);
+    Check(fdi >= 0, "add Nota Flanger device");
+    Check(fe.DeviceName(ft, fdi) == "Nota Flanger", $"device is Nota Flanger (got '{fe.DeviceName(ft, fdi)}')");
+    Check(fe.TrackDeviceBuiltinKind(ft, fdi) == 23, "device reports builtin kind 23");
+    int fpc = fe.DeviceParamCount(ft, fdi);
+    Check(fpc == 9, $"Nota Flanger exposes 9 params ({fpc})");
+    var fnames = Enumerable.Range(0, fpc).Select(i => fe.DeviceParamName(ft, fdi, i)).ToArray();
+    Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo", $"param layout ({string.Join(",", fnames)})");
+    Check(Math.Abs(fe.DeviceParamDefault(ft, fdi, 1) - 0.735f) < 1e-3f && Math.Abs(fe.DeviceParamDefault(ft, fdi, 3) - (0.5f + 0.7f / 1.9f)) < 1e-3f
+          && Math.Abs(fe.DeviceParamDefault(ft, fdi, 8) - 0.5f) < 1e-3f, "defaults: 2.5 ms, feedback +70 %, stereo 90° (the Jet Plane)");
+    fe.DeviceSetParam(ft, fdi, 2, 0.42f);
+    Check(Math.Abs(fe.DeviceGetParam(ft, fdi, 2) - 0.42f) < 1e-4f, "device param set/get round-trips");
+
+    var fbuf = new float[4096 * 2];
+    var fsc = new float[32];
+    bool FFinite() { foreach (var v in fbuf) if (!float.IsFinite(v) || Math.Abs(v) > 8f) return false; return true; }
+    void FRender(int frames = 4096, double at = 0.2) { fe.Seek(at); fe.Play(); fe.RenderOffline(fbuf, frames); fe.StopTransport(); }
+    int FScope() => fe.DeviceScope(ft, fdi, fsc, fsc.Length);
+    // A tail window (skip the first 2048 frames so the ~15 ms param glide and the line have settled).
+    float Tail() { double sum = 0; for (int i = 2048 * 2; i < 4096 * 2; i++) sum += fbuf[i] * (double)fbuf[i]; return (float)Math.Sqrt(sum / (2048 * 2)); }
+    fe.SetBpm(120);
+
+    // Every waveform renders audible + finite, incl. extreme feedback both ways.
+    for (int wv = 0; wv < 3; wv++)
+        foreach (float fbn in new[] { 0f, 0.5f, 1f })
+        {
+            fe.DeviceSetParam(ft, fdi, 5, wv / 2f);
+            fe.DeviceSetParam(ft, fdi, 3, fbn);
+            FRender();
+            Check(Rms(fbuf, 4096) > 1e-3f && FFinite(), $"Flanger wave {wv} feedback {(fbn - 0.5f) * 190:+0;-0} % is audible + stable");
+        }
+
+    // The comb is real: a static 440 Hz sine drops into the notch at τ = 1/880 s and passes at τ = 1/440 s.
+    fe.DeviceSetParam(ft, fdi, 2, 0f);                                  // Depth 0 → static comb
+    fe.DeviceSetParam(ft, fdi, 3, 0.5f);                                // no feedback
+    fe.DeviceSetParam(ft, fdi, 4, 0.5f);                                // dry = wet
+    float DelayNorm(double ms) => (float)(Math.Log(ms / 0.1) / Math.Log(80));
+    fe.DeviceSetParam(ft, fdi, 1, DelayNorm(1000.0 / 880));
+    FRender();
+    float notch = Tail();
+    fe.DeviceSetParam(ft, fdi, 1, DelayNorm(1000.0 / 440));
+    FRender();
+    float pass = Tail();
+    Check(notch < pass * 0.1f, $"440 Hz falls into the notch at τ 1.14 ms ({20 * Math.Log10(notch / Math.Max(1e-9f, pass)):0.0} dB vs the peak)");
+    FScope();
+    Check(Math.Abs(fsc[3] - 1000f / 440) < 0.01f && Math.Abs(fsc[14] - 220f) < 3f,
+          $"scope: τ {fsc[3]:0.000} ms, first notch {fsc[14]:0} Hz (= 1 / 2τ)");
+    Check(fsc[17] < -30f, $"dry = wet without feedback nulls deep ({fsc[17]:0.0} dB)");
+    // Negative feedback mirrors the comb: the notch moves to 1/τ, the peak to 1/2τ.
+    fe.DeviceSetParam(ft, fdi, 3, 0.5f - 0.7f / 1.9f);                  // −70 %
+    FRender(); FRender();
+    float negNotch = Tail();                                            // τ = 1/440 s → 440 Hz is now a notch
+    fe.DeviceSetParam(ft, fdi, 1, DelayNorm(1000.0 / 880));
+    FRender(); FRender();
+    float negPeak = Tail();
+    Check(negNotch < negPeak * 0.2f, $"negative feedback mirrors the comb (440 Hz at τ 2.27 ms {20 * Math.Log10(negNotch / Math.Max(1e-9f, negPeak)):0.0} dB vs τ 1.14 ms)");
+    FScope();
+    Check(Math.Abs(fsc[14] - 880f) < 5f && fsc[17] < -12f, $"scope: negative feedback's first notch at 1/τ ({fsc[14]:0} Hz, {fsc[17]:0.0} dB)");
+    fe.DeviceSetParam(ft, fdi, 3, 0.5f + 0.9f / 1.9f);                  // +90 %
+    FScope();
+    Check(fsc[18] > 10f, $"feedback +90 % raises the comb's peaks ({fsc[18]:+0.0} dB)");
+    fe.DeviceSetParam(ft, fdi, 3, 0.5f);
+
+    // Mix 0 is dry.
+    fe.DeviceSetParam(ft, fdi, 4, 0f);
+    fe.DeviceSetParam(ft, fdi, 1, DelayNorm(1000.0 / 880));
+    FRender(); FRender();                                               // twice: let the ~15 ms Mix glide land
+    float dry0 = Tail();
+    fe.SetDeviceBypassed(ft, fdi, true); FRender(); float byp = Tail(); fe.SetDeviceBypassed(ft, fdi, false);
+    Check(Math.Abs(dry0 - byp) < byp * 0.01f, $"Mix 0 passes the dry signal ({dry0:0.0000} vs bypass {byp:0.0000})");
+    fe.DeviceSetParam(ft, fdi, 4, 0.5f);
+
+    // Depth + Stereo: the LFO sweeps τ, and the right channel runs offset from the left.
+    fe.DeviceSetParam(ft, fdi, 1, 0.735f);
+    fe.DeviceSetParam(ft, fdi, 2, 1f);
+    fe.DeviceSetParam(ft, fdi, 0, 1f);                                  // 8 Hz
+    fe.DeviceSetParam(ft, fdi, 8, 1f);                                  // 180°
+    fe.DeviceSetParam(ft, fdi, 5, 0f);                                  // Sine: half a cycle later is the mirror
+    FRender(3001); FRender(3001);
+    FScope();
+    Check(Math.Abs(fsc[12] - 2.5f * 0.08f) < 0.01f && Math.Abs(fsc[13] - 2.5f * 1.92f) < 0.01f,
+          $"sweep range = Delay · (1 ± 0.92 · Depth) ({fsc[12]:0.00} … {fsc[13]:0.00} ms)");
+    Check(Math.Abs((fsc[3] - 2.5f) + (fsc[4] - 2.5f)) < 0.05f && Math.Abs(fsc[3] - fsc[4]) > 0.1f,
+          $"Stereo 180°: the channels swing opposite (τL {fsc[3]:0.00}, τR {fsc[4]:0.00} ms)");
+    fe.DeviceSetParam(ft, fdi, 8, 0f);
+    FRender(3001);
+    FScope();
+    Check(Math.Abs(fsc[3] - fsc[4]) < 1e-3f, $"Stereo 0°: both channels sweep together ({fsc[3]:0.000} / {fsc[4]:0.000})");
+
+    // Sync: the rate follows the tempo and the LFO locks to the song position.
+    fe.DeviceSetParam(ft, fdi, 6, 1f);
+    fe.DeviceSetParam(ft, fdi, 7, 4f / 8f);                             // 1/4 → 2 Hz at 120 BPM
+    FRender(); FScope();
+    Check(Math.Abs(fsc[6] - 2f) < 1e-3f && fsc[9] > 0.5f, $"Sync 1/4 at 120 BPM runs at 2 Hz, locked ({fsc[6]:0.000})");
+    Check(fe.DeviceText(ft, fdi, 0).Contains("sync 1/4"), $"status names the division ('{fe.DeviceText(ft, fdi, 0)}')");
+    fe.SetBpm(90);
+    FRender(); FScope();
+    Check(Math.Abs(fsc[6] - 1.5f) < 1e-3f, $"the synced rate follows a tempo change (90 BPM → {fsc[6]:0.000} Hz)");
+    fe.SetBpm(120);
+    fe.DeviceSetParam(ft, fdi, 6, 0f);
+
+    // Actions: restart the LFO, clear a ringing line.
+    fe.DeviceSetParam(ft, fdi, 0, 1f);
+    FRender(); FScope();
+    Check(fsc[23] >= 1f, $"free run: cycles run ({fsc[23]:0})");
+    fe.DeviceAction(ft, fdi, 0, 0, 0f);
+    FRender(32); FScope();
+    Check(fsc[23] < 1f && fsc[5] < 0.05f, $"device_action 0 restarts the LFO (cycle {fsc[23]:0}, phase {fsc[5]:0.000})");
+    fe.DeviceSetParam(ft, fdi, 2, 0f);
+    fe.DeviceSetParam(ft, fdi, 3, 1f);                                  // +95 %: a long ring
+    fe.DeviceSetParam(ft, fdi, 4, 1f);                                  // wet only
+    FRender(4096, 0.9);                                                 // fill the line from inside the clip
+    FRender(512, 3.0); float ring = Rms(fbuf, 512);                     // past the clip: the ring alone
+    FRender(4096, 0.9);
+    fe.DeviceAction(ft, fdi, 1, 0, 0f);
+    FRender(512, 3.0); float cleared = Rms(fbuf, 512);
+    Check(ring > 1e-3f && cleared < 1e-6f, $"device_action 1 clears the ringing line (ring {ring:0.0000} → {cleared:0.0e0})");
+    for (int i = 0; i < fpc; i++) fe.DeviceSetParam(ft, fdi, i, fe.DeviceParamDefault(ft, fdi, i));
+
+    Check(fe.DeviceText(ft, fdi, 1).Contains("notch") && fe.DeviceText(ft, fdi, 2).Contains("1/8T"),
+          "device text 1 = live reading, 2 = parameter guide with the division table");
+
+    // Clone.
+    fe.DeviceSetParam(ft, fdi, 3, 0.2f);
+    fe.DeviceSetParam(ft, fdi, 8, 0.9f);
+    int fdup = fe.DuplicateTrack(ft);
+    Check(fdup > 0 && fe.TrackDeviceBuiltinKind(fdup, fdi) == 23 && Math.Abs(fe.DeviceGetParam(fdup, fdi, 3) - 0.2f) < 1e-4f
+          && Math.Abs(fe.DeviceGetParam(fdup, fdi, 8) - 0.9f) < 1e-4f, "duplicate track clones the Flanger params");
+    fe.RemoveTrack(fdup);
+
+    // Automation drives Feedback.
+    int flane = fe.AddAutomationLane(ft, AutomationTarget.DeviceParam, fdi, 3);
+    Check(flane >= 0, "add Flanger Feedback automation lane");
+    fe.SetAutomationPoints(ft, flane, new[] { new AutomationPoint(0.0, 0.1f), new AutomationPoint(2.0, 0.9f) });
+    fe.Seek(1.99); fe.Play(); fe.RenderOffline(fbuf, 4096); fe.StopTransport();
+    Check(fe.DeviceGetParam(ft, fdi, 3) > 0.8f, $"automation drives Flanger Feedback ({fe.DeviceGetParam(ft, fdi, 3):F2})");
+    fe.RemoveAutomationLane(ft, flane);
+    for (int i = 0; i < fpc; i++) fe.DeviceSetParam(ft, fdi, i, fe.DeviceParamDefault(ft, fdi, i));
+
+    // MCP: listed, read and set in units.
+    {
+        var ftools = new Nota.Mcp.Tools.DeviceTools(fe, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        Check(ftools.ListDeviceKinds().Any(k => k.Kind == 23 && k.Name == "Nota Flanger"), "MCP lists Nota Flanger (kind 23)");
+        FRender();
+        var r0 = ftools.ReadFlanger(ft, fdi).Result;
+        Check(r0.Waveform == "Triangle" && !r0.Sync && Math.Abs(r0.DelayMs - 2.5) < 0.02 && Math.Abs(r0.FeedbackPercent - 70) < 0.6
+              && r0.Mode == "positive" && Math.Abs(r0.StereoDeg - 90) < 0.6 && r0.Summary.Length > 0 && r0.Live.Length > 0,
+              $"MCP read_flanger reports the defaults ({r0.Waveform}, {r0.DelayMs} ms, {r0.FeedbackPercent} %, {r0.Mode})");
+        var r1 = ftools.SetFlanger(ft, fdi, waveform: "saw", division: "1/8T", delayMs: 1, depthPercent: 40, feedbackPercent: -80,
+            mixPercent: 60, stereoDeg: 180).Result;
+        Check(r1.Waveform == "Saw" && r1.Sync && r1.Division == "1/8T" && Math.Abs(r1.DelayMs - 1) < 0.01 && Math.Abs(r1.DepthPercent - 40) < 0.1
+              && Math.Abs(r1.FeedbackPercent + 80) < 0.6 && r1.Mode == "negative" && Math.Abs(r1.MixPercent - 60) < 0.1 && r1.StereoDeg == 180,
+              $"MCP set_flanger writes in units ({r1.Waveform}, {r1.Division}, {r1.DelayMs} ms, {r1.FeedbackPercent} %)");
+        var r2 = ftools.SetFlanger(ft, fdi, rateHz: 0.5).Result;
+        Check(!r2.Sync && Math.Abs(0.02 * Math.Pow(400, fe.DeviceGetParam(ft, fdi, 0)) - 0.5) < 1e-3, "set_flanger rateHz switches to free run");
+        bool threw = false;
+        try { ftools.SetFlanger(ft, fdi, division: "1/5").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+        Check(threw, "set_flanger rejects an unknown division");
+        for (int i = 0; i < fpc; i++) fe.DeviceSetParam(ft, fdi, i, fe.DeviceParamDefault(ft, fdi, i));
+    }
+
+    // Factory presets: ≥ 25, every named param exists, each applies in place and renders.
+    {
+        var names = new HashSet<string>(fnames);
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 23).ToList();
+        Check(mine.Count >= 25, $"Nota Flanger ships ≥ 25 factory presets ({mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Flanger preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        int pf = 0;
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(fe, p.Id, ft, fdi).Length != 0) { pf++; continue; }
+            FRender();
+            if (!FFinite() || Rms(fbuf, 4096) < 1e-3f) pf++;
+        }
+        Check(pf == 0, $"every Flanger preset applies and renders ({pf} failed)");
+        cat.ApplyInPlace(fe, "flanger/Tin Robot", ft, fdi);
+        Check(fe.DeviceGetParam(ft, fdi, 6) > 0.5f && Math.Abs(fe.DeviceGetParam(ft, fdi, 7) - 6f / 8f) < 1e-3f
+              && Math.Abs(fe.DeviceGetParam(ft, fdi, 3) - (0.5f + 0.9f / 1.9f)) < 1e-3f, "Tin Robot preset: synced 1/8, feedback +90 %");
+        cat.ApplyInPlace(fe, "flanger/Jet Plane", ft, fdi);
+        bool isDefault = Enumerable.Range(0, fpc).All(i => Math.Abs(fe.DeviceGetParam(ft, fdi, i) - fe.DeviceParamDefault(ft, fdi, i)) < 2e-3f);
+        Check(isDefault, "Jet Plane preset = the device defaults");
+    }
+}
+
 // ===================== Nota Auto Shift (effect kind 10) ===================
 Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
 {

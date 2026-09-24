@@ -482,6 +482,13 @@ and user presets, automation, persistence and cloning.
   A permanent SCALE rail, Freeze, a note grid, a linear or log frequency axis, an L+R / L / R
   source that can read Mid/Side, and a status line with peak, crest, momentary LUFS and L/R
   correlation. Readable from MCP with `read_analyzer`.
+- **Nota Flanger** (23) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,
+  bipolar Feedback ±95 % (positive = jet; negative flips the wet polarity so the comb mirrors
+  into a hollow tone; − / 0 / + snaps), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or synced
+  (2/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A live
+  comb-response graph of L and R (drag the notch for Delay, up / down for Feedback), the delay
+  of both channels over two cycles, the first notch's sweep and null depth, and a status
+  strip; 31 factory presets; MCP `read_flanger` / `set_flanger`.
 - **Nota Chorus** — modulation (chorus) effect.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.

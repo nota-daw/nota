@@ -1652,6 +1652,48 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("autopan", 9, "Mix Motion",       ("Sync", 1f), ("Division", 0.267f), ("Waveform", 0.25f), ("Amount", 0.35f), ("Phase", 0.5f), ("Mix", 0.6f));
         Fx("autopan", 9, "Offset Swirl",     ("Sync", 1f), ("Division", 0.4f), ("Amount", 0.60f), ("Phase", 0.375f));
 
+        // ---- Nota Flanger (kind 23) — comb filter on a modulated delay. Written in units through Fl():
+        //      waveform (FSine / FTri / FSaw), Delay ms 0.1..8, Depth 0..1, Feedback −0.95..+0.95, Mix
+        //      0..1 (0.5 = the deepest notches, 1 = wet only / vibrato), Stereo 0..180°, and either a free
+        //      rate in Hz (0.02..8) or a Sync division (2/1 1/1 1/2 1/4D 1/4 1/4T 1/8 1/8T 1/16).
+        // Classic
+        Fl("Jet Plane",          FTri,  2.5f, 0.80f,  0.70f, 0.50f,  90, hz: 0.20f);
+        Fl("Slow Jet",           FTri,  3.0f, 0.90f,  0.75f, 0.50f,  90, hz: 0.08f);
+        Fl("Takeoff",            FTri,  4.0f, 1.00f,  0.85f, 0.50f,  45, hz: 0.05f);
+        Fl("Tape Flange",        FSine, 1.2f, 0.95f,  0.00f, 0.50f,   0, hz: 0.15f);
+        Fl("Gentle Sweep",       FSine, 2.0f, 0.60f,  0.30f, 0.40f,  90, hz: 0.25f);
+        Fl("Subtle Motion",      FSine, 1.5f, 0.40f,  0.20f, 0.30f, 120, hz: 0.30f);
+        Fl("Wide Stereo",        FTri,  2.5f, 0.80f,  0.60f, 0.50f, 180, hz: 0.15f);
+        Fl("Mono Sweep",         FTri,  2.5f, 0.80f,  0.70f, 0.50f,   0, hz: 0.20f);
+        // Negative feedback — hollow
+        Fl("Hollow Bar",         FSine, 1.2f, 0.60f, -0.65f, 0.50f, 180, div: "1/1");
+        Fl("Hollow Tube",        FSine, 3.0f, 0.50f, -0.70f, 0.50f,  90, hz: 0.30f);
+        Fl("Negative Jet",       FTri,  2.0f, 0.85f, -0.80f, 0.50f,  90, hz: 0.12f);
+        Fl("Inside Out",         FSine, 5.0f, 0.40f, -0.50f, 0.50f,  60, hz: 0.40f);
+        Fl("Half-Bar Hollow",    FSine, 2.0f, 0.70f, -0.60f, 0.50f, 180, div: "1/2");
+        // Resonant / FX
+        Fl("Tin Robot",          FTri,  0.6f, 0.35f,  0.90f, 0.60f,   0, div: "1/8");
+        Fl("Metal Ring",         FSine, 0.4f, 0.20f,  0.93f, 0.60f,  30, hz: 0.50f);
+        Fl("Laser Zap",          FSaw,  0.8f, 1.00f,  0.90f, 0.50f,   0, hz: 4.00f);
+        Fl("Comb Drone",         FSine, 5.0f, 0.05f,  0.92f, 0.60f,   0, hz: 0.05f);
+        Fl("Siren",              FSaw,  1.5f, 0.90f,  0.80f, 0.50f,  90, hz: 1.00f);
+        // Synced
+        Fl("Quarter Swirl",      FTri,  2.0f, 0.70f,  0.60f, 0.50f,  90, div: "1/4");
+        Fl("Two-Bar Sweep",      FTri,  3.0f, 0.90f,  0.75f, 0.50f,  90, div: "2/1");
+        Fl("Eighth Pulse",       FSaw,  1.5f, 0.60f,  0.50f, 0.50f,   0, div: "1/8");
+        Fl("Dotted Drift",       FSine, 2.5f, 0.70f,  0.55f, 0.50f, 120, div: "1/4D");
+        Fl("Triplet Shimmer",    FTri,  1.0f, 0.50f,  0.60f, 0.45f,  90, div: "1/8T");
+        // Vibrato and chorus-like
+        Fl("Vibrato",            FSine, 3.0f, 0.25f,  0.00f, 1.00f,   0, hz: 4.00f);
+        Fl("Flange Chorus",      FTri,  6.0f, 0.35f,  0.10f, 0.45f, 180, hz: 0.60f);
+        Fl("Doubler Wobble",     FSine, 7.0f, 0.15f,  0.00f, 0.40f, 180, hz: 0.35f);
+        // Sources
+        Fl("Drum Bus Jet",       FTri,  1.5f, 0.90f,  0.60f, 0.35f,  90, div: "2/1");
+        Fl("Guitar Classic",     FTri,  1.8f, 0.75f,  0.55f, 0.50f,  90, hz: 0.30f);
+        Fl("Vocal Air",          FSine, 0.8f, 0.50f,  0.30f, 0.30f, 120, hz: 0.20f);
+        Fl("Bass Swirl",         FSine, 4.0f, 0.50f,  0.40f, 0.35f,   0, hz: 0.15f);
+        Fl("Pad Space",          FSine, 3.0f, 0.90f,  0.50f, 0.50f, 180, hz: 0.07f);
+
         // ---- Nota Auto Shift (kind 10) — pitch correction, all params normalized 0..1 (unnamed ones
         //      reset to their defaults). Key round(11v) (0 C, .182 D, .364 E, .455 F, .636 G, .818 A);
         //      Scale 0 Chromatic/.25 Major/.5 Minor/.75 Penta Maj/1 Penta Min; Custom Scale 1 = the
@@ -2034,6 +2076,21 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("Auto", manual is null ? 1f : 0f), ("Gain", 0.5f + (manual ?? 0f) / 48f),
         };
         Fx("autogain", 18, name, ps.ToArray());
+    }
+
+    // Nota Flanger waveforms and Sync divisions (Flanger::kDivNames), and its presets in units.
+    private const int FSine = 0, FTri = 1, FSaw = 2;
+    private static readonly string[] FlDivs = { "2/1", "1/1", "1/2", "1/4D", "1/4", "1/4T", "1/8", "1/8T", "1/16" };
+
+    private void Fl(string name, int wave, float delayMs, float depth, float fb, float mix, float stereoDeg, float hz = 0.2f, string? div = null)
+    {
+        int d = div is null ? 1 : Array.IndexOf(FlDivs, div);
+        if (d < 0) throw new ArgumentException($"unknown Flanger division {div}");
+        Fx("flanger", 23, name,
+            ("Rate", (float)(Math.Log(Math.Clamp(hz, 0.02f, 8f) / 0.02) / Math.Log(400))),
+            ("Delay", (float)(Math.Log(Math.Clamp(delayMs, 0.1f, 8f) / 0.1) / Math.Log(80))),
+            ("Depth", depth), ("Feedback", 0.5f + Math.Clamp(fb, -0.95f, 0.95f) / 1.9f), ("Mix", mix),
+            ("Waveform", wave / 2f), ("Sync", div is null ? 0f : 1f), ("Division", d / 8f), ("Stereo", stereoDeg / 180f));
     }
 
     // Nota Forge stage types (the S* Type step, × 1/5).

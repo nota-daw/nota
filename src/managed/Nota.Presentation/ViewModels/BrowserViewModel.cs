@@ -254,6 +254,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             new() { Name = "Nota Vintage", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 8, Sub = "vintage saturator" },
             new() { Name = "Nota Forge", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 17, Sub = "saturator" },
             new() { Name = "Nota Orbit", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 9, Sub = "auto-pan" },
+            new() { Name = "Nota Flanger", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 23, Sub = "flanger" },
             new() { Name = "Nota Auto Shift", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 10, Sub = "pitch correction" },
             new() { Name = "Nota Beat Repeat", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 11, Sub = "glitch & repeats" },
             new() { Name = "Nota Crush", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 12, Sub = "bit crusher" },
