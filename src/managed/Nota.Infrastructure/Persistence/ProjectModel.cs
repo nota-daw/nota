@@ -191,6 +191,8 @@ public sealed class VoiceSampleDto
 {
     public int Voice { get; set; }
     public string Sample { get; set; } = "";
+    /// <summary>The voice plays its synth engine; the sample is kept for switching back.</summary>
+    public bool Synth { get; set; }
 }
 
 public sealed class SamplerDto

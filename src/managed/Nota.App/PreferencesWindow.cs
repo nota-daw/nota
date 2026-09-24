@@ -628,6 +628,8 @@ public sealed class PreferencesWindow : NotaWindow
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
+            ("Click · ⇧ · ⌥ a Rhythm step", "Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity"),
+            ("Click a Rhythm voice", "Select and play it · drop a file on it to load a sample"),
         }),
     };
 

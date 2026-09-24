@@ -301,9 +301,8 @@ internal static class DesignTokenCheck
         var app = Path.Combine(root, "src/managed/Nota.App");
         var views = Directory.EnumerateFiles(Path.Combine(app, "Controls"), "*.cs")
             .Select(f => (Path: Path.GetRelativePath(app, f), Text: File.ReadAllText(f))).ToArray();
-        // Deliberate exceptions: MixBar is a level strip, not a graph window; RhythmWaveViz
-        // draws the waveform itself as a shape, which is data, not a fill under a curve.
-        var exempt = new HashSet<string> { "Controls/MixBar.cs", "Controls/RhythmWaveViz.cs" };
+        // Deliberate exception: MixBar is a level strip, not a graph window.
+        var exempt = new HashSet<string> { "Controls/MixBar.cs" };
         string[] Offenders(string pattern) => views.Where(v => !exempt.Contains(v.Path) && Regex.IsMatch(v.Text, pattern)).Select(v => v.Path).OrderBy(p => p).ToArray();
 
         var frames = Offenders(@"DrawRectangle\((?:Sunken|Bg|Well|NotaPalette\.BgSunken), (?:new Pen\(\w+(?:, 1)?\)|null), new Rect\(0, 0, w, h\), \d+, \d+\)");
@@ -384,9 +383,9 @@ internal static class DesignTokenCheck
         yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
         // Accepted exceptions (decided 2026-09-16): plug-in / parameter stubs are narrow; the
-        // Rhythm, Bass and Physical instruments keep their wider layouts.
+        // Bass and Physical instruments keep their wider layouts.
         var exempt = new HashSet<string> { "PluginDeviceBody.cs", "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "RhythmInstrumentCard.cs", "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
+            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
         var off = Directory.EnumerateFiles(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")

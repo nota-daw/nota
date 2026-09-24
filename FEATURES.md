@@ -312,8 +312,12 @@ and user presets, automation, persistence and cloning.
   (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
-  banks (A–D), accents, per-step velocity, Swing/Humanize, and a per-voice **Sample** mode
-  (load your own one-shot). Six factory kits (808/909/Trap/House/Lo-Fi/Techno).
+  banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
+  **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
+  Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
+  contour or sample region, Perform rail with an output meter, a full-width step strip with
+  a velocity lane. 29 factory kits; MCP `get_rhythm`, `set_rhythm_pattern` (text rows),
+  `set_rhythm_voice`, `set_rhythm_perform`, `copy_rhythm_bank`, `audition_rhythm_voice`.
 - **Nota Pentad** — 5-voice analog poly in the Prophet-5 mould: Osc A (saw + pulse, hard
   sync) and Osc B (saw + triangle + pulse, Lo-Freq, keyboard off), noise, a 24 dB/oct
   resonant filter that self-oscillates and tracks the keyboard, two analog-curve ADSRs,

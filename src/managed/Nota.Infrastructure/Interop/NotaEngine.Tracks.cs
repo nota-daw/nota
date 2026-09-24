@@ -674,7 +674,12 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.TrackGrainInfo(_handle, trackId, out info) != 0; }
 
     public bool SetRhythmVoiceSample(int trackId, int voice, string path)
-    { ThrowIfDisposed(); return NativeMethods.RhythmSetVoiceSample(_handle, trackId, voice, path) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.RhythmSetVoiceSample(_handle, trackId, voice, path) != 0;
+        if (ok && TryGetRhythmVoiceInfo(trackId, voice, out var vi)) RememberSampleName(vi.SampleId, path);
+        return ok;
+    }
     public bool TryGetRhythmVoiceInfo(int trackId, int voice, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.RhythmVoiceInfo(_handle, trackId, voice, out info) != 0; }
     public int RhythmVoiceSource(int trackId, int voice)

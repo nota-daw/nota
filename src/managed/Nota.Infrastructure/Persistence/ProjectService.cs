@@ -136,10 +136,10 @@ public sealed class ProjectService
                     var vs = new System.Collections.Generic.List<VoiceSampleDto>();
                     for (int v = 0; v < 8; v++)
                     {
-                        if (engine.RhythmVoiceSource(ti.Id, v) != 1) continue;
+                        // A voice keeps its one-shot while it plays the synth, so save it either way.
                         if (!engine.TryGetRhythmVoiceInfo(ti.Id, v, out var vi) || vi.SampleId == 0) continue;
                         string? rel = RegisterSample(doc, engine, vi.SampleId, warnings);
-                        if (rel != null) vs.Add(new VoiceSampleDto { Voice = v, Sample = rel });
+                        if (rel != null) vs.Add(new VoiceSampleDto { Voice = v, Sample = rel, Synth = engine.RhythmVoiceSource(ti.Id, v) != 1 });
                     }
                     if (vs.Count > 0) instDto.VoiceSamples = vs;
                 }
@@ -556,8 +556,13 @@ public sealed class ProjectService
                     // Nota Rhythm Phase 2: reload each voice's one-shot from the bundle.
                     if (id > 0 && t.Instrument is { Kind: 12, VoiceSamples: { } vsl })
                         foreach (var vs in vsl)
-                            if (vs.Sample is { Length: > 0 } && !engine.SetRhythmVoiceSample(id, vs.Voice, ResolveInBundle(bundleDir, vs.Sample)))
+                        {
+                            if (vs.Sample is not { Length: > 0 }) continue;
+                            if (!engine.SetRhythmVoiceSample(id, vs.Voice, ResolveInBundle(bundleDir, vs.Sample)))
                                 warnings.Add($"Couldn't reload Rhythm voice sample \"{vs.Sample}\".");
+                            else if (vs.Synth)
+                                engine.InstrumentAction(id, RhythmModel.A_SetSource, vs.Voice, 0f);   // loading switches to Sample
+                        }
                 }
             }
             else if (t.Type == 3)

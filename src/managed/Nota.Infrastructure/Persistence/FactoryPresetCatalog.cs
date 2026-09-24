@@ -770,34 +770,133 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("flux", 11, "Vector Dance",   ("vecx", 0.50f), ("vecy", 0.50f), ("age", 0.20f), ("motion", 0.60f), ("motrate", 0.6f), ("filter", 0.60f), ("env", 0.60f), ("space", 0.35f), ("listen", 0.90f), ("target", 1f));
         Inst("flux", 11, "Pitch Wobble",   ("vecx", 0.20f), ("vecy", 0.50f), ("age", 0.30f), ("motion", 0.30f), ("filter", 0.55f), ("env", 0.55f), ("space", 0.30f), ("listen", 0.70f), ("target", 1f / 3f));
 
-        // ---- Nota Rhythm (kind 12) — drum-machine kit voicings. Voices: 0 Kick, 1 Snare,
+        // ---- Nota Rhythm (kind 12) — drum-machine kits (the sound, not the pattern: applying a
+        //      kit keeps the steps and each voice's sample region). Voices: 0 Kick, 1 Snare,
         //      2 Clap, 3 Rim, 4 Closed Hat, 5 Open Hat, 6 Tom, 7 Perc. Param id "v{n}_{p}"
-        //      (tune/decay/punch/tone/drive/level) + globals swing/humanize/accent.
+        //      (tune/decay/punch/tone/drive/level/pan) + globals swing/humanize/accent/volume/glue.
+        //      Decay spans per voice: Kick .06–1.2 s, Snare .05–.5 s, Closed Hat .02–.16 s,
+        //      Open Hat .08–.7 s; pan .5 = centre; glue 0 = off.
+        // Classic machines
         Inst("drums", 12, "808 Kit",
             ("v0_tune", 0.16f), ("v0_decay", 0.72f), ("v0_drive", 0.18f),
             ("v1_tune", 0.35f), ("v1_decay", 0.4f), ("v1_tone", 0.45f),
             ("v2_decay", 0.42f), ("v4_decay", 0.12f), ("v5_decay", 0.55f),
-            ("swing", 0f), ("accent", 0.7f));
+            ("swing", 0f), ("accent", 0.7f), ("glue", 0.15f));
         Inst("drums", 12, "909 Kit",
             ("v0_tune", 0.3f), ("v0_decay", 0.5f), ("v0_punch", 0.7f), ("v0_drive", 0.3f),
             ("v1_tune", 0.5f), ("v1_decay", 0.35f), ("v1_tone", 0.6f),
-            ("v4_decay", 0.14f), ("v5_decay", 0.45f), ("swing", 0.08f), ("accent", 0.75f));
-        Inst("drums", 12, "Trap",
-            ("v0_tune", 0.1f), ("v0_decay", 0.85f), ("v0_drive", 0.35f),
-            ("v1_tune", 0.4f), ("v1_decay", 0.3f), ("v4_decay", 0.08f), ("v5_decay", 0.6f),
-            ("swing", 0.12f), ("accent", 0.85f));
+            ("v4_decay", 0.14f), ("v5_decay", 0.45f), ("swing", 0.08f), ("accent", 0.75f), ("glue", 0.2f));
+        Inst("drums", 12, "Deep 808 Sub",
+            ("v0_tune", 0.08f), ("v0_decay", 0.95f), ("v0_punch", 0.35f), ("v0_drive", 0.12f), ("v0_level", 0.9f),
+            ("v1_tune", 0.3f), ("v1_decay", 0.45f), ("v1_tone", 0.4f), ("v2_decay", 0.5f),
+            ("v4_decay", 0.1f), ("v4_level", 0.65f), ("v5_decay", 0.6f), ("v5_level", 0.6f), ("glue", 0.1f));
+        Inst("drums", 12, "Tight & Dry",
+            ("v0_decay", 0.3f), ("v0_punch", 0.65f), ("v1_decay", 0.2f), ("v1_punch", 0.6f), ("v2_decay", 0.2f),
+            ("v3_decay", 0.3f), ("v4_decay", 0.05f), ("v5_decay", 0.25f), ("v6_decay", 0.3f), ("v7_decay", 0.2f),
+            ("v0_drive", 0.1f), ("v1_drive", 0.1f), ("glue", 0.2f));
+        Inst("drums", 12, "Wide Stereo",
+            ("v0_tune", 0.22f), ("v0_decay", 0.55f), ("v3_pan", 0.62f), ("v2_pan", 0.42f),
+            ("v4_pan", 0.34f), ("v4_decay", 0.13f), ("v5_pan", 0.68f), ("v5_decay", 0.5f),
+            ("v6_pan", 0.28f), ("v7_pan", 0.74f), ("v7_decay", 0.35f), ("glue", 0.2f));
+        // House · techno · electro
         Inst("drums", 12, "House",
             ("v0_tune", 0.28f), ("v0_decay", 0.45f), ("v0_punch", 0.6f),
             ("v2_decay", 0.35f), ("v4_decay", 0.16f), ("v5_decay", 0.4f),
-            ("swing", 0.18f), ("accent", 0.6f));
-        Inst("drums", 12, "Lo-Fi",
-            ("v0_tune", 0.2f), ("v0_decay", 0.55f), ("v0_tone", 0.3f), ("v0_drive", 0.45f),
-            ("v1_tune", 0.32f), ("v1_decay", 0.42f), ("v1_tone", 0.35f),
-            ("v4_decay", 0.14f), ("swing", 0.22f), ("humanize", 0.3f), ("accent", 0.5f));
+            ("swing", 0.18f), ("accent", 0.6f), ("glue", 0.25f));
         Inst("drums", 12, "Techno",
             ("v0_tune", 0.24f), ("v0_decay", 0.5f), ("v0_punch", 0.7f), ("v0_drive", 0.4f),
             ("v4_decay", 0.1f), ("v5_decay", 0.5f), ("v7_tune", 0.5f), ("v7_decay", 0.4f),
-            ("swing", 0f), ("accent", 0.8f));
+            ("swing", 0f), ("accent", 0.8f), ("glue", 0.3f));
+        Inst("drums", 12, "Dub Techno",
+            ("v0_tune", 0.2f), ("v0_decay", 0.62f), ("v0_tone", 0.3f), ("v0_drive", 0.2f),
+            ("v3_tune", 0.3f), ("v3_decay", 0.75f), ("v3_level", 0.7f),
+            ("v4_decay", 0.12f), ("v4_tone", 0.4f), ("v5_decay", 0.75f), ("v5_level", 0.55f),
+            ("v7_tune", 0.35f), ("v7_decay", 0.6f), ("v7_level", 0.55f), ("glue", 0.3f));
+        Inst("drums", 12, "Minimal Click",
+            ("v0_tune", 0.3f), ("v0_decay", 0.3f), ("v0_punch", 0.85f), ("v0_drive", 0.05f),
+            ("v3_tune", 0.7f), ("v3_decay", 0.25f), ("v4_decay", 0.06f), ("v4_tone", 0.7f),
+            ("v7_tune", 0.72f), ("v7_decay", 0.2f), ("v7_tone", 0.8f), ("swing", 0.06f), ("glue", 0.15f));
+        Inst("drums", 12, "Big Room",
+            ("v0_tune", 0.26f), ("v0_decay", 0.5f), ("v0_punch", 0.9f), ("v0_drive", 0.5f), ("v0_level", 0.9f),
+            ("v1_decay", 0.5f), ("v1_tone", 0.6f), ("v2_decay", 0.62f), ("v2_level", 0.9f),
+            ("v5_decay", 0.35f), ("accent", 0.85f), ("glue", 0.5f));
+        Inst("drums", 12, "Electro Funk",
+            ("v0_tune", 0.2f), ("v0_decay", 0.6f), ("v0_drive", 0.25f), ("v1_tune", 0.42f), ("v1_decay", 0.35f),
+            ("v2_decay", 0.5f), ("v6_tune", 0.5f), ("v6_decay", 0.5f), ("v4_decay", 0.1f),
+            ("swing", 0.2f), ("accent", 0.7f), ("glue", 0.2f));
+        Inst("drums", 12, "Acid Rave",
+            ("v0_tune", 0.32f), ("v0_decay", 0.45f), ("v0_punch", 0.75f), ("v0_drive", 0.45f),
+            ("v1_tune", 0.55f), ("v1_tone", 0.65f), ("v1_drive", 0.35f),
+            ("v4_decay", 0.12f), ("v4_tone", 0.7f), ("v5_decay", 0.5f), ("v5_tone", 0.65f), ("glue", 0.35f));
+        Inst("drums", 12, "Industrial",
+            ("v0_tune", 0.2f), ("v0_decay", 0.5f), ("v0_punch", 0.9f), ("v0_drive", 0.85f),
+            ("v1_tune", 0.35f), ("v1_tone", 0.75f), ("v1_drive", 0.75f), ("v2_drive", 0.6f),
+            ("v3_drive", 0.7f), ("v4_drive", 0.5f), ("v7_drive", 0.8f), ("v7_tone", 0.9f),
+            ("accent", 0.9f), ("glue", 0.7f), ("volume", 0.72f));
+        Inst("drums", 12, "Synthwave",
+            ("v0_tune", 0.3f), ("v0_decay", 0.5f), ("v1_tune", 0.4f), ("v1_decay", 0.75f), ("v1_tone", 0.45f),
+            ("v1_punch", 0.3f), ("v2_decay", 0.6f), ("v6_tune", 0.35f), ("v6_decay", 0.62f),
+            ("v5_decay", 0.45f), ("glue", 0.3f));
+        // Hip-hop · breaks
+        Inst("drums", 12, "Trap",
+            ("v0_tune", 0.1f), ("v0_decay", 0.85f), ("v0_drive", 0.35f),
+            ("v1_tune", 0.4f), ("v1_decay", 0.3f), ("v4_decay", 0.08f), ("v5_decay", 0.6f),
+            ("swing", 0.12f), ("accent", 0.85f), ("glue", 0.2f));
+        Inst("drums", 12, "Lo-Fi",
+            ("v0_tune", 0.2f), ("v0_decay", 0.55f), ("v0_tone", 0.3f), ("v0_drive", 0.45f),
+            ("v1_tune", 0.32f), ("v1_decay", 0.42f), ("v1_tone", 0.35f),
+            ("v4_decay", 0.14f), ("swing", 0.22f), ("humanize", 0.3f), ("accent", 0.5f), ("glue", 0.25f));
+        Inst("drums", 12, "Boom Bap",
+            ("v0_tune", 0.25f), ("v0_decay", 0.5f), ("v0_tone", 0.4f), ("v0_drive", 0.35f),
+            ("v1_tune", 0.38f), ("v1_decay", 0.45f), ("v1_tone", 0.5f), ("v1_drive", 0.3f),
+            ("v4_decay", 0.12f), ("v4_tone", 0.35f), ("swing", 0.28f), ("humanize", 0.25f), ("glue", 0.35f));
+        Inst("drums", 12, "Dusty Hip-Hop",
+            ("v0_tune", 0.22f), ("v0_decay", 0.48f), ("v0_tone", 0.25f), ("v0_drive", 0.55f),
+            ("v1_tune", 0.3f), ("v1_tone", 0.3f), ("v1_drive", 0.5f), ("v2_drive", 0.4f),
+            ("v4_tone", 0.25f), ("v4_decay", 0.13f), ("swing", 0.3f), ("humanize", 0.35f), ("glue", 0.4f), ("volume", 0.75f));
+        Inst("drums", 12, "Breakbeat",
+            ("v0_tune", 0.28f), ("v0_decay", 0.45f), ("v0_punch", 0.7f), ("v0_drive", 0.3f),
+            ("v1_tune", 0.5f), ("v1_decay", 0.45f), ("v1_punch", 0.7f), ("v1_drive", 0.3f),
+            ("v5_decay", 0.4f), ("swing", 0.12f), ("humanize", 0.15f), ("glue", 0.45f));
+        Inst("drums", 12, "Drum & Bass",
+            ("v0_tune", 0.35f), ("v0_decay", 0.35f), ("v0_punch", 0.8f), ("v0_drive", 0.2f),
+            ("v1_tune", 0.62f), ("v1_decay", 0.35f), ("v1_tone", 0.55f), ("v1_punch", 0.7f),
+            ("v4_decay", 0.1f), ("v5_decay", 0.35f), ("swing", 0.05f), ("glue", 0.4f));
+        Inst("drums", 12, "UK Garage",
+            ("v0_tune", 0.27f), ("v0_decay", 0.4f), ("v1_tune", 0.55f), ("v1_decay", 0.3f), ("v2_decay", 0.38f),
+            ("v3_tune", 0.55f), ("v4_decay", 0.1f), ("v5_decay", 0.35f), ("swing", 0.35f), ("humanize", 0.1f), ("glue", 0.25f));
+        Inst("drums", 12, "Jersey Club",
+            ("v0_tune", 0.3f), ("v0_decay", 0.4f), ("v0_punch", 0.75f), ("v1_tune", 0.6f), ("v1_decay", 0.3f),
+            ("v2_tune", 0.6f), ("v2_decay", 0.35f), ("v4_decay", 0.08f), ("swing", 0.1f), ("accent", 0.8f), ("glue", 0.3f));
+        Inst("drums", 12, "Footwork",
+            ("v0_tune", 0.12f), ("v0_decay", 0.8f), ("v0_drive", 0.25f), ("v4_decay", 0.08f),
+            ("v7_tune", 0.8f), ("v7_decay", 0.25f), ("v6_tune", 0.6f), ("v6_decay", 0.35f), ("glue", 0.2f));
+        // World · acoustic-ish
+        Inst("drums", 12, "Afro House",
+            ("v0_tune", 0.26f), ("v0_decay", 0.45f), ("v6_tune", 0.4f), ("v6_decay", 0.45f), ("v6_pan", 0.4f),
+            ("v7_tune", 0.45f), ("v7_decay", 0.5f), ("v7_tone", 0.35f), ("v7_pan", 0.62f), ("v3_tune", 0.5f),
+            ("swing", 0.15f), ("humanize", 0.2f), ("glue", 0.2f));
+        Inst("drums", 12, "Latin Percussion",
+            ("v3_tune", 0.62f), ("v3_decay", 0.35f), ("v3_pan", 0.6f), ("v6_tune", 0.55f), ("v6_decay", 0.4f),
+            ("v6_pan", 0.38f), ("v7_tune", 0.6f), ("v7_tone", 0.7f), ("v7_decay", 0.3f), ("v7_pan", 0.66f),
+            ("v0_decay", 0.4f), ("swing", 0.12f), ("humanize", 0.25f));
+        Inst("drums", 12, "Soft Brushes",
+            ("v0_tune", 0.3f), ("v0_decay", 0.4f), ("v0_punch", 0.2f), ("v0_level", 0.6f),
+            ("v1_tone", 0.85f), ("v1_decay", 0.6f), ("v1_punch", 0.2f), ("v1_drive", 0f), ("v1_level", 0.6f),
+            ("v4_tone", 0.85f), ("v4_decay", 0.12f), ("v4_level", 0.55f), ("v5_tone", 0.85f), ("v5_level", 0.5f),
+            ("swing", 0.45f), ("humanize", 0.4f), ("accent", 0.4f), ("glue", 0.1f));
+        // Texture
+        Inst("drums", 12, "Glitch",
+            ("v0_tune", 0.85f), ("v0_decay", 0.1f), ("v0_punch", 1f), ("v1_decay", 0.08f), ("v1_tone", 0.9f),
+            ("v2_tune", 1f), ("v2_decay", 0.1f), ("v7_tone", 1f), ("v7_decay", 0.12f), ("v7_drive", 0.6f),
+            ("v4_decay", 0.02f), ("humanize", 0.5f), ("glue", 0.3f));
+        Inst("drums", 12, "Ambient Pulse",
+            ("v0_tune", 0.2f), ("v0_decay", 0.7f), ("v0_tone", 0.3f), ("v0_punch", 0.2f), ("v0_level", 0.65f),
+            ("v3_level", 0.5f), ("v3_decay", 0.8f), ("v5_decay", 0.9f), ("v5_level", 0.45f), ("v5_tone", 0.3f),
+            ("v7_tune", 0.3f), ("v7_decay", 0.8f), ("v7_level", 0.45f), ("humanize", 0.2f), ("volume", 0.72f));
+        Inst("drums", 12, "Metal Perc",
+            ("v4_tune", 0.8f), ("v4_tone", 0.1f), ("v5_tune", 0.75f), ("v5_tone", 0.15f), ("v5_decay", 0.6f),
+            ("v7_tune", 0.55f), ("v7_tone", 0.9f), ("v7_decay", 0.55f), ("v3_tune", 0.85f), ("v3_drive", 0.4f), ("glue", 0.2f));
 
         // ---- Nota Monolith (kind 13) — mono Model-D synth. Ranges LO..2' = 0/.2/.4/.6/.8/1;
         //      waves tri/shark/saw/square/wide/narrow = 0/.2/.4/.6/.8/1; tunes bipolar (0.5 = 0).

@@ -5,19 +5,25 @@
 // groovebox: eight drum voices, each a compact synth engine (electronic drum generation —
 // analog/FM kick, noise snare, metal hats…), programmed on an internal 16-step sequencer
 // that plays synced to the DAW transport. Incoming MIDI notes also trigger the mapped voice
-// live (finger-drumming). Phase 1 is synth-only; per-voice samples are a later phase.
+// live (finger-drumming). Any voice can instead play a loaded one-shot (a Start / Length
+// region of it, forwards or reversed).
 //
 //   Voice engines (retriggered, monophonic): Kick (sine + pitch-drop + click), Snare (tone
 //   sines + noise snap), Clap (noise bursts + tail), Rim (band-passed noise click), Closed/
 //   Open Hat (HP noise — closed chokes open, 808-style), Tom (sine + pitch env), Perc (ring).
 //
 //   Sequencer: setTransport() feeds the beat clock; a 1/16 step = 0.25 beat, 16 steps = 1 bar.
-//   Swing delays odd 16ths; Humanize jitters timing + velocity. Four pattern banks (A–D).
+//   Swing delays odd 16ths; Humanize jitters velocity. Four pattern banks (A–D).
+//
+//   Bus: the voices sum through Glue (a gentle compressor) into Volume.
 //
 // The 7 per-voice knobs (Tune/Decay/Punch/Tone/Drive/Level/Pan) + 4 globals ride the plugin-
-// param interface (normalized 0..1) → automation / persist / clone for free. The step
-// patterns are structural state (getState/setState blob + the action() UI channel), not
-// params. Header-only, allocation-free after construction. Name & DSP are Nota's own.
+// param interface (normalized 0..1) → automation / persist / clone for free. Appended after
+// them (param order is the persisted layout — append only): per-voice sample Start / Length /
+// Reverse, then Glue (a bus compressor on the kit sum). The step patterns are structural
+// state (getState/setState blob + the action() UI channel), not params. A step is on/off with
+// a velocity (a "quiet" step is just a low one) and an accent flag. Header-only, allocation-
+// free after construction. Name & DSP are Nota's own.
 
 #pragma once
 
@@ -40,15 +46,24 @@ public:
     static constexpr int kVoices = 8;
     static constexpr int kSteps = 16;
     static constexpr int kBanks = 4;
-    static constexpr int kPV = 7;                       // params per voice
-    static constexpr int kNumParams = kVoices * kPV + 4; // + Swing, Humanize, Accent, Volume
+    static constexpr int kPV = 7;                       // params per voice (v1 block)
+    static constexpr int kPX = 3;                       // appended per-voice params (sample region)
+    static constexpr int kLegacyParams = kVoices * kPV + 4;   // RTH1 blobs carry exactly these
+    static constexpr int kExtra = kLegacyParams;              // first appended per-voice param
+    static constexpr int kNumParams = kExtra + kVoices * kPX + 1;   // + Glue
 
     enum VP { Tune = 0, Decay, Punch, Tone, Drive, Level, Pan };
-    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume };
-    enum Scope { S_Step = 0, S_Flash0, kScopeN = S_Flash0 + kVoices };
+    enum XP { Start = 0, Length, Reverse };
+    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume, Glue = kExtra + kVoices * kPX };
+    // scopeRead layout: the playing step (-1 stopped), the current bank, an edit revision that
+    // bumps on every pattern change (so an editor re-reads the blob after an MCP edit), the
+    // sounding-voice count, the glue gain reduction (dB, ≥ 0), then per voice a trigger flash
+    // (1 on a hit, decaying) and the sample play position (0..1 of the file, -1 idle).
+    enum Scope { S_Step = 0, S_Bank, S_Rev, S_Active, S_Glue, S_Flash0, S_Pos0 = S_Flash0 + kVoices, kScopeN = S_Pos0 + kVoices };
 
     // action() ids (UI editing channel).
-    enum Act { A_ToggleStep = 0, A_SetVel, A_ToggleAccent, A_SelectBank, A_ClearBank, A_SelectVoice, A_SetSource };
+    enum Act { A_ToggleStep = 0, A_SetVel, A_ToggleAccent, A_SelectBank, A_ClearBank, A_SelectVoice, A_SetSource,
+               A_CopyBank, A_Audition, A_ClearVoice };
     enum Source { Synth = 0, Sample = 1 };
 
     RhythmMachine() {
@@ -56,12 +71,18 @@ public:
         for (int v = 0; v < kVoices; ++v) {
             setP(v, Tune, 0.35f); setP(v, Decay, 0.5f); setP(v, Punch, 0.5f);
             setP(v, Tone, 0.5f); setP(v, Drive, 0.15f); setP(v, Level, 0.8f); setP(v, Pan, 0.5f);
+            setX(v, Start, 0.0f); setX(v, Length, 1.0f); setX(v, Reverse, 0.0f);
         }
         // Per-voice character tweaks.
         setP(0, Tune, 0.22f); setP(0, Decay, 0.55f);   // Kick — low, long
         setP(4, Decay, 0.14f);                          // Closed hat — short
         setP(5, Decay, 0.5f);                           // Open hat — long
         pn_[Swing].store(0.0f); pn_[Humanize].store(0.0f); pn_[Accent].store(0.7f); pn_[Volume].store(0.8f);
+        pn_[Glue].store(0.0f);
+        for (auto& p : pendingTrig_) p.store(-1.0f, std::memory_order_relaxed);
+        for (auto& sc : scope_) sc.store(0.0f, std::memory_order_relaxed);
+        scope_[S_Step].store(-1.0f, std::memory_order_relaxed);
+        for (int v = 0; v < kVoices; ++v) scope_[S_Pos0 + v].store(-1.0f, std::memory_order_relaxed);
         clearAll();
         // A minimal four-on-the-floor so a fresh instance makes a sound.
         for (int s = 0; s < 16; s += 4) { on_[0][0][s] = 1; vel_[0][0][s] = 200; }
@@ -81,15 +102,21 @@ public:
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
+    // Names group in the automation menu by their head: "Kick › Tune", "Perform › Swing",
+    // "Master › Glue". Ids never change.
     std::string pluginParamId(int32_t i) const override {
         if (i < 0 || i >= kNumParams) return {};
+        if (i == Glue) return "glue";
+        if (i >= kExtra) { static const char* x[] = {"start","length","reverse"}; int k = i - kExtra; return "v" + std::to_string(k / kPX) + "_" + x[k % kPX]; }
         if (i >= kVoices * kPV) { static const char* g[] = {"swing","humanize","accent","volume"}; return g[i - kVoices * kPV]; }
         static const char* pid[] = {"tune","decay","punch","tone","drive","level","pan"};
         return "v" + std::to_string(i / kPV) + "_" + pid[i % kPV];
     }
     std::string pluginParamName(int32_t i) const override {
         if (i < 0 || i >= kNumParams) return {};
-        if (i >= kVoices * kPV) { static const char* g[] = {"Swing","Humanize","Accent","Volume"}; return g[i - kVoices * kPV]; }
+        if (i == Glue) return "Master Glue";
+        if (i >= kExtra) { static const char* x[] = {"Start","Length","Reverse"}; int k = i - kExtra; return std::string(kVoiceNames[k / kPX]) + " " + x[k % kPX]; }
+        if (i >= kVoices * kPV) { static const char* g[] = {"Perform Swing","Perform Humanize","Perform Accent","Master Volume"}; return g[i - kVoices * kPV]; }
         static const char* pn[] = {"Tune","Decay","Punch","Tone","Drive","Level","Pan"};
         return std::string(kVoiceNames[i / kPV]) + " " + pn[i % kPV];
     }
@@ -102,6 +129,7 @@ public:
 
     // ---- UI editing channel ----------------------------------------------
     void action(int32_t id, int32_t iarg, float farg) override {
+        if (id != A_SelectVoice && id != A_Audition) rev_.fetch_add(1, std::memory_order_relaxed);
         switch (id) {
             case A_ToggleStep: { int v = iarg / kSteps, s = iarg % kSteps; if (valid(v, s)) { uint8_t& o = on_[bank_][v][s]; o = o ? 0 : 1; if (o && vel_[bank_][v][s] == 0) vel_[bank_][v][s] = 180; } break; }
             case A_SetVel:     { int v = iarg / kSteps, s = iarg % kSteps; if (valid(v, s)) vel_[bank_][v][s] = (uint8_t)std::clamp((int)std::lround(farg * 255.0f), 0, 255); break; }
@@ -110,6 +138,17 @@ public:
             case A_ClearBank:   { int b = (iarg >= 0 && iarg < kBanks) ? iarg : bank_; for (int v = 0; v < kVoices; ++v) for (int s = 0; s < kSteps; ++s) { on_[b][v][s] = 0; acc_[b][v][s] = 0; } break; }
             case A_SelectVoice: if (iarg >= 0 && iarg < kVoices) selVoice_ = (uint8_t)iarg; break;
             case A_SetSource:   if (iarg >= 0 && iarg < kVoices) src_[iarg] = (farg > 0.5f && smp_[iarg]) ? (uint8_t)Sample : (uint8_t)Synth; break;
+            case A_CopyBank: {   // iarg = src * kBanks + dst: the whole bank (steps, velocities, accents)
+                int from = iarg / kBanks, to = iarg % kBanks;
+                if (from >= 0 && from < kBanks && to >= 0 && to < kBanks && from != to) {
+                    std::memcpy(on_[to], on_[from], sizeof(on_[0])); std::memcpy(vel_[to], vel_[from], sizeof(vel_[0])); std::memcpy(acc_[to], acc_[from], sizeof(acc_[0]));
+                }
+                break;
+            }
+            case A_Audition:    // play a voice now (the kit list, a pad click); consumed by render()
+                if (iarg >= 0 && iarg < kVoices) pendingTrig_[iarg].store(std::clamp(farg, 0.0f, 1.0f), std::memory_order_relaxed);
+                break;
+            case A_ClearVoice:  if (iarg >= 0 && iarg < kVoices) for (int s = 0; s < kSteps; ++s) { on_[bank_][iarg][s] = 0; acc_[bank_][iarg][s] = 0; } break;
             default: break;
         }
     }
@@ -120,12 +159,14 @@ public:
         smp_[v] = std::move(b);
         src_[v] = smp_[v] ? (uint8_t)Sample : (uint8_t)Synth;
     }
+    int32_t activeVoiceCount() const override { return active_.load(std::memory_order_relaxed); }
     int32_t voiceSource(int v) const { return (v >= 0 && v < kVoices) ? src_[v] : 0; }
     int64_t voiceSampleId(int v) const { return (v >= 0 && v < kVoices && smp_[v]) ? smp_[v]->id : 0; }
     std::shared_ptr<SampleBuffer> voiceSampleBuf(int v) const { return (v >= 0 && v < kVoices) ? smp_[v] : nullptr; }
 
     // ---- project state ----------------------------------------------------
-    // Layout: [u32 magic]['kNumParams' floats]['bank','sel',2 reserved]['on,vel,acc' per bank/voice/step].
+    // Layout: [u32 magic]['kNumParams' floats]['bank','sel',2 reserved]['on,vel,acc' per bank/voice/step]
+    // ['src' per voice]. RTH1 (before the sample region + Glue) carries kLegacyParams floats.
     std::vector<uint8_t> getState() const override {
         std::vector<uint8_t> b;
         b.reserve(8 + kNumParams * 4 + kBanks * kVoices * kSteps * 3);
@@ -142,8 +183,12 @@ public:
         int off = 0;
         uint32_t magic = 0; for (int i = 0; i < 4; ++i) magic |= (uint32_t)data[i] << (i * 8);
         off = 4;
-        if (magic != kMagic) return;   // unknown — keep defaults
-        for (int i = 0; i < kNumParams && off + 4 <= size; ++i, off += 4) { float v; std::memcpy(&v, data + off, 4); if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
+        int nParams;
+        if (magic == kMagic) nParams = kNumParams;
+        else if (magic == kMagicV1) nParams = kLegacyParams;
+        else return;   // unknown — keep defaults
+        rev_.fetch_add(1, std::memory_order_relaxed);
+        for (int i = 0; i < nParams && off + 4 <= size; ++i, off += 4) { float v; std::memcpy(&v, data + off, 4); if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
         if (off + 2 <= size) { bank_ = (uint8_t)std::min<int>(data[off], kBanks - 1); selVoice_ = (uint8_t)std::min<int>(data[off + 1], kVoices - 1); off += 4; }
         for (int bk = 0; bk < kBanks; ++bk) for (int v = 0; v < kVoices; ++v) for (int s = 0; s < kSteps; ++s) {
             if (off + 3 > size) return;
@@ -156,6 +201,7 @@ public:
         for (int i = 0; i < kNumParams; ++i) r->pn_[i].store(pn_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
         std::memcpy(r->on_, on_, sizeof(on_)); std::memcpy(r->vel_, vel_, sizeof(vel_)); std::memcpy(r->acc_, acc_, sizeof(acc_));
         r->bank_ = bank_; r->selVoice_ = selVoice_;
+        r->rev_.store(rev_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
         for (int v = 0; v < kVoices; ++v) { r->smp_[v] = smp_[v]; r->src_[v] = src_[v]; }   // share sample buffers (immutable)
         r->setSampleRate(sampleRate_);
         return r;
@@ -164,6 +210,8 @@ public:
     int32_t scopeRead(float* out, int32_t maxN) const override {
         const int n = std::min(maxN, (int)kScopeN);
         for (int i = 0; i < n; ++i) out[i] = scope_[i].load(std::memory_order_relaxed);
+        if (n > S_Bank) out[S_Bank] = (float)bank_;
+        if (n > S_Rev) out[S_Rev] = (float)(rev_.load(std::memory_order_relaxed) & 0xFFFFFF);
         return n;
     }
 
@@ -182,7 +230,21 @@ public:
         const double stepBeats = 0.25;   // 1/16
 
         int flash[kVoices] = {0};
-        int lastStep = curStep_;
+        // Auditions from the editor (message thread → here, lock-free).
+        for (int v = 0; v < kVoices; ++v) {
+            float a = pendingTrig_[v].exchange(-1.0f, std::memory_order_relaxed);
+            if (a >= 0.0f) { trigger(v, a); flash[v] = 1; }
+        }
+        // Glue: a gentle feed-forward bus compressor on the kit sum (peak detector, 5 ms
+        // attack, 150 ms release) — threshold −8 → −24 dB and ratio 1.5 → 4 as Glue rises.
+        // The makeup follows 70 % of the average reduction (a ~0.7 s average), so the tails come
+        // up while the hits never end louder than they went in. 0 = out of circuit.
+        const float glue = get(Glue);
+        const bool glueOn = glue > 0.001f;
+        const float thrDb = -8.0f - glue * 16.0f, ratio = 1.5f + glue * 2.5f;
+        const float atk = std::exp(-1.0f / (0.005f * (float)sampleRate_)), rel = std::exp(-1.0f / (0.150f * (float)sampleRate_));
+        const float avgC = std::exp(-1.0f / (0.7f * (float)sampleRate_));
+        float grMax = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
             // --- sequencer clock ---
             if (playing_ && spb_ > 0.0) {
@@ -219,22 +281,42 @@ public:
                 const float gr = (pan >= 0.0f ? 1.0f : 1.0f + pan);
                 l += s * gl; r += s * gr;
             }
+            if (glueOn) {
+                const float pk = std::max(std::fabs(l), std::fabs(r));
+                const float lvlDb = pk > 1e-6f ? 20.0f * std::log10(pk) : -120.0f;
+                const float over = std::max(0.0f, lvlDb - thrDb);
+                const float target = over * (1.0f - 1.0f / ratio);           // dB of reduction wanted
+                const float c = target > glueGr_ ? atk : rel;
+                glueGr_ = target + c * (glueGr_ - target);
+                glueAvg_ = glueGr_ + avgC * (glueAvg_ - glueGr_);
+                const float g = std::pow(10.0f, (std::min(glueAvg_ * 0.7f, glueGr_) - glueGr_) * 0.05f);
+                l *= g; r *= g;
+                grMax = std::max(grMax, glueGr_);
+            } else { glueGr_ = 0.0f; glueAvg_ = 0.0f; }
             out[i * 2]     += l * vol;
             out[i * 2 + 1] += r * vol;
         }
 
         // publish telemetry
         scope_[S_Step].store((float)(playing_ ? curStep_ : -1), std::memory_order_relaxed);
+        scope_[S_Glue].store(grMax, std::memory_order_relaxed);
+        int active = 0;
         for (int v = 0; v < kVoices; ++v) {
             float f = scope_[S_Flash0 + v].load(std::memory_order_relaxed) * 0.6f;
             if (flash[v]) f = 1.0f;
             scope_[S_Flash0 + v].store(f, std::memory_order_relaxed);
+            const Voice& vc = voices_[v];
+            if (vc.active) ++active;
+            float pos = -1.0f;
+            if (vc.active && vc.splay && smp_[v] && smp_[v]->frames > 0) pos = (float)(vc.spos / (double)smp_[v]->frames);
+            scope_[S_Pos0 + v].store(pos, std::memory_order_relaxed);
         }
-        (void)lastStep;
+        active_.store(active, std::memory_order_relaxed);
     }
 
 private:
-    static constexpr uint32_t kMagic = 0x31485452;   // "RTH1"
+    static constexpr uint32_t kMagicV1 = 0x31485452;   // "RTH1" — 60 params
+    static constexpr uint32_t kMagic   = 0x32485452;   // "RTH2" — + sample region, Glue
     static constexpr double kTwoPi = 6.283185307179586;
     static constexpr const char* kVoiceNames[kVoices] = { "Kick", "Snare", "Clap", "Rim", "Closed Hat", "Open Hat", "Tom", "Perc" };
     static constexpr int kMidiMap[kVoices] = { 36, 38, 39, 37, 42, 46, 45, 41 };
@@ -249,10 +331,13 @@ private:
         float bp = 0.0f, bp2 = 0.0f;                 // band-pass (SVF) states
         int   burst = 0; float burstT = 0.0f;        // clap multi-burst
         double spos = 0.0; bool splay = false;       // sample-voice playback
+        double sBeg = 0.0, sEnd = 0.0; bool srev = false;   // the played region, direction
     };
 
     // --- helpers -----------------------------------------------------------
     void  setP(int v, int p, float val) { pn_[v * kPV + p].store(val, std::memory_order_relaxed); }
+    void  setX(int v, int p, float val) { pn_[kExtra + v * kPX + p].store(val, std::memory_order_relaxed); }
+    float getX(int v, int p) const { return pn_[kExtra + v * kPX + p].load(std::memory_order_relaxed); }
     float get(int i) const { return pn_[i].load(std::memory_order_relaxed); }
     float get2(int v, int p) const { return pn_[v * kPV + p].load(std::memory_order_relaxed); }
     static bool valid(int v, int s) { return v >= 0 && v < kVoices && s >= 0 && s < kSteps; }
@@ -269,6 +354,15 @@ private:
         vc.burst = 0; vc.burstT = 0.0f;
         vc.splay = (src_[v] == Sample && smp_[v] && !smp_[v]->empty());
         vc.spos = 0.0; vc.lp = 0.0f;
+        if (vc.splay) {
+            // The played region: Start .. Start + Length of the file (at least ~1 ms); Reverse
+            // plays it back to front.
+            const double n = (double)smp_[v]->frames;
+            const double st = std::clamp((double)getX(v, Start), 0.0, 1.0) * n;
+            const double en = std::clamp(st + (double)getX(v, Length) * n, std::min(n, st + 48.0), n);
+            vc.sBeg = st; vc.sEnd = en; vc.srev = getX(v, Reverse) >= 0.5f;
+            vc.spos = vc.srev ? std::max(st, en - 1.0) : st;
+        }
         if (v == 4) voices_[5].active = false;   // closed hat chokes open hat (808)
     }
 
@@ -281,13 +375,16 @@ private:
         float l, r; b.readStereo((int64_t)vc.spos, l, r);
         float s = 0.5f * (l + r);
         const double rate = (b.sourceSampleRate > 0 ? b.sourceSampleRate / sampleRate_ : 1.0) * std::exp2((tune - 0.5) * 2.0);
-        vc.spos += rate;
+        // A 64-frame fade into the region's far edge, so a Length cut never clicks.
+        const double left = vc.srev ? vc.spos - vc.sBeg : vc.sEnd - vc.spos;
+        if (left < 64.0 * rate) s *= (float)std::max(0.0, left / (64.0 * rate));
+        vc.spos += vc.srev ? -rate : rate;
         // Tone as a gentle one-pole low-pass (0 = dark, 1 = open).
         const float lpc = 0.05f + tone * 0.95f;
         vc.lp += lpc * (s - vc.lp); s = vc.lp;
         if (drive > 0.001f) s = std::tanh(s * (1.0f + drive * 3.0f));
         vc.env *= decayCoef(expMap(decay, 0.05f, 2.0f));
-        if (vc.spos >= (double)b.frames || (vc.env < 1e-4f)) { vc.active = false; vc.splay = false; }
+        if ((vc.srev ? vc.spos < vc.sBeg : vc.spos >= vc.sEnd) || vc.env < 1e-4f) { vc.active = false; vc.splay = false; }
         return s * vc.env * vc.vel * get2(v, Level);
     }
 
@@ -395,6 +492,11 @@ private:
     uint8_t bank_ = 0, selVoice_ = 0;
     std::shared_ptr<SampleBuffer> smp_[kVoices];   // per-voice sample (Phase 2); null = synth
     uint8_t src_[kVoices] = {0};                    // per-voice source: 0 Synth, 1 Sample
+
+    float glueGr_ = 0.0f, glueAvg_ = 0.0f;          // glue gain reduction + its average, dB (audio thread)
+    std::atomic<float> pendingTrig_[kVoices];       // auditions waiting for render(), -1 = none
+    std::atomic<uint32_t> rev_{0};                  // pattern edit revision (scope S_Rev)
+    std::atomic<int32_t> active_{0};                // sounding voices, last block
 
     std::atomic<float> scope_[kScopeN];
     std::atomic<float> pn_[kNumParams];

@@ -10954,7 +10954,13 @@ Console.WriteLine("-- Nota Rhythm --");
     Check(re.TrackInstrumentKind(t) == 12, $"instrument kind is 12 ({re.TrackInstrumentKind(t)})");
     Check(re.DeviceName(t, -1) == "Nota Rhythm", $"name is Nota Rhythm ('{re.DeviceName(t, -1)}')");
     int pc = re.PluginParamCount(t, -1);
-    Check(pc == 60, $"param count 60 (got {pc})");
+    Check(pc == 85, $"param count 85 (got {pc})");
+    int RIdx(NotaEngine e, int tr, string id) { for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) return i; return -1; }
+    Check(re.PluginParamName(t, -1, RIdx(re, t, "v4_decay")) == "Closed Hat Decay" && re.PluginParamName(t, -1, RIdx(re, t, "swing")) == "Perform Swing"
+          && re.PluginParamName(t, -1, RIdx(re, t, "glue")) == "Master Glue" && re.PluginParamName(t, -1, RIdx(re, t, "v2_start")) == "Clap Start",
+        "Rhythm param names group by voice / Perform / Master (the automation menu heads)");
+    Check(Math.Abs(re.InstrumentParamDefault(t, RIdx(re, t, "v0_length")) - 1f) < 1e-4f && re.InstrumentParamDefault(t, RIdx(re, t, "glue")) == 0f,
+        "sample Length defaults to the whole file, Glue to off");
 
     int kickTune = -1; for (int i = 0; i < pc; i++) if (re.PluginParamId(t, -1, i) == "v0_tune") kickTune = i;
     Check(kickTune >= 0, "found v0_tune param");
@@ -10991,6 +10997,113 @@ Console.WriteLine("-- Nota Rhythm --");
     re3.SetPluginState(t3, -1, blob);
     int kt3 = -1; for (int i = 0; i < re3.PluginParamCount(t3, -1); i++) if (re3.PluginParamId(t3, -1, i) == "v0_tune") kt3 = i;
     Check(kt3 >= 0 && Math.Abs(re3.PluginParamGet(t3, -1, kt3) - 0.9f) < 0.02f, "state blob restores params");
+
+    // An RTH1 blob (60 params, before the sample region and Glue) still loads: params, steps.
+    {
+        var v2 = re.GetPluginState(t, -1);
+        var v1 = new List<byte>();
+        v1.AddRange(BitConverter.GetBytes(0x31485452u));
+        v1.AddRange(v2.Skip(4).Take(60 * 4));
+        v1.AddRange(v2.Skip(4 + 85 * 4));
+        using var old = new NotaEngine();
+        int to = old.AddRhythmTrack();
+        old.InstrumentAction(to, 4, 0, 0);   // clear, so the steps must come from the blob
+        old.SetPluginState(to, -1, v1.ToArray());
+        var op = RhythmModel.Parse(old.GetPluginState(to, -1), old.PluginParamCount(to, -1));
+        Check(Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_tune")) - 0.9f) < 0.02f && op.On[0, 0, 0] && op.On[0, 0, 4] && op.On[0, 4, 2]
+              && Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_length")) - 1f) < 1e-4f,
+            "an RTH1 blob (older projects) restores params and steps; new params keep defaults");
+        var legacy = RhythmModel.Parse(v1.ToArray(), 85);
+        Check(legacy.On[0, 0, 0] && legacy.On[0, 4, 2] && !legacy.On[0, 1, 0], "RhythmModel.Parse reads an RTH1 blob");
+    }
+
+    // The editing channel: copy a bank, clear a voice, the edit revision + bank in the scope.
+    {
+        var sc = new float[RhythmModel.ScopeLength];
+        int n0 = re.InstrumentScope(t, sc);
+        float rev0 = sc[RhythmModel.S_Rev];
+        re.InstrumentAction(t, RhythmModel.A_CopyBank, 0 * 4 + 2, 0);   // A → C
+        re.InstrumentAction(t, RhythmModel.A_SelectBank, 2, 0);
+        re.InstrumentScope(t, sc);
+        var cp = RhythmModel.Parse(re.GetPluginState(t, -1), pc);
+        Check(n0 == RhythmModel.ScopeLength && sc[RhythmModel.S_Rev] != rev0 && (int)sc[RhythmModel.S_Bank] == 2 && cp.CurrentBank == 2
+              && cp.On[2, 0, 0] && cp.On[2, 0, 12] && cp.On[2, 4, 2], $"copy bank A → C, select C; the scope reports the bank and a new edit revision ({n0} floats)");
+        re.InstrumentAction(t, RhythmModel.A_ClearVoice, 0, 0);
+        cp = RhythmModel.Parse(re.GetPluginState(t, -1), pc);
+        Check(cp.Count(2, 0) == 0 && cp.Count(0, 0) == 4 && cp.On[2, 4, 2], "clear voice empties only that voice in the current bank");
+        re.InstrumentAction(t, RhythmModel.A_SelectBank, 0, 0);
+    }
+
+    // Audition plays a voice with the transport stopped; the sounding count follows.
+    {
+        using var ae = new NotaEngine();
+        int ta = ae.AddRhythmTrack();
+        ae.InstrumentAction(ta, RhythmModel.A_Audition, 1, 0.9f);   // snare
+        var ab = new float[4096 * 2];
+        ae.RenderOffline(ab, 4096);
+        Check(Rms(ab, 4096) > 0.001f && ab.All(float.IsFinite), $"audition plays a voice with the transport stopped ({Rms(ab, 4096):F3})");
+        Check(ae.InstrumentVoiceCount(ta) >= 1, $"the sounding-voice count sees it ({ae.InstrumentVoiceCount(ta)})");
+    }
+
+    // Glue: the bus compressor pulls the loud kit down (the makeup is only 70 % of the average
+    // reduction), never makes a hit louder than it went in, and stays finite.
+    {
+        (float Rms, float Peak) Kit(float glueV)
+        {
+            using var ge = new NotaEngine();
+            ge.SetBpm(120); ge.SetTimeSignature(4, 4);
+            int tg = ge.AddRhythmTrack();
+            ge.PluginParamSet(tg, -1, RIdx(ge, tg, "glue"), glueV);
+            ge.PluginParamSet(tg, -1, RIdx(ge, tg, "v0_drive"), 1f);
+            ge.PluginParamSet(tg, -1, RIdx(ge, tg, "v0_level"), 1f);
+            var gb = new float[44100 * 2];
+            ge.Seek(0); ge.Play(); ge.RenderOffline(gb, 44100); ge.StopTransport();
+            if (!gb.All(float.IsFinite)) return (float.NaN, float.NaN);
+            float r = Rms(gb, 44100);
+            return (r, gb.Max(Math.Abs));
+        }
+        var dry = Kit(0f); var glued = Kit(1f);
+        Check(float.IsFinite(glued.Rms) && glued.Rms > 0.001f && glued.Rms < dry.Rms * 0.9f && glued.Peak <= dry.Peak * 1.02f,
+            $"Glue compresses the kit (RMS {dry.Rms:F3} → {glued.Rms:F3}, peak {dry.Peak:F2} → {glued.Peak:F2})");
+    }
+
+    // Factory kits: ≥ 25, every id exists, each plays the pattern finite and unclipped; a kit
+    // keeps the steps and a voice's sample region; a user kit can be saved.
+    {
+        var ids = new HashSet<string>();
+        for (int i = 0; i < pc; i++) ids.Add(re.PluginParamId(t, -1, i));
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 12).ToList();
+        Check(mine.Count >= 25, $"Nota Rhythm ships ≥ 25 factory kits (got {mine.Count})");
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Rhythm kit param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        var quiet = new List<string>();
+        foreach (var p in mine)
+        {
+            using var ep = new NotaEngine();
+            ep.SetBpm(120); ep.SetTimeSignature(4, 4);
+            int tp = ep.AddRhythmTrack();
+            if (cat.ApplyInPlace(ep, p.Id, tp, -1).Length != 0) { quiet.Add($"{p.DisplayName} (apply)"); continue; }
+            var pb = new float[44100 * 2 * 2];
+            ep.Seek(0.0); ep.Play(); ep.RenderOffline(pb, 44100 * 2); ep.StopTransport();
+            float r = Rms(pb, 44100 * 2), pk = pb.Max(Math.Abs);
+            if (!pb.All(float.IsFinite) || r < 0.003f || pk > 2f) quiet.Add($"{p.DisplayName} ({r:F3}/{pk:F2})");
+        }
+        Check(quiet.Count == 0, $"every Rhythm kit plays its pattern, finite and not clipping hard{(quiet.Count > 0 ? " — " + string.Join(", ", quiet) : "")}");
+
+        using var kp = new NotaEngine();
+        int tk = kp.AddRhythmTrack();
+        kp.PluginParamSet(tk, -1, RIdx(kp, tk, "v2_length"), 0.4f);
+        kp.InstrumentAction(tk, RhythmModel.A_ToggleStep, 1 * 16 + 3, 0);   // snare on step 4
+        string trap = mine.First(p => p.DisplayName == "Trap").Id;
+        cat.ApplyInPlace(kp, trap, tk, -1);
+        var kpat = RhythmModel.Parse(kp.GetPluginState(tk, -1), kp.PluginParamCount(tk, -1));
+        Check(kpat.On[0, 1, 3] && kpat.On[0, 0, 0] && Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v2_length")) - 0.4f) < 1e-4f
+              && Math.Abs(kp.PluginParamGet(tk, -1, RIdx(kp, tk, "v0_tune")) - 0.1f) < 1e-4f,
+            "applying a kit sets the sound and keeps the steps and the sample region");
+        var user = PresetService.Capture(kp, tk, -1, "My Kit");
+        Check(user is { Type: "builtin-instrument", BuiltinKind: 12 } && user.NamedParams!.ContainsKey("glue"), "a Rhythm kit can be saved as a user preset");
+    }
 }
 
 // ============ Nota Rhythm — per-voice samples (Phase 2) ==================
@@ -11013,10 +11126,45 @@ Console.WriteLine("-- Nota Rhythm samples --");
         Check(se.RhythmVoiceSource(t, 0) == 0, "toggle voice 0 back to Synth");
         se.InstrumentAction(t, 6, 0, 1f);   // → Sample again (buffer still present)
         Check(se.RhythmVoiceSource(t, 0) == 1, "toggle voice 0 back to Sample");
+        Check(se.TryGetRhythmVoiceInfo(t, 0, out var ni) && se.SampleName(ni.SampleId) == Path.GetFileNameWithoutExtension(smpWav), "the voice sample keeps its file name");
+
+        // The sample region: a short Length plays less; Reverse still plays; the scope reports
+        // the play position while it sounds.
+        {
+            float Region(float start, float length, bool reverse)
+            {
+                using var ge = new NotaEngine();
+                int tg = ge.AddRhythmTrack();
+                ge.SetRhythmVoiceSample(tg, 0, smpWav);
+                int pcg = ge.PluginParamCount(tg, -1);
+                for (int i = 0; i < pcg; i++)
+                {
+                    string id = ge.PluginParamId(tg, -1, i);
+                    if (id == "v0_start") ge.PluginParamSet(tg, -1, i, start);
+                    if (id == "v0_length") ge.PluginParamSet(tg, -1, i, length);
+                    if (id == "v0_reverse") ge.PluginParamSet(tg, -1, i, reverse ? 1f : 0f);
+                    if (id == "v0_decay") ge.PluginParamSet(tg, -1, i, 1f);
+                }
+                ge.InstrumentAction(tg, RhythmModel.A_Audition, 0, 1f);
+                var gb = new float[22050 * 2];
+                ge.RenderOffline(gb, 512);
+                var sc = new float[RhythmModel.ScopeLength];
+                ge.InstrumentScope(tg, sc);
+                float pos = sc[RhythmModel.S_Pos0];
+                ge.RenderOffline(gb, 22050);
+                float energy = 0; foreach (var x in gb) energy += x * x;
+                return reverse ? (pos > start ? energy : -1) : (pos >= start && pos < start + 0.2f ? energy : -1);
+            }
+            float full = Region(0, 1, false), cut = Region(0, 0.2f, false), rev = Region(0.2f, 0.6f, true);
+            Check(full > 0 && cut > 0 && cut < full * 0.5f, $"a short sample Length plays less of the file ({full:F1} vs {cut:F1})");
+            Check(rev > 0, $"a reversed region plays, and the scope tracks its position ({rev:F1})");
+        }
 
         string dir = Path.Combine(Path.GetTempPath(), "nota-rhythm-proj-" + Guid.NewGuid().ToString("N"));
         try
         {
+            se.SetRhythmVoiceSample(t, 1, smpWav);
+            se.InstrumentAction(t, RhythmModel.A_SetSource, 1, 0f);   // voice 1 keeps a sample but plays the synth
             var w = new System.Collections.Generic.List<string>();
             var doc = ProjectService.Capture(se, new TransportState(120, 1, false, false), w);
             ProjectService.Save(doc, dir, se);
@@ -11026,6 +11174,8 @@ Console.WriteLine("-- Nota Rhythm samples --");
             int dt = -1; for (int i = 0; i < de.TrackCount; i++) if (de.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && de.TrackInstrumentKind(ti.Id) == 12) dt = ti.Id;
             Check(dt > 0 && de.RhythmVoiceSource(dt, 0) == 1, "round-trip restores voice 0 as Sample");
             Check(de.TryGetRhythmVoiceInfo(dt, 0, out var dvi) && dvi.SampleId != 0, "round-trip restores the voice sample");
+            Check(de.RhythmVoiceSource(dt, 1) == 0 && de.TryGetRhythmVoiceInfo(dt, 1, out var dv1) && dv1.SampleId != 0,
+                "round-trip keeps a sample on a voice that plays its synth (and keeps it on Synth)");
         }
         finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { } }
     }
@@ -11250,6 +11400,21 @@ Console.WriteLine("-- MCP tools --");
     mcpRhythm.SetRhythmStep(mcpRhy, 0, 4, false).Wait();
     var mcpKick2 = Array.Find(mcpRhythm.GetRhythm(mcpRhy, 0).Result.Voices, v => v.Index == 0);
     Check(mcpKick2!.Steps.Length == 3 && !Array.Exists(mcpKick2.Steps, s => s.Index == 4), "MCP set_rhythm_step off removes the step");
+    // Text rows, voice / groove shaping, bank copy.
+    string mcpPat = mcpRhythm.SetRhythmPattern(mcpRhy, new Dictionary<string, string> { ["snare"] = "....X.......x..o", ["ch"] = "x.x.x.x.|x.x.x.xo" }).Result;
+    var mcpSnap2 = mcpRhythm.GetRhythm(mcpRhy).Result;
+    Check(!mcpPat.StartsWith("error") && mcpSnap2.Voices[1].Pattern == "....X.......x..o" && mcpSnap2.Voices[4].Pattern == "x.x.x.x.x.x.x.xo"
+          && mcpSnap2.Voices[1].Steps.Length == 3 && mcpSnap2.Voices[1].Steps[0].Accent && mcpSnap2.Voices[1].Steps[2].Velocity < 0.45f,
+        $"MCP set_rhythm_pattern writes text rows (x on · X accent · o quiet) ({mcpPat})");
+    Check(mcpRhythm.SetRhythmPattern(mcpRhy, new Dictionary<string, string> { ["cowbell"] = "x..." }).Result.StartsWith("error"), "MCP set_rhythm_pattern names what it cannot read");
+    string mcpVoice = mcpRhythm.SetRhythmVoice(mcpRhy, "kick", tune: 0.1f, decay: 0.9f, level: 0.95f).Result;
+    string mcpPerf = mcpRhythm.SetRhythmPerform(mcpRhy, swing: 0.25f, glue: 0.4f).Result;
+    var mcpSnap3 = mcpRhythm.GetRhythm(mcpRhy).Result;
+    Check(mcpVoice.StartsWith("Kick") && Math.Abs(mcpSnap3.Voices[0].Sound!.Decay - 0.9f) < 1e-3f && Math.Abs(mcpSnap3.Swing - 0.25f) < 1e-3f
+          && Math.Abs(mcpSnap3.Glue - 0.4f) < 1e-3f && mcpPerf.Contains("glue 40") && mcpSnap3.Guide.Contains("glue") && mcpSnap3.Summary.Length > 0,
+        $"MCP set_rhythm_voice / set_rhythm_perform shape the kit ({mcpVoice} | {mcpPerf})");
+    Check(mcpRhythm.CopyRhythmBank(mcpRhy, 0, 3).Result.StartsWith("copied") && mcpRhythm.GetRhythm(mcpRhy, 3).Result.Voices[1].Pattern == "....X.......x..o",
+        "MCP copy_rhythm_bank copies A to D");
 
     // ---- MIDI controllers + MIDI Learn over MCP ----
     var mcpMidiDevSvc = new Nota.Infrastructure.MidiDeviceService();

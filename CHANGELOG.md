@@ -19,6 +19,38 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Rhythm's editor is now the almanac's card, with the new mockup's features.** The
+  drum machine moves from its 900 px layout onto the 700 × 260 frame: the **kit** on the
+  left, the selected **voice** in the middle, a fixed 186 px **Perform** rail, a full-width
+  **step** strip and a status line.
+  - **Kit** — the eight voices with their hue, SYN / SMP. Clicking a voice selects it and
+    plays it; drop a file on it to load a sample; right-click to load, switch source or
+    clear its steps.
+  - **Voice · Synth** — the **hit** contour (amp over the pitch drop, the pitch and decay
+    times in the corner) is a control: drag across for Decay, up / down for Tune. Then Tune,
+    Decay, Punch, Tone, Drive, Level.
+  - **Voice · Sample** — new per-voice **Start**, **Length** and **Reverse**: the file draws
+    in the voice's hue with the played region between two brass lines you drag, and the play
+    position in teal. Load file… sits in the header; a fresh sample plays at its own pitch.
+  - **Perform** — Swing, Human, Accent as teal sliders, **Master**, and new **Glue**: a bus
+    compressor on the whole kit (0 = off) whose makeup never makes a hit louder than it came
+    in. An output meter beside them.
+  - **Step** — brass steps with their number, bright brass accents and new **quiet steps**
+    (a brass outline; ⌥-click), a teal velocity lane, banks A–D in teal. Drag across to
+    paint, drag up / down or scroll for velocity; right-click for accent / quiet / velocity,
+    fills (beats, 8ths, 16ths, off-beats), shift left / right, reverse and clear. Right-click
+    a bank to copy it to another or clear it.
+  - The status line reads the voice and its steps ("steps 1 · 5 · 9 accent · 13"); the
+    header counts the sounding voices. Edits made over MCP show up on the card at once.
+- **MCP: Rhythm tools grow.** `get_rhythm` now returns each voice's sound (with tune and
+  decay in units), its sample, the row as text, the groove, the playing step, a summary and
+  a parameter guide. New: `set_rhythm_pattern` (rows as text — `x` on, `X` accent, `o`
+  quiet), `set_rhythm_voice`, `set_rhythm_perform`, `copy_rhythm_bank`,
+  `clear_rhythm_voice`, `select_rhythm_voice` and `audition_rhythm_voice`.
+- **Nota Rhythm ships 29 factory kits** (was 6) — classic machines, house / techno / electro,
+  hip-hop and breaks, world and brushes, glitch and ambient textures. A kit sets the sound
+  and keeps the pattern and each voice's sample region; your own kits can now be saved as
+  presets too.
 - **Nota Sampler's editor is now the almanac's card, with the new mockup's features.** The card
   moves onto the 700 × 260 frame the other instruments use: a **Sample** / **Pitch** / **Env** /
   **Filter** tab panel with a one-line reading beside the tabs, a fixed 186 px rail and a
@@ -189,6 +221,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   level, the effective attack and release, look-ahead latency and how often it kicked in.
 
 ### Changed
+- **Nota Rhythm's automation menu is grouped** by voice (Kick › Tune, Closed Hat › Decay),
+  **Perform** (Swing, Humanize, Accent) and **Master** (Volume, Glue). Ids are unchanged, so
+  existing lanes keep working; projects saved before keep their kits and patterns.
 - **Nota Sampler's automation menu is grouped.** Its parameters list under **Sample**, **Loop**,
   **Pitch**, **Env**, **Filter**, **Voice** and **Out** (e.g. Filter › Cutoff, Loop ›
   Crossfade); the ids are unchanged, so existing lanes and projects keep working. The six new
