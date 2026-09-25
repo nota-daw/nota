@@ -6,7 +6,8 @@
 // Audio device / sample-rate / buffer are persisted natively (audio.json) and
 // applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings);
 // toolbar side persists via SettingsViewModel; scan folders via the catalog.
-// Test-tone / CPU-check are flagged (NaBadge) — not wired.
+// Test: a 440 Hz sine through the master (toggle; stopped when the pane or window
+// goes away) and a 5 s CPU check sampling the live DSP load + dropout count.
 
 using System;
 using System.Collections.Generic;
@@ -62,6 +63,11 @@ public sealed class PreferencesWindow : NotaWindow
     private bool _loading;
     private TextBlock? _audioStatus;
 
+    private const double TestToneHz = 440;
+    private const int CpuCheckTicks = 50;   // × 100 ms = 5 s
+    private bool _toneOn;
+    private DispatcherTimer? _cpuTimer;
+
     private readonly ContentControl _content = new();
     private readonly List<Border> _navItems = new();
 
@@ -92,11 +98,13 @@ public sealed class PreferencesWindow : NotaWindow
         grid.Children.Add(_content);
         SetBody(grid);
 
+        Closed += (_, _) => StopTests();
         Select(0);
     }
 
     private void Select(int index)
     {
+        StopTests();   // the Audio pane is rebuilt on every visit — don't leave a tone / check orphaned
         for (int i = 0; i < _navItems.Count; i++)
         {
             bool on = i == index;
@@ -191,16 +199,90 @@ public sealed class PreferencesWindow : NotaWindow
 
         body.Children.Add(DividerLine());
         body.Children.Add(SectionLabel("TEST"));
-        var testTone = DisabledChip("Play test tone");
-        var cpu = DisabledChip("CPU check");
-        body.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
-            Children = { testTone, new NaBadge { Kind = NaBadgeKind.NA }, cpu, new NaBadge { Kind = NaBadgeKind.NA } },
-        });
+        body.Children.Add(TestToneRow(engine));
+        body.Children.Add(CpuCheckRow(engine));
 
         _loading = false;
         return body;
+    }
+
+    private Control TestToneRow(IAudioEngine engine)
+    {
+        var button = new Button { Content = "Play test tone", MinWidth = 120 };
+        var note = Caption($"{TestToneHz:0}\u2009Hz sine at −14\u2009dBFS, through the master.");
+        button.Click += (_, _) =>
+        {
+            SetTone(!_toneOn);
+            button.Content = _toneOn ? "Stop test tone" : "Play test tone";
+            button.Classes.Set("primary", _toneOn);
+        };
+        return TestRow("Output check", button, note);
+    }
+
+    private void SetTone(bool on)
+    {
+        if (_main is null || _toneOn == on) return;
+        _toneOn = on;
+        if (on) _main.Engine.SetFrequency((float)TestToneHz);
+        _main.Engine.SetTestTone(on);
+    }
+
+    // Samples the smoothed DSP load (render time / block budget) every 100 ms for 5 s and
+    // counts dropouts over the same window, then gives a verdict for the current buffer size.
+    private Control CpuCheckRow(IAudioEngine engine)
+    {
+        var button = new Button { Content = "CPU check", MinWidth = 120 };
+        var result = Caption("Measures audio-thread load for 5\u2009s — play your project for a real-world figure.");
+        button.Click += (_, _) =>
+        {
+            if (_cpuTimer is not null) return;
+            if (engine.NegotiatedSampleRate <= 0)
+            {
+                result.Text = "Audio device not running.";
+                result.Foreground = NotaPalette.Danger;
+                return;
+            }
+            button.IsEnabled = false;
+            result.Foreground = TextTertiary;
+            int ticks = 0, xrunsStart = engine.XrunCount;
+            double sum = 0, peak = 0;
+            _cpuTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            _cpuTimer.Tick += (_, _) =>
+            {
+                double load = Math.Clamp(engine.CpuLoad, 0, 1);
+                sum += load; peak = Math.Max(peak, load); ticks++;
+                if (ticks < CpuCheckTicks)
+                {
+                    result.Text = $"Measuring… {(CpuCheckTicks - ticks + 9) / 10}\u2009s · now {load * 100:0}\u2009%";
+                    return;
+                }
+                StopCpuCheck();
+                button.IsEnabled = true;
+                int xruns = Math.Max(0, engine.XrunCount - xrunsStart);
+                var (verdict, brush) = peak > 0.9 || xruns > 0
+                    ? ("overloaded — raise the buffer size", NotaPalette.Danger)
+                    : peak > 0.7
+                        ? ("close to the limit — consider a larger buffer", NotaPalette.Warning)
+                        : ("plenty of headroom", Success);
+                result.Text = $"Avg {sum / ticks * 100:0}\u2009% · peak {peak * 100:0}\u2009% · {xruns} dropout{(xruns == 1 ? "" : "s")} — {verdict}";
+                result.Foreground = brush;
+            };
+            result.Text = "Measuring… 5\u2009s";
+            _cpuTimer.Start();
+        };
+        return TestRow("Performance", button, result);
+    }
+
+    private void StopCpuCheck()
+    {
+        _cpuTimer?.Stop();
+        _cpuTimer = null;
+    }
+
+    private void StopTests()
+    {
+        SetTone(false);
+        StopCpuCheck();
     }
 
     private void Apply()
@@ -667,13 +749,18 @@ public sealed class PreferencesWindow : NotaWindow
 
     // ---- helpers ----------------------------------------------------------
 
-    private Border DisabledChip(string text) => new()
+    // Label · button · caption; the caption gets the remaining width so a long result wraps.
+    private static Control TestRow(string label, Button button, TextBlock caption)
     {
-        // Disabled (almanac § States): panel ground, hairline edge, Ink 6 — no opacity.
-        Background = NotaPalette.Panel, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-        Padding = new Thickness(12, 4), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = text, FontSize = 11, Foreground = NotaPalette.TextDisabled },
-    };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("130,Auto,*") };
+        grid.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+        Grid.SetColumn(button, 1);
+        grid.Children.Add(button);
+        caption.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(caption, 2);
+        grid.Children.Add(caption);
+        return grid;
+    }
 
     private static TextBlock SectionLabel(string text) => new()
     {

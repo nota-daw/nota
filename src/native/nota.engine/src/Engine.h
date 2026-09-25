@@ -1076,6 +1076,7 @@ private:
     bool   toneEnabled_ = false;
     float  frequency_   = 440.0f;
     double tonePhase_   = 0.0;
+    float  toneLevel_   = 0.0f;   // 0..1 fade so start/stop don't click
     int64_t lastBeatEmitted_ = -1;
     int    clickRemaining_ = 0;
     double clickPhase_ = 0.0;

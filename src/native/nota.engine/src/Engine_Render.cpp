@@ -1194,10 +1194,13 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
 
 void Engine::renderTone(float* out, int32_t numFrames) {
     const double sr = transport_.sampleRate();
-    if (!toneEnabled_ || sr <= 0.0) { tonePhase_ = 0.0; return; }
+    const float target = toneEnabled_ ? 1.0f : 0.0f;
+    if (sr <= 0.0 || (target == 0.0f && toneLevel_ == 0.0f)) { tonePhase_ = 0.0; return; }
     const double inc = kTwoPi * static_cast<double>(frequency_) / sr;
+    const float step = static_cast<float>(1.0 / (sr * 0.01));   // ~10 ms fade in/out
     for (int32_t i = 0; i < numFrames; ++i) {
-        const float s = static_cast<float>(std::sin(tonePhase_)) * kToneGain;
+        toneLevel_ = target > toneLevel_ ? std::min(target, toneLevel_ + step) : std::max(target, toneLevel_ - step);
+        const float s = static_cast<float>(std::sin(tonePhase_)) * kToneGain * toneLevel_;
         out[i * 2] += s; out[i * 2 + 1] += s;
         tonePhase_ += inc;
         if (tonePhase_ >= kTwoPi) tonePhase_ -= kTwoPi;

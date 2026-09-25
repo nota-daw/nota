@@ -18,6 +18,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- Preferences → Audio: **Play test tone** plays a 440 Hz sine through the master so you can
+  check the output, and **CPU check** measures the audio load for 5 seconds and tells you
+  whether the current buffer size leaves enough headroom. The test tone now fades in and out
+  instead of clicking.
+
 ### Changed
 - The audio engine now has its own version (starting at 0.2.5, shown in About) instead of a
   fixed 0.1.0; it's bumped with each release that changes the engine.
