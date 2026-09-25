@@ -5,7 +5,11 @@
 <h1 align="center">Nota</h1>
 
 <p align="center">
-  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver" alt="Latest release"></a>
+  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver&color=D9A13F" alt="Latest release"></a>
+  <a href="https://github.com/nota-daw/nota/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/nota-daw/nota/release.yml?label=build" alt="Build status"></a>
+  <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
+  <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-D9A13F" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
 </p>
 
 > **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
