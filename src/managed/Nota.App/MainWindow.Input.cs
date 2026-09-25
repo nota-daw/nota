@@ -94,8 +94,9 @@ public partial class MainWindow
         }
 
         // Transport hotkeys: Space = Play/Stop and Return = Stop are handled earlier in the
-        // tunnel phase (OnGlobalTransportKey) so a focused control can't steal them. R =
-        // Record; M = Metronome (below) de-dupe auto-repeat via _heldKeys.
+        // tunnel phase (OnGlobalTransportKey) so a focused control can't steal them. ⌘R =
+        // Record; ⌘M = Metronome (below) — also menu accelerators, so on macOS the native
+        // menu usually handles them first; de-duped against auto-repeat via _heldKeys.
 
         // Esc: cancel an in-progress arrangement gesture, else clear the selection (req 1.2.6/2.11).
         if (!mod && e.Key == Key.Escape && Timeline.EscapePressed())
@@ -114,21 +115,22 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
-        if (!mod && e.Key == Key.R && _heldKeys.Add(e.Key))
+        bool plainMod = mod && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
+        if (plainMod && e.Key == Key.R && _heldKeys.Add(e.Key))
         {
             _vm.Transport.RecordOn = !_vm.Transport.RecordOn;
             e.Handled = true;
             return;
         }
-        if (!mod && e.Key == Key.M && _heldKeys.Add(e.Key))
+        if (plainMod && e.Key == Key.M && _heldKeys.Add(e.Key))
         {
             _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn;
             e.Handled = true;
             return;
         }
 
-        // ⌘M / ⌃M = open the Mixer window (or focus it if already open).
-        if (mod && e.Key == Key.M)
+        // ⌘⇧M / ⌃⇧M = open the Mixer window (or focus it if already open).
+        if (mod && e.Key == Key.M && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
             ToggleMixerWindow();
             e.Handled = true;

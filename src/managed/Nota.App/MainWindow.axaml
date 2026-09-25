@@ -55,7 +55,7 @@
       <NativeMenuItem Header="View">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Mixer" Click="OnMenuMixer" Gesture="Cmd+M"/>
+            <NativeMenuItem Header="Mixer" Click="OnMenuMixer" Gesture="Shift+Cmd+M"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Toggle browser" Click="OnMenuToggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" Click="OnMenuToggleClip"/>
@@ -74,9 +74,9 @@
         <NativeMenuItem.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Play / Stop" Click="OnMenuPlayStop"/>
-            <NativeMenuItem Header="Record" Click="OnMenuRecord"/>
+            <NativeMenuItem Header="Record" Click="OnMenuRecord" Gesture="Cmd+R"/>
             <NativeMenuItem Header="Loop" Click="OnMenuLoop" Gesture="Cmd+L"/>
-            <NativeMenuItem Header="Metronome" Click="OnMenuMetronome" Gesture="Cmd+K"/>
+            <NativeMenuItem Header="Metronome" Click="OnMenuMetronome" Gesture="Cmd+M"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>

@@ -648,15 +648,15 @@ public sealed class PreferencesWindow : NotaWindow
         {
             ("Space", "Play / Stop"),
             ("Return", "Stop (again → back to the start)"),
-            ("R", "Record"),
-            ("M", "Metronome"),
+            ("⌘R", "Record"),
+            ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the time selection"),
         }),
         ("ARRANGEMENT & EDITING", new[]
         {
             ("⌘Z   ⌘⇧Z", "Undo / redo"),
             ("⌘A", "Toggle automation mode"),
-            ("⌘M", "Toggle the Mixer view"),
+            ("⌘⇧M", "Toggle the Mixer view"),
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),

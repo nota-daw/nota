@@ -27,6 +27,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Changed
 - The audio engine now has its own version (starting at 0.2.5, shown in About) instead of a
   fixed 0.1.0; it's bumped with each release that changes the engine.
+- Record and Metronome now need ⌘ / Ctrl: **⌘R** toggles Record and **⌘M** the metronome, so
+  bare R and M no longer flip them by accident while you play. The Mixer moves to **⌘⇧M**.
 
 ## [0.41.0] — 2026-09-24
 
