@@ -54,6 +54,8 @@ public sealed class Settings
     public bool BrowserGroupBySource { get; set; } = true;
     /// <summary>Float favorited devices to the top of their section.</summary>
     public bool BrowserFavoritesFirst { get; set; } = true;
+    /// <summary>The browser is folded down to its icon rail.</summary>
+    public bool BrowserCollapsed { get; set; }
 
     // --- arrangement view options (View menu) --------------------------------
     /// <summary>How many clips print their name on the lane: 0 every clip, 1 the head of each

@@ -117,6 +117,8 @@ public sealed class BrowserView : UserControl
     private const string IconMidi = "M6 17.2 a2.6 2.4 0 1 0 5.2 0 a2.6 2.4 0 1 0 -5.2 0 M11.2 17.2 V5 c3 .9 5.6 2.4 5.6 5.6";
     // MIDI-learn map — two nodes joined by a link (a control mapped to a parameter).
     private const string IconMap = "M3.4 17.6 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M15.4 6.4 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M7.9 15.7 L16.1 8.3";
+    // Collapse / expand — a window with its left sidebar ruled off.
+    private const string IconSidebar = "M3.5 5.5 h17 v13 h-17 z M9.5 5.5 v13";
     // View options — three centred rules, shortening downward (a sort/·filter glyph).
     private const string IconOptions = "M4 7 H20 M7 12 H17 M10 17 H14";
 
@@ -162,6 +164,16 @@ public sealed class BrowserView : UserControl
     private BrowserViewModel? _vm;
     private ISettingsService? _settings;
     private MidiMapView? _midiMap;
+
+    // Collapsed: only the icon rail shows; clicking an icon unfolds the browser on that tab.
+    private bool _collapsed;
+    private readonly Control _body;          // everything right of the rail
+    private readonly Border _railDivider;
+    private readonly Border _collapseBtn;
+
+    /// <summary>Raised when the browser folds to its rail or unfolds (the host resizes its column).</summary>
+    public event Action<bool>? CollapsedChanged;
+    public bool IsCollapsed => _collapsed;
 
     // Disclosure triangles for tree parent rows.
     private const string IconCollapsed = "M1 0 L6 4.5 L1 9 Z";  // ▸
@@ -235,8 +247,15 @@ public sealed class BrowserView : UserControl
             _tabs[i].BorderThickness = new Thickness(0, 1, 0, 0);
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         }
-        var rail = new StackPanel { Width = 40 };
-        foreach (var t in _tabs) rail.Children.Add(t);
+        var tabStack = new StackPanel();
+        foreach (var t in _tabs) tabStack.Children.Add(t);
+        _collapseBtn = RailButton(IconSidebar, "Collapse browser", () => SetCollapsed(!_collapsed, persist: true));
+        _collapseBtn.BorderThickness = new Thickness(0, 1, 0, 0);
+        _collapseBtn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        var rail = new DockPanel { Width = 40 };
+        DockPanel.SetDock(_collapseBtn, Dock.Bottom);
+        rail.Children.Add(_collapseBtn);
+        rail.Children.Add(tabStack);
 
         // --- Search (26h): accent border on focus, match count on the right ---
         _search = new TextBox
@@ -354,9 +373,10 @@ public sealed class BrowserView : UserControl
         right.Children.Add(_previewFooter);
         right.Children.Add(contentHost);
 
-        var railDivider = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
+        var railDivider = _railDivider = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
         railDivider.BindResource(Border.BackgroundProperty, "Brush.Panel");
         railDivider.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _body = right;
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         Grid.SetColumn(railDivider, 0);
@@ -388,13 +408,35 @@ public sealed class BrowserView : UserControl
     }
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
-    public void ShowMidiMap() => SelectTab(MapTab);
+    public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
+
+    /// <summary>Fold the browser down to its icon rail, or unfold it.</summary>
+    public void SetCollapsed(bool collapsed, bool persist)
+    {
+        if (collapsed == _collapsed) return;
+        _collapsed = collapsed;
+        _body.IsVisible = !collapsed;
+        MinWidth = collapsed ? 0 : 160;
+        // Folded, the rail is the whole island — its divider would double the outer border.
+        _railDivider.BorderThickness = new Thickness(0, 0, collapsed ? 0 : 1, 0);
+        // Nothing is open while folded, so no tab is marked active.
+        for (int i = 0; i < _tabs.Length; i++)
+            _tabs[i].Classes.Set("active", !collapsed && i == _active);
+        ToolTip.SetTip(_collapseBtn, collapsed ? "Expand browser" : "Collapse browser");
+        if (persist && _settings is not null)
+        {
+            _settings.Current.BrowserCollapsed = collapsed;
+            _settings.Save();
+        }
+        CollapsedChanged?.Invoke(collapsed);
+    }
 
     /// <summary>Persist the view options (the ⋮ menu) across sessions. Optional: without it
     /// the browser still works, it just forgets the toggles on quit.</summary>
     public void SetSettings(ISettingsService settings)
     {
         _settings = settings;
+        SetCollapsed(settings.Current.BrowserCollapsed, persist: false);
         if (_vm is null) return;
         _vm.GroupBySource = settings.Current.BrowserGroupBySource;
         _vm.FavoritesFirst = settings.Current.BrowserFavoritesFirst;
@@ -558,7 +600,7 @@ public sealed class BrowserView : UserControl
         if (index == _active) return;
         _active = index;
         for (int i = 0; i < _tabs.Length; i++)
-            _tabs[i].Classes.Set("active", i == index);
+            _tabs[i].Classes.Set("active", !_collapsed && i == index);
         // The MIDI-map tab hosts a bespoke editor, not a filtered item list.
         bool isMap = index == MapTab;
         _content.Content = isMap ? (Control?)_midiMap : _pages[index];
@@ -586,8 +628,29 @@ public sealed class BrowserView : UserControl
         inner.Children.Add(bar);
         var tab = new Border { Classes = { "RailTab" }, Child = inner };
         ToolTip.SetTip(tab, caption);
-        tab.PointerPressed += (_, _) => SelectTab(index);
+        tab.PointerPressed += (_, _) =>
+        {
+            SelectTab(index);
+            SetCollapsed(false, persist: true);   // a click on the folded rail opens that tab
+        };
         return tab;
+    }
+
+    // A rail-styled action (not a tab): same 36px cell and hover, never marked active.
+    private static Border RailButton(string iconData, string caption, Action onClick)
+    {
+        var icon = GridIcon(iconData, 16);
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        var btn = new Border { Classes = { "RailTab" }, Child = icon };
+        ToolTip.SetTip(btn, caption);
+        btn.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(btn).Properties.IsLeftButtonPressed) return;
+            onClick();
+            e.Handled = true;
+        };
+        return btn;
     }
 
     // --- rows ----------------------------------------------------------------

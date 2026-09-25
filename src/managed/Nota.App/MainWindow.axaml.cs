@@ -274,7 +274,8 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
-        Browser.SetSettings(vm.Settings);   // the ⋮ view options persist
+        Browser.CollapsedChanged += OnBrowserCollapsedChanged;
+        Browser.SetSettings(vm.Settings);   // the ⋮ view options persist (and the folded state)
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;

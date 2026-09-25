@@ -1081,6 +1081,9 @@ public sealed partial class ArrangementView
                     DrawGroupLane(ctx, _o._tracks[i], y, rh, w, _o.IsGroupCollapsed(tid));
                     continue;
                 }
+                // One pitch scale for the whole track, so a clip an octave up reads higher
+                // than its neighbour instead of every clip auto-fitting to its own notes.
+                var pitches = TrackPitchRange(_o._tracks[i].Clips);
                 // A track still being filled by a background import reads as translucent.
                 using (ctx.PushOpacity(_o.IsProcessingTrack(tid) ? 0.5 : 1.0))
                     foreach (var c in _o._tracks[i].Clips)
@@ -1090,12 +1093,12 @@ public sealed partial class ArrangementView
                         var edgeHi = Drag.None;
                         if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
                         else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
-                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi);
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi, pitches);
                     }
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
                     foreach (var c in _o.PendingClipsFor(tid))
-                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, false);
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, false, pitches: pitches);
             }
 
             // In-progress audio take (M-fix): audio clips only materialise on stop,
@@ -1151,7 +1154,8 @@ public sealed partial class ArrangementView
                         int destRow = m.origRow + _moveRowDelta;
                         if (destRow < 0 || destRow >= _o._tracks.Count) continue;
                         var dest = _o._tracks[destRow];
-                        DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, RowTop(destRow), RowH(destRow), true);
+                        var pitches = TrackPitchRange(dest.Clips.Append(m.vm));
+                        DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, RowTop(destRow), RowH(destRow), true, pitches: pitches);
                     }
 
             // Clip marquee (plain drag on empty space).
@@ -1212,16 +1216,28 @@ public sealed partial class ArrangementView
             g.EndFigure(true);
         }
 
-        private void DrawNotes(DrawingContext ctx, ClipVM c, Rect r, IBrush brush)
+        // Lowest/highest pitch across a track's MIDI clips, or null when there are no notes.
+        private static (int lo, int hi)? TrackPitchRange(IEnumerable<ClipVM> clips)
+        {
+            int lo = int.MaxValue, hi = int.MinValue;
+            foreach (var c in clips)
+                if (c.IsMidi && c.Notes is { } notes)
+                    foreach (var n in notes) { lo = Math.Min(lo, n.Pitch); hi = Math.Max(hi, n.Pitch); }
+            return lo <= hi ? (lo, hi) : null;
+        }
+
+        private void DrawNotes(DrawingContext ctx, ClipVM c, Rect r, IBrush brush, (int lo, int hi)? pitches = null)
         {
             if (c.Notes is null || c.Notes.Length == 0 || c.LengthBeats <= 0 || r.Height <= 0) return;
-            // Auto-range to the pitches actually present: a fixed 5-octave range
+            // Auto-range to the pitches actually present on the track (all its clips share
+            // one scale, so relative register reads across clips): a fixed 5-octave range
             // needs far more height than one lane row, so mapping it with a min
             // bar height pushes high notes above the clip and into the row above.
-            int lo = int.MaxValue, hi = int.MinValue;
-            foreach (var n in c.Notes) { lo = Math.Min(lo, n.Pitch); hi = Math.Max(hi, n.Pitch); }
+            var (lo, hi) = pitches ?? TrackPitchRange(new[] { c })!.Value;
             int span = Math.Max(1, hi - lo + 1);
-            double noteH = Math.Clamp(r.Height / span, 1, 4);
+            // Row step may drop below a pixel on a wide track range; the bar keeps 1px so
+            // it stays visible, and the top note still lands inside the clip.
+            double step = Math.Min(r.Height / span, 4), noteH = Math.Max(1, step);
             using var _ = ctx.PushClip(r);   // never bleed into adjacent lanes
             var geo = new StreamGeometry();
             using (var g = geo.Open())
@@ -1229,7 +1245,7 @@ public sealed partial class ArrangementView
                 {
                     double nx = r.X + (n.StartBeat / c.LengthBeats) * r.Width;
                     double nw = Math.Max(2, (n.LengthBeats / c.LengthBeats) * r.Width);
-                    double ny = r.Bottom - (n.Pitch - lo + 1) * noteH;
+                    double ny = Math.Max(r.Y, r.Bottom - (n.Pitch - lo + 1) * step);
                     double ww = Math.Min(nw, r.Right - nx);
                     if (ww > 0) AddRect(g, nx, ny, ww, noteH);
                 }
@@ -1321,7 +1337,7 @@ public sealed partial class ArrangementView
         }
 
         private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y,
-                                  double rowH, bool selected, Drag edgeHi = Drag.None)
+                                  double rowH, bool selected, Drag edgeHi = Drag.None, (int lo, int hi)? pitches = null)
         {
             double w = Bounds.Width;
             double x0 = _o.BeatToX(c.StartBeat);
@@ -1343,7 +1359,7 @@ public sealed partial class ArrangementView
             // height. Content first, then the band and the name over it. Both DrawNotes and
             // DrawWaveform already clip themselves to the rect they are handed.
             var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
-            if (c.IsMidi) DrawNotes(ctx, c, contentRect, content);
+            if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches);
             else DrawWaveform(ctx, c, contentRect, content);
 
             // 2px band in the track colour along the top edge: the clip's family marker.

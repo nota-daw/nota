@@ -25,6 +25,27 @@ public partial class MainWindow
 {
     private int _lastInstrumentTrackId;
 
+    // The browser column's width before it was folded to its rail, restored on unfold.
+    private GridLength _browserWidth = new(288);
+
+    // Folded, the column hugs the rail and the splitter goes away — there's nothing to resize.
+    private void OnBrowserCollapsedChanged(bool collapsed)
+    {
+        var column = BrowserGrid.ColumnDefinitions[0];
+        if (collapsed)
+        {
+            if (column.Width.IsAbsolute) _browserWidth = column.Width;
+            column.MinWidth = 0;
+            column.Width = GridLength.Auto;
+        }
+        else
+        {
+            column.MinWidth = 160;
+            column.Width = _browserWidth;
+        }
+        BrowserSplitter.IsVisible = !collapsed;
+    }
+
     /// <summary>The fallback target when nothing is selected: the last instrument track added,
     /// but only while it still exists — it may have been deleted, cut or undone since, and
     /// acting on a dead track id silently edits nothing (or re-shows its stale device chain).</summary>

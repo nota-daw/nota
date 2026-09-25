@@ -377,14 +377,14 @@
       <!-- Left browser (240) + main area (fills). Browser and arrangement are both islands:
            they float on the app ground with an even gutter, so the splitter between them
            carries no line of its own — it is a 2px transparent grab strip inside that gutter. -->
-      <Grid Grid.Row="0">
+      <Grid x:Name="BrowserGrid" Grid.Row="0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="288" MinWidth="160" MaxWidth="480"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="12,12,10,12"/>
-        <GridSplitter Grid.Column="1" Width="2" Background="Transparent"
+        <GridSplitter x:Name="BrowserSplitter" Grid.Column="1" Width="2" Background="Transparent"
                       ResizeDirection="Columns"/>
         <Panel x:Name="MainContent" Grid.Column="2">
           <app:ArrangementView x:Name="Timeline" Margin="0,12,12,12"/>
