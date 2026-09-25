@@ -17,6 +17,15 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Fixed
+- In the piano roll you can now drag a note's left edge to change where it starts; its end
+  stays put.
+- Stacked notes (a chord) no longer hide each other's velocity. Grab a stem by its cap to
+  pick one, or select several notes and drag any of their stems to move them all together.
+  ⇧-click a stem to add it to the selection.
+- Duplicating notes (⌘D) now replaces the notes the copy lands on, like duplicating a clip in
+  the arrangement. Before, the copy was stacked on top of them.
+- When you zoom out in the piano roll, the area past the clip's end is darkened and marked
+  with a line, so you can see where the clip ends.
 - Right-clicking empty space on a track now always opens a menu. It used to show nothing
   when there was no copied clip.
 
@@ -52,6 +61,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tempo detection.
 
 ### Changed
+- **The clip editor has a new look.** MIDI and audio clips now share one layout: a header
+  with the clip's name and modes, an inspector on the left, and the canvas. The piano-roll
+  keyboard is dark, so the notes stand out, and selected notes are brass. The ruler shows
+  beats only, with the loop as a brass strip along the top. Clip Tools previews show as
+  brass outlines over your notes, and **Apply** lights up only when there is something to
+  apply. Envelopes draw over the dimmed notes instead of replacing the roll. In audio
+  clips, the on/off buttons are switches, Envelope is a tab next to Sample, warp markers
+  have their own strip above the waveform, and the audio past the clip's end is darkened.
 - The audio engine now has its own version (starting at 0.2.5, shown in About) instead of a
   fixed 0.1.0; it's bumped with each release that changes the engine.
 - Record and Metronome now need ⌘ / Ctrl: **⌘R** toggles Record and **⌘M** the metronome, so

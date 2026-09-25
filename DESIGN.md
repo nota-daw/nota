@@ -402,6 +402,15 @@ redesign) and the host-plugin / parameter-list stubs (230, 190). Rhythm moved on
 - **Arrangement:** track rows 64 (the header carries every control), group rows 26 (open to
   64 while selected), header column 228, default zoom 28 px per beat. Every y ↔ row
   conversion goes through `ArrangementView.RowTop` / `RowAtY`.
+- **Clip editor** (MIDI and audio share one frame, `ClipEditorKit`): header 38 whose first
+  232 is the clip cell (3 px track-colour bar, name, mono kind badge), modes as shell
+  segments after it; inspector 232 on the left, sections split by hairlines and ending in
+  one Ink 5 hint line; the canvas sits in the well. MIDI: keys 48, rows 12, a beats-only
+  ruler 24 with the loop as a 3 px brass strip, notes in the track colour quieter by
+  velocity, selected notes brass, tool previews as brass outlines; the tools panel is 272
+  and Apply is its one solid-brass action, lit only while a preview is pending. Audio: a
+  ruler 24, a 22 px warp-marker strip, and everything outside the played region darkened.
+  Envelopes are a mode (a tab), drawn in brass over a wash of the canvas.
 
 ## Enforced by tests
 

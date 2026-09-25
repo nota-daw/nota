@@ -674,9 +674,11 @@ public sealed class PreferencesWindow : NotaWindow
             ("↑ ↓", "Transpose by a semitone"),
             ("⇧↑  ⇧↓", "Transpose by an octave"),
             ("⌘A", "Select all notes"),
-            ("⌘D", "Duplicate the selection"),
+            ("⌘D", "Duplicate the selection · replaces the notes it lands on"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste notes"),
             ("Delete", "Delete the selected notes"),
+            ("Drag note edge", "Change the note's start or end"),
+            ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
         }),
         ("PLAY NOTES (COMPUTER KEYBOARD)", new[]
         {

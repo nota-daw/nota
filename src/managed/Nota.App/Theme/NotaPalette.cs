@@ -283,9 +283,9 @@ internal static class NotaPalette
     public static readonly SolidColorBrush TooltipBg      = T("#18181E", "#2A251C"); // tooltips stay a dark pill
     public static readonly SolidColorBrush TooltipText    = T("#F0E4C8", "#F5EEDC");
 
-    // ---- Piano keys (literal keys: white stays light, black stays dark) ---
-    public static readonly SolidColorBrush KeyWhite     = T("#B7B1A3", "#FFFCF2");
-    public static readonly SolidColorBrush KeyBlack     = T("#201E1A", "#3A352B");
+    // ---- Piano keys (the clip editor keyboard is dark: keys recede, notes lead) ---
+    public static readonly SolidColorBrush KeyWhite     = T("#1C1A16", "#F3EFE4"); // piano-roll keys: dark, never the brightest thing
+    public static readonly SolidColorBrush KeyBlack     = T("#0E0D0B", "#DAD3C2"); // black keys and their lanes
     public static readonly SolidColorBrush MiniKeyWhite = T("#2A2721", "#F5F1E4"); // device-card mini keyboards
     public static readonly SolidColorBrush MiniKeyBlack = T("#151310", "#38332A");
 

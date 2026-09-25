@@ -54,7 +54,7 @@ public sealed class PianoRollView : UserControl
     public void SetClipIdentity(int a, int b) => _clipKey = (a, b);
 
     private const int MinPitch = 21, MaxPitch = 108;   // A0..C8 (88 keys)
-    private const double KeysW = 56, RowH = 14, RulerH = 20, VelH = 72;
+    private const double KeysW = 48, RowH = 12, RulerH = 24, VelH = 72;
 
     private readonly List<NotaNote> _notes = new();
     private double _lengthBeats = 4;
@@ -113,6 +113,8 @@ public sealed class PianoRollView : UserControl
     private readonly KeysColumn _keys;
     private readonly NoteGrid _gridControl;
     private readonly VelocityLane _vel;
+    private readonly Border _velHost;
+    private readonly Border _overlayHost = new() { IsVisible = false, ClipToBounds = true };
     private readonly ScrollViewer _bodyScroll;
     private readonly ScrollBar _hScroll;
 
@@ -166,12 +168,27 @@ public sealed class PianoRollView : UserControl
         _hScroll.IsVisible = _hScroll.Maximum > 1e-6;
     }
 
+    // The keyboard is dark (nota-design "Nota Clip Editor"): white keys sit one step above
+    // the panel, black keys below the well, and the lanes echo them — so the notes, not the
+    // keys, are the brightest thing in the editor.
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IBrush KeysBg = NotaPalette.BgSunken;
-    private static readonly IBrush VelBg = NotaPalette.GridRow;
+    private static readonly IBrush KeysBg = NotaPalette.Panel;
+    private static readonly IBrush VelBg = NotaPalette.BgSunken;
     private static readonly IBrush KeyWhite = NotaPalette.KeyWhite;
     private static readonly IBrush KeyBlack = NotaPalette.KeyBlack;
-    private static readonly IBrush RowBlackTint = new SolidColorBrush(Color.FromArgb(0x2E, 0x00, 0x00, 0x00));
+    private static readonly IBrush LaneWhite = NotaPalette.CanvasBg;
+    private static readonly IBrush LaneBlack = NotaPalette.KeyBlack;
+    private static readonly IBrush LoopStrip = NotaPalette.Accent;
+    private static readonly IBrush NoteSel = NotaPalette.Accent;
+    private static readonly IPen NoteSelEdge = new Pen(NotaPalette.AccentBright, 1);
+    private static readonly IBrush GhostFill = NotaPalette.AccentSubtle;
+    private static readonly IPen GhostEdge = new Pen(NotaPalette.AccentBright, 1);
+    private static readonly IBrush GhostStem = NotaPalette.AccentDim;
+    private static readonly IBrush RulerBarText = NotaPalette.TextStrong;
+    // Past the clip's end (seen once you zoom out): a dark wash and an Ink 2 end line, so the
+    // clip's edge reads at a glance.
+    private static readonly IBrush OutsideClip = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xC8);
+    private static readonly IPen ClipEndPen = new Pen(NotaPalette.TextStrong, 1);
     // Scale overlay: out-of-scale rows/keys get a translucent dark wash (they read
     // dimmed / semi-transparent), in-scale rows a faint accent, the root a stronger one.
     private static readonly IBrush OutScaleWash = NotaPalette.Wash(NotaPalette.BgSunken, 0xB4);
@@ -180,19 +197,23 @@ public sealed class PianoRollView : UserControl
     private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // almanac playhead: 1px brass
     private static readonly IBrush KeyHover = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     // Played-key highlight (currently-pressed keyboard / MIDI note): a solid key tint + a faint row wash.
-    private static readonly IBrush HeldKeyFill = NotaPalette.AccentBright;
+    private static readonly IBrush HeldKeyFill = NotaPalette.Accent;
     private static readonly IBrush HeldRowTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x30);
     private static readonly IPen KeyLine = new Pen(NotaPalette.GraphBorder, 1);
-    private static readonly IPen RowLine = new Pen(NotaPalette.GridRow, 1);
-    private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1);
-    private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);
+    private static readonly IPen KeyOctaveLine = new Pen(NotaPalette.BorderStrong, 1);
+    private static readonly IPen RowLine = new Pen(NotaPalette.GridSubBeat, 1);
+    private static readonly IPen RowOctaveLine = new Pen(NotaPalette.BorderDefault, 1);
+    private static readonly IPen BeatPen = new Pen(NotaPalette.GraphBorder, 1);
+    private static readonly IPen BarPen = new Pen(NotaPalette.BorderStrong, 1);
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // sub-beat grid (finer than a beat)
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush EdgeHighlight = NotaPalette.AccentPale;
     private static readonly IBrush MarqueeFill = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
     private static readonly IPen MarqueePen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1);
     private static readonly IBrush LabelText = NotaPalette.TextTertiary;
-    private static readonly IBrush KeyLabel = NotaPalette.BgSunken;
+    private static readonly IBrush KeyLabel = NotaPalette.TextMuted;
+    private static readonly IBrush KeyLabelHot = NotaPalette.TextPrimary;
+    private static readonly IBrush KeyLabelOnAccent = NotaPalette.TextOnAccent;
     private static readonly IBrush Divider = NotaPalette.BorderDefault;
     private static readonly Typeface Mono = NotaFonts.Mono;
 
@@ -206,9 +227,10 @@ public sealed class PianoRollView : UserControl
         _keys = new KeysColumn(this) { Height = RangeH };
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
+        _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*") };
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
         body.Children.Add(_keys);
         Avalonia.Controls.Grid.SetColumn(_gridControl, 1);
         body.Children.Add(_gridControl);
@@ -220,22 +242,26 @@ public sealed class PianoRollView : UserControl
         };
 
         // Ruler row (corner + ruler) pinned above; velocity row pinned below.
-        var rulerRow = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*"), Height = RulerH };
+        var rulerRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = RulerH };
         var corner = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) };
         rulerRow.Children.Add(corner);
         Avalonia.Controls.Grid.SetColumn(_ruler, 1);
         rulerRow.Children.Add(_ruler);
 
-        var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*"), Height = VelH };
-        var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
-        velLabelHost.Child = new TextBlock { Text = "VEL", FontSize = 8, Foreground = LabelText, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
+        var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0), Padding = new Thickness(0, 8, 0, 0) };
+        velLabelHost.Child = new TextBlock
+        {
+            Text = "VEL", FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.9, Foreground = LabelText,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
+        };
         velRow.Children.Add(velLabelHost);
-        Avalonia.Controls.Grid.SetColumn(_vel, 1);
-        velRow.Children.Add(_vel);
+        Avalonia.Controls.Grid.SetColumn(_velHost, 1);
+        velRow.Children.Add(_velHost);
 
         // Horizontal zoom scrollbar pinned below the velocity lane, aligned under the
         // grid (56px keys gutter on the left).
-        var scrollRow = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*") };
+        var scrollRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
         _hScroll = new ScrollBar { Orientation = Orientation.Horizontal, Height = 10, IsVisible = false, Minimum = 0 };
         _hScroll.Scroll += (_, _) => SetScrollBeats(_hScroll.Value);
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
@@ -245,6 +271,10 @@ public sealed class PianoRollView : UserControl
         root.Children.Add(rulerRow);
         Avalonia.Controls.Grid.SetRow(_bodyScroll, 1);
         root.Children.Add(_bodyScroll);
+        // Overlay slot over the note grid (the clip editor's Envelopes mode draws there).
+        Avalonia.Controls.Grid.SetRow(_overlayHost, 1);
+        _overlayHost.Margin = new Thickness(KeysW, 0, 0, 0);
+        root.Children.Add(_overlayHost);
         Avalonia.Controls.Grid.SetRow(velRow, 2);
         root.Children.Add(velRow);
         Avalonia.Controls.Grid.SetRow(scrollRow, 3);
@@ -303,6 +333,7 @@ public sealed class PianoRollView : UserControl
     public double Grid { get => _grid; set { _grid = Math.Max(1.0 / 32, value); Invalidate(); } }
 
     public void SetTrackColor(ISolidColorBrush b) { _trackBrush = b; Invalidate(); }
+    public ISolidColorBrush TrackBrush => _trackBrush;
 
     public void SetNotes(IEnumerable<NotaNote> notes, double lengthBeats)
     {
@@ -382,6 +413,25 @@ public sealed class PianoRollView : UserControl
         double cap = Math.Max(0, _lengthBeats - _grid);
         var copies = new List<NotaNote>(sel.Count);
         foreach (int i in sel) { var n = _notes[i]; n.StartBeat = Math.Min(n.StartBeat + shift, cap); copies.Add(n); }
+        // Like a duplicated clip in the arrangement, the copies overwrite what they land on
+        // instead of stacking: a note of the same pitch that starts under a copy goes, and
+        // one that runs into a copy is cut where the copy starts.
+        var kept = new List<NotaNote>(_notes.Count);
+        foreach (var n in _notes)
+        {
+            var m = n;
+            bool drop = false;
+            foreach (var c in copies)
+            {
+                if (c.Pitch != m.Pitch) continue;
+                double cs = c.StartBeat, ce = c.StartBeat + c.LengthBeats;
+                if (m.StartBeat >= cs - 1e-9 && m.StartBeat < ce - 1e-9) { drop = true; break; }
+                if (m.StartBeat < cs && m.StartBeat + m.LengthBeats > cs + 1e-9) m.LengthBeats = cs - m.StartBeat;
+            }
+            if (!drop) kept.Add(m);
+        }
+        _notes.Clear();
+        _notes.AddRange(kept);
         int baseIdx = _notes.Count;
         _notes.AddRange(copies);
         _selection.Clear();
@@ -413,6 +463,12 @@ public sealed class PianoRollView : UserControl
 
     public bool Previewing => _previewBackup is not null;
 
+    // Indices into _notes that a running preview added; empty when nothing is previewing.
+    private readonly HashSet<int> _ghosts = new();
+    private bool IsGhost(int i) => _previewBackup is not null && _ghosts.Contains(i);
+    private static (int, long, long, int) NoteKey(NotaNote n)
+        => (n.Pitch, (long)Math.Round(n.StartBeat * 1e4), (long)Math.Round(n.LengthBeats * 1e4), (int)Math.Round(n.Velocity * 127));
+
     /// <summary>The clip's notes ignoring any preview in flight — what a tool reads.</summary>
     public IReadOnlyList<NotaNote> SourceNotes => _previewBackup ?? _notes;
 
@@ -426,6 +482,10 @@ public sealed class PianoRollView : UserControl
         _previewBackup ??= new List<NotaNote>(_notes);
         _notes.Clear();
         _notes.AddRange(notes);
+        // What the tool added (not in the clip before) draws as a brass outline over the notes.
+        var before = new HashSet<(int, long, long, int)>(_previewBackup.Select(NoteKey));
+        _ghosts.Clear();
+        for (int i = 0; i < _notes.Count; i++) if (!before.Contains(NoteKey(_notes[i]))) _ghosts.Add(i);
         _selection.Clear();
         EnsureNotesVisible();
         Invalidate();
@@ -611,8 +671,47 @@ public sealed class PianoRollView : UserControl
         else if (y + RowH > top + viewH - margin) sv.Offset = new Vector(sv.Offset.X, y + RowH - viewH + margin);
     }
 
+    /// <summary>Puts a control over the note grid (below the ruler, right of the keys) —
+    /// or removes it with null. It is repainted with the roll, so it can map beats through
+    /// <see cref="BeatToX"/> and follow zoom and scroll.</summary>
+    public void SetOverlay(Control? overlay)
+    {
+        _overlayHost.Child = overlay;
+        _overlayHost.IsVisible = overlay is not null;
+    }
+
+    /// <summary>The selected notes, in clip order.</summary>
+    public IReadOnlyList<NotaNote> SelectedNotes()
+        => _selection.Where(i => i >= 0 && i < _notes.Count).OrderBy(i => i).Select(i => _notes[i]).ToList();
+
+    /// <summary>The ⌘/Ctrl-wheel zoom and Shift/horizontal-wheel scroll of the note grid, for an
+    /// overlay that sits on top of it.</summary>
+    internal void RouteWheel(PointerWheelEventArgs e, double x)
+    {
+        var mods = e.KeyModifiers;
+        if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            ZoomAt(WheelInput.ZoomFactor(e.Delta.Y, 1.2), XToBeat(x));
+        else if ((mods & KeyModifiers.Shift) != 0)
+            ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / Math.Max(1e-6, PixelsPerBeat));
+        else if (Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y))
+            ScrollByBeats(-WheelInput.Pixels(e.Delta.X) / Math.Max(1e-6, PixelsPerBeat));
+        else return;
+        e.Handled = true;
+    }
+
+    /// <summary>Darkens everything right of the clip's end and marks the edge with a line.</summary>
+    private void DrawOutsideClip(DrawingContext ctx, double w, double h)
+    {
+        double x = BeatToX(_lengthBeats);
+        if (x >= w) return;
+        x = Math.Max(0, x);
+        ctx.FillRectangle(OutsideClip, new Rect(x, 0, w - x, h));
+        ctx.DrawLine(ClipEndPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
+    }
+
     private void Invalidate()
     {
+        _overlayHost.Child?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _keys.InvalidateVisual();
         _gridControl.InvalidateVisual();
@@ -620,7 +719,7 @@ public sealed class PianoRollView : UserControl
     }
 
     private static bool IsBlack(int pitch) { int n = ((pitch % 12) + 12) % 12; return n is 1 or 3 or 6 or 8 or 10; }
-    private static string NoteName(int pitch)
+    internal static string NoteName(int pitch)
     {
         string[] names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
         return names[((pitch % 12) + 12) % 12] + (pitch / 12 - 1);
@@ -673,6 +772,8 @@ public sealed class PianoRollView : UserControl
     {
         private readonly PianoRollView _o;
         public RulerLane(PianoRollView o) { _o = o; }
+        // Beats only: a bar reads "3" in Ink 2, a beat "3.2" in Ink 5, set on the baseline in
+        // mono 9 just right of its tick. The loop is a 3px brass strip along the top.
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height;
@@ -681,25 +782,26 @@ public sealed class PianoRollView : UserControl
             _o.EnsurePpb(w);
             double ppb = _o.PixelsPerBeat;
             double viewEnd = Math.Min(_o._lengthBeats, _o.ScrollBeats + w / Math.Max(1e-6, ppb));
-            // Grid lines subdivide with zoom; labels use a coarser step with room for text.
-            double step = _o.GridStepBeats();
+            double loopEnd = Math.Min(w, _o.BeatToX(_o._lengthBeats));
+            double loopStart = Math.Max(0, _o.BeatToX(0));
+            if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
+            // Label every beat while there is room for "12.4", else bars only.
+            double step = ppb >= 30 ? 1 : 4;
             double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
             for (int k = 0; ; k++)
             {
                 double b = startB + k * step;
                 if (b > viewEnd + 1e-9) break;
                 double x = _o.BeatToX(b);
-                ctx.DrawLine(_o.GridPen(b), new Point(x, 0), new Point(x, h));
+                bool bar = Math.Abs(b / 4 - Math.Round(b / 4)) < 1e-6;
+                ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
+                if (b >= _o._lengthBeats - 1e-9) continue;
+                int barNo = (int)Math.Floor(b / 4) + 1, beatNo = (int)Math.Round(b - Math.Floor(b / 4) * 4) + 1;
+                string label = bar ? barNo.ToString(NotaNum.Culture) : $"{barNo}.{beatNo}";
+                var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
+                ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
             }
-            double lstep = _o.LabelStepBeats();
-            double startL = Math.Max(0, Math.Ceiling(_o.ScrollBeats / lstep - 1e-9) * lstep);
-            for (int k = 0; ; k++)
-            {
-                double b = startL + k * lstep;
-                if (b > viewEnd + 1e-9) break;
-                var ft = new FormattedText(GridLabel(b), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, LabelText);
-                ctx.DrawText(ft, new Point(_o.BeatToX(b) + 3, 4));
-            }
+            _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
             {
                 double px = _o.BeatToX(_o._playheadBeat);
@@ -732,17 +834,14 @@ public sealed class PianoRollView : UserControl
             for (int p = MinPitch; p <= MaxPitch; p++)
             {
                 double y = (MaxPitch - p) * RowH;
-                ctx.FillRectangle(IsBlack(p) ? KeyBlack : KeyWhite, new Rect(0, y, w, RowH - 1));
+                ctx.FillRectangle(IsBlack(p) ? KeyBlack : KeyWhite, new Rect(0, y, w, RowH));
                 if (_o._scaleOn)
                 {
-                    if (_o.IsRoot(p)) ctx.FillRectangle(RootTint, new Rect(0, y, w, RowH - 1));
-                    else if (!_o.InScale(p)) ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH - 1));
+                    if (_o.IsRoot(p)) ctx.FillRectangle(RootTint, new Rect(0, y, w, RowH));
+                    else if (!_o.InScale(p)) ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
                 }
-                if (p % 12 == 0)
-                {
-                    var ft = new FormattedText(NoteName(p), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, KeyLabel);
-                    ctx.DrawText(ft, new Point(w - ft.Width - 4, y + 2));
-                }
+                ctx.DrawLine(p % 12 == 0 ? KeyOctaveLine : KeyLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
+                if (p % 12 == 0) DrawKeyLabel(ctx, p, y, w, KeyLabel);
             }
             // Currently-pressed keys (computer keyboard / MIDI): light the key solid + label it.
             if (_o._held.Count > 0)
@@ -751,8 +850,7 @@ public sealed class PianoRollView : UserControl
                     if (hp < MinPitch || hp > MaxPitch) continue;
                     double y = (MaxPitch - hp) * RowH;
                     ctx.FillRectangle(HeldKeyFill, new Rect(0, y, w, RowH - 1));
-                    var ft = new FormattedText(NoteName(hp), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, KeyLabel);
-                    ctx.DrawText(ft, new Point(w - ft.Width - 4, y + 1));
+                    DrawKeyLabel(ctx, hp, y, w, KeyLabelOnAccent);
                 }
             // Hovered key: highlight it and label its note name (works for black keys too,
             // where the octave-C label wouldn't otherwise show).
@@ -760,9 +858,14 @@ public sealed class PianoRollView : UserControl
             {
                 double hy = (MaxPitch - _hover) * RowH;
                 ctx.FillRectangle(KeyHover, new Rect(0, hy, w, RowH - 1));
-                var ft = new FormattedText(NoteName(_hover), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, KeyLabel);
-                ctx.DrawText(ft, new Point(w - ft.Width - 4, hy + 1));
+                DrawKeyLabel(ctx, _hover, hy, w, KeyLabelHot);
             }
+        }
+
+        private static void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
+        {
+            var ft = new FormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink);
+            ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
         }
     }
 
@@ -770,7 +873,7 @@ public sealed class PianoRollView : UserControl
     private sealed class NoteGrid : Control
     {
         private readonly PianoRollView _o;
-        private enum Mode { None, Move, Resize, Marquee }
+        private enum Mode { None, Move, Resize, ResizeLeft, Marquee }
         private Mode _drag = Mode.None;
         private bool _dragMoved;
 
@@ -788,6 +891,7 @@ public sealed class PianoRollView : UserControl
         // Hover affordance (mirrors the arrangement grid): resize cursor on the trim edge, a
         // move/four-arrows cursor over a note body, plain arrow on empty space.
         private int _hoverNote = -1;
+        private bool _hoverLeft;   // the hovered trim edge is the note's start
         private int _cursorKind;   // 0 arrow, 1 resize, 2 move
         private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
         private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
@@ -822,14 +926,14 @@ public sealed class PianoRollView : UserControl
             for (int p = MinPitch; p <= MaxPitch; p++)
             {
                 double y = PitchToY(p);
-                if (IsBlack(p)) ctx.FillRectangle(RowBlackTint, new Rect(0, y, w, RowH));
+                ctx.FillRectangle(IsBlack(p) ? LaneBlack : LaneWhite, new Rect(0, y, w, RowH));
                 if (_o._scaleOn)
                 {
                     if (_o.IsRoot(p)) ctx.FillRectangle(RootTint, new Rect(0, y, w, RowH));
                     else if (_o.InScale(p)) ctx.FillRectangle(InScaleTint, new Rect(0, y, w, RowH));
                     else ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
                 }
-                ctx.DrawLine(RowLine, new Point(0, y + RowH), new Point(w, y + RowH));
+                ctx.DrawLine(p % 12 == 0 ? RowOctaveLine : RowLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
             }
             // Played-key rows: a faint wash across the grid so you see where the pressed note sits.
             if (_o._held.Count > 0)
@@ -845,7 +949,7 @@ public sealed class PianoRollView : UserControl
                 double b = startB + k * step;
                 if (b > viewEnd + 1e-9) break;
                 double x = BeatToX(b);
-                ctx.DrawLine(_o.GridPen(b), new Point(x, 0), new Point(x, h));
+                ctx.DrawLine(_o.GridPen(b), new Point(x + 0.5, 0), new Point(x + 0.5, h));
             }
             var notes = _o._notes;
             for (int i = 0; i < notes.Count; i++)
@@ -855,20 +959,30 @@ public sealed class PianoRollView : UserControl
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch);
                 double nw = Math.Max(3, n.LengthBeats * ppb);
                 bool sel = _o._selection.Contains(i);
-                var c = _o._trackColor;
-                IBrush fill;
-                if (sel) fill = AccentBright;
+                var r = new Rect(x, y, Math.Max(2, nw - 1), RowH - 1);
+                if (_o.IsGhost(i))   // a tool's preview: brass outline over the clip's own notes
+                {
+                    ctx.DrawRectangle(GhostFill, GhostEdge, r.Deflate(0.5), 2, 2);
+                    continue;
+                }
+                if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), 2, 2);
                 else
                 {
-                    double a = 0.35 + 0.60 * Math.Clamp(n.Velocity, 0, 1);
+                    // Track colour, quieter the softer the note.
+                    var c = _o._trackColor;
+                    double a = 0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1);
                     if (!_o.InScale(n.Pitch)) a *= 0.4;   // out-of-scale notes read faint
-                    fill = new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B));
+                    ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
                 }
-                ctx.FillRectangle(fill, new Rect(x, y + 1, nw, RowH - 2), 2);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
-                bool edgeHi = (_drag == Mode.Resize && sel) || (_drag == Mode.None && _hoverNote == i);
-                if (edgeHi) ctx.FillRectangle(EdgeHighlight, new Rect(x + nw - 2.5, y + 1, 2.5, RowH - 2));
+                bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft) && sel) || (_drag == Mode.None && _hoverNote == i);
+                if (edgeHi)
+                {
+                    bool left = _drag == Mode.ResizeLeft || (_drag == Mode.None && _hoverLeft);
+                    ctx.FillRectangle(EdgeHighlight, new Rect(left ? x : x + r.Width - 2.5, y + 1, 2.5, RowH - 3));
+                }
             }
+            _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
             {
                 double px = BeatToX(_o._playheadBeat);
@@ -885,16 +999,21 @@ public sealed class PianoRollView : UserControl
         private static Rect RectOf(Point a, Point b)
             => new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
-        private int HitTest(Point p, out bool edge)
+        // The note under p, and which trim edge (if any) p is on: +1 end, −1 start, 0 body.
+        // On a short note each edge zone shrinks to a third, so the body stays grabbable.
+        private int HitTest(Point p, out int edge)
         {
-            edge = false;
+            edge = 0;
             var notes = _o._notes;
             for (int i = notes.Count - 1; i >= 0; i--)
             {
                 var n = notes[i];
                 if (n.Pitch < MinPitch || n.Pitch > MaxPitch) continue;
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch), nw = Math.Max(3, n.LengthBeats * Ppb);
-                if (new Rect(x, y, nw, RowH).Contains(p)) { edge = p.X >= x + nw - EdgePx; return i; }
+                if (!new Rect(x, y, nw, RowH).Contains(p)) continue;
+                double zone = Math.Min(EdgePx, nw / 3);
+                edge = p.X >= x + nw - zone ? 1 : p.X <= x + zone ? -1 : 0;
+                return i;
             }
             return -1;
         }
@@ -905,7 +1024,7 @@ public sealed class PianoRollView : UserControl
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             var p = e.GetPosition(this);
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
-            int hit = HitTest(p, out bool edge);
+            int hit = HitTest(p, out int edge);
 
             // Double-click: add a note on empty space, delete one under the cursor.
             if (e.ClickCount == 2)
@@ -939,7 +1058,7 @@ public sealed class PianoRollView : UserControl
                 foreach (int i in _o._selection)
                     if (i >= 0 && i < _o._notes.Count) { var nn = _o._notes[i]; _orig[i] = (nn.StartBeat, nn.Pitch, nn.LengthBeats); }
                 _preDrag.Clear(); _preDrag.AddRange(_o._notes); _liveStarted = false;
-                if (edge) { _drag = Mode.Resize; _resizeAnchor = Snap(XToBeat(p.X)); Cursor = ResizeCursor; _cursorKind = 1; }
+                if (edge != 0) { _drag = edge > 0 ? Mode.Resize : Mode.ResizeLeft; _resizeAnchor = Snap(XToBeat(p.X)); Cursor = ResizeCursor; _cursorKind = 1; }
                 else { _drag = Mode.Move; _grabBeat = XToBeat(p.X) - _o._notes[hit].StartBeat; Cursor = MoveCursor; _cursorKind = 2; }
                 _lastGrid = p;
                 _o.Invalidate(); _o.Changed?.Invoke();
@@ -1002,6 +1121,23 @@ public sealed class PianoRollView : UserControl
                 _dragMoved = true;
                 PushLive();
             }
+            else if (_drag == Mode.ResizeLeft)
+            {
+                // Move the start, keep the end: clamp so no note passes its own end (minus
+                // one grid step) or the clip's start.
+                double dStart = Snap(XToBeat(p.X)) - _resizeAnchor;
+                foreach (var v in _orig.Values)
+                    dStart = Math.Clamp(dStart, -v.start, Math.Max(-v.start, v.len - _o._grid));
+                foreach (var kv in _orig)
+                {
+                    var n = _o._notes[kv.Key];
+                    n.StartBeat = kv.Value.start + dStart;
+                    n.LengthBeats = kv.Value.len - dStart;
+                    _o._notes[kv.Key] = n;
+                }
+                _dragMoved = true;
+                PushLive();
+            }
             else if (_drag == Mode.Marquee)
             {
                 _marqueeB = p;
@@ -1038,11 +1174,12 @@ public sealed class PianoRollView : UserControl
 
         private void UpdateHover(Point p)
         {
-            int hit = HitTest(p, out bool edge);
-            int kind = hit < 0 ? 0 : edge ? 1 : 2;   // 0 arrow, 1 resize edge, 2 move body
+            int hit = HitTest(p, out int edge);
+            int kind = hit < 0 ? 0 : edge != 0 ? 1 : 2;   // 0 arrow, 1 resize edge, 2 move body
             if (kind != _cursorKind) { _cursorKind = kind; Cursor = kind == 1 ? ResizeCursor : kind == 2 ? MoveCursor : ArrowCursor; }
             int hn = kind == 1 ? hit : -1;   // the bright trim-edge affordance shows only on the edge
-            if (hn != _hoverNote) { _hoverNote = hn; _o.Invalidate(); }
+            bool left = edge < 0;
+            if (hn != _hoverNote || left != _hoverLeft) { _hoverNote = hn; _hoverLeft = left; _o.Invalidate(); }
         }
 
         protected override void OnPointerExited(PointerEventArgs e)
@@ -1198,54 +1335,86 @@ public sealed class PianoRollView : UserControl
             {
                 double b = startB + k * step;
                 if (b > viewEnd + 1e-9) break;
-                ctx.DrawLine(_o.GridPen(b), new Point(_o.BeatToX(b), 0), new Point(_o.BeatToX(b), h));
+                ctx.DrawLine(_o.GridPen(b), new Point(_o.BeatToX(b) + 0.5, 0), new Point(_o.BeatToX(b) + 0.5, h));
             }
+            // A 2px stem per note with a 6×3 cap — the cap is the drag handle.
             var notes = _o._notes;
             for (int i = 0; i < notes.Count; i++)
             {
                 var n = notes[i];
-                double x = _o.BeatToX(n.StartBeat);
-                double bh = Math.Clamp(n.Velocity, 0, 1) * (h - 6);
+                double x = _o.BeatToX(n.StartBeat) + 3;
+                double bh = Math.Clamp(n.Velocity, 0, 1) * (h - 8);
                 bool sel = _o._selection.Contains(i);
                 bool hov = i == _hover;
-                IBrush b = sel ? AccentBright : new SolidColorBrush(hov ? Brighten(_o._trackColor) : _o._trackColor);
-                ctx.FillRectangle(b, new Rect(x, h - bh, 5, bh), 1);
-                // Hover / selected: cap the top edge (the velocity drag handle).
-                if (hov || sel) ctx.FillRectangle(EdgeHighlight, new Rect(x, h - bh - 1, 5, 2));
+                IBrush b;
+                if (_o.IsGhost(i)) b = GhostStem;
+                else if (sel) b = NoteSel;
+                else
+                {
+                    var c = hov ? Brighten(_o._trackColor) : _o._trackColor;
+                    double a = 0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1);
+                    b = new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B));
+                }
+                ctx.FillRectangle(b, new Rect(x, h - bh, 2, bh));
+                ctx.FillRectangle(hov && !sel ? EdgeHighlight : b, new Rect(x - 2, h - bh - 2, 6, 3), 1);
             }
+            _o.DrawOutsideClip(ctx, w, h);
         }
 
         private static Color Brighten(Color c)
             => Color.FromRgb((byte)Math.Min(255, c.R + 48), (byte)Math.Min(255, c.G + 48), (byte)Math.Min(255, c.B + 48));
 
-        private int Nearest(double x)
+        private double Usable => Math.Max(1, Bounds.Height - 8);
+        private double CapY(int i) => Bounds.Height - Math.Clamp(_o._notes[i].Velocity, 0, 1) * Usable;
+
+        // The stem under the pointer. Notes that start together (a chord, stacked pitches)
+        // share one x, so among the stems within reach the one whose cap is nearest the
+        // pointer's height wins — each stem stays reachable by grabbing it at its cap.
+        private int Nearest(Point p)
         {
-            int best = -1; double bd = 14;
+            int best = -1; double bx = 14, by = double.MaxValue;
             for (int i = 0; i < _o._notes.Count; i++)
             {
-                double d = Math.Abs(_o.BeatToX(_o._notes[i].StartBeat) + 2.5 - x);
-                if (d < bd) { bd = d; best = i; }
+                double dx = Math.Abs(_o.BeatToX(_o._notes[i].StartBeat) + 4 - p.X);
+                if (dx > 14) continue;
+                double dy = Math.Abs(CapY(i) - p.Y);
+                // Nearer in x wins outright; stems at (about) the same x go by cap height.
+                if (dx < bx - 2 || (Math.Abs(dx - bx) <= 2 && dy < by)) { best = i; bx = dx; by = dy; }
             }
             return best;
         }
 
+        // Grab: the stem under the pointer, and — when it is part of the selection — every
+        // selected note with it, each keeping its offset (so a stacked chord moves together).
+        private readonly Dictionary<int, float> _grabbed = new();
+        private double _grabY;
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
-            int hit = Nearest(e.GetPosition(this).X);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            var p = e.GetPosition(this);
+            int hit = Nearest(p);
             if (hit < 0) return;
-            // Keep an existing multi-selection if the grabbed note is part of it;
-            // otherwise this note becomes the selection.
-            if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
+            bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            if (shift) _o._selection.Add(hit);
+            else if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
+            _grabbed.Clear();
+            foreach (int i in _o._selection)
+                if (i >= 0 && i < _o._notes.Count) _grabbed[i] = _o._notes[i].Velocity;
             _velNote = hit; _drag = true;
-            Apply(e.GetPosition(this).Y);
+            // A click on one stem sets it where you clicked; a group moves by the drag distance.
+            if (_grabbed.Count == 1) Apply(p.Y);
+            _grabY = p.Y;
+            e.Pointer.Capture(this);
             _o.Invalidate(); _o.Changed?.Invoke();
             e.Handled = true;
         }
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            if (_drag) { Apply(e.GetPosition(this).Y); _o.Invalidate(); _o.Changed?.Invoke(); return; }
-            int hv = Nearest(e.GetPosition(this).X);           // hover highlight (no drag)
+            var p = e.GetPosition(this);
+            if (_drag) { Apply(p.Y); _o.Invalidate(); _o.Changed?.Invoke(); return; }
+            int hv = Nearest(p);           // hover highlight (no drag)
             if (hv != _hover) { _hover = hv; InvalidateVisual(); }
         }
 
@@ -1256,15 +1425,29 @@ public sealed class PianoRollView : UserControl
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (_drag) { _drag = false; _o.CommitNotes(); _o.Changed?.Invoke(); }
+            if (!_drag) return;
+            _drag = false; _grabbed.Clear(); e.Pointer.Capture(null);
+            _o.CommitNotes(); _o.Changed?.Invoke();
         }
 
         private void Apply(double y)
         {
-            if (_velNote < 0 || _velNote >= _o._notes.Count) return;
-            var n = _o._notes[_velNote];
-            n.Velocity = (float)Math.Clamp((Bounds.Height - y) / (Bounds.Height - 6), 0.02, 1.0);
-            _o._notes[_velNote] = n;
+            if (_grabbed.Count == 1)
+            {
+                if (_velNote < 0 || _velNote >= _o._notes.Count) return;
+                var n = _o._notes[_velNote];
+                n.Velocity = (float)Math.Clamp((Bounds.Height - y) / Usable, 0.02, 1.0);
+                _o._notes[_velNote] = n;
+                return;
+            }
+            float d = (float)((_grabY - y) / Usable);
+            foreach (var (i, v0) in _grabbed)
+            {
+                if (i < 0 || i >= _o._notes.Count) continue;
+                var n = _o._notes[i];
+                n.Velocity = Math.Clamp(v0 + d, 0.02f, 1f);
+                _o._notes[i] = n;
+            }
         }
     }
 }

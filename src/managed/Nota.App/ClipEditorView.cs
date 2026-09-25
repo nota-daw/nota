@@ -1,252 +1,188 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Clip (mockup 1e): composes the 200px props rail (ClipPropsView) with
-// the piano roll (PianoRollView). A header row carries the Notes | Envelopes
-// tabs; Envelopes (M9 follow-up) swaps in a per-clip envelope editor with a
-// Velocity / Volume target selector.
+// Detail · Clip for MIDI clips (nota-design "Nota Clip Editor" 1a): a 38px header — the clip
+// cell, Notes | Envelopes, then the Scale switch with its key and mode, and the Tools
+// toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
+// the 272px clip-tools panel (MidiToolsView). Envelopes is a mode of the same canvas: the
+// notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
+// brass, on the roll's own beat axis so zoom and scroll carry over.
 
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using static Nota.App.ClipEditorKit;
 
 namespace Nota.App;
 
 public sealed class ClipEditorView : UserControl
 {
-    private static readonly IBrush Panel = NotaPalette.SurfaceCard;
-    private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
-    private static readonly IBrush Brass = NotaPalette.Accent;
-    private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush TextSecondary = NotaPalette.TextSecondary;
-    private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-
     public PianoRollView Roll { get; }
 
-    private readonly ContentControl _rightHost;
-    private readonly EnvPanel? _envPanel;
+    private readonly EnvOverlay? _envOverlay;
     private readonly ClipPropsView _props;
     private readonly MidiToolsView _tools;
-    private Border _notesTab = null!, _envTab = null!, _toolsChip = null!;
+    private readonly ToggleButton _toolsToggle;
+    private Action<int> _setTab = _ => { };
+    private bool _envMode;
 
     public ClipEditorView(PianoRollView roll, string clipName, double startBeat,
                           IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4)
     {
         Roll = roll;
-
-        _rightHost = new ContentControl { Content = roll };
         if (engine is not null && trackId > 0 && clipIndex >= 0)
-            _envPanel = new EnvPanel(engine, trackId, clipIndex, lengthBeats);
+        {
+            _envOverlay = new EnvOverlay(roll, engine, trackId, clipIndex, lengthBeats);
+            var named = engine.GetClipName(trackId, clipIndex);
+            if (!string.IsNullOrWhiteSpace(named)) clipName = named;
+        }
 
-        // Props rail | editor | clip-tools rail. The tools rail is a toggle rather than a
+        // Inspector | roll | clip-tools panel. The tools panel is a toggle rather than a
         // tab because its whole point is watching the roll change while you turn a knob.
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        _props = new ClipPropsView(roll, clipName, startBeat);
+        _props = new ClipPropsView(roll, startBeat);
         grid.Children.Add(_props);
-        Grid.SetColumn(_rightHost, 1);
-        grid.Children.Add(_rightHost);
+        Grid.SetColumn(roll, 1);
+        grid.Children.Add(roll);
         _tools = new MidiToolsView(roll) { IsVisible = false };
         Grid.SetColumn(_tools, 2);
         grid.Children.Add(_tools);
 
-        var header = TabsHeader();
+        _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip" } };
+        _toolsToggle.Click += (_, _) => SetTools(_toolsToggle.IsChecked == true);
+
+        var tabs = Segments(new[] { "Notes", "Envelopes" }, 0, i => ShowTab(i == 1), out _setTab);
+        if (_envOverlay is null) Inactive.Set(tabs, true);   // session slots carry no clip envelope
+        var right = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 12,
+            Children = { ScaleControls(), HeaderDivider(), _toolsToggle },
+        };
+        var header = Header(roll.TrackBrush, clipName, "MIDI", tabs, null, right);
         DockPanel.SetDock(header, Dock.Top);
-        var dock = new DockPanel();
-        dock.Children.Add(header);
-        dock.Children.Add(grid);
-        Content = dock;
+        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
     }
 
     /// <summary>Follows a clip that was moved or resized in the arrangement while this editor
     /// stayed on screen. The roll's own length is pushed by <c>PianoRollView.SetNotes</c>
-    /// (which also refreshes the props rail's LENGTH/LOOP); this carries the pieces that
+    /// (which also refreshes the inspector's LENGTH/LOOP); this carries the pieces that
     /// otherwise keep their construction-time snapshot.</summary>
     public void SetClipBounds(double startBeat, double lengthBeats)
     {
         _props.SetStart(startBeat);
-        _envPanel?.SetLength(lengthBeats);
+        _envOverlay?.SetLength(lengthBeats);
     }
 
     private void ShowTab(bool envelopes)
     {
-        if (envelopes && _envPanel is null) return;
-        _rightHost.Content = envelopes ? _envPanel : Roll;
-        PaintTab(_notesTab, !envelopes);
-        PaintTab(_envTab, envelopes);
-        if (envelopes && _tools.IsVisible) ToggleTools();
+        if (envelopes && _envOverlay is null) { _setTab(0); return; }
+        _envMode = envelopes;
+        Roll.SetOverlay(envelopes ? _envOverlay : null);
+        if (envelopes && _tools.IsVisible) SetTools(false);
     }
 
-    /// <summary>Shows or hides the clip-tools rail. Hiding drops the tool's preview, so
+    /// <summary>Shows or hides the clip-tools panel. Hiding drops the tool's preview, so
     /// walking away from a half-tweaked generator leaves the clip as it was.</summary>
-    private void ToggleTools()
+    private void SetTools(bool show)
     {
-        bool show = !_tools.IsVisible;
-        if (show && _rightHost.Content != Roll) ShowTab(false);
+        if (show && _envMode) { _setTab(0); ShowTab(false); }
         _tools.IsVisible = show;
-        SetChip(_toolsChip, "Tools", show);
+        _toolsToggle.IsChecked = show;
         _tools.SetActive(show);
     }
 
-    private static void PaintTab(Border tab, bool active)
-    {
-        tab.Background = active ? AccentSubtle : Brushes.Transparent;
-        tab.BorderBrush = active ? Brass : Brushes.Transparent;
-        ((TextBlock)tab.Child!).Foreground = active ? AccentBright : TextTertiary;
-    }
-
-    private Control TabsHeader()
-    {
-        _notesTab = Tab("Notes");
-        _notesTab.PointerPressed += (_, _) => ShowTab(false);
-        _envTab = Tab("Envelopes");
-        _envTab.PointerPressed += (_, _) => ShowTab(true);
-        _envTab.IsEnabled = _envPanel is not null;
-        PaintTab(_notesTab, true);
-        PaintTab(_envTab, false);
-        Inactive.Set(_envTab, _envPanel is null);
-        var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { _notesTab, _envTab } };
-        _toolsChip = Chip();
-        SetChip(_toolsChip, "Tools", false);
-        _toolsChip.PointerPressed += (_, e) => { e.Handled = true; ToggleTools(); };
-        var right = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
-            Children = { ScaleControls(), _toolsChip },
-        };
-        DockPanel.SetDock(right, Dock.Right);
-        return new Border
-        {
-            Height = 30, Background = Panel, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(10, 0),
-            Child = new DockPanel { LastChildFill = true, Children = { right, tabs } },
-        };
-    }
-
-    // ---- scale overlay pickers ("Set Scale") ----------------
-    private Border _scaleToggle = null!, _keyChip = null!, _scaleChip = null!;
+    // ---- scale overlay ("Set Scale"): a switch, then the key and the mode ----
+    private Action _syncScale = () => { };
+    private TextBlock _keyText = null!, _modeText = null!;
 
     private Control ScaleControls()
     {
-        _scaleToggle = Chip();
-        _keyChip = Chip(dropdown: true);
-        _scaleChip = Chip(dropdown: true);
-        _scaleToggle.PointerPressed += (_, e) => { e.Handled = true; Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); UpdateScaleChips(); };
-        _keyChip.PointerPressed += (_, e) => { e.Handled = true; ShowMenu(_keyChip, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); UpdateScaleChips(); }); };
-        _scaleChip.PointerPressed += (_, e) => { e.Handled = true; ShowMenu(_scaleChip, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); UpdateScaleChips(); }); };
-        UpdateScaleChips();
-        return new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = "SCALE", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) },
-                _scaleToggle, _keyChip, _scaleChip,
-            },
-        };
+        _keyText = Mono("");
+        _modeText = new TextBlock { FontSize = NotaType.Body };
+        var sw = SwitchRow("Scale", () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
+        var key = Dropdown(_keyText, a => ShowMenu(a, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); PaintScale(); }));
+        var mode = Dropdown(_modeText, a => ShowMenu(a, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); PaintScale(); }));
+        PaintScale();
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode } };
     }
 
-    private void UpdateScaleChips()
+    private void PaintScale()
     {
-        bool on = Roll.ScaleOn;
-        SetChip(_scaleToggle, on ? "On" : "Off", on);
-        SetChip(_keyChip, PianoRollView.KeyNames[Roll.ScaleRoot], on);
-        SetChip(_scaleChip, PianoRollView.ScaleNames[Roll.ScaleIndex], on);
-        Inactive.Set(_keyChip, !on, interactive: true);
-        Inactive.Set(_scaleChip, !on, interactive: true);
+        _syncScale();
+        _keyText.Text = PianoRollView.KeyNames[Roll.ScaleRoot];
+        _modeText.Text = PianoRollView.ScaleNames[Roll.ScaleIndex];
+        var ink = Roll.ScaleOn ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
+        _keyText.Foreground = ink;
+        _modeText.Foreground = ink;
     }
 
-    private static Border Chip(bool dropdown = false)
+    // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------
+    private sealed class EnvOverlay : UserControl
     {
-        var tb = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Foreground = TextSecondary };
-        return new Border
-        {
-            Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong,
-            Padding = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
-            Child = dropdown ? Glyph.WithChevron(tb) : tb,
-        };
-    }
-
-    private static void SetChip(Border chip, string text, bool active)
-    {
-        var tb = chip.Child as TextBlock ?? (TextBlock)((StackPanel)chip.Child!).Children[0];
-        tb.Text = text;
-        tb.Foreground = active ? AccentBright : TextSecondary;
-        chip.Background = active ? AccentSubtle : NotaPalette.SurfaceRaised;
-        chip.BorderBrush = active ? Brass : NotaPalette.BorderStrong;
-    }
-
-    private static void ShowMenu(Control anchor, string[] items, int current, Action<int> pick)
-    {
-        var f = new MenuFlyout();
-        for (int i = 0; i < items.Length; i++)
-        {
-            int idx = i;
-            var mi = new MenuItem { Header = items[i] };
-            if (i == current) mi.Icon = new TextBlock { Text = "•", Foreground = AccentBright };
-            mi.Click += (_, _) => pick(idx);
-            f.Items.Add(mi);
-        }
-        f.ShowAt(anchor);
-    }
-
-    private static Border Tab(string text) => new()
-    {
-        Height = 22, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-        Padding = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
-        Child = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
-    };
-
-    // ---- envelope panel: target selector + editable curve -----------------
-    private sealed class EnvPanel : UserControl
-    {
+        private static readonly string[] Targets = { "Velocity", "Volume" };
         private readonly IAudioEngine _engine;
         private readonly int _trackId, _clipIndex;
         private readonly EnvCanvas _canvas;
         private readonly TextBlock _targetText;
         private MidiClipEnvelope _target = MidiClipEnvelope.Velocity;
 
-        public EnvPanel(IAudioEngine engine, int trackId, int clipIndex, double lengthBeats)
+        public EnvOverlay(PianoRollView roll, IAudioEngine engine, int trackId, int clipIndex, double lengthBeats)
         {
             _engine = engine; _trackId = trackId; _clipIndex = clipIndex;
-            _canvas = new EnvCanvas(lengthBeats) { Committed = OnCommitted };
-            _targetText = new TextBlock { Text = "Velocity", FontSize = 10, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
+            _canvas = new EnvCanvas(roll, lengthBeats) { Committed = OnCommitted };
+            _targetText = new TextBlock { Text = Targets[0], FontSize = NotaType.Body, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
 
             var chip = new Border
             {
-                Height = 22, Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong,
-                BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(10, 0),
-                Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(_targetText),
+                Height = 22, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
+                CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 0), Margin = new Thickness(10, 8, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 10,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "ENV", FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 1.08,
+                            Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+                        },
+                        _targetText,
+                        new Glyph(GlyphKind.ChevronDown, 8) { Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+                    },
+                },
             };
-            chip.PointerPressed += (_, e) => { e.Handled = true; CycleTarget(); };
-            var hint = new TextBlock { Text = "click to add · drag to move · right-click to delete", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-            var bar = new Border
+            chip.PointerPressed += (_, e) =>
             {
-                Height = 30, Background = Panel, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0),
-                Child = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { chip, hint } },
+                if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                ShowMenu(chip, Targets, _target == MidiClipEnvelope.Volume ? 1 : 0, i =>
+                {
+                    _target = i == 1 ? MidiClipEnvelope.Volume : MidiClipEnvelope.Velocity;
+                    _targetText.Text = Targets[i];
+                    Load();
+                });
             };
-            DockPanel.SetDock(bar, Dock.Top);
-            var dock = new DockPanel();
-            dock.Children.Add(bar);
-            dock.Children.Add(new Border { Background = Sunken, Child = _canvas });
-            Content = dock;
+            ToolTip.SetTip(chip, "Click to add a point · drag to move · right-click to delete");
+            Content = new Grid
+            {
+                Children =
+                {
+                    new Border { Background = NotaPalette.Wash(NotaPalette.BgSunken, 0xB3), IsHitTestVisible = false },
+                    _canvas,
+                    chip,
+                },
+            };
             Load();
         }
 
         public void SetLength(double lengthBeats) => _canvas.SetLength(lengthBeats);
-
-        private void CycleTarget()
-        {
-            _target = _target == MidiClipEnvelope.Velocity ? MidiClipEnvelope.Volume : MidiClipEnvelope.Velocity;
-            _targetText.Text = _target == MidiClipEnvelope.Volume ? "Volume" : "Velocity";
-            Load();
-        }
 
         private void Load()
         {
@@ -266,22 +202,33 @@ public sealed class ClipEditorView : UserControl
 
     private sealed class EnvPt { public double Beat; public double Val; public float Curve; }
 
-    // Custom-drawn envelope editor (0..1 over clip-local beats). Points carry a
-    // per-segment curve (M9-D): drag a point to move it, drag a segment line to bend
-    // it, right-click/double-click a point or segment to delete / reset to linear.
+    // Custom-drawn envelope editor (0..1 over clip-local beats) on the roll's beat axis.
+    // Points carry a per-segment curve (M9-D): drag a point to move it, drag a segment
+    // line to bend it, right-click/double-click a point or segment to delete / reset to
+    // linear. A brass line; nodes in Ink 3 ringed with the well, the one in hand in brass.
     private sealed class EnvCanvas : Control
     {
-        private static readonly IBrush Bg = NotaPalette.BgSunken;
-        private static readonly IBrush GridBeat = NotaPalette.Wash(NotaPalette.BorderStrong, 0x50);
-        private static readonly IBrush EnvLine = NotaPalette.AccentBright;
+        private static readonly IPen EnvPen = new Pen(NotaPalette.Accent, 1.8);
+        private static readonly IBrush NodeFill = NotaPalette.TextSecondary;
+        private static readonly IBrush NodeHot = NotaPalette.Accent;
+        private static readonly IPen NodeRing = new Pen(NotaPalette.BgSunken, 2);
+        private static readonly IBrush EmptyInk = NotaPalette.TextTertiary;
+        private readonly PianoRollView _roll;
         private readonly System.Collections.Generic.List<EnvPt> _pts = new();
         private double _clipBeats;
-        private int _drag = -1;
+        private int _drag = -1, _hover = -1;
         private EnvPt? _bend;
         private const double HandlePx = 7;
 
         public Action<double[], double[], float[]>? Committed;
-        public EnvCanvas(double clipBeats) { _clipBeats = Math.Max(1e-6, clipBeats); }
+        public EnvCanvas(PianoRollView roll, double clipBeats)
+        {
+            _roll = roll;
+            _clipBeats = Math.Max(1e-6, clipBeats);
+            Background = Brushes.Transparent;   // take the pointer across the whole grid
+        }
+
+        public IBrush? Background { get; init; }
 
         // The clip was trimmed/stretched in the arrangement: re-span the beat axis. Points keep
         // their beats (the engine clamps them to the new length), so only the mapping changes.
@@ -300,8 +247,8 @@ public sealed class ClipEditorView : UserControl
             InvalidateVisual();
         }
 
-        private double BeatToX(double beat, double w) => beat / _clipBeats * w;
-        private double XToBeat(double x, double w) => Math.Clamp(x / Math.Max(1, w), 0, 1) * _clipBeats;
+        private double BeatToX(double beat, double w) => _roll.BeatToX(beat);
+        private double XToBeat(double x, double w) => Math.Clamp(_roll.XToBeat(x), 0, _clipBeats);
         private static double ValToY(double v, double h) { double pad = 6; return pad + (1 - Math.Clamp(v, 0, 1)) * (h - 2 * pad); }
         private static double YToVal(double y, double h) { double pad = 6; return Math.Clamp((h - pad - y) / Math.Max(1, h - 2 * pad), 0, 1); }
         private static double Shape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
@@ -372,9 +319,21 @@ public sealed class ClipEditorView : UserControl
             InvalidateVisual();
         }
 
+        protected override void OnPointerWheelChanged(PointerWheelEventArgs e) => _roll.RouteWheel(e, e.GetPosition(this).X);
+
+        protected override void OnPointerExited(PointerEventArgs e)
+        {
+            if (_hover != -1) { _hover = -1; InvalidateVisual(); }
+        }
+
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             var p = e.GetPosition(this);
+            if (_drag < 0 && _bend is null)
+            {
+                int hv = HitPoint(p.X, p.Y, Bounds.Width, Bounds.Height);
+                if (hv != _hover) { _hover = hv; InvalidateVisual(); }
+            }
             if (_drag >= 0)
             {
                 _pts[_drag].Beat = XToBeat(p.X, Bounds.Width);
@@ -405,18 +364,18 @@ public sealed class ClipEditorView : UserControl
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height;
-            ctx.FillRectangle(Bg, new Rect(0, 0, w, h));
-            for (int b = 0; b <= (int)Math.Floor(_clipBeats + 1e-6); b++)
+            if (Background is not null) ctx.FillRectangle(Background, new Rect(0, 0, w, h));
+            if (_pts.Count == 0)   // empty state: one Ink 5 line
             {
-                double x = BeatToX(b, w);
-                if (x > w) break;
-                ctx.DrawLine(new Pen(GridBeat, b % 4 == 0 ? 1 : 0.6), new Point(x, 0), new Point(x, h));
+                var ft = new FormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
+                ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
+                return;
             }
             if (_pts.Count == 0) return;
             var ord = Sorted();
-            var pen = new Pen(EnvLine, 1.6);
+            var pen = EnvPen;
             double fy = ValToY(ord[0].Val, h);
-            ctx.DrawLine(pen, new Point(0, fy), new Point(BeatToX(ord[0].Beat, w), fy));
+            ctx.DrawLine(pen, new Point(Math.Max(0, BeatToX(0, w)), fy), new Point(BeatToX(ord[0].Beat, w), fy));
             for (int i = 1; i < ord.Count; i++)
             {
                 var a = ord[i - 1]; var b = ord[i];
@@ -432,9 +391,13 @@ public sealed class ClipEditorView : UserControl
                 }
             }
             double ly = ValToY(ord[^1].Val, h);
-            ctx.DrawLine(pen, new Point(BeatToX(ord[^1].Beat, w), ly), new Point(w, ly));
-            foreach (var p in ord)
-                ctx.DrawEllipse(EnvLine, null, new Point(BeatToX(p.Beat, w), ValToY(p.Val, h)), 3, 3);
+            ctx.DrawLine(pen, new Point(BeatToX(ord[^1].Beat, w), ly), new Point(Math.Min(w, BeatToX(_clipBeats, w)), ly));
+            for (int i = 0; i < _pts.Count; i++)
+            {
+                var p = _pts[i];
+                bool hot = i == _drag || i == _hover;
+                ctx.DrawEllipse(hot ? NodeHot : NodeFill, NodeRing, new Point(BeatToX(p.Beat, w), ValToY(p.Val, h)), 4.5, 4.5);
+            }
         }
     }
 }
