@@ -75,10 +75,13 @@ std::shared_ptr<SampleBuffer> decodeMp3(const std::string& path) {
 
 std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path) {
     const std::string ext = extLower(path);
-    if (ext == "wav")  return decodeWav(path);
-    if (ext == "flac") return decodeFlac(path);
-    if (ext == "mp3")  return decodeMp3(path);
-    return nullptr; // aiff and others: deferred
+    std::shared_ptr<SampleBuffer> buf;
+    if (ext == "wav")       buf = decodeWav(path);
+    else if (ext == "flac") buf = decodeFlac(path);
+    else if (ext == "mp3")  buf = decodeMp3(path);
+    // aiff and others: deferred
+    if (buf) buf->buildPeakTable();   // one pass now; every later waveform query reads blocks
+    return buf;
 }
 
 } // namespace nota

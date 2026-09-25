@@ -12203,5 +12203,141 @@ Console.WriteLine("-- MCP tools --");
     Check(te.Undo() && te.GetClipNotes(tt, tc).Length == toolSrc.Length, "applying a tool is one undo step");
 }
 
+// --- background audio import: block-wise decode off the UI thread ---
+Console.WriteLine("-- background audio import --");
+{
+    string dir = Path.Combine(Path.GetTempPath(), "nota_import_" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    try
+    {
+        // 30 s of 128 BPM clicks in stereo with a slow swell, long enough for the peak table path.
+        string clicks = Path.Combine(dir, "clicks.wav");
+        Nota.SmokeTest.WavWriter.WriteClicks(clicks, bpm: 128.0, seconds: 30.0, sampleRate: 44100);
+        string swell = Path.Combine(dir, "swell.wav");
+        Nota.SmokeTest.WavWriter.WriteStereo(swell, 30.0, 44100, i =>
+        {
+            double env = 0.1 + 0.8 * Math.Abs(Math.Sin(Math.PI * i / (44100.0 * 7)));
+            double v = env * Math.Sin(2 * Math.PI * 220 * i / 44100.0);
+            return (v, 0.5 * v);
+        });
+
+        using var ie = new NotaEngine();
+        ie.SetBpm(120); ie.SetTimeSignature(4, 4);
+
+        Check(ie.OpenAudioImport(Path.Combine(dir, "missing.wav")) is null, "import: unreadable file → null");
+
+        using (var job = ie.OpenAudioImport(swell)!)
+        {
+            Check(job is not null && job.TotalFrames == 44100 * 30 && job.Channels == 2 && job.SampleRate == 44100,
+                  $"import: header read up front ({job?.TotalFrames} frames, {job?.Channels} ch)");
+            // Decode one small block → only the head of the waveform is drawable.
+            Check(job!.Step(44100) == 1 && job.DecodedFrames == 44100, "import: step decodes one block");
+            var early = new float[256 * 2];
+            int en = job.ReadPeaks(early, 256);
+            bool headReady = early[0] <= early[1], tailPending = early[(en - 1) * 2] > early[(en - 1) * 2 + 1];
+            Check(en == 256 && headReady && tailPending, "import: partial peaks — decoded head drawn, tail pending (1,-1)");
+            int guard = 0;
+            while (job.Step(1 << 16) == 1 && ++guard < 10000) { }
+            Check(job.IsDone && job.DecodedFrames == job.TotalFrames, "import: decodes to completion");
+            var done = new float[256 * 2];
+            job.ReadPeaks(done, 256);
+            bool allReady = true;
+            for (int b = 0; b < 256; b++) if (done[b * 2] > done[b * 2 + 1]) allReady = false;
+            Check(allReady, "import: every bucket drawable once done");
+
+            int it = ie.AddAudioTrack();
+            int ic = ie.AddImportedAudioClip(it, job, 0.0);
+            Check(ic >= 0, "import: finished buffer placed on a track");
+
+            // Engine peaks (table path: 256 buckets over 1.3M frames) vs a brute-force reference.
+            Check(ie.TryGetAudioClipInfo(it, ic, out var iai), "import: clip info");
+            var raw = ie.ReadSample(iai.SampleId);
+            long rawFrames = raw.Length / 2;
+            var got = new float[256 * 2];
+            int gn = ie.GetClipPeaks(it, ic, got, 256);
+            long per = rawFrames / gn;
+            double worst = 0;
+            for (int b = 0; b < gn; b++)
+            {
+                float mn = 1, mx = -1;
+                for (long f = b * per; f < (b + 1) * per; f++) { float m = 0.5f * (raw[f * 2] + raw[f * 2 + 1]); mn = Math.Min(mn, m); mx = Math.Max(mx, m); }
+                worst = Math.Max(worst, Math.Max(Math.Abs(mn - got[b * 2]), Math.Abs(mx - got[b * 2 + 1])));
+            }
+            Check(gn == 256 && worst < 1e-6, $"import: table-based peaks match a full scan (max err {worst:E1})");
+
+            // Seeding a fresh job with the table shows the WHOLE waveform before any decode.
+            var table = job.ReadPeakTable();
+            using var seeded = ie.OpenAudioImport(swell)!;
+            Check(seeded.SeedPeakTable(table), "import: cached overview accepted");
+            var sp = new float[256 * 2];
+            seeded.ReadPeaks(sp, 256);
+            double sd = 0;
+            for (int i = 0; i < 512; i++) sd = Math.Max(sd, Math.Abs(sp[i] - done[i]));
+            Check(seeded.DecodedFrames == 0 && sd < 0.02, $"import: seeded waveform complete before decoding (max diff {sd:E1})");
+            Check(!seeded.SeedPeakTable(new float[10]), "import: overview of another length rejected");
+        }
+
+        // Same file through the old synchronous path and the import job → identical audio.
+        using var se = new NotaEngine();
+        se.SetBpm(120); se.SetTimeSignature(4, 4);
+        int st2 = se.AddAudioTrack();
+        int sc2 = se.AddAudioClip(st2, clicks, 0.0);
+        double syncBpm = se.AutoWarpClip(st2, sc2);
+
+        int ct = ie.AddAudioTrack();
+        double jobBpm;
+        int cc;
+        using (var cj = ie.OpenAudioImport(clicks)!)
+        {
+            while (cj.Step(1 << 16) == 1) { }
+            jobBpm = cj.DetectTempo();
+            cc = ie.AddImportedAudioClip(ct, cj, 0.0);
+        }   // disposing the job must not free the buffer the engine now plays
+        Check(Math.Abs(jobBpm - syncBpm) < 1e-9 && Math.Abs(jobBpm - 128) < 8,
+              $"import: worker tempo matches auto-warp's ({jobBpm:F1} vs {syncBpm:F1})");
+        ie.SetDeferWarpBuild(true);
+        double used = ie.AutoWarpClipAtBpm(ct, cc, jobBpm);
+        ie.SetDeferWarpBuild(false);
+        ie.TryGetAudioClipInfo(ct, cc, out var wa);
+        se.TryGetAudioClipInfo(st2, sc2, out var wb);
+        Check(used == jobBpm && wa.WarpEnabled != 0 && wa.WarpBeats == wb.WarpBeats,
+              $"import: warp with the known tempo matches auto-warp ({wa.WarpBeats} vs {wb.WarpBeats} beats)");
+        Check(ie.WarpBuildRemaining > 0, "import: warp cache deferred for sliced building");
+        long guard2 = 0;
+        while (ie.WarpBuildStep(48000) > 0 && ++guard2 < 100000) { }
+        Check(ie.WarpBuildRemaining == 0, "import: sliced warp build completes");
+
+        // Only the imported clicks track plays in both engines → the renders must agree.
+        for (int i = 0; i < ie.TrackCount; i++)
+            if (ie.TryGetTrackInfo(i, out var ti2) && ti2.Id != ct) ie.SetTrackMute(ti2.Id, true);
+        var ra = new float[8192 * 2]; var rb = new float[8192 * 2];
+        ie.Play(); se.Play();
+        ie.RenderOffline(ra, 8192); se.RenderOffline(rb, 8192);
+        double rd = 0; for (int i = 0; i < ra.Length; i++) rd = Math.Max(rd, Math.Abs(ra[i] - rb[i]));
+        Check(Rms(ra, 8192) > 0.001f && rd < 1e-5, $"import: plays identically to the synchronous load (max diff {rd:E1})");
+
+        // Analysis cache: content fingerprint + round trip in a project's analysis/ folder.
+        string? k1 = Nota.Infrastructure.AudioAnalysisCache.Fingerprint(clicks);
+        string copy = Path.Combine(dir, "renamed copy.wav");
+        File.Copy(clicks, copy);
+        Check(k1 is not null && k1 == Nota.Infrastructure.AudioAnalysisCache.Fingerprint(copy),
+              "cache: fingerprint follows content, not the file name");
+        Check(k1 != Nota.Infrastructure.AudioAnalysisCache.Fingerprint(swell), "cache: different audio → different key");
+        var cache = new Nota.Infrastructure.AudioAnalysisCache();
+        string bundle = Path.Combine(dir, "Song.nota");
+        Directory.CreateDirectory(bundle);
+        var entry = new Nota.Infrastructure.AudioAnalysis(new float[] { -0.5f, 0.5f, -0.25f, 0.75f }, 128.0);
+        cache.Store(k1!, entry, bundle);
+        Check(File.Exists(Path.Combine(bundle, "analysis", k1 + ".npk")), "cache: stored in the project's analysis/ folder");
+        var back = cache.TryLoad(k1!, bundle);
+        Check(back is not null && back.Bpm == 128.0 && back.PeakTable.SequenceEqual(entry.PeakTable), "cache: round trip");
+        Check(cache.TryLoad("0000000000000000", bundle) is null, "cache: miss → null");
+    }
+    finally
+    {
+        try { Directory.Delete(dir, true); } catch { }
+    }
+}
+
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

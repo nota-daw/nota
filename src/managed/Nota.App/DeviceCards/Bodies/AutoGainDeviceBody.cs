@@ -68,13 +68,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         double MaxG() => MaxGainDb(P(MaxGain));
 
         // ---- reference track (the device's sidechain) ---------------------------------------
-        string TrackName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string TrackName(int id) => TrackNames.Of(engine, id);
         int Ref() => engine.DeviceSidechainSource(track, di);
         bool HasRef() => Ref() >= 0;
 

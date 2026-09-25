@@ -42,6 +42,11 @@ public interface IAudioEngine : IDisposable
     // --- Tracks & clips ----------------------------------------------------
     int AddAudioTrack();
     int AddAudioClip(int trackId, string path, double startBeat);
+    /// <summary>Starts a background decode of a WAV/FLAC/MP3 (null if it can't be opened).
+    /// Safe to drive off the UI thread — see <see cref="IAudioImport"/>.</summary>
+    IAudioImport? OpenAudioImport(string path);
+    /// <summary>Places a finished import on a track (no disk I/O). Returns the clip index or -1.</summary>
+    int AddImportedAudioClip(int trackId, IAudioImport import, double startBeat);
     void SetTrackVolume(int trackId, float volume);
     void SetTrackPan(int trackId, float pan);
     void SetTrackMute(int trackId, bool mute);
@@ -134,6 +139,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Detects the clip's source tempo, enables warp, and snaps its length to
     /// the beat grid so it conforms to the project BPM. Returns the detected BPM (0 = failed).</summary>
     double AutoWarpClip(int trackId, int clipIndex);
+    /// <summary><see cref="AutoWarpClip"/> with an already-detected tempo (skips detection).</summary>
+    double AutoWarpClipAtBpm(int trackId, int clipIndex, double bpm);
     /// <summary>Beats-mode warp: detects transients and pins a grid-snapped marker at each
     /// hit so percussion locks tightly to the grid. Returns the detected BPM (0 = failed).</summary>
     double BeatWarpClip(int trackId, int clipIndex);

@@ -126,13 +126,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
         // Key-source MIDI track: the sidechain source slot.
         int MidiSrc() => engine.DeviceSidechainSource(track, di);
-        string TrackName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string TrackName(int id) => TrackNames.Of(engine, id);
         string MidiSrcName() => MidiSrc() >= 0 ? TrackName(MidiSrc()) : "none";
 
         // Key change: a Custom scale moves with its tonic.

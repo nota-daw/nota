@@ -83,9 +83,8 @@ internal static class DeviceParamControls
         for (int i = 0; i < n; i++)
         {
             if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
-            string kind = ti.IsReturn ? "Return" : ti.IsInstrument ? "Instrument" : "Audio";
             ids.Add(ti.Id);
-            combo.Items.Add($"{i + 1} · {kind}");
+            combo.Items.Add(TrackNames.Of(engine, ti));
         }
         combo.SelectedIndex = Math.Max(0, ids.IndexOf(engine.DeviceSidechainSource(track, di)));
         combo.SelectionChanged += (_, _) =>

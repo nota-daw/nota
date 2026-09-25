@@ -63,6 +63,8 @@ set(NOTA_ENGINE_SOURCES
     src/WarpStream.cpp
     src/TempoDetect.cpp
     src/AudioFile.cpp
+    src/AudioImport.cpp
+    src/nota_engine_import.cpp
     src/AudioBackendFactory.cpp   # platform-selected backend construction
 )
 

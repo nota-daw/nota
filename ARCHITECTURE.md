@@ -145,6 +145,12 @@ referenced samples into `samples/` and plugin state blobs into `plugin-states/`,
 writes `project.json` atomically (temp file + rename) with an auto-backup. Loading
 replays the document through the same structural-edit operations the UI uses.
 
+`analysis/` holds a cache of imported audio — each file's waveform overview (min/max per
+512 frames) and detected tempo, as `<content fingerprint>.npk` — so re-importing a file
+is instant. It is disposable: delete it and entries are rebuilt on the next import. While
+a project is unsaved the entries are staged in the per-user data folder and copied in on
+the first save (`AudioAnalysisCache`).
+
 See `Nota.Infrastructure/Persistence/ProjectService.cs`.
 
 ## UI

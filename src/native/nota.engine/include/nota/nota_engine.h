@@ -367,6 +367,43 @@ NOTA_API int32_t nota_clip_get_source_peaks(const NotaEngine* engine, int32_t tr
 NOTA_API int32_t nota_clip_get_warp_full_peaks(const NotaEngine* engine, int32_t track_id,
                                                int32_t clip_index, float* out_min_max, int32_t max_points);
 
+/* ---- Background audio import -------------------------------------------- */
+/* Decodes a WAV/FLAC/MP3 block by block on ANY thread (it touches no engine state), so
+ * the UI stays responsive and can draw the waveform as it fills in. One job is not
+ * thread-safe: serialise all calls on it. Flow: open → step until 0 (peaks meanwhile) →
+ * detect_tempo → nota_track_add_imported_clip (authoring thread) → close. */
+typedef struct NotaAudioImport NotaAudioImport;
+typedef struct NotaAudioImportInfo {
+    int32_t channels;
+    double  sample_rate;
+    int64_t total_frames;
+    int64_t decoded_frames;
+    int32_t done;
+} NotaAudioImportInfo;
+/* Opens the file and reads its header. NULL if it can't be opened / is unsupported. */
+NOTA_API NotaAudioImport* nota_audio_import_open(const char* path_utf8);
+NOTA_API void       nota_audio_import_close(NotaAudioImport* job);
+/* Decodes up to max_frames more. Returns 1 while frames remain, 0 when done, -1 on error. */
+NOTA_API int32_t    nota_audio_import_step(NotaAudioImport* job, int64_t max_frames);
+NOTA_API NotaResult nota_audio_import_info(const NotaAudioImport* job, NotaAudioImportInfo* out);
+/* Waveform over the whole file, same layout as nota_clip_get_peaks. Buckets not decoded
+ * yet are (1,-1) (min > max = nothing to draw) unless a cached overview was seeded. */
+NOTA_API int32_t    nota_audio_import_peaks(const NotaAudioImport* job, float* out_min_max, int32_t max_points);
+/* The per-512-frame min/max overview (for an on-disk cache). Returns its length in
+ * floats; copies up to max_floats into out (out may be NULL to query the length). */
+NOTA_API int64_t    nota_audio_import_peak_table(const NotaAudioImport* job, float* out, int64_t max_floats);
+/* Seeds the overview from a cache so the full waveform shows before decoding finishes.
+ * Returns 1 if accepted (count must match this file's table length), else 0. */
+NOTA_API int32_t    nota_audio_import_seed_peak_table(NotaAudioImport* job, const float* table, int64_t count);
+/* Tempo of the whole file once done (0 = not detectable). */
+NOTA_API double     nota_audio_import_detect_tempo(const NotaAudioImport* job);
+/* Places the finished import on a track (authoring thread; no disk I/O). Returns the clip
+ * index, or -1. The job may be closed afterwards — the engine keeps its own reference. */
+NOTA_API int32_t    nota_track_add_imported_clip(NotaEngine* engine, int32_t track_id,
+                                                 const NotaAudioImport* job, double start_beat);
+/* Auto-warp with an already-detected tempo (skips detection). Returns the BPM used (0 = failed). */
+NOTA_API double     nota_clip_auto_warp_bpm(NotaEngine* engine, int32_t track_id, int32_t clip_index, double bpm);
+
 /* ---- Instrument tracks, MIDI clips & notes (M2) -------------------------- */
 /* Adds an instrument track with the built-in Nota Synth. Returns id (>0). */
 NOTA_API int32_t nota_engine_add_instrument_track(NotaEngine* engine);

@@ -104,13 +104,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         int State() => Math.Clamp((int)Math.Round(Sc(S_State)), 0, 4);
 
         // Sidechain key: the source track and whether it is in use.
-        string SrcName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string SrcName(int id) => TrackNames.Of(engine, id);
         int Src() => engine.DeviceSidechainSource(track, di);
         bool ExtOn() => On(ExternalKey) && Src() >= 0;
         string KeyName() => ExtOn() ? SrcName(Src()) : "Internal";

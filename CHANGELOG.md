@@ -23,12 +23,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   check the output, and **CPU check** measures the audio load for 5 seconds and tells you
   whether the current buffer size leaves enough headroom. The test tone now fades in and out
   instead of clicking.
+- **Importing audio no longer freezes the app.** A dropped or imported file (WAV, FLAC,
+  MP3) shows up at once as a greyed-out **Processing…** track whose waveform fills in as
+  the file loads; tempo detection and warping run in the background, and when it's done
+  the track takes its colours and is selected. Deleting the track while it's processing
+  cancels the import. Long clips also draw faster when you move or trim them.
+- **Analysis cache in the project folder.** Nota remembers each imported file's waveform
+  and tempo in the project's `analysis/` folder (not next to your audio, as `.asd` files
+  are), so importing the same file again shows its whole waveform right away and skips
+  tempo detection.
 
 ### Changed
 - The audio engine now has its own version (starting at 0.2.5, shown in About) instead of a
   fixed 0.1.0; it's bumped with each release that changes the engine.
 - Record and Metronome now need ⌘ / Ctrl: **⌘R** toggles Record and **⌘M** the metronome, so
   bare R and M no longer flip them by accident while you play. The Mixer moves to **⌘⇧M**.
+
+### Fixed
+- Sidechain and source pickers on devices (Compressor, Dynamic EQ-8, Ceiling, Shutter,
+  Auto Filter, Auto Shift, Level, Prism, plugins with a sidechain input) and the Mixer's MIDI
+  source list now name tracks the same way as the arrangement — e.g. an instrument track you
+  haven't renamed shows its instrument's name instead of "Track 2" or "2 · Audio".
 
 ## [0.41.0] — 2026-09-24
 

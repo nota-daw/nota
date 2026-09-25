@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <vector>
@@ -42,6 +43,64 @@ struct SampleBuffer {
         const float* p = &samples[frame * channels];
         if (channels == 1) { l = r = p[0]; }
         else               { l = p[0]; r = p[1]; }
+    }
+
+    // --- waveform overview ---------------------------------------------------
+    // Min/max of the stereo mid per kPeakBlock frames, interleaved [min0,max0,min1,max1,…].
+    // Built when a file is decoded so waveform queries over long spans read blocks instead
+    // of every frame (a 10-minute file is ~29M frames). Empty = not built; peakRange then
+    // scans frames. Blocks not computed yet hold the (1,-1) "no data" sentinel.
+    static constexpr int64_t kPeakBlock = 512;
+    std::vector<float> peakTable;
+
+    int64_t peakBlocks() const { return (frames + kPeakBlock - 1) / kPeakBlock; }
+    bool hasPeakTable() const { return static_cast<int64_t>(peakTable.size()) == peakBlocks() * 2; }
+
+    void buildPeakTable() { updatePeakTable(0, frames); }
+
+    // (Re)compute the blocks overlapping frames [f0, f1). Used incrementally while a file
+    // decodes block by block; a block straddling f0 is recomputed whole.
+    void updatePeakTable(int64_t f0, int64_t f1) {
+        if (!hasPeakTable()) {
+            peakTable.assign(static_cast<size_t>(peakBlocks() * 2), 0.0f);
+            fillSentinel(0, peakBlocks());
+        }
+        f0 = std::max<int64_t>(0, f0); f1 = std::min(f1, frames);
+        if (f1 <= f0) return;
+        for (int64_t b = f0 / kPeakBlock; b <= (f1 - 1) / kPeakBlock; ++b) {
+            float mn, mx;
+            scanRange(b * kPeakBlock, std::min(frames, (b + 1) * kPeakBlock), mn, mx);
+            peakTable[b * 2] = mn; peakTable[b * 2 + 1] = mx;
+        }
+    }
+
+    void fillSentinel(int64_t b0, int64_t b1) {
+        for (int64_t b = b0; b < b1; ++b) { peakTable[b * 2] = 1.0f; peakTable[b * 2 + 1] = -1.0f; }
+    }
+
+    // Min/max of the stereo mid over frames [f0, f1): whole table blocks in the middle,
+    // exact frame scans for the partial blocks at either end. (0,0) for an empty range.
+    void peakRange(int64_t f0, int64_t f1, float& mn, float& mx) const {
+        f0 = std::max<int64_t>(0, f0); f1 = std::min(f1, frames);
+        mn = 1.0f; mx = -1.0f;
+        if (f1 <= f0) { mn = mx = 0.0f; return; }
+        if (f1 - f0 < 4 * kPeakBlock || !hasPeakTable()) { scanRange(f0, f1, mn, mx); return; }
+        const int64_t b0 = (f0 + kPeakBlock - 1) / kPeakBlock, b1 = f1 / kPeakBlock;   // whole blocks
+        float a, z;
+        scanRange(f0, b0 * kPeakBlock, a, z); mn = std::min(mn, a); mx = std::max(mx, z);
+        for (int64_t b = b0; b < b1; ++b) { mn = std::min(mn, peakTable[b * 2]); mx = std::max(mx, peakTable[b * 2 + 1]); }
+        scanRange(b1 * kPeakBlock, f1, a, z); mn = std::min(mn, a); mx = std::max(mx, z);
+        if (mn > mx) mn = mx = 0.0f;
+    }
+
+private:
+    void scanRange(int64_t f0, int64_t f1, float& mn, float& mx) const {
+        mn = 1.0f; mx = -1.0f;
+        for (int64_t f = f0; f < f1; ++f) {
+            float l, r; readStereo(f, l, r);
+            const float mid = 0.5f * (l + r);
+            mn = std::min(mn, mid); mx = std::max(mx, mid);
+        }
     }
 };
 

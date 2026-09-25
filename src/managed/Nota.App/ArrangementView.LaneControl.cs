@@ -1057,15 +1057,21 @@ public sealed partial class ArrangementView
                     DrawGroupLane(ctx, _o._tracks[i], y, rh, w, _o.IsGroupCollapsed(tid));
                     continue;
                 }
-                foreach (var c in _o._tracks[i].Clips)
-                {
-                    if (IsDraggingCrossTrack(tid, c.ClipIndex)) continue;
-                    // Highlight the edge a resize would grab (hover), or the edge actively being trimmed.
-                    var edgeHi = Drag.None;
-                    if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
-                    else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
-                    DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi);
-                }
+                // A track still being filled by a background import reads as translucent.
+                using (ctx.PushOpacity(_o.IsProcessingTrack(tid) ? 0.5 : 1.0))
+                    foreach (var c in _o._tracks[i].Clips)
+                    {
+                        if (IsDraggingCrossTrack(tid, c.ClipIndex)) continue;
+                        // Highlight the edge a resize would grab (hover), or the edge actively being trimmed.
+                        var edgeHi = Drag.None;
+                        if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
+                        else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi);
+                    }
+                // Imports still decoding: a translucent placeholder whose waveform fills in.
+                using (ctx.PushOpacity(0.5))
+                    foreach (var c in _o.PendingClipsFor(tid))
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, false);
             }
 
             // In-progress audio take (M-fix): audio clips only materialise on stop,

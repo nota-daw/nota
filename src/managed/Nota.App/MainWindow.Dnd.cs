@@ -30,13 +30,9 @@ public partial class MainWindow
             switch (item.Kind)
             {
                 case BrowserItemKind.Sample:
-                {
-                    int t = TrackIsAudio(trackId) ? trackId : Engine.AddAudioTrack();
-                    int c = Engine.AddAudioClip(t, item.Path, beat);
-                    AutoWarpImported(t, c);
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
+                    // Decodes in the background; the track shows a filling placeholder meanwhile.
+                    _ = ImportAudioInBackgroundAsync(item.Path, TrackIsAudio(trackId) ? trackId : -1, beat);
                     break;
-                }
                 case BrowserItemKind.BuiltinInstrument:
                 {
                     // Dropped on an existing (non-rack) instrument track → swap its instrument;

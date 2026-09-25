@@ -184,14 +184,8 @@ public partial class MainWindow
                     break;
                 }
                 case BrowserItemKind.Sample:
-                {
-                    int t = Engine.AddAudioTrack();
-                    int c = Engine.AddAudioClip(t, item.Path, 0.0);
-                    AutoWarpImported(t, c);
-                    Timeline.Refresh();
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
+                    _ = ImportAudioInBackgroundAsync(item.Path, -1, 0.0);
                     break;
-                }
                 case BrowserItemKind.Project:
                     OpenProject(item.Path);
                     return; // OpenProject rebuilds everything itself

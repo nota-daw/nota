@@ -273,6 +273,8 @@ public:
     // --- structural edits: audio (M1) ---
     int32_t addAudioTrack();
     int32_t addAudioClip(int32_t trackId, const std::string& path, double startBeat);
+    // Places an already-decoded buffer (background import) — no disk I/O on this thread.
+    int32_t addAudioClipBuffer(int32_t trackId, std::shared_ptr<SampleBuffer> sample, double startBeat);
     void    setTrackVolume(int32_t trackId, float v);
     void    setTrackPan(int32_t trackId, float p);
     void    setTrackMute(int32_t trackId, bool m);
@@ -470,7 +472,9 @@ public:
     bool    setClipPitch(int32_t trackId, int32_t clipIndex, float semitones); // audio clip varispeed transpose
     bool    setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed);  // audio clip plays back-to-front
     bool    setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32_t mode); // toggle/mode + rebuild cache
-    double  autoWarpClip(int32_t trackId, int32_t clipIndex); // detect tempo, enable warp, snap length to grid; returns detected BPM (0 = failed)
+    // Detect tempo, enable warp, snap length to grid; returns the BPM used (0 = failed).
+    // knownBpm > 0 skips detection (the background import already measured it).
+    double  autoWarpClip(int32_t trackId, int32_t clipIndex, double knownBpm = 0.0);
     double  beatWarpClip(int32_t trackId, int32_t clipIndex); // Beats mode: detect transients, pin grid-snapped markers at each hit; returns detected BPM (0 = failed)
     bool    setClipWarpLength(int32_t trackId, int32_t clipIndex, double beats);          // warped clip target length
     bool    setClipWarpMarkers(int32_t trackId, int32_t clipIndex, const double* srcFrames, const double* beats, int32_t count);

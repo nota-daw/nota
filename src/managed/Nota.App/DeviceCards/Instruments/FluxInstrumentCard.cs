@@ -216,8 +216,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             for (int i = 0; i < engine.TrackCount; i++)
             {
                 if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id != id) continue;
-                string name = engine.GetTrackName(id);
-                if (string.IsNullOrWhiteSpace(name)) name = $"Track {i + 1}";
+                string name = TrackNames.Of(engine, ti);
                 string kind = ti.Type switch { 2 => " · return", 3 => " · bus", _ => "" };
                 return name + kind;
             }

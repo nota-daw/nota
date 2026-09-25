@@ -43,33 +43,7 @@ public partial class MainWindow
         var path = files[0].TryGetLocalPath();
         if (path is null) { _vm.StatusText = "Unsupported file location."; return; }
 
-        string name = System.IO.Path.GetFileName(path);
-        // Decode + tempo-detect run on the UI thread (they mutate the engine), but they can be
-        // slow for a long file — surface a background strip in the status bar so it never looks
-        // frozen. Yield first so the strip paints before the (blocking) engine calls.
-        await RunBackgroundAsync($"Importing {name}…", async prog =>
-        {
-            await Task.Yield();
-            int trackId = Engine.AddAudioTrack();
-            int clip = Engine.AddAudioClip(trackId, path, 0.0);
-            if (clip < 0) { _vm.StatusText = $"Failed to load {name}"; return; }
-
-            prog.Report(ProgressReport.Indeterminate("Analysing tempo…"));
-            await Task.Yield();
-            double bpm = AutoWarpImported(trackId, clip);
-            Timeline.Refresh();
-            _vm.StatusText = bpm > 0
-                ? string.Format(NotaNum.Culture, "Imported {0} · warped to tempo ({1:0.0}\u2009BPM)", name, bpm)
-                : $"Imported {name}";
-        });
-    }
-
-    // Auto-warp a freshly imported audio clip so it conforms to the project tempo.
-    // Returns the detected BPM (0 when detection fails and the clip is left as-is).
-    private double AutoWarpImported(int trackId, int clipIndex)
-    {
-        try { return clipIndex >= 0 ? Engine.AutoWarpClip(trackId, clipIndex) : 0.0; }
-        catch { return 0.0; }
+        await ImportAudioInBackgroundAsync(path, -1, 0.0);
     }
 
     // --- Export master to WAV (M6-4) ---------------------------------------
@@ -335,6 +309,7 @@ public partial class MainWindow
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
             Timeline.SaveSections(dir);  // arrangement song sections (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
+            _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle
             _projectPath = dir;
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             UpdateWindowTitle();
@@ -355,6 +330,8 @@ public partial class MainWindow
     // per-clip editor state and rebuild every view (cf. RefreshAfterUndoRedo).
     private void RefreshAfterLoad()
     {
+        _importEpoch++;                  // imports still running belong to the old graph
+        Timeline.ClearPendingImports();
         _editorRoll = null;
         _clipEditor = null;
         _editorTrackId = -1;

@@ -159,10 +159,12 @@ void seedNeutralWarp(AudioClip& c, double spb, double devSR) {
 // to the beat grid, and seed two end markers so the whole clip stretches to that
 // many beats at the project tempo (i.e. conforms to the current BPM). Returns the
 // detected BPM, or 0 when detection fails (leaving markers untouched by caller).
-double seedAutoWarp(AudioClip& c, double spb, double devSR) {
+double seedAutoWarp(AudioClip& c, double spb, double devSR, double knownBpm = 0.0) {
     const double srcSR = c.sample->sourceSampleRate;
     const int64_t srcLen = c.effectiveLength();
-    const double bpm = detectTempo(*c.sample, static_cast<int64_t>(c.sourceOffsetFrames), srcLen, srcSR);
+    const double bpm = knownBpm > 0.0
+        ? knownBpm
+        : detectTempo(*c.sample, static_cast<int64_t>(c.sourceOffsetFrames), srcLen, srcSR);
     if (bpm <= 0.0 || srcLen <= 0) return 0.0;
     const double durationSec = static_cast<double>(srcLen) / srcSR;
     const double beatsRaw = durationSec * bpm / 60.0;
@@ -376,7 +378,7 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
     return true;
 }
 
-double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex) {
+double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex, double knownBpm) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return 0.0;
     if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return 0.0;
@@ -385,7 +387,7 @@ double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex) {
     auto nt = cloneTrack(*old);
     AudioClip& c = nt->clips[clipIndex];
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
-    const double bpm = seedAutoWarp(c, spb, devSR);
+    const double bpm = seedAutoWarp(c, spb, devSR, knownBpm);
     if (bpm <= 0.0) return 0.0;   // detection failed: leave the clip unchanged
     c.warpEnabled = true;
     configureClipWarp(c, spb, devSR);
@@ -684,7 +686,10 @@ int32_t Engine::addAudioTrack() {
 }
 
 int32_t Engine::addAudioClip(int32_t trackId, const std::string& path, double startBeat) {
-    auto sample = decodeAudioFile(path);
+    return addAudioClipBuffer(trackId, decodeAudioFile(path), startBeat);
+}
+
+int32_t Engine::addAudioClipBuffer(int32_t trackId, std::shared_ptr<SampleBuffer> sample, double startBeat) {
     if (!sample || sample->empty()) return -1;
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
@@ -762,13 +767,8 @@ static int32_t warpPeaksRange(const AudioClip& clip, float* out, int32_t maxPoin
         int64_t s0 = static_cast<int64_t>(srcAtBeat(beat0 + span * b / buckets));
         int64_t s1 = static_cast<int64_t>(srcAtBeat(beat0 + span * (b + 1) / buckets));
         if (s1 < s0) std::swap(s0, s1);
-        float mn = 1.0f, mx = -1.0f;
-        for (int64_t f = s0; f <= s1; ++f) {
-            float l, r; sb.readStereo(f, l, r);
-            const float mid = 0.5f * (l + r);
-            mn = std::min(mn, mid); mx = std::max(mx, mid);
-        }
-        if (mn > mx) { mn = mx = 0.0f; }
+        float mn, mx;
+        sb.peakRange(s0, s1 + 1, mn, mx);
         out[b * 2] = mn; out[b * 2 + 1] = mx;
     }
     return buckets;
@@ -812,14 +812,9 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex,
     const int32_t buckets = static_cast<int32_t>(std::min<int64_t>(maxPoints, total));
     const int64_t per = total / buckets;
     for (int32_t b = 0; b < buckets; ++b) {
-        int64_t begin = base + b * per;
-        int64_t end   = begin + per;
-        float mn = 1.0f, mx = -1.0f;
-        for (int64_t f = begin; f < end; ++f) {
-            float l, r; sb.readStereo(f, l, r);
-            const float mid = 0.5f * (l + r);
-            mn = std::min(mn, mid); mx = std::max(mx, mid);
-        }
+        const int64_t begin = base + b * per;
+        float mn, mx;
+        sb.peakRange(begin, begin + per, mn, mx);
         outMinMax[b * 2] = mn; outMinMax[b * 2 + 1] = mx;
     }
     if (clip.reversed) reversePeaks(outMinMax, buckets);
@@ -844,15 +839,8 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex,
     const int32_t buckets = static_cast<int32_t>(std::min<int64_t>(maxPoints, total));
     const int64_t per = total / buckets;
     for (int32_t b = 0; b < buckets; ++b) {
-        int64_t begin = b * per;
-        int64_t end   = begin + per;
-        float mn = 1.0f, mx = -1.0f;
-        for (int64_t f = begin; f < end; ++f) {
-            float l, r; sb.readStereo(f, l, r);
-            const float mid = 0.5f * (l + r);
-            mn = std::min(mn, mid); mx = std::max(mx, mid);
-        }
-        if (mn > mx) { mn = mx = 0.0f; }
+        float mn, mx;
+        sb.peakRange(b * per, (b + 1) * per, mn, mx);
         outMinMax[b * 2] = mn; outMinMax[b * 2 + 1] = mx;
     }
     return buckets;

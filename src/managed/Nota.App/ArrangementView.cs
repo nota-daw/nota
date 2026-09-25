@@ -582,18 +582,6 @@ public sealed partial class ArrangementView : UserControl
         }
     }
 
-    // Instrument tracks show their instrument (plugin) name; audio/return use a default.
-    private static string TrackDisplayName(IAudioEngine eng, int id, bool isInstrument, bool isReturn)
-    {
-        if (isReturn) return $"Return {eng.TrackReturnIndex(id) + 1}";
-        if (isInstrument)
-        {
-            string inst = eng.DeviceName(id, -1);   // Synth / Sampler / plugin name
-            return string.IsNullOrWhiteSpace(inst) ? "Inst " + id : inst;
-        }
-        return "Audio " + id;
-    }
-
     private void Zoom(double factor)
     {
         _pixelsPerBeat = Math.Clamp(_pixelsPerBeat * factor, 4, 240);
@@ -666,8 +654,6 @@ public sealed partial class ArrangementView : UserControl
                 if (!eng.TryGetTrackInfo(i, out var ti)) continue;
                 // Stored colour (set via the header menu) wins; otherwise auto by position.
                 int effColor = EffectiveColorIndex(eng, ti.Id);
-                // A stored name (set via the header menu) wins; otherwise the derived default.
-                string storedName = eng.GetTrackName(ti.Id);
                 var tvm = new TrackVM
                 {
                     Id = ti.Id,
@@ -681,9 +667,8 @@ public sealed partial class ArrangementView : UserControl
                     Armed = ti.Armed != 0,
                     Frozen = !ti.IsReturn && !ti.IsGroup && eng.IsTrackFrozen(ti.Id),   // M7
                     LiveRole = FreezeRole?.Invoke(ti.Id) ?? 0,                          // live-freeze (v1.1)
-                    Name = storedName.Length > 0 ? storedName
-                         : ti.IsGroup ? "Group"
-                         : TrackDisplayName(eng, ti.Id, ti.IsInstrument, ti.IsReturn),
+                    // A stored name (set via the header menu) wins; otherwise the derived default.
+                    Name = IsProcessingTrack(ti.Id) ? "Processing…" : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
                     Pan = ti.Pan,
                 };
@@ -1621,6 +1606,9 @@ public sealed partial class ArrangementView : UserControl
             BorderThickness = new Thickness(0, 0, 1, 1),
             Child = grid,
         };
+        // A background import is still filling the track: the disabled look (by colour, not
+        // opacity), still clickable so the track can be deleted to cancel.
+        if (IsProcessingTrack(t.Id)) card.AttachedToVisualTree += (_, _) => Inactive.Set(card, true, interactive: true);
         _headerCards[t.Id] = (card, name, t.IsGroup, spine, spineBrush);   // for in-place selection repaint
         if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);

@@ -511,13 +511,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             // Sidechain source (None + every other track).
             var scName = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             bool scOk = engine.DeviceAcceptsSidechain(track, di);
-            string SrcName(int id)
-            {
-                for (int i = 0; i < engine.TrackCount; i++)
-                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                    { string n = engine.GetTrackName(id); return n.Length > 0 ? n : Inv($"Track {i + 1}"); }
-                return "None";
-            }
+            string SrcName(int id) { string n = TrackNames.Of(engine, id); return n == "—" ? "None" : n; }
             readouts.Add(() =>
             {
                 int src = scOk ? engine.DeviceSidechainSource(track, di) : -1;
@@ -659,7 +653,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 {
                     var autos = Enumerable.Range(0, 3).Where(b => BandActive(b) && On(BP(b, AutoRelease))).Select(b => PrismInk.Names[b]).ToList();
                     int src = engine.DeviceAcceptsSidechain(track, di) ? engine.DeviceSidechainSource(track, di) : -1;
-                    string sc = src >= 0 ? "sidechain: " + engine.GetTrackName(src) : "own input";
+                    string sc = src >= 0 ? "sidechain: " + TrackNames.Of(engine, src) : "own input";
                     return Inv($"{(On(Detect) ? "RMS" : "Peak")} detector · {(autos.Count > 0 ? "auto release on " + string.Join(", ", autos) : "fixed release")} · {sc}");
                 }
                 default:

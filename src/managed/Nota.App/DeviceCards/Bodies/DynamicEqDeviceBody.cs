@@ -85,13 +85,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
 
         // Key source: the device's sidechain routing (a track), picked from a menu.
-        string SrcName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string SrcName(int id) => TrackNames.Of(engine, id);
         int Src() => engine.DeviceSidechainSource(track, di);
         void ShowKeyMenu(Control at)
         {

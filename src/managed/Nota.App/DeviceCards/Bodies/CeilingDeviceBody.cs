@@ -251,13 +251,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // Key source: Internal, or another track (the device's sidechain routing).
-        string SrcName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string SrcName(int id) => TrackNames.Of(engine, id);
         int Src() => engine.DeviceSidechainSource(track, di);
         bool ExtOn() => Src() >= 0;
         string KeyName() => ExtOn() ? SrcName(Src()) : "Internal";

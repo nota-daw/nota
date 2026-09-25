@@ -463,13 +463,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         int centreTab = 0;
 
         // Sidechain key: the switch picks a source (a flyout with the tracks and the key gain).
-        string SrcName(int id)
-        {
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id == id)
-                { string n = engine.GetTrackName(id); return n.Length > 0 ? n : NotaNum.F($"Track {i + 1}"); }
-            return "—";
-        }
+        string SrcName(int id) => TrackNames.Of(engine, id);
         Control SidechainSwitch()
         {
             Border? host = null;

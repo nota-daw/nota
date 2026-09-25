@@ -357,7 +357,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         {
             if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
             srcIds.Add(ti.Id);
-            srcNames.Add(NotaNum.F($"{i + 1} · {(ti.IsReturn ? "Return" : ti.IsInstrument ? "Instr" : "Audio")}"));
+            srcNames.Add(TrackNames.Of(engine, ti));
         }
         string SourceName() { int k = srcIds.IndexOf(engine.DeviceSidechainSource(track, di)); return k > 0 ? srcNames[k] : "Internal"; }
         bool ExtActive() => Sc(S_ExtKey) > 0.5;

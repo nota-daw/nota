@@ -256,7 +256,7 @@ public sealed class MixerView : UserControl
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && ti.Id != id)
-                Add(_engine.GetTrackName(ti.Id) is { Length: > 0 } nm ? nm : $"Inst {ti.Id}", ti.Id);
+                Add(TrackNames.Of(_engine, ti), ti.Id);
         int cur = _engine.GetTrackMidiSource(id);
         int sel = sources.IndexOf(cur);
         cb.SelectedIndex = sel >= 0 ? sel : 0;
