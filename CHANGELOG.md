@@ -58,6 +58,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   bare R and M no longer flip them by accident while you play. The Mixer moves to **⌘⇧M**.
 
 ### Fixed
+- Duplicating a clip (⌘D) now places the copy right after it, even when other clips follow.
+  Before, the copy jumped past the last clip on the track. Like dragging, it replaces the
+  part of any clip it lands on.
 - A MIDI note that is already held at the playhead now sounds when you press Play in the
   middle of it, drag the playhead onto it during playback, or loop back into it. Before,
   only the next note in the clip played. Dragging the playhead during playback also

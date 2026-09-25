@@ -1663,14 +1663,17 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
     if (!old) return -1;
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
+    int32_t newIdx;
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return -1;
         MidiClip d = nt->midiClips[clipIndex];
         const double srcStart = d.startBeat, len = d.lengthBeats;
         auto snips = captureClipAutomation(*nt, srcStart, srcStart + len);
-        // Place right after the source, then shift past any further clip so it never overlaps.
-        d.startBeat = placeMidiNonOverlap(*nt, d.startBeat + d.lengthBeats, d.lengthBeats);
-        nt->midiClips.insert(nt->midiClips.begin() + clipIndex + 1, d);
+        // Land right after the source, overwriting whatever sits there (like a drag).
+        d.startBeat = srcStart + len;
+        midiOverwriteRange(nt->midiClips, d.startBeat, d.startBeat + len);
+        nt->midiClips.push_back(d);
+        newIdx = static_cast<int32_t>(nt->midiClips.size()) - 1;
         applyClipAutomation(*nt, trackId, snips, d.startBeat, len, /*sameTrack*/ true);
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return -1;
@@ -1678,13 +1681,15 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
         const double len = audioDisplayLenBeats(d, spb, devSR);
         const double srcStart = d.startBeat;
         auto snips = captureClipAutomation(*nt, srcStart, srcStart + len);
-        d.startBeat = placeAudioNonOverlap(*nt, d.startBeat + len, len, spb, devSR);
+        d.startBeat = srcStart + len;
+        audioOverwriteRange(nt->clips, d.startBeat, d.startBeat + len, spb, devSR);
         if (d.warpEnabled) configureClipWarp(d, spb, devSR);   // the copy needs its own stretcher
-        nt->clips.insert(nt->clips.begin() + clipIndex + 1, d);
+        nt->clips.push_back(d);
+        newIdx = static_cast<int32_t>(nt->clips.size()) - 1;
         applyClipAutomation(*nt, trackId, snips, d.startBeat, len, /*sameTrack*/ true);
     }
     republishWithTrack(trackId, nt);
-    return clipIndex + 1;
+    return newIdx;
 }
 
 // --- clip clipboard (copy/cut/paste, incl. cross-track) ---------------------
@@ -1904,7 +1909,7 @@ std::vector<Engine::BlockClip> Engine::captureBlock(
 // Re-land a captured block at placedStart onto the same tracks, one shared non-overlap
 // shift for the whole block (so relative geometry is preserved), publishing every touched
 // track in a single undo step. Records the placed clips in lastPlaced_.
-void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart) {
+void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart, bool overwrite) {
     lastPlaced_.clear();
     if (items.empty() || !authoring_) return;
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
@@ -1921,8 +1926,19 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart)
 
     // Find the minimal shared shift d >= 0 so no clip in the block overlaps an existing
     // clip on its track. All clips move together by d, so relative positions never change.
+    // In overwrite mode the block lands exactly at placedStart and carves what it covers
+    // instead (all carves first, so they never cut a copy placed by an earlier item).
     double d = 0.0;
-    bool moved = true;
+    bool moved = !overwrite;
+    if (overwrite) {
+        for (const auto& b : items) {
+            auto it = clones.find(b.trackId);
+            if (it == clones.end()) continue;
+            const double s = placedStart + b.relStart, e = s + b.len;
+            if (b.kind == 1) midiOverwriteRange(it->second->midiClips, s, e);
+            else audioOverwriteRange(it->second->clips, s, e, spb, devSR);
+        }
+    }
     while (moved) {
         moved = false;
         for (const auto& b : items) {
@@ -2096,7 +2112,7 @@ double Engine::duplicateClipBlock(const std::vector<std::pair<int32_t,int32_t>>&
         }
     }
     if (absStart == std::numeric_limits<double>::max()) return -1.0;
-    placeBlock(items, absStart + len);
+    placeBlock(items, absStart + len, /*overwrite*/ true);   // right after itself, like a drag
     return len;
 }
 

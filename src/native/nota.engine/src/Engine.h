@@ -1005,10 +1005,11 @@ private:
     // BlockClip entries rebased to the block start, returning the block's total length.
     // placeBlock re-lands a captured block at placedStart onto the same tracks, shifting the
     // WHOLE block right by a single shared delta to clear existing clips, and publishes all
-    // touched tracks in one undo step; it records the placed clips in lastPlaced_.
+    // touched tracks in one undo step; it records the placed clips in lastPlaced_. With
+    // overwrite it never shifts: the block lands at placedStart and carves what it covers.
     std::vector<BlockClip> captureBlock(const std::vector<std::pair<int32_t,int32_t>>& sel,
                                         double& blockLen) const;
-    void placeBlock(const std::vector<BlockClip>& items, double placedStart);
+    void placeBlock(const std::vector<BlockClip>& items, double placedStart, bool overwrite = false);
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
     std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);

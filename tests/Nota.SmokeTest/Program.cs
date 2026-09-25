@@ -10504,15 +10504,47 @@ Console.WriteLine("-- block clip ops (multi-selection) --");
         Check(e.PasteClipBlock(20.0, -1) == 1 && e.TryGetClipInfo(a, 0, out var pc) && Math.Abs(pc.StartBeat - 20.0) < eps, "cut block pastes back at beat 20");
     }
 
-    // Shared non-overlap: a blocker at [4,6) forces the WHOLE block right by one shift, so
-    // the copies' internal geometry (a 2-beat gap) is preserved instead of splitting apart.
+    // Duplicate lands right after the source even when the next slots are taken: with four
+    // clips back to back, duplicating the first overwrites the second instead of jumping past
+    // the fourth, and a partial overlap only carves the covered part.
+    {
+        using var e = new NotaEngine();
+        int a = e.AddInstrumentTrack();
+        int c0 = e.AddMidiClip(a, 0.0, 4.0);
+        e.AddMidiClip(a, 4.0, 4.0);
+        e.AddMidiClip(a, 8.0, 4.0);
+        e.AddMidiClip(a, 12.0, 4.0);
+        e.DuplicateClipBlock(new[] { (a, c0) });
+        var placed = e.LastPlacedClips();
+        Check(placed.Length == 1 && e.TryGetClipInfo(a, placed[0].clipIndex, out var d0) && Math.Abs(d0.StartBeat - 4.0) < eps,
+              "duplicate of the first clip lands right after it (beat 4)");
+        var starts = new List<(double s, double l)>();
+        for (int i = 0; e.TryGetClipInfo(a, i, out var ci); i++) starts.Add((ci.StartBeat, ci.LengthBeats));
+        Check(starts.Count == 4, $"covered clip replaced, others kept (got {starts.Count} clips)");
+        Check(starts.Any(x => Math.Abs(x.s - 12.0) < eps), "fourth clip untouched (no copy past the end)");
+        Check(!starts.Any(x => x.s >= 16.0 - eps), "nothing placed after the last clip");
+
+        using var f = new NotaEngine();
+        int b = f.AddInstrumentTrack();
+        int g0 = f.AddMidiClip(b, 0.0, 4.0);
+        f.AddMidiClip(b, 6.0, 4.0);              // copy [4,8) half-covers [6,10)
+        Check(f.DuplicateClip(b, g0) >= 0, "single duplicate over a partial overlap");
+        var rest = new List<(double s, double l)>();
+        for (int i = 0; f.TryGetClipInfo(b, i, out var ci); i++) rest.Add((ci.StartBeat, ci.LengthBeats));
+        Check(rest.Any(x => Math.Abs(x.s - 4.0) < eps && Math.Abs(x.l - 4.0) < eps), "copy at [4,8)");
+        Check(rest.Any(x => Math.Abs(x.s - 8.0) < eps && Math.Abs(x.l - 2.0) < eps), "overlapped clip carved to [8,10)");
+    }
+
+    // Shared non-overlap on paste: a blocker at [4,6) forces the WHOLE block right by one shift,
+    // so the copies' internal geometry (a 2-beat gap) is preserved instead of splitting apart.
     {
         using var e = new NotaEngine();
         int a = e.AddInstrumentTrack();
         int ca = e.AddMidiClip(a, 0.0, 2.0);
         int cb = e.AddMidiClip(a, 2.0, 2.0);
         e.AddMidiClip(a, 4.0, 2.0);              // blocker at [4,6)
-        e.DuplicateClipBlock(new[] { (a, ca), (a, cb) });
+        e.CopyClipBlock(new[] { (a, ca), (a, cb) });
+        e.PasteClipBlock(4.0, -1);
         var placed = e.LastPlacedClips();
         Check(placed.Length == 2, "two copies placed past the blocker");
         e.TryGetClipInfo(placed[0].trackId, placed[0].clipIndex, out var q0);

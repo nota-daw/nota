@@ -735,7 +735,7 @@ NOTA_API NotaResult nota_midi_clip_env_set(NotaEngine* engine, int32_t track_id,
 NOTA_API NotaResult nota_clip_set_warp_markers(NotaEngine* engine, int32_t track_id, int32_t clip_index, const double* src_frames, const double* beats, int32_t count);
 NOTA_API int32_t     nota_clip_get_warp_markers(const NotaEngine* engine, int32_t track_id, int32_t clip_index, double* out_src, double* out_beat, int32_t max_count);
 NOTA_API int32_t    nota_clip_split(NotaEngine* engine, int32_t track_id, int32_t clip_index, double at_beat);   /* -> new clip index, or -1 */
-NOTA_API int32_t    nota_clip_duplicate(NotaEngine* engine, int32_t track_id, int32_t clip_index);              /* -> new clip index, or -1 */
+NOTA_API int32_t    nota_clip_duplicate(NotaEngine* engine, int32_t track_id, int32_t clip_index);              /* right after itself, overwriting what it covers -> new clip index, or -1 */
 NOTA_API NotaResult nota_clip_delete(NotaEngine* engine, int32_t track_id, int32_t clip_index);
 /* Time-range clip ops for the arrangement time-selection: split at the range boundaries
  * so only covered content is affected, in one undo step, no ripple. delete_range carves
@@ -769,8 +769,9 @@ NOTA_API int32_t    nota_clip_clipboard_kind(NotaEngine* engine);
 /* Block clip clipboard (multi-selection). A block = a set of clips (track_ids[i],
  * clip_indices[i]) captured with their track ids, beats relative to the block start, and
  * each clip's automation. block_paste re-lands the block onto the same tracks at at_beat;
- * block_duplicate places the copy right after the block. Overlap is avoided by shifting the
- * WHOLE block by one shared delta, so relative geometry is preserved. Each op is a single
+ * block_duplicate places the copy right after the block, overwriting (carving) whatever it
+ * lands on, like a drag. block_paste avoids overlap by shifting the WHOLE block by one shared
+ * delta, so relative geometry is preserved. Each op is a single
  * undo step. block_duplicate returns the block length (>0), or -1. last_placed writes the
  * (track_id, clip_index) of every clip the last paste/duplicate produced (up to cap pairs)
  * and returns the total count, so the UI can re-select them. */
