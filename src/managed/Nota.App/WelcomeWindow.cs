@@ -16,6 +16,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Microsoft.Extensions.DependencyInjection;
+using Nota.Application;
 
 namespace Nota.App;
 
@@ -78,7 +80,7 @@ public sealed class WelcomeWindow : NotaWindow
         brand.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = $"Version {AppInfo.Version} · Desktop DAW",
+            Text = $"Version {AppInfo.Version} · Engine {App.Services.GetRequiredService<EngineBuildInfo>().Version} · Desktop DAW",
         });
         Grid.SetColumn(brand, 1);
         header.Children.Add(brand);
