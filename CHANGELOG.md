@@ -47,6 +47,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   bare R and M no longer flip them by accident while you play. The Mixer moves to **⌘⇧M**.
 
 ### Fixed
+- A MIDI note that is already held at the playhead now sounds when you press Play in the
+  middle of it, drag the playhead onto it during playback, or loop back into it. Before,
+  only the next note in the clip played. Dragging the playhead during playback also
+  releases the notes that were sounding, so they no longer hang.
 - Sidechain and source pickers on devices (Compressor, Dynamic EQ-8, Ceiling, Shutter,
   Auto Filter, Auto Shift, Level, Prism, plugins with a sidechain input) and the Mixer's MIDI
   source list now name tracks the same way as the arrangement — e.g. an instrument track you

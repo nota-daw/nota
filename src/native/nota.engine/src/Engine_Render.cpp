@@ -227,7 +227,9 @@ void Engine::drainCommands() {
             case CommandType::SetTimeSignature: transport_.setTimeSignature(c.i0, c.i1); break;
             case CommandType::SetLoop:          transport_.setLoop(c.i0 != 0, c.d0, c.d1); break;
             case CommandType::SetMetronome:     transport_.setMetronome(c.i0 != 0); break;
-            case CommandType::Seek:             transport_.seekBeats(c.d0); break;
+            case CommandType::Seek:
+                seekedWhileRolling_ |= transport_.isPlaying();   // a jump mid-playback, not Stop→Seek→Play
+                transport_.seekBeats(c.d0); seekedThisBlock_ = true; break;
             case CommandType::None:             break;
         }
     }
@@ -311,6 +313,9 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                 if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
                     evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel};
+                // Chase: a note already held at the jump point starts sounding right here.
+                if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
+                    evs[n++] = {0, true, note.pitch, vel};
                 if (offS >= blockStart && offS < blockStart + frames && n < 1024)
                     evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
             }
@@ -692,14 +697,23 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     Graph* g = liveGraph_.load(std::memory_order_acquire);
 
-    // Flush stuck instrument voices on a play→stop edge (pause/stop): otherwise a
-    // held note keeps ringing forever since its note-off never arrives.
-    if (!playing && renderWasPlaying_ && g)
-        for (auto& tptr : g->tracks)
+    auto flushArrangementVoices = [&] {
+        if (g) for (auto& tptr : g->tracks)
             if (tptr->instrument && !sessionActiveOf(*tptr)) {
                 tptr->instrument->allNotesOff();
                 for (auto& md : tptr->midiEffects) if (md) md->reset();   // flush arp held/pending
             }
+    };
+    // Flush stuck instrument voices on a play→stop edge (pause/stop), or on a seek while
+    // rolling: otherwise a held note keeps ringing forever since its note-off never arrives.
+    const bool seeked = seekedThisBlock_, seekedRolling = seekedWhileRolling_;
+    seekedThisBlock_ = seekedWhileRolling_ = false;
+    if ((!playing && renderWasPlaying_) || (playing && renderWasPlaying_ && seekedRolling))
+        flushArrangementVoices();
+    // Note chase: when playback starts, the playhead jumps (seek) or the loop wraps, clip
+    // notes that began before the playhead but are still held get re-triggered at the
+    // jump point — otherwise a note you start in the middle of stays silent.
+    bool chase = playing && (!renderWasPlaying_ || seeked);
     renderWasPlaying_ = playing;
 
     // Split the block at loop boundaries so the loop is sample-accurate: nothing
@@ -711,11 +725,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         if (playing && transport_.isLooping()
             && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             transport_.wrapToLoopStart();
-            if (g) for (auto& tptr : g->tracks)
-                if (tptr->instrument && !sessionActiveOf(*tptr)) {
-                    tptr->instrument->allNotesOff();
-                    for (auto& md : tptr->midiEffects) if (md) md->reset();
-                }
+            flushArrangementVoices();
+            chase = true;
             if (nLoopSeams < 16) loopSeams[nLoopSeams++] = done;   // declick this seam below
         }
         int32_t seg = std::min(numFrames - done, kMaxBlock);
@@ -724,7 +735,9 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             if (toEnd > 0.5 && toEnd < seg) seg = std::max(1, static_cast<int32_t>(std::lround(toEnd)));
         }
         const double segStart = transport_.playheadSamples();
+        chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
+        chaseNotes_ = chase = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
         transport_.advanceBy(seg);
         done += seg;

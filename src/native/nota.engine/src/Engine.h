@@ -1071,6 +1071,9 @@ private:
     std::vector<OverrideTarget> overrides_;
     bool wasPlaying_ = false;                 // poll() edge detection: stop ends latched writes
     bool renderWasPlaying_ = false;           // audio-thread play→stop edge (flush stuck notes)
+    bool seekedThisBlock_ = false;            // a Seek command was drained this block (audio thread)
+    bool seekedWhileRolling_ = false;         // ...and it arrived while the transport was rolling
+    bool chaseNotes_ = false;                 // this segment starts at a discontinuity: re-trigger held clip notes
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time

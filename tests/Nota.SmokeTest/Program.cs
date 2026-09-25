@@ -1365,6 +1365,28 @@ Console.WriteLine("-- Nota Aurora --");
         var b2 = new float[8192 * 2]; ae.Seek(0.0); ae.Play(); ae.RenderOffline(b2, 8192); ae.StopTransport();
         Check(Rms(b2, 8192) > 0.001f, $"Aurora osc2-only patch is audible (RMS {Rms(b2, 8192):F3})");
     }
+    {
+        // Note chase: a clip note already held at the playhead must sound when playback starts
+        // mid-note, after a seek while rolling, and after a loop wrap into it.
+        static float RmsFrom(float[] b, int from, int to) { double sum = 0; for (int i = from * 2; i < to * 2; i++) sum += b[i] * (double)b[i]; return (float)Math.Sqrt(sum / Math.Max(1, (to - from) * 2)); }
+        using var ce = new NotaEngine();
+        ce.SetBpm(120);   // 22050 samples per beat @ 44.1k
+        int tc = ce.AddWavetableSynthTrack();
+        ce.AddMidiClip(tc, 0.0, 8.0);
+        ce.SetClipNotes(tc, 0, new[] { new NotaNote(60, 0.0, 4.0, 0.9f), new NotaNote(64, 5.0, 3.0, 0.9f) });
+        var cb = new float[22050 * 2];
+        ce.Seek(1.0); ce.Play(); ce.RenderOffline(cb, 22050); ce.StopTransport();
+        Check(Rms(cb, 22050) > 0.001f, $"note chase: play from mid-note sounds (RMS {Rms(cb, 22050):F3})");
+
+        ce.Seek(4.25); ce.Play(); ce.RenderOffline(cb, 11025);          // gap between notes: silence
+        ce.Seek(6.0); ce.RenderOffline(cb, 22050); ce.StopTransport();  // seek into note 2 while rolling
+        Check(Rms(cb, 22050) > 0.001f, $"note chase: seek into a held note while playing sounds (RMS {Rms(cb, 22050):F3})");
+
+        var lb = new float[44100 * 2];
+        ce.SetLoop(true, 1.0, 2.0); ce.Seek(1.0); ce.Play(); ce.RenderOffline(lb, 44100); ce.StopTransport();
+        ce.SetLoop(false, 0.0, 0.0);
+        Check(RmsFrom(lb, 24000, 44100) > 0.001f, $"note chase: held note re-sounds after the loop wraps (RMS {RmsFrom(lb, 24000, 44100):F3})");
+    }
 
     // v3 (almanac rework): the wheels, the output pan, LFO 2's sync and the three FX
     // blocks' switches and characters all exist and all act.
