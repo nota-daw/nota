@@ -31,6 +31,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.41.5] — 2026-09-25
+
+### Highlights
+- The clip editor has a fresh look: MIDI and audio clips share one layout with a header, an inspector and a cleaner piano roll.
+- Paste Bounced Audio (⌘⇧V) renders a range through a track's instrument and effects and pastes it as a new audio clip.
+- Input monitoring on audio tracks lets you hear your mic, interface or another track live through the track's effects.
+- Importing audio no longer freezes the app, and re-importing a file you've used before is instant.
+- Record and Metronome now need ⌘ (⌘R, ⌘M), so they don't toggle by accident while you play.
+- Fixes for clip duplication, notes held at the playhead, and track names in sidechain pickers.
+
 ### Added
 - **Paste Bounced Audio** (⌘⇧V, Ctrl+Shift+V on Windows/Linux; also in the Edit menu),
   like in Ableton Live. Select a range on any audio or MIDI track with Shift+drag, click an
