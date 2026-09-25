@@ -1,6 +1,12 @@
-# Nota
+<p align="center">
+  <img src="assets/icons/logo.png" alt="Nota logo" width="128" height="128">
+</p>
 
-[![Latest release](https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver)](https://github.com/nota-daw/nota/releases/latest)
+<h1 align="center">Nota</h1>
+
+<p align="center">
+  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver" alt="Latest release"></a>
+</p>
 
 > **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
 > was developed with AI assistance. It started as a tool I built for myself, and was only

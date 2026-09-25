@@ -1,14 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F5CE7A"></stop><stop offset=".45" stop-color="#D8A03D"></stop><stop offset="1" stop-color="#A9721F"></stop></linearGradient>
-    <linearGradient id="body" x1=".2" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#2A2620"></stop><stop offset=".55" stop-color="#1C1A16"></stop><stop offset="1" stop-color="#100F0D"></stop></linearGradient>
-    <radialGradient id="glow" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#ffffff" stop-opacity=".10"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient>
-  </defs>
-  <rect width="1024" height="1024" fill="url(#body)"></rect>
-  <rect width="1024" height="1024" fill="url(#glow)"></rect>
-  <g>
-    <circle cx="512" cy="512" r="300" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="86" stroke-dasharray="1413.7 1885.0" stroke-linecap="round" transform="rotate(135 512 512)"></circle>
-    <circle cx="512" cy="512" r="300" fill="none" stroke="url(#brass)" stroke-width="86" stroke-dasharray="876.5 1885.0" stroke-linecap="round" transform="rotate(135 512 512)"></circle>
-    <g transform="rotate(32 512 512)"><line x1="512" y1="512" x2="512" y2="228" stroke="#F5EFE2" stroke-width="86" stroke-linecap="round"></line></g>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="pl"><rect x="0" y="0" width="1024" height="1024" rx="0"/></clipPath></defs><rect width="1024" height="1024" fill="#1C1A16"/><circle cx="512" cy="512" r="300" fill="none" stroke="#100F0D" stroke-width="86" stroke-dasharray="1413.7166941154069 1884.9555921538758" stroke-linecap="round" transform="rotate(135 512 512)"/><circle cx="512" cy="512" r="300" fill="none" stroke="#D8A03D" stroke-width="86" stroke-dasharray="876.4793509405157 1884.9555921538758" stroke-linecap="round" transform="rotate(135 512 512)"/><line x1="512" y1="512" x2="512" y2="228" stroke="#F2EDE1" stroke-width="86" stroke-linecap="round" transform="rotate(32 512 512)"/></svg>
