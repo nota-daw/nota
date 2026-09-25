@@ -797,6 +797,13 @@ NOTA_API int32_t    nota_track_has_clipboard(NotaEngine* engine);
  * -1 = master bus, >0 = another track's post-fader output (by id). */
 NOTA_API NotaResult nota_track_set_record_input(NotaEngine* engine, int32_t track_id, int32_t source);
 NOTA_API int32_t    nota_track_get_record_input(NotaEngine* engine, int32_t track_id);
+/* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input
+ * source live through its devices + fader instead of its clips. A master source stays
+ * silent (it would feed back). push_monitor_frames feeds the hardware-monitor ring without
+ * opening a capture device (tests only). */
+NOTA_API NotaResult nota_track_set_monitor(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_monitor(NotaEngine* engine, int32_t track_id);
+NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const float* interleaved_stereo, int32_t frames);
 
 /* MIDI routing: forward an instrument track's MIDI to another instrument track
  * (source_track_id = -1 turns it off). */

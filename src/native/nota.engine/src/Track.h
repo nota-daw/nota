@@ -179,6 +179,12 @@ public:
     int32_t recordInputSource() const { return recordInputSource_.load(std::memory_order_relaxed); }
     void    setRecordInputSource(int32_t s) { recordInputSource_.store(s, std::memory_order_relaxed); }
 
+    // Input monitoring (audio tracks, Ableton's Monitor "In"): while on, the track plays its
+    // record-input source live — hardware input, or another track's / return's post-fader
+    // output — through its own devices + fader instead of its clips, transport rolling or not.
+    bool monitor() const { return monitor_.load(std::memory_order_relaxed); }
+    void setMonitor(bool m) { monitor_.store(m, std::memory_order_relaxed); }
+
     // MIDI routing: send this instrument track's note events (clips + live input) to
     // another instrument track's instrument as well. -1 = off. The destination reads
     // this while rendering, so it's atomic. One hop only (not transitive).
@@ -247,6 +253,7 @@ private:
     int32_t            returnIndex_ = -1;         // >=0 for return tracks
     int32_t            groupId_ = -1;             // parent Group track id, or -1 (top-level)
     std::atomic<int32_t> recordInputSource_{0};   // 0 hardware, -1 master, >0 source track id
+    std::atomic<bool>    monitor_{false};           // live input monitoring (audio tracks)
     std::atomic<int32_t> midiFromTrackId_{-1};      // -1 off, >0 forward MIDI to this track id
     std::atomic<bool>    frozen_{false};            // M7: play frozenBuf instead of the live chain
 };

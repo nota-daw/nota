@@ -501,6 +501,17 @@ NotaResult nota_track_set_record_input(NotaEngine* e, int32_t track_id, int32_t 
 int32_t nota_track_get_record_input(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackRecordInput(track_id) : 0;
 }
+NotaResult nota_track_set_monitor(NotaEngine* e, int32_t track_id, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTrackMonitor(track_id, on != 0);
+    return NOTA_OK;
+}
+int32_t nota_track_get_monitor(NotaEngine* e, int32_t track_id) {
+    return (e && CENG(e)->trackMonitor(track_id)) ? 1 : 0;
+}
+void nota_engine_push_monitor_frames(NotaEngine* e, const float* interleaved_stereo, int32_t frames) {
+    if (e && interleaved_stereo && frames > 0) ENG(e)->pushMonitorFramesForTest(interleaved_stereo, frames);
+}
 NotaResult nota_track_set_midi_source(NotaEngine* e, int32_t track_id, int32_t source_track_id) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMidiSource(track_id, source_track_id);

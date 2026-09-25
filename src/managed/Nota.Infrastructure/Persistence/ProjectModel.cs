@@ -78,6 +78,7 @@ public sealed class TrackDto
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }
+    public bool Monitor { get; set; }   // live input monitoring (audio tracks)
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
     public float[] Sends { get; set; } = new float[4];

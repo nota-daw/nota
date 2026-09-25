@@ -355,6 +355,18 @@ public sealed partial class NotaEngine
     public int GetTrackRecordInput(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetRecordInput(_handle, trackId); }
 
+    /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
+    public void SetTrackMonitor(int trackId, bool on)
+    { ThrowIfDisposed(); NativeMethods.TrackSetMonitor(_handle, trackId, on ? 1 : 0); }
+
+    /// <summary>True when the audio track monitors its record input live.</summary>
+    public bool GetTrackMonitor(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackGetMonitor(_handle, trackId) != 0; }
+
+    /// <summary>Test hook: feed the hardware-monitor ring without opening a capture device.</summary>
+    public void PushMonitorFramesForTest(float[] interleavedStereo, int frames)
+    { ThrowIfDisposed(); NativeMethods.EnginePushMonitorFrames(_handle, interleavedStereo, frames); }
+
     /// <summary>Sets an instrument track's MIDI input source (receive that track's MIDI; -1 = off).</summary>
     public void SetTrackMidiSource(int trackId, int sourceTrackId)
     { ThrowIfDisposed(); NativeMethods.TrackSetMidiSource(_handle, trackId, sourceTrackId); }

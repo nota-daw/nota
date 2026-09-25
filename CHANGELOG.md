@@ -19,6 +19,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Input monitoring** on audio tracks: the headphones button right of the track's input
+  selector lets you hear the input live through the track's effects and fader, whether or
+  not the transport is playing, like Ableton's Monitor "In". The input can be your audio
+  interface or microphone, another track, or a return. While monitoring is on, the track
+  plays its input instead of its clips. Soloing the monitoring track doesn't mute the track
+  it listens to. The Master input can't be monitored because it would feed back, so the
+  button is dimmed when Master is selected. Monitoring is saved with the project.
 - Preferences → Audio: **Play test tone** plays a 440 Hz sine through the master so you can
   check the output, and **CPU check** measures the audio load for 5 seconds and tells you
   whether the current buffer size leaves enough headroom. The test tone now fades in and out

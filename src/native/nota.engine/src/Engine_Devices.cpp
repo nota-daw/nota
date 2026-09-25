@@ -909,6 +909,9 @@ void Engine::recomputeRouting() {
         if (t->instrument) claim(t->instrument->sidechainSourceTrackId());
         for (auto& d : t->devices)
             if (d) claim(d->sidechainSourceTrackId());
+        // A monitoring audio track hears its source track's post-fader tap.
+        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0)
+            claim(t->recordInputSource());
     }
 }
 

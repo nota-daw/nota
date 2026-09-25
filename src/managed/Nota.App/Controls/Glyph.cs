@@ -23,6 +23,7 @@ internal enum GlyphKind
     ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
     StepLeft, StepRight,           // filled small triangles (◀ ▶ as "move")
     Edit, Freeze, PopOut, Cycle, Dot, Bypass, Plus, Grip, Minus,
+    Headphones,                    // input monitoring
 }
 
 internal sealed class Glyph : Control
@@ -126,6 +127,23 @@ internal sealed class Glyph : Control
                 for (int i = -1; i <= 1; i++)
                     for (int j = -1; j <= 1; j += 2)
                         ctx.DrawEllipse(ink, null, new Point(cx + j * dx, cy + i * dy), dr, dr);
+                break;
+            }
+            case GlyphKind.Headphones:
+            {
+                // A headband arc over two ear cups.
+                double rr = s * 0.36, top = cy + s * 0.06;
+                var band = new StreamGeometry();
+                using (var c = band.Open())
+                {
+                    c.BeginFigure(new Point(cx - rr, top), false);
+                    c.ArcTo(new Point(cx + rr, top), new Size(rr, rr), 0, false, SweepDirection.Clockwise);
+                    c.EndFigure(false);
+                }
+                ctx.DrawGeometry(null, pen, band);
+                double cw = s * 0.2, ch = s * 0.32;
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx - rr - cw * 0.5, top, cw, ch), cw * 0.35));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + rr - cw * 0.5, top, cw, ch), cw * 0.35));
                 break;
             }
             case GlyphKind.Dot:

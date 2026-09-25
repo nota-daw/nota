@@ -46,6 +46,7 @@ using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // Captured input frame (input thread -> message), lock-free up-queue (M4-3).
 struct InputFrame { float l; float r; };
 using InputQueue = SpscRingBuffer<InputFrame, 1u << 17>;  // ~3 s at 44.1 kHz — headroom for UI-thread drain stalls
+using MonitorQueue = SpscRingBuffer<InputFrame, 1u << 14>; // input thread -> audio thread (live monitoring)
 
 // Incoming MIDI control event surfaced to the UI for MIDI-learn (MIDI thread ->
 // message thread, lock-free up-queue). kind: 0 = control-change, 1 = note-on.
@@ -788,6 +789,10 @@ public:
     // -1 = master bus, >0 = another track's post-fader output (by id).
     void setTrackRecordInput(int32_t trackId, int32_t source);
     int32_t trackRecordInput(int32_t trackId) const;
+    // Input monitoring (audio tracks): hear the record-input source live through the track.
+    void setTrackMonitor(int32_t trackId, bool on);
+    bool trackMonitor(int32_t trackId) const;
+    void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
@@ -847,6 +852,7 @@ private:
     // automation + solo + send buses + track pass + return pass. processBlock
     // splits a block at loop boundaries and calls this per segment.
     void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, bool playing, double spb);
+    void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames);   // live input monitoring
     void drainCommands();
     void drainLiveMidi(double blockStartBeat, bool playing);
     void renderInstrumentRaw(Graph* g, Track& t, float* dst, int32_t frames,
@@ -1098,6 +1104,23 @@ private:
     double recRoutedStart_[128] = {};
     float  recRoutedVel_[128] = {};
     void   captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb);
+
+    // Live input monitoring: the input thread also feeds this ring while any audio track
+    // monitors the hardware input; the audio thread pops one segment's worth per mixGraph
+    // into monitorHwBuf_, holding a small cushion so the two device clocks don't click.
+    // Declared before input_ so it outlives the capture thread on destruction.
+    MonitorQueue        monitorQueue_;
+    std::vector<float>  monitorHwBuf_;                 // audio thread, this segment's hw input
+    bool                monitorPrimed_ = false;         // audio thread: cushion reached
+    std::atomic<int32_t> inputBlockFrames_{0};         // largest capture callback seen (cushion size)
+    std::atomic<bool>   hwMonitorTap_{false};           // input thread -> monitorQueue_
+    std::atomic<bool>   hwRecordTap_{false};            // input thread -> inputQueue_ (hw take rolling)
+    bool                hwMonitorWanted_ = false;       // message thread: some track monitors hw input
+    bool                inputTestMode_ = false;         // tests: never open a real capture device
+    bool ensureAudioInput();                            // open the capture device once (shared)
+    void releaseAudioInputIfIdle();                     // close it when nothing records/monitors
+    void updateMonitorInput();                          // (re)evaluate hw monitoring after edits
+    void pullMonitorInput(int32_t frames);              // audio thread: ring -> monitorHwBuf_
 
     // audio input recording (M4-3): input thread -> ring -> message-thread buffer.
     std::unique_ptr<AudioInput> input_;

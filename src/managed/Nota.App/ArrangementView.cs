@@ -1534,13 +1534,22 @@ public sealed partial class ArrangementView : UserControl
         Control row2 = btnRow;
         if (isAudioTrack || t.IsInstrument)
         {
-            var combo = isAudioTrack ? BuildInputCombo(t.Id) : BuildMidiSourceCombo(t.Id);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3};
+            // Audio tracks: a monitor chip right of the input selector hears that input live.
+            var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
+            var combo = isAudioTrack ? BuildInputCombo(t.Id, monitor) : BuildMidiSourceCombo(t.Id);
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3};
             btnRow.Margin = new Thickness(0);
             Grid.SetColumn(btnRow, 0);
             Grid.SetColumn(combo, 1);
             g.Children.Add(btnRow);
             g.Children.Add(combo);
+            if (monitor is not null)
+            {
+                combo.Margin = new Thickness(0);
+                monitor.Chip.Margin = new Thickness(0, 0, 12, 0);   // the row's right inset moves to the chip
+                Grid.SetColumn(monitor.Chip, 2);
+                g.Children.Add(monitor.Chip);
+            }
             row2 = g;
         }
 
@@ -1858,7 +1867,7 @@ public sealed partial class ArrangementView : UserControl
 
     // Compact record-input selector for an audio track header: Ext (hardware), Master,
     // or another track / send. Reflects and writes the track's stored input source.
-    private ComboBox BuildInputCombo(int trackId)
+    private ComboBox BuildInputCombo(int trackId, MonitorChip? monitor = null)
     {
         var cb = new ComboBox
         {
@@ -1871,8 +1880,8 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
         void Add(string value, int src)
         {
-            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
-            var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
+            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
+            var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
             // the name rendered near-white. A NotaPalette brush re-points on a variant change,
@@ -1881,7 +1890,8 @@ public sealed partial class ArrangementView : UserControl
             DockPanel.SetDock(inTb, Dock.Left);
             // MinWidth so the closed selection box (which doesn't stretch its content in
             // Avalonia) still spreads In to the left edge and the name to the right.
-            var content = new DockPanel { LastChildFill = true, MinWidth = 84, Children = { inTb, valTb } };
+            // Narrower with the monitor chip beside it, so the closed box still shows In + name.
+            var content = new DockPanel { LastChildFill = true, MinWidth = monitor is null ? 84 : 58, Children = { inTb, valTb } };
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
             sources.Add(src);
         }
@@ -1892,12 +1902,56 @@ public sealed partial class ArrangementView : UserControl
         int cur = _engine?.GetTrackRecordInput(trackId) ?? 0;
         int sel = sources.IndexOf(cur);
         cb.SelectedIndex = sel >= 0 ? sel : 0;
+        monitor?.SetSource(sel >= 0 ? cur : 0);
         cb.SelectionChanged += (_, _) =>
         {
-            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
-                _engine?.SetTrackRecordInput(trackId, sources[cb.SelectedIndex]);
+            if (cb.SelectedIndex < 0 || cb.SelectedIndex >= sources.Count) return;
+            _engine?.SetTrackRecordInput(trackId, sources[cb.SelectedIndex]);
+            monitor?.SetSource(sources[cb.SelectedIndex]);
         };
         return cb;
+    }
+
+    // Input-monitor chip (Monitor "In"): while lit, the audio track plays whatever arrives on
+    // its input — hardware, another track or a return — live through its devices and fader,
+    // in place of its clips. Master can't be monitored (it would feed back), so the chip
+    // fades out and explains itself while Master is the selected input.
+    private sealed class MonitorChip
+    {
+        public required Border Chip { get; init; }
+        public required Action<int> SetSource { get; init; }
+    }
+
+    private MonitorChip MonitorToggle(int trackId)
+    {
+        bool state = _engine?.GetTrackMonitor(trackId) ?? false;
+        bool usable = true;
+        var glyph = new Glyph(GlyphKind.Headphones, 10);
+        var chip = new Border
+        {
+            Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
+            Child = glyph, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        };
+        void Paint()
+        {
+            // Engaged: the brass wash + edge of M/S; at rest a neutral chip.
+            chip.Background = Brush(state ? "Brush.AccentSubtle" : "Brush.SurfaceRaised");
+            chip.BorderBrush = Brush(state ? "Brush.BorderBrass" : "Brush.BorderDefault");
+            glyph.Foreground = Brush(state ? "Brush.AccentHover" : "Brush.TextStrong");
+            chip.Opacity = usable ? 1.0 : 0.4;
+            ToolTip.SetTip(chip, usable
+                ? (state ? "Monitoring input — click to stop" : "Monitor input: hear it live through this track")
+                : "Master can't be monitored (it would feed back)");
+        }
+        Paint();
+        chip.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            state = !state; Paint();
+            _engine?.SetTrackMonitor(trackId, state);
+        };
+        return new MonitorChip { Chip = chip, SetSource = src => { usable = src != -1; Paint(); } };
     }
 
     // Compact MIDI-input selector for an instrument track header: None, or another instrument

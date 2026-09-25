@@ -31,6 +31,7 @@ Engine::Engine()
       authoring_(std::make_shared<Graph>()) {
     authoring_->masterTrack = std::make_shared<Track>(kMasterTrackId, TrackType::Audio);
     scratch_.assign(kMaxBlock * 2, 0.0f);
+    monitorHwBuf_.assign(kMaxBlock * 2, 0.0f);
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
     for (auto& b : groupBus_)  b.assign(kMaxBlock * 2, 0.0f); // group submix buses
@@ -44,7 +45,10 @@ Engine::Engine()
     installRackPluginFactory();          // lets rack blobs rebuild hosted-plugin children on load
 }
 
-Engine::~Engine() { stop(); }
+Engine::~Engine() {
+    stop();
+    if (input_) input_->stop();   // monitoring can keep the capture device open until teardown
+}
 
 bool Engine::start() {
     if (backend_->isRunning()) return true;
@@ -144,7 +148,13 @@ bool Engine::applyAudioConfig() {
     stop();
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
-    return start();
+    const bool ok = start();
+    // Live monitoring held the old capture device open: reopen on the chosen one.
+    hwRecordTap_.store(false, std::memory_order_relaxed);
+    hwMonitorTap_.store(false, std::memory_order_relaxed);
+    hwMonitorWanted_ = false;
+    updateMonitorInput();
+    return ok;
 }
 
 // --- MIDI device settings (M7-2) ---------------------------------------------
@@ -306,6 +316,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setReturnIndex(t.returnIndex());                       // M6-1
     nt->setGroupId(t.groupId());                               // group membership
     nt->setRecordInputSource(t.recordInputSource());           // internal record routing
+    nt->setMonitor(t.monitor());                               // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                   // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
@@ -338,6 +349,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     retired_.push_back(g);
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
+    updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
 }
 
 void Engine::pushUndo() {

@@ -88,6 +88,7 @@ public sealed class ProjectService
                 RecordInput = engine.GetTrackRecordInput(ti.Id) is var rin && rin > 0
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
+                Monitor = engine.GetTrackMonitor(ti.Id),
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
             };
@@ -466,6 +467,7 @@ public sealed class ProjectService
         var scDeferred = new List<(int track, int dev, int srcIndex)>();
         var instScDeferred = new List<(int track, int srcIndex)>();   // instrument React source (Nota Flux)
         var recInputDeferred = new List<(int trackId, int encoded)>();
+        var monitorDeferred = new List<(int trackId, bool on)>();
         var groupDeferred = new List<(int trackId, int parentDocIndex)>();   // group membership
         var midiFromDeferred = new List<(int trackId, int sourceDocIndex)>();  // MIDI routing source ("MIDI In")
         // CV links resolved after all tracks exist (cross-track targets are doc-indices).
@@ -593,6 +595,7 @@ public sealed class ProjectService
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
+            if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
@@ -792,6 +795,8 @@ public sealed class ProjectService
                 : (enc >= 2 && enc - 2 < newTrackIds.Count && newTrackIds[enc - 2] > 0 ? newTrackIds[enc - 2] : 0);
             if (source != 0) engine.SetTrackRecordInput(trackId, source);
         }
+        // Input monitoring last, so a track-source monitor never briefly opens the hardware input.
+        foreach (var (trackId, on) in monitorDeferred) if (on) engine.SetTrackMonitor(trackId, true);
         // MIDI routing source ("MIDI In", stored as a doc index), now that every track exists.
         foreach (var (trackId, sourceDocIndex) in midiFromDeferred)
         {

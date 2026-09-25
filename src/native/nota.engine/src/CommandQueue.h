@@ -66,6 +66,11 @@ public:
         return true;
     }
 
+    // Approximate fill level. Exact from the consumer thread (the producer can only grow it).
+    size_t size() const noexcept {
+        return (head_.load(std::memory_order_acquire) - tail_.load(std::memory_order_relaxed)) & kMask;
+    }
+
 private:
     static constexpr size_t kMask = Capacity - 1;
     T buffer_[Capacity]{};

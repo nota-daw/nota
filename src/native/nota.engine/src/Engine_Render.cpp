@@ -795,6 +795,24 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
 }
 
+// Fill `dst` with what a monitoring audio track hears: the hardware input pulled for this
+// segment, or its source track's previous-block post-fader route tap. Guards against the
+// obvious feedback loops (itself, master, or a group it sits inside) by staying silent.
+void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames) {
+    const int32_t src = t.recordInputSource();
+    if (src == 0) { std::copy_n(monitorHwBuf_.data(), frames * 2, dst); return; }
+    std::fill_n(dst, frames * 2, 0.0f);
+    if (src < 0 || src == t.id()) return;
+    for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {   // ancestor group?
+        if (a == src) return;
+        int32_t parent = -1;
+        for (auto& o : g->tracks) if (o->id() == a) { parent = o->groupId(); break; }
+        a = parent;
+    }
+    const int32_t slot = routeSlotForTrack(src);
+    if (slot >= 0) std::copy_n(routeBus_[slot].data(), frames * 2, dst);
+}
+
 void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, bool playing, double spb) {
     {
         // Automation (M9): read-mode block-rate eval — write each active lane's
@@ -819,6 +837,21 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
         const int32_t recSrc = internalRecordSource_.load(std::memory_order_relaxed);
+
+        // Live input monitoring: this segment's hardware input (shared by every track
+        // monitoring it), and the set of tracks whose output some monitoring track hears —
+        // those keep rendering while solo-gated, feeding only their route tap / record tap.
+        pullMonitorInput(frames);
+        constexpr int kMaxFeeds = 16;
+        int32_t feedIds[kMaxFeeds]; int numFeeds = 0;
+        if (recSrc > 0) feedIds[numFeeds++] = recSrc;
+        for (auto& t : g->tracks)
+            if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0 && numFeeds < kMaxFeeds)
+                feedIds[numFeeds++] = t->recordInputSource();
+        auto feedsMonitor = [&](int32_t id) {
+            for (int i = 0; i < numFeeds; ++i) if (feedIds[i] == id) return true;
+            return false;
+        };
         bool anySolo = false;
         int32_t numReturns = 0;
         for (auto& t : g->tracks) {
@@ -890,7 +923,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // — otherwise a soloed sibling would punch silent gaps into the buffer.
             const bool capturing = (t.id() == freezeCaptureTrackId_.load(std::memory_order_relaxed));
             const bool audible = !leafMute(t) && (!anySolo || leafSolo(t));
-            if (!audible && !capturing) { t.setMeter(0, 0, 0, 0); continue; }
+            // Soloing a monitoring (or recording) track must not silence what it listens to.
+            const bool feeding = !audible && !leafMute(t) && feedsMonitor(t.id());
+            if (!audible && !capturing && !feeding) { t.setMeter(0, 0, 0, 0); continue; }
+            const bool toMix = audible || capturing;   // false: render only for the taps
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
             float* dest = destSlot >= 0 ? groupBus_[destSlot].data() : out;
@@ -898,8 +934,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // 0) Session view (M5-2): apply quantized launch/stop; a playing slot
             //    overrides this track's arrangement content. (Skipped for a frozen or
             //    capturing track — the buffer/arrangement is the source of truth.)
+            // Input monitoring (Monitor "In"): the track plays its record-input source live
+            // in place of its clips — hardware input this segment, or the source track's
+            // post-fader tap from the previous one. Master (-1) would feed back: silent.
+            const bool monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
+
             bool sessionActive = false;
-            if (!frozenActive && !capturing) if (auto& sp = t.sessionPlayer) {
+            if (!frozenActive && !capturing && !monitoring) if (auto& sp = t.sessionPlayer) {
                 if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
                     if (t.instrument) t.instrument->allNotesOff();
                     for (auto& md : t.midiEffects) if (md) md->reset();   // clock switch → flush arp
@@ -922,7 +963,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         t.instrument->setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
                     }
                 }
-                if (sessionActive && t.type() == TrackType::Instrument)
+                if (monitoring)
+                    renderMonitorInput(g, t, scratch_.data(), frames);
+                else if (sessionActive && t.type() == TrackType::Instrument)
                     renderSessionSlotRaw(t, scratch_.data(), frames, spb);
                 else if (sessionActive && t.type() == TrackType::Audio)
                     renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb);
@@ -996,10 +1039,11 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             for (int32_t i = 0; i < frames; ++i) {
                 const float l = scratch_[i * 2]     * gl;
                 const float r = scratch_[i * 2 + 1] * gr;
-                dest[i * 2]     += l;
-                dest[i * 2 + 1] += r;
                 if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;   // record this track's output
                 if (route) { route[i * 2] += l; route[i * 2 + 1] += r; }   // tap post-fader → route bus
+                if (!toMix) continue;                                         // solo-gated feeder: taps only
+                dest[i * 2]     += l;
+                dest[i * 2 + 1] += r;
                 if (anySend)
                     for (int b = 0; b < numReturns; ++b) if (sends[b] != 0.0f) {
                         returnBus_[b][i * 2]     += l * sends[b];
@@ -1012,6 +1056,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 sqR += r * (double)r;
             }
             if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
+            if (!toMix) { t.setMeter(0, 0, 0, 0); continue; }
             t.setMeter(pkL, pkR,
                        static_cast<float>(std::sqrt(sqL / frames)),
                        static_cast<float>(std::sqrt(sqR / frames)));

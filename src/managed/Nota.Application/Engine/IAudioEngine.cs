@@ -221,6 +221,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
     int GetTrackRecordInput(int trackId);
+    /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
+    /// source through the track in place of its clips. A master source stays silent.</summary>
+    void SetTrackMonitor(int trackId, bool on);
+    bool GetTrackMonitor(int trackId);
     /// <summary>Set an instrument track's MIDI input source — receive another instrument track's
     /// MIDI output ("MIDI In"). sourceTrackId = -1 turns it off.</summary>
     void SetTrackMidiSource(int trackId, int sourceTrackId);

@@ -36,11 +36,103 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     }
 }
 void Engine::setTrackRecordInput(int32_t trackId, int32_t source) {
-    if (auto t = findTrackAuthoring(trackId)) t->setRecordInputSource(source);
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return;
+    t->setRecordInputSource(source);
+    if (t->monitor()) { recomputeRouting(); updateMonitorInput(); }   // monitored source moved
 }
 int32_t Engine::trackRecordInput(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->recordInputSource() : 0;
+}
+
+// --- live input monitoring ---------------------------------------------------
+void Engine::setTrackMonitor(int32_t trackId, bool on) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio) return;
+    t->setMonitor(on);
+    recomputeRouting();      // claim / release the source track's route tap
+    updateMonitorInput();    // open / close the capture device for a hardware source
+}
+bool Engine::trackMonitor(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && t->monitor();
+}
+
+// Open the capture device once; recording and monitoring share it, each gated by its own
+// tap flag, so starting a take while monitoring doesn't reopen (or drop) the stream.
+bool Engine::ensureAudioInput() {
+    if (inputTestMode_) return true;
+    if (input_ && input_->isRunning()) return true;
+    if (!input_) input_ = createAudioInput();
+    const uint32_t inputDev = resolveAudioDeviceId(config_.inputDeviceUid, /*inputScope=*/true);
+    // The input thread only touches the lock-free rings (RT-safe).
+    return input_->start([this](const float* s, int32_t n) {
+        if (n > inputBlockFrames_.load(std::memory_order_relaxed))
+            inputBlockFrames_.store(n, std::memory_order_relaxed);
+        if (hwRecordTap_.load(std::memory_order_relaxed)) {
+            int64_t dropped = 0;
+            for (int32_t i = 0; i < n; ++i)
+                if (!inputQueue_.push(InputFrame{ s[i * 2], s[i * 2 + 1] })) ++dropped;
+            if (dropped) inputDroppedFrames_.fetch_add(dropped, std::memory_order_relaxed);
+        }
+        if (hwMonitorTap_.load(std::memory_order_relaxed))
+            for (int32_t i = 0; i < n; ++i)
+                if (!monitorQueue_.push(InputFrame{ s[i * 2], s[i * 2 + 1] })) break;   // full: the audio thread trims
+    }, inputDev);
+}
+
+void Engine::releaseAudioInputIfIdle() {
+    if (hwRecordTap_.load(std::memory_order_relaxed) || hwMonitorTap_.load(std::memory_order_relaxed)) return;
+    if (input_) input_->stop();
+}
+
+// Keep the capture device open exactly while some audio track monitors the hardware
+// input. Only acts on a change, so a failed open isn't retried on every edit.
+void Engine::updateMonitorInput() {
+    bool want = false;
+    if (authoring_)
+        for (auto& t : authoring_->tracks)
+            if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() == 0) { want = true; break; }
+    if (want == hwMonitorWanted_) return;
+    hwMonitorWanted_ = want;
+    if (want) {
+        if (ensureAudioInput()) hwMonitorTap_.store(true, std::memory_order_relaxed);
+    } else {
+        hwMonitorTap_.store(false, std::memory_order_relaxed);
+        releaseAudioInputIfIdle();
+    }
+}
+
+// Audio thread: pop this segment's hardware input into monitorHwBuf_. The capture and
+// output devices run on separate clocks, so keep a cushion of about one capture block
+// queued (re-primed after an underrun) and trim any excess so latency can't build up.
+void Engine::pullMonitorInput(int32_t frames) {
+    float* dst = monitorHwBuf_.data();
+    std::fill_n(dst, frames * 2, 0.0f);
+    if (!hwMonitorTap_.load(std::memory_order_relaxed)) { monitorPrimed_ = false; return; }
+    const size_t cushion = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
+    size_t avail = monitorQueue_.size();
+    const size_t n = static_cast<size_t>(frames);
+    InputFrame f;
+    if (avail > n + cushion * 2 + 256) {          // drifted / stalled: drop the stale backlog
+        for (size_t k = avail - (n + cushion); k > 0 && monitorQueue_.pop(f); --k) {}
+        avail = n + cushion;
+    }
+    if (!monitorPrimed_) {
+        if (avail < n + cushion) return;          // still filling the cushion: silence
+        monitorPrimed_ = true;
+    }
+    size_t i = 0;
+    for (; i < n && monitorQueue_.pop(f); ++i) { dst[i * 2] = f.l; dst[i * 2 + 1] = f.r; }
+    if (i < n) monitorPrimed_ = false;            // underrun: rebuild the cushion
+}
+
+void Engine::pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames) {
+    inputTestMode_ = true;
+    hwMonitorTap_.store(true, std::memory_order_relaxed);
+    for (int32_t i = 0; i < frames; ++i)
+        monitorQueue_.push(InputFrame{ interleavedStereo[i * 2], interleavedStereo[i * 2 + 1] });
 }
 void Engine::setTrackMidiSource(int32_t trackId, int32_t sourceTrackId) {
     if (sourceTrackId == trackId) sourceTrackId = -1;   // no self-routing
@@ -246,17 +338,12 @@ bool Engine::startAudioRecording(int32_t trackId) {
         return true;
     }
 
-    if (!input_) input_ = createAudioInput();
-    // The input thread only touches the lock-free ring (RT-safe).
-    const uint32_t inputDev = resolveAudioDeviceId(config_.inputDeviceUid, /*inputScope=*/true);
-    const bool ok = input_->start([this](const float* s, int32_t n) {
-        int64_t dropped = 0;
-        for (int32_t i = 0; i < n; ++i)
-            if (!inputQueue_.push(InputFrame{ s[i * 2], s[i * 2 + 1] })) ++dropped;
-        if (dropped) inputDroppedFrames_.fetch_add(dropped, std::memory_order_relaxed);
-    }, inputDev);
-    if (!ok) { audioRecordTrackId_ = 0; return false; }
-    audioRecordSampleRate_ = input_->sampleRate() > 0 ? input_->sampleRate() : transport_.sampleRate();
+    // The device may already be open for monitoring: flush anything a previous take's
+    // tap left behind, then start feeding the capture ring.
+    if (!ensureAudioInput()) { audioRecordTrackId_ = 0; return false; }
+    { InputFrame stale; while (inputQueue_.pop(stale)) {} }
+    hwRecordTap_.store(true, std::memory_order_relaxed);
+    audioRecordSampleRate_ = input_ && input_->sampleRate() > 0 ? input_->sampleRate() : transport_.sampleRate();
     beginCaptureLayout();
     audioRecording_ = true;
     // Arrangement takes rewind to the take start on stop; session takes manage
@@ -273,7 +360,8 @@ void Engine::stopAudioRecording() {
     if (!audioRecording_) return;
     audioRecording_ = false;
     internalRecordSource_.store(0, std::memory_order_relaxed);  // stop the mixGraph tap
-    if (input_) input_->stop();
+    hwRecordTap_.store(false, std::memory_order_relaxed);        // stop the capture tap
+    releaseAudioInputIfIdle();                                   // keep it open if monitoring
     drainInputQueue(); // pull whatever the input (or mix) thread pushed before it stopped
 
     const int32_t trackId = audioRecordTrackId_;

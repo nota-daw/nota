@@ -50,4 +50,10 @@ public sealed class MixerTools(IAudioEngine engine, IEngineDispatch dispatch, IA
 
     [McpServerTool(Name = "get_record_input"), Description("Read a track's record-input source index.")]
     public Task<int> GetRecordInput(int trackId) => Read(() => E.GetTrackRecordInput(trackId));
+
+    [McpServerTool(Name = "set_track_monitor"), Description("Turn live input monitoring on/off for an audio track: it plays its record-input source (hardware input, or another track's / return's output) through its devices and fader in real time, in place of its clips.")]
+    public Task SetTrackMonitor(int trackId, bool on) => Mutate(() => E.SetTrackMonitor(trackId, on));
+
+    [McpServerTool(Name = "get_track_monitor"), Description("Read whether an audio track is monitoring its record input live.")]
+    public Task<bool> GetTrackMonitor(int trackId) => Read(() => E.GetTrackMonitor(trackId));
 }

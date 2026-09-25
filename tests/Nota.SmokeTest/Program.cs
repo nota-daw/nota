@@ -10695,6 +10695,72 @@ Console.WriteLine("-- record input project round-trip --");
     finally { try { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true); } catch { } }
 }
 
+// ============ live input monitoring (Monitor "In") ==========================
+Console.WriteLine("-- input monitoring --");
+{
+    using var me = new NotaEngine();
+    me.SetBpm(120); me.SetTimeSignature(4, 4);
+    int minst = me.AddBassSynthTrack();
+    int monClip = me.AddMidiClip(minst, 0, 8);
+    me.SetClipNotes(minst, monClip, new[] { new NotaNote(36, 0.0, 8.0, 1.0f) });
+    int mon = me.AddAudioTrack();
+    me.SetTrackRecordInput(mon, minst);          // listen to the synth (no hardware device)
+    me.SetTrackSolo(mon, true);                   // solo the (empty) audio track
+    var mbuf = new float[2048 * 2];
+    me.Seek(0); me.Play();
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) < 1e-4f, $"soloed empty audio track is silent without monitoring (RMS {Rms(mbuf, 2048):F5})");
+
+    me.SetTrackMonitor(mon, true);
+    Check(me.GetTrackMonitor(mon), "monitor flag set");
+    me.Seek(0);                                   // retrigger the note (it began while the synth was gated)
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) > 0.001f, $"monitoring track hears its solo-gated source (RMS {Rms(mbuf, 2048):F4})");
+
+    me.SetTrackVolume(mon, 0f);                   // the signal really flows through its fader
+    for (int b = 0; b < 2; b++) me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) < 1e-4f, $"monitored signal follows the track fader (RMS {Rms(mbuf, 2048):F5})");
+    me.SetTrackVolume(mon, 1f);
+
+    me.SetTrackRecordInput(mon, -1);              // master would feed back: stays silent
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) < 1e-4f, $"master source is not monitored (RMS {Rms(mbuf, 2048):F5})");
+    me.StopTransport();
+
+    // Hardware input via the test hook (no capture device): heard with the transport stopped.
+    var sine = new float[8192 * 2];
+    for (int i = 0; i < 8192; i++) sine[i * 2] = sine[i * 2 + 1] = 0.5f * MathF.Sin(2f * MathF.PI * 440f * i / 44100f);
+    me.PushMonitorFramesForTest(sine, 8192);
+    me.SetTrackRecordInput(mon, 0);
+    me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) > 0.05f, $"hardware input monitored live while stopped (RMS {Rms(mbuf, 2048):F3})");
+    me.SetTrackMonitor(mon, false);
+    me.RenderOffline(mbuf, 2048);
+    Check(Rms(mbuf, 2048) < 1e-4f, $"monitor off silences the input (RMS {Rms(mbuf, 2048):F5})");
+}
+
+// ============ input monitoring survives a project round-trip ===============
+Console.WriteLine("-- input monitoring project round-trip --");
+{
+    using var src = new NotaEngine();
+    int ms = src.AddBassSynthTrack();
+    int mt = src.AddAudioTrack();
+    src.SetTrackRecordInput(mt, ms);
+    src.SetTrackMonitor(mt, true);
+    string dir = Path.Combine(Path.GetTempPath(), "nota-monitor-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(src, new TransportState(120, 1, false, false), w);
+        ProjectService.Save(doc, dir, src);
+        using var dst = new NotaEngine();
+        ProjectService.Apply(ProjectService.Load(dir), dst, dir);
+        dst.TryGetTrackInfo(1, out var t1);
+        Check(dst.GetTrackMonitor(t1.Id), "monitor state persisted");
+    }
+    finally { try { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true); } catch { } }
+}
+
 // ============ simultaneous instrument + audio recording ====================
 Console.WriteLine("-- simultaneous instrument + audio record --");
 {
