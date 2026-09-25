@@ -173,6 +173,7 @@ public partial class MainWindow : Window
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
+        Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
         // Arrangement context menus add tracks through the toolbar's own handlers, so the two
         // routes seed, refresh and report identically.

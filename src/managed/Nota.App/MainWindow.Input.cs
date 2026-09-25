@@ -147,6 +147,17 @@ public partial class MainWindow
             return;
         }
 
+        // ⌘⇧V / ⌃⇧V = Paste Bounced Audio: render the last time selection through its track's
+        // chain and paste it onto the focused audio track at the playhead (MainWindow.PasteBounced).
+        if (e.Key == Key.V && ArrangementView.IsPrimaryDown(e.KeyModifiers)
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
+            && _editorRoll is not { GridFocused: true })
+        {
+            _ = PasteBouncedAsync();
+            e.Handled = true;
+            return;
+        }
+
         // ⌘/⌃ + C/X/V = copy/cut/paste the selected arrangement clip. Skipped while the
         // piano-roll grid is focused (it copies/pastes notes) and when nothing is
         // actionable, so the event falls through to other handlers.

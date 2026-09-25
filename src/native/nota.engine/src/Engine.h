@@ -276,6 +276,11 @@ public:
     int32_t addAudioClip(int32_t trackId, const std::string& path, double startBeat);
     // Places an already-decoded buffer (background import) — no disk I/O on this thread.
     int32_t addAudioClipBuffer(int32_t trackId, std::shared_ptr<SampleBuffer> sample, double startBeat);
+    // Paste Bounced Audio: places device-rate interleaved-stereo PCM on an audio track at
+    // startBeat as a new (unwarped) clip, overwriting whatever it covers. One undo step.
+    // Returns the clip index, or -1 (not an audio track / empty buffer).
+    int32_t pasteAudioFrames(int32_t trackId, const float* interleaved, int64_t frames, double startBeat,
+                             const std::string& name);
     void    setTrackVolume(int32_t trackId, float v);
     void    setTrackPan(int32_t trackId, float p);
     void    setTrackMute(int32_t trackId, bool m);
@@ -298,9 +303,13 @@ public:
     // have the backend stopped and then pump renderOffline() for the returned frame
     // count (the capture is filled inside mixGraph). endFreeze publishes the frozen
     // track; cancelFreeze aborts without freezing. Not undoable (a view toggle).
-    int64_t beginFreeze(int32_t trackId, double lengthBeats);  // capture frames, or 0 on failure
+    int64_t beginFreeze(int32_t trackId, double lengthBeats, double tailSec = 2.0);  // capture frames, or 0 on failure
     void    endFreeze(int32_t trackId);
     void    cancelFreeze();
+    // Paste Bounced Audio (⌘⇧V): copies the armed capture's rendered frames into out (up to
+    // capFrames, interleaved stereo) and disarms it WITHOUT freezing the track — a one-shot
+    // bounce of the track's post-device, pre-fader sound. Returns the frames copied.
+    int64_t takeFreezeCapture(float* out, int64_t capFrames);
     void    unfreeze(int32_t trackId);                         // drop the buffer, go back to live
     bool    trackFrozen(int32_t trackId) const;
     // Opaque frozen-audio blob for project save/restore (header + interleaved PCM).

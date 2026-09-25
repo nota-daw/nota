@@ -823,6 +823,17 @@ NOTA_API int64_t    nota_track_freeze_begin(NotaEngine* engine, int32_t track_id
 NOTA_API void       nota_track_freeze_end(NotaEngine* engine, int32_t track_id);
 NOTA_API void       nota_track_freeze_cancel(NotaEngine* engine);
 NOTA_API void       nota_track_unfreeze(NotaEngine* engine, int32_t track_id);
+/* Paste Bounced Audio (⌘⇧V). bounce_begin arms a capture exactly length_beats long (no
+ * ring-out tail) and returns its frame count; seek to the range start and pump
+ * render_offline for that many frames, then freeze_take copies the captured post-device, pre-fader PCM
+ * (interleaved stereo, device rate, up to cap_frames) into out and disarms the capture
+ * WITHOUT freezing the track; returns frames copied. paste_audio_frames places such PCM on
+ * an audio track at at_beat as a new clip, overwriting what it covers (one undo step);
+ * returns the clip index or -1. name_utf8 may be NULL. */
+NOTA_API int64_t    nota_track_bounce_begin(NotaEngine* engine, int32_t track_id, double length_beats);
+NOTA_API int64_t    nota_track_freeze_take(NotaEngine* engine, float* out, int64_t cap_frames);
+NOTA_API int32_t    nota_track_paste_audio_frames(NotaEngine* engine, int32_t track_id, const float* interleaved,
+                                                  int64_t frames, double at_beat, const char* name_utf8);
 NOTA_API int32_t    nota_track_is_frozen(const NotaEngine* engine, int32_t track_id);
 /* Opaque frozen-audio blob for project save/restore (header + interleaved PCM). get
  * copies up to `cap` bytes into out and returns the full size (out=NULL probes the

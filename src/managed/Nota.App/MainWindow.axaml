@@ -48,6 +48,7 @@
             <NativeMenuItem Header="Cut" Click="OnMenuCut"/>
             <NativeMenuItem Header="Copy" Click="OnMenuCopy"/>
             <NativeMenuItem Header="Paste" Click="OnMenuPaste"/>
+            <NativeMenuItem Header="Paste Bounced Audio" Click="OnMenuPasteBounced" Gesture="Shift+Cmd+V"/>
             <NativeMenuItem Header="Delete" Click="OnMenuDeleteSel"/>
           </NativeMenu>
         </NativeMenuItem.Menu>

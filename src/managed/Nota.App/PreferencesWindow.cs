@@ -661,6 +661,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clip (or automation range)"),
+            ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
             ("⌘D", "Duplicate the selected clip(s) / range"),
             ("⌘E", "Split at the playhead · at the range edges"),
             ("⌘J", "Consolidate the selection into one clip per track"),

@@ -2140,6 +2140,45 @@ Console.WriteLine("-- Nota Pentad --");
         Check(fe.IsTrackFrozen(ft) && Rms(live, N) > 1e-3f && md < 1e-5, $"Nota Pentad freeze == live render (maxdiff {md:G3})");
     }
 
+    // Paste Bounced Audio (⌘⇧V): a range bounce captures exactly what the chain plays from the
+    // range start (held notes chased), leaves the source unfrozen, and pastes as one undo step
+    // that overwrites what it covers on the target audio track.
+    {
+        using var be = new NotaEngine();
+        be.SetBpm(120);
+        int bt = be.AddPentadTrack();
+        SetId(be, bt, "drift", 0.7f); SetId(be, bt, "mixnoise", 0.2f);
+        be.AddMidiClip(bt, 0.0, 4.0);
+        be.SetClipNotes(bt, 0, new[] { new NotaNote(57, 0.0, 3.0, 0.9f), new NotaNote(64, 0.5, 2.0, 0.8f) });
+        // Live reference first (as in the freeze test): a fresh engine's first render still
+        // carries the parameter smoothing from the SetId calls above.
+        long withTail = be.BeginFreeze(bt, 2.0); be.CancelFreeze();
+        long bFrames = be.BeginBounce(bt, 2.0); be.CancelFreeze();
+        Check(bFrames > 0 && bFrames < withTail, $"bounce arms exactly the range, no ring-out tail ({bFrames} < {withTail} frames)");
+        be.Seek(1.0); be.Play(); var live = new float[bFrames * 2]; be.RenderOffline(live, (int)bFrames); be.StopTransport();
+        be.Stop(); be.SetLoop(false, 0, 0); be.SetMetronome(false); be.StopTransport();
+        be.BeginBounce(bt, 2.0);
+        be.Seek(1.0); be.Play();
+        var chunk = new float[4096 * 2];
+        for (long rem = bFrames; rem > 0;) { int m = (int)Math.Min(4096, rem); be.RenderOffline(chunk, m); rem -= m; }
+        be.StopTransport();
+        var pcm = new float[bFrames * 2];
+        long got = be.TakeFreezeCapture(pcm);
+        // The bounce is pre-fader; the live mix went through the centred equal-power pan (cos π/4).
+        float panGain = (float)Math.Cos(Math.PI / 4);
+        double md = 0; for (int i = 0; i < pcm.Length; i++) md = Math.Max(md, Math.Abs(live[i] - pcm[i] * panGain));
+        Check(bFrames > 0 && got == bFrames && !be.IsTrackFrozen(bt) && Rms(pcm, (int)bFrames) > 1e-3f && md < 1e-5,
+              $"bounce range == live render from the range start, source not frozen (maxdiff {md:G3})");
+
+        int dst = be.AddAudioTrack();
+        int ClipsOn(int id)
+        { for (int i = 0; i < be.TrackCount; i++) if (be.TryGetTrackInfo(i, out var ti) && ti.Id == id) return ti.ClipCount; return -1; }
+        Check(be.PasteAudioFrames(dst, pcm, bFrames, 8.0, "Bounce") >= 0 && ClipsOn(dst) == 1, "paste bounced audio places a clip");
+        Check(be.PasteAudioFrames(dst, pcm, bFrames, 8.0, "Bounce") >= 0 && ClipsOn(dst) == 1, "paste bounced audio overwrites the covered range");
+        Check(be.Undo() && ClipsOn(dst) == 1 && be.Undo() && ClipsOn(dst) == 0, "each bounced paste is one undo step");
+        Check(be.PasteAudioFrames(bt, pcm, bFrames, 8.0, null) < 0, "paste bounced audio rejects an instrument track");
+    }
+
     // Factory presets: 40 ship, every named param is a real Pentad id, each applies in place.
     {
         var cat = new FactoryPresetCatalog();

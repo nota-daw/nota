@@ -1056,6 +1056,35 @@ void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns
     audioOverwriteRange(clips, ns, ne, transport_.samplesPerBeat(), transport_.sampleRate());
 }
 
+int32_t Engine::pasteAudioFrames(int32_t trackId, const float* interleaved, int64_t frames, double startBeat,
+                                 const std::string& name) {
+    if (!interleaved || frames <= 0) return -1;
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Audio) return -1;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    if (spb <= 0.0 || devSR <= 0.0) return -1;
+    startBeat = std::max(0.0, startBeat);
+
+    auto sb = std::make_shared<SampleBuffer>();
+    sb->channels = 2;
+    sb->frames = frames;
+    sb->sourceSampleRate = devSR;   // the capture ran at the device rate
+    sb->samples.assign(interleaved, interleaved + static_cast<size_t>(frames) * 2);
+
+    auto nt = cloneTrack(*old);
+    audioOverwriteRange(nt->clips, startBeat, startBeat + static_cast<double>(frames) / spb, spb, devSR);
+    AudioClip clip;
+    clip.sample = std::move(sb);
+    clip.startBeat = startBeat;
+    clip.lengthFrames = frames;
+    clip.name = name;
+    nt->clips.push_back(std::move(clip));
+    const int32_t idx = static_cast<int32_t>(nt->clips.size()) - 1;
+    republishWithTrack(trackId, nt);
+    lastPlaced_ = { { trackId, idx } };
+    return idx;
+}
+
 bool Engine::moveClip(int32_t trackId, int32_t clipIndex, double newStartBeat) {
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;
@@ -2439,15 +2468,15 @@ int32_t Engine::clipNoteCount(int32_t trackId, int32_t clipIndex) const {
 // bumps the whole project format).
 namespace { constexpr int kFreezeHeaderBytes = static_cast<int>(sizeof(double) + sizeof(int64_t)); }
 
-int64_t Engine::beginFreeze(int32_t trackId, double lengthBeats) {
+int64_t Engine::beginFreeze(int32_t trackId, double lengthBeats, double tailSec) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     if (t->type() != TrackType::Instrument && t->type() != TrackType::Audio) return 0;
     const double sr  = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
     const double spb = transport_.samplesPerBeat();
     if (spb <= 0.0 || lengthBeats <= 0.0) return 0;
-    const double tailSec = 2.0;   // let reverb/delay tails ring past the last clip
-    int64_t frames = static_cast<int64_t>(std::ceil(lengthBeats * spb)) + static_cast<int64_t>(tailSec * sr);
+    // tailSec lets reverb/delay tails ring past the last clip (0 for an exact-range bounce).
+    int64_t frames = static_cast<int64_t>(std::ceil(lengthBeats * spb)) + static_cast<int64_t>(std::max(0.0, tailSec) * sr);
     if (frames <= 0) return 0;
     freezeCaptureBuf_.assign(static_cast<size_t>(frames) * 2, 0.0f);
     freezeCapFrames_   = frames;
@@ -2475,6 +2504,13 @@ void Engine::cancelFreeze() {
     freezeCaptureTrackId_.store(-1, std::memory_order_relaxed);
     freezeCaptureBuf_ = std::vector<float>();
     freezeCapFrames_ = 0; freezeCursor_ = 0;
+}
+
+int64_t Engine::takeFreezeCapture(float* out, int64_t capFrames) {
+    const int64_t n = (out && capFrames > 0) ? std::min(capFrames, freezeCursor_) : 0;
+    if (n > 0) std::memcpy(out, freezeCaptureBuf_.data(), static_cast<size_t>(n) * 2 * sizeof(float));
+    cancelFreeze();   // disarm + free the capture; the track itself is untouched
+    return n;
 }
 
 void Engine::unfreeze(int32_t trackId) {

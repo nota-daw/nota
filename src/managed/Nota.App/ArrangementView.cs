@@ -1016,6 +1016,7 @@ public sealed partial class ArrangementView : UserControl
         int prev = SelTrackId;
         SelTrackId = trackId;
         SelClipIndex = clipIndex;
+        if (trackId > 0) FocusTrackId = trackId;
         _sel.Clear();
         if (trackId > 0 && clipIndex >= 0) _sel.Add((trackId, clipIndex));
         // Selecting into or out of a group changes that row's height, so the rows below it
@@ -1072,7 +1073,7 @@ public sealed partial class ArrangementView : UserControl
         else
         {
             _sel.Add((trackId, clipIndex));
-            SelTrackId = trackId; SelClipIndex = clipIndex;   // the just-clicked clip is the primary
+            SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;   // the just-clicked clip is the primary
         }
         UpdateHeaderSelection();
         Redraw();
@@ -1119,7 +1120,41 @@ public sealed partial class ArrangementView : UserControl
         _timeSelRowLo = Math.Max(0, Math.Min(rowA, rowB));
         _timeSelRowHi = Math.Min(Math.Max(0, _tracks.Count - 1), Math.Max(rowA, rowB));
         if (_sel.Count > 0) { _sel.Clear(); SelClipIndex = -1; UpdateHeaderSelection(); }
+        if (HasTimeSelection) BounceSource = (TimeSelectionTrackIds(), _timeSelStart, _timeSelEnd);
         Redraw();
+    }
+
+    /// <summary>Paste Bounced Audio (⌘⇧V) source: the most recent time selection's tracks and
+    /// range. Outlives the selection itself, so the user can click over to the target track.</summary>
+    public (int[] TrackIds, double Start, double End)? BounceSource { get; private set; }
+
+    /// <summary>The track the user last clicked (clip, header, or empty lane space) — the target
+    /// of Paste Bounced Audio. Unlike <see cref="SelectedTrackId"/>, a click on empty lane space
+    /// keeps it, since that click is how the paste position (the playhead) is placed.</summary>
+    public int FocusTrackId { get; internal set; } = -1;
+
+    /// <summary>Context-menu Paste Bounced Audio onto (track id, beat).</summary>
+    public event Action<int, double>? PasteBouncedRequested;
+    internal void RequestPasteBounced(int trackId, double beat) => PasteBouncedRequested?.Invoke(trackId, beat);
+
+    /// <summary>True when Paste Bounced Audio can land on <paramref name="trackId"/>: it's an audio
+    /// track and the remembered range covers exactly one audio/instrument track that still exists.</summary>
+    internal bool CanPasteBouncedOnto(int trackId)
+    {
+        if (BounceSource is not { } src) return false;
+        var target = _tracks.Find(t => t.Id == trackId);
+        if (target is null || target.IsInstrument || target.IsReturn || target.IsGroup) return false;
+        int sources = 0;
+        foreach (int id in src.TrackIds)
+            if (_tracks.Find(t => t.Id == id) is { IsReturn: false, IsGroup: false }) sources++;
+        return sources == 1;
+    }
+
+    /// <summary>Refreshes and selects the clips the engine placed last (e.g. a bounced paste).</summary>
+    public void RefreshAndSelectPlaced()
+    {
+        Refresh();
+        ReselectPlaced();
     }
 
     internal void ClearTimeSelection()
@@ -1240,7 +1275,7 @@ public sealed partial class ArrangementView : UserControl
             foreach (var c in _tracks[r].Clips)
                 if (c.StartBeat < bhi - 1e-6 && c.StartBeat + c.LengthBeats > blo + 1e-6)
                     _sel.Add((_tracks[r].Id, c.ClipIndex));
-        SelTrackId = trackId; SelClipIndex = clipIndex;
+        SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;
         UpdateHeaderSelection();
         Redraw();
     }
@@ -1272,7 +1307,7 @@ public sealed partial class ArrangementView : UserControl
         if (HasTimeSelection) ClearTimeSelection();
         _sel.Clear();
         foreach (var c in clips) _sel.Add(c);
-        if (_sel.Count > 0) { var f = _sel.First(); SelTrackId = f.track; SelClipIndex = f.clip; }
+        if (_sel.Count > 0) { var f = _sel.First(); SelTrackId = f.track; SelClipIndex = f.clip; FocusTrackId = f.track; }
         else { SelTrackId = -1; SelClipIndex = -1; }
         UpdateHeaderSelection();
         Redraw();

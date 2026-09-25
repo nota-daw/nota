@@ -531,6 +531,16 @@ void nota_track_freeze_end(NotaEngine* e, int32_t track_id) {
 void nota_track_freeze_cancel(NotaEngine* e) {
     if (e) ENG(e)->cancelFreeze();
 }
+int64_t nota_track_bounce_begin(NotaEngine* e, int32_t track_id, double length_beats) {
+    return e ? ENG(e)->beginFreeze(track_id, length_beats, 0.0) : 0;
+}
+int64_t nota_track_freeze_take(NotaEngine* e, float* out, int64_t cap_frames) {
+    return e ? ENG(e)->takeFreezeCapture(out, cap_frames) : 0;
+}
+int32_t nota_track_paste_audio_frames(NotaEngine* e, int32_t track_id, const float* interleaved,
+                                      int64_t frames, double at_beat, const char* name_utf8) {
+    return e ? ENG(e)->pasteAudioFrames(track_id, interleaved, frames, at_beat, name_utf8 ? name_utf8 : "") : -1;
+}
 void nota_track_unfreeze(NotaEngine* e, int32_t track_id) {
     if (e) ENG(e)->unfreeze(track_id);
 }

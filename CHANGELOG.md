@@ -16,9 +16,20 @@ created, and the build-and-publish run starts.
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Fixed
+- Right-clicking empty space on a track now always opens a menu. It used to show nothing
+  when there was no copied clip.
+
 ## [Unreleased]
 
 ### Added
+- **Paste Bounced Audio** (⌘⇧V, Ctrl+Shift+V on Windows/Linux; also in the Edit menu),
+  like in Ableton Live. Select a range on any audio or MIDI track with Shift+drag, click an
+  audio track, and press ⌘⇧V. The range is rendered through the track's instrument and all
+  its effects, then pasted there at the playhead as a new audio clip, replacing what was
+  under it. You can also right-click an audio track and choose **Paste bounced audio** to
+  paste at that spot. The render runs in the background with a progress bar, and one undo
+  removes the paste.
 - **Input monitoring** on audio tracks: the headphones button right of the track's input
   selector lets you hear the input live through the track's effects and fader, whether or
   not the transport is playing, like Ableton's Monitor "In". The input can be your audio

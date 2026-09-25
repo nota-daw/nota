@@ -239,6 +239,14 @@ public interface IAudioEngine : IDisposable
     void EndFreeze(int trackId);
     /// <summary>Aborts an armed freeze capture.</summary>
     void CancelFreeze();
+    /// <summary>Arms a capture exactly <paramref name="lengthBeats"/> long (no ring-out tail); returns frames.</summary>
+    long BeginBounce(int trackId, double lengthBeats);
+    /// <summary>Paste Bounced Audio: copies the armed capture's frames into <paramref name="outFrames"/>
+    /// (interleaved stereo) and disarms it without freezing the track. Returns frames copied.</summary>
+    long TakeFreezeCapture(float[] outFrames);
+    /// <summary>Places device-rate interleaved-stereo PCM on an audio track as a new clip at
+    /// <paramref name="atBeat"/>, overwriting what it covers (one undo step). Clip index, or -1.</summary>
+    int PasteAudioFrames(int trackId, float[] interleaved, long frames, double atBeat, string? name);
     /// <summary>Drops a track's freeze buffer (back to live processing).</summary>
     void UnfreezeTrack(int trackId);
     /// <summary>True when the track is frozen.</summary>

@@ -65,6 +65,58 @@ public sealed class TrackFreezer
         return true;
     }
 
+    /// <summary>Paste Bounced Audio (⌘⇧V): renders <paramref name="trackId"/>'s post-device,
+    /// pre-fader sound over [<paramref name="startBeat"/>, <paramref name="endBeat"/>) and returns
+    /// it as interleaved stereo at the device rate (exactly the range, no tail), without freezing
+    /// the track. Null when the engine can't capture the track (unsupported type).</summary>
+    public float[]? BounceRange(IAudioEngine engine, int trackId, double startBeat, double endBeat,
+                                bool restoreLoop, bool restoreMetronome, IProgress<double>? progress = null)
+    {
+        if (endBeat <= startBeat) return null;
+        double restoreBeat = engine.PositionBeats;
+        double loopStart = engine.LoopStart, loopEnd = engine.LoopEnd;
+
+        engine.Stop();
+        engine.SetLoop(false, 0, 0);
+        engine.SetMetronome(false);
+        engine.StopTransport();
+
+        long total = engine.BeginBounce(trackId, endBeat - startBeat);
+        if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat); return null; }
+
+        float[] pcm;
+        try
+        {
+            engine.Seek(startBeat);   // capture starts at the range start; held notes are chased
+            engine.Play();
+
+            var buf = new float[Chunk * 2];
+            long remaining = total, done = 0;
+            int lastPct = -1;
+            while (remaining > 0)
+            {
+                int m = (int)Math.Min(Chunk, remaining);
+                engine.RenderOffline(buf, m);
+                remaining -= m; done += m;
+                int pct = (int)(100.0 * done / total);
+                if (progress is not null && pct != lastPct) { lastPct = pct; progress.Report((double)done / total); }
+            }
+            engine.StopTransport();
+            pcm = new float[total * 2];
+            engine.TakeFreezeCapture(pcm);   // disarms without freezing the track (short = zero-padded)
+        }
+        catch
+        {
+            engine.CancelFreeze();
+            Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+            throw;
+        }
+
+        Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+        progress?.Report(1.0);
+        return pcm;
+    }
+
     private static void Restore(IAudioEngine engine, bool loop, bool metronome,
                                 double loopStart, double loopEnd, double beat)
     {

@@ -389,6 +389,25 @@ public sealed partial class NotaEngine
     /// <summary>Aborts an armed freeze capture without freezing anything.</summary>
     public void CancelFreeze() { ThrowIfDisposed(); NativeMethods.TrackFreezeCancel(_handle); }
 
+    /// <summary>Like <see cref="BeginFreeze"/> but sized to exactly <paramref name="lengthBeats"/> (no
+    /// ring-out tail) — a one-shot range bounce finished with <see cref="TakeFreezeCapture"/>.</summary>
+    public long BeginBounce(int trackId, double lengthBeats)
+    { ThrowIfDisposed(); return NativeMethods.TrackBounceBegin(_handle, trackId, lengthBeats); }
+
+    /// <summary>Copies the armed capture's rendered frames (interleaved stereo, device rate) into
+    /// <paramref name="outFrames"/> and disarms it without freezing the track. Returns frames copied.</summary>
+    public long TakeFreezeCapture(float[] outFrames)
+    { ThrowIfDisposed(); return NativeMethods.TrackFreezeTake(_handle, outFrames, outFrames.Length / 2); }
+
+    /// <summary>Places device-rate interleaved-stereo PCM on an audio track at <paramref name="atBeat"/>
+    /// as a new clip, overwriting what it covers (one undo step). Returns the clip index, or -1.</summary>
+    public int PasteAudioFrames(int trackId, float[] interleaved, long frames, double atBeat, string? name)
+    {
+        ThrowIfDisposed();
+        if (frames * 2 > interleaved.Length) throw new ArgumentOutOfRangeException(nameof(frames));
+        return NativeMethods.TrackPasteAudioFrames(_handle, trackId, interleaved, frames, atBeat, name);
+    }
+
     /// <summary>Drops a track's freeze buffer and returns it to live processing.</summary>
     public void UnfreezeTrack(int trackId) { ThrowIfDisposed(); NativeMethods.TrackUnfreeze(_handle, trackId); }
 

@@ -424,6 +424,8 @@ public sealed partial class ArrangementView
                         // (except during playback — scrub from the ruler, not the grid).
                         _o.Select(-1, -1);
                         _o.ClearTimeSelection();
+                        int row = _o.RowAtY(_marqueePress.Y);
+                        if (row >= 0 && row < _o._tracks.Count) _o.FocusTrackId = _o._tracks[row].Id;
                         if (_o._engine is not { IsPlaying: true })
                             _o.SeekTo(_o._scrollBeats + _marqueePress.X / _o._pixelsPerBeat);
                     }
@@ -844,27 +846,48 @@ public sealed partial class ArrangementView
         private static readonly KeyGesture ConsolidateGesture =
             new(Key.J, OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control);
 
-        // Right-click on empty lane space: paste the clipboard clip here (type permitting), and
-        // consolidate the time selection when the click lands inside it.
+        // ⌘⇧V / Ctrl+⇧V, shown next to the context-menu Paste bounced audio items.
+        private static readonly KeyGesture PasteBouncedGesture =
+            new(Key.V, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | KeyModifiers.Shift);
+
+        // "Paste bounced audio" onto this track at `at`, or null when there's nothing to paste
+        // or the track can't take it (only audio tracks can).
+        private MenuItem? PasteBouncedItem(int trackId, double at)
+        {
+            if (!_o.CanPasteBouncedOnto(trackId)) return null;
+            var mi = new MenuItem { Header = "Paste bounced audio", InputGesture = PasteBouncedGesture };
+            mi.Click += (_, _) => _o.RequestPasteBounced(trackId, at);
+            return mi;
+        }
+
+        // Right-click on empty lane space: paste the clipboard clip (or the bounced range) here,
+        // insert a MIDI clip on an instrument track, and consolidate the time selection when the
+        // click lands inside it. Always opens, so the menu never silently fails to appear.
         private void ShowLaneMenu(Point pos, double beat)
         {
             int ti = _o.RowAtY(pos.Y);
             if (ti < 0) return;
-            int trackId = _o._tracks[ti].Id;
+            var track = _o._tracks[ti];
+            int trackId = track.Id;
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
-            if (!_o.HasClipClipboard && !inRange) return;
             double at = _o.Snap(beat);
             var flyout = new MenuFlyout();
-            if (_o.HasClipClipboard)
+            var paste = new MenuItem { Header = "Paste", IsEnabled = _o.HasClipClipboard };
+            paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
+            flyout.Items.Add(paste);
+            if (PasteBouncedItem(trackId, at) is { } bounced) flyout.Items.Add(bounced);
+            if (track.IsInstrument)
             {
-                var paste = new MenuItem { Header = "Paste" };
-                paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
-                flyout.Items.Add(paste);
+                var insert = new MenuItem { Header = "Insert MIDI clip" };
+                insert.Click += (_, _) => _o.AddMidiClipAt(trackId, beat);
+                flyout.Items.Add(new Separator());
+                flyout.Items.Add(insert);
             }
             if (inRange)
             {
                 var consolidate = new MenuItem { Header = "Consolidate selection", InputGesture = ConsolidateGesture };
                 consolidate.Click += (_, _) => _o.ConsolidateSelection();
+                flyout.Items.Add(new Separator());
                 flyout.Items.Add(consolidate);
             }
             flyout.ShowAt(this, showAtPointer: true);
@@ -935,6 +958,7 @@ public sealed partial class ArrangementView
             flyout.Items.Add(copy);
             flyout.Items.Add(cut);
             flyout.Items.Add(paste);
+            if (PasteBouncedItem(trackId, at) is { } bounced) flyout.Items.Add(bounced);
             flyout.Items.Add(new Separator());
             flyout.Items.Add(split);
             flyout.Items.Add(dup);
