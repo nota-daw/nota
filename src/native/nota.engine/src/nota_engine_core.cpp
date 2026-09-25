@@ -12,7 +12,10 @@
 #include <new>
 #include <string>
 
-#define NOTA_VERSION_STRING "0.1.0"
+// Injected by CMake from src/native/nota.engine/VERSION.
+#ifndef NOTA_VERSION_STRING
+#error "NOTA_VERSION_STRING must be defined by the build (see CMakeLists.txt)"
+#endif
 
 extern "C" {
 

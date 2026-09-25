@@ -18,6 +18,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- The audio engine now has its own version (starting at 0.2.5, shown in About) instead of a
+  fixed 0.1.0; it's bumped with each release that changes the engine.
+
 ## [0.41.0] — 2026-09-24
 
 ### Highlights

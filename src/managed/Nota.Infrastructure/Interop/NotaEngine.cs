@@ -23,7 +23,7 @@ public sealed partial class NotaEngine : IAudioEngine
             throw new InvalidOperationException("Failed to create native engine.");
     }
 
-    /// <summary>Engine library version, e.g. "0.1.0".</summary>
+    /// <summary>Engine library version, e.g. "0.2.5" (src/native/nota.engine/VERSION).</summary>
     public static string Version => Marshal.PtrToStringUTF8(NativeMethods.Version()) ?? "?";
 
     /// <summary>Negotiated output sample rate, or 0 if not started.</summary>

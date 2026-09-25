@@ -128,7 +128,7 @@ typedef struct NotaMeter {
     float rms_r;
 } NotaMeter;
 
-/* Library version string, e.g. "0.1.0" (M0). Never NULL. */
+/* Library version string, e.g. "0.2.5" (from nota.engine/VERSION). Never NULL. */
 NOTA_API const char* nota_engine_version(void);
 
 /* Create / destroy the engine. create() returns NULL on failure. */

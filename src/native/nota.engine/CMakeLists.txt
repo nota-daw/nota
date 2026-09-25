@@ -1,9 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 cmake_minimum_required(VERSION 3.24)
 
+# Engine version: single source of truth is the VERSION file next to this one,
+# bumped by the release skill (independent of the app's repo-root VERSION).
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" NOTA_ENGINE_VERSION LIMIT_COUNT 1)
+string(STRIP "${NOTA_ENGINE_VERSION}" NOTA_ENGINE_VERSION)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+
 # OBJC/OBJCXX only exist on Apple; enable them conditionally so the Windows
 # (MSVC/clang-cl) configure doesn't fail looking for an Objective-C compiler.
-project(nota_engine LANGUAGES C CXX VERSION 0.1.0)
+project(nota_engine LANGUAGES C CXX VERSION ${NOTA_ENGINE_VERSION})
 if(APPLE)
     enable_language(OBJC)
     enable_language(OBJCXX)
@@ -95,6 +101,9 @@ target_include_directories(nota_engine
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/dr_libs
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor           # Signalsmith Stretch, miniaudio, RtMidi
 )
+
+target_compile_definitions(nota_engine PRIVATE
+    NOTA_VERSION_STRING="${PROJECT_VERSION}")
 
 # Output a stable name: libnota_engine.dylib / nota_engine.dll (consumed by P/Invoke).
 set_target_properties(nota_engine PROPERTIES

@@ -1,13 +1,14 @@
 ---
 name: release
-description: Cut a Nota release — actualize CHANGELOG.md (promote [Unreleased] to a dated version and add a short human-readable summary of it), bump VERSION, create the vX.Y.Z tag, then commit and push. Run this when the user asks to release, ship, cut a version, or tag a release. The GitHub Actions release workflow then builds every platform and drafts the release from the changelog section.
+description: Cut a Nota release — actualize CHANGELOG.md (promote [Unreleased] to a dated version and add a short human-readable summary of it), bump VERSION and the engine's src/native/nota.engine/VERSION, create the vX.Y.Z tag, then commit and push. Run this when the user asks to release, ship, cut a version, or tag a release. The GitHub Actions release workflow then builds every platform and drafts the release from the changelog section.
 user-invocable: true
 ---
 
 # Cutting a Nota release
 
 A release is a deliberate act: `## [Unreleased]` in `CHANGELOG.md` is promoted to a dated
-version, `VERSION` is bumped, a `vX.Y.Z` tag is created, and pushing the tag triggers
+version, `VERSION` is bumped (and the native engine's own
+`src/native/nota.engine/VERSION`), a `vX.Y.Z` tag is created, and pushing the tag triggers
 `.github/workflows/release.yml` — which builds every target (x64 + arm64 across macOS,
 Windows, Linux) and drafts the GitHub release using the version's changelog section as the
 body.
@@ -25,7 +26,7 @@ or an explicit `X.Y.Z`. Nota has historically bumped **minor** per release.
 1. **On `main`.** `git rev-parse --abbrev-ref HEAD` must be `main`. Releases build only
    from main (the CI guard enforces it too). If not, stop and tell the user.
 2. **Clean working tree.** `git status --porcelain` must be empty, so the release commit
-   contains *only* the VERSION + CHANGELOG changes. If dirty, stop and ask the user to
+   contains *only* the VERSION + engine VERSION + CHANGELOG changes. If dirty, stop and ask the user to
    commit or stash first.
 3. **Up to date with origin.** `git fetch origin` then confirm local `main` is not behind
    `origin/main` (`git rev-list --left-right --count origin/main...HEAD`). If behind, stop.
@@ -84,10 +85,28 @@ Write the new `X.Y.Z` to `VERSION` (no trailing newline changes beyond what's al
 there; it's read with `.Trim()`). This is the single source of truth the CI checks the tag
 against — it MUST equal the tag version.
 
+## 3b. Bump the engine version
+
+The native engine (`src/native/nota.engine`) has its own semver in
+`src/native/nota.engine/VERSION`, independent of the app version. CMake reads it into
+`project(... VERSION)` and bakes it into `nota_engine_version()` (shown in the About
+window next to the app version). It moves only when the engine itself changed:
+
+- Find the previous release tag: `git describe --tags --abbrev=0 --match 'v*'`.
+- Check for engine changes since then:
+  `git diff --quiet <prev-tag> HEAD -- src/native/nota.engine` (exit 1 = changed).
+- **Changed** → bump the engine's **patch** (`a.b.c` → `a.b.(c+1)`). If the user asked
+  for an explicit engine bump (e.g. "engine minor", or an explicit engine `X.Y.Z`), use
+  that instead — minor for a C ABI change (new/changed `nota_*` exports), major for a
+  breaking one.
+- **Unchanged** → leave it as-is.
+
+Tell the user the old → new engine version (or that it's unchanged).
+
 ## 4. Commit, tag, push
 
 ```bash
-git add VERSION CHANGELOG.md
+git add VERSION CHANGELOG.md src/native/nota.engine/VERSION
 git commit -m "Release vX.Y.Z"
 git tag -a "vX.Y.Z" -m "Nota vX.Y.Z"
 git push origin main
@@ -106,6 +125,7 @@ Notes:
 
 Tell the user:
 - the released version and tag,
+- the engine version (bumped `a.b.c → a.b.d`, or unchanged),
 - the Highlights you wrote,
 - that the tag push kicked off `.github/workflows/release.yml`, which will produce the 5
   platform artifacts and a **draft** GitHub release (they review + publish manually),
