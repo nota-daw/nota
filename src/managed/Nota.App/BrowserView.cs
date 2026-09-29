@@ -1037,7 +1037,10 @@ public sealed class BrowserView : UserControl
     {
         list.DoubleTapped += (_, _) =>
         {
-            if (list.SelectedItem is BrowserItem { IsGroup: false } item) ItemActivated?.Invoke(item);
+            if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
+            // Folders (sample dirs, preset categories) are navigation: double-click opens them.
+            if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
+            else ItemActivated?.Invoke(item);
         };
         list.SelectionChanged += (_, _) =>
         {

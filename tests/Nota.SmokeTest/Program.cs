@@ -13383,5 +13383,53 @@ Console.WriteLine("-- background audio import --");
     }
 }
 
+// --- browser: factory presets filed into category folders inside their device ---------
+{
+    Console.WriteLine("-- browser: preset categories --");
+    var fcat = new FactoryPresetCatalog();
+    var all = fcat.All();
+    // Every device with a real library files its presets; only an Init may sit loose.
+    var loose = all.GroupBy(p => (p.IsInstrument, p.IsMidiEffect, p.BuiltinKind)).Where(g => g.Count() >= 10)
+        .SelectMany(g => g).Where(p => p.Category.Length == 0 && !p.DisplayName.StartsWith("Init", StringComparison.Ordinal)).ToList();
+    Check(loose.Count == 0, $"every preset of a 10+ preset device is filed ({loose.Count} loose: {string.Join(", ", loose.Take(5).Select(p => p.Id))})");
+    Check(all.Any(p => p.Id == "synth/Warm Pad" && p.Category == "Pads")
+          && all.Any(p => p.Id == "ceiling/Master Safe" && p.Category == "Mastering")
+          && all.Any(p => p.Id == "arp/Trap Roll" && p.Category == "Ratchets & Rolls")
+          && all.Any(p => p.Id == "synth/Init Saw" && p.Category == ""),
+          "instrument, effect and MIDI presets carry their category; Init stays unfiled");
+
+    var bvm = new Nota.Presentation.BrowserViewModel(new EmptyPluginCatalog(), new EmptyPresetLibrary(), fcat);
+    var synth = bvm.Instruments.First(i => i.Name == "Nota Synth");
+    Check(synth.Children[0] is { Name: "Init Saw", Kind: Nota.Presentation.BrowserItemKind.Preset, Depth: 1 }
+          && synth.Children.Skip(1).All(c => c.Kind == Nota.Presentation.BrowserItemKind.Folder && c.Depth == 1),
+          "a device holds its Init loose on top, then category folders");
+    var pads = synth.Children.First(c => c.Name == "Pads");
+    Check(pads.Children.Any(p => p.Name == "Warm Pad" && p.Depth == 2 && p.Path == "factory:synth/Warm Pad"),
+          "a folder holds its presets one level deeper, still applying by factory id");
+
+    bvm.ToggleExpand(synth);
+    int at = bvm.Instruments.IndexOf(synth);
+    Check(bvm.Instruments.Contains(pads) && !bvm.Instruments.Any(i => i.Name == "Warm Pad"),
+          "expanding a device shows its folders, not the presets inside them");
+    bvm.ToggleExpand(pads);
+    Check(bvm.Instruments.Any(i => i.Path == "factory:synth/Warm Pad") && bvm.Instruments.IndexOf(pads) > at,
+          "expanding a folder reveals its presets");
+    bvm.ToggleExpand(pads);
+    Check(!bvm.Instruments.Any(i => i.Path == "factory:synth/Warm Pad"), "…and collapsing hides them again");
+
+    bvm.FilterTree(0, "Glacier");
+    Check(bvm.Instruments.Select(i => i.Name).SequenceEqual(new[] { "BUILT-IN", "Nota Aurora", "Pads", "Glacier Pad" }),
+          $"search opens the folder around a hit ({string.Join(" / ", bvm.Instruments.Select(i => i.Name))})");
+    bvm.FilterTree(0, "");
+    bvm.FilterTree(1, "Mastering");
+    var ceiling = bvm.Effects.ToList();
+    int ci = ceiling.FindIndex(i => i.Name == "Nota Ceiling");
+    Check(ci >= 0 && ceiling[ci + 1] is { Name: "Mastering", Kind: Nota.Presentation.BrowserItemKind.Folder }
+          && ceiling.Any(i => i.Path == "factory:ceiling/Master Safe"),
+          "searching a category name lists that folder with all its presets");
+    bvm.FilterTree(1, "");
+    Check(!bvm.Effects.Any(i => i.Depth > 0), "clearing the search collapses back to devices");
+}
+
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

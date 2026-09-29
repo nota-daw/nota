@@ -17,6 +17,13 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- Factory presets in the browser are sorted into folders inside each device, on the
+  Instruments, Audio Effects and MIDI Effects tabs. Instruments use Pads, Bass, Leads,
+  Keys & Plucks, Bells & Mallets and more. Effects use Vocals, Drums, Mix & Bus, Mastering,
+  Ambient, Sidechain and more. MIDI effects have their own folders, such as Triads and
+  Sevenths for Chord and Grooves and Ratchets for Arp. An Init preset stays at the top.
+  Searching opens the folders that contain a match, and searching a folder name
+  (for example "Mastering") lists that folder in every device. Double-click a folder to open it.
 - **Remove out of scale** in the MIDI clip editor, next to the Scale key and mode: with
   Scale on it deletes every note outside the scale in one undo step. The button is live
   only while the clip has such notes.

@@ -21,17 +21,17 @@ public sealed class PresetTools(
     private readonly IPresetLibrary _library = presetLibrary;
     private readonly ISettingsService _settings = settings;
 
-    public sealed record FactoryPreset(string Id, string DisplayName, bool IsInstrument, int BuiltinKind, bool IsMidiEffect);
+    public sealed record FactoryPreset(string Id, string DisplayName, bool IsInstrument, int BuiltinKind, bool IsMidiEffect, string Category);
     public sealed record UserPreset(string Path, string DisplayName, string Type);
 
     [McpServerTool(Name = "list_factory_presets"), Description(
         "List the shipped factory presets (stable id, display name, whether it's an instrument or a MIDI effect, "
-        + "and the parent built-in kind). Apply them with apply_factory_preset.")]
+        + "the parent built-in kind, and the browser category folder — Pads, Bass, Vocals, Mastering …; \"\" = unfiled). Apply them with apply_factory_preset.")]
     public Task<FactoryPreset[]> ListFactoryPresets() => Read(() =>
     {
         var all = _factory.All();
         var list = new List<FactoryPreset>(all.Count);
-        foreach (var p in all) list.Add(new FactoryPreset(p.Id, p.DisplayName, p.IsInstrument, p.BuiltinKind, p.IsMidiEffect));
+        foreach (var p in all) list.Add(new FactoryPreset(p.Id, p.DisplayName, p.IsInstrument, p.BuiltinKind, p.IsMidiEffect, p.Category));
         return list.ToArray();
     });
 

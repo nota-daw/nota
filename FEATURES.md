@@ -629,6 +629,11 @@ and user presets, automation, persistence and cloning.
   device type sits at the right edge as a quiet tag (a plug-in's tag names its format and
   vendor, which tells the AU and VST3 builds of one plug-in apart). The name always wins
   the room: the tag gives way rather than truncating it.
+- **Factory presets in folders**: a built-in device expands into category folders — Pads /
+  Bass / Leads / Keys & Plucks … for instruments, Vocals / Drums / Mix & Bus / Mastering /
+  Ambient / Sidechain … for effects, Triads / Sevenths, Grooves / Ratchets … for MIDI
+  effects — with its Init loose on top. Search opens the folders around the hits, and a
+  folder name ("Mastering") lists that folder in every device.
 - **View options** (the ⋮ button beside the search box): show type tags, group by source,
   favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
