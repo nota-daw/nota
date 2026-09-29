@@ -195,9 +195,17 @@ public partial class MainWindow
     private void OnMenuLoop(object? sender, EventArgs e)
     {
         if (_vm is null) return;
-        // A time-range selection wins: loop exactly that range (and enable looping).
-        if (Timeline.LoopTimeSelection()) { _vm.StatusText = "Loop set to selection"; return; }
-        _vm.Transport.LoopOn = !_vm.Transport.LoopOn;
+        // A selection (time range, else selected clips) sets the loop to exactly that
+        // range and enables it; pressing again once it already loops it turns looping off.
+        var t = _vm.Transport;
+        if (Timeline.SelectionLoopRange() is { } r
+            && !(t.LoopOn && Engine.LoopStart == r.Start && Engine.LoopEnd == r.End))
+        {
+            Timeline.SetLoopRegion(r.Start, r.End);
+            _vm.StatusText = "Loop set to selection";
+            return;
+        }
+        t.LoopOn = !t.LoopOn;
     }
     private void OnMenuMetronome(object? sender, EventArgs e) { if (_vm is not null) _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn; }
 }

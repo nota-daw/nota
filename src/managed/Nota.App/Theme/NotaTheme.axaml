@@ -353,6 +353,7 @@
   </Style>
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.AccentHover}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
   </Style>
 
   <Style Selector="Button.ghost">

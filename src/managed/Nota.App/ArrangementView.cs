@@ -553,26 +553,44 @@ public sealed partial class ArrangementView : UserControl
     internal void SetLoopRegion(double startBeat, double endBeat)
     {
         if (_engine is null) return;
-        double s = Math.Max(0, Snap(Math.Min(startBeat, endBeat)));
-        double e = Math.Max(s + _snapBeats, Snap(Math.Max(startBeat, endBeat)));
+        var (s, e) = SnapLoopRange(startBeat, endBeat);
         _engine.SetLoop(true, s, e);
         _loopActive = true; _loopS = s; _loopE = e; _loopDragging = false;
         Redraw();
         LoopChanged?.Invoke();
     }
 
+    private (double Start, double End) SnapLoopRange(double a, double b)
+    {
+        double s = Math.Max(0, Snap(Math.Min(a, b)));
+        return (s, Math.Max(s + _snapBeats, Snap(Math.Max(a, b))));
+    }
+
     /// <summary>Loop over the beat span of the current clip selection. False if nothing selected.</summary>
     public bool LoopSelection()
     {
-        if (_engine is null || _sel.Count == 0) return false;
+        if (_engine is null || ClipSelectionSpan() is not { } span) return false;
+        SetLoopRegion(span.Start, span.End);
+        return true;
+    }
+
+    private (double Start, double End)? ClipSelectionSpan()
+    {
+        if (_sel.Count == 0) return null;
         double min = double.MaxValue, max = double.MinValue;
         foreach (var t in _tracks)
             foreach (var c in t.Clips)
                 if (_sel.Contains((t.Id, c.ClipIndex)))
                 { min = Math.Min(min, c.StartBeat); max = Math.Max(max, c.StartBeat + c.LengthBeats); }
-        if (max <= min) return false;
-        SetLoopRegion(min, max);
-        return true;
+        return max > min ? (min, max) : null;
+    }
+
+    /// <summary>The (snapped) loop region the current selection asks for — a time-range
+    /// selection wins, else the span of the selected clips. Null when nothing is selected.</summary>
+    public (double Start, double End)? SelectionLoopRange()
+    {
+        if (HasTimeSelection) return SnapLoopRange(_timeSelStart, _timeSelEnd);
+        return ClipSelectionSpan() is { } span ? SnapLoopRange(span.Start, span.End) : null;
     }
 
     /// <summary>Pushes fresh per-track meter readings into the header meters (~30 Hz, M6-2),
@@ -1308,14 +1326,6 @@ public sealed partial class ArrangementView : UserControl
         if (ids.Length == 0 || end <= start || !_engine.ConsolidateRange(ids, start, end)) return false;
         Refresh();
         ReselectPlaced();
-        return true;
-    }
-
-    /// <summary>Cmd+L over a time selection: loop exactly that range. False when there's no range.</summary>
-    public bool LoopTimeSelection()
-    {
-        if (_engine is null || !HasTimeSelection) return false;
-        SetLoopRegion(_timeSelStart, _timeSelEnd);
         return true;
     }
 

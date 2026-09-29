@@ -650,7 +650,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Return", "Stop (again → back to the start)"),
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
-            ("⌘L", "Loop on / off · loop the time selection"),
+            ("⌘L", "Loop on / off · loop the selected clips or time range"),
         }),
         ("ARRANGEMENT & EDITING", new[]
         {

@@ -269,6 +269,7 @@ public partial class MainWindow : Window
         vm.RecordingTick += () => { Timeline.Refresh(rebuildHeaders: false); ReloadEditorNotes(); };
         // Hit Record with nothing armed → auto-arm the selected/last track (M-fix).
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
+        vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 

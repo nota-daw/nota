@@ -1281,55 +1281,37 @@ public sealed partial class ArrangementView
         // Draws one clip (fill + border + name strip + notes/waveform) at row-y with
         // the given track colour. Reused for the live cross-track drag preview.
         // Group lane preview: collapsed → each descendant clip as a mini-clip stacked into its
-        // own sub-lane (child colour), so starts/ends read at a glance; expanded → a thin strip
-        // in the group colour over each descendant clip's span, marking content boundaries.
+        // own sub-lane (child colour), so starts/ends read at a glance; expanded → nothing (the
+        // children are right below and show their own clips).
         private void DrawGroupLane(DrawingContext ctx, ArrangementView.TrackVM g, double y, double rowH, double w, bool collapsed)
         {
-            if (g.GroupMini.Count == 0) return;
-            if (collapsed)
+            if (!collapsed || g.GroupMini.Count == 0) return;
+            // Collapsed: the hidden children still have to read, so each takes a sub-lane
+            // of the (slim) row. Below ~3px a sub-lane stops being legible — past that the
+            // stack degrades to one merged span strip.
+            int slots = Math.Max(1, g.GroupSlotCount);
+            const double padTop = 5, padBot = 5;
+            double innerH = rowH - padTop - padBot;
+            double laneH = innerH / slots;
+            if (laneH >= 2.5)
             {
-                // Collapsed: the hidden children still have to read, so each takes a sub-lane
-                // of the (slim) row. Below ~3px a sub-lane stops being legible — past that the
-                // stack degrades to one merged span strip.
-                int slots = Math.Max(1, g.GroupSlotCount);
-                const double padTop = 5, padBot = 5;
-                double innerH = rowH - padTop - padBot;
-                double laneH = innerH / slots;
-                if (laneH >= 2.5)
-                {
-                    double barH = Math.Max(2, laneH - 1);
-                    foreach (var m in g.GroupMini)
-                    {
-                        double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
-                        if (x1 < 0 || x0 > w || m.Length <= 0) continue;
-                        var (fill, border, _, _) = ClipColors(m.ColorIndex);
-                        var r = new Rect(x0, y + padTop + m.Slot * laneH, Math.Max(2, x1 - x0), barH);
-                        ctx.DrawRectangle(fill, border, r, 1.5, 1.5);
-                    }
-                    return;
-                }
+                double barH = Math.Max(2, laneH - 1);
                 foreach (var m in g.GroupMini)
                 {
                     double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
                     if (x1 < 0 || x0 > w || m.Length <= 0) continue;
                     var (fill, border, _, _) = ClipColors(m.ColorIndex);
-                    ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), 1.5, 1.5);
+                    var r = new Rect(x0, y + padTop + m.Slot * laneH, Math.Max(2, x1 - x0), barH);
+                    ctx.DrawRectangle(fill, border, r, 1.5, 1.5);
                 }
+                return;
             }
-            else
+            foreach (var m in g.GroupMini)
             {
-                var col = TrackColorForIndex(g.ColorIndex);
-                var fill = Alpha(col, 0.55);
-                var border = new Pen(Alpha(col, 0.85), 1);
-                double stripH = Math.Min(6, Math.Max(3, rowH - 12));
-                double sy = y + (rowH - stripH) / 2;
-                foreach (var m in g.GroupMini)
-                {
-                    double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
-                    if (x1 < 0 || x0 > w || m.Length <= 0) continue;
-                    var r = new Rect(x0, sy, Math.Max(2, x1 - x0), stripH);
-                    ctx.DrawRectangle(fill, border, r, 3, 3);
-                }
+                double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
+                if (x1 < 0 || x0 > w || m.Length <= 0) continue;
+                var (fill, border, _, _) = ClipColors(m.ColorIndex);
+                ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), 1.5, 1.5);
             }
         }
 
