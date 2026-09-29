@@ -17,6 +17,9 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- **Remove out of scale** in the MIDI clip editor, next to the Scale key and mode: with
+  Scale on it deletes every note outside the scale in one undo step. The button is live
+  only while the clip has such notes.
 - Dropping an effect from the browser onto Devices puts it where you point: between cards
   (an accent bar marks the spot) or in place of the card under the pointer (the card is
   outlined). Dropping an instrument there replaces the track's instrument. Either way it is
@@ -37,6 +40,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   shows its first automated parameter instead of Volume.
 - While dragging from the browser over the arrangement, the target track is outlined in its
   header too, and the outline stays visible over the lane's clips.
+- **Convert Harmony to New MIDI Track** is much cleaner. Overtones no longer come out as extra
+  notes. Held chords no longer break into short fragments. Slightly detuned recordings map to
+  the right notes. The shimmer of chorused or detuned sounds no longer adds neighbouring
+  semitones. Notes start on the audio's attacks, and a re-struck chord comes out as new notes.
 
 ### Fixed
 - Reordering or removing effects in Devices no longer scrambles their automation: each lane

@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Clip for MIDI clips (nota-design "Nota Clip Editor" 1a): a 38px header — the clip
-// cell, Notes | Envelopes, then the Scale switch with its key and mode, and the Tools
-// toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
+// cell, Notes | Envelopes, then the Scale switch with its key, mode and "Remove out of
+// scale", and the Tools toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
 // the 272px clip-tools panel (MidiToolsView). Envelopes is a mode of the same canvas: the
 // notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
 // brass, on the roll's own beat axis so zoom and scroll carry over.
@@ -99,6 +99,7 @@ public sealed class ClipEditorView : UserControl
     // ---- scale overlay ("Set Scale"): a switch, then the key and the mode ----
     private Action _syncScale = () => { };
     private TextBlock _keyText = null!, _modeText = null!;
+    private Button _dropOutOfScale = null!;
 
     private Control ScaleControls()
     {
@@ -107,8 +108,14 @@ public sealed class ClipEditorView : UserControl
         var sw = SwitchRow("Scale", () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
         var key = Dropdown(_keyText, a => ShowMenu(a, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); PaintScale(); }));
         var mode = Dropdown(_modeText, a => ShowMenu(a, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); PaintScale(); }));
+        // Deletes the notes the overlay dims; live only while some note is out of scale.
+        _dropOutOfScale = ClipEditorKit.Button("Remove out of scale", () => Roll.RemoveOutOfScaleNotes());
+        _dropOutOfScale.HorizontalAlignment = HorizontalAlignment.Left;
+        _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
+        ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
+        Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
         PaintScale();
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode } };
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _dropOutOfScale } };
     }
 
     private void PaintScale()
@@ -119,6 +126,7 @@ public sealed class ClipEditorView : UserControl
         var ink = Roll.ScaleOn ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
         _keyText.Foreground = ink;
         _modeText.Foreground = ink;
+        _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
     }
 
     // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------

@@ -455,6 +455,22 @@ public sealed class PianoRollView : UserControl
         return true;
     }
 
+    /// <summary>True when the scale overlay is on and some note falls outside it.</summary>
+    public bool HasOutOfScaleNotes => _scaleOn && _notes.Exists(n => !InScale(n.Pitch));
+
+    /// <summary>Removes every note outside the scale overlay. No-op with the scale off.
+    /// Undoable (one Commit).</summary>
+    public bool RemoveOutOfScaleNotes()
+    {
+        if (!HasOutOfScaleNotes) return false;
+        _notes.RemoveAll(n => !InScale(n.Pitch));
+        _selection.Clear();
+        Invalidate();
+        CommitNotes();
+        Changed?.Invoke();
+        return true;
+    }
+
     // --- clip-tool preview -------------------------------------------------------
     // A tool's result is shown in the roll and streamed to the engine with no undo
     // checkpoint, exactly like a note drag, so the knobs are audible while they move.

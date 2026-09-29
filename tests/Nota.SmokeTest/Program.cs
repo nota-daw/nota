@@ -12924,6 +12924,33 @@ Console.WriteLine("-- MCP tools --");
         var pitches = new HashSet<int>(); foreach (var s in spans) pitches.Add(s.Pitch);
         Check(pitches.Contains(60) && pitches.Contains(64) && pitches.Contains(67),
             $"harmony detects C-major triad (pitches: {string.Join(",", pitches)})");
+
+        // Harmony on harmonic-rich tones: 8-partial saws (C2 + C4/E4/G4), 45 cents sharp with a
+        // ±15-cent 5 Hz vibrato, struck three times (decaying). Expect exactly the four pitches —
+        // no overtone ghosts, no semitone flips — each split into three re-strikes.
+        float[] Saws(double sec, int[] midi, double[] strikes)
+        {
+            var x = new float[(int)(sec * psr)];
+            var ph = new double[midi.Length];
+            for (int i = 0; i < x.Length; i++)
+            {
+                double t = (double)i / psr, last = 0, v = 0;
+                foreach (var st in strikes) if (t >= st) last = st;
+                for (int k = 0; k < midi.Length; k++)
+                {
+                    ph[k] += 2 * Math.PI * 440 * Math.Pow(2, (midi[k] - 69) / 12.0 + (45 + 15 * Math.Sin(2 * Math.PI * 5 * t)) / 1200.0) / psr;
+                    for (int h = 1; h <= 8; h++) v += Math.Sin(ph[k] * h) / h;
+                }
+                x[i] = (float)(v * Math.Exp(-(t - last) * 1.5) * 0.15);
+            }
+            return x;
+        }
+        var hs = Nota.Infrastructure.AudioHarmony.Detect(Saws(3, new[] { 36, 60, 64, 67 }, new[] { 0.0, 1.0, 2.0 }), psr, minNoteSec: 0.25);
+        var hp = new SortedSet<int>(); foreach (var s in hs) hp.Add(s.Pitch);
+        Check(hp.SetEquals(new[] { 36, 60, 64, 67 }), $"harmony: saw chord, no overtone/detune ghosts (pitches: {string.Join(",", hp)})");
+        bool threeEach = true;
+        foreach (int p in hp) { int c = 0; foreach (var s in hs) if (s.Pitch == p) c++; threeEach &= c == 3; }
+        Check(threeEach && hs.Count == 12, $"harmony: re-struck chord splits into 3 notes per pitch (got {hs.Count})");
     }
     finally { try { if (File.Exists(clickWav)) File.Delete(clickWav); } catch { } }
 }
