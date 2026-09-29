@@ -767,8 +767,17 @@ public interface IAudioEngine : IDisposable
 
     // --- Audio preview / audition (M7-4a) ----------------------------------
     void PreviewFile(string path);
+    /// <summary>Auditions <paramref name="path"/> from <paramref name="startSeconds"/> in;
+    /// the file already loaded is reused without a re-decode (waveform seek).</summary>
+    void PreviewFileAt(string path, double startSeconds);
     void StopPreview();
     bool IsPreviewActive { get; }
+    /// <summary>Loop the audition until stopped.</summary>
+    void SetPreviewLoop(bool on);
+    /// <summary>Audition level as linear gain (1 = unity).</summary>
+    void SetPreviewGain(float gain);
+    /// <summary>Audition playhead, seconds into the file.</summary>
+    double PreviewPosition { get; }
     bool PreviewSelfTest();
 
     // --- xrun / dropout telemetry (M7-8) -----------------------------------

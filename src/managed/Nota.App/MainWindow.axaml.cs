@@ -280,7 +280,8 @@ public partial class MainWindow : Window
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         Browser.SetViewModel(vm.Browser);
         Browser.ItemActivated += OnBrowserItemActivated;
-        Browser.PreviewRequested += OnBrowserPreview;
+        Browser.Preview.Attach(vm.Engine, vm.Settings);
+        Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
         Browser.RevealRequested += OnBrowserReveal;
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
         Browser.EditTagsRequested += OnBrowserEditTags;

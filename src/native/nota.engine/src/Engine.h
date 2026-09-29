@@ -108,8 +108,11 @@ public:
     // --- audio preview / audition (M7-4a) ---
     // Decode a file and mix it into the live output without a track, so the
     // browser can audition samples. One preview at a time.
-    bool previewFile(const std::string& path);
+    bool previewFile(const std::string& path, double startSeconds = 0.0);
     void stopPreview();
+    void setPreviewLoop(bool on) { previewLoop_.store(on, std::memory_order_relaxed); }
+    void setPreviewGain(float g) { previewGain_.store(g < 0.0f ? 0.0f : g, std::memory_order_relaxed); }
+    double previewPosition() const { return previewPosSec_.load(std::memory_order_relaxed); }
     bool isPreviewActive() const { return previewActive_.load(std::memory_order_relaxed); }
     bool previewSelfTest();   // feed a synthetic buffer, render offline, no device
 
@@ -1073,7 +1076,13 @@ private:
     std::atomic<SampleBuffer*> previewLive_{nullptr};
     std::atomic<bool>          previewActive_{false};
     std::atomic<bool>          previewRestart_{false};
+    std::atomic<double>        previewStartSec_{0.0}; // where a restart begins (source seconds)
+    std::atomic<bool>          previewLoop_{false};
+    std::atomic<float>         previewGain_{1.0f};    // linear, ramped per block
+    std::atomic<double>        previewPosSec_{0.0};   // playhead published for the UI
+    std::string                previewPath_;          // message thread: the file previewHold_ decodes
     double                     previewPos_ = 0.0;   // audio-thread only, source frames
+    float                      previewGainCur_ = 1.0f; // audio-thread only
 
     // Undo/redo snapshot stacks (M6-6). Hold retained Graph snapshots; entries
     // are cheap (metadata only — sample buffers are shared via shared_ptr).

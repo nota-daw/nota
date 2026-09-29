@@ -288,20 +288,6 @@ public partial class MainWindow
         await new TagEditorWindow(lib, key).ShowDialog(this);
     }
 
-    private void OnBrowserPreview(BrowserItem item)
-    {
-        if (_vm is null || string.IsNullOrEmpty(item.Path)) return;
-        try
-        {
-            Engine.PreviewFile(item.Path);
-            _vm.StatusText = $"Previewing {item.Name}";
-        }
-        catch (Exception ex)
-        {
-            _vm.StatusText = $"Preview failed: {ex.Message}";
-        }
-    }
-
     private async void OnSavePreset(int deviceIndex)
     {
         if (_vm is null || _deviceChain is null) return;

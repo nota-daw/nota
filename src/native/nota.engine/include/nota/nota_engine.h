@@ -156,6 +156,15 @@ NOTA_API double nota_engine_sample_rate(const NotaEngine* engine);
 NOTA_API NotaResult nota_engine_preview_file(NotaEngine* engine, const char* path);
 NOTA_API NotaResult nota_engine_stop_preview(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_preview_active(const NotaEngine* engine);
+/* Audition from start_seconds into the file. Re-auditioning the file already loaded
+ * (a waveform seek, a replay) reuses its decoded buffer. */
+NOTA_API NotaResult nota_engine_preview_file_at(NotaEngine* engine, const char* path, double start_seconds);
+/* Loop the audition until stopped (1) or play it once (0). */
+NOTA_API NotaResult nota_engine_set_preview_loop(NotaEngine* engine, int32_t on);
+/* Audition level, linear gain (1 = unity), ramped over one block. */
+NOTA_API NotaResult nota_engine_set_preview_gain(NotaEngine* engine, float gain);
+/* Playhead of the audition in seconds into the file (last rendered block). */
+NOTA_API double     nota_engine_preview_position(const NotaEngine* engine);
 
 /* ---- xrun / dropout telemetry (M7-8) -------------------------------------
  * Running count of audio-device overloads/dropouts since launch. The UI polls

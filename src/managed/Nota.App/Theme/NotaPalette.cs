@@ -239,6 +239,7 @@ internal static class NotaPalette
     public static readonly SolidColorBrush AccentDeep   = T("#B08536", "#7A5008"); // Brush.AccentDeep — press, left half of the loop
     public static readonly SolidColorBrush AccentDim    = T("#8A6B2E", "#9C8034"); // Brush.AccentDim — eyebrows, mono section marks
     public static readonly SolidColorBrush AccentEdge   = T("#5E4A22", "#D3B173"); // Brush.AccentEdge — chip border, link underline
+    public static readonly SolidColorBrush AccentMute   = T("#7A6130", "#C39B4F"); // between Edge and Dim — a waveform at rest, the part ahead of the hover
     public static readonly SolidColorBrush AccentPale   = T("#FCE5B8", "#5C3C04"); // hot edge highlight
     // Opaque, not an alpha tint: the almanac wants one predictable colour, and
     // alpha over two different grounds is not one.

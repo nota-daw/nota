@@ -17,6 +17,14 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- A new sample player at the bottom of the browser's Files tab. It shows the file's real
+  waveform: click it to play from that point, hover to see the time. It also has Play / Stop,
+  a time readout, Loop, Auto (a file plays as soon as you select it) and a preview volume
+  fader (double-click it for 0 dB). With the Files list focused, ↑ ↓ move through the
+  files and Space plays or stops the selected one. Auto, Loop and the volume are remembered.
+  In a narrow browser the player tightens instead of overlapping: Auto becomes just its dot,
+  the total time and then Loop hide, and the volume folds into the speaker icon (click it
+  for the fader).
 - Factory presets in the browser are sorted into folders inside each device, on the
   Instruments, Audio Effects and MIDI Effects tabs. Instruments use Pads, Bass, Leads,
   Keys & Plucks, Bells & Mallets and more. Effects use Vocals, Drums, Mix & Bus, Mastering,

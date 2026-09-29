@@ -640,7 +640,8 @@ public sealed class PreferencesWindow : NotaWindow
 
     // NB: this list mirrors the real key handlers — keep the two in sync (see the
     // `nota-shortcuts` skill). Bindings live in MainWindow.Input.cs (transport, global
-    // editing, computer-keyboard notes) and PianoRollView.cs (note editing). ⌘ = Meta on
+    // editing, computer-keyboard notes), PianoRollView.cs (note editing) and PreviewPlayer.cs
+    // (the Files tab's sample player). ⌘ = Meta on
     // macOS / Ctrl on Windows.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
@@ -694,6 +695,13 @@ public sealed class PreferencesWindow : NotaWindow
             ("W E · T Y U", "Black keys (sharps)"),
             ("Z / X", "Shift octave down / up"),
             ("C / V", "Lower / raise velocity"),
+        }),
+        ("BROWSER · FILES", new[]
+        {
+            ("↑ ↓", "Move through the files · with Auto on, each one plays as it is selected"),
+            ("Space", "Play / stop the selected sample (while the Files list has focus)"),
+            ("Click waveform", "Play from that point"),
+            ("Double-click volume", "Reset the preview volume to 0\u2009dB"),
         }),
         ("GAMEPAD (MACOS)", new[]
         {

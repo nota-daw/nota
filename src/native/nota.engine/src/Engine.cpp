@@ -185,14 +185,21 @@ bool Engine::applyMidiConfig() {
 
 // --- audio preview / audition (M7-4a) ----------------------------------------
 
-bool Engine::previewFile(const std::string& path) {
-    auto buf = decodeAudioFile(path); // message thread only
-    if (!buf || buf->empty()) return false;
-    // Retire the previous buffer so the audio thread can finish any block that
-    // still holds its raw pointer, then publish the new one.
-    if (previewHold_) previewRetired_.push_back(std::move(previewHold_));
-    previewHold_ = buf;
-    previewLive_.store(buf.get(), std::memory_order_release);
+bool Engine::previewFile(const std::string& path, double startSeconds) {
+    // Re-auditioning the loaded file (a waveform seek, a replay) skips the decode.
+    if (!previewHold_ || previewHold_->empty() || path != previewPath_) {
+        auto buf = decodeAudioFile(path); // message thread only
+        if (!buf || buf->empty()) return false;
+        // Retire the previous buffer so the audio thread can finish any block that
+        // still holds its raw pointer, then publish the new one.
+        if (previewHold_) previewRetired_.push_back(std::move(previewHold_));
+        previewHold_ = buf;
+        previewPath_ = path;
+        previewLive_.store(buf.get(), std::memory_order_release);
+    }
+    const double start = startSeconds > 0.0 ? startSeconds : 0.0;
+    previewStartSec_.store(start, std::memory_order_relaxed);
+    previewPosSec_.store(start, std::memory_order_relaxed); // the UI reads the new spot at once
     previewRestart_.store(true, std::memory_order_release);
     previewActive_.store(true, std::memory_order_release);
     return true;
@@ -211,21 +218,33 @@ void Engine::renderPreview(float* out, int32_t numFrames) {
     }
     SampleBuffer* sb = previewLive_.load(std::memory_order_acquire);
     if (!sb || sb->empty()) { previewActive_.store(false, std::memory_order_release); return; }
-    if (previewRestart_.exchange(false, std::memory_order_acq_rel)) previewPos_ = 0.0;
+    const float target = previewGain_.load(std::memory_order_relaxed);
+    if (previewRestart_.exchange(false, std::memory_order_acq_rel)) {
+        previewPos_ = previewStartSec_.load(std::memory_order_relaxed) * sb->sourceSampleRate;
+        previewGainCur_ = target; // a fresh start jumps straight to the level, no fade-in
+    }
 
     const double sr = transport_.sampleRate();
     const double ratio = sr > 0 ? sb->sourceSampleRate / sr : 1.0; // source frames per device frame
+    const bool loop = previewLoop_.load(std::memory_order_relaxed);
+    const float g0 = previewGainCur_, dg = numFrames > 0 ? (target - g0) / numFrames : 0.0f;
     for (int32_t i = 0; i < numFrames; ++i) {
+        if (loop && previewPos_ >= sb->frames) previewPos_ -= sb->frames;
         const int64_t i0 = static_cast<int64_t>(previewPos_);
         if (i0 < 0 || i0 >= sb->frames) { previewActive_.store(false, std::memory_order_release); break; }
         const double frac = previewPos_ - i0;
         float l0, r0, l1, r1;
         sb->readStereo(i0, l0, r0);
-        sb->readStereo(i0 + 1, l1, r1);
-        out[i * 2]     += static_cast<float>(l0 + (l1 - l0) * frac);
-        out[i * 2 + 1] += static_cast<float>(r0 + (r1 - r0) * frac);
+        // Looping, the last frame interpolates into the first instead of into silence.
+        sb->readStereo(loop && i0 + 1 >= sb->frames ? 0 : i0 + 1, l1, r1);
+        const float g = g0 + dg * i;
+        out[i * 2]     += g * static_cast<float>(l0 + (l1 - l0) * frac);
+        out[i * 2 + 1] += g * static_cast<float>(r0 + (r1 - r0) * frac);
         previewPos_ += ratio;
     }
+    previewGainCur_ = target;
+    previewPosSec_.store(sb->sourceSampleRate > 0 ? previewPos_ / sb->sourceSampleRate : 0.0,
+                         std::memory_order_relaxed);
 }
 
 bool Engine::xrunSelfTest() {
@@ -243,16 +262,46 @@ bool Engine::previewSelfTest() {
     buf->samples.assign(buf->frames * 2, 0.25f);
     if (previewHold_) previewRetired_.push_back(std::move(previewHold_));
     previewHold_ = buf;
+    previewPath_.clear();
     previewLive_.store(buf.get(), std::memory_order_release);
+    previewStartSec_.store(0.0, std::memory_order_relaxed);
     previewRestart_.store(true, std::memory_order_release);
     previewActive_.store(true, std::memory_order_release);
 
-    std::vector<float> out(256 * 2, 0.0f);
-    renderPreview(out.data(), 256);
-    double sum = 0.0;
-    for (float v : out) sum += v * (double)v;
+    const bool loop0 = previewLoop_.load();
+    const float gain0 = previewGain_.load();
+    previewLoop_.store(false);
+    previewGain_.store(1.0f);
+    auto rms = [&](int32_t frames) {
+        std::vector<float> out(static_cast<size_t>(frames) * 2, 0.0f);
+        renderPreview(out.data(), frames);
+        double sum = 0.0;
+        for (float v : out) sum += v * (double)v;
+        return std::sqrt(sum / out.size());
+    };
+    const double unity = rms(256);
+    bool ok = unity > 1e-4;
+    // Gain scales the level (a restart jumps straight to it, no ramp).
+    previewGain_.store(0.5f);
+    previewStartSec_.store(0.0); previewRestart_.store(true); previewActive_.store(true);
+    ok = ok && std::abs(rms(256) - unity * 0.5) < unity * 0.01;
+    previewGain_.store(1.0f);
+    // A start offset lands there; played once, the voice runs off the end and stops.
+    previewStartSec_.store(0.05); previewRestart_.store(true); previewActive_.store(true);
+    rms(256);
+    ok = ok && previewPosSec_.load() > 0.05 && previewPosSec_.load() < 0.07;
+    for (int b = 0; b < 64 && previewActive_.load(); ++b) rms(256);
+    ok = ok && !previewActive_.load();
+    // Looped, it keeps sounding well past the buffer's 0.1 s.
+    previewLoop_.store(true);
+    previewStartSec_.store(0.0); previewRestart_.store(true); previewActive_.store(true);
+    for (int b = 0; b < 64; ++b) rms(256);
+    ok = ok && previewActive_.load() && rms(256) > 1e-4;
+
     stopPreview();
-    return std::sqrt(sum / out.size()) > 1e-4;
+    previewLoop_.store(loop0);
+    previewGain_.store(gain0);
+    return ok;
 }
 
 // --- debug tone ------------------------------------------------------------

@@ -8176,7 +8176,7 @@ Console.WriteLine("-- M7-2: MIDI device settings --");
 // the user's real presets folder).
 Console.WriteLine("-- M7-4: browser preview + presets --");
 {
-    Check(engine.PreviewSelfTest(), "audio preview self-test (audible, device-free)");
+    Check(engine.PreviewSelfTest(), "audio preview self-test (audible, gain, start offset, one-shot end, loop; device-free)");
 
     int pt = engine.AddInstrumentTrack();
     int di = engine.AddBuiltinDevice(pt, 0); // EQ

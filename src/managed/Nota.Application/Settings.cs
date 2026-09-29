@@ -56,6 +56,12 @@ public sealed class Settings
     public bool BrowserFavoritesFirst { get; set; } = true;
     /// <summary>The browser is folded down to its icon rail.</summary>
     public bool BrowserCollapsed { get; set; }
+    /// <summary>Files tab player: selecting a sample auditions it.</summary>
+    public bool BrowserPreviewAuto { get; set; } = true;
+    /// <summary>Files tab player: loop the audition until stopped.</summary>
+    public bool BrowserPreviewLoop { get; set; }
+    /// <summary>Files tab player: fader position 0..1 (gain = v², so 0.7 ≈ −6 dB, 1 = 0 dB).</summary>
+    public double BrowserPreviewVolume { get; set; } = 0.7;
 
     // --- arrangement view options (View menu) --------------------------------
     /// <summary>How many clips print their name on the lane: 0 every clip, 1 the head of each

@@ -9,8 +9,8 @@
 // type sits at the right edge as a quiet tag. A search box filters the active list
 // live, a ⋮ button holds the view options, chips filter by favorite/tag, a status
 // line counts what is on screen, and a pinned preview footer auditions the selected
-// sample (Files tab). Double-clicking an item raises ItemActivated; the footer ▶ (or
-// Auto-audition on selection) raises PreviewRequested. Brushes bind via
+// sample (Files tab, see PreviewPlayer). Double-clicking an item raises ItemActivated.
+// Brushes bind via
 // GetResourceObservable (the control is built during MainWindow's XAML load, before
 // it is attached). Rows are drag sources (M7-5).
 
@@ -189,19 +189,13 @@ public sealed class BrowserView : UserControl
     private readonly Border _emptyWrap;
 
     // Pinned preview footer + the status line under it.
-    private readonly Button _previewBtn;
-    private readonly Path _previewIcon;
-    private readonly TextBlock _previewName;
-    private readonly TextBlock _previewSub;
-    private readonly ToggleButton _autoAudition;
-    private readonly PreviewWaveform _previewWave;
-    private readonly Border _previewFooter;   // sample auditioner — Files tab only
+    private readonly PreviewPlayer _previewFooter;   // sample auditioner — Files tab only
     private readonly Border _statusBar;
     private readonly TextBlock _statusText;
-    private BrowserItem? _footerItem;
 
     public event Action<BrowserItem>? ItemActivated;
-    public event Action<BrowserItem>? PreviewRequested;
+    /// <summary>The Files tab's sample player (status messages ride its StatusChanged).</summary>
+    public PreviewPlayer Preview => _previewFooter;
     /// <summary>Reveal a sample / folder / project in the system file manager.</summary>
     public event Action<BrowserItem>? RevealRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
@@ -326,8 +320,7 @@ public sealed class BrowserView : UserControl
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
 
-        _previewFooter = BuildPreviewFooter(out _previewBtn, out _previewIcon, out _previewName,
-                                            out _previewSub, out _autoAudition, out _previewWave);
+        _previewFooter = new PreviewPlayer();
 
         // Status line: what the active tab is showing, counted.
         _statusText = new TextBlock { FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
@@ -955,75 +948,14 @@ public sealed class BrowserView : UserControl
         return mi;
     }
 
-    // --- preview footer --------------------------------------------------------
-
-    private Border BuildPreviewFooter(out Button playBtn, out Path playIcon, out TextBlock name,
-                                      out TextBlock sub, out ToggleButton auto, out PreviewWaveform wave)
+    /// <summary>Space while the Files list has focus: the player's Play / Stop. False when
+    /// the key isn't the browser's (another tab, nothing to play) so it falls to the transport.</summary>
+    public bool TryTogglePreview(object? source)
     {
-        // Row 1: filename + format info (mono).
-        name = new TextBlock { Text = "—", FontSize = 10, VerticalAlignment = VerticalAlignment.Bottom };
-        name.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
-        sub = new TextBlock { Text = "", FontSize = 9, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 0) };
-        sub.Classes.Add("Mono");
-        sub.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var infoRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6), Children = { name, sub } };
-
-        // Row 2: play button + waveform strip.
-        playIcon = new Path { Data = Geometry.Parse(IconPlay), Stretch = Stretch.Uniform, Width = 10, Height = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        // A raised button with a brass glyph: the transport's Play is the main window's one solid brass action.
-        playIcon.BindResource(Shape.FillProperty, "Brush.AccentBright");
-        playBtn = new Button { Content = playIcon, Width = 26, Height = 26, Padding = new Thickness(0), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
-        var pb = playBtn;
-        pb.Click += (_, _) => { if (_footerItem is { } it && it.Kind == BrowserItemKind.Sample) PreviewRequested?.Invoke(it); };
-        wave = new PreviewWaveform { Height = 30, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var playRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        Grid.SetColumn(pb, 0);
-        Grid.SetColumn(wave, 1);
-        playRow.Children.Add(pb);
-        playRow.Children.Add(wave);
-
-        // Row 3: Auto-audition chip + preview volume bar (decorative — not wired).
-        auto = new ToggleButton { Content = "Auto-audition", FontSize = 9, Padding = new Thickness(6, 0), Height = 18, VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(auto, "Audition a sample when it is selected");
-        var volFillOuter = new Border { Width = 50, Height = 3, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
-        volFillOuter.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        var volFill = new Border { Width = 32, Height = 3, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left };
-        volFill.BindResource(Border.BackgroundProperty, "Brush.BorderStrong");
-        volFillOuter.Child = volFill;
-        ToolTip.SetTip(volFillOuter, "Set the preview volume (not available yet)");
-        var row3 = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center, Children = { auto, Caption("vol"), volFillOuter },
-        };
-
-        var footer = new Border
-        {
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(10, 8),
-            Child = new StackPanel { Children = { infoRow, playRow, row3 } },
-        };
-        footer.BindResource(Border.BackgroundProperty, "Brush.Panel");
-        footer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        return footer;
-    }
-
-    private void UpdateFooter(BrowserItem? item)
-    {
-        _footerItem = item;
-        bool isSample = item is { Kind: BrowserItemKind.Sample };
-        _previewName.Text = item?.Name ?? "—";
-        _previewSub.Text = isSample && !string.IsNullOrEmpty(item!.Sub) ? "· " + item.Sub : "";
-        _previewBtn.IsEnabled = isSample;
-        _previewWave.SetSample(isSample ? item!.Name : null);
-        if (isSample && (_autoAudition.IsChecked ?? false)) PreviewRequested?.Invoke(item!);
-    }
-
-    private TextBlock Caption(string text)
-    {
-        var t = new TextBlock { Text = text, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        return t;
+        if (_active != FilesTab || !_previewFooter.HasSample) return false;
+        for (var c = source as StyledElement; c is not null; c = c.Parent)
+            if (c == _pages[FilesTab] || c == _previewFooter) { _previewFooter.Toggle(); return true; }
+        return false;
     }
 
     private ListBox NewList(IDataTemplate itemTemplate) => new()
@@ -1046,7 +978,7 @@ public sealed class BrowserView : UserControl
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
-            if (_active >= 0 && list == _pages[_active]) UpdateFooter(list.SelectedItem as BrowserItem);
+            if (list == _pages[FilesTab]) _previewFooter.SetItem(list.SelectedItem as BrowserItem);
         };
         // Drag source (M7-5): start a copy-drag when the pointer leaves the row.
         // Must use handledEventsToo — ListBoxItem marks PointerPressed as Handled for

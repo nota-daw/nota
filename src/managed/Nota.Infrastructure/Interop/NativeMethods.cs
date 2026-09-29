@@ -171,6 +171,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_preview_active")]
     internal static partial int PreviewActive(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_preview_file_at", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult PreviewFileAt(IntPtr engine, string path, double startSeconds);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_preview_loop")]
+    internal static partial NotaResult SetPreviewLoop(IntPtr engine, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_preview_gain")]
+    internal static partial NotaResult SetPreviewGain(IntPtr engine, float gain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_preview_position")]
+    internal static partial double PreviewPosition(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_preview_selftest")]
     internal static partial int PreviewSelfTest(IntPtr engine);
 
