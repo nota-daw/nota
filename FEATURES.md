@@ -529,14 +529,29 @@ and user presets, automation, persistence and cloning.
   (Velocity/Length/Chance/Ratchet/Transpose) plus step mute; Free/Sync (1/1…1/32), Gate,
   Swing, Vel Amt, Retrig Off/Note/Beat, Transpose, Steps 1–16, Hold, Restart. 30 presets,
   full automation, MCP tools (`get_arp` / `set_arp` / `set_arp_lane` / `set_arp_step` / `restart_arp`).
-- **Nota Scale** — snap to a scale: Root, Major/Minor/Dorian/Phryg/Penta/Custom, Fold
-  (Nearest/Down/Up), NOTE MAP, Range, Follow Key, Learn/Clear.
-- **Nota Length** (formerly Note Length) — note lengths: Sync/ms/Gate %, Vel→Len, Key→Len,
-  Random, Legato, clip length limit; a GATE visualiser.
+- **Nota Scale** — snaps notes into a scale, in two sizes (L 700 / S 260, S·L toggle; one
+  preset list for both): Root, Major/Minor/Dorian/Phryg/Penta/Custom (older scales such as
+  Lydian or Harmonic minor still load and show by name), Fold Nearest/Down/Up, Transpose, a
+  clickable NOTE MAP (C → B as key cells: scale notes filled, root outlined, the rest showing
+  where they fold; the note playing lights up with its target and fades out), last IN → OUT,
+  Range (outside passes through), Follow key (the root follows what you play), Learn (a mode
+  that builds a Custom scale from the notes you play) and Clear. Held notes release correctly
+  when the scale changes. 35 presets, full automation, MCP tools (`get_scale` / `set_scale` /
+  `set_scale_note`).
+- **Nota Length** (formerly Note Length) — forces note lengths: Sync (1/32 … 1/1, 1/8., 1/4T) /
+  ms / Gate % (of the held length; clip notes can also shorten), start from note-on or
+  note-off, bipolar Vel → Len and Key → Len, Random, Legato (to the next note), Clip length
+  limit (the bar line). Two sizes (L 700 / S 260) with an animated GATE window: one bar of five
+  notes, input outlined, output filled, Random's range as a band. 32 presets, full
+  automation, MCP tools (`get_length` / `set_length`).
 - **Nota Velocity** — velocity transformation: Curve/Compand/Fixed, Drive, Random, Out
   Range, Random Dir, and a Last 12 histogram.
-- **Nota Random** — randomization: Chance, Gauss/Even/Walk, Lock seed / Re-roll,
-  Note/Velocity/Timing/Skip/Octave amounts, Distribution, Rate, Stay in scale.
+- **Nota Random** — randomization: Chance; Note (±12 st) / Velocity (±64) / Timing (up to
+  100 ms late) / Skip / Octave (±2) amounts; Gauss / Even / Walk; Per note / Per bar; Stay in
+  scale (C major); seed with Reroll and Lock (holds the roll on screen, repeating it every bar).
+  Two sizes (L 700 / S 260) with an animated OUTPUT window (one bar of eight notes, input dashed,
+  output filled by velocity, × for skipped) and a DICE histogram drawn from the same generator.
+  32 presets, full automation, MCP tools (`get_random` / `set_random`).
 - **Nota Chord** — chord generator in two sizes (L 700 / S 260, S·L toggle; one preset list
   for both): TYPE Maj7/Min7/Sus4/5th/Custom, six switchable shifts (±12 st ruler + interval
   name + velocity offset), Strum 0–100 ms (low → high), Spread (every other / all shifts up an

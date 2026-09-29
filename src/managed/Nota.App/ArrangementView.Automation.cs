@@ -492,6 +492,54 @@ public sealed partial class ArrangementView
                     mMenu.Items.Add(new Separator());
                     mMenu.Items.Add(shifts);
                 }
+                else if (e.MidiEffectKind(t.Id, m) == 2 && mpc > ScaleMidiBody.PView)
+                {
+                    // Nota Scale: the key, fold and range by name, then Notes ▸ each scale degree of
+                    // the Custom mask. View (the card size) is editor state.
+                    (int p, string label)[] ps =
+                    {
+                        (ScaleMidiBody.PRoot, "Root"), (ScaleMidiBody.PScale, "Scale"), (ScaleMidiBody.PFold, "Fold"),
+                        (ScaleMidiBody.PTranspose, "Transpose"), (ScaleMidiBody.PRangeLo, "Range Low"), (ScaleMidiBody.PRangeHi, "Range High"),
+                        (ScaleMidiBody.PFollowKey, "Follow Key"), (ScaleMidiBody.PLearn, "Learn"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    var notes = new MenuItem { Header = "Custom Notes" };
+                    string[] degrees = { "Root", "♭2", "2", "♭3", "3", "4", "♭5", "5", "♭6", "6", "♭7", "7" };
+                    for (int d = 0; d < 12; d++) notes.Items.Add(MLeaf(m, ScaleMidiBody.PMask0 + d, degrees[d]));
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(notes);
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 3 && mpc > LengthMidiBody.PView)
+                {
+                    // Nota Length: its sound params by name. Rate / Gate (pre-Division sync) and
+                    // View (the card size) are not offered.
+                    (int p, string label)[] ps =
+                    {
+                        (LengthMidiBody.PMode, "Mode"), (LengthMidiBody.PDivision, "Division (Sync)"), (LengthMidiBody.PMs, "Length (ms)"),
+                        (LengthMidiBody.PPercent, "Length (Gate %)"), (LengthMidiBody.PTrigger, "Start From"),
+                        (LengthMidiBody.PVelToLen, "Vel → Len"), (LengthMidiBody.PKeyToLen, "Key → Len"), (LengthMidiBody.PRandom, "Random"),
+                        (LengthMidiBody.PLegato, "Legato"), (LengthMidiBody.PClipLimit, "Clip Length Limit"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 5 && mpc > RandomModel.PLockBar)
+                {
+                    // Nota Random: WHAT VARIES, then DICE. View (the card size) and Lock Bar (set by
+                    // the Lock button) are not offered.
+                    (int p, string label)[] ps =
+                    {
+                        (RandomModel.PNoteRange, "Note"), (RandomModel.PVelAmt, "Velocity"), (RandomModel.PTimeAmt, "Timing"),
+                        (RandomModel.PSkip, "Skip"), (RandomModel.POctAmt, "Octave"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    mMenu.Items.Add(new Separator());
+                    (int p, string label)[] dice =
+                    {
+                        (RandomModel.PChance, "Chance"), (RandomModel.PDist, "Distribution"), (RandomModel.PRate, "Rate"),
+                        (RandomModel.PSeed, "Seed"), (RandomModel.PLocked, "Lock"), (RandomModel.PStayInScale, "Stay In Scale"),
+                    };
+                    foreach (var (p, label) in dice) mMenu.Items.Add(MLeaf(m, p, label));
+                }
                 else
                 {
                     int shown = Math.Min(mpc, 16);   // globals (+ a few lanes); per-step lanes are edited in the grid

@@ -60,8 +60,47 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - Nota Chord has 34 presets. The automation menu lists its settings, and each shift's
   semitones, switch and velocity are under Shifts. MCP gets new tools for it: `get_chord`,
   `set_chord` and `set_chord_shift`.
+- Nota Length has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The GATE window now shows a bar of five notes and what happens to each: the note played in
+  is outlined, the note that comes out is filled, and a band shows how far Random can move
+  it. A playhead runs across the bar, and Random picks new lengths on every pass.
+- Nota Length's Sync mode has eight lengths, from 1/32 to a whole bar, plus dotted 1/8 and
+  triplet 1/4. Vel → Len and Key → Len now go both ways: plus makes loud (or low) notes
+  longer, minus makes them shorter. Legato now holds each note until the next one starts.
+  Clip length limit stops a note at the end of the bar. Projects and presets from older
+  versions load with the same lengths as before.
+- Nota Length has 32 presets. The automation menu lists its settings, and MCP gets new tools
+  for it: `get_length` and `set_length`.
+- Nota Random has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The OUTPUT window shows a bar of eight notes: the note played in is dashed, the note that
+  comes out is filled (brighter when louder), and a skipped note gets a ×. A playhead runs
+  across the bar, and every bar is a new roll. The DICE panel draws the chosen distribution
+  from the same dice the device uses.
+- Nota Random's Lock now holds the roll you see on screen and repeats it every bar; Reroll
+  moves to the next seed. Stay in scale keeps notes in C major. Timing now delays notes by
+  up to 100 ms.
+- Nota Random has 32 presets. The automation menu lists its settings, and MCP gets new tools
+  for it: `get_random` and `set_random`.
+- Nota Scale has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The NOTE MAP shows C to B as keys: scale notes are filled, the root is outlined, and every
+  other note shows where it goes. Click a note to add it or take it out. The note you play
+  lights up, along with the note it turns into, and fades out when you let go.
+- Nota Scale's Learn is now a mode: while it's on, the notes you play pass through and
+  become a new Custom scale. Follow key now finds the key that best fits what you play.
+  Clear leaves only the root.
+- Nota Scale has 35 presets. The automation menu lists its settings, and each note of the
+  Custom scale is under Custom Notes. MCP gets new tools for it: `get_scale`, `set_scale`
+  and `set_scale_note`.
 
 ### Fixed
+- Nota Scale no longer leaves notes hanging when you change the scale, root or fold while a
+  key is held, or when two held keys land on the same note.
+- Nota Length's Gate % below 100 % now shortens notes from a clip. Before, a note always
+  lasted at least as long as it was held.
+- Nota Length no longer leaves notes hanging when you bypass it while a note is sounding.
+- Nota Random's Timing now really moves notes. Before, a shift longer than a few milliseconds
+  was cut short, so most notes played on time.
+- Nota Random no longer leaves a transposed note hanging when you bypass it while it sounds.
 - Nota Chord no longer leaves notes hanging when you change its shifts while a key is held,
   or when two held keys share a note.
 

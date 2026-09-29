@@ -312,7 +312,7 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                 float vel = note.velocity;
                 if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel};
+                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel, static_cast<float>((offS - onS) / spb)};
                 // Chase: a note already held at the jump point starts sounding right here.
                 if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
                     evs[n++] = {0, true, note.pitch, vel};
@@ -498,7 +498,7 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
             const double onAbs = it * L + note.startBeat;
             const double offAbs = onAbs + note.lengthBeats;
             if (onAbs >= p && onAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity};
+                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity, static_cast<float>(note.lengthBeats)};
             if (offAbs >= p && offAbs < p + db && n < 1024)
                 evs[n++] = {static_cast<int32_t>((offAbs - p) * spb), false, note.pitch, 0.0f};
         }

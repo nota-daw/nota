@@ -6530,87 +6530,353 @@ Console.WriteLine("-- Nota Chord --");
     }
 }
 
-// ===================== Nota Scale (MIDI kind 2) rework =====================
+// ===================== Nota Scale (MIDI kind 2) — almanac rework =====================
 Console.WriteLine("-- Nota Scale --");
 {
     using var e = new NotaEngine();
     e.SetBpm(120); e.SetTimeSignature(4, 4);
     int t = e.AddInstrumentTrack();
     int m = e.AddMidiEffect(t, 2);
-    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Scale", "add Nota Scale");
+    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Scale" && e.MidiEffectKind(t, 0) == 2, "add Nota Scale");
     int pc = e.MidiEffectParamCount(t, 0);
-    Check(pc == 20, $"Nota Scale exposes 20 params (got {pc})");
-    var pnames = new System.Collections.Generic.HashSet<string>();
-    for (int i = 0; i < pc; i++) pnames.Add(e.MidiEffectParamName(t, 0, i));
-    Check(pnames.Contains("Fold") && pnames.Contains("Follow Key") && pnames.Contains("Range Low")
-          && pnames.Contains("Range High") && pnames.Contains("Learn") && pnames.Contains("Mask 0") && pnames.Contains("Mask 11"),
-          "mockup-3b params present (Fold / Follow Key / Range / Learn / Mask 0-11)");
+    Check(pc == 21, $"Nota Scale exposes 21 params (got {pc})");
+    string[] expect = { "Root", "Scale", "Transpose", "Mask 0", "Mask 11", "Fold", "Follow Key", "Range Low", "Range High", "Learn", "View" };
+    int[] at = { 0, 1, 2, 3, 14, 15, 16, 17, 18, 19, 20 };
+    bool layout = true; for (int i = 0; i < expect.Length; i++) layout &= e.MidiEffectParamName(t, 0, at[i]) == expect[i];
+    Check(layout, "param layout is append-only (Root/Scale/Transpose, Mask 0-11, Fold … Learn, then View)");
+    Check(GetByName(e, t, 0, "Scale") == 1f && GetByName(e, t, 0, "Root") == 0f && GetByName(e, t, 0, "View") == 0f, "defaults: C minor, card L");
 
-    // C major, Nearest fold: an out-of-scale C#4 (61) snaps into the scale, and the last
-    // remapped note-on is published for the card's IN→OUT readout.
-    SetByName(e, t, 0, "Root", 0f); SetByName(e, t, 0, "Scale", 0f); SetByName(e, t, 0, "Fold", 0f);
-    e.AddMidiClip(t, 0.0, 4.0);
+    // Play a short run of notes, return every output note-on (read back through the IN→OUT telemetry,
+    // one note per 1/8 so each block sees at most one note-on).
+    e.AddMidiClip(t, 0.0, 16.0);
+    var flush = new float[256 * 2];
+    void Stop() { e.StopTransport(); e.RenderOffline(flush, 256); }   // a stopped block flushes held notes (play → stop edge)
+    int[] Run(params int[] ins)
+    {
+        Stop();
+        e.SetClipNotes(t, 0, ins.Select((p, i) => new NotaNote(p, i * 0.5, 0.25, 0.9f)).ToArray());
+        var outs = new List<int>(); var buf = new float[256 * 2]; int seen = 0;
+        var sc = new float[32];
+        e.Seek(0); e.Play();
+        for (int blk = 0; blk < 44100 * (ins.Length * 0.25 + 0.3) / 256 && outs.Count < ins.Length; blk++)
+        {
+            e.RenderOffline(buf, 256);
+            e.MidiEffectScope(t, 0, sc);
+            if ((int)sc[7] != seen) { seen = (int)sc[7]; outs.Add(e.MidiEffectLastOut(t, 0)); }
+        }
+        e.StopTransport();
+        return outs.ToArray();
+    }
+    string J(IEnumerable<int> a) => string.Join(",", a);
+
+    // C major, Nearest (a tie goes up) / Down / Up on C#4 D#4 F#4 A#4.
+    SetByName(e, t, 0, "Scale", 0f);
+    var near = Run(61, 63, 66, 70);
+    Check(J(near) == "62,64,67,71", $"C major Nearest folds C# D# F# A# → D E G B (got {J(near)})");
+    SetByName(e, t, 0, "Fold", 1f);
+    var down = Run(61, 63, 66, 70);
+    Check(J(down) == "60,62,65,69", $"Fold Down → C D F A (got {J(down)})");
+    SetByName(e, t, 0, "Fold", 2f);
+    var up = Run(61, 63, 66, 70);
+    Check(J(up) == "62,64,67,71", $"Fold Up → D E G B (got {J(up)})");
+    SetByName(e, t, 0, "Fold", 0f);
+
+    // Root + Transpose; Range passes notes outside through.
+    SetByName(e, t, 0, "Root", 2f); SetByName(e, t, 0, "Scale", 1f);   // D minor: D E F G A A# C
+    var dm = Run(61, 66, 71);
+    Check(J(dm) == "62,67,72", $"D minor snaps C# F# B → D G C, ties going up (got {J(dm)})");
+    SetByName(e, t, 0, "Transpose", 12f);
+    Check(J(Run(61)) == "74", "Transpose adds after snapping");
+    SetByName(e, t, 0, "Transpose", 0f);
+    SetByName(e, t, 0, "Range Low", 60f); SetByName(e, t, 0, "Range High", 64f);
+    var rg = Run(61, 66);
+    Check(J(rg) == "62,66", $"Range: F#4 (outside 60..64) passes through (got {J(rg)})");
+    SetByName(e, t, 0, "Range Low", 0f); SetByName(e, t, 0, "Range High", 127f);
+
+    // Custom mask (relative to the root) + an empty mask passes everything.
+    SetByName(e, t, 0, "Root", 0f); SetByName(e, t, 0, "Scale", 10f);
+    for (int i = 0; i < 12; i++) SetByName(e, t, 0, $"Mask {i}", i == 0 || i == 7 ? 1f : 0f);
+    var c5 = Run(62, 65, 69);
+    Check(J(c5) == "60,67,67", $"Custom root + fifth: D F A → C G G (got {J(c5)})");
+    for (int i = 0; i < 12; i++) SetByName(e, t, 0, $"Mask {i}", 0f);
+    Check(J(Run(61, 66)) == "61,66", "an empty Custom scale passes notes through");
+
+    // Learn: a fresh Custom scale from what's played; notes pass untouched while learning.
+    SetByName(e, t, 0, "Learn", 1f);
+    var learned = Run(62, 65, 69, 62);
+    SetByName(e, t, 0, "Learn", 0f);
+    bool lm = true; for (int i = 0; i < 12; i++) lm &= GetByName(e, t, 0, $"Mask {i}") == (i is 2 or 5 or 9 ? 1f : 0f);
+    Check(J(learned) == "62,65,69,62" && lm && GetByName(e, t, 0, "Scale") == 10f, $"Learn collects D F A into Custom, passing them through (got {J(learned)})");
+    Check(J(Run(64)) == "65", "the learned scale snaps E → F");
+
+    // Follow Key: a G-major line moves a C major scale's root to G.
+    for (int i = 0; i < 12; i++) SetByName(e, t, 0, $"Mask {i}", 0f);
+    SetByName(e, t, 0, "Scale", 0f); SetByName(e, t, 0, "Root", 0f); SetByName(e, t, 0, "Follow Key", 1f);
+    Run(67, 71, 74, 66, 67, 71, 74, 66, 62, 67);
+    Check(GetByName(e, t, 0, "Root") == 7f, $"Follow Key finds G from a G-major line (root {GetByName(e, t, 0, "Root")})");
+    SetByName(e, t, 0, "Follow Key", 0f); SetByName(e, t, 0, "Root", 0f);
+
+    // Note-offs follow the note-on even when the scale changes while the key is held.
+    {
+        Stop();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(61, 0.0, 2.0, 0.9f) });
+        var sc = new float[32]; var hb = new float[512 * 2];
+        e.Seek(0); e.Play();
+        for (int i = 0; i < 20; i++) e.RenderOffline(hb, 512);
+        e.MidiEffectScope(t, 0, sc);
+        bool heldD = ((int)sc[5] & (1 << 2)) != 0 && ((int)sc[4] & (1 << 1)) != 0;
+        SetByName(e, t, 0, "Fold", 1f);                                    // now C# would fold to C…
+        for (int i = 0; i < 200; i++) e.RenderOffline(hb, 512);           // …past the note's end
+        e.MidiEffectScope(t, 0, sc);
+        e.StopTransport();
+        Check(heldD && (int)sc[4] == 0 && (int)sc[5] == 0, $"held C# sounds as D and releases it after a fold change (held in {(int)sc[4]} out {(int)sc[5]})");
+        SetByName(e, t, 0, "Fold", 0f);
+    }
+
+    // Bypass passes notes; telemetry counts note-ons per pitch class.
+    e.SetMidiEffectBypassed(t, 0, true);
+    Check(J(Run(61)) == "61", "bypassed Scale passes notes through");
+    e.SetMidiEffectBypassed(t, 0, false);
+
+    // It still makes sound, and duplicating the track clones the scale.
+    SetByName(e, t, 0, "Scale", 10f);
+    for (int i = 0; i < 12; i++) SetByName(e, t, 0, $"Mask {i}", i == 0 || i == 7 ? 1f : 0f);
+    SetByName(e, t, 0, "View", 1f);
     e.SetClipNotes(t, 0, new[] { new NotaNote(61, 0.0, 2.0, 0.9f) });
     var scbuf = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(scbuf, 12000); e.StopTransport();
-    int li = e.MidiEffectLastIn(t, 0), lo = e.MidiEffectLastOut(t, 0);
-    int[] cmaj = { 0, 2, 4, 5, 7, 9, 11 };
-    Check(li == 61 && lo >= 0 && System.Array.IndexOf(cmaj, ((lo % 12) + 12) % 12) >= 0, $"quantizes out-of-scale note into scale (IN {li} OUT {lo})");
-
-    // Custom mask: switch to Custom + set an empty-ish mask → different remap vs the preset.
-    SetByName(e, t, 0, "Scale", 10f);   // Custom
-    for (int i = 0; i < 12; i++) SetByName(e, t, 0, $"Mask {i}", 0f);
-    SetByName(e, t, 0, "Mask 0", 1f); SetByName(e, t, 0, "Mask 7", 1f);   // only root + fifth
-    e.Seek(0); e.Play(); e.RenderOffline(scbuf, 12000); e.StopTransport();
-    int lo2 = e.MidiEffectLastOut(t, 0);
-    Check(lo2 >= 0 && (((lo2 % 12) + 12) % 12 == 0 || ((lo2 % 12) + 12) % 12 == 7), $"custom two-note scale folds to root/fifth (OUT {lo2})");
-
+    bool fin = true; foreach (var x in scbuf) if (!float.IsFinite(x)) { fin = false; break; }
+    Check(fin && Rms(scbuf, 12000) > 0.001f, "Scale → instrument renders audible, finite audio");
     int t2 = e.DuplicateTrack(t);
-    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Mask 7") - 1f) < 1e-3, "duplicate track clones Scale custom mask");
+    Check(t2 > 0 && GetByName(e, t2, 0, "Mask 7") == 1f && GetByName(e, t2, 0, "Mask 4") == 0f && GetByName(e, t2, 0, "View") == 1f,
+          "duplicate track clones the Custom mask and card size");
+
+    // Automation drives Root.
+    {
+        int lane = e.AddAutomationLane(t, AutomationTarget.MidiDeviceParam, 0, 0);
+        e.SetAutomationPoints(t, lane, new[] { new AutomationPoint(0, 5f, 0), new AutomationPoint(16, 5f, 0) });
+        var ab = new float[1024 * 2]; e.Seek(0); e.Play(); e.RenderOffline(ab, 1024); e.StopTransport();
+        Check(Math.Abs(GetByName(e, t, 0, "Root") - 5f) < 0.01f, $"automation drives Root (got {GetByName(e, t, 0, "Root")})");
+        e.RemoveAutomationLane(t, lane);
+    }
+
+    // MCP: named read / write.
+    {
+        var mcp = new Nota.Mcp.Tools.MidiFxTools(e, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        mcp.SetScale(t, 0, root: "A", scale: "minor", fold: "down", rangeLow: 36, view: "L").GetAwaiter().GetResult();
+        var st = mcp.GetScale(t, 0).GetAwaiter().GetResult();
+        Check(st.Root == "A" && st.Scale == "minor" && J(st.Degrees) == "0,2,3,5,7,8,10" && string.Join(" ", st.Notes) == "A B C D E F G"
+              && st.Fold == "down" && st.RangeLow == 36 && st.View == "L" && st.FoldMap[1] == "C#→C", $"MCP get/set_scale (notes {string.Join(" ", st.Notes)}, C# {st.FoldMap[1]})");
+        mcp.SetScaleNote(t, 0, "G#", true).GetAwaiter().GetResult();
+        st = mcp.GetScale(t, 0).GetAwaiter().GetResult();
+        Check(st.Scale == "custom" && string.Join(" ", st.Notes) == "A B C D E F G G#", $"MCP set_scale_note turns the scale Custom ({string.Join(" ", st.Notes)})");
+        mcp.SetScale(t, 0, notes: new[] { "D", "F", "A" }).GetAwaiter().GetResult();
+        st = mcp.GetScale(t, 0).GetAwaiter().GetResult();
+        Check(J(st.Degrees) == "0,5,8" && st.Scale == "custom", $"MCP notes → Custom degrees relative to the root ({J(st.Degrees)})");
+        mcp.SetScale(t, 0, root: "C", scale: "major", fold: "nearest", rangeLow: 0).GetAwaiter().GetResult();
+    }
+
+    // A project from before View loads as the L card; a factory preset keeps the card size.
+    {
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(e, new TransportState(120, 1, false, false), w);
+        var md = doc.Tracks.First(x => x.MidiEffects.Count > 0 && x.MidiEffects[0].Kind == 2).MidiEffects[0];
+        md.Params = md.Params.Take(20).ToArray();
+        using var e2 = new NotaEngine();
+        ProjectService.Apply(doc, e2, Path.GetTempPath());
+        int lt = -1;
+        for (int i = 0; e2.TryGetTrackInfo(i, out var ti); i++) if (e2.TrackMidiEffectCount(ti.Id) > 0 && e2.MidiEffectKind(ti.Id, 0) == 2) { lt = ti.Id; break; }
+        Check(lt > 0 && GetByName(e2, lt, 0, "View") == 0f && GetByName(e2, lt, 0, "Scale") == 0f, "a pre-View Scale project loads (card L)");
+    }
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 2).ToList();
+        Check(mine.Count >= 25, $"Nota Scale ships 25+ factory presets (got {mine.Count})");
+        var names = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) names.Add(e.MidiEffectParamName(t, 0, i));
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Scale preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        SetByName(e, t, 0, "View", 1f);
+        var off = new System.Collections.Generic.List<string>();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(61, 0.0, 1.0, 0.9f) });
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(e, p.Id, t, 0).Length != 0) { off.Add(p.DisplayName + " (apply)"); continue; }
+            var pb = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(pb, 12000); e.StopTransport();
+            bool ok = true; foreach (var x in pb) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { ok = false; break; }
+            if (!ok || Rms(pb, 12000) < 0.001f) off.Add(p.DisplayName);
+        }
+        Check(off.Count == 0, $"every Scale preset applies and renders{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Check(GetByName(e, t, 0, "View") == 1f, "presets leave the card size (View) alone");
+        var blues = mine.First(p => p.DisplayName == "A Blues");
+        cat.ApplyInPlace(e, blues.Id, t, 0);
+        Check(GetByName(e, t, 0, "Root") == 9f && GetByName(e, t, 0, "Scale") == 10f && GetByName(e, t, 0, "Mask 6") == 1f && GetByName(e, t, 0, "Mask 4") == 0f,
+              "A Blues preset sets root A and its Custom degrees");
+    }
 }
 
-// ===================== Nota Length (MIDI kind 3) rework =====================
+// ===================== Nota Length (MIDI kind 3) — almanac rework =====================
 Console.WriteLine("-- Nota Length --");
 {
+    static float RmsRange(float[] b, int from, int to) { double sum = 0; for (int i = from * 2; i < to * 2; i++) sum += b[i] * (double)b[i]; return (float)Math.Sqrt(sum / Math.Max(1, (to - from) * 2)); }
     using var e = new NotaEngine();
     e.SetBpm(120); e.SetTimeSignature(4, 4);
     int t = e.AddInstrumentTrack();
     int m = e.AddMidiEffect(t, 3);
-    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Length", $"add Nota Length (got '{e.MidiEffectName(t, 0)}')");
+    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Length" && e.MidiEffectKind(t, 0) == 3, $"add Nota Length (got '{e.MidiEffectName(t, 0)}')");
     int pc = e.MidiEffectParamCount(t, 0);
-    Check(pc == 11, $"Nota Length exposes 11 params (got {pc})");
-    var pn = new System.Collections.Generic.HashSet<string>();
-    for (int i = 0; i < pc; i++) pn.Add(e.MidiEffectParamName(t, 0, i));
-    Check(pn.Contains("Mode") && pn.Contains("Ms") && pn.Contains("Percent") && pn.Contains("Trigger")
-          && pn.Contains("Vel to Len") && pn.Contains("Key to Len") && pn.Contains("Random")
-          && pn.Contains("Legato") && pn.Contains("Clip Limit"), "mockup-3b params present");
+    Check(pc == 13, $"Nota Length exposes 13 params (got {pc})");
+    string[] expect = { "Rate", "Gate", "Mode", "Ms", "Percent", "Trigger", "Vel to Len", "Key to Len", "Random", "Legato", "Clip Limit", "Division", "View" };
+    bool layout = true; for (int i = 0; i < expect.Length; i++) layout &= e.MidiEffectParamName(t, 0, i) == expect[i];
+    Check(layout, "param layout is append-only (… Clip Limit, then Division / View)");
+    Check(e.MidiEffectParamMin(t, 0, 6) == -1f && e.MidiEffectParamMin(t, 0, 7) == -1f && e.MidiEffectParamMax(t, 0, 11) == 7f,
+          "Vel / Key to Len are bipolar, Division spans 8 values");
+    Check(GetByName(e, t, 0, "Mode") == 0f && GetByName(e, t, 0, "Division") == 2f && GetByName(e, t, 0, "Gate") == 1f, "defaults: Sync 1/8");
 
-    // A long note forced to a short synced length differs from bypass (note cut short).
-    e.AddMidiClip(t, 0.0, 4.0);
-    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });   // held 3 beats
-    SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Rate", 0f); SetByName(e, t, 0, "Gate", 1f);   // 1/16
-    var on = new float[40000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(on, 40000); e.StopTransport();
-    e.SetMidiEffectBypassed(t, 0, true);
-    var off = new float[40000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(off, 40000); e.StopTransport();
-    e.SetMidiEffectBypassed(t, 0, false);
-    double diff = 0; for (int i = 0; i < 40000 * 2; i++) { double d = on[i] - off[i]; diff += d * d; }
-    Check(Math.Sqrt(diff / (40000 * 2)) > 0.003, "Sync mode forces (shortens) the note vs bypass");
+    // The forced length, read back from the telemetry: [3] last out pitch, [4] its length in beats.
+    var sc = new float[8];
+    e.AddMidiClip(t, 0.0, 8.0);
+    float OutLen(NotaNote[] ns, double seconds)
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, ns);
+        var buf = new float[2048 * 2]; e.Seek(0); e.Play();
+        int blocks = (int)Math.Ceiling(seconds * 44100 / 2048);   // offline renders at 44.1 kHz
+        for (int b = 0; b < blocks; b++) e.RenderOffline(buf, 2048);
+        e.StopTransport();
+        return e.MidiEffectScope(t, 0, sc) >= 5 ? sc[4] : -1;
+    }
+    bool Near(float v, double want) => Math.Abs(v - want) < 0.02;
+    var held3 = new[] { new NotaNote(60, 0.0, 3.0, 64f / 127f) };   // vel 64: the velocity modifier is neutral
+    SetByName(e, t, 0, "Division", 3f);
+    float l = OutLen(held3, 2.0); Check(Near(l, 1.0), $"Sync 1/4 forces a 3-beat note to 1 beat (got {l:0.000})");
+    SetByName(e, t, 0, "Division", 6f);
+    l = OutLen(held3, 2.0); Check(Near(l, 0.75), $"Sync 1/8. → 0.75 beat (got {l:0.000})");
+    SetByName(e, t, 0, "Division", 7f);
+    l = OutLen(held3, 2.0); Check(Near(l, 2.0 / 3), $"Sync 1/4T → ⅔ beat (got {l:0.000})");
+    SetByName(e, t, 0, "Mode", 1f); SetByName(e, t, 0, "Ms", 250f);
+    l = OutLen(held3, 2.0); Check(Near(l, 0.5), $"ms 250 at 120 BPM → ½ beat (got {l:0.000})");
+    SetByName(e, t, 0, "Mode", 2f); SetByName(e, t, 0, "Percent", 50f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 2.0, 64f / 127f) }, 2.0); Check(Near(l, 1.0), $"Gate 50 % of a 2-beat note → 1 beat (got {l:0.000})");
+    SetByName(e, t, 0, "Percent", 25f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 2.0, 64f / 127f) }, 2.0); Check(Near(l, 0.5), $"Gate 25 % shortens a clip note (its length rides on the note-on) → ½ beat (got {l:0.000})");
+    SetByName(e, t, 0, "Percent", 150f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 1.0, 64f / 127f) }, 2.0); Check(Near(l, 1.5), $"Gate 150 % of a 1-beat note → 1.5 beats (got {l:0.000})");
+
+    // Bipolar modifiers: + makes loud / low notes longer, − the opposite.
+    SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Division", 3f);
+    SetByName(e, t, 0, "Vel to Len", 1f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 3.0, 1f) }, 2.5); Check(Near(l, 1 + 63.0 / 64), $"Vel → Len +100 %: vel 127 nearly doubles (got {l:0.000})");
+    SetByName(e, t, 0, "Vel to Len", -0.5f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 3.0, 1f) }, 2.5); Check(Near(l, 1 - 0.5 * 63 / 64), $"Vel → Len −50 %: loud notes shorter (got {l:0.000})");
+    SetByName(e, t, 0, "Vel to Len", 0f);
+    SetByName(e, t, 0, "Key to Len", 1f);
+    l = OutLen(new[] { new NotaNote(48, 0.0, 3.0, 64f / 127f) }, 2.5); Check(Near(l, 1.5), $"Key → Len +100 %: C3 lasts 1.5× (got {l:0.000})");
+    l = OutLen(new[] { new NotaNote(72, 0.0, 3.0, 64f / 127f) }, 2.5); Check(Near(l, 0.5), $"Key → Len +100 %: C5 lasts 0.5× (got {l:0.000})");
+    SetByName(e, t, 0, "Key to Len", 0f);
+
+    // Random spreads within ±amount.
+    SetByName(e, t, 0, "Random", 0.5f);
+    var rl = new System.Collections.Generic.List<float>();
+    for (int k = 0; k < 6; k++) rl.Add(OutLen(held3, 2.0));
+    Check(rl.All(x => x >= 0.49 && x <= 1.51) && rl.Max() - rl.Min() > 0.01, $"Random ±50 % spreads 0.5..1.5 beats ({string.Join(" ", rl.Select(x => x.ToString("0.00")))})");
+    SetByName(e, t, 0, "Random", 0f);
+
+    // Clip length limit: a 1/2 note from beat 3.5 stops at the bar line.
+    SetByName(e, t, 0, "Division", 4f); SetByName(e, t, 0, "Clip Limit", 1f);
+    l = OutLen(new[] { new NotaNote(60, 3.5, 3.0, 64f / 127f) }, 3.0); Check(Near(l, 0.5), $"Clip length limit cuts at the bar line (got {l:0.000})");
+    SetByName(e, t, 0, "Clip Limit", 0f);
+    l = OutLen(new[] { new NotaNote(60, 3.5, 3.0, 64f / 127f) }, 3.5); Check(Near(l, 2.0), $"without Clip the note crosses the bar (got {l:0.000})");
+
+    // Legato: each note lasts until the next one starts.
+    SetByName(e, t, 0, "Division", 1f); SetByName(e, t, 0, "Legato", 1f);
+    l = OutLen(new[] { new NotaNote(60, 0.0, 0.2, 64f / 127f), new NotaNote(64, 1.0, 0.2, 64f / 127f) }, 0.65);
+    Check(Near(l, 1.0) && (int)sc[3] == 60, $"Legato stretches a 1/16 to the next note (C4 {l:0.000} beats)");
+    SetByName(e, t, 0, "Legato", 0f);
+
+    // Start from note-off: the note fires on release and nothing sounds while the key is held.
+    SetByName(e, t, 0, "Division", 3f); SetByName(e, t, 0, "Trigger", 1f);
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f) });
+        var quiet = new float[2048 * 2]; for (int b = 0; b < 60; b++) e.RenderOffline(quiet, 2048);   // let earlier tails die away
+        const int beat = 22050;   // 1 beat at 120 BPM, 44.1 kHz offline
+        var ob = new float[beat * 3 * 2]; var blk = new float[1050 * 2];
+        e.Seek(0); e.Play();
+        for (int o = 0; o < beat * 3; o += 1050) { e.RenderOffline(blk, 1050); Array.Copy(blk, 0, ob, o * 2, 1050 * 2); }
+        e.StopTransport();
+        float held = RmsRange(ob, 0, beat - 256), after = RmsRange(ob, beat + 512, 2 * beat);
+        e.MidiEffectScope(t, 0, sc);
+        Check(held < 1e-5f && after > 0.001f && Near(sc[4], 1.0), $"note-off start: silent while held ({held:E1}), sounds after release ({after:0.0000}), 1 beat long");
+    }
+    SetByName(e, t, 0, "Trigger", 0f);
+
+    // Bypass mid-note releases what the device still holds.
+    {
+        SetByName(e, t, 0, "Division", 5f);
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.25, 0.9f) });
+        var hb = new float[2048 * 2]; e.Seek(0); e.Play();
+        for (int b = 0; b < 8; b++) e.RenderOffline(hb, 2048);
+        e.SetMidiEffectBypassed(t, 0, true);
+        for (int b = 0; b < 80; b++) e.RenderOffline(hb, 2048);
+        e.StopTransport(); e.SetMidiEffectBypassed(t, 0, false);
+        Check(Rms(hb, 2048) < 1e-4f, $"bypass mid-note leaves no stuck notes (tail RMS {Rms(hb, 2048):E1})");
+    }
 
     // Every mode + the note-off trigger renders finite + audible.
+    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
     void RenderFinite(string tag, Action cfg)
     {
         cfg();
         var b = new float[40000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(b, 40000); e.StopTransport();
-        bool fin = true; foreach (var s in b) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
+        bool fin = true; foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { fin = false; break; }
         Check(fin && Rms(b, 40000) > 0.0005f, $"{tag} renders finite + audible");
     }
     RenderFinite("ms mode", () => { SetByName(e, t, 0, "Mode", 1f); SetByName(e, t, 0, "Ms", 120f); });
     RenderFinite("Gate% mode", () => { SetByName(e, t, 0, "Mode", 2f); SetByName(e, t, 0, "Percent", 50f); });
-    RenderFinite("note-off trigger", () => { SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Trigger", 1f); });
-    RenderFinite("modifiers + legato", () => { SetByName(e, t, 0, "Trigger", 0f); SetByName(e, t, 0, "Vel to Len", 0.6f); SetByName(e, t, 0, "Random", 0.3f); SetByName(e, t, 0, "Legato", 1f); });
+    RenderFinite("note-off trigger", () => { SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Trigger", 1f); e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.5, 0.9f) }); });
+    RenderFinite("modifiers + legato", () => { e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) }); SetByName(e, t, 0, "Trigger", 0f); SetByName(e, t, 0, "Vel to Len", 0.6f); SetByName(e, t, 0, "Random", 0.3f); SetByName(e, t, 0, "Legato", 1f); });
 
-    SetByName(e, t, 0, "Ms", 333f);
+    SetByName(e, t, 0, "Ms", 333f); SetByName(e, t, 0, "Division", 6f);
     int t2 = e.DuplicateTrack(t);
-    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Ms") - 333f) < 1e-3, "duplicate track clones Length params");
+    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Ms") - 333f) < 1e-3 && GetByName(e, t2, 0, "Division") == 6f, "duplicate track clones Length params");
+
+    // A project from before Division (11 params): Rate maps onto Division, Key to Len flips sign.
+    {
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(e, new TransportState(120, 1, false, false), w);
+        var md = doc.Tracks.First(x => x.MidiEffects.Count > 0 && x.MidiEffects[0].Kind == 3).MidiEffects[0];
+        md.Params = new float[] { 2, 1, 0, 250, 100, 0, 0.4f, 0.5f, 0, 0, 0 };   // Rate 2 = 1/8 dotted, Key to Len +0.5 (old: high longer)
+        using var e2 = new NotaEngine();
+        ProjectService.Apply(doc, e2, Path.GetTempPath());
+        int lt = -1;
+        for (int i = 0; e2.TryGetTrackInfo(i, out var ti); i++) if (e2.TrackMidiEffectCount(ti.Id) > 0 && e2.MidiEffectKind(ti.Id, 0) == 3) { lt = ti.Id; break; }
+        Check(lt > 0 && GetByName(e2, lt, 0, "Division") == 6f && Math.Abs(GetByName(e2, lt, 0, "Key to Len") + 0.5f) < 1e-4
+              && Math.Abs(GetByName(e2, lt, 0, "Vel to Len") - 0.4f) < 1e-4, "legacy Length project: Rate → Division, Key to Len keeps its meaning");
+    }
+
+    // Factory presets: 25+, every name valid, each applies in place and renders.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 3).ToList();
+        Check(mine.Count >= 25, $"Nota Length ships 25+ factory presets (got {mine.Count})");
+        var names = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) names.Add(e.MidiEffectParamName(t, 0, i));
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Length preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        SetByName(e, t, 0, "View", 1f);
+        var off = new System.Collections.Generic.List<string>();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f), new NotaNote(64, 1.0, 1.0, 0.7f) });
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(e, p.Id, t, 0).Length != 0) { off.Add(p.DisplayName + " (apply)"); continue; }
+            var pb = new float[40000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(pb, 40000); e.StopTransport();
+            bool ok = true; foreach (var x in pb) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { ok = false; break; }
+            if (!ok || Rms(pb, 40000) < 0.0005f) off.Add(p.DisplayName);
+        }
+        Check(off.Count == 0, $"every Length preset applies and renders{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Check(GetByName(e, t, 0, "View") == 1f, "presets leave the card size (View) alone");
+    }
 }
 
 // ===================== Nota Velocity (MIDI kind 4) rework =====================
@@ -6669,7 +6935,9 @@ Console.WriteLine("-- Nota Random --");
     int m = e.AddMidiEffect(t, 5);
     Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Random", "add Nota Random");
     int pc = e.MidiEffectParamCount(t, 0);
-    Check(pc == 11, $"Nota Random exposes 11 params (got {pc})");
+    Check(pc == 13, $"Nota Random exposes 13 params (got {pc})");
+    Check(e.MidiEffectParamName(t, 0, 0) == "Chance" && e.MidiEffectParamName(t, 0, 10) == "Seed" && e.MidiEffectParamName(t, 0, 11) == "View"
+          && e.MidiEffectParamName(t, 0, 12) == "Lock Bar", "param layout is append-only (… Seed, then View / Lock Bar)");
     var pn = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++) pn.Add(e.MidiEffectParamName(t, 0, i));
     Check(pn.Contains("Note Range") && pn.Contains("Vel Amt") && pn.Contains("Time Amt") && pn.Contains("Skip")
@@ -6718,6 +6986,139 @@ Console.WriteLine("-- Nota Random --");
     SetByName(e, t, 0, "Note Range", 5f);
     int t2 = e.DuplicateTrack(t);
     Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Note Range") - 5f) < 1e-3, "duplicate track clones Random params");
+
+    // Reset to a clean state: every dimension off, per note, Gauss, unlocked.
+    void Clean()
+    {
+        foreach (var n in new[] { "Note Range", "Vel Amt", "Time Amt", "Skip", "Oct Amt", "Dist", "Rate", "Stay In Scale", "Locked", "Lock Bar" }) SetByName(e, t, 0, n, 0f);
+        SetByName(e, t, 0, "Chance", 1f); SetByName(e, t, 0, "Seed", 1f);
+    }
+    var rsc = new float[10];
+    int Onset(float[] b) { for (int i = 0; i < b.Length / 2; i++) if (Math.Abs(b[2 * i]) > 1e-4f) return i; return -1; }
+    float[] RenderOne(double beat, int frames)
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, beat, 0.5, 0.9f) });
+        var q = new float[2048 * 2]; for (int b = 0; b < 40; b++) e.RenderOffline(q, 2048);   // let earlier tails die away
+        var buf = new float[frames * 2]; var blk = new float[512 * 2];
+        e.Seek(0); e.Play();
+        for (int o = 0; o < frames; o += 512) { e.RenderOffline(blk, 512); Array.Copy(blk, 0, buf, o * 2, Math.Min(512, frames - o) * 2); }
+        e.StopTransport();
+        return buf;
+    }
+
+    // Timing: a real delay (up to 100 ms), not clipped to the block — the onset moves by the reported delay.
+    Clean();
+    int dryOn = Onset(RenderOne(0.25, 16384));
+    SetByName(e, t, 0, "Time Amt", 1f); SetByName(e, t, 0, "Dist", 1f);
+    float maxDelay = 0; int wetOn = -1; float rep = 0;
+    for (int sd = 1; sd <= 8 && maxDelay < 30; sd++)
+    {
+        SetByName(e, t, 0, "Seed", sd);
+        int on = Onset(RenderOne(0.25, 16384));
+        e.MidiEffectScope(t, 0, rsc);
+        if (rsc[8] > maxDelay) { maxDelay = rsc[8]; wetOn = on; rep = rsc[8]; }
+    }
+    int wantShift = (int)Math.Round(rep / 1000.0 * 44100);
+    Check(maxDelay > 30 && maxDelay <= 100.5f && dryOn >= 0 && Math.Abs(wetOn - dryOn - wantShift) < 64,
+          $"Timing delays the note by the reported {rep:0.0} ms (onset {dryOn} → {wetOn}, want +{wantShift})");
+
+    // Lock holds one roll: the same note every bar comes out the same. Unlocked rolls anew per bar.
+    int[] BarPitches(bool locked)
+    {
+        using var be = new NotaEngine();
+        be.SetBpm(120); be.SetTimeSignature(4, 4);
+        int bt = be.AddInstrumentTrack(); be.AddMidiEffect(bt, 5);
+        SetByName(be, bt, 0, "Chance", 1f); SetByName(be, bt, 0, "Note Range", 12f); SetByName(be, bt, 0, "Dist", 1f); SetByName(be, bt, 0, "Seed", 5f);
+        SetByName(be, bt, 0, "Locked", locked ? 1f : 0f); SetByName(be, bt, 0, "Lock Bar", 2f);
+        be.AddMidiClip(bt, 0.0, 24.0);
+        be.SetClipNotes(bt, 0, Enumerable.Range(0, 6).Select(b => new NotaNote(60, b * 4.0 + 1.0, 0.5, 0.9f)).ToArray());
+        var ps = new int[6]; var blk = new float[1024 * 2];
+        be.Seek(0); be.Play();
+        for (int b = 0; b < 6; b++)
+        {
+            for (int f = 0; f < 88200; f += 1024) be.RenderOffline(blk, 1024);   // one bar at 120 BPM
+            be.MidiEffectScope(bt, 0, rsc); ps[b] = (int)rsc[5];
+        }
+        be.StopTransport();
+        return ps;
+    }
+    var lk = BarPitches(true); var ul = BarPitches(false);
+    Check(lk.All(x => x == lk[0]) && lk[0] >= 48 && lk[0] <= 72, $"Locked repeats the held roll every bar ({string.Join(" ", lk)})");
+    Check(ul.Distinct().Count() > 1, $"unlocked rolls a new value each bar ({string.Join(" ", ul)})");
+
+    // Per bar: one set of values for the whole bar — four notes in a bar move together.
+    Clean(); SetByName(e, t, 0, "Note Range", 12f); SetByName(e, t, 0, "Dist", 1f); SetByName(e, t, 0, "Rate", 1f); SetByName(e, t, 0, "Seed", 9f);
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.4, 0.9f), new NotaNote(60, 1.0, 0.4, 0.9f), new NotaNote(60, 2.0, 0.4, 0.9f), new NotaNote(60, 3.0, 0.4, 0.9f) });
+        var outs = new System.Collections.Generic.List<int>(); var blk = new float[1024 * 2];
+        e.Seek(0); e.Play();
+        for (int f = 0; f < 88200; f += 1024) { int before = (int)rsc[1]; e.RenderOffline(blk, 1024); e.MidiEffectScope(t, 0, rsc); if ((int)rsc[1] != before) outs.Add((int)rsc[5]); }
+        e.StopTransport();
+        Check(outs.Count >= 4 && outs.Skip(outs.Count - 4).Distinct().Count() == 1, $"Per bar moves every note of the bar alike ({string.Join(" ", outs)})");
+    }
+
+    // Stay in scale: every varied pitch lands in C major.
+    Clean(); SetByName(e, t, 0, "Note Range", 12f); SetByName(e, t, 0, "Dist", 1f); SetByName(e, t, 0, "Stay In Scale", 1f);
+    {
+        var outs = new System.Collections.Generic.HashSet<int>();
+        for (int sd = 1; sd <= 12; sd++) { SetByName(e, t, 0, "Seed", sd); RenderOne(0.0, 4096); e.MidiEffectScope(t, 0, rsc); outs.Add((int)rsc[5]); }
+        Check(outs.All(p => new[] { 0, 2, 4, 5, 7, 9, 11 }.Contains(((p % 12) + 12) % 12)) && outs.Count > 2, $"Stay in scale keeps notes in C major ({string.Join(" ", outs)})");
+    }
+
+    // Skip counts in the telemetry; bypass mid-note releases a transposed note.
+    Clean(); SetByName(e, t, 0, "Skip", 1f);
+    { int before = (int)(e.MidiEffectScope(t, 0, rsc) >= 4 ? rsc[3] : 0); RenderOne(0.0, 4096); e.MidiEffectScope(t, 0, rsc); Check(rsc[3] > before && rsc[5] == -1, "a skipped note is counted and reported (out −1)"); }
+    Clean(); SetByName(e, t, 0, "Note Range", 12f); SetByName(e, t, 0, "Dist", 1f);
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.5, 0.9f) });
+        var hb = new float[2048 * 2]; e.Seek(0); e.Play();
+        for (int b = 0; b < 4; b++) e.RenderOffline(hb, 2048);
+        e.SetMidiEffectBypassed(t, 0, true);
+        for (int b = 0; b < 80; b++) e.RenderOffline(hb, 2048);
+        e.StopTransport(); e.SetMidiEffectBypassed(t, 0, false);
+        Check(Rms(hb, 2048) < 1e-4f, $"bypass mid-note releases the transposed note (tail RMS {Rms(hb, 2048):E1})");
+    }
+
+    // MCP: named get / set in musical units.
+    {
+        var mcp = new Nota.Mcp.Tools.MidiFxTools(e, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        mcp.SetRandom(t, 0, chancePercent: 80, noteRangeSemitones: 5, velocityRange: 32, timingMaxMs: 40, skipPercent: 10, octaveRange: 1,
+            distribution: "walk", rate: "per-bar", stayInScale: true, seed: 77, locked: true, lockBar: 3, view: "S").GetAwaiter().GetResult();
+        var st = mcp.GetRandom(t, 0).GetAwaiter().GetResult();
+        Check(st.ChancePercent == 80 && st.NoteRangeSemitones == 5 && st.VelocityRange == 32 && st.TimingMaxMs == 40 && st.SkipPercent == 10
+              && st.OctaveRange == 1 && st.Distribution == "walk" && st.Rate == "per-bar" && st.StayInScale && st.Seed == 77 && st.Locked
+              && st.LockBar == 3 && st.View == "S", "MCP set_random / get_random round-trip in musical units");
+        mcp.SetRandom(t, 0, reroll: true, view: "L").GetAwaiter().GetResult();
+        Check(mcp.GetRandom(t, 0).GetAwaiter().GetResult().Seed == 78, "MCP reroll moves to the next seed");
+        bool threw = false; try { mcp.SetRandom(t, 0, distribution: "pink").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+        Check(threw, "MCP set_random rejects an unknown distribution");
+    }
+
+    // Factory presets: 25+, every name valid, each applies in place and renders.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 5).ToList();
+        Check(mine.Count >= 25, $"Nota Random ships 25+ factory presets (got {mine.Count})");
+        var names = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) names.Add(e.MidiEffectParamName(t, 0, i));
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Random preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        SetByName(e, t, 0, "View", 1f);
+        var off = new System.Collections.Generic.List<string>();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f), new NotaNote(64, 1.0, 1.0, 0.7f), new NotaNote(67, 2.0, 1.0, 0.8f), new NotaNote(72, 3.0, 1.0, 0.9f) });
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(e, p.Id, t, 0).Length != 0) { off.Add(p.DisplayName + " (apply)"); continue; }
+            var pb = new float[88200 * 2]; e.Seek(0); e.Play(); e.RenderOffline(pb, 88200); e.StopTransport();
+            bool ok = true; foreach (var x in pb) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { ok = false; break; }
+            if (!ok || Rms(pb, 88200) < 0.0005f) off.Add(p.DisplayName);
+        }
+        Check(off.Count == 0, $"every Random preset applies and renders{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Check(GetByName(e, t, 0, "View") == 1f, "presets leave the card size (View) alone");
+    }
 }
 
 // ===================== Phase 2: more MIDI effects + automation + Map/CC =====

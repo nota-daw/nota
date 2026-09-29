@@ -28,6 +28,8 @@ struct MidiEv {
     bool    on;     // true = note-on, false = note-off
     int32_t pitch;  // 0..127
     float   vel;    // 0..1 (note-on)
+    float   dur = 0.0f;   // note-on from a clip: its length in beats (0 = unknown, e.g. played live).
+                          // Lets a device that needs the length up front (Nota Length's Gate %) use it.
 };
 
 class MidiDevice {

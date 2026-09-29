@@ -2198,25 +2198,121 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Chord("Sub Octave",         new[] { -12 });
         Chord("Soft Fifth + Oct",   new[] { 7, 12 }, vel: new[] { -20, -35 });
         Chord("Tone Cluster",       new[] { 1, 2, 3 }, vel: new[] { -10, -15, -20 });
-        // ---- Nota Scale (MIDI, kind 2) — Root 0..11, Scale 0..9 preset / 10 Custom; Fold 0 Near/1 Down/2 Up
-        Midi("scale", 2, "C Minor",      ("Root", 0f), ("Scale", 1f));
-        Midi("scale", 2, "Penta Minor",  ("Root", 0f), ("Scale", 8f), ("Fold", 1f));
-        Midi("scale", 2, "Dorian Up",    ("Root", 0f), ("Scale", 3f), ("Fold", 2f));
-        // ---- Nota Length (MIDI, kind 3) — Mode 0 Sync/1 ms/2 Gate%; Rate 0 1/16..3 1/4
-        Midi("notelength", 3, "Staccato",    ("Mode", 0f), ("Rate", 0f), ("Gate", 1f));
-        Midi("notelength", 3, "Tenuto 1/4",  ("Mode", 0f), ("Rate", 3f), ("Gate", 1f));
-        Midi("notelength", 3, "Half Gate",   ("Mode", 2f), ("Percent", 50f));
-        Midi("notelength", 3, "Fixed 120ms", ("Mode", 1f), ("Ms", 120f));
+        // ---- Nota Scale (MIDI, kind 2) — almanac rework. Root 0 C … 11 B; Scale 0 Major / 1 Minor /
+        //      2 Harm Minor / 3 Dorian / 4 Phrygian / 5 Lydian / 6 Mixolydian / 7 Penta / 8 Penta Minor /
+        //      9 Chromatic, or a Custom set of degrees (semitones above the root); Fold 0 Nearest /
+        //      1 Down / 2 Up; Range as MIDI notes (outside passes through); Transpose ±24 st.
+        Scl("Init",                 root: 0, scale: 1);
+        Scl("C Major",              root: 0, scale: 0);
+        Scl("A Minor",              root: 9, scale: 1);
+        Scl("E Minor Down",         root: 4, scale: 1, fold: 1);
+        Scl("G Major Up",           root: 7, scale: 0, fold: 2);
+        Scl("D Dorian",             root: 2, scale: 3);
+        Scl("E Phrygian",           root: 4, scale: 4);
+        Scl("F Lydian",             root: 5, scale: 5);
+        Scl("G Mixolydian",         root: 7, scale: 6);
+        Scl("A Harmonic Minor",     root: 9, scale: 2);
+        Scl("C Penta",              root: 0, scale: 7);
+        Scl("A Penta Minor",        root: 9, scale: 8, fold: 1);
+        Scl("Black Keys (F# Penta)", root: 6, scale: 7);
+        Scl("White Keys Only",      root: 0, scale: 0, fold: 1);
+        Scl("A Blues",              root: 9, degrees: new[] { 0, 3, 5, 6, 7, 10 });
+        Scl("C Melodic Minor",      root: 0, degrees: new[] { 0, 2, 3, 5, 7, 9, 11 });
+        Scl("E Phrygian Dominant",  root: 4, degrees: new[] { 0, 1, 4, 5, 7, 8, 10 });
+        Scl("D Hijaz",              root: 2, degrees: new[] { 0, 1, 4, 5, 7, 8, 10 }, fold: 1);
+        Scl("C Double Harmonic",    root: 0, degrees: new[] { 0, 1, 4, 5, 7, 8, 11 });
+        Scl("A Hirajoshi",          root: 9, degrees: new[] { 0, 2, 3, 7, 8 });
+        Scl("E In Sen",             root: 4, degrees: new[] { 0, 1, 5, 7, 10 });
+        Scl("C Whole Tone",         root: 0, degrees: new[] { 0, 2, 4, 6, 8, 10 });
+        Scl("C Diminished",         root: 0, degrees: new[] { 0, 2, 3, 5, 6, 8, 9, 11 });
+        Scl("B Locrian",            root: 11, degrees: new[] { 0, 1, 3, 5, 6, 8, 10 });
+        Scl("C Major Triad",        root: 0, degrees: new[] { 0, 4, 7 });
+        Scl("A Minor Triad",        root: 9, degrees: new[] { 0, 3, 7 }, fold: 1);
+        Scl("Root + Fifth",         root: 0, degrees: new[] { 0, 7 }, fold: 1);
+        Scl("Octaves Only",         root: 0, degrees: new[] { 0 }, fold: 1);
+        Scl("Bass Line C Minor",    root: 0, scale: 1, fold: 1, lo: 24, hi: 59);
+        Scl("Lead Above C4",        root: 0, scale: 0, lo: 60, hi: 127);
+        Scl("Up a Fifth, Major",    root: 0, scale: 0, transpose: 7);
+        Scl("Octave Down, Minor",   root: 0, scale: 1, transpose: -12);
+        Scl("Follow Key Major",     root: 0, scale: 0, follow: true);
+        Scl("Follow Key Minor",     root: 9, scale: 1, follow: true);
+        Scl("Chromatic Pass",       root: 0, scale: 9);
+        // ---- Nota Length (MIDI, kind 3) — almanac rework. Mode 0 Sync / 1 ms / 2 Gate %;
+        // Division 0 1/32 · 1 1/16 · 2 1/8 · 3 1/4 · 4 1/2 · 5 1/1 · 6 1/8. · 7 1/4T; Trigger 0 from
+        // note-on / 1 from note-off; Vel / Key to Len −1..+1 (+ = loud / low notes longer).
+        Len("Staccato",          mode: 0, div: 1);
+        Len("Eighths",           mode: 0, div: 2);
+        Len("Tenuto 1/4",        mode: 0, div: 3);
+        Len("Half Notes",        mode: 0, div: 4);
+        Len("Whole Bar",         mode: 0, div: 5, clip: true);
+        Len("Dotted Eighth",     mode: 0, div: 6);
+        Len("Quarter Triplet",   mode: 0, div: 7);
+        Len("32nd Blips",        mode: 0, div: 0);
+        Len("Blip 40ms",         mode: 1, ms: 40);
+        Len("Fixed 120ms",       mode: 1, ms: 120);
+        Len("Fixed 250ms",       mode: 1, ms: 250);
+        Len("Fixed 500ms",       mode: 1, ms: 500);
+        Len("One Second",        mode: 1, ms: 1000, clip: true);
+        Len("Half Gate",         mode: 2, pct: 50);
+        Len("Tight Quarter Gate", mode: 2, pct: 25);
+        Len("Almost Legato",     mode: 2, pct: 90);
+        Len("Stretch 150%",      mode: 2, pct: 150);
+        Len("Double Gate",       mode: 2, pct: 200, clip: true);
+        Len("Release Echo",      mode: 0, div: 1, trig: 1);
+        Len("Off-Beat Ghost",    mode: 1, ms: 80, trig: 1, vel: -0.3f);
+        Len("Release Swell",     mode: 2, pct: 100, trig: 1, clip: true);
+        Len("Dynamic Length",    mode: 0, div: 2, vel: 0.8f);
+        Len("Soft Tails",        mode: 0, div: 3, vel: -0.6f);
+        Len("Bass Heavy",        mode: 0, div: 2, key: 0.7f);
+        Len("Bright Tops",       mode: 0, div: 3, key: -0.6f);
+        Len("Humanized",         mode: 0, div: 2, rnd: 0.3f);
+        Len("Loose Hands",       mode: 2, pct: 90, vel: 0.3f, rnd: 0.2f);
+        Len("Chaos Gate",        mode: 1, ms: 300, rnd: 0.8f);
+        Len("Pluck Machine",     mode: 1, ms: 40, vel: 0.5f, key: 0.3f);
+        Len("Legato Glide",      mode: 0, div: 3, legato: true);
+        Len("Legato Bar Pad",    mode: 0, div: 5, legato: true, clip: true);
+        Len("Clip-Safe Quarter", mode: 0, div: 3, clip: true, rnd: 0.1f);
         // ---- Nota Velocity (MIDI, kind 4) — Mode 0 Curve/1 Compand/2 Fixed; Drive 1 = linear
         Midi("velocity", 4, "Soft Hands", ("Mode", 0f), ("Drive", 1.4f));
         Midi("velocity", 4, "Humanize",   ("Mode", 0f), ("Drive", 1f), ("Random", 0.25f));
         Midi("velocity", 4, "Compress",   ("Mode", 1f), ("Drive", 0.6f));
         Midi("velocity", 4, "Fixed 100",  ("Mode", 2f), ("Fixed", 0.79f));
-        // ---- Nota Random (MIDI, kind 5) — Dist 0 Gauss/1 Even/2 Walk; Rate 0 note/1 bar
-        Midi("random", 5, "Human Drift",   ("Chance", 0.7f), ("Note Range", 1f), ("Time Amt", 0.3f), ("Vel Amt", 0.3f), ("Dist", 2f));
-        Midi("random", 5, "Pitch Roulette",("Chance", 0.5f), ("Note Range", 12f), ("Dist", 1f), ("Stay In Scale", 1f));
-        Midi("random", 5, "Ghost Notes",   ("Chance", 1f), ("Note Range", 0f), ("Skip", 0.35f), ("Vel Amt", 0.4f));
-        Midi("random", 5, "Octave Jumps",  ("Chance", 0.4f), ("Note Range", 0f), ("Oct Amt", 0.5f), ("Rate", 1f));
+        // ---- Nota Random (MIDI, kind 5) — almanac rework. Note ±0..12 st; Vel / Time / Skip / Oct
+        // amounts 0..1 (±64 velocity, ≤100 ms late, 0..100 % dropped, ±2 octaves); Dist 0 Gauss /
+        // 1 Even / 2 Walk; Rate 0 per note / 1 per bar. A locked preset carries its seed, so the
+        // same roll repeats every bar.
+        Rnd("Init",               chance: 0.5f, note: 7);
+        Rnd("Human Touch",        chance: 1f,   vel: 0.2f, time: 0.1f);
+        Rnd("Loose Drummer",      chance: 1f,   vel: 0.35f, time: 0.2f, skip: 0.05f);
+        Rnd("Tight Humanize",     chance: 1f,   vel: 0.12f, time: 0.05f);
+        Rnd("Lazy Behind",        chance: 0.8f, time: 0.45f, dist: 2);
+        Rnd("Velocity Shimmer",   chance: 1f,   vel: 0.5f, dist: 1);
+        Rnd("Accent Lottery",     chance: 0.3f, vel: 0.8f, dist: 1);
+        Rnd("Ghost Notes",        chance: 1f,   vel: 0.4f, skip: 0.35f);
+        Rnd("Sparse Hats",        chance: 1f,   skip: 0.5f, vel: 0.25f, dist: 1);
+        Rnd("Thin Out",           chance: 1f,   skip: 0.2f);
+        Rnd("Stutter Drop",       chance: 0.6f, skip: 0.6f, time: 0.15f, dist: 1);
+        Rnd("Pitch Roulette",     chance: 0.5f, note: 12, dist: 1, scale: true);
+        Rnd("Gentle Wander",      chance: 0.6f, note: 2, scale: true);
+        Rnd("Melodic Drift",      chance: 0.8f, note: 5, dist: 2, scale: true);
+        Rnd("Wide Leaps",         chance: 0.5f, note: 12, dist: 1);
+        Rnd("Chromatic Smear",    chance: 0.4f, note: 1, dist: 1);
+        Rnd("Neighbour Tones",    chance: 0.35f, note: 2, scale: true, dist: 1);
+        Rnd("Octave Jumps",       chance: 0.4f, oct: 0.5f, rate: 1);
+        Rnd("Octave Scatter",     chance: 0.6f, oct: 1f, dist: 1);
+        Rnd("Sub Drops",          chance: 0.3f, oct: 0.5f, vel: 0.2f);
+        Rnd("Bar Transposer",     chance: 1f,   note: 5, rate: 1, dist: 1, scale: true);
+        Rnd("Bar Mood",           chance: 1f,   vel: 0.4f, time: 0.2f, rate: 1, dist: 2);
+        Rnd("Random Walk Bass",   chance: 1f,   note: 4, dist: 2, scale: true);
+        Rnd("Walking Octaves",    chance: 0.7f, note: 3, oct: 0.5f, dist: 2, scale: true);
+        Rnd("Generative Keys",    chance: 0.7f, note: 7, vel: 0.3f, time: 0.1f, skip: 0.15f, dist: 2, scale: true);
+        Rnd("Glitch Machine",     chance: 0.8f, note: 12, vel: 0.6f, time: 0.3f, skip: 0.3f, oct: 0.5f, dist: 1);
+        Rnd("Chaos",              chance: 1f,   note: 12, vel: 1f, time: 0.6f, skip: 0.4f, oct: 1f, dist: 1);
+        Rnd("Subtle Chaos",       chance: 0.25f, note: 3, vel: 0.2f, time: 0.1f, skip: 0.1f);
+        Rnd("Frozen Variation",   chance: 0.6f, note: 5, vel: 0.3f, skip: 0.15f, scale: true, seed: 7);
+        Rnd("Frozen Groove",      chance: 1f,   vel: 0.4f, time: 0.25f, skip: 0.2f, seed: 42);
+        Rnd("Frozen Arp Shuffle", chance: 0.7f, note: 7, oct: 0.5f, dist: 1, scale: true, seed: 128);
+        Rnd("Frozen Melody",      chance: 0.9f, note: 5, dist: 2, scale: true, seed: 311);
     }
 
     public IReadOnlyList<FactoryPresetInfo> All()
@@ -2398,6 +2494,18 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("eq", 0, name, ps.ToArray());
     }
 
+    // A Nota Scale preset: a preset scale (0..9) or a Custom set of degrees above the root.
+    private void Scl(string name, int root, int scale = 10, int[]? degrees = null, int fold = 0, int lo = 0, int hi = 127,
+                     int transpose = 0, bool follow = false)
+    {
+        var ps = new List<(string, float)> { ("Root", root), ("Scale", degrees is null ? scale : 10), ("Fold", fold),
+            ("Range Low", lo), ("Range High", hi), ("Transpose", transpose), ("Follow Key", follow ? 1 : 0) };
+        // The Custom notes: the listed degrees, or (for a preset scale) the major default.
+        int[] mask = degrees ?? new[] { 0, 2, 4, 5, 7, 9, 11 };
+        for (int d = 0; d < 12; d++) ps.Add(($"Mask {d}", System.Array.IndexOf(mask, d) >= 0 ? 1 : 0));
+        Midi("scale", 2, name, ps.ToArray());
+    }
+
     // A Nota Chord preset: every slot is written (shifts listed in order are switched on, the rest off).
     private void Chord(string name, int[] shifts, float strum = 0, float spread = 0, bool keepRoot = true, bool fold = false,
                        int key = 0, bool minor = false, int[]? vel = null)
@@ -2426,6 +2534,26 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Lane("Rat", rat?.Select(v => (float)v)); Lane("Trn", trn?.Select(v => (float)v));
         Lane("On", steps?.Select(c => c == 'x' ? 1f : 0f));
         Midi("arp", 0, name, ps.ToArray());
+    }
+
+    // A Nota Length preset (MIDI kind 3); every sound param is named so switching presets is exact.
+    private void Len(string name, int mode, int div = 2, float ms = 250, float pct = 100, int trig = 0,
+        float vel = 0, float key = 0, float rnd = 0, bool legato = false, bool clip = false)
+        => Midi("notelength", 3, name, ("Mode", mode), ("Division", div), ("Ms", ms), ("Percent", pct), ("Trigger", trig),
+            ("Vel to Len", vel), ("Key to Len", key), ("Random", rnd), ("Legato", legato ? 1 : 0), ("Clip Limit", clip ? 1 : 0), ("Gate", 1));
+
+    // A Nota Random preset (MIDI kind 5); every sound param is named so switching presets is exact.
+    // seed > 0 locks the roll on that seed (bar 0's roll repeats every bar).
+    private void Rnd(string name, float chance, float note = 0, float vel = 0, float time = 0, float skip = 0, float oct = 0,
+        int dist = 0, int rate = 0, bool scale = false, int seed = 0)
+    {
+        var ps = new List<(string, float)>
+        {
+            ("Chance", chance), ("Note Range", note), ("Vel Amt", vel), ("Time Amt", time), ("Skip", skip), ("Oct Amt", oct),
+            ("Dist", dist), ("Rate", rate), ("Stay In Scale", scale ? 1 : 0), ("Locked", seed > 0 ? 1 : 0),
+        };
+        if (seed > 0) { ps.Add(("Seed", seed)); ps.Add(("Lock Bar", 0)); }
+        Midi("random", 5, name, ps.ToArray());
     }
 
     private void Midi(string group, int kind, string name, params (string Name, float Value)[] ps)

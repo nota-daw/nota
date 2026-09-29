@@ -121,20 +121,20 @@ public:
     }
 
     void process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int maxOut,
-                 int32_t frames, double, double, bool) override {
+                 int32_t frames, double, double spb, bool) override {
         nOut = 0;
         const int64_t blockEnd = clock_ + frames;
-        auto emit = [&](int64_t at, bool on, int pitch, float vel) {
+        auto emit = [&](int64_t at, bool on, int pitch, float vel, float dur = 0.0f) {
             if (nOut >= maxOut) return;
             int off = (int)(at - clock_);
-            out[nOut++] = { std::clamp(off, 0, std::max(0, frames - 1)), on, pitch, vel };
+            out[nOut++] = { std::clamp(off, 0, std::max(0, frames - 1)), on, pitch, vel, dur };
         };
 
         // 1) Strummed note-ons that now fall inside this block (still flushed when bypassed,
         //    so a chord started before the bypass completes and its offs stay balanced).
         for (int k = 0; k < nPend_;) {
             if (pend_[k].abs < blockEnd) {
-                emit(pend_[k].abs, true, pend_[k].pitch, pend_[k].vel);
+                emit(pend_[k].abs, true, pend_[k].pitch, pend_[k].vel, pend_[k].dur);
                 if (pend_[k].chord == chordSeq_) sounded_.fetch_add(1, std::memory_order_relaxed);
                 pend_[k] = pend_[--nPend_];
             } else ++k;
@@ -145,7 +145,7 @@ public:
             for (int i = 0; i < nIn; ++i) {
                 const MidiEv& e = in[i];
                 if (!e.on && keys_[e.pitch].n > 0) releaseKey(e, clock_ + e.off, emit);
-                else emit(clock_ + e.off, e.on, e.pitch, e.vel);
+                else emit(clock_ + e.off, e.on, e.pitch, e.vel, e.dur);
             }
             clock_ = blockEnd;
             return;
@@ -205,8 +205,10 @@ public:
                 kk.out[kk.n++] = pit[q];
                 if (outCount_[pit[q]]++ > 0) { sounded_.fetch_add(1, std::memory_order_relaxed); continue; }   // already sounding
                 int64_t at = absEv + (int64_t)std::llround(strumSamp * q);
-                if (at < blockEnd) { emit(at, true, pit[q], vel[q]); sounded_.fetch_add(1, std::memory_order_relaxed); }
-                else if (nPend_ < kMaxPend) pend_[nPend_++] = { at, pit[q], vel[q], chordSeq_ };
+                // A clip note's length carries over (shortened by the strum delay) for devices after us.
+                const float dur = e.dur > 0.0f && spb > 0.0 ? std::max(1.0f / 256.0f, e.dur - (float)(strumSamp * q / spb)) : 0.0f;
+                if (at < blockEnd) { emit(at, true, pit[q], vel[q], dur); sounded_.fetch_add(1, std::memory_order_relaxed); }
+                else if (nPend_ < kMaxPend) pend_[nPend_++] = { at, pit[q], vel[q], chordSeq_, dur };
             }
             ++held_;
         }
@@ -259,7 +261,7 @@ private:
     }
 
     static constexpr int kMaxPend = 256;
-    struct Pend { int64_t abs; int32_t pitch; float vel; uint32_t chord; };
+    struct Pend { int64_t abs; int32_t pitch; float vel; uint32_t chord; float dur; };
     Pend     pend_[kMaxPend];
     int      nPend_ = 0;
     Key      keys_[128];

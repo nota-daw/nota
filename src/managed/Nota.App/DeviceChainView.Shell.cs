@@ -120,7 +120,7 @@ public sealed partial class DeviceChainView
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = s.Compact ? 6 : 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
 
         // Type badge (mono caps). An instrument that reports its voices shows them here, live,
         // as the badge's value — e.g. "SYNTH · 3/16".
@@ -205,7 +205,7 @@ public sealed partial class DeviceChainView
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
         if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-            nameWidth: s.Compact ? 78 : 132));
+            nameWidth: s.Compact ? 74 : 132));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
 

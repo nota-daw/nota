@@ -136,6 +136,18 @@ public static class PresetService
             engine.MidiEffectSetParam(trackId, index, 16 + v, Math.Abs(engine.MidiEffectGetParam(trackId, index, v)) >= 0.5f ? 1f : 0f);
     }
 
+    /// <summary>Nota Length (MIDI kind 3) before the almanac rework: four sync rates in Rate
+    /// (1/16 · 1/8 · 1/8D · 1/4) — now Division (8 values) — and a Key to Len where + made HIGH
+    /// notes longer (now + makes low notes longer). Maps both onto the new params.</summary>
+    public static void LengthLegacy(IAudioEngine engine, int trackId, int index)
+    {
+        if (engine.MidiEffectParamCount(trackId, index) < 12) return;
+        int[] rateToDivision = { 1, 2, 6, 3 };
+        int rate = Math.Clamp((int)Math.Round(engine.MidiEffectGetParam(trackId, index, 0)), 0, 3);
+        engine.MidiEffectSetParam(trackId, index, 11, rateToDivision[rate]);
+        engine.MidiEffectSetParam(trackId, index, 7, -engine.MidiEffectGetParam(trackId, index, 7));
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -177,6 +189,7 @@ public static class PresetService
                         if (doc.NamedParams.TryGetValue(engine.MidiEffectParamName(targetTrackId, mi, i), out var v))
                             engine.MidiEffectSetParam(targetTrackId, mi, i, v);
                     if (doc.BuiltinKind == 1 && !doc.NamedParams.ContainsKey("On 1")) ChordLegacySwitches(engine, targetTrackId, mi);
+                    if (doc.BuiltinKind == 3 && doc.NamedParams.ContainsKey("Rate") && !doc.NamedParams.ContainsKey("Division")) LengthLegacy(engine, targetTrackId, mi);
                 }
                 return "";
             }
@@ -299,6 +312,9 @@ public static class PresetService
                     // A Nota Chord preset saved before its slots had switches: "0 semitones" meant off.
                     if (engine.MidiEffectKind(trackId, deviceIndex) == 1 && !doc.NamedParams.ContainsKey("On 1"))
                         ChordLegacySwitches(engine, trackId, deviceIndex);
+                    // A Nota Length preset from before Division: map its Rate (and Key to Len's old sign).
+                    if (engine.MidiEffectKind(trackId, deviceIndex) == 3 && doc.NamedParams.ContainsKey("Rate") && !doc.NamedParams.ContainsKey("Division"))
+                        LengthLegacy(engine, trackId, deviceIndex);
                 }
                 return "";
             }
