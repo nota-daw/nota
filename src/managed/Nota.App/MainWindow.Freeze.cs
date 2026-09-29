@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -183,6 +184,67 @@ public partial class MainWindow
                 async () => { Timeline.Select(trackId, -1); await LiveFreezeAsync(trackId); }));
         }
         return items;
+    }
+
+    // Freeze entries for the multi-track menu: freeze the live tracks / unfreeze the frozen
+    // ones among the selection. Live-freeze pairs are per-track, so they're left to each
+    // track's own menu, as are returns and groups (never freezable).
+    private IReadOnlyList<Control> BuildTracksFreezeMenu(IReadOnlyList<int> trackIds)
+    {
+        var items = new List<Control>();
+        var plain = trackIds.Where(id => IsFreezable(id) && LinkForSource(id) is null && LinkForFrozen(id) is null).ToList();
+        var live = plain.Where(id => !Engine.IsTrackFrozen(id)).ToList();
+        var frozen = plain.Where(id => Engine.IsTrackFrozen(id)).ToList();
+        if (live.Count > 0)
+            items.Add(FreezeMenuItem(live.Count == 1 ? "Freeze track" : $"Freeze {live.Count} tracks", SnowflakeIcon(),
+                () => FreezeTracksAsync(live)));
+        if (frozen.Count > 0)
+            items.Add(FreezeMenuItem(frozen.Count == 1 ? "Unfreeze track" : $"Unfreeze {frozen.Count} tracks", SnowflakeIcon(),
+                () => UnfreezeTracks(frozen)));
+        return items;
+    }
+
+    // Freeze several tracks behind one progress dialog (each bounce takes over the engine).
+    private async Task FreezeTracksAsync(IReadOnlyList<int> trackIds)
+    {
+        if (_vm is null || trackIds.Count == 0) return;
+        double endBeats = ProjectEndBeats();
+        if (endBeats <= 0.0) { _vm.StatusText = "Nothing to freeze — the arrangement is empty."; return; }
+
+        _vm.SuspendEnginePolling = true;
+        int done = 0;
+        try
+        {
+            await RunBlockingAsync("Freeze", "Freezing tracks…", async prog =>
+            {
+                for (int i = 0; i < trackIds.Count; i++)
+                {
+                    int k = i;
+                    var frac = new Progress<double>(f =>
+                    {
+                        double all = (k + f) / trackIds.Count;
+                        prog.Report(ProgressReport.At(all, $"Freezing track {k + 1} of {trackIds.Count}… {all * 100:0}\u2009%"));
+                    });
+                    if (await Task.Run(() => _freezer.Freeze(Engine, trackIds[k], endBeats,
+                            _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac)))
+                        done++;
+                }
+            });
+            _vm.StatusText = done == trackIds.Count
+                ? $"{done} tracks frozen — their devices are idle until you unfreeze."
+                : $"Froze {done} of {trackIds.Count} tracks.";
+        }
+        catch (Exception ex) { _vm.StatusText = $"Freeze failed: {ex.Message}"; }
+        finally { _vm.SuspendEnginePolling = false; }
+
+        AfterFreezeChange();
+    }
+
+    private void UnfreezeTracks(IReadOnlyList<int> trackIds)
+    {
+        foreach (var id in trackIds) Engine.UnfreezeTrack(id);
+        if (_vm is not null) _vm.StatusText = trackIds.Count == 1 ? "Track unfrozen." : $"{trackIds.Count} tracks unfrozen.";
+        AfterFreezeChange();
     }
 
     private static MenuItem FreezeMenuItem(string header, Control? icon, Action run)

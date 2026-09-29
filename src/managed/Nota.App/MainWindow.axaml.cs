@@ -76,6 +76,7 @@ public partial class MainWindow : Window
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
+    private bool _trackHeadersFocused;
 
     private IAudioEngine Engine => _vm!.Engine;
 
@@ -169,22 +170,19 @@ public partial class MainWindow : Window
         Timeline.Engine = vm.Engine;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
+        Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
-        // Arrangement context menus add tracks through the toolbar's own handlers, so the two
-        // routes seed, refresh and report identically.
-        Timeline.AddTrackRequested += kind =>
+        // Arrangement context menus add tracks through the toolbar's own path, so the two
+        // routes seed, refresh and report identically; the menu's row places the new track.
+        Timeline.AddTrackRequested += (kind, anchor) =>
         {
-            switch (kind)
-            {
-                case NewTrackKind.Instrument: OnAddInstrumentClicked(this, new RoutedEventArgs()); break;
-                case NewTrackKind.Audio:      OnAddAudioClicked(this, new RoutedEventArgs()); break;
-                case NewTrackKind.Return:     OnAddReturnClicked(this, new RoutedEventArgs()); break;
-            }
+            if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
+            else AddTrack(kind, anchor);
         };
 
         _masterMeter = new MeterBar(horizontal: true);
@@ -353,6 +351,8 @@ public partial class MainWindow : Window
         {
             if (e.Source is Visual v)
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+            // Likewise the track-header column: while it has focus, Cmd+A/C/X/V/D and Delete act on tracks.
+            _trackHeadersFocused = Timeline.IsVisible && Timeline.IsInTrackHeaders(e);
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // Global transport keys (Space = Play/Stop, Return = Stop) must win over whatever
@@ -432,25 +432,31 @@ public partial class MainWindow : Window
 
     }
 
-    private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e)
+    private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Instrument);
+    private void OnAddAudioClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Audio);
+
+    // Adds an instrument (with a seed MIDI clip) or audio track. From a track's context menu
+    // the new track lands after that row — or inside it, for a group; the toolbar appends.
+    // Creation + placement are one undo step.
+    private void AddTrack(NewTrackKind kind, int anchorTrackId = -1)
     {
         if (_vm is null) return;
-        int trackId = Engine.AddInstrumentTrack();
-        Engine.AddMidiClip(trackId, 0.0, 4.0);
+        int trackId;
+        Engine.BeginUndoGroup();
+        try
+        {
+            trackId = kind == NewTrackKind.Instrument ? Engine.AddInstrumentTrack() : Engine.AddAudioTrack();
+            if (kind == NewTrackKind.Instrument) Engine.AddMidiClip(trackId, 0.0, 4.0);
+            Timeline.PlaceNewTrack(trackId, anchorTrackId);
+        }
+        finally { Engine.EndUndoGroup(); }
         Timeline.Refresh();
+        if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();   // new track shows in the graph/sidebar
-        _vm.StatusText = $"Instrument track {trackId} (synth)";
-    }
-
-    private void OnAddAudioClicked(object? sender, RoutedEventArgs e)
-    {
-        if (_vm is null) return;
-        int trackId = Engine.AddAudioTrack();
-        Timeline.Refresh();
-        _session?.Refresh();
-        if (_modular?.IsVisible == true) _modular.Refresh();
-        _vm.StatusText = $"Audio track {trackId} — arm it and hit Rec to record input";
+        _vm.StatusText = kind == NewTrackKind.Instrument
+            ? $"Instrument track {trackId} (synth)"
+            : $"Audio track {trackId} — arm it and hit Rec to record input";
     }
 
     private void OnAddReturnClicked(object? sender, RoutedEventArgs e)

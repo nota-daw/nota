@@ -77,6 +77,8 @@ public partial class MainWindow
             _vm.StatusText = "Duplicated notes";
             return;
         }
+        // Track headers focused: duplicate the selected tracks.
+        if (_trackHeadersFocused && Timeline.DuplicateSelectedTracks()) { _vm.StatusText = "Duplicated track(s)"; return; }
         // In automation mode a selected range duplicates the envelope slice (chains on repeat).
         if (Timeline.AutomationMode && Timeline.DuplicateAutoSelection()) { _vm.StatusText = "Duplicated automation"; return; }
         // A time-range selection duplicates the covered slice (chains on repeat) before clips.
@@ -121,24 +123,28 @@ public partial class MainWindow
     private void OnMenuCopy(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = "Copied track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = "Copied notes"; return; }
         if (Timeline.CopySelectedClip()) _vm.StatusText = "Copied clip";
     }
     private void OnMenuCut(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = "Cut track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = "Cut notes"; return; }
         if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip"; }
     }
     private void OnMenuPaste(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = "Pasted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = "Pasted notes"; return; }
         if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip"; }
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = "Deleted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = "Deleted notes"; return; }
         if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = "Deleted clip(s)"; }
     }

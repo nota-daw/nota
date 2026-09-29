@@ -327,6 +327,13 @@ public:
     bool    ungroup(int32_t groupId);                    // dissolve; children reparent up one level
     bool    setTrackGroup(int32_t trackId, int32_t groupId); // move track into groupId (-1 = top-level)
 
+    // Multi-track ops (arrangement header multi-selection). A set expands to every descendant
+    // of each group in it and keeps engine order; each op is one snapshot / undo step.
+    // duplicateTracks inserts the copies after the set's last member, members keeping their
+    // own groups; removeTracks drops the whole set. Unknown ids are ignored.
+    int32_t duplicateTracks(const int32_t* ids, int32_t n, int32_t* outIds, int32_t cap); // -> copies made, -1 none
+    bool    removeTracks(const int32_t* ids, int32_t n);
+
     // --- send/return buses (M6-1) ---
     int32_t addReturnTrack();                            // aux bus: device chain -> master
     void    setTrackSend(int32_t trackId, int32_t bus, float level); // post-fader send (atomic)
@@ -461,10 +468,15 @@ public:
     bool    setTrackColorIndex(int32_t trackId, int32_t colorIndex);
     int32_t trackColorIndex(int32_t trackId) const;
 
-    // Track clipboard (copy/cut/paste). copyTrack stores a fully independent clone;
-    // pasteTrack appends a fresh copy (new id + cloned DSP). Cut = copy + removeTrack.
+    // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
+    // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
+    // cloned DSP) after afterTrackId inside its group — or top-level after the last regular
+    // track when afterTrackId is -1 — with group links inside the set following the copies.
+    // copyTrack / pasteTrack are the single-track forms. Cut = copy + removeTracks.
     bool    copyTrack(int32_t trackId);
-    int32_t pasteTrack();                      // -> new track id, or -1
+    int32_t pasteTrack();                      // -> first new track id, or -1
+    bool    copyTracks(const int32_t* ids, int32_t n);
+    int32_t pasteTracks(int32_t afterTrackId, int32_t* outIds, int32_t cap);   // -> tracks pasted, -1 none
     bool    hasTrackClipboard() const;
 
     // --- project load (M7-6) ---
@@ -1005,8 +1017,9 @@ private:
     // can re-select exactly what it produced.
     std::vector<std::pair<int32_t,int32_t>> lastPlaced_;
 
-    // Track clipboard: a fully independent clone of the copied track (null = empty).
-    std::shared_ptr<Track>              trackClipboard_;
+    // Track clipboard: fully independent clones of the copied set, engine order (empty = none).
+    // Each clone keeps its source id so paste can re-link group membership inside the set.
+    std::vector<std::shared_ptr<Track>> trackClipboard_;
 
     // Automation carried with clips (copy/cut/paste/duplicate). captureClipAutomation
     // pulls the points in [start,end] out of every lane, offset to clip-relative beats.
@@ -1033,6 +1046,13 @@ private:
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
     std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
+    // The tracks in ids plus every descendant of a group among them, in engine order.
+    std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
+    // Publishes fresh deep clones of src (returns skipped) after afterId, or before the
+    // returns when afterId isn't a regular track. Group links inside the set follow the
+    // copies; a member whose group is outside the set keeps it (keepParent) or joins rootParent.
+    std::vector<int32_t> insertTrackClones(const std::vector<std::shared_ptr<Track>>& src,
+                                           int32_t afterId, int32_t rootParent, bool keepParent);
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
     void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne);
 

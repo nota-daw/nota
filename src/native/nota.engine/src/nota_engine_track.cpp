@@ -64,6 +64,13 @@ NotaResult nota_engine_set_track_group(NotaEngine* e, int32_t track_id, int32_t 
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setTrackGroup(track_id, group_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+int32_t nota_engine_duplicate_tracks(NotaEngine* e, const int32_t* track_ids, int32_t n, int32_t* out_ids, int32_t cap) {
+    return e ? ENG(e)->duplicateTracks(track_ids, n, out_ids, cap) : -1;
+}
+NotaResult nota_engine_remove_tracks(NotaEngine* e, const int32_t* track_ids, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->removeTracks(track_ids, n) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 
 // ---- Send / return buses (M6-1) -------------------------------------------
 int32_t nota_engine_add_return_track(NotaEngine* e) {
@@ -496,6 +503,13 @@ NotaResult nota_track_copy(NotaEngine* e, int32_t track_id) {
 }
 int32_t nota_track_paste(NotaEngine* e) {
     return e ? ENG(e)->pasteTrack() : -1;
+}
+NotaResult nota_track_copy_many(NotaEngine* e, const int32_t* track_ids, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyTracks(track_ids, n) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_paste_after(NotaEngine* e, int32_t after_track_id, int32_t* out_ids, int32_t cap) {
+    return e ? ENG(e)->pasteTracks(after_track_id, out_ids, cap) : -1;
 }
 int32_t nota_track_has_clipboard(NotaEngine* e) {
     return (e && CENG(e)->hasTrackClipboard()) ? 1 : 0;

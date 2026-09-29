@@ -2504,34 +2504,129 @@ bool Engine::setTrackGroup(int32_t trackId, int32_t groupId) {
     return true;
 }
 
-// --- track clipboard (copy/cut/paste) --------------------------------------
-bool Engine::copyTrack(int32_t trackId) {
-    auto src = findTrackAuthoring(trackId);
-    if (!src) return false;
-    trackClipboard_ = deepCloneTrack(*src, 0);   // id is a placeholder; paste assigns a real one
-    return true;
+// --- multi-track sets (header multi-selection) -----------------------------
+std::vector<std::shared_ptr<Track>> Engine::expandTrackSet(const int32_t* ids, int32_t n) const {
+    std::vector<std::shared_ptr<Track>> out;
+    if (!ids || n <= 0) return out;
+    std::set<int32_t> want(ids, ids + n);
+    // A track belongs when it or any ancestor group is in the set.
+    auto inSet = [&](const Track& t) {
+        if (want.count(t.id())) return true;
+        for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {
+            if (want.count(a)) return true;
+            auto p = findTrackAuthoring(a);
+            a = p ? p->groupId() : -1;
+        }
+        return false;
+    };
+    for (auto& t : authoring_->tracks) if (inSet(*t)) out.push_back(t);
+    return out;
 }
-bool Engine::hasTrackClipboard() const { return trackClipboard_ != nullptr; }
-int32_t Engine::pasteTrack() {
-    if (!trackClipboard_) return -1;
-    if (trackClipboard_->type() == TrackType::Return) return -1;  // return-bus identity can't be duplicated
-    const int32_t newId = nextTrackId_++;
-    auto nt = deepCloneTrack(*trackClipboard_, newId);            // re-clone so repeat pastes stay independent
-    nt->setGroupId(-1);                                           // paste lands top-level (its group may not exist)
+
+std::vector<int32_t> Engine::insertTrackClones(const std::vector<std::shared_ptr<Track>>& src,
+                                               int32_t afterId, int32_t rootParent, bool keepParent) {
+    std::map<int32_t, int32_t> remap;   // source id -> copy id
+    for (auto& s : src) if (s->type() != TrackType::Return) remap[s->id()] = nextTrackId_++;
+    std::vector<std::shared_ptr<Track>> clones;
+    std::vector<int32_t> newIds;
+    for (auto& s : src) {
+        if (s->type() == TrackType::Return) continue;   // return-bus identity can't be duplicated
+        auto nt = deepCloneTrack(*s, remap[s->id()]);
+        auto it = remap.find(s->groupId());
+        nt->setGroupId(it != remap.end() ? it->second : keepParent ? s->groupId() : rootParent);
+        clones.push_back(nt);
+        newIds.push_back(nt->id());
+    }
+    if (clones.empty()) return newIds;
+
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
-    g->tracks.reserve(authoring_->tracks.size() + 1);
+    g->tracks.reserve(authoring_->tracks.size() + clones.size());
     for (auto& t : authoring_->tracks) g->tracks.push_back(t);
-    // Append after the last non-return track so it sits with the regular tracks.
-    int32_t insertAt = static_cast<int32_t>(g->tracks.size());
+    int32_t insertAt = -1;
     for (int32_t i = 0; i < static_cast<int32_t>(g->tracks.size()); ++i)
-        if (g->tracks[i]->type() == TrackType::Return) { insertAt = i; break; }
-    g->tracks.insert(g->tracks.begin() + insertAt, nt);
+        if (g->tracks[i]->id() == afterId && g->tracks[i]->type() != TrackType::Return) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+        // Append after the last non-return track so the copies sit with the regular tracks.
+        insertAt = static_cast<int32_t>(g->tracks.size());
+        for (int32_t i = 0; i < static_cast<int32_t>(g->tracks.size()); ++i)
+            if (g->tracks[i]->type() == TrackType::Return) { insertAt = i; break; }
+    }
+    g->tracks.insert(g->tracks.begin() + insertAt, clones.begin(), clones.end());
     publish(std::move(g));
     recomputePdc();
-    return newId;
+    return newIds;
+}
+
+int32_t Engine::duplicateTracks(const int32_t* ids, int32_t n, int32_t* outIds, int32_t cap) {
+    auto set = expandTrackSet(ids, n);
+    set.erase(std::remove_if(set.begin(), set.end(),
+                             [](const std::shared_ptr<Track>& t) { return t->type() == TrackType::Return; }),
+              set.end());
+    if (set.empty()) return -1;
+    auto newIds = insertTrackClones(set, set.back()->id(), -1, /*keepParent*/ true);
+    const int32_t count = static_cast<int32_t>(newIds.size());
+    if (outIds) for (int32_t i = 0; i < count && i < cap; ++i) outIds[i] = newIds[i];
+    return count > 0 ? count : -1;
+}
+
+bool Engine::removeTracks(const int32_t* ids, int32_t n) {
+    auto set = expandTrackSet(ids, n);
+    if (set.empty()) return false;
+    std::set<int32_t> drop;
+    for (auto& t : set) {
+        // Plugin windows shouldn't outlive the track (it survives in undo history, so only hide).
+        if (t->instrument) t->instrument->closeEditor();
+        for (auto& d : t->devices) if (d) d->closeEditor();
+        drop.insert(t->id());
+    }
+    auto g = std::make_shared<Graph>();
+    g->sceneCount = authoring_->sceneCount;
+    g->masterVolume = authoring_->masterVolume;
+    g->masterTrack = authoring_->masterTrack;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks)
+        if (!drop.count(t->id())) g->tracks.push_back(t);
+    publish(std::move(g));
+    recomputePdc();
+    return true;
+}
+
+// --- track clipboard (copy/cut/paste) --------------------------------------
+bool Engine::copyTrack(int32_t trackId) { return copyTracks(&trackId, 1); }
+
+bool Engine::copyTracks(const int32_t* ids, int32_t n) {
+    auto set = expandTrackSet(ids, n);
+    if (set.empty()) return false;
+    std::vector<std::shared_ptr<Track>> clip;
+    clip.reserve(set.size());
+    for (auto& t : set) clip.push_back(deepCloneTrack(*t, t->id()));   // source id kept for re-linking
+    trackClipboard_ = std::move(clip);
+    return true;
+}
+
+bool Engine::hasTrackClipboard() const { return !trackClipboard_.empty(); }
+
+int32_t Engine::pasteTrack() {
+    std::vector<int32_t> ids(trackClipboard_.size());
+    int32_t n = pasteTracks(-1, ids.data(), static_cast<int32_t>(ids.size()));
+    return n > 0 ? ids[0] : -1;
+}
+
+int32_t Engine::pasteTracks(int32_t afterTrackId, int32_t* outIds, int32_t cap) {
+    if (trackClipboard_.empty()) return -1;
+    // Land next to the anchor, in its group; without one, top-level (the source groups may be gone).
+    int32_t parent = -1;
+    auto anchor = findTrackAuthoring(afterTrackId);
+    if (anchor && anchor->type() != TrackType::Return && anchor->id() != kMasterTrackId)
+        parent = anchor->groupId();
+    else afterTrackId = -1;
+    auto newIds = insertTrackClones(trackClipboard_, afterTrackId, parent, /*keepParent*/ false);
+    const int32_t count = static_cast<int32_t>(newIds.size());
+    if (outIds) for (int32_t i = 0; i < count && i < cap; ++i) outIds[i] = newIds[i];
+    return count > 0 ? count : -1;
 }
 
 

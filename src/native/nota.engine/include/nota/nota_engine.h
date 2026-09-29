@@ -339,6 +339,13 @@ NOTA_API int32_t    nota_engine_add_group_track(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_create_group(NotaEngine* engine, const int32_t* track_ids, int32_t n);
 NOTA_API NotaResult nota_engine_ungroup(NotaEngine* engine, int32_t group_id);
 NOTA_API NotaResult nota_engine_set_track_group(NotaEngine* engine, int32_t track_id, int32_t group_id);
+/* Multi-track ops (header multi-selection). The set expands to every descendant of a group in
+ * it; each call is one undo step. duplicate inserts the copies after the set's last member
+ * (memberships kept) and writes up to cap new ids, returning the count (-1 none); remove
+ * drops the whole set. */
+NOTA_API int32_t    nota_engine_duplicate_tracks(NotaEngine* engine, const int32_t* track_ids, int32_t n,
+                                                 int32_t* out_ids, int32_t cap);
+NOTA_API NotaResult nota_engine_remove_tracks(NotaEngine* engine, const int32_t* track_ids, int32_t n);
 
 /* ---- Send / return buses (M6-1) ----------------------------------------- */
 /* Adds a return (aux) track: an effect bus that other tracks send to, running
@@ -801,10 +808,15 @@ NOTA_API NotaResult nota_track_set_name(NotaEngine* engine, int32_t track_id, co
 NOTA_API int32_t    nota_track_get_name(NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
 NOTA_API NotaResult nota_track_set_color(NotaEngine* engine, int32_t track_id, int32_t color_index);
 NOTA_API int32_t    nota_track_get_color(NotaEngine* engine, int32_t track_id);
-/* Track clipboard: copy stores an independent clone, paste appends a fresh copy (new id).
- * Cut = copy + nota_engine_remove_track. has_clipboard: 1 when a track is copied. */
+/* Track clipboard: copy stores independent clones (a group brings its children), paste
+ * appends fresh copies (new ids) top-level. copy_many / paste_after are the multi-track forms:
+ * paste_after lands the copies after after_track_id inside its group (-1 = top-level at the
+ * end), writes up to cap new ids and returns the count (-1 none). Cut = copy + remove.
+ * has_clipboard: 1 when tracks are copied. */
 NOTA_API NotaResult nota_track_copy(NotaEngine* engine, int32_t track_id);
-NOTA_API int32_t    nota_track_paste(NotaEngine* engine);   /* -> new track id, or -1 */
+NOTA_API int32_t    nota_track_paste(NotaEngine* engine);   /* -> first new track id, or -1 */
+NOTA_API NotaResult nota_track_copy_many(NotaEngine* engine, const int32_t* track_ids, int32_t n);
+NOTA_API int32_t    nota_track_paste_after(NotaEngine* engine, int32_t after_track_id, int32_t* out_ids, int32_t cap);
 NOTA_API int32_t    nota_track_has_clipboard(NotaEngine* engine);
 /* Record input source for an audio track (internal resampling): 0 = hardware input,
  * -1 = master bus, >0 = another track's post-fader output (by id). */

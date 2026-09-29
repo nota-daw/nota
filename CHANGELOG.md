@@ -22,8 +22,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   outlined). Dropping an instrument there replaces the track's instrument. Either way it is
   one undo step.
 - Effects and presets can be dropped on a return track or the master in the arrangement.
+- Work with several tracks at once. ⇧-click track headers to select them (⇧-click again to
+  deselect), or click the headers and press ⌘A to select every track. With the headers in
+  focus, ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the selected
+  tracks. Right-clicking a selection opens a menu for the whole set: group, colour, freeze,
+  copy, cut, paste, duplicate and delete. Each command is one undo step.
 
 ### Changed
+- "Add track" in a track's right-click menu puts the new track right after that track. On a
+  group it adds the track inside the group.
+- Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after
+  the selected track, in its group.
 - The first time you switch to automation mode, each track that already has automation
   shows its first automated parameter instead of Volume.
 - While dragging from the browser over the arrangement, the target track is outlined in its

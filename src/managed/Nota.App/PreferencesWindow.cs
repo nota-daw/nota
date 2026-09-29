@@ -669,6 +669,13 @@ public sealed class PreferencesWindow : NotaWindow
             ("0", "Deactivate / activate the selected clip(s)"),
             ("Delete", "Delete the selected clip / range"),
         }),
+        ("TRACKS (AFTER A CLICK IN THE TRACK HEADERS)", new[]
+        {
+            ("⌘A", "Select all tracks"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
+            ("⌘D", "Duplicate the selected tracks"),
+            ("Delete", "Delete the selected tracks · a group goes with its tracks"),
+        }),
         ("PIANO ROLL", new[]
         {
             ("← →", "Move notes by the grid"),
@@ -700,6 +707,8 @@ public sealed class PreferencesWindow : NotaWindow
         ("MOUSE", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("⇧-click track header", "Add the track to the selection · again to remove it"),
+            ("Right-click track headers", "A multi-selection gets its own menu: group, colour, freeze, copy, duplicate, delete"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),
             ("Click section", "Jump the playhead to its start"),
             ("Double-click section", "Rename it"),

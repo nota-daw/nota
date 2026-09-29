@@ -51,6 +51,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_track_group")]
     internal static partial NotaResult SetTrackGroup(IntPtr engine, int trackId, int groupId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_duplicate_tracks")]
+    internal static partial int DuplicateTracks(IntPtr engine, [In] int[] trackIds, int n, [Out] int[] outIds, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_remove_tracks")]
+    internal static partial NotaResult RemoveTracks(IntPtr engine, [In] int[] trackIds, int n);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_return_track")]
     internal static partial int AddReturnTrack(IntPtr engine);
 
@@ -233,6 +239,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_paste")]
     internal static partial int TrackPaste(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_many")]
+    internal static partial NotaResult TrackCopyMany(IntPtr engine, [In] int[] trackIds, int n);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_after")]
+    internal static partial int TrackPasteAfter(IntPtr engine, int afterTrackId, [Out] int[] outIds, int cap);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_has_clipboard")]
     internal static partial int TrackHasClipboard(IntPtr engine);

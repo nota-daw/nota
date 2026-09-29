@@ -203,6 +203,8 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Freeze / Live Freeze entries for a track's context menu (empty when the track
     /// can't be frozen). Built by MainWindow, which owns the freeze state and commands.</summary>
     public Func<int, IReadOnlyList<Control>>? FreezeMenuItems;
+    /// <summary>Freeze entries for the multi-track context menu (the selected ids, row order).</summary>
+    public Func<IReadOnlyList<int>, IReadOnlyList<Control>>? FreezeTracksMenuItems;
     /// <summary>Called at the start of a full <see cref="Refresh"/>, before the track model is
     /// rebuilt — MainWindow drops live-freeze links whose tracks were deleted or undone.</summary>
     public Action? RefreshStarting;
@@ -217,8 +219,10 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int, ClipConvertMode>? ConvertClipRequested;
     /// <summary>A context menu asked for a new track. MainWindow owns creation — the seed
     /// MIDI clip, the session / modular / device-chain refreshes and the status line — so the
-    /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.</summary>
-    public event Action<NewTrackKind>? AddTrackRequested;
+    /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.
+    /// The id is the track the menu was opened on (-1 = none): the new track lands after it,
+    /// or inside it for a group (see <see cref="PlaceNewTrack"/>).</summary>
+    public event Action<NewTrackKind, int>? AddTrackRequested;
     /// <summary>Raised after a clip's start/length changed in place (edge-drag trim or
     /// stretch): track id, clip index. An open clip editor re-reads its geometry from this.</summary>
     public event Action<int, int>? ClipGeometryChanged;
@@ -1082,9 +1086,10 @@ public sealed partial class ArrangementView : UserControl
             ItemDropped?.Invoke(items[i], i == 0 ? trackId : -1, beat);
         e.Handled = true;
     }
-    internal void Select(int trackId, int clipIndex)
+    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false)
     {
         if (HasTimeSelection) ClearTimeSelection();   // clip- and time-selection are exclusive (1.2.5)
+        if (!keepTrackSet) _selTracks.Clear();        // any other selection resets the header multi-selection
         int prev = SelTrackId;
         SelTrackId = trackId;
         SelClipIndex = clipIndex;
@@ -1757,9 +1762,9 @@ public sealed partial class ArrangementView : UserControl
                 try { _engine?.OpenPluginEditor(t.Id, -1); } catch { /* builtin/no editor: no-op */ }
                 return;
             }
-            // Ctrl/Cmd-click extends the multi-track selection (used to form a group).
+            // Shift- (or Ctrl/Cmd-) click adds the track to the multi-selection; again removes it.
             if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed
-                && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+                && (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0)
             {
                 ToggleTrackInSelection(t.Id); e.Handled = true; return;
             }
@@ -1817,10 +1822,10 @@ public sealed partial class ArrangementView : UserControl
     // "Add …" entries shared by the arrangement's track-level menus. Return is left enabled
     // when the buses are full, like the toolbar's + Return — MainWindow says so in the status
     // line rather than the menu going quietly dead.
-    private IEnumerable<MenuItem> AddTrackItems()
+    private IEnumerable<MenuItem> AddTrackItems(int anchorTrackId = -1)
     {
         MenuItem Item(string header, NewTrackKind kind)
-            => MenuKit.Item(header, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind));
+            => MenuKit.Item(header, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind, anchorTrackId));
         yield return Item("Add instrument track", NewTrackKind.Instrument);
         yield return Item("Add audio track", NewTrackKind.Audio);
         yield return Item("Add return track", NewTrackKind.Return);
@@ -1834,15 +1839,8 @@ public sealed partial class ArrangementView : UserControl
         var flyout = new MenuFlyout();
         foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
         flyout.Items.Add(new Separator());
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste) };
-        paste.Click += (_, _) =>
-        {
-            int nid = _engine.PasteTrack();
-            if (nid > 0) Select(nid, -1);
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        paste.Click += (_, _) => PasteTracksAfter(-1);
         flyout.Items.Add(paste);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
@@ -1850,15 +1848,18 @@ public sealed partial class ArrangementView : UserControl
     private void ShowTrackMenu(Control anchor, int trackId)
     {
         if (_engine is null) return;
+        // Right-click inside a multi-selection acts on the whole set.
+        var selected = SelectedTrackIds();
+        if (selected.Count > 1 && selected.Contains(trackId)) { ShowTracksMenu(anchor, selected); return; }
         var flyout = new MenuFlyout();
 
         var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
-        var color = BuildColorSubmenu(trackId);
+        var color = BuildColorSubmenu(new[] { trackId });
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked.
-        bool isAudio = _tracks.Any(v => v.Id == trackId && !v.IsInstrument && !v.IsReturn);
+        bool isAudio = _tracks.Any(v => v.Id == trackId && !v.IsInstrument && !v.IsReturn && !v.IsGroup);
         MenuItem? recInput = null;
         if (isAudio)
         {
@@ -1901,42 +1902,20 @@ public sealed partial class ArrangementView : UserControl
                 midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id));
         }
 
-        var copy = new MenuItem { Header = "Copy track", Icon = MenuKit.Icon(GlyphKind.Copy) };
-        copy.Click += (_, _) => _engine.CopyTrack(trackId);
-        var cut = new MenuItem { Header = "Cut track", Icon = MenuKit.Icon(GlyphKind.Cut) };
-        cut.Click += (_, _) =>
-        {
-            if (!_engine.CopyTrack(trackId)) return;
-            _engine.RemoveTrack(trackId);
-            if (SelTrackId == trackId) SelTrackId = -1;
-            Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
-        };
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste) };
-        paste.Click += (_, _) =>
-        {
-            int nid = _engine.PasteTrack();
-            if (nid > 0) Select(nid, -1);
-            Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
-        };
+        // Clipboard + lifecycle go through the same set commands as the keys (a group carries
+        // its children); paste lands right after this track.
+        var one = new[] { trackId };
+        var copy = new MenuItem { Header = "Copy track", Icon = MenuKit.Icon(GlyphKind.Copy), InputGesture = MenuKit.CopyKey };
+        copy.Click += (_, _) => _engine.CopyTracks(one);
+        var cut = new MenuItem { Header = "Cut track", Icon = MenuKit.Icon(GlyphKind.Cut), InputGesture = MenuKit.CutKey };
+        cut.Click += (_, _) => CutTracks(one);
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        paste.Click += (_, _) => PasteTracksAfter(trackId);
 
-        var dup = new MenuItem { Header = "Duplicate track", Icon = MenuKit.Icon(GlyphKind.Duplicate) };
-        dup.Click += (_, _) =>
-        {
-            int nid = _engine.DuplicateTrack(trackId);
-            if (nid > 0) Select(nid, -1);
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
-        var del = new MenuItem { Header = "Delete track", Icon = MenuKit.Icon(GlyphKind.Trash) };
-        del.Click += (_, _) =>
-        {
-            _engine.RemoveTrack(trackId);
-            if (SelTrackId == trackId) SelTrackId = -1;
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
+        var dup = new MenuItem { Header = "Duplicate track", Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateKey };
+        dup.Click += (_, _) => DuplicateTracks(one);
+        var del = new MenuItem { Header = "Delete track", Icon = MenuKit.Icon(GlyphKind.Trash), InputGesture = MenuKit.DeleteKey };
+        del.Click += (_, _) => DeleteTracks(one);
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
         // new group; "Ungroup" dissolves the group this track is/belongs to.
@@ -1966,7 +1945,7 @@ public sealed partial class ArrangementView : UserControl
         flyout.Items.Add(group);
         if (ungroup is not null) flyout.Items.Add(ungroup);
         var addTrack = new MenuItem { Header = "Add track", Icon = MenuKit.Icon(GlyphKind.Plus) };   // submenu: this menu is long already
-        foreach (var mi in AddTrackItems()) addTrack.Items.Add(mi);
+        foreach (var mi in AddTrackItems(trackId)) addTrack.Items.Add(mi);
 
         flyout.Items.Add(new Separator());
         flyout.Items.Add(addTrack);
@@ -2109,9 +2088,17 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // Colour ▸ one submenu per base hue, each with normal / light / dark shades shown as
-    // swatches, plus Auto. Picking sets the track's stored palette index.
-    private MenuItem BuildColorSubmenu(int trackId)
+    // swatches, plus Auto. Picking sets the stored palette index of every given track.
+    private MenuItem BuildColorSubmenu(IReadOnlyList<int> trackIds)
     {
+        void SetColor(int ci)
+        {
+            if (_engine is null) return;
+            _engine.BeginUndoGroup();
+            try { foreach (var id in trackIds) _engine.SetTrackColorIndex(id, ci); }
+            finally { _engine.EndUndoGroup(); }
+            Refresh(); SessionChanged?.Invoke();
+        }
         var color = new MenuItem { Header = "Color", Icon = MenuKit.Icon(GlyphKind.Palette) };
         for (int b = 0; b < PaletteBases; b++)
         {
@@ -2120,13 +2107,13 @@ public sealed partial class ArrangementView : UserControl
             {
                 int ci = b * PaletteShades + s;
                 var shade = new MenuItem { Header = TrackColorNames[b] + ShadeNames[s], Icon = Swatch(ci) };
-                shade.Click += (_, _) => { _engine?.SetTrackColorIndex(trackId, ci); Refresh(); SessionChanged?.Invoke(); };
+                shade.Click += (_, _) => SetColor(ci);
                 baseItem.Items.Add(shade);
             }
             color.Items.Add(baseItem);
         }
         var autoColor = new MenuItem { Header = "Auto" };
-        autoColor.Click += (_, _) => { _engine?.SetTrackColorIndex(trackId, -1); Refresh(); SessionChanged?.Invoke(); };
+        autoColor.Click += (_, _) => SetColor(-1);
         color.Items.Add(new Separator());
         color.Items.Add(autoColor);
         return color;
@@ -2292,7 +2279,7 @@ public sealed partial class ArrangementView : UserControl
         var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
         flyout.Items.Add(rename);
-        flyout.Items.Add(BuildColorSubmenu(trackId));
+        flyout.Items.Add(BuildColorSubmenu(new[] { trackId }));
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 

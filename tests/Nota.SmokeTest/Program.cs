@@ -12531,6 +12531,53 @@ Console.WriteLine("-- track groups --");
     finally { try { if (System.IO.Directory.Exists(gdir)) System.IO.Directory.Delete(gdir, true); } catch { } }
 }
 
+// ============ multi-track copy / paste / duplicate / remove ===============
+Console.WriteLine("-- multi-track set ops --");
+{
+    using var me = new NotaEngine();
+    int a = me.AddInstrumentTrack(), b = me.AddAudioTrack(), c = me.AddInstrumentTrack();
+    int g = me.CreateGroup(new[] { a, b });
+    me.SetTrackName(a, "A"); me.SetTrackName(c, "C");
+    List<(int id, int group)> Order()
+    {
+        var l = new List<(int, int)>();
+        for (int i = 0; i < me.TrackCount; i++) if (me.TryGetTrackInfo(i, out var ti) && !ti.IsReturn) l.Add((ti.Id, ti.GroupId));
+        return l;
+    }
+    int IndexOf(int id) => Order().FindIndex(t => t.id == id);
+    int GroupOf(int id) => Order().First(t => t.id == id).group;
+
+    // Copying a group brings its children; paste after C re-links them to the new group.
+    Check(me.CopyTracks(new[] { g }), "copy a group");
+    var pasted = me.PasteTracks(c);
+    Check(pasted.Length == 3, $"pasting a group pastes it + both children ({pasted.Length})");
+    int ng = pasted.FirstOrDefault(id => Order().Any(t => t.group == id));
+    Check(ng > 0 && pasted.Count(id => GroupOf(id) == ng) == 2, "pasted children belong to the pasted group");
+    Check(GroupOf(ng) == -1 && pasted.All(id => IndexOf(id) > IndexOf(c)), "paste lands top-level after the anchor");
+
+    // Paste after a group member lands in that group, right behind the member.
+    Check(me.CopyTracks(new[] { c }), "copy a single track");
+    var intoGroup = me.PasteTracks(a);
+    Check(intoGroup.Length == 1 && GroupOf(intoGroup[0]) == g && IndexOf(intoGroup[0]) == IndexOf(a) + 1,
+        "paste after a group member joins its group, right after it");
+    Check(me.GetTrackName(intoGroup[0]) == "C", "pasted track keeps its name");
+
+    // Duplicate keeps each copy's own group and inserts after the set's last member.
+    int before = me.TrackCount;
+    var dups = me.DuplicateTracks(new[] { a, c });
+    Check(dups.Length == 2 && me.TrackCount == before + 2, $"duplicate two tracks ({dups.Length})");
+    Check(dups.All(id => IndexOf(id) > IndexOf(c)), "duplicates land after the last selected track");
+    Check(GroupOf(dups[0]) == g && GroupOf(dups[1]) == -1, "duplicates keep their own groups");
+
+    // Removing a group takes its children, in one undo step.
+    int count = me.TrackCount;
+    Check(me.RemoveTracks(new[] { g }), "remove a group");
+    Check(Order().All(t => t.id != g && t.group != g), "removing a group removes its children");
+    Check(me.TrackCount < count - 3, $"group + children gone ({count} -> {me.TrackCount})");
+    me.Undo();
+    Check(me.TrackCount == count, $"one undo restores the removed set ({me.TrackCount})");
+}
+
 // ============ MCP tools drive the engine ================================
 Console.WriteLine("-- MCP tools --");
 {

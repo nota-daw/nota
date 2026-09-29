@@ -59,6 +59,8 @@ public interface IAudioEngine : IDisposable
     int CreateGroup(int[] trackIds);             // group tracks under a new group; returns group id or -1
     void Ungroup(int groupId);                   // dissolve; children reparent up one level
     void SetTrackGroup(int trackId, int groupId); // move a track into groupId (-1 = top-level)
+    int[] DuplicateTracks(int[] trackIds);       // set (+ group children) after its last member; new ids
+    bool RemoveTracks(int[] trackIds);           // set (+ group children), one undo step
 
     // --- Send / return buses (M6-1) ----------------------------------------
     int AddReturnTrack();
@@ -221,6 +223,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
+    bool CopyTracks(int[] trackIds);             // a group brings its children
+    int[] PasteTracks(int afterTrackId);         // after the anchor, inside its group (-1 = end); new ids
     bool HasTrackClipboard();
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
