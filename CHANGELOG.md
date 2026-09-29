@@ -17,6 +17,8 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Fixed
+- Reordering or removing effects in Devices no longer scrambles their automation: each lane
+  stays on its own device and parameter. Removing a device also removes its automation.
 - In the piano roll you can now drag a note's left edge to change where it starts; its end
   stays put.
 - Stacked notes (a chord) no longer hide each other's velocity. Grab a stem by its cap to

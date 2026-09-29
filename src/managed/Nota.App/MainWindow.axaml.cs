@@ -289,6 +289,7 @@ public partial class MainWindow : Window
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits);
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
         _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel

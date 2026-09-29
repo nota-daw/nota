@@ -547,6 +547,7 @@ bool Engine::moveDevice(int32_t trackId, int32_t fromIndex, int32_t toIndex) {
     auto dev = nt->devices[fromIndex];
     nt->devices.erase(nt->devices.begin() + fromIndex);
     nt->devices.insert(nt->devices.begin() + toIndex, dev);
+    remapAutomationAfterDeviceChange(*nt, false, -1, fromIndex, toIndex);   // lanes follow their device
     republishWithTrack(trackId, nt);
     remapCvLinksAfterDeviceChange(trackId, -1, fromIndex, toIndex);  // keep CV-link targets valid
     return true; // order change doesn't affect total chain latency (PDC unchanged)
@@ -560,6 +561,7 @@ bool Engine::removeDevice(int32_t trackId, int32_t deviceIndex) {
     if (old->devices[deviceIndex]) old->devices[deviceIndex]->closeEditor();
     auto nt = cloneTrack(*old);
     nt->devices.erase(nt->devices.begin() + deviceIndex);
+    remapAutomationAfterDeviceChange(*nt, false, deviceIndex, -1, -1);     // drop/shift its lanes
     republishWithTrack(trackId, nt);
     remapCvLinksAfterDeviceChange(trackId, deviceIndex, -1, -1);   // drop/shift CV-link targets
     recomputePdc();
@@ -689,6 +691,7 @@ bool Engine::moveMidiEffect(int32_t trackId, int32_t fromIndex, int32_t toIndex)
     auto md = nt->midiEffects[fromIndex];
     nt->midiEffects.erase(nt->midiEffects.begin() + fromIndex);
     nt->midiEffects.insert(nt->midiEffects.begin() + toIndex, md);
+    remapAutomationAfterDeviceChange(*nt, true, -1, fromIndex, toIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -698,6 +701,7 @@ bool Engine::removeMidiEffect(int32_t trackId, int32_t index) {
     if (!old || index < 0 || index >= static_cast<int32_t>(old->midiEffects.size())) return false;
     auto nt = cloneTrack(*old);
     nt->midiEffects.erase(nt->midiEffects.begin() + index);
+    remapAutomationAfterDeviceChange(*nt, true, index, -1, -1);
     republishWithTrack(trackId, nt);
     if (nt->instrument) nt->instrument->allNotesOff();   // drop any arp-driven voices
     return true;

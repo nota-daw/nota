@@ -67,6 +67,7 @@ public sealed partial class DeviceChainView
     // map: old index → new index, or -1 when the device is gone.
     private void RemapExtras(ChainKind k, Func<int, int> map)
     {
+        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);

@@ -133,6 +133,21 @@ public sealed partial class ArrangementView
         Redraw();
     }
 
+    /// <summary>The device chain reordered / removed effects (midi=false) or MIDI effects on a
+    /// track: keep its shown automation target on the same device (the engine moves the lanes
+    /// the same way). map: old chain index → new, -1 when the device is gone (→ Volume).</summary>
+    internal void RemapAutoTargets(int trackId, bool midi, Func<int, int> map)
+    {
+        if (!_autoTargets.TryGetValue(trackId, out var sel)) return;
+        bool onChain = midi ? sel.target == AutomationTarget.MidiDeviceParam
+                            : sel.target == AutomationTarget.DeviceParam
+                              || (sel.target == AutomationTarget.PluginParam && sel.dev >= 0);
+        if (!onChain) return;
+        int ni = map(sel.dev);
+        _autoTargets[trackId] = ni >= 0 ? sel with { dev = ni } : (AutomationTarget.Volume, -1, -1, "");
+        // Refresh() (raised by the chain's Changed) rebuilds the lanes from _autoTargets.
+    }
+
     /// <summary>Select a hosted-plugin parameter (by stable id) as the lane target (M9-B3).</summary>
     internal void SetAutoPluginTarget(TrackVM t, int deviceIndex, string paramId)
     {

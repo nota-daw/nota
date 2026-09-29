@@ -266,6 +266,8 @@ NOTA_API int32_t nota_plugin_last_touched_param(NotaEngine* engine, int32_t trac
 /* ---- automation write / record (M9-C) -----------------------------------
  * Device-free self-test of the write path (touch, latch, override/re-enable). */
 NOTA_API int32_t nota_engine_automation_write_selftest(NotaEngine* engine);
+/* Self-test: reordering / removing effects keeps each lane on its own device. */
+NOTA_API int32_t nota_engine_automation_device_remap_selftest(NotaEngine* engine);
 /* There are no record modes: lanes always play back, and gestures record while
  * automation record is on (the transport record button drives it — engaging it
  * via nota_engine_set_recording sets this too). begin/end bracket a control

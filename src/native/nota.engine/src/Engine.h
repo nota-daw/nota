@@ -235,6 +235,7 @@ public:
     void    reenableAutomation();        // hand the overridden lanes back to playback
     bool    automationOverridden() const { return !overrides_.empty(); }
     bool    automationWriteSelfTest();   // device-free: touch, latch, override/re-enable
+    bool    automationDeviceRemapSelfTest();   // lanes follow their device on move/remove
 
     // --- debug oscillator (M0) ---
     void setToneEnabled(bool enabled);
@@ -915,6 +916,11 @@ private:
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
     void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to);
+    // Keep automation-lane deviceIndex valid after an effect (midi=false) or MIDI effect
+    // (midi=true) on `nt` was removed (removedIndex>=0; its lanes are dropped) or moved
+    // (from/to). Edits `nt` in place before it is published, so it shares the device
+    // edit's undo step; also fixes in-flight write / override lane references.
+    void remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t removedIndex, int32_t from, int32_t to);
 
     // automation write (M9-C, message thread)
     void sampleAutomationWritesAt(double beat);  // grow active lanes to (beat, control-value)

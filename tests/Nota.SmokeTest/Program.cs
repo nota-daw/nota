@@ -8801,6 +8801,7 @@ Console.WriteLine("-- M9-B1: plugin-param automation core --");
 Console.WriteLine("-- M9-C W1: automation write/record --");
 {
     Check(engine.AutomationWriteSelfTest(), "automation write path: touch, latch, override (device-free)");
+    Check(engine.AutomationDeviceRemapSelfTest(), "automation lanes follow their device on reorder / remove");
 }
 
 // ===================== M9-C W2: record-switch C ABI + C# ===================

@@ -784,6 +784,7 @@ public interface IAudioEngine : IDisposable
     string AutomationLaneParamId(int trackId, int laneIndex);
     int PluginLastTouchedParam(int trackId, int deviceIndex);   // "Learn" (M9-B3)
     bool AutomationWriteSelfTest();   // M9-C: device-free write-path check
+    bool AutomationDeviceRemapSelfTest();   // lanes follow their device on reorder / remove
     // Automation record (M9-C). There are no record modes: lanes always play back, and
     // a control gesture records while automation record is on (the transport record
     // button drives it). deviceIndex < 0 = instrument; paramId for PluginParam.

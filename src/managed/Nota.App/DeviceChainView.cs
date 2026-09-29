@@ -53,6 +53,11 @@ public sealed partial class DeviceChainView : UserControl
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
     public event Action? Changed;
 
+    /// <summary>Raised when this view reorders / removes effects (midi=false) or MIDI effects
+    /// (midi=true) on a track: map is old chain index → new index, or -1 when the device is gone.
+    /// Lets index-addressed state elsewhere (the arrangement's automation target) follow it.</summary>
+    public event Action<int, bool, Func<int, int>>? DevicesRemapped;
+
     /// <summary>Raised to save a device/instrument as a preset (M7-4c); arg is the
     /// device index, or -1 for the track's instrument. MainWindow does the prompt+save.</summary>
     public event Action<int>? PresetSaveRequested;
