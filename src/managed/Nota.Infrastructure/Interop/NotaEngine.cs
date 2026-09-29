@@ -186,6 +186,9 @@ public sealed partial class NotaEngine : IAudioEngine
     public double PreviewPosition
     { get { ThrowIfDisposed(); return NativeMethods.PreviewPosition(_handle); } }
 
+    public int ReadPreviewScope(float[] output)
+    { ThrowIfDisposed(); return NativeMethods.PreviewScope(_handle, output, Math.Min(output.Length, 4096)); }
+
     /// <summary>Stops the current audition.</summary>
     public void StopPreview()
     { ThrowIfDisposed(); Check(NativeMethods.StopPreview(_handle)); }

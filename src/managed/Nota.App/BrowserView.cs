@@ -8,11 +8,10 @@
 // drops to tertiary ink so names scan on their distinctive word, and the device
 // type sits at the right edge as a quiet tag. A search box filters the active list
 // live, a ⋮ button holds the view options, chips filter by favorite/tag, a status
-// line counts what is on screen, and a pinned preview footer auditions the selected
-// sample (Files tab, see PreviewPlayer). Double-clicking an item raises ItemActivated.
-// Brushes bind via
-// GetResourceObservable (the control is built during MainWindow's XAML load, before
-// it is attached). Rows are drag sources (M7-5).
+// line counts what is on screen, and a pinned preview footer auditions the selection — a
+// sample, a preset or a built-in device (list tabs, see PreviewPlayer). Double-clicking an
+// item raises ItemActivated. Brushes bind via GetResourceObservable (the control is built
+// during MainWindow's XAML load, before it is attached). Rows are drag sources (M7-5).
 
 using System;
 using System.Collections.ObjectModel;
@@ -150,7 +149,8 @@ public sealed class BrowserView : UserControl
     }
 
     private const int TabCount = 7;   // Instr / FX / MIDI / Files / Preset / Proj / Map
-    private const int FilesTab = 3;   // the only tab with a sample auditioner
+    private const int FilesTab = 3;   // samples: the player auditions the file
+    private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
@@ -189,7 +189,7 @@ public sealed class BrowserView : UserControl
     private readonly Border _emptyWrap;
 
     // Pinned preview footer + the status line under it.
-    private readonly PreviewPlayer _previewFooter;   // sample auditioner — Files tab only
+    private readonly PreviewPlayer _previewFooter;   // sample / preset auditioner — list tabs
     private readonly Border _statusBar;
     private readonly TextBlock _statusText;
 
@@ -321,6 +321,7 @@ public sealed class BrowserView : UserControl
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
 
         _previewFooter = new PreviewPlayer();
+        _previewFooter.SetContext(files: _active == FilesTab);
 
         // Status line: what the active tab is showing, counted.
         _statusText = new TextBlock { FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
@@ -599,8 +600,12 @@ public sealed class BrowserView : UserControl
         _content.Content = isMap ? (Control?)_midiMap : _pages[index];
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
-        // The sample auditioner only makes sense for the Files tab.
-        _previewFooter.IsVisible = index == FilesTab;
+        // The auditioner follows the list tabs: samples in Files, presets and built-in devices
+        // in Instr / FX / MIDI / Presets. It picks up the new tab's selection.
+        bool auditions = index <= PresetsTab;
+        _previewFooter.IsVisible = auditions;
+        _previewFooter.SetContext(files: index == FilesTab);
+        if (auditions) SyncPreview(_pages[index]);
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
         _statusBar.IsVisible = !isMap;
@@ -952,10 +957,25 @@ public sealed class BrowserView : UserControl
     /// the key isn't the browser's (another tab, nothing to play) so it falls to the transport.</summary>
     public bool TryTogglePreview(object? source)
     {
-        if (_active != FilesTab || !_previewFooter.HasSample) return false;
+        if (_active > PresetsTab || !_previewFooter.HasSample) return false;
         for (var c = source as StyledElement; c is not null; c = c.Parent)
-            if (c == _pages[FilesTab] || c == _previewFooter) { _previewFooter.Toggle(); return true; }
+            if (c == _pages[_active] || c == _previewFooter) { _previewFooter.Toggle(); return true; }
         return false;
+    }
+
+    // Hands the player a list's selection and the row below it (which the player pre-renders,
+    // so arrowing down plays at once).
+    private void SyncPreview(ListBox list)
+    {
+        var item = list.SelectedItem as BrowserItem;
+        BrowserItem? next = null;
+        if (item is not null && list.ItemsSource is System.Collections.IList rows)
+        {
+            int i = rows.IndexOf(item);
+            for (int j = i + 1; i >= 0 && j < rows.Count; j++)
+                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind != BrowserItemKind.Folder) { next = r; break; }
+        }
+        _previewFooter.SetItem(item, next);
     }
 
     private ListBox NewList(IDataTemplate itemTemplate) => new()
@@ -972,13 +992,13 @@ public sealed class BrowserView : UserControl
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
             if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
-            else ItemActivated?.Invoke(item);
+            else { _previewFooter.StopAudition(); ItemActivated?.Invoke(item); }
         };
         list.SelectionChanged += (_, _) =>
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
-            if (list == _pages[FilesTab]) _previewFooter.SetItem(list.SelectedItem as BrowserItem);
+            if (_active <= PresetsTab && list == _pages[_active]) SyncPreview(list);
         };
         // Drag source (M7-5): start a copy-drag when the pointer leaves the row.
         // Must use handledEventsToo — ListBoxItem marks PointerPressed as Handled for

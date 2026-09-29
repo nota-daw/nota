@@ -26,6 +26,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -115,6 +116,14 @@ public:
     double previewPosition() const { return previewPosSec_.load(std::memory_order_relaxed); }
     bool isPreviewActive() const { return previewActive_.load(std::memory_order_relaxed); }
     bool previewSelfTest();   // feed a synthetic buffer, render offline, no device
+    // Preset audition: rendered buffers (see Audition.h) kept by key in a small LRU, so
+    // stepping back through a list replays without a re-render. Message thread.
+    void auditionStore(const std::string& key, std::shared_ptr<SampleBuffer> buf);
+    bool auditionCached(const std::string& key) const;
+    bool previewCached(const std::string& key, double startSeconds);   // false = not cached
+    // The last `n` (≤ kPreviewScope) mono samples the preview voice played, oldest first.
+    int32_t previewScope(float* out, int32_t n) const;
+    static constexpr int32_t kPreviewScope = 4096;
 
     // --- xrun / dropout telemetry (M7-8) ---
     // The backend's overload listener bumps this off the RT thread; the UI polls
@@ -1070,9 +1079,15 @@ private:
     // Audio preview / audition (M7-4a): the message thread publishes a decoded
     // buffer via previewLive_ (raw ptr), keeping it alive in previewHold_ and
     // retiring the old one — same lifetime dance as the graph snapshots, so the
-    // audio thread never reads a freed buffer.
+    // audio thread never reads a freed buffer. The retired list is message-thread
+    // only: each entry carries the audio thread's render epoch at retirement and is
+    // freed once two more renders have finished (none can still hold its pointer),
+    // so the audio thread neither touches the list nor frees memory.
+    void publishPreview(std::shared_ptr<SampleBuffer> buf);
+    void reapPreview();
     std::shared_ptr<SampleBuffer>              previewHold_;
-    std::vector<std::shared_ptr<SampleBuffer>> previewRetired_;
+    std::vector<std::pair<uint64_t, std::shared_ptr<SampleBuffer>>> previewRetired_;
+    std::atomic<uint64_t>      previewEpoch_{0};   // audio thread: +1 per renderPreview call
     std::atomic<SampleBuffer*> previewLive_{nullptr};
     std::atomic<bool>          previewActive_{false};
     std::atomic<bool>          previewRestart_{false};
@@ -1083,6 +1098,9 @@ private:
     std::string                previewPath_;          // message thread: the file previewHold_ decodes
     double                     previewPos_ = 0.0;   // audio-thread only, source frames
     float                      previewGainCur_ = 1.0f; // audio-thread only
+    std::atomic<float>         previewScope_[kPreviewScope] = {};  // mono ring, audio thread writes
+    std::atomic<int64_t>       previewScopeW_{0};                   // samples written so far
+    std::list<std::pair<std::string, std::shared_ptr<SampleBuffer>>> auditionCache_;   // MRU first
 
     // Undo/redo snapshot stacks (M6-6). Hold retained Graph snapshots; entries
     // are cheap (metadata only — sample buffers are shared via shared_ptr).

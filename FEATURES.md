@@ -640,6 +640,19 @@ and user presets, automation, persistence and cloning.
   search box counts the matches.
 - **Preview** a sample from the browser, and **drag and drop** onto a track, into the grid,
   or into a rack chain.
+- **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
+  Effects and Presets tabs and plays the selected factory preset, saved preset or built-in
+  device (its default sound). The preset is rendered offline on a standalone chain (not a
+  track) in a few milliseconds and cached, and the row below is rendered ahead, so ↑ ↓
+  through a folder plays each sound at once. Instruments play a phrase that suits them —
+  a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and bells, a
+  groove for Nota Rhythm, a held chord for Pendulum / Consort. MIDI effects play a phrase
+  that shows what they do into a plain keys patch. Audio effects process a demo — **Beat**,
+  **Keys** or **Loop** (drums, keys and bass), picked per device (dynamics get the beat,
+  reverbs and delays the keys, EQ and drive the loop) — or the **sample** last selected in
+  Files; the source chip changes it. **WAVE / SPEC** in the well switches to a live spectrum
+  of what is playing. Racks, drum kits and plug-in presets aren't previewed (the well says
+  why).
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
     Racks are not replaced in place.

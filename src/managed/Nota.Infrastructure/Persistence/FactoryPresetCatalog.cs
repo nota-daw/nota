@@ -19,6 +19,7 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     // Built-in effect kinds: EQ 0, Compressor 1, Reverb 2, Delay 3, Utility 4.
     private readonly List<(FactoryPresetInfo Info, PresetDocument Doc)> _all = new();
     private readonly Dictionary<string, PresetDocument> _byId = new();
+    private readonly Dictionary<string, FactoryPresetInfo> _infoById = new();
 
     // The browser folder the following presets go into (see Section). Starts empty for
     // each device, so a device's Init sits loose above its folders.
@@ -2424,6 +2425,9 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     /// <summary>The preset's document (named params), or null — for validation and tests.</summary>
     public PresetDocument? Document(string id) => _byId.TryGetValue(id, out var doc) ? doc : null;
 
+    /// <summary>The preset's browser description (device, category), or null.</summary>
+    public FactoryPresetInfo? Info(string id) => _infoById.TryGetValue(id, out var info) ? info : null;
+
     public string Apply(IAudioEngine engine, string id, int targetTrackId)
         => _byId.TryGetValue(id, out var doc)
             ? PresetService.Apply(doc, engine, targetTrackId)
@@ -2677,7 +2681,9 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         var map = new Dictionary<string, float>(ps.Length);
         foreach (var (key, value) in ps) map[key] = value;
         var doc = new PresetDocument { DisplayName = name, Type = type, BuiltinKind = kind, NamedParams = map };
-        _all.Add((new FactoryPresetInfo(id, name, isInstrument, kind, isMidi, _section), doc));
+        var info = new FactoryPresetInfo(id, name, isInstrument, kind, isMidi, _section);
+        _all.Add((info, doc));
         _byId[id] = doc;
+        _infoById[id] = info;
     }
 }

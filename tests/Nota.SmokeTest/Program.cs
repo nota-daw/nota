@@ -100,6 +100,15 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Browser preset audition alone (fast iteration): `--audition`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--audition")
+{
+    Console.WriteLine("-- browser: preset audition --");
+    foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AUDITION PASSED" : $"AUDITION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Opt-in hosted-plugin check (M3-3): `--hostcheck <path-to-nota-scanworker>`.
 // Loads a hosted AU instrument and effect and confirms audio flows through them.
 if (args.Length >= 2 && args[0] == "--hostcheck")
@@ -13430,6 +13439,10 @@ Console.WriteLine("-- background audio import --");
     bvm.FilterTree(1, "");
     Check(!bvm.Effects.Any(i => i.Depth > 0), "clearing the search collapses back to devices");
 }
+
+// --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
+Console.WriteLine("-- browser: preset audition --");
+foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

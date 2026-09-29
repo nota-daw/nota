@@ -165,6 +165,69 @@ NOTA_API NotaResult nota_engine_set_preview_loop(NotaEngine* engine, int32_t on)
 NOTA_API NotaResult nota_engine_set_preview_gain(NotaEngine* engine, float gain);
 /* Playhead of the audition in seconds into the file (last rendered block). */
 NOTA_API double     nota_engine_preview_position(const NotaEngine* engine);
+/* The last n (≤ 4096) mono samples the preview voice played, oldest first — for a live
+ * spectrum / scope under the browser player. Returns the count written. */
+NOTA_API int32_t    nota_engine_preview_scope(const NotaEngine* engine, float* out, int32_t n);
+
+/* ---- Preset audition --------------------------------------------------------
+ * A standalone chain (MIDI effects -> built-in instrument -> audio effects) that renders a
+ * phrase offline into a buffer: not a track, never in the graph, so it is built, rendered
+ * and destroyed on any worker thread. An effect-only rig plays a source (a demo loop or a
+ * file) through its devices. The finished buffer is stored in the engine's audition cache
+ * under a key (message thread) and played on the preview voice with preview_cached_at, so
+ * loop / gain / position / scope work as for a sample.
+ *   create -> set_instrument / add_device / add_midi_effect (+ params) -> render
+ *   -> peaks -> nota_engine_audition_store (UI thread) -> destroy. */
+typedef struct NotaAudition NotaAudition;
+typedef struct NotaAuditionNote {
+    double  start_beat;
+    double  length_beats;
+    int32_t pitch;      /* 0..127 */
+    float   velocity;   /* 0..1 */
+} NotaAuditionNote;
+#define NOTA_AUDITION_ROLLING 1   /* the instrument sees a rolling transport (generative synths) */
+NOTA_API NotaAudition* nota_audition_create(double sample_rate);
+NOTA_API void    nota_audition_destroy(NotaAudition* rig);
+/* 1 = ok. Instrument kinds as nota_engine_set_track_builtin_instrument (no racks). */
+NOTA_API int32_t nota_audition_set_instrument(NotaAudition* rig, int32_t kind);
+/* Normalized value by plugin-param id; 1 = the id exists. */
+NOTA_API int32_t nota_audition_instrument_param(NotaAudition* rig, const char* id, float value);
+/* Appends a built-in audio effect / MIDI effect; returns its index or -1. */
+NOTA_API int32_t nota_audition_add_device(NotaAudition* rig, int32_t kind);
+NOTA_API int32_t nota_audition_device_param(NotaAudition* rig, int32_t index, const char* name, float value);
+NOTA_API int32_t nota_audition_add_midi_effect(NotaAudition* rig, int32_t kind);
+NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, const char* name, float value);
+/* The Sampler's sample (NULL / "" = a procedural keys tone at C4). */
+NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8);
+/* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
+ * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
+ * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */
+NOTA_API int32_t nota_audition_set_source_file(NotaAudition* rig, const char* path_utf8, double max_seconds);
+NOTA_API int32_t nota_audition_add_source_from(NotaAudition* rig, const NotaAudition* part, float gain);
+NOTA_API int32_t nota_audition_use_cached_source(NotaAudition* rig, const char* key);
+NOTA_API int32_t nota_audition_cache_source(NotaAudition* rig, const char* key, float target_peak);
+/* Kits (Drum Rack / Nota Rhythm): a pad instrument instead of a built-in one. A pad plays a
+ * one-shot file on its note with gain, pan (-1..1) and a choke group (0 = none), through its
+ * own effects. Returns the pad / device index or -1. */
+NOTA_API int32_t nota_audition_use_kit(NotaAudition* rig);
+NOTA_API int32_t nota_audition_kit_add_pad(NotaAudition* rig, int32_t note, const char* path_utf8,
+                                           float gain, float pan, int32_t choke);
+NOTA_API int32_t nota_audition_kit_pad_add_device(NotaAudition* rig, int32_t pad, int32_t kind);
+NOTA_API int32_t nota_audition_kit_pad_device_param(NotaAudition* rig, int32_t pad, int32_t device,
+                                                    const char* name, float value);
+/* Renders the notes (beats at bpm) for phrase_beats, then the tail until it falls silent or
+ * max_tail_seconds pass. Returns frames rendered, or -1 (cancelled / nothing to play). */
+NOTA_API int64_t nota_audition_render(NotaAudition* rig, const NotaAuditionNote* notes, int32_t count,
+                                      double bpm, double phrase_beats, double max_tail_seconds, int32_t flags);
+/* Any thread: makes a running render return -1 within one block. */
+NOTA_API void    nota_audition_cancel(NotaAudition* rig);
+NOTA_API int32_t nota_audition_peaks(const NotaAudition* rig, float* out_min_max, int32_t max_points);
+NOTA_API double  nota_audition_seconds(const NotaAudition* rig);
+/* Message thread: keep the rendered buffer under `key` (a small LRU). */
+NOTA_API NotaResult nota_engine_audition_store(NotaEngine* engine, const NotaAudition* rig, const char* key);
+NOTA_API int32_t    nota_engine_audition_cached(const NotaEngine* engine, const char* key);
+/* Plays the cached audition from start_seconds; 0 = not cached. */
+NOTA_API int32_t    nota_engine_preview_cached_at(NotaEngine* engine, const char* key, double start_seconds);
 
 /* ---- xrun / dropout telemetry (M7-8) -------------------------------------
  * Running count of audio-device overloads/dropouts since launch. The UI polls

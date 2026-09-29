@@ -4,6 +4,7 @@
 // Engine — hosted plugins & device chain (M3): load instrument/effect, device CRUD/params/bypass/editor/state, clone helpers, kind/id introspection, PDC latency.
 
 #include "Engine.h"
+#include "DeviceFactory.h"
 #include "Amp.h"
 #include "AutoFilter.h"
 #include "AudioFile.h"
@@ -575,7 +576,7 @@ Device* Engine::deviceAt(int32_t trackId, int32_t deviceIndex) const {
 }
 
 // Fresh built-in instances, used to read a parameter's factory default value.
-static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
+std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Eq>();
         case 1: return std::make_shared<Compressor>();
@@ -605,7 +606,7 @@ static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
         default: return nullptr;   // Rack / plugin: no simple per-param default
     }
 }
-static std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
+std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Synth>();
         case 1: return std::make_shared<Sampler>();      // empty; a sample is loaded later
@@ -641,7 +642,7 @@ bool Engine::setTrackBuiltinInstrument(int32_t trackId, int32_t kind) {
 }
 
 // --- MIDI effects (before the instrument) ---------------------------------
-static std::shared_ptr<MidiDevice> makeMidiDevice(int32_t kind) {
+std::shared_ptr<MidiDevice> makeMidiDevice(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Arpeggiator>();
         case 1: return std::make_shared<MidiChord>();

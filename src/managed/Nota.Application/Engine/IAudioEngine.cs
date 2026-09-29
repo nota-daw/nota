@@ -779,6 +779,19 @@ public interface IAudioEngine : IDisposable
     /// <summary>Audition playhead, seconds into the file.</summary>
     double PreviewPosition { get; }
     bool PreviewSelfTest();
+    /// <summary>The last <paramref name="output"/>.Length (≤ 4096) mono samples the preview
+    /// voice played, oldest first. Returns the count written.</summary>
+    int ReadPreviewScope(float[] output);
+
+    // --- Preset audition ------------------------------------------------------
+    /// <summary>A fresh offline audition chain at the engine's sample rate (see
+    /// <see cref="IAuditionRig"/>). Safe to call from any thread.</summary>
+    IAuditionRig CreateAuditionRig();
+    /// <summary>UI thread: keeps a rendered rig's audio under <paramref name="key"/> (small LRU).</summary>
+    void StoreAudition(IAuditionRig rig, string key);
+    bool IsAuditionCached(string key);
+    /// <summary>Plays the cached audition from <paramref name="startSeconds"/>; false = not cached.</summary>
+    bool PreviewAuditionAt(string key, double startSeconds);
 
     // --- xrun / dropout telemetry (M7-8) -----------------------------------
     int XrunCount { get; }

@@ -17,6 +17,16 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- Preview presets before loading them. The browser's player now also sits under the
+  Instruments, Audio Effects, MIDI Effects and Presets tabs: select a preset (or a built-in
+  device, to hear its default sound) and it plays. Instruments play a phrase that suits
+  them — a chord for a pad, a riff for a bass, a line for a lead, a groove for Nota Rhythm.
+  MIDI effects play a short phrase through a simple keys sound. Audio effects process a
+  demo: drums (Beat), chords (Keys) or a full loop, chosen to suit the effect. Pick another
+  with the source button, including the sample you last selected in Files. Sounds are
+  prepared in the background and remembered, and the next preset is prepared ahead, so
+  ↑ ↓ through a folder plays each one at once. Click **SPEC** in the waveform to see a live
+  spectrum instead. Racks, drum kits and plug-in presets can't be previewed yet.
 - A new sample player at the bottom of the browser's Files tab. It shows the file's real
   waveform: click it to play from that point, hover to see the time. It also has Play / Stop,
   a time readout, Loop, Auto (a file plays as soon as you select it) and a preview volume

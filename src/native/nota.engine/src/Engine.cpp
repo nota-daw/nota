@@ -192,10 +192,8 @@ bool Engine::previewFile(const std::string& path, double startSeconds) {
         if (!buf || buf->empty()) return false;
         // Retire the previous buffer so the audio thread can finish any block that
         // still holds its raw pointer, then publish the new one.
-        if (previewHold_) previewRetired_.push_back(std::move(previewHold_));
-        previewHold_ = buf;
+        publishPreview(buf);
         previewPath_ = path;
-        previewLive_.store(buf.get(), std::memory_order_release);
     }
     const double start = startSeconds > 0.0 ? startSeconds : 0.0;
     previewStartSec_.store(start, std::memory_order_relaxed);
@@ -207,15 +205,84 @@ bool Engine::previewFile(const std::string& path, double startSeconds) {
 
 void Engine::stopPreview() {
     previewActive_.store(false, std::memory_order_release);
+    reapPreview();
+}
+
+void Engine::publishPreview(std::shared_ptr<SampleBuffer> buf) {
+    auto old = std::move(previewHold_);
+    previewHold_ = std::move(buf);
+    previewLive_.store(previewHold_.get(), std::memory_order_release);
+    // Stamped after the swap: a render that starts from here on reads the new buffer.
+    if (old) previewRetired_.emplace_back(previewEpoch_.load(std::memory_order_acquire), std::move(old));
+    reapPreview();
+}
+
+void Engine::reapPreview() {
+    const uint64_t now = previewEpoch_.load(std::memory_order_acquire);
+    previewRetired_.erase(std::remove_if(previewRetired_.begin(), previewRetired_.end(),
+                                         [now](const auto& r) { return now >= r.first + 2; }),
+                          previewRetired_.end());
+}
+
+// --- preset audition cache ---------------------------------------------------------
+
+namespace {
+constexpr size_t  kAuditionCacheMax = 32;
+constexpr int64_t kAuditionCacheBytes = 96ll << 20;
+}
+
+void Engine::auditionStore(const std::string& key, std::shared_ptr<SampleBuffer> buf) {
+    if (key.empty() || !buf || buf->empty()) return;
+    auditionCache_.remove_if([&](const auto& e) { return e.first == key; });
+    auditionCache_.emplace_front(key, std::move(buf));
+    // Trim the least recent past the count / memory budget. The buffer the preview voice
+    // holds stays alive through previewHold_ even when it drops out of the cache.
+    int64_t bytes = 0;
+    size_t kept = 0;
+    for (auto it = auditionCache_.begin(); it != auditionCache_.end();) {
+        bytes += static_cast<int64_t>(it->second->samples.size() * sizeof(float));
+        if (++kept > kAuditionCacheMax || (kept > 1 && bytes > kAuditionCacheBytes)) it = auditionCache_.erase(it);
+        else ++it;
+    }
+}
+
+bool Engine::auditionCached(const std::string& key) const {
+    for (const auto& e : auditionCache_) if (e.first == key) return true;
+    return false;
+}
+
+bool Engine::previewCached(const std::string& key, double startSeconds) {
+    auto it = std::find_if(auditionCache_.begin(), auditionCache_.end(), [&](const auto& e) { return e.first == key; });
+    if (it == auditionCache_.end()) return false;
+    auditionCache_.splice(auditionCache_.begin(), auditionCache_, it);   // most recent
+    const auto& buf = auditionCache_.front().second;
+    if (previewHold_ != buf) publishPreview(buf);
+    previewPath_ = key;   // a file preview of any real path decodes afresh
+    const double start = startSeconds > 0.0 ? startSeconds : 0.0;
+    previewStartSec_.store(start, std::memory_order_relaxed);
+    previewPosSec_.store(start, std::memory_order_relaxed);
+    previewRestart_.store(true, std::memory_order_release);
+    previewActive_.store(true, std::memory_order_release);
+    return true;
+}
+
+int32_t Engine::previewScope(float* out, int32_t n) const {
+    if (!out || n <= 0) return 0;
+    n = std::min(n, kPreviewScope);
+    const int64_t w = previewScopeW_.load(std::memory_order_acquire);
+    for (int32_t i = 0; i < n; ++i)
+        out[i] = previewScope_[(w - n + i) & (kPreviewScope - 1)].load(std::memory_order_relaxed);
+    return n;
 }
 
 // Audio thread: mix the audition voice into `out` at its natural pitch.
 void Engine::renderPreview(float* out, int32_t numFrames) {
-    if (!previewActive_.load(std::memory_order_acquire)) {
-        // Safe point to release retired buffers (audio thread not reading them).
-        if (!previewRetired_.empty()) previewRetired_.clear();
-        return;
-    }
+    // Every call, however it returns, ends one render epoch (see publishPreview).
+    struct EpochTick {
+        std::atomic<uint64_t>& e;
+        ~EpochTick() { e.fetch_add(1, std::memory_order_release); }
+    } tick{previewEpoch_};
+    if (!previewActive_.load(std::memory_order_acquire)) return;
     SampleBuffer* sb = previewLive_.load(std::memory_order_acquire);
     if (!sb || sb->empty()) { previewActive_.store(false, std::memory_order_release); return; }
     const float target = previewGain_.load(std::memory_order_relaxed);
@@ -228,6 +295,8 @@ void Engine::renderPreview(float* out, int32_t numFrames) {
     const double ratio = sr > 0 ? sb->sourceSampleRate / sr : 1.0; // source frames per device frame
     const bool loop = previewLoop_.load(std::memory_order_relaxed);
     const float g0 = previewGainCur_, dg = numFrames > 0 ? (target - g0) / numFrames : 0.0f;
+    const int64_t scopeW = previewScopeW_.load(std::memory_order_relaxed);
+    int64_t scopeN = 0;
     for (int32_t i = 0; i < numFrames; ++i) {
         if (loop && previewPos_ >= sb->frames) previewPos_ -= sb->frames;
         const int64_t i0 = static_cast<int64_t>(previewPos_);
@@ -238,10 +307,15 @@ void Engine::renderPreview(float* out, int32_t numFrames) {
         // Looping, the last frame interpolates into the first instead of into silence.
         sb->readStereo(loop && i0 + 1 >= sb->frames ? 0 : i0 + 1, l1, r1);
         const float g = g0 + dg * i;
-        out[i * 2]     += g * static_cast<float>(l0 + (l1 - l0) * frac);
-        out[i * 2 + 1] += g * static_cast<float>(r0 + (r1 - r0) * frac);
+        const float l = g * static_cast<float>(l0 + (l1 - l0) * frac);
+        const float r = g * static_cast<float>(r0 + (r1 - r0) * frac);
+        out[i * 2]     += l;
+        out[i * 2 + 1] += r;
+        previewScope_[(scopeW + i) & (kPreviewScope - 1)].store(0.5f * (l + r), std::memory_order_relaxed);
+        ++scopeN;
         previewPos_ += ratio;
     }
+    previewScopeW_.store(scopeW + scopeN, std::memory_order_release);
     previewGainCur_ = target;
     previewPosSec_.store(sb->sourceSampleRate > 0 ? previewPos_ / sb->sourceSampleRate : 0.0,
                          std::memory_order_relaxed);
@@ -260,10 +334,8 @@ bool Engine::previewSelfTest() {
     buf->sourceSampleRate = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     buf->frames = static_cast<int64_t>(buf->sourceSampleRate * 0.1);
     buf->samples.assign(buf->frames * 2, 0.25f);
-    if (previewHold_) previewRetired_.push_back(std::move(previewHold_));
-    previewHold_ = buf;
+    publishPreview(buf);
     previewPath_.clear();
-    previewLive_.store(buf.get(), std::memory_order_release);
     previewStartSec_.store(0.0, std::memory_order_relaxed);
     previewRestart_.store(true, std::memory_order_release);
     previewActive_.store(true, std::memory_order_release);

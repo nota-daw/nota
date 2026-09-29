@@ -696,11 +696,12 @@ public sealed class PreferencesWindow : NotaWindow
             ("Z / X", "Shift octave down / up"),
             ("C / V", "Lower / raise velocity"),
         }),
-        ("BROWSER · FILES", new[]
+        ("BROWSER · PREVIEW", new[]
         {
-            ("↑ ↓", "Move through the files · with Auto on, each one plays as it is selected"),
-            ("Space", "Play / stop the selected sample (while the Files list has focus)"),
+            ("↑ ↓", "Move through samples, presets and devices · with Auto on, each one plays as it is selected"),
+            ("Space", "Play / stop the selected sample, preset or device (while a browser list has focus)"),
             ("Click waveform", "Play from that point"),
+            ("Click WAVE / SPEC", "Switch the well between the waveform and a live spectrum"),
             ("Double-click volume", "Reset the preview volume to 0\u2009dB"),
         }),
         ("GAMEPAD (MACOS)", new[]

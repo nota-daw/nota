@@ -65,6 +65,8 @@ set(NOTA_ENGINE_SOURCES
     src/AudioFile.cpp
     src/AudioImport.cpp
     src/nota_engine_import.cpp
+    src/nota_engine_audition.cpp
+    src/Audition.cpp
     src/AudioBackendFactory.cpp   # platform-selected backend construction
 )
 
