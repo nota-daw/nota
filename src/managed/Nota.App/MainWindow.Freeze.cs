@@ -162,8 +162,8 @@ public partial class MainWindow
                 // Editing changes the source's notes/devices, so land on the source track.
                 items.Add(FreezeMenuItem("Edit source", GlyphIcon(GlyphKind.Edit, accent: true),
                     () => { Timeline.Select(src, -1); BeginEditSession(src); }));
-            items.Add(FreezeMenuItem("Unfreeze (wake source)", null, () => UnfreezeLink(src)));
-            items.Add(FreezeMenuItem("Flatten (remove source)", null, () => FlattenLinkAsync(src)));
+            items.Add(FreezeMenuItem("Unfreeze (wake source)", MenuKit.Icon(GlyphKind.Freeze), () => UnfreezeLink(src)));
+            items.Add(FreezeMenuItem("Flatten (remove source)", MenuKit.Icon(GlyphKind.Flatten), () => FlattenLinkAsync(src)));
             return items;
         }
 
@@ -172,7 +172,7 @@ public partial class MainWindow
         {
             items.Add(FreezeMenuItem("Unfreeze track", SnowflakeIcon(),
                 () => { Timeline.Select(trackId, -1); UnfreezeTrack(trackId); }));
-            items.Add(FreezeMenuItem("Flatten to audio track", null,
+            items.Add(FreezeMenuItem("Flatten to audio track", MenuKit.Icon(GlyphKind.Flatten),
                 async () => { Timeline.Select(trackId, -1); await FlattenTrackAsync(trackId); }));
         }
         else

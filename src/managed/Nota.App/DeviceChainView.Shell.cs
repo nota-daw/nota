@@ -218,9 +218,9 @@ public sealed partial class DeviceChainView
         {
             if (presets.Count > 0)
             {
-                var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}" };
-                var prev = new MenuItem { Header = "Previous preset" }; prev.Click += (_, _) => StepPreset(-1);
-                var next = new MenuItem { Header = "Next preset" }; next.Click += (_, _) => StepPreset(+1);
+                var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}", Icon = MenuKit.Icon(GlyphKind.List) };
+                var prev = new MenuItem { Header = "Previous preset", Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
+                var next = new MenuItem { Header = "Next preset", Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
                 for (int i = 0; i < presets.Count; i++)
                 {
@@ -234,7 +234,7 @@ public sealed partial class DeviceChainView
             // A / B compare of two full-parameter snapshots.
             float[] Capture() => CaptureParams(s.Kind, di);
             if (extra.A == null) { extra.A = Capture(); extra.B = (float[])extra.A.Clone(); extra.Active = 0; }
-            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}" };
+            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}", Icon = MenuKit.Icon(GlyphKind.Compare) };
             void Switch(int slot)
             {
                 if (slot == extra.Active) return;
@@ -245,14 +245,14 @@ public sealed partial class DeviceChainView
             }
             var toA = new MenuItem { Header = "A", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 0 }; toA.Click += (_, _) => Switch(0);
             var toB = new MenuItem { Header = "B", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 1 }; toB.Click += (_, _) => Switch(1);
-            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A" };
+            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A", Icon = MenuKit.Icon(GlyphKind.Copy) };
             copy.Click += (_, _) => { var c = Capture(); if (extra.Active == 0) extra.B = (float[])c.Clone(); else extra.A = (float[])c.Clone(); };
             ab.Items.Add(toA); ab.Items.Add(toB); ab.Items.Add(new Separator()); ab.Items.Add(copy);
             flyout.Items.Add(ab);
             if (s.CanMove)
             {
-                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0 }; left.Click += (_, _) => Move(di - 1);
-                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1 }; rightMi.Click += (_, _) => Move(di + 1);
+                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0, Icon = MenuKit.Icon(GlyphKind.StepLeft) }; left.Click += (_, _) => Move(di - 1);
+                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1, Icon = MenuKit.Icon(GlyphKind.StepRight) }; rightMi.Click += (_, _) => Move(di + 1);
                 flyout.Items.Add(left); flyout.Items.Add(rightMi);
             }
             flyout.Items.Add(new Separator());

@@ -1747,11 +1747,7 @@ public sealed partial class ArrangementView : UserControl
     private IEnumerable<MenuItem> AddTrackItems()
     {
         MenuItem Item(string header, NewTrackKind kind)
-        {
-            var mi = new MenuItem { Header = header };
-            mi.Click += (_, _) => AddTrackRequested?.Invoke(kind);
-            return mi;
-        }
+            => MenuKit.Item(header, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind));
         yield return Item("Add instrument track", NewTrackKind.Instrument);
         yield return Item("Add audio track", NewTrackKind.Audio);
         yield return Item("Add return track", NewTrackKind.Return);
@@ -1765,7 +1761,7 @@ public sealed partial class ArrangementView : UserControl
         var flyout = new MenuFlyout();
         foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
         flyout.Items.Add(new Separator());
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard() };
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste) };
         paste.Click += (_, _) =>
         {
             int nid = _engine.PasteTrack();
@@ -1783,7 +1779,7 @@ public sealed partial class ArrangementView : UserControl
         if (_engine is null) return;
         var flyout = new MenuFlyout();
 
-        var rename = new MenuItem { Header = "Rename…" };
+        var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
         var color = BuildColorSubmenu(trackId);
 
@@ -1794,7 +1790,7 @@ public sealed partial class ArrangementView : UserControl
         if (isAudio)
         {
             int cur = _engine.GetTrackRecordInput(trackId);
-            recInput = new MenuItem { Header = "Record input" };
+            recInput = new MenuItem { Header = "Record input", Icon = MenuKit.Icon(GlyphKind.Input) };
             MenuItem Src(string label, int source)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = cur == source };
@@ -1818,7 +1814,7 @@ public sealed partial class ArrangementView : UserControl
         if (isInstr)
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            midiFrom = new MenuItem { Header = "MIDI from" };
+            midiFrom = new MenuItem { Header = "MIDI from", Icon = MenuKit.Icon(GlyphKind.Note) };
             MenuItem Src(string label, int src)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = curSrc == src };
@@ -1832,9 +1828,9 @@ public sealed partial class ArrangementView : UserControl
                 midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id));
         }
 
-        var copy = new MenuItem { Header = "Copy track" };
+        var copy = new MenuItem { Header = "Copy track", Icon = MenuKit.Icon(GlyphKind.Copy) };
         copy.Click += (_, _) => _engine.CopyTrack(trackId);
-        var cut = new MenuItem { Header = "Cut track" };
+        var cut = new MenuItem { Header = "Cut track", Icon = MenuKit.Icon(GlyphKind.Cut) };
         cut.Click += (_, _) =>
         {
             if (!_engine.CopyTrack(trackId)) return;
@@ -1842,7 +1838,7 @@ public sealed partial class ArrangementView : UserControl
             if (SelTrackId == trackId) SelTrackId = -1;
             Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
         };
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard() };
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste) };
         paste.Click += (_, _) =>
         {
             int nid = _engine.PasteTrack();
@@ -1850,7 +1846,7 @@ public sealed partial class ArrangementView : UserControl
             Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
         };
 
-        var dup = new MenuItem { Header = "Duplicate track" };
+        var dup = new MenuItem { Header = "Duplicate track", Icon = MenuKit.Icon(GlyphKind.Duplicate) };
         dup.Click += (_, _) =>
         {
             int nid = _engine.DuplicateTrack(trackId);
@@ -1859,7 +1855,7 @@ public sealed partial class ArrangementView : UserControl
             SessionChanged?.Invoke();
             TrackSelected?.Invoke(SelTrackId);
         };
-        var del = new MenuItem { Header = "Delete track" };
+        var del = new MenuItem { Header = "Delete track", Icon = MenuKit.Icon(GlyphKind.Trash) };
         del.Click += (_, _) =>
         {
             _engine.RemoveTrack(trackId);
@@ -1871,13 +1867,13 @@ public sealed partial class ArrangementView : UserControl
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
         // new group; "Ungroup" dissolves the group this track is/belongs to.
-        var group = new MenuItem { Header = "Group tracks" };
+        var group = new MenuItem { Header = "Group tracks", Icon = MenuKit.Icon(GlyphKind.Folder), InputGesture = MenuKit.GroupKey };
         group.Click += (_, _) => GroupTracks(trackId);
         int ungroupId = GroupToUngroupFor(trackId);
         MenuItem? ungroup = null;
         if (ungroupId > 0)
         {
-            ungroup = new MenuItem { Header = "Ungroup" };
+            ungroup = new MenuItem { Header = "Ungroup", Icon = MenuKit.Icon(GlyphKind.Ungroup), InputGesture = MenuKit.UngroupKey };
             ungroup.Click += (_, _) => UngroupGroup(ungroupId);
         }
 
@@ -1896,7 +1892,7 @@ public sealed partial class ArrangementView : UserControl
         flyout.Items.Add(new Separator());
         flyout.Items.Add(group);
         if (ungroup is not null) flyout.Items.Add(ungroup);
-        var addTrack = new MenuItem { Header = "Add track" };   // submenu: this menu is long already
+        var addTrack = new MenuItem { Header = "Add track", Icon = MenuKit.Icon(GlyphKind.Plus) };   // submenu: this menu is long already
         foreach (var mi in AddTrackItems()) addTrack.Items.Add(mi);
 
         flyout.Items.Add(new Separator());
@@ -2043,7 +2039,7 @@ public sealed partial class ArrangementView : UserControl
     // swatches, plus Auto. Picking sets the track's stored palette index.
     private MenuItem BuildColorSubmenu(int trackId)
     {
-        var color = new MenuItem { Header = "Color" };
+        var color = new MenuItem { Header = "Color", Icon = MenuKit.Icon(GlyphKind.Palette) };
         for (int b = 0; b < PaletteBases; b++)
         {
             var baseItem = new MenuItem { Header = TrackColorNames[b], Icon = Swatch(b * PaletteShades) };
@@ -2219,7 +2215,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return;
         var flyout = new MenuFlyout();
-        var rename = new MenuItem { Header = "Rename…" };
+        var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
         flyout.Items.Add(rename);
         flyout.Items.Add(BuildColorSubmenu(trackId));
