@@ -355,8 +355,22 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
 void Engine::pushUndo() {
     if (!authoring_) return;
     undoStack_.push_back(authoring_);          // authoring_ is immutable after publish
-    if (undoStack_.size() > kMaxUndoDepth) undoStack_.erase(undoStack_.begin());
+    if (undoStack_.size() > kMaxUndoDepth) {
+        undoStack_.erase(undoStack_.begin());
+        if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;   // keep the group's anchor
+    }
     redoStack_.clear();                         // a new edit invalidates the redo branch
+}
+
+void Engine::beginUndoGroup() {
+    if (undoGroupDepth_++ == 0) undoGroupBase_ = undoStack_.size();
+}
+
+void Engine::endUndoGroup() {
+    if (undoGroupDepth_ <= 0 || --undoGroupDepth_ > 0) return;
+    // Keep only the first checkpoint the group pushed (the pre-group state).
+    if (undoStack_.size() > undoGroupBase_ + 1)
+        undoStack_.erase(undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_ + 1), undoStack_.end());
 }
 
 void Engine::publish(std::shared_ptr<Graph> g) {
@@ -420,6 +434,7 @@ void Engine::reset() {
     nextTrackId_ = 1;
     undoStack_.clear();
     redoStack_.clear();
+    undoGroupDepth_ = 0; undoGroupBase_ = 0;
 }
 
 

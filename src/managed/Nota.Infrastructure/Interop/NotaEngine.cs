@@ -137,6 +137,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public bool Redo() { ThrowIfDisposed(); return NativeMethods.Redo(_handle) == NativeMethods.NotaResult.Ok; }
     public bool CanUndo { get { ThrowIfDisposed(); return NativeMethods.CanUndo(_handle) != 0; } }
     public bool CanRedo { get { ThrowIfDisposed(); return NativeMethods.CanRedo(_handle) != 0; } }
+    public void BeginUndoGroup() { ThrowIfDisposed(); NativeMethods.UndoGroupBegin(_handle); }
+    public void EndUndoGroup() { ThrowIfDisposed(); NativeMethods.UndoGroupEnd(_handle); }
 
     // --- Project load (M7-6) -----------------------------------------------
 

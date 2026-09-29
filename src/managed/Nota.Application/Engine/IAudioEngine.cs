@@ -697,6 +697,10 @@ public interface IAudioEngine : IDisposable
     bool Redo();
     bool CanUndo { get; }
     bool CanRedo { get; }
+    /// <summary>Opens an undo group: the edits made until the matching
+    /// <see cref="EndUndoGroup"/> undo as one step. Nests.</summary>
+    void BeginUndoGroup();
+    void EndUndoGroup();
 
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();

@@ -239,6 +239,14 @@ public sealed partial class ArrangementView
                 ctx.DrawText(ft, new Point(12, my + (FooterRowH - ft.Height) / 2));
             }
 
+            // Browser drag-over: the return / master the drop would land on.
+            if (_o.FooterDropRow >= 0)
+            {
+                var r = new Rect(0, _o.FooterDropRow * FooterRowH, w, FooterRowH);
+                ctx.FillRectangle(DropWash, r);
+                ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
+            }
+
             // Loop region wash (matches the scrolling lanes).
             if (_o._loopActive && _o._loopE > _o._loopS)
             {

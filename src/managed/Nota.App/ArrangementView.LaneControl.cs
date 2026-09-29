@@ -1042,14 +1042,10 @@ public sealed partial class ArrangementView
                 ctx.FillRectangle(SelWash, new Rect(0, sy, w, RowH(i)));
             }
 
-            // Browser drag-over: glow the lane the drop would land on (future state).
+            // Browser drag-over: wash the lane the drop would land on (its edge is drawn
+            // last, over the clips, so a full lane still reads as the target).
             if (_o.DropTrackIndex >= 0 && _o.DropTrackIndex < _o._tracks.Count)
-            {
-                double dy = RowTop(_o.DropTrackIndex);
-                var r = new Rect(0, dy, w, RowH(_o.DropTrackIndex));
-                ctx.FillRectangle(DropWash, r);
-                ctx.DrawRectangle(null, new Pen(DropEdge, 1.5), r);
-            }
+                ctx.FillRectangle(DropWash, new Rect(0, RowTop(_o.DropTrackIndex), w, RowH(_o.DropTrackIndex)));
 
             // Vertical grid: bars always, beats when zoomed in enough.
             bool showBeats = _o._pixelsPerBeat >= 12;
@@ -1170,6 +1166,9 @@ public sealed partial class ArrangementView
                 if (sx >= 0 && sx <= w) ctx.DrawLine(MarqueePen, new Point(sx, ty), new Point(sx, ty + th));
                 if (ex >= 0 && ex <= w) ctx.DrawLine(MarqueePen, new Point(ex, ty), new Point(ex, ty + th));
             }
+
+            if (_o.DropTrackIndex >= 0 && _o.DropTrackIndex < _o._tracks.Count)
+                ctx.DrawRectangle(null, DropEdgePen, new Rect(1, RowTop(_o.DropTrackIndex) + 1, w - 2, RowH(_o.DropTrackIndex) - 2));
 
             // Drag position tooltip (req 2.9): bar.beat of the grabbed clip's start, or the
             // edge being trimmed, in a small pill near the cursor.

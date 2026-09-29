@@ -63,8 +63,9 @@ public sealed partial class DeviceChainView : UserControl
     public event Action<int>? PresetSaveRequested;
 
     /// <summary>Raised when a browser item is dropped on the device panel; MainWindow
-    /// routes it (effect → the shown track; instrument → a rack chain / drum pad).</summary>
-    public event Action<BrowserItem>? ItemDropped;
+    /// routes it (effect → the shown track at the target slot; instrument → replaces the
+    /// track's instrument, or a rack chain / drum pad).</summary>
+    public event Action<BrowserItem, DeviceDropTarget>? ItemDropped;
 
     /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
     public event Action<string>? StatusMessage;
@@ -92,24 +93,8 @@ public sealed partial class DeviceChainView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        Content = new Panel { Children = { scroller, _dropGlow } };
-
-        DragDrop.SetAllowDrop(this, true);
-        DragDrop.AddDragOverHandler(this, (_, e) =>
-        {
-            bool ok = BrowserView.IsAcceptableDrag(e);
-            e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
-            _dropGlow.IsVisible = ok;
-        });
-        DragDrop.AddDragLeaveHandler(this, (_, _) => _dropGlow.IsVisible = false);
-        DragDrop.AddDropHandler(this, (_, e) =>
-        {
-            _dropGlow.IsVisible = false;
-            var items = BrowserView.DroppedItems(e);
-            if (items.Count == 0) return;
-            foreach (var item in items) ItemDropped?.Invoke(item);
-            e.Handled = true;
-        });
+        Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        HookBrowserDrop();
     }
 
     public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; Rebuild(); }
@@ -157,6 +142,7 @@ public sealed partial class DeviceChainView : UserControl
     private void Rebuild()
     {
         _row.Children.Clear();
+        _instrumentCard = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
@@ -167,7 +153,7 @@ public sealed partial class DeviceChainView : UserControl
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
         for (int i = 0; i < midiCount; i++) _row.Children.Add(MidiDeviceCard(i, midiCount));
 
-        if (IsInstrumentTrack(_trackId)) _row.Children.Add(InstrumentCard());
+        if (IsInstrumentTrack(_trackId)) _row.Children.Add(_instrumentCard = InstrumentCard());
 
         int count = _engine.TrackDeviceCount(_trackId);
         for (int i = 0; i < count; i++) _row.Children.Add(DeviceCard(i, count));
@@ -222,7 +208,7 @@ public sealed partial class DeviceChainView : UserControl
                () => { foreach (var r in _rackParamRefreshers) r(); },
                Rebuild,
                c => RackPresetSaveRequested?.Invoke(c),
-               () => _dropGlow.IsVisible = false,
+               ClearDropHints,
                _factory);
 
     // ---- instrument / sends / add ----------------------------------------

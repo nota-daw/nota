@@ -552,6 +552,10 @@ NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_redo(const NotaEngine* engine);
+/* Undo group: the edits made between begin and end undo as ONE step (e.g. replacing a
+ * device in place = add + move + remove). Nests; pair every begin with an end. */
+NOTA_API void       nota_engine_undo_group_begin(NotaEngine* engine);
+NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,

@@ -37,14 +37,7 @@ public partial class MainWindow
                 {
                     // Dropped on an existing (non-rack) instrument track → swap its instrument;
                     // otherwise add a new track. Racks/Sampler fall through to their own adds.
-                    if (CanReplaceInstrument(trackId) && Engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind))
-                    {
-                        if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, trackId, _kits.DefaultRhythmKit, out _);
-                        _lastInstrumentTrackId = trackId;
-                        RefreshDeviceChainIfShowing(trackId);
-                        _vm.StatusText = $"Changed instrument to {item.Name} (track {trackId})";
-                        break;
-                    }
+                    if (TryReplaceInstrument(item, trackId)) break;
                     int t = item.BuiltinKind switch
                     {
                         4 => Engine.AddDrumRackTrack(),
@@ -73,14 +66,7 @@ public partial class MainWindow
                 case BrowserItemKind.PluginInstrument:
                 {
                     // Dropped on an existing (non-rack) instrument track → swap its instrument.
-                    if (CanReplaceInstrument(trackId))
-                    {
-                        Engine.SetTrackInstrumentPlugin(trackId, item.CatalogIndex);
-                        _lastInstrumentTrackId = trackId;
-                        RefreshDeviceChainIfShowing(trackId);
-                        _vm.StatusText = $"Changed instrument to {item.Name} (track {trackId})";
-                        break;
-                    }
+                    if (TryReplaceInstrument(item, trackId)) break;
                     int t = Engine.AddPluginInstrumentTrack(item.CatalogIndex);
                     Engine.AddMidiClip(t, beat, 4.0);
                     _lastInstrumentTrackId = t;
@@ -124,10 +110,49 @@ public partial class MainWindow
         catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
     }
 
-    // A browser item dropped on the Devices panel of the shown track. Effects/presets
-    // go on the track; instruments dropped on an Instrument/Drum Rack become a new
-    // chain / pad; otherwise they belong on the arrangement.
-    private void OnDevicePanelDrop(BrowserItem item) => DropBrowserItem(item, _deviceChain?.TrackId ?? -1);
+    // A browser item dropped on the Devices panel of the shown track. An effect lands in
+    // the gap it was dropped on, or replaces the card it was dropped on; an instrument
+    // replaces the track's instrument (a rack gets a new chain / pad instead). The rest —
+    // presets, samples — routes as usual.
+    private void OnDevicePanelDrop(BrowserItem item, DeviceDropTarget target)
+    {
+        int t = _deviceChain?.TrackId ?? -1;
+        if (_vm is null || _deviceChain is null || t <= 0 || target.Mode == DeviceDropMode.Default)
+        { DropBrowserItem(item, t); return; }
+        Engine.BeginUndoGroup();   // add + move (+ remove) undo as one step
+        try
+        {
+            switch (item.Kind)
+            {
+                case BrowserItemKind.BuiltinInstrument:
+                case BrowserItemKind.PluginInstrument:
+                    if (!TryReplaceInstrument(item, t)) { DropBrowserItem(item, t); return; }
+                    break;
+                case BrowserItemKind.BuiltinEffect:
+                case BrowserItemKind.PluginEffect:
+                case BrowserItemKind.BuiltinMidiEffect:
+                {
+                    int idx = item.Kind switch
+                    {
+                        BrowserItemKind.BuiltinEffect => Engine.AddBuiltinDevice(t, item.BuiltinKind),
+                        BrowserItemKind.PluginEffect => Engine.AddTrackEffectPlugin(t, item.CatalogIndex),
+                        _ => Engine.AddMidiEffect(t, item.BuiltinKind),
+                    };
+                    if (idx < 0) { _vm.StatusText = $"Couldn't load {item.Name}."; return; }
+                    _deviceChain.PlaceDroppedDevice(idx, target);
+                    _vm.StatusText = target.Mode == DeviceDropMode.Replace
+                        ? $"Replaced with {item.Name}" : $"Added {item.Name} to track {t}";
+                    break;
+                }
+                default:
+                    DropBrowserItem(item, t);
+                    return;
+            }
+            Timeline.Refresh();
+        }
+        catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
+        finally { Engine.EndUndoGroup(); }
+    }
     private void OnModularDrop(BrowserItem item) => DropBrowserItem(item, _modular?.TrackId ?? -1);
 
     // Adds an instrument/effect/MIDI-FX/sample/preset from the browser to a track;
@@ -271,6 +296,24 @@ public partial class MainWindow
     {
         _deviceChain?.ForgetInstrumentState(trackId);
         if (_deviceChain?.IsVisible == true && _deviceChain.TrackId == trackId) _deviceChain.Show(trackId);
+    }
+
+    // Swaps a plain instrument track's instrument for a dropped browser instrument (built-in
+    // or plugin). False — nothing changed — when the track can't take it in place.
+    private bool TryReplaceInstrument(BrowserItem item, int trackId)
+    {
+        if (_vm is null || !CanReplaceInstrument(trackId)) return false;
+        if (item.Kind == BrowserItemKind.BuiltinInstrument)
+        {
+            if (!Engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind)) return false;
+            if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, trackId, _kits.DefaultRhythmKit, out _);
+        }
+        else if (item.Kind == BrowserItemKind.PluginInstrument) Engine.SetTrackInstrumentPlugin(trackId, item.CatalogIndex);
+        else return false;
+        _lastInstrumentTrackId = trackId;
+        RefreshDeviceChainIfShowing(trackId);
+        _vm.StatusText = $"Changed instrument to {item.Name} (track {trackId})";
+        return true;
     }
 
     // True when an instrument dropped on this track should replace its instrument in place rather

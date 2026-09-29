@@ -198,6 +198,8 @@ int32_t nota_engine_can_undo(const NotaEngine* e) {
 int32_t nota_engine_can_redo(const NotaEngine* e) {
     return e ? (CENG(e)->canRedo() ? 1 : 0) : 0;
 }
+void nota_engine_undo_group_begin(NotaEngine* e) { if (e) ENG(e)->beginUndoGroup(); }
+void nota_engine_undo_group_end(NotaEngine* e) { if (e) ENG(e)->endUndoGroup(); }
 
 // ---- Project reset (M7-6) -------------------------------------------------
 

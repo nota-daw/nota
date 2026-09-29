@@ -176,6 +176,16 @@ public sealed partial class ArrangementView : UserControl
         Background = NotaPalette.AccentBright,
     };
 
+    // Browser drag-over: a ring over the target row's header — the scrolling tracks' and the
+    // return/master footer's (the lanes get their own wash + edge).
+    private readonly Border _headerDropRing = DropRing();
+    private readonly Border _footerDropRing = DropRing();
+    private static Border DropRing() => new()
+    {
+        IsVisible = false, IsHitTestVisible = false, Width = HeaderW,
+        BorderThickness = new Thickness(2), BorderBrush = DropEdge, Background = DropWash,
+    };
+
     // Return/Master section pinned under the scrolling tracks (no scroll).
     private readonly Canvas _footerHeaders;
     private readonly FooterLaneControl _footerLanes;
@@ -303,7 +313,7 @@ public sealed partial class ArrangementView : UserControl
         // below the tracks) so instruments/samples can be dropped anywhere.
         DragDrop.SetAllowDrop(scroller, true);
         DragDrop.AddDragOverHandler(scroller, OnLaneDragOver);
-        DragDrop.AddDragLeaveHandler(scroller, (_, _) => { DropTrackIndex = -1; _lanes.InvalidateVisual(); });
+        DragDrop.AddDragLeaveHandler(scroller, (_, _) => SetDropTrack(-1));
         DragDrop.AddDropHandler(scroller, OnLaneDrop);
         // Right-click the empty area below the tracks → paste a copied track there (the
         // header cards / lanes are top-anchored, so clicks below them land on the scroller).
@@ -343,6 +353,11 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(_footerLanes, 1);
         _footer.Children.Add(footerHeaderPanel);
         _footer.Children.Add(_footerLanes);
+        // Effects / presets dropped on a return or the master go on that bus.
+        DragDrop.SetAllowDrop(_footer, true);
+        DragDrop.AddDragOverHandler(_footer, OnFooterDragOver);
+        DragDrop.AddDragLeaveHandler(_footer, (_, _) => SetFooterDropRow(-1));
+        DragDrop.AddDropHandler(_footer, OnFooterDrop);
 
         // Bottom: horizontal scrollbar under the lanes.
         var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -993,13 +1008,67 @@ public sealed partial class ArrangementView : UserControl
     {
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
-        int ti = ok ? RowAtY(e.GetPosition(_lanes).Y) : -1;
-        if (ti != DropTrackIndex) { DropTrackIndex = ti; _lanes.InvalidateVisual(); }
+        SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
+    }
+
+    // Marks row ti (-1 = none) as the browser drop target: lane wash + header ring.
+    private void SetDropTrack(int ti)
+    {
+        if (ti == DropTrackIndex) return;
+        DropTrackIndex = ti;
+        _lanes.InvalidateVisual();
+        _headerDropRing.IsVisible = ti >= 0 && ti < _tracks.Count;
+        if (!_headerDropRing.IsVisible) return;
+        Canvas.SetTop(_headerDropRing, RowTop(ti));
+        _headerDropRing.Height = RowHeightAt(ti);
+    }
+
+    // The return/master footer row at y: returns first, master last; -1 outside.
+    private int FooterRowAt(double y)
+    {
+        int row = (int)Math.Floor(y / FooterRowH);
+        return y >= 0 && row <= _returns.Count ? row : -1;
+    }
+    private int FooterRowTrackId(int row)
+        => row < 0 ? -1 : row < _returns.Count ? _returns[row].Id : _engine?.MasterTrackId ?? -1;
+
+    // Only effects and presets have a home on a bus; instruments / samples belong on tracks.
+    private static bool IsBusDrop()
+        => BrowserView.CurrentDrag is { Kind: BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.Preset };
+
+    private void OnFooterDragOver(object? sender, DragEventArgs e)
+    {
+        bool ok = IsBusDrop();
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        SetFooterDropRow(ok ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
+    }
+
+    private void OnFooterDrop(object? sender, DragEventArgs e)
+    {
+        int row = FooterRowAt(e.GetPosition(_footerHeaders).Y);
+        SetFooterDropRow(-1);
+        if (!IsBusDrop() || BrowserView.CurrentDrag is not { } item) return;
+        int trackId = FooterRowTrackId(row);
+        if (trackId <= 0) return;
+        ItemDropped?.Invoke(item, trackId, 0);
+        e.Handled = true;
+    }
+
+    internal int FooterDropRow = -1;   // footer row under a browser drag (-1 none); drawn by FooterLaneControl
+    private void SetFooterDropRow(int row)
+    {
+        if (row == FooterDropRow) return;
+        FooterDropRow = row;
+        _footerLanes.InvalidateVisual();
+        _footerDropRing.IsVisible = row >= 0;
+        if (row < 0) return;
+        Canvas.SetTop(_footerDropRing, row * FooterRowH);
+        _footerDropRing.Height = FooterRowH;
     }
 
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
-        DropTrackIndex = -1; _lanes.InvalidateVisual();
+        SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;
         var p = e.GetPosition(_lanes);
@@ -1432,6 +1501,7 @@ public sealed partial class ArrangementView : UserControl
             _headers.Children.Add(card);
         }
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
+        _headers.Children.Add(_headerDropRing);  // browser drop target (kept invisible until a drag)
         _headers.Height = Math.Max(RowHeight, RowsHeight);
     }
 
@@ -2172,6 +2242,7 @@ public sealed partial class ArrangementView : UserControl
         Canvas.SetLeft(master, 0);
         Canvas.SetTop(master, y);
         _footerHeaders.Children.Add(master);
+        _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
     }
 
     private Control BuildSlimRow(string title, string sub, int colorIndex, int trackId, string bgKey, bool masterSpine = false)
@@ -2278,6 +2349,7 @@ public sealed partial class ArrangementView : UserControl
     // Browser drag-over: the lane the drop would land on glows (bright accent wash + edge).
     private static readonly IBrush DropWash = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
     private static readonly IBrush DropEdge = NotaPalette.Wash(NotaPalette.AccentBright, 0xC0);
+    private static readonly IPen DropEdgePen = new Pen(DropEdge, 2);
     internal int DropTrackIndex = -1;   // -1 = no drag over; set by OnLaneDragOver, drawn by LaneControl
     // In-progress audio take (M-fix): audio clips only materialise on stop, so a
     // translucent red region grows from the take start to the playhead as feedback.

@@ -855,6 +855,12 @@ public:
     bool redo();
     bool canUndo() const { return !undoStack_.empty(); }
     bool canRedo() const { return !redoStack_.empty(); }
+    // Undo group: every checkpoint pushed between begin and end collapses into one undo
+    // step (the state before the first edit), so a compound UI edit — e.g. swapping a
+    // device in place as add + move + remove — undoes with one step. Nests; an end
+    // without a begin is ignored.
+    void beginUndoGroup();
+    void endUndoGroup();
 
     // --- offline render (tests / export) ---
     void renderOffline(float* out, int32_t frames);
@@ -1054,6 +1060,8 @@ private:
     std::vector<std::shared_ptr<Graph>> undoStack_;
     std::vector<std::shared_ptr<Graph>> redoStack_;
     static constexpr size_t kMaxUndoDepth = 128;
+    int32_t undoGroupDepth_ = 0;     // open beginUndoGroup() calls
+    size_t  undoGroupBase_  = 0;     // undoStack_ size when the outermost group began
 
     std::atomic<float> masterVolume_{1.0f};
     std::atomic<float> masterPeakL_{0.0f};

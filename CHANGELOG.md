@@ -16,9 +16,18 @@ created, and the build-and-publish run starts.
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Added
+- Dropping an effect from the browser onto Devices puts it where you point: between cards
+  (an accent bar marks the spot) or in place of the card under the pointer (the card is
+  outlined). Dropping an instrument there replaces the track's instrument. Either way it is
+  one undo step.
+- Effects and presets can be dropped on a return track or the master in the arrangement.
+
 ### Changed
 - The first time you switch to automation mode, each track that already has automation
   shows its first automated parameter instead of Volume.
+- While dragging from the browser over the arrangement, the target track is outlined in its
+  header too, and the outline stays visible over the lane's clips.
 
 ### Fixed
 - Reordering or removing effects in Devices no longer scrambles their automation: each lane

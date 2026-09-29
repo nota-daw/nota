@@ -11693,6 +11693,30 @@ Console.WriteLine("-- overwrite on drag (carve) --");
 // bug02: select all clips, move 1.1→2.1, then 2.1→3.1 (or →5.1). Moving the clips one by
 // one let an early clip land on a not-yet-moved group member and carve it (clips vanished
 // or got cut). The atomic group move only carves clips that stay put.
+Console.WriteLine("-- undo group (device swap in place) --");
+{
+    // A Devices-panel drop that replaces a card is add + move + remove; in an undo group
+    // it must undo (and redo) as one step.
+    using var ue = new NotaEngine();
+    int t = ue.AddAudioTrack();
+    ue.AddBuiltinDevice(t, 0); ue.AddBuiltinDevice(t, 2);   // EQ, Reverb
+    string Chain() { var k = new int[ue.TrackDeviceCount(t)]; for (int i = 0; i < k.Length; i++) k[i] = ue.TrackDeviceBuiltinKind(t, i); return string.Join(",", k); }
+    string before = Chain();
+    ue.BeginUndoGroup();
+    int n = ue.AddBuiltinDevice(t, 3);   // Delay, appended
+    ue.MoveDevice(t, n, 0);              // → in place of the EQ …
+    ue.RemoveDevice(t, 1);               // … which is dropped
+    ue.EndUndoGroup();
+    string swapped = Chain();
+    Check(swapped == "3,2", $"swap in place: Delay replaces EQ ({swapped})");
+    Check(ue.Undo() && Chain() == before, $"one undo restores the chain ({Chain()} vs {before})");
+    Check(ue.Redo() && Chain() == swapped, "one redo re-applies the swap");
+    Check(ue.Undo() && ue.Undo() && ue.TrackDeviceCount(t) == 1, "earlier edits stay separate steps");
+    ue.EndUndoGroup();                   // an unmatched end is ignored
+    ue.AddBuiltinDevice(t, 4);
+    Check(ue.Undo() && ue.TrackDeviceCount(t) == 1, "edits after the group checkpoint normally");
+}
+
 Console.WriteLine("-- group move (no self-carve) --");
 {
     using var ge = new NotaEngine();
