@@ -447,31 +447,34 @@ public sealed partial class ArrangementView
                 // Nothing actually moved (snap kept every start, no row change) → don't touch
                 // the model, so a jiggle-and-release doesn't create a no-op undo step.
                 bool moved = rowDelta != 0 || _groupMove.Any(m => Math.Abs(m.vm.StartBeat - m.origStart) > 1e-9);
-                bool keptDeviceAuto = false;
+                bool committed = false;
                 if (eng is not null && moved)
-                    // Descending clip index: cross-track moves erase from the source and
-                    // would otherwise invalidate lower indices on the same track.
-                    foreach (var m in _groupMove.OrderByDescending(m => m.clip))
+                {
+                    // One atomic group move: moving the clips one by one let an early clip
+                    // carve a not-yet-moved member of the group (clips vanished / got cut).
+                    var moves = _groupMove.Select(m =>
                     {
                         int destRow = m.origRow + rowDelta;
                         int destTrack = (rowDelta != 0 && destRow >= 0 && destRow < _o._tracks.Count)
                             ? _o._tracks[destRow].Id : m.track;
-                        if (destTrack != m.track)
-                        {
-                            eng.MoveClipToTrack(m.track, m.clip, destTrack, m.vm.StartBeat);
-                            keptDeviceAuto |= eng.LastMoveKeptDeviceAutomation();
-                        }
-                        else eng.MoveClip(m.track, m.clip, m.vm.StartBeat);
-                        // Same-track moves keep their clip index, so an open editor on one of
-                        // them stays valid — but its START read-out is now off.
-                        if (rowDelta == 0) _o.RaiseClipGeometryChanged(m.track, m.clip);
-                    }
-                if (keptDeviceAuto)   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
-                    _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
+                        return (m.track, m.clip, destTrack, m.vm.StartBeat);
+                    }).ToArray();
+                    committed = eng.MoveClipBlock(moves);
+                    // Same-track moves keep their clip index, so an open editor on one of
+                    // them stays valid — but its START read-out is now off.
+                    if (committed && rowDelta == 0)
+                        foreach (var m in _groupMove) _o.RaiseClipGeometryChanged(m.track, m.clip);
+                    if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
+                        _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
+                }
                 _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
                 e.Pointer.Capture(null);
-                if (moved && rowDelta != 0) _o.Select(-1, -1);   // indices changed → drop stale selection
-                if (moved) _o.Refresh(); else InvalidateVisual();
+                if (moved)
+                {
+                    _o.Refresh();   // also restores the preview if the engine rejected the move
+                    if (committed) _o.ReselectPlaced();   // cross-track moves change indices
+                }
+                else InvalidateVisual();
                 return;
             }
 

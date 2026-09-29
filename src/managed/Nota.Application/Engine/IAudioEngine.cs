@@ -112,6 +112,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Moves a clip to another same-type track — instrument→instrument or
     /// audio→audio (atomic). Same-track == MoveClip.</summary>
     void MoveClipToTrack(int srcTrackId, int clipIndex, int destTrackId, double newStartBeat);
+    /// <summary>Moves a group of clips at once (multi-selection drag): they carve only the
+    /// clips that stay put, never each other; same-track clips keep their index. One undo
+    /// step; <see cref="LastPlacedClips"/> reports each new position in request order.</summary>
+    bool MoveClipBlock((int trackId, int clipIndex, int destTrackId, double newStartBeat)[] moves);
     void TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats);
     /// <summary>Grid resize for an audio clip (grid-relative): warped clips (or unwarped
     /// clips dragged past their source length) stretch; unwarped clips within source

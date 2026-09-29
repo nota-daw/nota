@@ -378,6 +378,13 @@ public:
     // or audio→audio; atomic — both tracks change in one publish). Same-track falls
     // back to moveClip.
     bool    moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sourceTrackId, double newStartBeat);
+    // Group move (multi-selection drag): every clip moves at once, so a moved clip only
+    // carves the clips that stay put — never another member of the group. Clips that stay
+    // on their track keep their index; cross-track ones are appended to the destination.
+    // All-or-nothing validation, one undo step; lastPlaced() reports each clip's new
+    // (trackId, clipIndex) in request order.
+    struct ClipMoveReq { int32_t srcTrackId; int32_t clipIndex; int32_t dstTrackId; double newStartBeat; };
+    bool    moveClipBlock(const std::vector<ClipMoveReq>& moves);
     bool    trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, double newLengthBeats);
     // Grid resize for an audio clip (grid-relative): warped clips (or unwarped
     // clips dragged past their source length) stretch to newLengthBeats; unwarped

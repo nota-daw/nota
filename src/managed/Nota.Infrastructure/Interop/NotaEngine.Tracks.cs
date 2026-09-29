@@ -82,6 +82,18 @@ public sealed partial class NotaEngine
     public void MoveClipToTrack(int srcTrackId, int clipIndex, int destTrackId, double newStartBeat)
     { ThrowIfDisposed(); Check(NativeMethods.ClipMoveToTrack(_handle, srcTrackId, clipIndex, destTrackId, newStartBeat)); }
 
+    /// <summary>Moves a group of clips at once (multi-selection drag): they carve only the clips
+    /// that stay put, never each other; same-track clips keep their index. One undo step;
+    /// <see cref="LastPlacedClips"/> reports each clip's new position in request order.</summary>
+    public bool MoveClipBlock((int trackId, int clipIndex, int destTrackId, double newStartBeat)[] moves)
+    {
+        ThrowIfDisposed();
+        if (moves.Length == 0) return false;
+        var t = new int[moves.Length]; var c = new int[moves.Length]; var d = new int[moves.Length]; var s = new double[moves.Length];
+        for (int i = 0; i < moves.Length; i++) (t[i], c[i], d[i], s[i]) = moves[i];
+        return NativeMethods.ClipsBlockMove(_handle, t, c, d, s, moves.Length) == NativeMethods.NotaResult.Ok;
+    }
+
     /// <summary>Trims/resizes a clip to a new start + length in beats.</summary>
     public void TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats)
     { ThrowIfDisposed(); Check(NativeMethods.ClipTrim(_handle, trackId, clipIndex, newStartBeat, newLengthBeats)); }

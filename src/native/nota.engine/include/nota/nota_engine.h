@@ -678,6 +678,12 @@ NOTA_API NotaResult nota_clip_move(NotaEngine* engine, int32_t track_id, int32_t
 /* Move a clip to another same-type track (instrument→instrument or audio→audio,
  * atomic). Same-track == nota_clip_move. */
 NOTA_API NotaResult nota_clip_move_to_track(NotaEngine* engine, int32_t src_track_id, int32_t clip_index, int32_t source_track_id, double new_start_beat);
+/* Group move (multi-selection drag): moves n clips at once — clip i of track_ids[i] at
+ * clip_indices[i] lands on dest_track_ids[i] at new_starts[i]. Moved clips carve only the
+ * clips that stay put (never each other); same-track clips keep their index. One undo step;
+ * nota_clips_last_placed then reports each clip's new (track, index) in request order. */
+NOTA_API NotaResult nota_clips_block_move(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices,
+                                          const int32_t* dest_track_ids, const double* new_starts, int32_t n);
 NOTA_API NotaResult nota_clip_trim(NotaEngine* engine, int32_t track_id, int32_t clip_index, double new_start_beat, double new_length_beats);
 /* Grid resize for an audio clip (grid-relative): warped clips (or unwarped clips
  * dragged past their source length) stretch; unwarped clips within source bounds

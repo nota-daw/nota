@@ -11688,6 +11688,77 @@ Console.WriteLine("-- overwrite on drag (carve) --");
     }
 }
 
+// ============ group move: the group never carves itself ======================
+// bug02: select all clips, move 1.1→2.1, then 2.1→3.1 (or →5.1). Moving the clips one by
+// one let an early clip land on a not-yet-moved group member and carve it (clips vanished
+// or got cut). The atomic group move only carves clips that stay put.
+Console.WriteLine("-- group move (no self-carve) --");
+{
+    using var ge = new NotaEngine();
+    ge.SetBpm(120); ge.SetTimeSignature(4, 4);
+    int g1 = ge.AddInstrumentTrack(), g2 = ge.AddInstrumentTrack();
+    foreach (var s in new[] { 0.0, 8, 16, 28 }) ge.AddMidiClip(g1, s, 4);
+    foreach (var s in new[] { 4.0, 12, 20, 24, 32 }) ge.AddMidiClip(g2, s, 4);
+    double[] Starts(int tid)
+    {
+        int idx = tid == g1 ? 0 : 1;
+        ge.TryGetTrackInfo(idx, out var ti);
+        var r = new double[ti.ClipCount];
+        bool lenOk = true;
+        for (int k = 0; k < ti.ClipCount; k++) { ge.TryGetClipInfo(tid, k, out var ci); r[k] = ci.StartBeat; lenOk &= Math.Abs(ci.LengthBeats - 4) < 1e-6; }
+        Check(lenOk, "group move keeps every clip's length (no trimming)");
+        Array.Sort(r); return r;
+    }
+    // Shift every clip (as the UI does: current engine indices) by delta on its own track.
+    bool ShiftAll(double delta)
+    {
+        var mv = new System.Collections.Generic.List<(int, int, int, double)>();
+        foreach (var (tid, row) in new[] { (g1, 0), (g2, 1) })
+        {
+            ge.TryGetTrackInfo(row, out var ti);
+            for (int k = 0; k < ti.ClipCount; k++) { ge.TryGetClipInfo(tid, k, out var ci); mv.Add((tid, k, tid, ci.StartBeat + delta)); }
+        }
+        return ge.MoveClipBlock(mv.ToArray());
+    }
+    string Fmt(double[] a) => string.Join(",", a);
+    Check(ShiftAll(4) && ShiftAll(4), "group move accepted");
+    Check(Fmt(Starts(g1)) == "8,16,24,36", $"track 1 after 1.1→2.1→3.1 ({Fmt(Starts(g1))})");
+    Check(Fmt(Starts(g2)) == "12,20,28,32,40", $"track 2 after 1.1→2.1→3.1 ({Fmt(Starts(g2))})");
+    Check(ShiftAll(12), "group move (+3 bars) accepted");
+    Check(Fmt(Starts(g1)) == "20,28,36,48" && Fmt(Starts(g2)) == "24,32,40,44,52",
+        $"group move +3 bars keeps every clip ({Fmt(Starts(g1))} | {Fmt(Starts(g2))})");
+    // One undo step per group move.
+    ge.Undo();
+    Check(Fmt(Starts(g1)) == "8,16,24,36" && Fmt(Starts(g2)) == "12,20,28,32,40", "group move undoes in one step");
+    // Same-track moves keep their clip index; LastPlacedClips reports them in request order.
+    ge.TryGetClipInfo(g1, 0, out var before0);
+    Check(ge.MoveClipBlock(new[] { (g1, 0, g1, before0.StartBeat + 1.0) }), "single group move accepted");
+    ge.TryGetClipInfo(g1, 0, out var after0);
+    var placed = ge.LastPlacedClips();
+    Check(Math.Abs(after0.StartBeat - before0.StartBeat - 1.0) < 1e-6 && placed.Length == 1 && placed[0] == (g1, 0),
+        "same-track group move keeps the clip index");
+    // A stationary clip in the landing range still gets carved (overwrite semantics).
+    ge.Undo();
+    Check(ge.MoveClipBlock(new[] { (g1, 0, g1, 18.0) }), "carving group move accepted");   // [8,12] → [18,22] over [16,20]
+    var spans = new System.Collections.Generic.List<string>();
+    ge.TryGetTrackInfo(0, out var cti);
+    for (int k = 0; k < cti.ClipCount; k++) { ge.TryGetClipInfo(g1, k, out var ci); spans.Add($"{ci.StartBeat}+{ci.LengthBeats}"); }
+    spans.Sort(string.CompareOrdinal);
+    bool carved = string.Join(" ", spans) == "16+2 18+4 24+4 36+4";
+    Check(carved, $"stationary clip under the landing range is carved to [16,18] ({string.Join(" ", spans)})");
+    // Cross-track: a clip moving down onto the next track while that track's clip at the same
+    // spot moves down too must not carve it.
+    using var xe = new NotaEngine();
+    xe.SetBpm(120); xe.SetTimeSignature(4, 4);
+    int x1 = xe.AddInstrumentTrack(), x2 = xe.AddInstrumentTrack(), x3 = xe.AddInstrumentTrack();
+    xe.AddMidiClip(x1, 0, 4); xe.AddMidiClip(x2, 0, 4);
+    Check(xe.MoveClipBlock(new[] { (x1, 0, x2, 0.0), (x2, 0, x3, 0.0) }), "cross-track group move accepted");
+    xe.TryGetTrackInfo(0, out var xi1); xe.TryGetTrackInfo(1, out var xi2); xe.TryGetTrackInfo(2, out var xi3);
+    Check(xi1.ClipCount == 0 && xi2.ClipCount == 1 && xi3.ClipCount == 1,
+        $"cross-track group move keeps both clips ({xi1.ClipCount}/{xi2.ClipCount}/{xi3.ClipCount})");
+    Check(!xe.MoveClipBlock(new[] { (x2, 5, x2, 0.0) }), "group move rejects a bad clip index");
+}
+
 // ============ disarming a track stops its recording ========================
 Console.WriteLine("-- disarm stops recording --");
 {

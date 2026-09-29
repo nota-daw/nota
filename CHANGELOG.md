@@ -108,6 +108,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   don't change it.
 
 ### Fixed
+- Moving several selected clips at once no longer deletes or shortens some of them. Before,
+  a second move of the same clips could make clips disappear or get cut. A group move is
+  now also a single undo step.
 - Nota Scale no longer leaves notes hanging when you change the scale, root or fold while a
   key is held, or when two held keys land on the same note.
 - Nota Length's Gate % below 100 % now shortens notes from a clip. Before, a note always

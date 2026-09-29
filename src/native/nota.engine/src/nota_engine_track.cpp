@@ -288,6 +288,13 @@ NotaResult nota_clip_move_to_track(NotaEngine* e, int32_t src_track_id, int32_t 
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->moveClipToTrack(src_track_id, clip_index, source_track_id, new_start_beat) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_clips_block_move(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices,
+                                 const int32_t* dest_track_ids, const double* new_starts, int32_t n) {
+    if (!e || !track_ids || !clip_indices || !dest_track_ids || !new_starts || n <= 0) return NOTA_ERR_INVALID_ARG;
+    std::vector<Engine::ClipMoveReq> moves; moves.reserve(n);
+    for (int32_t i = 0; i < n; ++i) moves.push_back({ track_ids[i], clip_indices[i], dest_track_ids[i], new_starts[i] });
+    return ENG(e)->moveClipBlock(moves) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clip_trim(NotaEngine* e, int32_t track_id, int32_t clip_index, double new_start_beat, double new_length_beats) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->trimClip(track_id, clip_index, new_start_beat, new_length_beats) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

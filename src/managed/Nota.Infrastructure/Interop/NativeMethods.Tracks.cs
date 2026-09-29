@@ -78,6 +78,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_move_to_track")]
     internal static partial NotaResult ClipMoveToTrack(IntPtr engine, int srcTrackId, int clipIndex, int destTrackId, double newStartBeat);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clips_block_move")]
+    internal static partial NotaResult ClipsBlockMove(IntPtr engine, int[] trackIds, int[] clipIndices, int[] destTrackIds, double[] newStarts, int n);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_trim")]
     internal static partial NotaResult ClipTrim(IntPtr engine, int trackId, int clipIndex, double newStartBeat, double newLengthBeats);
 
