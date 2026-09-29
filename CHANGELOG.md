@@ -31,6 +31,40 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- Nota Arp has a new look and two sizes: a full card and a small 260-pixel one. Switch
+  between them with S / L in the card's header. Both sizes share the same presets, and the
+  preset you pick stays selected when you switch size. The Pattern view shows the notes the arp
+  will play, one step at a time, and the Groove view has the per-step lanes. As it plays, a
+  marker moves across the steps.
+- Nota Arp's note orders now use every octave you set. For example, Up · Down over two
+  octaves goes up to the top note and back down. There are two new orders, Down · Up and
+  Diverge. A ratchet now repeats that step's note.
+- New in Nota Arp: Vel Amt sets how much the Velocity lane shapes the notes. Retrig has a
+  new Beat mode that starts the pattern again on every bar. Restart starts it from step 1.
+- Nota Arp has 30 presets. Switching presets now also resets the steps the new preset
+  doesn't set.
+- The automation menu lists all of Nota Arp's settings, and every step is under Groove.
+  MCP gets new tools for the arp: `get_arp`, `set_arp`, `set_arp_lane`, `set_arp_step` and
+  `restart_arp`.
+- Nota Chord has a new look in the same two sizes as the arp, a full card and a small
+  260-pixel one. Each of the six shifts now has its own on/off switch, a ruler from −12 to
+  +12 semitones with the interval's name, and a velocity offset you drag sideways. The
+  keyboard shows three octaves and lights the chord as it's strummed: live while you hold a
+  key, and once per bar as a preview while the transport runs.
+- Nota Chord's Fold in scale can use any key, major or minor (it used the major scale of
+  each played note). Spread now opens the chord in two steps: first every other shift goes
+  up an octave, then all of them. Velocity offsets are in MIDI steps (−64…+63), and the
+  default is Maj7 with a 30 ms strum. Projects and presets from older versions load with the
+  same shifts switched on as before.
+- Nota Chord has 34 presets. The automation menu lists its settings, and each shift's
+  semitones, switch and velocity are under Shifts. MCP gets new tools for it: `get_chord`,
+  `set_chord` and `set_chord_shift`.
+
+### Fixed
+- Nota Chord no longer leaves notes hanging when you change its shifts while a key is held,
+  or when two held keys share a note.
+
 ## [0.41.5] — 2026-09-25
 
 ### Highlights

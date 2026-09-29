@@ -727,6 +727,7 @@ bool        Engine::midiEffectBypassed(int32_t t, int32_t i) const { auto* m = m
 int32_t     Engine::midiEffectLastIn(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastIn() : -1; }
 int32_t     Engine::midiEffectLastOut(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastOut() : -1; }
 int32_t     Engine::midiEffectScope(int32_t t, int32_t i, float* out, int32_t maxN) const { auto* m = midiDeviceAt(t, i); return m ? m->midiScope(out, maxN) : 0; }
+void        Engine::midiEffectCommand(int32_t t, int32_t i, int32_t cmd) { if (auto* m = midiDeviceAt(t, i)) m->midiCommand(cmd); }
 void        Engine::setMidiEffectCcDest(int32_t t, int32_t i, int32_t dev, int32_t param) { if (auto* m = midiDeviceAt(t, i)) m->setCcDest(dev, param); }
 void        Engine::setMidiEffectCcDepth(int32_t t, int32_t i, float d) { if (auto* m = midiDeviceAt(t, i)) m->setCcDepth(d); }
 int32_t     Engine::midiEffectCcDestDevice(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->ccDestDevice() : -2; }

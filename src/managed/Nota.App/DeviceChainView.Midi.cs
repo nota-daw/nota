@@ -19,10 +19,13 @@ public sealed partial class DeviceChainView
         string name = _engine.MidiEffectName(_trackId, index);
         int kind = _engine.MidiEffectKind(_trackId, index);
         var body = _midiFactory.Resolve(kind);
+        var ctx = NewCardContext();
+        double width = body.WidthFor(_engine, _trackId, index);
         var spec = new ShellSpec(
             Name: name, Subtitle: "MIDI", DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
-            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: body.Width, Kind: ChainKind.Midi);
-        var content = body.Build(NewCardContext(), index);
+            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Midi,
+            HeaderExtra: body.HeaderAccessory(ctx, index), Compact: width < 300);
+        var content = body.Build(ctx, index);
         return BuildCardShell(spec, body.FullBleed ? content : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = content });
     }
 }

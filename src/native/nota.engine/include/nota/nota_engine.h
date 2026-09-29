@@ -889,6 +889,8 @@ NOTA_API int32_t     nota_midi_effect_last_in(const NotaEngine* engine, int32_t 
 NOTA_API int32_t     nota_midi_effect_last_out(const NotaEngine* engine, int32_t track_id, int32_t index);
 /* Float scope buffer for a MIDI effect editor (Nota Velocity in/out pairs); returns count written. */
 NOTA_API int32_t     nota_midi_effect_scope(const NotaEngine* engine, int32_t track_id, int32_t index, float* out, int32_t max_n);
+/* An editor command to a MIDI effect (Nota Arp: 1 = restart the pattern). */
+NOTA_API void        nota_midi_effect_command(NotaEngine* engine, int32_t track_id, int32_t index, int32_t cmd);
 /* Map/CC routing: the effect's CC lane modulates an audio-device param on the track. */
 NOTA_API void        nota_midi_effect_set_cc_dest(NotaEngine* engine, int32_t track_id, int32_t index, int32_t dest_device, int32_t dest_param);
 NOTA_API void        nota_midi_effect_set_cc_depth(NotaEngine* engine, int32_t track_id, int32_t index, float depth);

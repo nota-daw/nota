@@ -2,10 +2,16 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Arp — the built-in step arpeggiator (MidiDevice, midiKind 0). Classic "Step
-// Arp"-style: global controls (rate/sync, octaves, note order, gate, swing, hold,
-// key-retrig, transpose, loop length + mode) plus six 16-step lanes (Velocity /
-// Length / Chance / Ratchet / Transpose / On) and an inert Map-CC lane. It consumes
-// the incoming held notes and emits a generated sequence to the instrument.
+// Arp"-style: global controls (rate/sync, octaves, note order, gate, swing, velocity
+// amount, hold, retrigger Off/Note/Beat, transpose, loop length + mode) plus six 16-step
+// Groove lanes (Velocity / Length / Chance / Ratchet / Transpose / On) and an inert
+// Map-CC lane. It consumes the incoming held notes and emits a generated sequence.
+//
+// The note order walks the whole octave-expanded range (Up·Down over two octaves climbs
+// C3…B4 and back down), one note per step; a ratchet repeats that step's note. Step k of
+// the pattern plays note k of the order, so the editor can draw exactly what will play.
+// midiScope() publishes the live step and the held chord for the editor's Pattern view;
+// midiCommand(1) restarts the pattern at the next block.
 //
 // The step schedule is a PURE FUNCTION of the absolute step index (derived from the
 // beat position), not an accumulator — so it is robust to transport seeks/loops and
@@ -33,9 +39,14 @@ public:
     enum { GRate = 0, GSync, GFreeRate, GGate, GOctaves, GOctaveMode, GNoteOrder,
            GSwing, GHold, GKeyRetrig, GTranspose, GLoop, GLoopMode, kNumGlobals };
     enum { LVel = 0, LLen, LChance, LRatchet, LTransp, LOn, LCC, kNumLanes };
-    static constexpr int kNumParams = kNumGlobals + kNumLanes * kSteps;   // 13 + 7*16 = 125
+    // Appended after the lanes (param order = persisted layout, append only).
+    static constexpr int PVelAmt = kNumGlobals + kNumLanes * kSteps;   // 125: Groove velocity depth
+    static constexpr int PView   = PVelAmt + 1;                          // 126: editor size (0 = L, 1 = S) — UI state
+    static constexpr int kNumParams = PView + 1;                         // 127
 
-    enum { OrdUp = 0, OrdDown, OrdUpDown, OrdConverge, OrdAsPlayed, OrdChord, OrdRandom };
+    // Order values are persisted: new orders are appended, the editor lists them musically.
+    enum { OrdUp = 0, OrdDown, OrdUpDown, OrdConverge, OrdAsPlayed, OrdChord, OrdRandom, OrdDownUp, OrdDiverge };
+    enum { RetrigOff = 0, RetrigNote, RetrigBeat };
     enum { OctUp = 0, OctDown, OctUpDown, OctRandom };
     enum { LoopFwd = 0, LoopBack, LoopPing, LoopRandom };
 
@@ -55,13 +66,15 @@ public:
         p_[GLoopMode].store(0.0f);
         for (int s = 0; s < kSteps; ++s) {
             lane(LVel, s).store(0.8f);
-            lane(LLen, s).store(0.9f);
+            lane(LLen, s).store(1.0f);
             lane(LChance, s).store(1.0f);
             lane(LRatchet, s).store(1.0f);
             lane(LTransp, s).store(0.0f);
             lane(LOn, s).store(1.0f);
             lane(LCC, s).store(0.0f);
         }
+        p_[PVelAmt].store(1.0f);
+        p_[PView].store(0.0f);
     }
 
     int32_t midiKind() const override { return 0; }
@@ -77,21 +90,26 @@ public:
                                        "Order", "Swing", "Hold", "Retrig", "Transpose", "Loop", "LoopMode" };
             return g[i];
         }
+        if (i == PVelAmt) return "VelAmt";
+        if (i == PView) return "View";
         static thread_local char buf[16];
         static const char* ln[] = { "Vel", "Len", "Chn", "Rat", "Trn", "On", "CC" };
         std::snprintf(buf, sizeof(buf), "%s %d", ln[(i - kNumGlobals) / kSteps], (i - kNumGlobals) % kSteps + 1);
         return buf;
     }
     float paramMin(int32_t i) const override {
+        if (i >= PVelAmt) return 0.0f;
         if (i < kNumGlobals) {
             switch (i) { case GTranspose: return -24.0f; case GFreeRate: return 0.1f; case GLoop: return 1.0f; default: return 0.0f; }
         }
         switch ((i - kNumGlobals) / kSteps) { case LTransp: return -24.0f; case LRatchet: return 1.0f; default: return 0.0f; }
     }
     float paramMax(int32_t i) const override {
+        if (i >= PVelAmt) return 1.0f;
         if (i < kNumGlobals) {
-            switch (i) { case GRate: return 7.0f; case GFreeRate: return 40.0f; case GGate: return 2.0f;
-                         case GOctaves: return 8.0f; case GOctaveMode: return 3.0f; case GNoteOrder: return 6.0f;
+            switch (i) { case GRate: return 7.0f; case GFreeRate: return 50.0f; case GGate: return 2.0f;
+                         case GOctaves: return 8.0f; case GOctaveMode: return 3.0f; case GNoteOrder: return 8.0f;
+                         case GKeyRetrig: return 2.0f;
                          case GTranspose: return 24.0f; case GLoop: return 16.0f; case GLoopMode: return 3.0f; default: return 1.0f; }
         }
         switch ((i - kNumGlobals) / kSteps) { case LLen: return 2.0f; case LRatchet: return 8.0f;
@@ -110,7 +128,28 @@ public:
         return a;   // transient live state (held/pending/phase) starts fresh
     }
 
-    void reset() override { held_ = 0; physDown_ = 0; nOffs_ = 0; nOns_ = 0; arpBeat_ = 0.0; phaseRef_ = 0.0; }
+    void reset() override {
+        held_ = 0; physDown_ = 0; nOffs_ = 0; nOns_ = 0; arpBeat_ = 0.0; phaseRef_ = 0.0;
+        curLp_.store(-1, std::memory_order_relaxed); curK_.store(-1, std::memory_order_relaxed);
+        heldLive_.store(0, std::memory_order_relaxed);
+    }
+
+    // Editor commands: 1 = restart the pattern (step 1) at the next block.
+    void midiCommand(int32_t cmd) override { if (cmd == 1) restartReq_.store(true, std::memory_order_relaxed); }
+
+    // Editor telemetry: [0] loop position of the sounding step (-1 = idle), [1] its pattern
+    // step counter, [2] notes held right now, [3] n = chord size, [4..4+n) the chord in held
+    // order — the held notes, or the last chord played once released.
+    int32_t midiScope(float* out, int32_t maxN) const override {
+        if (!out || maxN < 4) return 0;
+        out[0] = (float)curLp_.load(std::memory_order_relaxed);
+        out[1] = (float)curK_.load(std::memory_order_relaxed);
+        out[2] = (float)heldLive_.load(std::memory_order_relaxed);
+        int n = std::min(chordN_.load(std::memory_order_acquire), std::min(kMaxHeld, (int)maxN - 4));
+        out[3] = (float)n;
+        for (int i = 0; i < n; ++i) out[4 + i] = (float)chord_[i].load(std::memory_order_relaxed);
+        return 4 + n;
+    }
 
     // Map/CC routing (the CC lane modulates a target audio-device param).
     int32_t ccDestDevice() const override { return ccDev_.load(std::memory_order_relaxed); }
@@ -128,8 +167,9 @@ public:
 
         const double b0 = playing ? beatStart : arpBeat_;
         const double b1 = b0 + frames / spb;
-        const bool retrig = p_[GKeyRetrig].load(std::memory_order_relaxed) > 0.5f;
+        const int  retrig = std::clamp((int)std::lround(p_[GKeyRetrig].load(std::memory_order_relaxed)), 0, 2);
         const bool hold   = p_[GHold].load(std::memory_order_relaxed) > 0.5f;
+        if (restartReq_.exchange(false, std::memory_order_relaxed)) { phaseRef_ = b0; nOns_ = 0; }
 
         // 1) Fold input into the held set (input notes are consumed by the arp).
         for (int i = 0; i < nIn; ++i) {
@@ -140,12 +180,14 @@ public:
                 if (fresh) held_ = 0;
                 if (physDown_ < 127) physDown_++;
                 addHeld(e.pitch, e.vel);
-                if (fresh && retrig) phaseRef_ = b0 + e.off / spb;   // restart the pattern at the key-press
+                if (fresh && retrig == RetrigNote) phaseRef_ = b0 + e.off / spb;   // restart the pattern at the key-press
             } else {
                 if (physDown_ > 0) physDown_--;
                 if (!hold) removeHeld(e.pitch);
             }
         }
+
+        publishChord();
 
         // 2) Fire due pending note-ons (ratchet tails) and note-offs from earlier blocks.
         firePendingOns(out, nOut, maxOut, b0, b1, spb, frames);
@@ -155,18 +197,31 @@ public:
         const double stepBeats = currentStepBeats(spb);
         if (stepBeats > 1e-6 && held_ > 0) {
             const double swing = std::clamp(p_[GSwing].load(std::memory_order_relaxed), 0.0f, 1.0f);
-            long kLo = (long)std::floor((b0 - phaseRef_) / stepBeats) - 1;
-            long kHi = (long)std::ceil((b1 - phaseRef_) / stepBeats) + 1;
+            const double ref = retrig == RetrigBeat ? 0.0 : phaseRef_;   // Beat: bar-aligned grid
+            long kLo = (long)std::floor((b0 - ref) / stepBeats) - 1;
+            long kHi = (long)std::ceil((b1 - ref) / stepBeats) + 1;
             for (long k = kLo; k <= kHi; ++k) {
                 if (k < 0) continue;
-                double stepBeat = phaseRef_ + k * stepBeats;
+                double stepBeat = ref + k * stepBeats;
                 if (k % 2 == 1) stepBeat += swing * stepBeats * 0.5;
                 if (stepBeat < b0 || stepBeat >= b1) continue;
-                // Publish the step's CC-lane value (independent of note gating) for Map routing.
+                // Beat retrigger: the pattern starts over on every bar (4 beats).
+                long kp = k;
+                if (retrig == RetrigBeat) {
+                    const double bar = std::floor(k * stepBeats / 4.0 + 1e-9) * 4.0;
+                    kp = k - (long)std::ceil(bar / stepBeats - 1e-9);
+                    if (kp < 0) kp = 0;
+                }
                 const int loop = std::clamp((int)std::lround(p_[GLoop].load(std::memory_order_relaxed)), 1, kSteps);
-                ccOut_.store(lane(LCC, loopPos(k, loop)).load(std::memory_order_relaxed) / 127.0f, std::memory_order_relaxed);
-                emitStep(k, stepBeat, stepBeats, b0, b1, spb, frames, out, nOut, maxOut);
+                const int lp = loopPos(kp, loop);
+                curLp_.store(lp, std::memory_order_relaxed);
+                curK_.store((int32_t)std::min<long>(kp, 1 << 30), std::memory_order_relaxed);
+                // Publish the step's CC-lane value (independent of note gating) for Map routing.
+                ccOut_.store(lane(LCC, lp).load(std::memory_order_relaxed) / 127.0f, std::memory_order_relaxed);
+                emitStep(k, kp, lp, stepBeat, stepBeats, b0, b1, spb, frames, out, nOut, maxOut);
             }
+        } else if (held_ == 0 && nOns_ == 0 && nOffs_ == 0) {
+            curLp_.store(-1, std::memory_order_relaxed);
         }
         arpBeat_ = b1;
     }
@@ -224,11 +279,9 @@ private:
         }
     }
 
-    // --- one step ---
-    void emitStep(long stepAbs, double stepBeat, double stepBeats, double b0, double b1, double spb, int32_t frames,
+    // --- one step --- (stepAbs seeds chance; kp = pattern step picks the note; lp = lane slot)
+    void emitStep(long stepAbs, long kp, int lp, double stepBeat, double stepBeats, double b0, double b1, double spb, int32_t frames,
                   MidiEv* out, int& nOut, int maxOut) {
-        const int loop = std::clamp((int)std::lround(p_[GLoop].load(std::memory_order_relaxed)), 1, kSteps);
-        const int lp = loopPos(stepAbs, loop);
         if (lane(LOn, lp).load(std::memory_order_relaxed) < 0.5f) return;
         if (rnd01(stepAbs, 11) >= std::clamp(lane(LChance, lp).load(std::memory_order_relaxed), 0.0f, 1.0f)) return;
 
@@ -236,24 +289,26 @@ private:
         const float lenL = std::clamp(lane(LLen, lp).load(std::memory_order_relaxed), 0.0f, 2.0f);
         const int   ratch = std::clamp((int)std::lround(lane(LRatchet, lp).load(std::memory_order_relaxed)), 1, 8);
         const float velL = std::clamp(lane(LVel, lp).load(std::memory_order_relaxed), 0.0f, 1.0f);
+        const float amt  = std::clamp(p_[PVelAmt].load(std::memory_order_relaxed), 0.0f, 1.0f);
+        const float velK = 1.0f - amt + amt * velL;   // Groove velocity, scaled by VelAmt
         const int   trn = (int)std::lround(p_[GTranspose].load(std::memory_order_relaxed) + lane(LTransp, lp).load(std::memory_order_relaxed));
         const int   order = (int)std::lround(p_[GNoteOrder].load(std::memory_order_relaxed));
 
         int seqLen = 0; buildSequence(seqBuf_, seqVel_, seqLen);
         if (seqLen <= 0) return;
+        const int oc = 12 * octaveRandom(kp);
 
         const double subLen = stepBeats / ratch;
+        long idx = (order == OrdRandom) ? (long)(rnd01(kp, 7) * seqLen) : kp % seqLen;
+        idx = ((idx % seqLen) + seqLen) % seqLen;
         for (int r = 0; r < ratch; ++r) {
             const double onBeat  = stepBeat + r * subLen;
             const double offBeat = onBeat + std::max(0.05, (double)lenL) * subLen * gate;
             if (order == OrdChord) {
-                const int oc = octaveRandom(stepAbs);
-                for (int h = 0; h < held_; ++h)
-                    place(heldBuf_[h].pitch + 12 * oc + trn, velL * heldBuf_[h].vel, onBeat, offBeat, b0, b1, spb, frames, out, nOut, maxOut);
+                for (int h = 0; h < seqLen; ++h)
+                    place(seqBuf_[h] + oc + trn, velK * seqVel_[h], onBeat, offBeat, b0, b1, spb, frames, out, nOut, maxOut);
             } else {
-                long idx = (order == OrdRandom) ? (long)(rnd01(stepAbs * 8 + r, 7) * seqLen) : ((stepAbs * ratch + r) % seqLen);
-                idx = ((idx % seqLen) + seqLen) % seqLen;
-                place(seqBuf_[idx] + trn, velL * seqVel_[idx], onBeat, offBeat, b0, b1, spb, frames, out, nOut, maxOut);
+                place(seqBuf_[idx] + oc + trn, velK * seqVel_[idx], onBeat, offBeat, b0, b1, spb, frames, out, nOut, maxOut);
             }
         }
     }
@@ -271,9 +326,11 @@ private:
         }
     }
 
-    // --- note sequence (ordered + octave-expanded pitches from the held chord) ---
+    // --- note sequence: the held chord expanded over the octaves (blocks in OctMode order),
+    //     then walked in the note order across that whole range. Chord = all of it at once.
     static constexpr int kSeqMax = 256;
     int seqBuf_[kSeqMax]; float seqVel_[kSeqMax];
+    int rangeBuf_[kSeqMax]; float rangeVel_[kSeqMax];
     void buildSequence(int* seq, float* vel, int& len) {
         len = 0; if (held_ <= 0) return;
         int idx[kMaxHeld], m = held_;
@@ -281,16 +338,6 @@ private:
         const int order = (int)std::lround(p_[GNoteOrder].load(std::memory_order_relaxed));
         if (order != OrdAsPlayed)
             std::sort(idx, idx + m, [&](int a, int b) { return heldBuf_[a].pitch < heldBuf_[b].pitch; });
-        int pat[kMaxHeld * 2], pn = 0;
-        switch (order) {
-            case OrdDown: for (int i = m - 1; i >= 0; --i) pat[pn++] = idx[i]; break;
-            case OrdUpDown: for (int i = 0; i < m; ++i) pat[pn++] = idx[i];
-                            for (int i = m - 2; i >= 1; --i) pat[pn++] = idx[i]; break;
-            case OrdConverge: { int lo = 0, hi = m - 1; bool low = true;
-                                while (lo <= hi) { pat[pn++] = low ? idx[lo++] : idx[hi--]; low = !low; } break; }
-            default: for (int i = 0; i < m; ++i) pat[pn++] = idx[i]; break;   // Up / AsPlayed / Random
-        }
-        if (pn == 0) pat[pn++] = idx[0];
         const int octs = std::clamp((int)std::lround(p_[GOctaves].load(std::memory_order_relaxed)), 1, 8);
         const int octMode = (int)std::lround(p_[GOctaveMode].load(std::memory_order_relaxed));
         int oo[16], on = 0;
@@ -298,18 +345,42 @@ private:
             case OctDown: for (int o = octs - 1; o >= 0; --o) oo[on++] = o; break;
             case OctUpDown: for (int o = 0; o < octs; ++o) oo[on++] = o;
                             for (int o = octs - 2; o >= 1; --o) oo[on++] = o; break;
-            default: for (int o = 0; o < octs; ++o) oo[on++] = o; break;   // Up / Random
+            case OctRandom: oo[on++] = 0; break;   // a random octave per step instead
+            default: for (int o = 0; o < octs; ++o) oo[on++] = o; break;
         }
-        if (on == 0) oo[on++] = 0;
-        for (int oi = 0; oi < on && len < kSeqMax; ++oi)
-            for (int pi = 0; pi < pn && len < kSeqMax; ++pi) {
-                seq[len] = heldBuf_[pat[pi]].pitch + 12 * oo[oi];
-                vel[len] = heldBuf_[pat[pi]].vel; ++len;
+        int n = 0;
+        for (int oi = 0; oi < on && n < kSeqMax; ++oi)
+            for (int i = 0; i < m && n < kSeqMax; ++i) {
+                rangeBuf_[n] = heldBuf_[idx[i]].pitch + 12 * oo[oi];
+                rangeVel_[n] = heldBuf_[idx[i]].vel; ++n;
             }
+        auto push = [&](int i) { if (len < kSeqMax) { seq[len] = rangeBuf_[i]; vel[len] = rangeVel_[i]; ++len; } };
+        switch (order) {
+            case OrdDown:   for (int i = n - 1; i >= 0; --i) push(i); break;
+            case OrdUpDown: for (int i = 0; i < n; ++i) push(i); for (int i = n - 2; i >= 1; --i) push(i); break;
+            case OrdDownUp: for (int i = n - 1; i >= 0; --i) push(i); for (int i = 1; i <= n - 2; ++i) push(i); break;
+            case OrdConverge: case OrdDiverge: {
+                int c[kSeqMax], cn = 0, lo = 0, hi = n - 1;
+                while (lo <= hi) { c[cn++] = lo; if (lo != hi) c[cn++] = hi; ++lo; --hi; }
+                if (order == OrdConverge) for (int i = 0; i < cn; ++i) push(c[i]);
+                else for (int i = cn - 1; i >= 0; --i) push(c[i]);
+                break;
+            }
+            default: for (int i = 0; i < n; ++i) push(i); break;   // Up / AsPlayed / Random / Chord
+        }
     }
-    int octaveRandom(long stepAbs) {
+    int octaveRandom(long kp) {
         const int octs = std::clamp((int)std::lround(p_[GOctaves].load(std::memory_order_relaxed)), 1, 8);
-        return ((int)std::lround(p_[GOctaveMode].load(std::memory_order_relaxed)) == OctRandom) ? (int)(rnd01(stepAbs, 5) * octs) : 0;
+        return ((int)std::lround(p_[GOctaveMode].load(std::memory_order_relaxed)) == OctRandom) ? (int)(rnd01(kp, 5) * octs) : 0;
+    }
+
+    // Snapshot the chord for the editor (audio thread → UI): the held notes, or — once all are
+    // released — the last chord that played, so the Pattern view keeps showing it.
+    void publishChord() {
+        heldLive_.store(held_, std::memory_order_relaxed);
+        if (held_ <= 0) return;
+        for (int i = 0; i < held_; ++i) chord_[i].store(heldBuf_[i].pitch, std::memory_order_relaxed);
+        chordN_.store(held_, std::memory_order_release);
     }
 
     int loopPos(long stepAbs, int loop) {
@@ -342,6 +413,9 @@ private:
 
     double sr_ = 44100.0, arpBeat_ = 0.0, phaseRef_ = 0.0;
     std::atomic<float> ccOut_{0.0f}, ccDepth_{1.0f};
+    std::atomic<bool> restartReq_{false};
+    std::atomic<int32_t> curLp_{-1}, curK_{-1}, heldLive_{0}, chordN_{0};
+    std::atomic<int32_t> chord_[kMaxHeld] {};
     std::atomic<int32_t> ccDev_{-2}, ccParam_{-1};
     std::atomic<float> p_[kNumParams];
 };

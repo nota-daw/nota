@@ -91,7 +91,7 @@ public sealed partial class DeviceChainView
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
         Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null,
-        CardPresets? Presets = null);
+        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false);   // Compact: a mini card — no type badge, a narrower preset picker
 
     /// <summary>A card's own preset list, in place of the factory presets for its kind — the
     /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
@@ -115,7 +115,8 @@ public sealed partial class DeviceChainView
         // a new slot; Delete removes the selected card.
         var name = new TextBlock
         {
-            Text = s.Name, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+            // A compact card drops the family prefix ("Nota Arp" → "Arp") to leave room for the presets.
+            Text = s.Compact && s.Name.StartsWith("Nota ", StringComparison.Ordinal) ? s.Name[5..] : s.Name, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
@@ -139,7 +140,8 @@ public sealed partial class DeviceChainView
                 badge.Text = type.Length > 0 ? $"{type} · {voices}" : voices;
             });
         }
-        if (badge.Text.Length > 0 || s.IsInstrument) right.Children.Add(badge);
+        if ((badge.Text.Length > 0 || s.IsInstrument) && !s.Compact) right.Children.Add(badge);
+        if (s.HeaderExtra is { } headerExtra) right.Children.Add(headerExtra);
 
         if (s.Bypassable)
         {
@@ -200,7 +202,10 @@ public sealed partial class DeviceChainView
             int n = presets.Count; if (n == 0) return;
             ApplyPreset(curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n);
         }
-        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset));
+        // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
+        // the preset belongs to the device, not to the card size.
+        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+            nameWidth: s.Compact ? 78 : 132));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
 

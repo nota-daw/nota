@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — the Nota Chord editor (MIDI effect kind 1), mockup 3b (700×260 on the
-// shared shell): a LIVE strip (chord-type presets · Strum · Keep root · Fold in scale) over
-// a body of a SHIFTS stack (six voices — semitone offset + relative velocity, active voices
-// lit) beside a RESULT panel (the resulting chord for a reference C3 as note names + a
-// two-octave keyboard preview lighting played vs added, plus Voices count + Spread).
-// Detune is intentionally absent — the note stream carries integer pitch to the instrument.
+// Detail · Devices — the Nota Chord editor (MIDI effect kind 1), almanac mockups 1a / 1b.
+// Two sizes share every value; the S / L toggle in the shell header flips the card (the
+// choice is the device's "View" param, so it persists with the project):
+//   • L 700 × 260 — TYPE list (Maj7 / Min7 / Sus4 / 5th / Custom, Keep root, Fold in scale +
+//     its key) | SHIFTS: six rows — switch dot, semitones, a bipolar ±12 ruler, the interval
+//     name and a draggable velocity offset | RESULT: the chord's note names, a three-octave
+//     keyboard (played Brass Light, added Brass Deep, an unplayed root outlined), Strum and
+//     Spread — over a status line.
+//   • S 260 × 260 — note names + the keyboard over six vertical bipolar shift bars (the
+//     number under each toggles it), Strum / Spread knobs and the two flags. The header keeps
+//     the same preset picker as L; presets set everything, S just edits less.
+// Editing a shift turns TYPE to Custom. The keyboard animates: a held chord lights as the
+// engine strums it (telemetry), and otherwise the preview strums once per bar while the
+// transport runs, and once after each edit.
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,205 +26,542 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application;
 
 namespace Nota.App;
 
 internal sealed class ChordMidiBody : IMidiDeviceBody
 {
     // Param indices — mirror MidiChord.h.
-    private const int Voice1 = 0, Strum = 6, KeepRoot = 7, Spread = 8, Fold = 9, Vel1 = 10;
-    private const int Voices = 6;
+    internal const int Voice1 = 0, Strum = 6, KeepRoot = 7, Spread = 8, Fold = 9, Vel1 = 10, On1 = 16,
+                       FoldKey = 22, FoldMode = 23, PView = 24, Slots = 6;
+    private const int DefaultRoot = 48;   // C3 — the preview's input before any note was played
 
-    private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    private static readonly (string name, int[] semis)[] Templates =
+    internal static readonly (string Name, int[]? Shifts)[] Types =
     {
-        ("Maj7", new[] { 4, 7, 11 }), ("Min7", new[] { 3, 7, 10 }),
-        ("Sus4", new[] { 5, 7 }), ("5th", new[] { 7, 12 }),
+        ("Maj7", new[] { 4, 7, 11 }), ("Min7", new[] { 3, 7, 10 }), ("Sus4", new[] { 5, 7 }), ("5th", new[] { 7 }), ("Custom", null),
     };
+    private static readonly string[] Intervals = { "P1", "m2", "M2", "m3", "M3", "P4", "TT", "P5", "m6", "M6", "m7", "M7", "P8" };
+    private static readonly string[] KeyNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    private static readonly bool[] MajorPc = { true, false, true, false, true, true, false, true, false, true, false, true };
+    private static readonly bool[] MinorPc = { true, false, true, true, false, true, false, true, true, false, true, false };
 
-    private static readonly IBrush HdrBg = NotaPalette.SurfaceCard;
-    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Ground = NotaPalette.SurfaceInset;
+    private static readonly IBrush Island = NotaPalette.SurfaceCard;
     private static readonly IBrush Bd = NotaPalette.BorderDefault;
-    private static readonly IBrush Inset = NotaPalette.BgSunken;
-    private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush Rule = NotaPalette.GraphBorder;
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush BrassLit = NotaPalette.AccentBright;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
-    private static readonly IBrush Muted = NotaPalette.TextTertiary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
-    private static readonly IBrush Green = NotaPalette.Success;
-    private static readonly IBrush Card = NotaPalette.SurfaceRaised;
-    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
-    private static readonly IBrush AmberSubtle = NotaPalette.Wash(NotaPalette.Accent, 0x24);
+    private static readonly IBrush Cap = NotaPalette.TextTertiary;
+    private static readonly IBrush Axis = NotaPalette.TextAxis;
+
+    // Per-card editor state that survives rebuilds — UI only, not persisted.
+    private sealed class Ui { public bool CustomPinned; public long EditTicks; }
+    private static readonly Dictionary<(int, int), Ui> UiState = new();
+    private static Ui UiFor(int track, int mi) { if (!UiState.TryGetValue((track, mi), out var u)) UiState[(track, mi)] = u = new Ui(); return u; }
 
     public double Width => 700;
     public bool FullBleed => true;
 
+    private static bool HasLayout(IAudioEngine e, int track, int mi) => e.MidiEffectParamCount(track, mi) > PView;
+    private static bool IsMini(IAudioEngine e, int track, int mi) => HasLayout(e, track, mi) && e.MidiEffectGetParam(track, mi, PView) >= 0.5f;
+    public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? 260 : 700;
+
+    public Control? HeaderAccessory(DeviceCardContext ctx, int index)
+    {
+        var e = ctx.Engine; int t = ctx.TrackId;
+        if (!HasLayout(e, t, index)) return null;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        if (!IsMini(e, t, index)) row.Children.Add(MidiCardHeader.LearnButton(ctx));
+        row.Children.Add(MidiCardHeader.SizeToggle(ctx, index, PView, () => IsMini(e, t, index)));
+        return row;
+    }
+
+    // ---- the chord model (mirrors MidiChord::process) ------------------------------------------
+    internal readonly record struct Note(int Pitch, bool Played, int Vel);
+
+    internal static List<Note> Compute(Func<int, float> g, int root, int inVel = 100)
+    {
+        bool keep = g(KeepRoot) >= 0.5f, fold = g(Fold) >= 0.5f, minor = g(FoldMode) >= 0.5f;
+        int key = (((int)Math.Round(g(FoldKey))) % 12 + 12) % 12;
+        int level = Math.Min(2, (int)Math.Floor(Math.Clamp(g(Spread) / 100.0, 0, 1) * 3 + 1e-9));
+        var list = new List<Note>();
+        void Add(int p, int v, bool played)
+        {
+            if (p is < 0 or > 127) return;
+            int i = list.FindIndex(n => n.Pitch == p);
+            if (i >= 0) { if (played) list[i] = new Note(p, true, v); return; }
+            list.Add(new Note(p, played, v));
+        }
+        if (keep) Add(root, inVel, true);
+        int k = 0;
+        for (int s = 0; s < Slots; s++)
+        {
+            if (g(On1 + s) < 0.5f) continue;
+            int p = root + Math.Clamp((int)Math.Round(g(Voice1 + s)), -24, 24);
+            if (fold && !(minor ? MinorPc : MajorPc)[((p - key) % 12 + 12) % 12]) p -= 1;
+            if ((k % 2 == 0 && level >= 1) || (k % 2 == 1 && level >= 2)) p += 12;
+            k++;
+            Add(p, Math.Clamp(inVel + (int)Math.Round(g(Vel1 + s)), 1, 127), false);
+        }
+        list.Sort((a, b) => a.Pitch.CompareTo(b.Pitch));
+        return list;
+    }
+
+    /// <summary>The TYPE row the active shifts match (Custom when none).</summary>
+    internal static int MatchType(Func<int, float> g)
+    {
+        var on = Enumerable.Range(0, Slots).Where(s => g(On1 + s) >= 0.5f).Select(s => (int)Math.Round(g(Voice1 + s))).OrderBy(x => x).ToArray();
+        for (int i = 0; i < Types.Length; i++)
+            if (Types[i].Shifts is { } iv && on.SequenceEqual(iv.OrderBy(x => x))) return i;
+        return Types.Length - 1;
+    }
+
+    internal static string Sgn(int v) => v > 0 ? $"+{v}" : v < 0 ? $"−{-v}" : "0";
+    internal static string IntervalName(int st) => Math.Abs(st) <= 12 ? (st < 0 ? "−" : "") + Intervals[Math.Abs(st)] : Sgn(st);
+    internal static string ScaleName(Func<int, float> g, bool shortForm)
+    {
+        string key = KeyNames[(((int)Math.Round(g(FoldKey))) % 12 + 12) % 12];
+        bool minor = g(FoldMode) >= 0.5f;
+        return shortForm ? $"{key} {(minor ? "min" : "maj")}" : $"{key} {(minor ? "minor" : "major")}";
+    }
+
+    // ---- small builders -------------------------------------------------------------------------
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
+    { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, LetterSpacing = 0.8, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
+
+    // ---- body -------------------------------------------------------------------------------------
     public Control Build(DeviceCardContext ctx, int index)
     {
-        var engine = ctx.Engine;
-        int track = ctx.TrackId, mi = index;
+        var engine = ctx.Engine; int track = ctx.TrackId, mi = index;
+        if (!HasLayout(engine, track, mi)) return new TextBlock { Text = "Nota Chord", Margin = new Thickness(8) };
         float G(int p) => engine.MidiEffectGetParam(track, mi, p);
-        void S(int p, double v) => engine.MidiEffectSetParam(track, mi, p, (float)v);
-        int Semi(int v) => (int)Math.Round(G(Voice1 + v));
+        int GI(int p) => (int)Math.Round(G(p));
+        float Def(int p) => engine.MidiEffectParamDefault(track, mi, p);
+        void Begin(int p) => engine.BeginAutomationWrite(track, AutomationTarget.MidiDeviceParam, mi, p, "");
+        void End(int p) => engine.EndAutomationWrite(track, AutomationTarget.MidiDeviceParam, mi, p, "");
+        void Learn(Control c, int p, string name) => MidiLearn.Bind(c, MidiTarget.MidiDeviceParam(track, mi, p), name);
 
+        var ui = UiFor(track, mi);
+        bool mini = IsMini(engine, track, mi);
         var readouts = new List<Action>();
-        static TextBlock Mono(string t, IBrush c, double fs = 9) { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
-        static TextBlock Cap(string t, IBrush? c = null, double fs = 8) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? Muted, VerticalAlignment = VerticalAlignment.Center };
-        static string IntervalLabel(int s) => s == 0 ? "off" : s == 12 ? "+oct" : s == -12 ? "−oct" : (s > 0 ? "+" : "−") + Math.Abs(s);
-
-        // ---- chord preview (reference root C3=60), mirroring MidiChord.h ----
-        static int FoldMajor(int iv) { int[] d = { 0, 2, 4, 5, 7, 9, 11 }; int within = ((iv % 12) + 12) % 12, octs = (iv - within) / 12, best = 0, bd = 99; foreach (int g in d) { int df = Math.Abs(g - within); if (df < bd) { bd = df; best = g; } } return octs * 12 + best; }
-        var keys = new ChordKeysViz { VerticalAlignment = VerticalAlignment.Stretch };
-        List<int> Chord(int root)
-        {
-            bool keep = G(KeepRoot) >= 0.5f, fold = G(Fold) >= 0.5f;
-            double sp = Math.Clamp(G(Spread) / 100.0, 0, 1);
-            var list = new List<int>();
-            if (keep) list.Add(root);
-            for (int v = 0; v < Voices; v++) { int s = Semi(v); if (s == 0) continue; int p = root + (fold ? FoldMajor(s) : s); if (sp > 0) p += 12 * (int)Math.Floor(sp * (v + 1) + 1e-9); if (p is >= 0 and <= 127) list.Add(p); }
-            return list.Distinct().OrderBy(x => x).ToList();
-        }
         void Refresh() { foreach (var r in readouts) r(); }
+        void Edited() { ui.EditTicks = Stopwatch.GetTimestamp(); Refresh(); }
+        void S(int p, double v) { engine.MidiEffectSetParam(track, mi, p, (float)v); }
+        void SetShift(int s, int st) { S(Voice1 + s, st); S(On1 + s, 1); ui.CustomPinned = false; Edited(); }
+        void ApplyType(int i)
+        {
+            if (Types[i].Shifts is not { } iv) { ui.CustomPinned = true; Edited(); return; }
+            for (int s = 0; s < Slots; s++) { S(Voice1 + s, s < iv.Length ? iv[s] : 0); S(On1 + s, s < iv.Length ? 1 : 0); S(Vel1 + s, 0); }
+            ui.CustomPinned = false; Edited();
+        }
+        int TypeIndex() => ui.CustomPinned ? Types.Length - 1 : MatchType(G);
+        int StrumMs() => (int)Math.Round(Math.Clamp(G(Strum), 0, 200));
+        string SpreadText() => $"{G(Spread):0} %";
 
-        // ---- generic controls -------------------------------------------------
-        Control RawSlider(int p, double min, double max, Func<double, string> fmt, double w, bool bipolar = false, double valW = 40)
+        // ---- live model: the held chord from telemetry, else the preview for the last root -----
+        var scope = new float[4 + 2 * (Slots + 1)];
+        int root = DefaultRoot, voices = 0;
+        var notes = new List<Note>();
+        var lit = new List<(int, bool)>();
+        void Poll()
         {
-            var val = Mono(fmt(G(p)), Txt); val.Width = valW; val.TextAlignment = TextAlignment.Right;
-            var fill = new Border { Height = 3, Background = Amber, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var handle = new Border { Width = 7, Height = 9, Background = Sub, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 9, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            if (w > 0) slot.Width = w;
-            slot.Children.Add(new Border { Height = 3, Background = Inset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center });
-            if (bipolar) slot.Children.Add(new Border { Width = 1, Background = Bd, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 1) });
-            slot.Children.Add(fill); slot.Children.Add(handle);
-            double Norm(double v) => (v - min) / (max - min);
-            void Vis(double v) { double W = slot.Bounds.Width, n = Norm(v); if (bipolar) { double c = W / 2, x = n * W; fill.Width = Math.Abs(x - c); fill.HorizontalAlignment = HorizontalAlignment.Left; fill.Margin = new Thickness(Math.Min(c, x), 0, 0, 0); } else { fill.Width = n * W; fill.Margin = new Thickness(0); } handle.Margin = new Thickness(Math.Clamp(n * W - 3.5, 0, Math.Max(0, W - 7)), 0, 0, 0); }
-            bool drag = false;
-            void SetX(double x) { double n = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); double v = min + n * (max - min); S(p, v); Vis(v); val.Text = fmt(v); Refresh(); }
-            slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetX(e.GetPosition(slot).X); };
-            slot.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(slot).X); };
-            slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-            MidiLearn.Bind(slot, MidiTarget.MidiDeviceParam(track, mi, p), engine.MidiEffectParamName(track, mi, p));
-            slot.SizeChanged += (_, _) => Vis(G(p));   // flexible-width sliders reposition once laid out
-            readouts.Add(() => { if (!drag) { double v = G(p); Vis(v); val.Text = fmt(v); } });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(w > 0 ? "Auto,Auto" : "*,Auto"), ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(val, 1); g.Children.Add(slot); g.Children.Add(val);
-            return g;
+            int sn = engine.MidiEffectScope(track, mi, scope);
+            int lastRoot = sn >= 4 ? (int)scope[0] : -1, held = sn >= 4 ? (int)scope[1] : 0;
+            bool bypassed = engine.MidiEffectBypassed(track, mi);
+            bool keep = G(KeepRoot) >= 0.5f;
+            lit.Clear();
+            if (held > 0 && !bypassed && lastRoot >= 0)
+            {
+                root = lastRoot;
+                int n = Math.Min((int)scope[3], (sn - 4) / 2), sounded = (int)scope[2];
+                notes = new List<Note>(n);
+                for (int i = 0; i < n; i++) { int p = (int)scope[4 + i]; notes.Add(new Note(p, keep && p == root, (int)scope[4 + n + i])); }
+                for (int i = 0; i < Math.Min(sounded, n); i++) lit.Add((notes[i].Pitch, notes[i].Played));
+            }
+            else
+            {
+                root = lastRoot >= 0 ? lastRoot : DefaultRoot;
+                notes = Compute(G, root);
+                int strum = StrumMs();
+                double ms = double.PositiveInfinity;
+                if (strum > 0 && !bypassed)
+                {
+                    double sinceEdit = Stopwatch.GetElapsedTime(ui.EditTicks).TotalMilliseconds;
+                    if (ui.EditTicks != 0 && sinceEdit < strum * notes.Count + 250) ms = sinceEdit;            // replay after an edit
+                    else if (engine.IsPlaying && engine.Bpm > 0) ms = (engine.PositionBeats % 4.0 + 4.0) % 4.0 * 60000.0 / engine.Bpm;   // once per bar
+                }
+                for (int i = 0; i < notes.Count; i++) if (ms >= i * strum) lit.Add((notes[i].Pitch, notes[i].Played));
+            }
+            voices = notes.Count;
         }
-        // Vertical-drag numeric (velocity offset).
-        Control DragNum(int p, double min, double max, Func<double, string> fmt, double w)
+        int KeyStart() { int lo = notes.Count > 0 ? Math.Min(root, notes[0].Pitch) : root; return (int)Math.Floor(lo / 12.0) * 12; }
+        string NoteList() => notes.Count == 0 ? "—" : string.Join(" ", notes.Select(n => DeviceCardKit.NoteName(n.Pitch)));
+        int RingPitch() => G(KeepRoot) >= 0.5f ? -1 : root;
+        string StatusRight() => engine.MidiEffectBypassed(track, mi) ? "bypassed" : "MIDI · latency 0 smp";
+
+        Poll();
+        Control rootView = mini ? BuildMini() : BuildLarge();
+        ctx.AddDeviceRefresher(() => { Poll(); Refresh(); });
+        Refresh();
+        return rootView;
+
+        // =========================================================================================
+        Control BuildLarge()
         {
-            var tb = Mono(fmt(G(p)), Sub, 8); tb.Width = w; tb.TextAlignment = TextAlignment.Right; tb.Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-            bool drag = false; double sy = 0, sv = 0;
-            tb.PointerPressed += (_, e) => { drag = true; sy = e.GetPosition(tb).Y; sv = G(p); e.Pointer.Capture(tb); };
-            tb.PointerMoved += (_, e) => { if (drag) { double dv = (sy - e.GetPosition(tb).Y) / 100.0 * (max - min); S(p, Math.Clamp(sv + dv, min, max)); tb.Text = fmt(G(p)); Refresh(); } };
-            tb.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-            readouts.Add(() => { if (!drag) tb.Text = fmt(G(p)); });
-            return tb;
+            // ---- TYPE ----
+            var list = new StackPanel { Margin = new Thickness(0, 3) };
+            for (int i = 0; i < Types.Length; i++)
+            {
+                int ti = i;
+                var bar = new Border { Width = 2, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left };
+                var name = new TextBlock { Text = Types[i].Name, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+                var hint = Mono(Types[i].Shifts is { } iv ? string.Join(" ", iv.Select(Sgn)) : "", Axis, 7);
+                hint.HorizontalAlignment = HorizontalAlignment.Right;
+                var rowB = new Border { Height = 18, Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new Panel { Children = { bar, new DockPanel { Margin = new Thickness(8, 0), Children = { WithDock(hint, Dock.Right), name } } } } };
+                bool hover = false;
+                void Paint()
+                {
+                    bool on = TypeIndex() == ti;
+                    rowB.Background = on ? NotaPalette.AccentSubtle : hover ? NotaPalette.GridBeat : Brushes.Transparent;
+                    bar.Background = on ? NotaPalette.Accent : Brushes.Transparent;
+                    name.Foreground = on ? Txt : Sub; name.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
+                rowB.PointerEntered += (_, _) => { hover = true; Paint(); };
+                rowB.PointerExited += (_, _) => { hover = false; Paint(); };
+                rowB.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(rowB).Properties.IsLeftButtonPressed) return; ApplyType(ti); ev.Handled = true; };
+                ToolTip.SetTip(rowB, Types[i].Shifts is null ? "Custom: your own shifts" : $"{Types[i].Name}: set the shifts to {hint.Text}");
+                readouts.Add(Paint);
+                list.Children.Add(rowB);
+            }
+            var flags = new StackPanel { Spacing = 4, Children = { Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
+                                                                   Flag(Fold, "Fold in scale", "Drop added notes outside the scale a semitone into it") } };
+            flags.Children.Add(ScaleLabel());
+            var typeFoot = new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 6), Child = flags };
+            var typeIsland = IslandBox(IslandHead(Caps("TYPE"), null), new DockPanel { Children = { WithDock(typeFoot, Dock.Bottom), list } }, 100);
+
+            // ---- SHIFTS ----
+            var rows = new Grid { Margin = new Thickness(6, 5) };
+            for (int s = 0; s < Slots; s++)
+            {
+                rows.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
+                var r = ShiftRow(s); Grid.SetRow(r, s); rows.Children.Add(r);
+            }
+            var shiftsIsland = IslandBox(IslandHead(Caps("SHIFTS"), Mono("semitones · interval · velocity", Cap, 7)), rows, 292);
+
+            // ---- RESULT ----
+            var noteText = Mono("", BrassLit); noteText.FontWeight = FontWeight.Medium;
+            var range = Mono("", Axis, 7); range.HorizontalAlignment = HorizontalAlignment.Right;
+            var legend = new DockPanel { Children = { WithDock(range, Dock.Right), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children =
+            {
+                Swatch(NotaPalette.AccentBright, null, "played"), Swatch(ChordKeysViz.Added, null, "added"), Swatch(null, NotaPalette.Accent, "root off"),
+            } } } };
+            var keys = new ChordKeysViz { Labels = true };
+            var sliders = new StackPanel { Spacing = 6, Children =
+            {
+                SliderLine("STRUM", Strum, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} ms"),
+                SliderLine("SPREAD", Spread, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} %"),
+            } };
+            var resBody = new DockPanel { Margin = new Thickness(8, 6), Children =
+            {
+                WithDock(legend, Dock.Top), WithDock(sliders, Dock.Bottom), new Border { Margin = new Thickness(0, 6), Child = keys },
+            } };
+            var resultIsland = IslandBox(IslandHead(Caps("RESULT"), noteText), resBody, double.NaN);
+            readouts.Add(() =>
+            {
+                noteText.Text = NoteList();
+                int start = KeyStart();
+                range.Text = $"{DeviceCardKit.NoteName(start)} – {DeviceCardKit.NoteName(start + 35)}";
+                keys.Set(start, lit, RingPitch());
+            });
+
+            typeIsland.Margin = new Thickness(0, 0, 5, 0); shiftsIsland.Margin = new Thickness(0, 0, 5, 0);
+            var islands = new DockPanel { Children = { WithDock(typeIsland, Dock.Left), WithDock(shiftsIsland, Dock.Left), resultIsland } };
+
+            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var statusR = Mono("", Sub);
+            readouts.Add(() =>
+            {
+                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices · strum {StrumMs()}\u2009ms · spread {SpreadText()}"
+                             + (G(Fold) >= 0.5f ? $" · fold {ScaleName(G, true)}" : "");
+                statusR.Text = StatusRight();
+            });
+            return Framed(islands, statusL, statusR);
         }
-        Control Toggle(int p, string label)
+
+        // =========================================================================================
+        Control BuildMini()
         {
-            var b = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold } };
-            void Sync() { bool on = G(p) >= 0.5f; b.Background = on ? NotaPalette.AccentSubtle : Card; b.BorderBrush = on ? NotaPalette.BorderBrass : Bd; ((TextBlock)b.Child!).Foreground = on ? NotaPalette.AccentHover : Sub; }
-            b.PointerPressed += (_, _) => { S(p, G(p) >= 0.5f ? 0 : 1); Refresh(); };
-            readouts.Add(Sync); Sync();
-            MidiLearn.Bind(b, MidiTarget.MidiDeviceParam(track, mi, p), label);
+            var noteText = Mono("", BrassLit); noteText.FontWeight = FontWeight.Medium;
+            var voicesText = Mono("", Cap, 7);
+            var head = new DockPanel { Height = 12, Children = { WithDock(voicesText, Dock.Right), noteText } };
+            var keys = new ChordKeysViz { Labels = false, KeyRadius = 0, Height = 40 };
+
+            var bars = new Grid { ColumnSpacing = 3 };
+            for (int s = 0; s < Slots; s++)
+            {
+                bars.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+                var c = ShiftColumn(s); Grid.SetColumn(c, s); bars.Children.Add(c);
+            }
+
+            var knobs = new Grid { Height = 53, ColumnDefinitions = new ColumnDefinitions("*,*,78") };
+            var strum = KnobCell("STRUM", Strum, () => G(Strum) / 100, n => S(Strum, Math.Round(n * 100)), () => $"{StrumMs()} ms");
+            var spread = KnobCell("SPREAD", Spread, () => G(Spread) / 100, n => S(Spread, Math.Round(n * 100)), SpreadText);
+            var flags = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
+            {
+                Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
+                Flag(Fold, "Fold in scale", $"Drop added notes outside {ScaleName(G, false)} a semitone into it"),
+            } };
+            Grid.SetColumn(spread, 1); Grid.SetColumn(flags, 2);
+            knobs.Children.Add(strum); knobs.Children.Add(spread); knobs.Children.Add(flags);
+
+            var inner = new DockPanel { Children =
+            {
+                WithDock(head, Dock.Top), WithDock(new Border { Margin = new Thickness(0, 4), Child = keys }, Dock.Top),
+                WithDock(knobs, Dock.Bottom), bars,
+            } };
+            var island = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
+                Padding = new Thickness(6, 5, 6, 0), Child = inner };
+            readouts.Add(() =>
+            {
+                noteText.Text = NoteList();
+                voicesText.Text = $"{voices} of {Slots + 1}";
+                keys.Set(KeyStart(), lit, RingPitch());
+            });
+
+            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var statusR = Mono("", Sub);
+            readouts.Add(() =>
+            {
+                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices";
+                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : $"strum {StrumMs()}\u2009ms";
+            });
+            return Framed(island, statusL, statusR);
+        }
+
+        // ---- shared pieces -----------------------------------------------------------------------
+        Control Framed(Control main, TextBlock left, TextBlock right)
+        {
+            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
+                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
+            right.Margin = new Thickness(8, 0, 0, 0);
+            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
+        }
+
+        Control IslandHead(Control left, Control? right)
+        {
+            var d = new DockPanel { Margin = new Thickness(8, 0) };
+            if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
+            d.Children.Add(left);
+            return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
+        }
+
+        Border IslandBox(Control head, Control content, double width)
+        {
+            var b = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true,
+                Child = new DockPanel { Children = { WithDock(head, Dock.Top), content } } };
+            if (!double.IsNaN(width)) b.Width = width;
             return b;
         }
-        // Chord-type presets: highlight the template matching the current voices (else Custom).
-        Control ChordChips()
+
+        Control Swatch(IBrush? fill, IBrush? ring, string label)
         {
-            var names = Templates.Select(t => t.name).Append("Custom").ToArray();
-            var arr = new Border[names.Length];
-            int MatchIdx()
-            {
-                var active = Enumerable.Range(0, Voices).Select(Semi).Where(s => s != 0).OrderBy(x => x).ToArray();
-                for (int i = 0; i < Templates.Length; i++) if (active.SequenceEqual(Templates[i].semis.OrderBy(x => x))) return i;
-                return Templates.Length;   // Custom
-            }
-            void Hi() { int cur = MatchIdx(); for (int i = 0; i < names.Length; i++) { bool on = i == cur; arr[i].Background = on ? Amber : Brushes.Transparent; ((TextBlock)arr[i].Child!).Foreground = on ? Ink : Muted; } }
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-            for (int i = 0; i < names.Length; i++)
-            {
-                int iv = i;
-                var c = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(7, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Muted } };
-                c.PointerPressed += (_, _) =>
-                {
-                    if (iv < Templates.Length) { var t = Templates[iv].semis; for (int v = 0; v < Voices; v++) S(Voice1 + v, v < t.Length ? t[v] : 0); }
-                    Refresh();
-                };
-                arr[i] = c; row.Children.Add(c);
-            }
-            readouts.Add(Hi); Hi();
-            return new Border { Background = Inset, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            var sw = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Clip, Background = fill, BorderBrush = ring,
+                BorderThickness = new Thickness(ring is null ? 0 : 1), VerticalAlignment = VerticalAlignment.Center };
+            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { sw, new TextBlock { Text = label, FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
         }
 
-        // ---- LIVE strip ----
-        var strumBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("STRUM"), RawSlider(Strum, 0, 120, v => $"{v:0}\u2009ms", 52, false, 40) } };
-        var liveL = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("CHORD"), ChordChips(), strumBlock } };
-        var liveR = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Children = { Toggle(KeepRoot, "Keep root"), Toggle(Fold, "Fold in scale") } };
-        var liveGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        Grid.SetColumn(liveR, 1); liveGrid.Children.Add(liveL); liveGrid.Children.Add(liveR);
-        var liveStrip = new Border { Height = 34, Background = HdrBg, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(9, 0), Child = liveGrid };
-
-        // ---- SHIFTS stack ----
-        Control ShiftRow(int v)
+        // A switch flag (Keep root / Fold in scale), brass-washed when on.
+        Control Flag(int p, string label, string tip)
         {
-            var dot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
-            var lbl = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, Width = 30, VerticalAlignment = VerticalAlignment.Center };
-            var semi = RawSlider(Voice1 + v, -24, 24, s => { int i = (int)Math.Round(s); return i == 0 ? "·" : (i > 0 ? "+" : "") + i; }, 0, true, 26);
-            var vel = DragNum(Vel1 + v, -100, 100, x => { int i = (int)Math.Round(x); return (i >= 0 ? "+" : "") + i; }, 30);
-            readouts.Add(() => { int s = Semi(v); bool on = s != 0; dot.Fill = on ? Green : Bd; lbl.Text = IntervalLabel(s); lbl.Foreground = on ? Txt : Muted; });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 7, VerticalAlignment = VerticalAlignment.Center };
-            var cells = new Control[] { dot, lbl, semi, vel };
-            for (int c = 0; c < cells.Length; c++) { Grid.SetColumn(cells[c], c); g.Children.Add(cells[c]); }
-            return new Border { Background = NotaPalette.BgApp, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 0), Height = 26, Child = g };
+            var tb = new TextBlock { Text = label, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            b.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+                S(p, G(p) >= 0.5f ? 0 : 1); Edited(); ev.Handled = true;
+            };
+            ToolTip.SetTip(b, tip);
+            Learn(b, p, label);
+            readouts.Add(() =>
+            {
+                bool on = G(p) >= 0.5f;
+                b.Background = on ? NotaPalette.AccentSubtle : NotaPalette.TrackOff;
+                b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.TrackOff;
+                tb.Foreground = on ? NotaPalette.AccentHover : Txt;
+                tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+            });
+            return b;
         }
-        var shiftHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
-        var sh1 = Cap("semitones · velocity"); sh1.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(sh1, 1);
-        shiftHead.Children.Add(Cap("SHIFTS")); shiftHead.Children.Add(sh1);
-        var shiftStack = new StackPanel { Spacing = 3 };
-        shiftStack.Children.Add(shiftHead);
-        for (int v = 0; v < Voices; v++) shiftStack.Children.Add(ShiftRow(v));
-        var shiftPanel = new Border { Width = 330, Padding = new Thickness(8, 6), Child = shiftStack };
 
-        // ---- RESULT panel ----
-        var noteText = Mono("", AmberLit); noteText.HorizontalAlignment = HorizontalAlignment.Right;
-        var resHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
-        Grid.SetColumn(noteText, 1); resHead.Children.Add(Cap("RESULT")); resHead.Children.Add(noteText);
-        var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children =
+        // "scale C major": click the key for the next one (Shift = previous, wheel scrolls), the mode to flip it.
+        Control ScaleLabel()
         {
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = AmberLit, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, Cap("played", Sub) } },
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new Border { Width = 8, Height = 8, Background = Amber, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, Cap("added", Sub) } },
-        } };
-        var voicesText = Mono("", Txt);
-        var voicesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("VOICES"), voicesText } };
-        var spreadRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { Cap("SPREAD"), RawSlider(Spread, 0, 100, v => $"{v:0}\u2009%", 0, false, 34) } };
-        var resBottom = new StackPanel { Spacing = 4, Children = { voicesRow, spreadRow } };
-        var resDock = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(resHead, Dock.Top); DockPanel.SetDock(legend, Dock.Top);
-        DockPanel.SetDock(resBottom, Dock.Bottom);
-        var keyBox = new Border { Height = 44, Margin = new Thickness(0, 4), Child = keys };
-        // Docked children first (top: header+legend, bottom: voices/spread), fill (keyboard) last.
-        resDock.Children.Add(resHead); resDock.Children.Add(legend); resDock.Children.Add(resBottom); resDock.Children.Add(keyBox);
-        var resPanel = new Border { Background = RailBg, BorderBrush = Bd, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(9, 6), Child = resDock };
+            var keyTb = Mono("", Axis, 7); var modeTb = Mono("", Axis, 7);
+            keyTb.Cursor = modeTb.Cursor = new Cursor(StandardCursorType.Hand);
+            void StepKey(int d) { S(FoldKey, ((GI(FoldKey) + d) % 12 + 12) % 12); Edited(); }
+            keyTb.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(keyTb).Properties.IsLeftButtonPressed) return;
+                StepKey(ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1); ev.Handled = true;
+            };
+            keyTb.PointerWheelChanged += (_, ev) => { StepKey(ev.Delta.Y > 0 ? 1 : -1); ev.Handled = true; };
+            modeTb.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(modeTb).Properties.IsLeftButtonPressed) return;
+                S(FoldMode, G(FoldMode) >= 0.5f ? 0 : 1); Edited(); ev.Handled = true;
+            };
+            ToolTip.SetTip(keyTb, "Fold key — click for the next, Shift-click for the previous");
+            ToolTip.SetTip(modeTb, "Fold scale — major / natural minor");
+            Learn(keyTb, FoldKey, "Fold Key"); Learn(modeTb, FoldMode, "Fold Mode");
+            readouts.Add(() =>
+            {
+                var ink = G(Fold) >= 0.5f ? Sub : Axis;
+                keyTb.Text = KeyNames[((GI(FoldKey)) % 12 + 12) % 12]; modeTb.Text = G(FoldMode) >= 0.5f ? "minor" : "major";
+                keyTb.Foreground = modeTb.Foreground = ink;
+            });
+            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center,
+                Children = { Mono("scale", Axis, 7), keyTb, modeTb } };
+        }
 
-        // result-driven readouts
-        readouts.Add(() =>
+        // One SHIFTS row: switch dot · semitones · ±12 ruler · interval · velocity offset.
+        Control ShiftRow(int s)
         {
-            var chord = Chord(60);
-            keys.Set(60, chord);
-            noteText.Text = string.Join(" ", chord.Select(p => NoteNames[((p % 12) + 12) % 12] + (p / 12 - 2)));   // C3 = 60
-            int active = Enumerable.Range(0, Voices).Count(v => Semi(v) != 0);
-            voicesText.Text = $"{active} of {Voices}";
-        });
+            int pSt = Voice1 + s, pOn = On1 + s, pVel = Vel1 + s;
+            var dot = new Ellipse { Width = 6, Height = 6 };
+            var dotHit = new Border { Width = 14, Height = 14, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = dot };
+            dotHit.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(dotHit).Properties.IsLeftButtonPressed) return;
+                S(pOn, G(pOn) >= 0.5f ? 0 : 1); ui.CustomPinned = false; Edited(); ev.Handled = true;
+            };
+            ToolTip.SetTip(dotHit, $"Shift {s + 1} on / off");
+            Learn(dotHit, pOn, $"Shift {s + 1} on");
+            var st = Mono("", Txt, 9); st.FontWeight = FontWeight.SemiBold; st.Width = 24;
+            var ruler = new ChordShiftTrack { Height = 14, Margin = new Thickness(0, 0, 2, 0) };
+            ruler.Changed += v => SetShift(s, v);
+            ruler.GestureBegin += () => { Begin(pSt); Begin(pOn); }; ruler.GestureEnd += () => { End(pSt); End(pOn); };
+            Learn(ruler, pSt, $"Shift {s + 1}");
+            var iv = Mono("", Sub); iv.Width = 22; iv.TextAlignment = TextAlignment.Center;
+            var vel = VelDrag(pVel, s);
+            var g = new DockPanel { Children = { WithDock(dotHit, Dock.Left), WithDock(st, Dock.Left), WithDock(vel, Dock.Right), WithDock(iv, Dock.Right), ruler } };
+            st.Margin = new Thickness(6, 0, 6, 0); iv.Margin = new Thickness(6, 0, 6, 0);
+            var row = new Border { Height = 24, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 7, 0),
+                VerticalAlignment = VerticalAlignment.Center, Child = g };
+            readouts.Add(() =>
+            {
+                bool on = G(pOn) >= 0.5f; int v = GI(pSt);
+                row.Background = on ? Ground : NotaPalette.GridRow;
+                row.BorderBrush = on ? Bd : NotaPalette.GridBeat;
+                dot.Fill = on ? NotaPalette.Accent : NotaPalette.BorderStrong;
+                st.Text = on ? Sgn(v) : "off"; st.Foreground = on ? Txt : NotaPalette.TextDisabled;
+                iv.Text = on ? IntervalName(v) : "·"; iv.Foreground = on ? Sub : NotaPalette.BorderStrong;
+                if (!ruler.Dragging) ruler.Value = v;
+                ruler.On = on;
+            });
+            return row;
+        }
 
-        var body = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(shiftPanel, Dock.Left); body.Children.Add(shiftPanel); body.Children.Add(resPanel);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp };
-        DockPanel.SetDock(liveStrip, Dock.Top); root.Children.Add(liveStrip); root.Children.Add(body);
+        // Velocity offset: drag sideways (2px per step), double-click resets.
+        Control VelDrag(int p, int s)
+        {
+            var tb = Mono("", Cap); tb.Width = 28; tb.TextAlignment = TextAlignment.Right;
+            var hit = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = tb, VerticalAlignment = VerticalAlignment.Stretch };
+            bool drag = false; double x0 = 0; int v0 = 0;
+            hit.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(hit).Properties.IsLeftButtonPressed) return;
+                ev.Handled = true;
+                if (ev.ClickCount == 2) { Begin(p); S(p, 0); End(p); Edited(); return; }
+                drag = true; x0 = ev.GetPosition(hit).X; v0 = GI(p); ev.Pointer.Capture(hit); Begin(p);
+            };
+            hit.PointerMoved += (_, ev) =>
+            {
+                if (!drag) return;
+                int v = Math.Clamp((int)Math.Round(v0 + (ev.GetPosition(hit).X - x0) / 2), -64, 63);
+                if (v != GI(p)) { S(p, v); ui.CustomPinned = true; Refresh(); }
+            };
+            void Stop() { if (!drag) return; drag = false; End(p); Edited(); }
+            hit.PointerReleased += (_, ev) => { if (drag) ev.Pointer.Capture(null); Stop(); };
+            hit.PointerCaptureLost += (_, _) => Stop();
+            ToolTip.SetTip(hit, $"Shift {s + 1} velocity offset — drag sideways, double-click resets");
+            Learn(hit, p, $"Shift {s + 1} velocity");
+            readouts.Add(() => { int v = GI(p); tb.Text = Sgn(v); tb.Foreground = v != 0 ? BrassLit : Cap; });
+            return hit;
+        }
 
-        Refresh();
-        return root;
+        // A mini-view shift: a vertical ±12 bar over its number (click the number to switch it).
+        Control ShiftColumn(int s)
+        {
+            int pSt = Voice1 + s, pOn = On1 + s;
+            var bar = new ChordShiftTrack { Vertical = true };
+            bar.Changed += v => SetShift(s, v);
+            bar.GestureBegin += () => { Begin(pSt); Begin(pOn); }; bar.GestureEnd += () => { End(pSt); End(pOn); };
+            Learn(bar, pSt, $"Shift {s + 1}");
+            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones)");
+            var lbl = Mono("", Txt); lbl.HorizontalAlignment = HorizontalAlignment.Center;
+            var lblHit = new Border { Height = 11, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };
+            bool hover = false;
+            lblHit.PointerEntered += (_, _) => { hover = true; Refresh(); };
+            lblHit.PointerExited += (_, _) => { hover = false; Refresh(); };
+            lblHit.PointerPressed += (_, ev) =>
+            {
+                if (!ev.GetCurrentPoint(lblHit).Properties.IsLeftButtonPressed) return;
+                S(pOn, G(pOn) >= 0.5f ? 0 : 1); ui.CustomPinned = false; Edited(); ev.Handled = true;
+            };
+            Learn(lblHit, pOn, $"Shift {s + 1} on");
+            readouts.Add(() =>
+            {
+                bool on = G(pOn) >= 0.5f; int v = GI(pSt);
+                if (!bar.Dragging) bar.Value = v;
+                bar.On = on;
+                lbl.Text = on ? Sgn(v) : "off";
+                lbl.Foreground = hover ? Txt : on ? Txt : NotaPalette.TextDisabled;
+            });
+            return new DockPanel { Children = { WithDock(lblHit, Dock.Bottom), bar } };
+        }
+
+        // A RESULT slider: the label brightens to brass once moved off its default.
+        Control SliderLine(string label, int p, Func<double, double> toNorm, Func<double, double> fromNorm, Func<double, string> fmt)
+        {
+            var l = Caps(label); l.Width = 40;
+            var val = Mono("", Txt); val.Width = 34; val.TextAlignment = TextAlignment.Right;
+            var track = new SliderTrack { Height = 11, Reset = () => { S(p, Def(p)); Edited(); } };
+            track.Changed += n => { S(p, fromNorm(n)); Refresh(); };
+            track.GestureBegin += () => Begin(p);
+            track.GestureEnd += () => { End(p); Edited(); };
+            Learn(track, p, label);
+            readouts.Add(() =>
+            {
+                double v = G(p);
+                if (!track.Dragging) track.Norm = toNorm(v);
+                bool mod = Math.Abs(v - Def(p)) > 0.5;
+                l.Foreground = mod ? BrassLit : Cap;
+                val.Foreground = mod ? BrassLit : Txt;
+                val.Text = fmt(v);
+            });
+            track.Margin = new Thickness(6, 0, 6, 0);
+            return new DockPanel { Children = { WithDock(l, Dock.Left), WithDock(val, Dock.Right), track } };
+        }
+
+        // A mini-view knob: 34px gauge, caps label, mono value.
+        Control KnobCell(string label, int p, Func<double> norm, Action<double> set, Func<string> text)
+        {
+            var knob = new Knob(norm(), 1.0) { Accent = true, Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center };
+            knob.ValueChanged += n => { set(n); Refresh(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => { End(p); Edited(); };
+            Learn(knob, p, label);
+            var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
+            readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
+            return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
+                Children = { knob, new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.6, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };
+        }
     }
 }

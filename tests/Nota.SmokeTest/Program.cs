@@ -6267,7 +6267,9 @@ Console.WriteLine("-- Nota Arp (MIDI effect) --");
     Check(ae.MidiEffectKind(t, 0) == 0, "MIDI effect kind is 0 (Arp)");
     Check(ae.MidiEffectName(t, 0) == "Nota Arp", $"MIDI effect name is Nota Arp (got '{ae.MidiEffectName(t, 0)}')");
     int pc = ae.MidiEffectParamCount(t, 0);
-    Check(pc == 125, $"Nota Arp exposes 125 params (got {pc})");
+    Check(pc == 127, $"Nota Arp exposes 127 params (got {pc})");
+    Check(ae.MidiEffectParamName(t, 0, 125) == "VelAmt" && ae.MidiEffectParamName(t, 0, 126) == "View", "Nota Arp appends VelAmt + View");
+    Check(ae.MidiEffectParamMax(t, 0, 6) == 8f && ae.MidiEffectParamMax(t, 0, 9) == 2f, "Nota Arp: 9 orders, 3 retrig modes");
 
     // Param round-trip (Gate).
     int gate = -1; for (int i = 0; i < pc; i++) if (ae.MidiEffectParamName(t, 0, i) == "Gate") gate = i;
@@ -6318,45 +6320,214 @@ Console.WriteLine("-- Nota Arp (MIDI effect) --");
     int t2 = ae.AddInstrumentTrack();
     string fw = factory.Apply(ae, tpl.Id, t2);
     Check(fw.Length == 0 && ae.TrackMidiEffectCount(t2) == 1, $"factory arp template '{tpl.DisplayName}' applies");
+
+    // Factory presets: at least 25, each resolving only real param names; applying in place
+    // resets what the preset leaves out (Ratchet Build → Up 1/16 clears the ratchets) but
+    // keeps the card size (View).
+    var arpPresets = factory.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 0).ToList();
+    Check(arpPresets.Count >= 25, $"Nota Arp ships >= 25 presets (got {arpPresets.Count})");
+    int pt = ae.AddInstrumentTrack(); int pm = ae.AddMidiEffect(pt, 0);
+    var arpNames = Enumerable.Range(0, ae.MidiEffectParamCount(pt, pm)).Select(i => ae.MidiEffectParamName(pt, pm, i)).ToHashSet();
+    foreach (var ap in arpPresets)
+    {
+        var doc = factory.Document(ap.Id);
+        var bad = doc?.NamedParams?.Keys.Where(k => !arpNames.Contains(k)).ToList() ?? new();
+        Check(doc != null && bad.Count == 0, $"arp preset '{ap.DisplayName}' names real params{(bad.Count > 0 ? " (bad: " + string.Join(",", bad) + ")" : "")}");
+    }
+    ae.MidiEffectSetParam(pt, pm, 126, 1f);   // S view
+    factory.ApplyInPlace(ae, arpPresets.First(p => p.DisplayName == "Ratchet Build").Id, pt, pm);
+    Check(ae.MidiEffectGetParam(pt, pm, 61 + 6) == 4f, "Ratchet Build sets step-7 ratchet ×4");
+    factory.ApplyInPlace(ae, arpPresets.First(p => p.DisplayName == "Up 1/16").Id, pt, pm);
+    Check(ae.MidiEffectGetParam(pt, pm, 61 + 6) == 1f && ae.MidiEffectGetParam(pt, pm, 11) == 16f, "preset switch resets unlisted ratchets + steps");
+    Check(ae.MidiEffectGetParam(pt, pm, 126) == 1f, "preset switch keeps the card size (View)");
 }
 
-// ===================== Nota Chord (MIDI kind 1) rework =====================
+// Nota Arp — note orders walk the whole octave range, one note per step. The played pitches
+// are read back through a Nota Scale placed after the arp (its last-IN = the arp's output).
+Console.WriteLine("-- Nota Arp orders / retrig / telemetry --");
+{
+    int[] Played(int order, int octaves, int retrig = 1, int steps = 10)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120); e.SetTimeSignature(4, 4);
+        int t = e.AddInstrumentTrack();
+        e.AddMidiClip(t, 0.0, 16.0);
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 16.0, 0.9f), new NotaNote(64, 0.0, 16.0, 0.9f), new NotaNote(67, 0.0, 16.0, 0.9f) });
+        e.AddMidiEffect(t, 0); e.AddMidiEffect(t, 2);   // Arp → Scale (probe)
+        e.MidiEffectSetParam(t, 0, 0, 5f); e.MidiEffectSetParam(t, 0, 6, order); e.MidiEffectSetParam(t, 0, 4, octaves);
+        e.MidiEffectSetParam(t, 0, 9, retrig); e.MidiEffectSetParam(t, 0, 3, 0.5f);
+        var got = new List<int>(); var buf = new float[256 * 2]; int last = -1;
+        e.Seek(0); e.Play();
+        for (int b = 0; b < 44100 * 4 / 256 && got.Count < steps; b++)
+        {
+            e.RenderOffline(buf, 256);
+            int p = e.MidiEffectLastIn(t, 1);
+            if (p >= 0 && p != last) { got.Add(p); last = p; }
+        }
+        e.StopTransport();
+        return got.ToArray();
+    }
+    string J(IEnumerable<int> a) => string.Join(",", a);
+    var upDown = Played(2, 2);
+    Check(J(upDown) == "60,64,67,72,76,79,76,72,67,64", $"Up·Down walks both octaves and back (got {J(upDown)})");
+    var downUp = Played(7, 2);
+    Check(J(downUp) == "79,76,72,67,64,60,64,67,72,76", $"Down·Up (got {J(downUp)})");
+    var conv = Played(3, 2, steps: 6);
+    Check(J(conv) == "60,79,64,76,67,72", $"Converge alternates the outer notes inward (got {J(conv)})");
+    var div = Played(8, 2, steps: 6);
+    Check(J(div) == "72,67,76,64,79,60", $"Diverge spreads from the middle (got {J(div)})");
+
+    // Telemetry + Restart + Beat retrigger.
+    using var e = new NotaEngine();
+    e.SetBpm(120); e.SetTimeSignature(4, 4);
+    int t = e.AddInstrumentTrack();
+    e.AddMidiClip(t, 0.0, 16.0);
+    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 16.0, 0.9f), new NotaNote(64, 0.0, 16.0, 0.9f) });
+    e.AddMidiEffect(t, 0);
+    var sc = new float[40]; var blk = new float[512 * 2];
+    e.Seek(0); e.Play();
+    for (int b = 0; b < 44100 / 512; b++) e.RenderOffline(blk, 512);   // 1 s = 8 sixteenths
+    int n = e.MidiEffectScope(t, 0, sc);
+    Check(n == 6 && sc[2] == 2 && sc[3] == 2 && sc[4] == 60 && sc[5] == 64, $"arp telemetry reports the held chord (n={n}, held={sc[2]}, chord={sc[4]},{sc[5]})");
+    Check(sc[0] >= 6 && sc[0] <= 8 && sc[1] >= 6, $"arp telemetry reports the sounding step (lp={sc[0]}, k={sc[1]})");
+    e.MidiEffectCommand(t, 0, 1);   // Restart
+    e.RenderOffline(blk, 512); e.RenderOffline(blk, 512);
+    e.MidiEffectScope(t, 0, sc);
+    Check(sc[1] <= 1, $"Restart starts the pattern over (k={sc[1]})");
+    e.MidiEffectSetParam(t, 0, 9, 2f);   // Beat: restarts every bar
+    e.MidiEffectSetParam(t, 0, 0, 4f);   // 1/8T → 12 steps per bar
+    int maxK = 0;
+    for (int b = 0; b < 44100 * 4 / 512; b++) { e.RenderOffline(blk, 512); e.MidiEffectScope(t, 0, sc); maxK = Math.Max(maxK, (int)sc[1]); }
+    e.StopTransport();
+    Check(maxK == 11, $"Beat retrigger restarts the pattern every bar (max step {maxK}, expected 11)");
+}
+
+// ===================== Nota Chord (MIDI kind 1) — almanac rework =====================
 Console.WriteLine("-- Nota Chord --");
 {
     using var e = new NotaEngine();
     e.SetBpm(120); e.SetTimeSignature(4, 4);
     int t = e.AddInstrumentTrack();
     int m = e.AddMidiEffect(t, 1);
-    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Chord", "add Nota Chord");
+    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Chord" && e.MidiEffectKind(t, 0) == 1, "add Nota Chord");
     int pc = e.MidiEffectParamCount(t, 0);
-    Check(pc == 16, $"Nota Chord exposes 16 params (got {pc})");
-    var pnames = new System.Collections.Generic.HashSet<string>();
-    for (int i = 0; i < pc; i++) pnames.Add(e.MidiEffectParamName(t, 0, i));
-    Check(pnames.Contains("Voice 6") && pnames.Contains("Strum") && pnames.Contains("Keep Root")
-          && pnames.Contains("Spread") && pnames.Contains("Fold") && pnames.Contains("Vel 1"),
-          "mockup-3b params present (Voice 6 / Strum / Keep Root / Spread / Fold / Vel 1)");
-    // Keep Root defaults on (backward-compatible: root passes through).
-    SetByName(e, t, 0, "Keep Root", 1f);
-    Check(GetByName(e, t, 0, "Keep Root") >= 0.5f, "Keep Root defaults on");
+    Check(pc == 25, $"Nota Chord exposes 25 params (got {pc})");
+    string[] expect = { "Voice 1", "Voice 6", "Strum", "Keep Root", "Spread", "Fold", "Vel 1", "Vel 6", "On 1", "On 6", "Fold Key", "Fold Mode", "View" };
+    int[] at = { 0, 5, 6, 7, 8, 9, 10, 15, 16, 21, 22, 23, 24 };
+    bool layout = true; for (int i = 0; i < expect.Length; i++) layout &= e.MidiEffectParamName(t, 0, at[i]) == expect[i];
+    Check(layout, "param layout is append-only (Voice/Strum/Keep/Spread/Fold/Vel then On/Fold Key/Fold Mode/View)");
+    Check(e.MidiEffectParamMin(t, 0, 0) == -12f && e.MidiEffectParamMax(t, 0, 0) == 12f && e.MidiEffectParamMax(t, 0, 10) == 63f,
+          "shifts span ±12 st, velocity offsets −64..+63");
+    Check(GetByName(e, t, 0, "Voice 3") == 11f && GetByName(e, t, 0, "On 3") == 1f && GetByName(e, t, 0, "On 4") == 0f
+          && GetByName(e, t, 0, "Strum") == 30f && GetByName(e, t, 0, "Keep Root") == 1f, "defaults: Maj7 with a 30 ms strum");
 
+    // The chord a key produces, read from the editor telemetry after one short note.
+    var sc = new float[32];
+    int[] ChordOf(int pitch, float vel = 0.9f)
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(pitch, 0.0, 1.0, vel) });
+        var buf = new float[4096 * 2]; e.Seek(0); e.Play();
+        for (int b = 0; b < 12; b++) e.RenderOffline(buf, 4096);   // ~1.1 s: the whole strum has sounded
+        e.StopTransport();
+        int n = e.MidiEffectScope(t, 0, sc) >= 4 ? (int)sc[3] : 0;
+        var r = new int[n]; for (int i = 0; i < n; i++) r[i] = (int)sc[4 + i];
+        return r;
+    }
     e.AddMidiClip(t, 0.0, 4.0);
-    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
-    // With Keep Root on vs off the audio differs (the root note is removed).
-    var withRoot = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(withRoot, 12000); e.StopTransport();
+    SetByName(e, t, 0, "Strum", 0f);
+    Check(ChordOf(60).SequenceEqual(new[] { 60, 64, 67, 71 }), "Maj7 on C4 → C E G B");
+    Check((int)sc[0] == 60, "telemetry reports the played root");
+    SetByName(e, t, 0, "On 2", 0f);
+    Check(ChordOf(60).SequenceEqual(new[] { 60, 64, 71 }), "a switched-off shift is dropped");
+    SetByName(e, t, 0, "On 2", 1f);
     SetByName(e, t, 0, "Keep Root", 0f);
-    var noRoot = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(noRoot, 12000); e.StopTransport();
-    double kd = 0; for (int i = 0; i < 12000 * 2; i++) { double d = withRoot[i] - noRoot[i]; kd += d * d; }
-    Check(Math.Sqrt(kd / (12000 * 2)) > 0.002, "Keep Root toggle changes the output");
+    Check(ChordOf(60).SequenceEqual(new[] { 64, 67, 71 }), "Keep root off drops the played note");
+    SetByName(e, t, 0, "Keep Root", 1f);
+    SetByName(e, t, 0, "Spread", 40f);
+    Check(ChordOf(60).SequenceEqual(new[] { 60, 67, 76, 83 }), "Spread ⅓: every other shift up an octave");
+    SetByName(e, t, 0, "Spread", 80f);
+    Check(ChordOf(60).SequenceEqual(new[] { 60, 76, 79, 83 }), "Spread ⅔: all shifts up an octave");
+    SetByName(e, t, 0, "Spread", 0f);
+    SetByName(e, t, 0, "Fold", 1f); SetByName(e, t, 0, "On 3", 0f);
+    Check(ChordOf(62).SequenceEqual(new[] { 62, 65, 69 }), "Fold in C major: a triad on D turns minor");
+    SetByName(e, t, 0, "Fold Key", 9f); SetByName(e, t, 0, "Fold Mode", 1f);
+    Check(ChordOf(64).SequenceEqual(new[] { 64, 67, 71 }), "Fold in A minor: a triad on E turns minor");
+    SetByName(e, t, 0, "Fold", 0f); SetByName(e, t, 0, "On 3", 1f);
+    SetByName(e, t, 0, "Vel 1", -30f);
+    ChordOf(60, 100f / 127f);
+    Check((int)sc[4 + 4 + 1] == 70 && (int)sc[4 + 4 + 0] == 100, $"velocity offsets add MIDI units (E at {(int)sc[9]}, root {(int)sc[8]})");
+    SetByName(e, t, 0, "Vel 1", 0f);
+
+    // Strum: the telemetry counts the notes that have sounded.
+    SetByName(e, t, 0, "Strum", 100f);
+    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+    var sbuf = new float[1024 * 2]; e.Seek(0); e.Play();
+    e.RenderOffline(sbuf, 1024); e.MidiEffectScope(t, 0, sc); int early = (int)sc[2], held = (int)sc[1];
+    for (int b = 0; b < 20; b++) e.RenderOffline(sbuf, 1024);
+    e.MidiEffectScope(t, 0, sc); int late = (int)sc[2];
+    e.StopTransport();
+    Check(held == 1 && early >= 1 && early < 4 && late == 4, $"Strum 100 ms sounds the chord low → high over time ({early} → {late} of 4, held {held})");
+
+    // Changing the shifts while a key is held still releases what it played (no stuck notes).
+    SetByName(e, t, 0, "Strum", 0f);
+    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.5, 0.9f) });
+    var hb = new float[2048 * 2]; e.Seek(0); e.Play();
+    e.RenderOffline(hb, 2048);
+    SetByName(e, t, 0, "Voice 1", 5f); SetByName(e, t, 0, "Voice 2", 9f); SetByName(e, t, 0, "On 4", 1f); SetByName(e, t, 0, "Voice 4", -5f);
+    for (int b = 0; b < 60; b++) e.RenderOffline(hb, 2048);   // ~2.8 s: note off at 0.25 s, then the release tail
+    e.StopTransport();
+    Check(Rms(hb, 2048) < 1e-4f, $"editing shifts mid-note leaves no stuck notes (tail RMS {Rms(hb, 2048):E1})");
 
     // Strum + all voices stays finite and audible.
-    SetByName(e, t, 0, "Keep Root", 1f);
-    SetByName(e, t, 0, "Voice 3", 12f); SetByName(e, t, 0, "Strum", 40f); SetByName(e, t, 0, "Spread", 50f);
+    SetByName(e, t, 0, "Strum", 40f); SetByName(e, t, 0, "Spread", 50f);
+    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
     var sb = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(sb, 12000); e.StopTransport();
     bool fin = true; foreach (var s in sb) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
     Check(fin && Rms(sb, 12000) > 0.001f, "Strum + Spread render audible + finite");
 
+    SetByName(e, t, 0, "Voice 3", 12f);
     int t2 = e.DuplicateTrack(t);
-    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Voice 3") - 12f) < 1e-3, "duplicate track clones Chord params");
+    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Voice 3") - 12f) < 1e-3 && GetByName(e, t2, 0, "On 4") == 1f, "duplicate track clones Chord params");
+
+    // A project saved before the slot switches (16 params, 0 st = off) loads with On N derived.
+    {
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(e, new TransportState(120, 1, false, false), w);
+        var md = doc.Tracks.First(x => x.MidiEffects.Count > 0).MidiEffects[0];
+        var legacy = new float[16];
+        legacy[0] = 3; legacy[1] = 7; legacy[2] = 0; legacy[3] = -12; legacy[7] = 1;   // Voice 1,2,4 used; 3,5,6 "off"
+        md.Params = legacy;
+        using var e2 = new NotaEngine();
+        ProjectService.Apply(doc, e2, Path.GetTempPath());
+        int lt = -1;
+        for (int i = 0; e2.TryGetTrackInfo(i, out var ti); i++) if (e2.TrackMidiEffectCount(ti.Id) > 0 && e2.MidiEffectKind(ti.Id, 0) == 1) { lt = ti.Id; break; }
+        Check(lt > 0 && GetByName(e2, lt, 0, "On 1") == 1f && GetByName(e2, lt, 0, "On 3") == 0f && GetByName(e2, lt, 0, "On 4") == 1f
+              && GetByName(e2, lt, 0, "On 5") == 0f, "legacy Chord project: 0-semitone slots load switched off");
+    }
+
+    // Factory presets: 25+, every name valid, each applies in place and renders.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 1).ToList();
+        Check(mine.Count >= 25, $"Nota Chord ships 25+ factory presets (got {mine.Count})");
+        var names = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) names.Add(e.MidiEffectParamName(t, 0, i));
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Chord preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        SetByName(e, t, 0, "View", 1f);
+        var off = new System.Collections.Generic.List<string>();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f) });
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(e, p.Id, t, 0).Length != 0) { off.Add(p.DisplayName + " (apply)"); continue; }
+            var pb = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(pb, 12000); e.StopTransport();
+            bool ok = true; foreach (var x in pb) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { ok = false; break; }
+            if (!ok || Rms(pb, 12000) < 0.001f) off.Add(p.DisplayName);
+        }
+        Check(off.Count == 0, $"every Chord preset applies and renders{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Check(GetByName(e, t, 0, "View") == 1f, "presets leave the card size (View) alone");
+    }
 }
 
 // ===================== Nota Scale (MIDI kind 2) rework =====================

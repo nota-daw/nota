@@ -522,8 +522,13 @@ and user presets, automation, persistence and cloning.
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 
 ### MIDI effects
-- **Nota Arp** — arpeggiator: step sequencer with Velocity/Length/Chance/Ratchet/Transpose
-  lanes, Order, Oct 1–4, Dir (↑↓↕?), Hold/Retrig, Free/Sync, Gate/Swing.
+- **Nota Arp** — arpeggiator in two sizes (L 700 / S 260, S·L toggle; one preset list and
+  current preset for both): 9 orders (Up, Down,
+  Up·Down, Down·Up, Converge, Diverge, Random, Chord, As played) over 1–4 octaves; a live
+  Pattern view of the notes each step plays and a Groove view of five per-step lanes
+  (Velocity/Length/Chance/Ratchet/Transpose) plus step mute; Free/Sync (1/1…1/32), Gate,
+  Swing, Vel Amt, Retrig Off/Note/Beat, Transpose, Steps 1–16, Hold, Restart. 30 presets,
+  full automation, MCP tools (`get_arp` / `set_arp` / `set_arp_lane` / `set_arp_step` / `restart_arp`).
 - **Nota Scale** — snap to a scale: Root, Major/Minor/Dorian/Phryg/Penta/Custom, Fold
   (Nearest/Down/Up), NOTE MAP, Range, Follow Key, Learn/Clear.
 - **Nota Length** (formerly Note Length) — note lengths: Sync/ms/Gate %, Vel→Len, Key→Len,
@@ -532,8 +537,12 @@ and user presets, automation, persistence and cloning.
   Range, Random Dir, and a Last 12 histogram.
 - **Nota Random** — randomization: Chance, Gauss/Even/Walk, Lock seed / Re-roll,
   Note/Velocity/Timing/Skip/Octave amounts, Distribution, Rate, Stay in scale.
-- **Nota Chord** — chord generator: Maj7/Min7/Sus4/5th/Custom, 6 voices with offset and
-  velocity, Strum, Keep root, Fold in scale, Spread; a preview keyboard.
+- **Nota Chord** — chord generator in two sizes (L 700 / S 260, S·L toggle; one preset list
+  for both): TYPE Maj7/Min7/Sus4/5th/Custom, six switchable shifts (±12 st ruler + interval
+  name + velocity offset), Strum 0–100 ms (low → high), Spread (every other / all shifts up an
+  octave), Keep root, Fold in scale (any key, major / minor); a three-octave RESULT keyboard
+  that lights a held chord as it strums (and previews the strum once per bar). 34 presets,
+  full automation, MCP tools (`get_chord` / `set_chord` / `set_chord_shift`).
 
 ### Racks
 - **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains

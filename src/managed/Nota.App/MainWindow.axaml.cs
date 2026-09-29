@@ -578,6 +578,17 @@ public partial class MainWindow : Window
         if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
     }
 
+    /// <summary>Whether MIDI Learn is armed — device cards with their own Learn button
+    /// (Nota Arp) mirror it.</summary>
+    internal bool MidiLearnArmed => _learn?.Armed == true;
+
+    /// <summary>Flip MIDI Learn exactly as the transport-bar button does.</summary>
+    internal void ToggleMidiLearn()
+    {
+        MidiLearnBtn.IsChecked = MidiLearnBtn.IsChecked != true;
+        OnToggleMidiLearn(MidiLearnBtn, new RoutedEventArgs());
+    }
+
     // MIDI Learn: arm/disarm the overlay and reveal the mappings tab so the user
     // can see what they're binding.
     private void OnToggleMidiLearn(object? sender, RoutedEventArgs e)

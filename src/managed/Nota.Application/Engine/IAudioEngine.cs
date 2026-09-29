@@ -410,6 +410,8 @@ public interface IAudioEngine : IDisposable
     int MidiEffectLastOut(int trackId, int index);
     /// <summary>Float scope buffer for a MIDI effect editor (Nota Velocity in/out pairs); returns count written.</summary>
     int MidiEffectScope(int trackId, int index, float[] outv);
+    /// <summary>Send an editor command to a MIDI effect (Nota Arp: 1 = restart the pattern).</summary>
+    void MidiEffectCommand(int trackId, int index, int cmd);
     string MidiEffectName(int trackId, int index);
     int MidiEffectParamCount(int trackId, int index);
     string MidiEffectParamName(int trackId, int index, int paramIndex);

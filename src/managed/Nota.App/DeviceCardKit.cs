@@ -327,7 +327,7 @@ internal static class DeviceCardKit
     // Clicks are handled so they neither select nor start dragging the card. Shared by the
     // card shell and the rack chain full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step)
+        Action<int> apply, Action<int> step, double nameWidth = 132)
     {
         const double H = 18;
         var label = new TextBlock
@@ -339,7 +339,7 @@ internal static class DeviceCardKit
         DockPanel.SetDock(chevron, Dock.Right);
         var name = new Border
         {
-            Width = 132, Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel { Children = { chevron, label } },
         };
         ToolTip.SetTip(name, "Choose a preset");

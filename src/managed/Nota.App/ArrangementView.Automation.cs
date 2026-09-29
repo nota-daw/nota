@@ -441,12 +441,61 @@ public sealed partial class ArrangementView
                 int mpc = e.MidiEffectParamCount(t.Id, m);
                 if (mpc <= 0) continue;
                 var mMenu = new MenuItem { Header = e.MidiEffectName(t.Id, m) };
-                int shown = Math.Min(mpc, 16);   // globals (+ a few lanes); per-step lanes are edited in the grid
-                for (int p = 0; p < shown; p++)
+                MenuItem MLeaf(int mm, int pp, string? label = null) => Leaf(label ?? e.MidiEffectParamName(t.Id, mm, pp), $"M:{mm}:{pp}",
+                    () => SetAutoTarget(t, AutomationTarget.MidiDeviceParam, mm, pp), automated);
+                if (e.MidiEffectKind(t.Id, m) == 0 && mpc > ArpGrid.PView)
                 {
-                    int mm = m, pp = p;
-                    mMenu.Items.Add(Leaf(e.MidiEffectParamName(t.Id, m, p), $"M:{mm}:{pp}",
-                        () => SetAutoTarget(t, AutomationTarget.MidiDeviceParam, mm, pp), automated));
+                    // Nota Arp: its globals by name, then Groove ▸ lane ▸ step 1–16 (the View
+                    // size toggle is editor state, not a sound parameter).
+                    (int p, string label)[] globals =
+                    {
+                        (ArpGrid.GRate, "Rate"), (ArpGrid.GSync, "Sync"), (ArpGrid.GFreeRate, "Free Rate"), (ArpGrid.GOrder, "Order"),
+                        (ArpGrid.GGate, "Gate"), (ArpGrid.GSwing, "Swing"), (ArpGrid.PVelAmt, "Vel Amt"), (ArpGrid.GOctaves, "Octaves"),
+                        (ArpGrid.GOctaveMode, "Octave Mode"), (ArpGrid.GRetrig, "Retrig"), (ArpGrid.GHold, "Hold"),
+                        (ArpGrid.GTranspose, "Transpose"), (ArpGrid.GLoop, "Steps"), (ArpGrid.GLoopMode, "Loop Mode"),
+                    };
+                    foreach (var (p, label) in globals) mMenu.Items.Add(MLeaf(m, p, label));
+                    var groove = new MenuItem { Header = "Groove" };
+                    (string name, int b)[] lanes =
+                    {
+                        ("Velocity", ArpGrid.LVel), ("Length", ArpGrid.LLen), ("Chance", ArpGrid.LChance), ("Ratchet", ArpGrid.LRatchet),
+                        ("Transpose", ArpGrid.LTransp), ("Step On", ArpGrid.LOn), ("CC", ArpGrid.LCC),
+                    };
+                    foreach (var (name, b) in lanes)
+                    {
+                        var lm = new MenuItem { Header = name };
+                        for (int st = 0; st < ArpGrid.Steps; st++) lm.Items.Add(MLeaf(m, b + st, $"Step {st + 1}"));
+                        groove.Items.Add(lm);
+                    }
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(groove);
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 1 && mpc > ChordMidiBody.PView)
+                {
+                    // Nota Chord: the globals, then Shifts ▸ Shift N ▸ semitones / on / velocity
+                    // (View, the card size, is editor state).
+                    (int p, string label)[] globals =
+                    {
+                        (ChordMidiBody.Strum, "Strum"), (ChordMidiBody.Spread, "Spread"), (ChordMidiBody.KeepRoot, "Keep Root"),
+                        (ChordMidiBody.Fold, "Fold in Scale"), (ChordMidiBody.FoldKey, "Fold Key"), (ChordMidiBody.FoldMode, "Fold Mode"),
+                    };
+                    foreach (var (p, label) in globals) mMenu.Items.Add(MLeaf(m, p, label));
+                    var shifts = new MenuItem { Header = "Shifts" };
+                    for (int s = 0; s < ChordMidiBody.Slots; s++)
+                    {
+                        var sm = new MenuItem { Header = $"Shift {s + 1}" };
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.Voice1 + s, "Semitones"));
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.On1 + s, "On"));
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.Vel1 + s, "Velocity"));
+                        shifts.Items.Add(sm);
+                    }
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(shifts);
+                }
+                else
+                {
+                    int shown = Math.Min(mpc, 16);   // globals (+ a few lanes); per-step lanes are edited in the grid
+                    for (int p = 0; p < shown; p++) mMenu.Items.Add(MLeaf(m, p));
                 }
                 flyout.Items.Add(mMenu);
             }

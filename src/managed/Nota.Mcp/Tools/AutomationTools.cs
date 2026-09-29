@@ -40,7 +40,8 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
         => Mutate(() => E.SetAutomationPoints(trackId, laneIndex, Array.ConvertAll(points, p => new AutomationPoint(p.Beat, p.Value, p.Curve))));
 
     [McpServerTool(Name = "add_automation_lane"), Description(
-        "Add an automation lane. target: \"volume\", \"pan\", or \"device_param\" (with deviceIndex+paramIndex). "
+        "Add an automation lane. target: \"volume\", \"pan\", \"device_param\" (with deviceIndex+paramIndex) or "
+        + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params). "
         + "Returns the lane index.")]
     public Task<int> AddAutomationLane(int trackId, string target, int deviceIndex = -1, int paramIndex = -1) => Mutate(() =>
     {

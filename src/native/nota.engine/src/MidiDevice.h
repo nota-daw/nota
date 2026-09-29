@@ -71,6 +71,10 @@ public:
     // up to maxN floats into out, returns the count. 0 = no scope. Message-thread read.
     virtual int32_t midiScope(float* /*out*/, int32_t /*maxN*/) const { return 0; }
 
+    // An editor command (e.g. Nota Arp: 1 = restart the pattern). Message thread; the
+    // device hands it to the audio thread itself (an atomic flag). Unknown = ignored.
+    virtual void midiCommand(int32_t /*cmd*/) {}
+
     // Deep copy for track duplication (rebuilt by midiKind() + copied params by the
     // engine; live state starts fresh). Returns nullptr if the engine should handle it.
     virtual std::shared_ptr<MidiDevice> clone() const { return nullptr; }

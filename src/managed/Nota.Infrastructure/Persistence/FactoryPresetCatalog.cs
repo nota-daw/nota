@@ -8,6 +8,7 @@
 // (param names). Apply reuses PresetService.Apply — the same path as user presets.
 
 using System.Collections.Generic;
+using System.Linq;
 using Nota.Application;
 
 namespace Nota.Infrastructure;
@@ -2111,26 +2112,92 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("strata", 15, "Reverse Tape",  ("Feedback", 90f),  ("InputGain", 0f), ("Speed", 1f),   ("Quantize", 1f), ("CountIn", 0f), ("SetTempo", 0f), ("Reverse", 1f));
         Fx("strata", 15, "Free Overdub",  ("Feedback", 100f), ("InputGain", 0f), ("Speed", 1f),   ("Quantize", 0f), ("CountIn", 0f), ("SetTempo", 0f), ("Reverse", 0f));
 
-        // ---- Nota Arp (MIDI, kind 0) — Rate idx (5=1/16, 6=1/16T); Order 0 Up/1 Down/
-        //      2 UpDown/3 Converge/4 AsPlayed/5 Chord/6 Random; OctMode/LoopMode 0..3.
-        Midi("arp", 0, "Up 1/16",       ("Rate", 5f), ("Order", 0f), ("Octaves", 1f), ("Gate", 0.9f), ("Loop", 16f));
-        Midi("arp", 0, "Octave Up-Down",("Rate", 5f), ("Order", 2f), ("Octaves", 2f), ("OctMode", 2f), ("Gate", 0.85f));
-        Midi("arp", 0, "Triplet Roll",  ("Rate", 6f), ("Order", 0f), ("Octaves", 1f), ("Gate", 0.8f));
-        Midi("arp", 0, "Trance Gate",   ("Rate", 5f), ("Order", 5f), ("Gate", 0.5f), ("Loop", 16f),
-                                        ("On 2", 0f), ("On 4", 0f), ("On 6", 0f), ("On 8", 0f),
-                                        ("On 10", 0f), ("On 12", 0f), ("On 14", 0f), ("On 16", 0f));
-        Midi("arp", 0, "Random Walk",   ("Rate", 5f), ("Order", 6f), ("Octaves", 2f), ("OctMode", 3f), ("LoopMode", 3f), ("Gate", 0.8f));
-        Midi("arp", 0, "Ratchet Build", ("Rate", 5f), ("Order", 0f), ("Octaves", 1f), ("Gate", 0.9f), ("Loop", 8f),
-                                        ("Rat 1", 1f), ("Rat 2", 1f), ("Rat 3", 2f), ("Rat 4", 2f),
-                                        ("Rat 5", 3f), ("Rat 6", 3f), ("Rat 7", 4f), ("Rat 8", 4f));
+        // ---- Nota Arp (MIDI, kind 0) — Rate idx 0 1/1 … 3 1/8, 4 1/8T, 5 1/16, 6 1/16T, 7 1/32;
+        //      Order 0 Up/1 Down/2 Up·Down/3 Converge/4 As played/5 Chord/6 Random/7 Down·Up/
+        //      8 Diverge; Retrig 0 Off/1 Note/2 Beat (bar); OctMode/LoopMode 0..3; Gate 0..2;
+        //      FreeRate in Hz. Groove lanes per step: vel/chn 0..1, len 0..2, rat 1..8, trn ±24,
+        //      steps = "x" on / "." muted. Unlisted params reset to their defaults.
+        Arp("Up 1/16",            new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.9f });
+        Arp("Down 1/8",           new() { ["Rate"] = 3, ["Order"] = 1, ["Octaves"] = 2, ["Gate"] = 0.8f });
+        Arp("Octave Up-Down",     new() { ["Rate"] = 5, ["Order"] = 2, ["Octaves"] = 2, ["Gate"] = 0.85f });
+        Arp("Down-Up Cascade",    new() { ["Rate"] = 5, ["Order"] = 7, ["Octaves"] = 3, ["Gate"] = 0.7f });
+        Arp("Converge",           new() { ["Rate"] = 5, ["Order"] = 3, ["Octaves"] = 2, ["Gate"] = 0.8f });
+        Arp("Diverge Bloom",      new() { ["Rate"] = 6, ["Order"] = 8, ["Octaves"] = 2, ["Gate"] = 1.2f });
+        Arp("As Played Hook",     new() { ["Rate"] = 5, ["Order"] = 4, ["Octaves"] = 1, ["Gate"] = 0.6f, ["Retrig"] = 1 });
+        Arp("Triplet Roll",       new() { ["Rate"] = 6, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.8f });
+        Arp("Trance Gate",        new() { ["Rate"] = 5, ["Order"] = 5, ["Gate"] = 0.5f }, steps: "x.x.x.x.x.x.x.x.");
+        Arp("House Offbeat Stab", new() { ["Rate"] = 3, ["Order"] = 5, ["Gate"] = 0.35f, ["Loop"] = 8 }, steps: ".x.x.x.x");
+        Arp("Random Walk",        new() { ["Rate"] = 5, ["Order"] = 6, ["Octaves"] = 2, ["OctMode"] = 3, ["LoopMode"] = 3, ["Gate"] = 0.8f });
+        Arp("Ratchet Build",      new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.9f, ["Loop"] = 8 },
+                                  rat: new[] { 1, 1, 2, 2, 3, 3, 4, 4 });
+        Arp("Swing Groove",       new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 2, ["Gate"] = 0.7f, ["Swing"] = 0.6f },
+                                  vel: new[] { 1f, .55f, .75f, .55f, 1f, .55f, .75f, .6f, 1f, .55f, .75f, .55f, 1f, .6f, .8f, .65f });
+        Arp("Staccato Pluck",     new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 2, ["Gate"] = 0.25f });
+        Arp("Legato Glide",       new() { ["Rate"] = 4, ["Order"] = 2, ["Octaves"] = 2, ["Gate"] = 1.6f });
+        Arp("Octave Jumper",      new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.6f },
+                                  trn: new[] { 0, 12, 0, 12, 0, 12, 0, 12, 0, 12, 0, 12, 0, 12, 0, 12 });
+        Arp("Fifth Echo",         new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.7f, ["Loop"] = 8 },
+                                  trn: new[] { 0, 0, 7, 0, 12, 0, 7, 0 }, vel: new[] { 1f, .6f, .8f, .6f, .9f, .6f, .8f, .5f });
+        Arp("Chance Sparkle",     new() { ["Rate"] = 7, ["Order"] = 6, ["Octaves"] = 3, ["Gate"] = 0.5f },
+                                  chn: new[] { 1f, .4f, .7f, .4f, .9f, .3f, .6f, .5f, 1f, .4f, .7f, .3f, .8f, .5f, .6f, .4f });
+        Arp("Velocity Accents",   new() { ["Rate"] = 5, ["Order"] = 2, ["Octaves"] = 2, ["Gate"] = 0.75f, ["VelAmt"] = 1 },
+                                  vel: new[] { 1f, .35f, .5f, .35f, .85f, .35f, .5f, .35f, 1f, .35f, .5f, .35f, .85f, .35f, .6f, .45f });
+        Arp("Ratchet Rolls",      new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 2, ["Gate"] = 0.8f },
+                                  rat: new[] { 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 3, 4 });
+        Arp("Slow Chord Pad",     new() { ["Rate"] = 1, ["Order"] = 5, ["Octaves"] = 1, ["Gate"] = 1.9f });
+        Arp("Stutter 1/32",       new() { ["Rate"] = 7, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.5f, ["Loop"] = 4 });
+        Arp("Bar Retrig Riff",    new() { ["Rate"] = 5, ["Order"] = 2, ["Octaves"] = 2, ["Gate"] = 0.7f, ["Retrig"] = 2, ["Loop"] = 12 });
+        Arp("Free Run 150 ms",    new() { ["Sync"] = 0, ["FreeRate"] = 6.667f, ["Order"] = 0, ["Octaves"] = 2, ["Gate"] = 0.8f });
+        Arp("Four-Octave Rise",   new() { ["Rate"] = 6, ["Order"] = 0, ["Octaves"] = 4, ["Gate"] = 0.6f });
+        Arp("Hold Drone",         new() { ["Rate"] = 4, ["Order"] = 3, ["Octaves"] = 2, ["Gate"] = 0.9f, ["Hold"] = 1 });
+        Arp("Ping-Pong Steps",    new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 2, ["Gate"] = 0.9f, ["Loop"] = 8, ["LoopMode"] = 2 },
+                                  len: new[] { 1f, .3f, .6f, .3f, 1f, .3f, .8f, .4f });
+        Arp("Ghost Notes",        new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.6f },
+                                  vel: new[] { 1f, .2f, .2f, .7f, .2f, .2f, .9f, .2f, 1f, .2f, .2f, .7f, .2f, .2f, .8f, .25f },
+                                  chn: new[] { 1f, .6f, .6f, 1f, .6f, .6f, 1f, .6f, 1f, .6f, .6f, 1f, .6f, .6f, 1f, .6f });
+        Arp("Minimal Techno",     new() { ["Rate"] = 5, ["Order"] = 1, ["Octaves"] = 1, ["Gate"] = 0.4f }, steps: "x..x..x.x..x..x.",
+                                  len: new[] { .5f, 1f, 1f, .4f, 1f, 1f, .6f, 1f, .5f, 1f, 1f, .4f, 1f, 1f, .7f, 1f });
+        Arp("Trap Roll",          new() { ["Rate"] = 5, ["Order"] = 0, ["Octaves"] = 1, ["Gate"] = 0.6f },
+                                  rat: new[] { 1, 1, 2, 1, 1, 1, 3, 1, 1, 2, 1, 1, 4, 1, 2, 3 },
+                                  vel: new[] { 1f, .6f, .7f, .6f, .9f, .6f, .7f, .6f, 1f, .7f, .6f, .6f, .9f, .6f, .75f, .8f });
 
-        // ---- Nota Chord (MIDI, kind 1) — Voice N semitone offsets (0 = off) + Strum/Spread/Fold
-        Midi("chord", 1, "Major Triad",  ("Voice 1", 4f), ("Voice 2", 7f));
-        Midi("chord", 1, "Minor Triad",  ("Voice 1", 3f), ("Voice 2", 7f));
-        Midi("chord", 1, "Power Chord",  ("Voice 1", 7f), ("Voice 2", 12f));
-        Midi("chord", 1, "Octaves",      ("Voice 1", 12f), ("Voice 2", -12f));
-        Midi("chord", 1, "Maj7 Wide",    ("Voice 1", 4f), ("Voice 2", 7f), ("Voice 3", 11f), ("Voice 4", 16f), ("Spread", 40f));
-        Midi("chord", 1, "Strummed Guitar", ("Voice 1", 7f), ("Voice 2", 12f), ("Voice 3", 16f), ("Voice 4", 19f), ("Strum", 22f), ("Vel 4", -20f));
+        // ---- Nota Chord (MIDI, kind 1) — up to six shifts (−12..+12 st, each switched on), optional
+        //      velocity offsets (MIDI units), Strum ms 0..100, Spread % (⅓ = every other shift up an
+        //      octave, ⅔ = all of them), Keep Root, Fold into a key (0 C … 11 B, major / minor).
+        Chord("Major Triad",        new[] { 4, 7 });
+        Chord("Minor Triad",        new[] { 3, 7 });
+        Chord("Maj7",               new[] { 4, 7, 11 }, strum: 30);
+        Chord("Min7",               new[] { 3, 7, 10 }, strum: 30);
+        Chord("Dominant 7",         new[] { 4, 7, 10 });
+        Chord("Sus2",               new[] { 2, 7 });
+        Chord("Sus4",               new[] { 5, 7 });
+        Chord("Power Chord",        new[] { 7, 12 });
+        Chord("Octaves",            new[] { 12, -12 });
+        Chord("Sixth",              new[] { 4, 7, 9 });
+        Chord("Minor 6",            new[] { 3, 7, 9 });
+        Chord("Diminished 7",       new[] { 3, 6, 9 });
+        Chord("Half-Diminished",    new[] { 3, 6, 10 });
+        Chord("Augmented",          new[] { 4, 8 });
+        Chord("Maj7 Wide",          new[] { 4, 7, 11, 12 }, spread: 40);
+        Chord("Add9 Open",          new[] { 4, 7, 2 }, spread: 40);
+        Chord("Min9 Open",          new[] { 10, 3, 7, 2 }, spread: 40, strum: 20);
+        Chord("Neo-Soul m11",       new[] { 3, 7, 10, 5 }, spread: 40, strum: 45, vel: new[] { -6, -10, -14, -18 });
+        Chord("Rootless Maj9",      new[] { -10, 4, 7, 11 }, keepRoot: false);
+        Chord("Rootless Dom9",      new[] { -10, 4, 7, 10 }, keepRoot: false);
+        Chord("Quartal",            new[] { -7, 5, 10 });
+        Chord("Stacked Fifths",     new[] { -12, -5, 7 });
+        Chord("Organ Drawbars",     new[] { -12, 7, 12 }, vel: new[] { -10, -20, -15 });
+        Chord("Strummed Guitar",    new[] { 7, 12, -12, 4 }, strum: 25, vel: new[] { -4, -8, -12, -16 });
+        Chord("Harp Roll",          new[] { 4, 7, 11, 12, -12 }, strum: 90, spread: 70, vel: new[] { -20, -15, -10, -5, -25 });
+        Chord("Slow Strum Pad",     new[] { 3, 7, 10, 12 }, strum: 65, vel: new[] { -8, -12, -16, -20 });
+        Chord("Diatonic Triads C",  new[] { 4, 7 }, fold: true);
+        Chord("Diatonic 7ths C",    new[] { 4, 7, 11 }, fold: true, strum: 20);
+        Chord("Diatonic Triads Am", new[] { 4, 7 }, fold: true, key: 9, minor: true);
+        Chord("Diatonic 9ths Am",   new[] { 4, 7, 11, 2 }, fold: true, key: 9, minor: true, spread: 40);
+        Chord("Octave Doubler",     new[] { 12 });
+        Chord("Sub Octave",         new[] { -12 });
+        Chord("Soft Fifth + Oct",   new[] { 7, 12 }, vel: new[] { -20, -35 });
+        Chord("Tone Cluster",       new[] { 1, 2, 3 }, vel: new[] { -10, -15, -20 });
         // ---- Nota Scale (MIDI, kind 2) — Root 0..11, Scale 0..9 preset / 10 Custom; Fold 0 Near/1 Down/2 Up
         Midi("scale", 2, "C Minor",      ("Root", 0f), ("Scale", 1f));
         Midi("scale", 2, "Penta Minor",  ("Root", 0f), ("Scale", 8f), ("Fold", 1f));
@@ -2329,6 +2396,36 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         }
         for (int n = 1; n <= 8; n++) if (!used[n]) ps.Add(($"{n} On", 0f));
         Fx("eq", 0, name, ps.ToArray());
+    }
+
+    // A Nota Chord preset: every slot is written (shifts listed in order are switched on, the rest off).
+    private void Chord(string name, int[] shifts, float strum = 0, float spread = 0, bool keepRoot = true, bool fold = false,
+                       int key = 0, bool minor = false, int[]? vel = null)
+    {
+        var ps = new List<(string, float)>();
+        for (int v = 0; v < 6; v++)
+        {
+            bool on = v < shifts.Length;
+            ps.Add(($"Voice {v + 1}", on ? shifts[v] : 0));
+            ps.Add(($"On {v + 1}", on ? 1 : 0));
+            ps.Add(($"Vel {v + 1}", vel is not null && v < vel.Length ? vel[v] : 0));
+        }
+        ps.Add(("Strum", strum)); ps.Add(("Spread", spread));
+        ps.Add(("Keep Root", keepRoot ? 1 : 0)); ps.Add(("Fold", fold ? 1 : 0));
+        ps.Add(("Fold Key", key)); ps.Add(("Fold Mode", minor ? 1 : 0));
+        Midi("chord", 1, name, ps.ToArray());
+    }
+
+    // A Nota Arp preset: globals by name + optional per-step Groove lanes ("Vel N", "Len N", …).
+    private void Arp(string name, Dictionary<string, float> g, float[]? vel = null, float[]? len = null, float[]? chn = null,
+                     int[]? rat = null, int[]? trn = null, string? steps = null)
+    {
+        var ps = g.Select(kv => (kv.Key, kv.Value)).ToList();
+        void Lane(string prefix, IEnumerable<float>? vals) { if (vals is null) return; int i = 1; foreach (var v in vals) ps.Add(($"{prefix} {i++}", v)); }
+        Lane("Vel", vel); Lane("Len", len); Lane("Chn", chn);
+        Lane("Rat", rat?.Select(v => (float)v)); Lane("Trn", trn?.Select(v => (float)v));
+        Lane("On", steps?.Select(c => c == 'x' ? 1f : 0f));
+        Midi("arp", 0, name, ps.ToArray());
     }
 
     private void Midi(string group, int kind, string name, params (string Name, float Value)[] ps)

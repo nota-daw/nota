@@ -145,6 +145,22 @@ Follow the mockup language:
   Signal Path / Modulation) with a segmented toggle styled like the Devices/Clip
   segment, swapping a `ContentControl`. One section = one horizontal row that fits
   260px tall.
+- **Card sizes (S / L) are views of ONE device, never two devices.** When a mockup gives a
+  device a mini (S, 260) and a full (L) size (Nota Arp is the reference):
+  - **Presets belong to the device, not to the size.** Both sizes show the same preset
+    picker with the **full** preset list and the **same current preset** — pick a preset in
+    L, flip to S, it is still selected there (and vice versa). S may edit fewer params, but
+    a preset still sets all of them. Never swap the picker for another control in S; the
+    shell's `ShellSpec.Compact` only narrows it (and hides the type badge).
+  - Every value is shared; S just exposes a subset (e.g. 4 knobs). No per-size params.
+  - The size itself is **editor state**: store it in an appended param (`View`, 0 = L,
+    1 = S) so it persists with the project and clones, but keep it out of presets (in-place
+    preset apply skips `View`), and out of the automation menu.
+  - Plumbing (MIDI effects): `IMidiDeviceBody.WidthFor(engine, track, index)` returns 260/700
+    from `View`; `HeaderAccessory(ctx, index)` puts the S/L toggle (and L-only extras) in the
+    shell header; the toggle writes `View` and calls `ctx.RequestRebuild()`. Per-card UI
+    state that should survive the rebuild (active tab, selected lane) lives in a static map
+    keyed by (track, index), not in the singleton body.
 - **Lay panels as a signal chain**: bordered titled sections left→right with `▸`
   arrows (Osc → Noise → Filter → Amp). Each panel = `Border` (SurfaceCard fill,
   1px border, radius 7) with a bold section title.

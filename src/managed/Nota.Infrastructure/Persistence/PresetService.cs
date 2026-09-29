@@ -127,6 +127,15 @@ public static class PresetService
     /// instrument presets always create a new track. Returns "" on success or a user-facing warning.</summary>
     // Nota EQ-3 (kind 16) appended Range, the fader law. A preset saved before it names no
     // Range (or holds only the first 10 values) and was made in the Classic ±15 dB law.
+    /// <summary>Nota Chord (MIDI kind 1) before the almanac rework had no per-slot switches —
+    /// a slot was off when its offset was 0. Derive On 1..6 (params 16..21) from Voice 1..6.</summary>
+    public static void ChordLegacySwitches(IAudioEngine engine, int trackId, int index)
+    {
+        if (engine.MidiEffectParamCount(trackId, index) < 22) return;
+        for (int v = 0; v < 6; v++)
+            engine.MidiEffectSetParam(trackId, index, 16 + v, Math.Abs(engine.MidiEffectGetParam(trackId, index, v)) >= 0.5f ? 1f : 0f);
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -167,6 +176,7 @@ public static class PresetService
                     for (int i = 0; i < pc; i++)
                         if (doc.NamedParams.TryGetValue(engine.MidiEffectParamName(targetTrackId, mi, i), out var v))
                             engine.MidiEffectSetParam(targetTrackId, mi, i, v);
+                    if (doc.BuiltinKind == 1 && !doc.NamedParams.ContainsKey("On 1")) ChordLegacySwitches(engine, targetTrackId, mi);
                 }
                 return "";
             }
@@ -276,10 +286,19 @@ public static class PresetService
                 if (deviceIndex < 0) return "Not a MIDI effect.";
                 if (doc.NamedParams is { Count: > 0 })
                 {
+                    // Params the preset leaves out go back to their defaults, so switching presets
+                    // never inherits a previous one's steps. "View" (the card size) is editor
+                    // state and stays as it is.
                     int pc = engine.MidiEffectParamCount(trackId, deviceIndex);
                     for (int i = 0; i < pc; i++)
-                        if (doc.NamedParams.TryGetValue(engine.MidiEffectParamName(trackId, deviceIndex, i), out var v))
-                            engine.MidiEffectSetParam(trackId, deviceIndex, i, v);
+                    {
+                        string pn = engine.MidiEffectParamName(trackId, deviceIndex, i);
+                        if (doc.NamedParams.TryGetValue(pn, out var v)) engine.MidiEffectSetParam(trackId, deviceIndex, i, v);
+                        else if (pn != "View") engine.MidiEffectSetParam(trackId, deviceIndex, i, engine.MidiEffectParamDefault(trackId, deviceIndex, i));
+                    }
+                    // A Nota Chord preset saved before its slots had switches: "0 semitones" meant off.
+                    if (engine.MidiEffectKind(trackId, deviceIndex) == 1 && !doc.NamedParams.ContainsKey("On 1"))
+                        ChordLegacySwitches(engine, trackId, deviceIndex);
                 }
                 return "";
             }
