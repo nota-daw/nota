@@ -976,7 +976,7 @@ Console.WriteLine("-- Nota Synth --");
     Check(se.DeviceName(t, -1) == "Nota Synth", $"instrument is Nota Synth (got '{se.DeviceName(t, -1)}')");
 
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 19, $"Nota Synth exposes 19 params (got {pc})");
+    Check(pc == 20, $"Nota Synth exposes 20 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -1045,6 +1045,31 @@ Console.WriteLine("-- Nota Synth --");
     Check(Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "unison")) - 0f) < 1e-4
        && Math.Abs(se.PluginParamGet(tl, -1, PIdx(tl, "voicemode")) - 0f) < 1e-4,
         "params added since keep their defaults when an old state is loaded");
+
+    // The card size (S / L) is the last param, "view": a new Synth opens as S, the choice
+    // travels with the state blob (project save) and a duplicate, but presets neither save
+    // nor apply it.
+    {
+        int tv = se.AddInstrumentTrack();
+        int vi = InstrumentView.Index(se, tv);
+        Check(vi == pc - 1 && se.PluginParamId(tv, -1, vi) == "view", $"view is the last Synth param (index {vi})");
+        Check(InstrumentView.IsMini(se, tv) && Math.Abs(se.InstrumentParamDefault(tv, vi) - 1f) < 1e-4, "a new Synth defaults to the S card");
+        InstrumentView.SetMini(se, tv, false);
+        int tvs = se.AddInstrumentTrack();
+        se.SetPluginState(tvs, -1, se.GetPluginState(tv, -1));
+        Check(!InstrumentView.IsMini(se, tvs), "the L choice persists through the synth state");
+        int tvd = se.DuplicateTrack(tv);
+        Check(tvd > 0 && !InstrumentView.IsMini(se, tvd), "a duplicated Synth keeps its card size");
+        var doc = PresetService.Capture(se, tv, -1, "Mine");
+        Check(doc?.NamedParams is { } np && !np.ContainsKey("view") && np.ContainsKey("cutoff"), "a Synth user preset leaves the card size out");
+        var cat = new FactoryPresetCatalog();
+        var synthPresets = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 0).ToList();
+        Check(synthPresets.Count > 0 && cat.ApplyInPlace(se, synthPresets[0].Id, tv, -1).Length == 0 && !InstrumentView.IsMini(se, tv),
+            "applying a preset keeps the Synth's card size");
+        InstrumentView.SetMini(se, tv, true);
+        cat.ApplyInPlace(se, synthPresets[^1].Id, tv, -1);
+        Check(InstrumentView.IsMini(se, tv), "…in both sizes");
+    }
 
     // Off / LP / HP / BP all pass signal, and each one sounds different from the others.
     int tf = se.AddInstrumentTrack();
@@ -6879,51 +6904,158 @@ Console.WriteLine("-- Nota Length --");
     }
 }
 
-// ===================== Nota Velocity (MIDI kind 4) rework =====================
+// ===================== Nota Velocity (MIDI kind 4) — almanac rework =====================
 Console.WriteLine("-- Nota Velocity --");
 {
     using var e = new NotaEngine();
     e.SetBpm(120); e.SetTimeSignature(4, 4);
     int t = e.AddInstrumentTrack();
     int m = e.AddMidiEffect(t, 4);
-    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Velocity", "add Nota Velocity");
+    Check(m == 0 && e.MidiEffectName(t, 0) == "Nota Velocity" && e.MidiEffectKind(t, 0) == 4, "add Nota Velocity");
     int pc = e.MidiEffectParamCount(t, 0);
-    Check(pc == 7, $"Nota Velocity exposes 7 params (got {pc})");
-    var pn = new System.Collections.Generic.HashSet<string>();
-    for (int i = 0; i < pc; i++) pn.Add(e.MidiEffectParamName(t, 0, i));
-    Check(pn.Contains("Drive") && pn.Contains("Mode") && pn.Contains("Out Low") && pn.Contains("Out High")
-          && pn.Contains("Random Dir") && pn.Contains("Fixed") && pn.Contains("Random"), "mockup-3b params present");
+    Check(pc == 9, $"Nota Velocity exposes 9 params (got {pc})");
+    string[] expect = { "Drive", "Fixed", "Out Low", "Random", "Mode", "Out High", "Random Dir", "Random On", "View" };
+    bool layout = true; for (int i = 0; i < expect.Length; i++) layout &= e.MidiEffectParamName(t, 0, i) == expect[i];
+    Check(layout, "param layout is append-only (… Random Dir, then Random On / View)");
+    Check(e.MidiEffectParamMin(t, 0, 0) == 0.25f && e.MidiEffectParamMax(t, 0, 0) == 4f, "Drive spans 0.25..4");
+    Check(GetByName(e, t, 0, "Drive") == 1f && GetByName(e, t, 0, "Random On") == 0f && Math.Abs(GetByName(e, t, 0, "Random") - 0.25f) < 1e-6,
+          "defaults: linear, Random off (±16 ready)");
 
-    // Fixed mode forces velocity: play a soft note, the last-in/out telemetry reports the
-    // forced output and it differs from the input.
     e.AddMidiClip(t, 0.0, 4.0);
-    e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.3f) });   // vel ~38
-    SetByName(e, t, 0, "Mode", 2f); SetByName(e, t, 0, "Fixed", 0.8f);
-    var b = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(b, 12000); e.StopTransport();
-    int li = e.MidiEffectLastIn(t, 0), lo = e.MidiEffectLastOut(t, 0);
-    Check(li is > 30 and < 46 && lo is > 95 and < 108, $"Fixed mode forces velocity (in {li} → out {lo})");
+    var scope = new float[25];
+    // One note through the device → (last in, last out) from the telemetry.
+    (int In, int Out) Play(float vel)
+    {
+        e.StopTransport();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 0.5, vel) });
+        var buf = new float[4096 * 2]; e.Seek(0); e.Play(); e.RenderOffline(buf, 4096); e.StopTransport();
+        return (e.MidiEffectLastIn(t, 0), e.MidiEffectLastOut(t, 0));
+    }
+    int Expect(double inVel, int mode, double drive, double fixedN, double lo, double hi)
+    {
+        double n = inVel, shaped = mode == 2 ? fixedN : mode == 1 ? 0.5 + Math.Sign(2 * n - 1) * Math.Pow(Math.Abs(2 * n - 1), 1 / drive) * 0.5 : Math.Pow(n, 1 / drive);
+        return (int)Math.Round((lo + shaped * (hi - lo)) * 127);
+    }
 
-    // Scope publishes 12 in/out pairs for the histogram/curve.
-    var scope = new float[24];
+    var r = Play(64f / 127f);
+    Check(r.In == 64 && r.Out == 64, $"linear by default ({r.In} → {r.Out})");
+    SetByName(e, t, 0, "Drive", 2f);
+    r = Play(32f / 127f); Check(r.Out == Expect(32 / 127.0, 0, 2, 0, 1 / 127.0, 1), $"Curve drive 2 lifts a soft note ({r.In} → {r.Out})");
+    SetByName(e, t, 0, "Drive", 4f);
+    r = Play(16f / 127f); Check(r.Out == Expect(16 / 127.0, 0, 4, 0, 1 / 127.0, 1) && r.Out > 70, $"Curve drive 4 (the new top) ({r.In} → {r.Out})");
+    SetByName(e, t, 0, "Mode", 1f); SetByName(e, t, 0, "Drive", 0.5f);
+    r = Play(100f / 127f); Check(r.Out == Expect(100 / 127.0, 1, 0.5, 0, 1 / 127.0, 1) && r.Out < 100, $"Compand 0.5 squeezes to the middle ({r.In} → {r.Out})");
+    SetByName(e, t, 0, "Mode", 2f); SetByName(e, t, 0, "Fixed", 100f / 127f);
+    r = Play(0.3f); Check(r.Out == 100, $"Fixed forces 100 ({r.In} → {r.Out})");
+    SetByName(e, t, 0, "Out Low", 20f / 127f); SetByName(e, t, 0, "Out High", 60f / 127f);
+    r = Play(0.3f); Check(r.Out == Expect(0.3, 2, 1, 100 / 127.0, 20 / 127.0, 60 / 127.0), $"Fixed goes through the Out range ({r.Out})");
+    SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Drive", 1f); SetByName(e, t, 0, "Out Low", 0f); SetByName(e, t, 0, "Out High", 0f);
+    r = Play(0.9f); Check(r.Out == 1, $"a zero Out range still plays velocity 1, never a note-off ({r.Out})");
+    SetByName(e, t, 0, "Out High", 1f);
+
+    // Random: off by default even with an amount; on, it stays within ±amount and the direction holds.
+    var outs = new System.Collections.Generic.List<int>();
+    for (int k = 0; k < 6; k++) outs.Add(Play(64f / 127f).Out);
+    Check(outs.All(x => x == 64), "Random off: the amount is kept but does nothing");
+    SetByName(e, t, 0, "Random On", 1f); SetByName(e, t, 0, "Random", 0.5f);   // ±32
+    outs.Clear(); for (int k = 0; k < 12; k++) outs.Add(Play(64f / 127f).Out);
+    Check(outs.All(x => x >= 32 && x <= 96) && outs.Distinct().Count() > 3, $"Random ±32 spreads both ways ({string.Join(" ", outs)})");
+    SetByName(e, t, 0, "Random Dir", 1f);
+    outs.Clear(); for (int k = 0; k < 8; k++) outs.Add(Play(64f / 127f).Out);
+    Check(outs.All(x => x >= 64 && x <= 96), $"Random up only adds ({string.Join(" ", outs)})");
+    SetByName(e, t, 0, "Random Dir", 2f);
+    outs.Clear(); for (int k = 0; k < 8; k++) outs.Add(Play(64f / 127f).Out);
+    Check(outs.All(x => x >= 32 && x <= 64), $"Random down only subtracts ({string.Join(" ", outs)})");
+    SetByName(e, t, 0, "Random Dir", 1f); SetByName(e, t, 0, "Random", 1f); SetByName(e, t, 0, "Out High", 70f / 127f);   // base ≈ 36, up to +64
+    outs.Clear(); for (int k = 0; k < 16; k++) outs.Add(Play(64f / 127f).Out);
+    Check(outs.All(x => x >= 35 && x <= 70) && outs.Contains(70), $"Random never leaves the Out range ({string.Join(" ", outs)})");
+    SetByName(e, t, 0, "Out High", 1f); SetByName(e, t, 0, "Random Dir", 0f); SetByName(e, t, 0, "Random On", 0f);
+
+    // Telemetry: 12 (in, out) pairs oldest → newest + the note count; the history survives a stop.
     int sn = e.MidiEffectScope(t, 0, scope);
-    bool sok = sn == 24; for (int i = 0; i < sn; i++) if (!float.IsFinite(scope[i]) || scope[i] < 0 || scope[i] > 1.001f) sok = false;
-    Check(sok, $"scope publishes 12 in/out pairs (n={sn})");
+    bool sok = sn == 25; for (int i = 0; i < 24; i++) if (!float.IsFinite(scope[i]) || scope[i] < 0 || scope[i] > 1.001f) sok = false;
+    Check(sok && scope[24] >= 12, $"scope: 12 in/out pairs + the note count (n={sn}, count {scope[24]})");
+    Check(Math.Abs(scope[22] * 127 - e.MidiEffectLastIn(t, 0)) < 0.6 && Math.Abs(scope[23] * 127 - e.MidiEffectLastOut(t, 0)) < 0.6, "the newest pair is the last note");
 
-    // Curve + Compand + Random render finite.
+    // Every mode renders finite + audible.
     void Fin(string tag, Action cfg)
     {
         cfg();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.5f) });
         var buf = new float[12000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(buf, 12000); e.StopTransport();
-        bool fin = true; foreach (var s in buf) if (!float.IsFinite(s) || Math.Abs(s) > 8f) { fin = false; break; }
+        bool fin = true; foreach (var x in buf) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { fin = false; break; }
         Check(fin && Rms(buf, 12000) > 0.0005f, $"{tag} renders finite + audible");
     }
     Fin("Curve + drive", () => { SetByName(e, t, 0, "Mode", 0f); SetByName(e, t, 0, "Drive", 1.6f); });
     Fin("Compand + range", () => { SetByName(e, t, 0, "Mode", 1f); SetByName(e, t, 0, "Out Low", 0.2f); SetByName(e, t, 0, "Out High", 0.9f); });
-    Fin("Random up", () => { SetByName(e, t, 0, "Random", 0.4f); SetByName(e, t, 0, "Random Dir", 1f); });
+    Fin("Random up", () => { SetByName(e, t, 0, "Random On", 1f); SetByName(e, t, 0, "Random", 0.4f); SetByName(e, t, 0, "Random Dir", 1f); });
 
-    SetByName(e, t, 0, "Drive", 0.7f);
+    SetByName(e, t, 0, "Drive", 0.7f); SetByName(e, t, 0, "View", 1f);
     int t2 = e.DuplicateTrack(t);
-    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Drive") - 0.7f) < 1e-3, "duplicate track clones Velocity params");
+    Check(t2 > 0 && Math.Abs(GetByName(e, t2, 0, "Drive") - 0.7f) < 1e-3 && GetByName(e, t2, 0, "Random On") == 1f && GetByName(e, t2, 0, "View") == 1f,
+          "duplicate track clones Velocity params");
+
+    // A project from before the Random switch (7 params): a Random amount stays live, none stays off.
+    foreach (var (amt, want) in new[] { (0.3f, 1f), (0f, 0f) })
+    {
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(e, new TransportState(120, 1, false, false), w);
+        var md = doc.Tracks.First(x => x.MidiEffects.Count > 0 && x.MidiEffects[0].Kind == 4).MidiEffects[0];
+        md.Params = new float[] { 1.4f, 0.8f, 0f, amt, 0f, 1f, 0f };
+        using var e2 = new NotaEngine();
+        ProjectService.Apply(doc, e2, Path.GetTempPath());
+        int vt = -1;
+        for (int i = 0; e2.TryGetTrackInfo(i, out var ti); i++) if (e2.TrackMidiEffectCount(ti.Id) > 0 && e2.MidiEffectKind(ti.Id, 0) == 4) { vt = ti.Id; break; }
+        Check(vt > 0 && GetByName(e2, vt, 0, "Random On") == want && Math.Abs(GetByName(e2, vt, 0, "Drive") - 1.4f) < 1e-4,
+              $"legacy Velocity project (Random {amt}): Random On = {want}");
+    }
+
+    // Factory presets: 25+, every name valid, each applies in place and renders.
+    {
+        var cat = new FactoryPresetCatalog();
+        var mine = cat.All().Where(p => p.IsMidiEffect && p.BuiltinKind == 4).ToList();
+        Check(mine.Count >= 25, $"Nota Velocity ships 25+ factory presets (got {mine.Count})");
+        var names = new System.Collections.Generic.HashSet<string>();
+        for (int i = 0; i < pc; i++) names.Add(e.MidiEffectParamName(t, 0, i));
+        var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
+        Check(bad.Count == 0, $"every Velocity preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        var off = new System.Collections.Generic.List<string>();
+        e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f), new NotaNote(64, 1.0, 1.0, 0.4f) });
+        foreach (var p in mine)
+        {
+            if (cat.ApplyInPlace(e, p.Id, t, 0).Length != 0) { off.Add(p.DisplayName + " (apply)"); continue; }
+            var pb = new float[40000 * 2]; e.Seek(0); e.Play(); e.RenderOffline(pb, 40000); e.StopTransport();
+            bool ok = true; foreach (var x in pb) if (!float.IsFinite(x) || Math.Abs(x) > 8f) { ok = false; break; }
+            if (!ok || Rms(pb, 40000) < 0.0005f) off.Add(p.DisplayName);
+        }
+        Check(off.Count == 0, $"every Velocity preset applies and renders{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Check(GetByName(e, t, 0, "View") == 1f, "presets leave the card size (View) alone");
+        var hum = mine.First(p => p.DisplayName == "Humanize");
+        cat.ApplyInPlace(e, hum.Id, t, 0);
+        Check(GetByName(e, t, 0, "Random On") == 1f && Math.Abs(GetByName(e, t, 0, "Random") * 64 - 16) < 0.01, "Humanize: Random ±16 on");
+    }
+
+    // MCP: named access in musical units.
+    {
+        var mcp = new Nota.Mcp.Tools.MidiFxTools(e, new Nota.SmokeTest.SyncDispatch(), new Nota.SmokeTest.NoRefresh());
+        mcp.SetVelocity(t, 0, mode: "compand", drive: 0.5f, outLow: 30, outHigh: 110, randomAmount: 10, randomDirection: "up", view: "L").GetAwaiter().GetResult();
+        var st = mcp.GetVelocity(t, 0).GetAwaiter().GetResult();
+        Check(st.Mode == "compand" && Math.Abs(st.Drive - 0.5f) < 1e-3 && st.OutLow == 30 && st.OutHigh == 110 && st.RandomOn && st.RandomAmount == 10
+              && st.RandomDirection == "up" && st.View == "L", $"MCP set/get_velocity round-trip ({st.Mode} {st.Drive} {st.OutLow}–{st.OutHigh} {st.RandomAmount} {st.RandomDirection})");
+        Check(st.Curve.Length == 9 && st.Curve[0] >= 30 && st.Curve[^1] <= 110 && st.Curve[4] == 70, $"MCP curve sits in the Out range ({string.Join(" ", st.Curve)})");
+        mcp.SetVelocity(t, 0, fixedValue: 77, randomOn: false).GetAwaiter().GetResult();
+        st = mcp.GetVelocity(t, 0).GetAwaiter().GetResult();
+        Check(st.Mode == "fixed" && st.FixedValue == 77 && !st.RandomOn, "MCP fixedValue switches to fixed mode");
+        mcp.SetVelocity(t, 0, outLow: 120, outHigh: 100).GetAwaiter().GetResult();
+        st = mcp.GetVelocity(t, 0).GetAwaiter().GetResult();
+        Check(st.OutLow < st.OutHigh, $"MCP keeps outLow below outHigh ({st.OutLow}–{st.OutHigh})");
+        mcp.SetVelocity(t, 0, mode: "curve", drive: 1, outLow: 1, outHigh: 127).GetAwaiter().GetResult();
+        Play(0.5f);
+        st = mcp.GetVelocity(t, 0).GetAwaiter().GetResult();
+        Check(st.LastNotes.Length > 0 && st.LastNotes[^1].In == 64 && st.LastNotes[^1].Out == 64 && st.NotesShaped > 0, "MCP reports the last notes in → out");
+        bool threw = false; try { mcp.SetVelocity(t, 0, mode: "loud").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
+        Check(threw, "MCP rejects an unknown mode");
+    }
 }
 
 // ===================== Nota Random (MIDI kind 5) rework =====================

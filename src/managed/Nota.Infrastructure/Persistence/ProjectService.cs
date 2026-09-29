@@ -607,6 +607,7 @@ public sealed class ProjectService
                 for (int p = 0; p < m.Params.Length && p < mpc; p++) engine.MidiEffectSetParam(id, mi, p, m.Params[p]);
                 if (m.Kind == 1 && m.Params.Length <= 16) PresetService.ChordLegacySwitches(engine, id, mi);   // pre-switch Nota Chord
                 if (m.Kind == 3 && m.Params.Length <= 11) PresetService.LengthLegacy(engine, id, mi);          // pre-Division Nota Length
+                if (m.Kind == 4 && m.Params.Length <= 7) PresetService.VelocityLegacy(engine, id, mi);         // pre-switch Nota Velocity
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
                 if (m.CcDestDevice >= 0 && m.CcDestParam >= 0)
                 {

@@ -256,7 +256,9 @@ and user presets, automation, persistence and cloning.
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
   stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
   Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
-  Osc · Env · Filter tabs with draggable envelope and filter graphs. 25 factory presets.
+  Osc · Env · Filter tabs with draggable envelope and filter graphs. Two sizes (L 700 /
+  S 260, S by default): S is the draggable filter curve over Cutoff · Reso · Attack ·
+  Release; the size is saved with the project. 25 factory presets.
 - **Nota Sampler** — sampler (one-shot and loop: Off / Fwd / Ping / Rev), voice modes
   Poly 16 / Mono / Choke, Glide (legato in Mono), loop crossfade, sample Gain, pitch
   Keytrack, filter key-tracking and Env → Cutoff, Vel→Vol, Output; Sample · Pitch · Env ·
@@ -544,8 +546,11 @@ and user presets, automation, persistence and cloning.
   limit (the bar line). Two sizes (L 700 / S 260) with an animated GATE window: one bar of five
   notes, input outlined, output filled, Random's range as a band. 32 presets, full
   automation, MCP tools (`get_length` / `set_length`).
-- **Nota Velocity** — velocity transformation: Curve/Compand/Fixed, Drive, Random, Out
-  Range, Random Dir, and a Last 12 histogram.
+- **Nota Velocity** — velocity transformation: Curve / Compand / Fixed, Drive (0.25 … 4) or
+  the Fixed value, Out range (1 … 127, never 0), Random ±0 … 64 with its own switch and Both /
+  Up / Down. Two sizes (L 700 / S 260) with an animated TRANSFER graph (curve, Random's band,
+  the last 12 notes as dots) and a LAST 12 NOTES histogram (in outlined, out filled). 32
+  presets, full automation, MCP tools (`get_velocity` / `set_velocity`).
 - **Nota Random** — randomization: Chance; Note (±12 st) / Velocity (±64) / Timing (up to
   100 ms late) / Skip / Octave (±2) amounts; Gauss / Even / Walk; Per note / Per bar; Stay in
   scale (C major); seed with Reroll and Lock (holds the roll on screen, repeating it every bar).

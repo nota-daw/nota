@@ -522,6 +522,22 @@ public sealed partial class ArrangementView
                     };
                     foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
                 }
+                else if (e.MidiEffectKind(t.Id, m) == 4 && mpc > VelocityModel.PView)
+                {
+                    // Nota Velocity: MODE, then OUT RANGE / RANDOM. View (the card size) is editor state.
+                    (int p, string label)[] ps =
+                    {
+                        (VelocityModel.PMode, "Mode"), (VelocityModel.PDrive, "Drive"), (VelocityModel.PFixed, "Value (Fixed)"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    mMenu.Items.Add(new Separator());
+                    (int p, string label)[] outs =
+                    {
+                        (VelocityModel.POutLo, "Out Low"), (VelocityModel.POutHi, "Out High"),
+                        (VelocityModel.PRandomOn, "Random On"), (VelocityModel.PRandom, "Random"), (VelocityModel.PRandomDir, "Random Direction"),
+                    };
+                    foreach (var (p, label) in outs) mMenu.Items.Add(MLeaf(m, p, label));
+                }
                 else if (e.MidiEffectKind(t.Id, m) == 5 && mpc > RandomModel.PLockBar)
                 {
                     // Nota Random: WHAT VARIES, then DICE. View (the card size) and Lock Bar (set by
@@ -606,7 +622,7 @@ public sealed partial class ArrangementView
         {
             string id = e.PluginParamId(t.Id, -1, i);
             string nm = e.PluginParamName(t.Id, -1, i);
-            if (id.Length == 0) continue;
+            if (id.Length == 0 || InstrumentView.IsViewParam(id)) continue;   // the card size isn't sound
             string grp = Head(nm);
             if (grp.Length > 0 && sizes[grp] < 2) grp = "";
             string leaf = grp.Length > 0 ? nm[(grp.Length + 1)..] : nm;

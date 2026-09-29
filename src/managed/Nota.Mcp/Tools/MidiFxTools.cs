@@ -500,6 +500,98 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         if (view is not null) S(LView, view.Trim().Equals("S", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
     });
 
+    // ---- Nota Velocity (kind 4) — named access in musical units ------------------------------
+    // Param layout mirrors MidiVelocity.h: Drive 0, Fixed 1, Out Low 2, Random 3, Mode 4, Out High 5,
+    // Random Dir 6, Random On 7, View 8.
+    private const int VDrive = 0, VFixed = 1, VLo = 2, VRnd = 3, VMode = 4, VHi = 5, VDir = 6, VRndOn = 7, VView = 8;
+    private static readonly string[] VelModes = { "curve", "compand", "fixed" };
+    private static readonly string[] VelDirs = { "both", "up", "down" };
+
+    public sealed record VelocityNote(int In, int Out);
+    public sealed record VelocityState(
+        string Mode, float Drive, int FixedValue, int OutLow, int OutHigh, bool RandomOn, int RandomAmount, string RandomDirection,
+        string View, int[] Curve, VelocityNote[] LastNotes, int NotesShaped);
+
+    private void RequireVelocity(int trackId, int index)
+    {
+        if (E.MidiEffectKind(trackId, index) != 4 || E.MidiEffectParamCount(trackId, index) <= VView)
+            throw new ArgumentException($"MIDI effect {index} on track {trackId} is not a Nota Velocity.");
+    }
+
+    [McpServerTool(Name = "get_velocity"), Description(
+        "Read a Nota Velocity (MIDI effect kind 4) in musical units: mode (curve | compand | fixed), drive 0.25..4 (1 = linear; "
+        + "curve: > 1 makes soft notes louder, < 1 quieter; compand: > 1 stretches velocities to the edges, < 1 squeezes them to the "
+        + "middle), fixedValue 1..127 (fixed mode), the Out range outLow..outHigh (1..127), randomOn, randomAmount 0..64 (velocity "
+        + "units), randomDirection (both | up | down), card view, curve — the output before Random for inputs 1, 16, 32 … 127 "
+        + "(9 points) — and live telemetry: the last (up to 12) notes as in → out velocity, oldest first, and notes shaped so far.")]
+    public Task<VelocityState> GetVelocity(int trackId, int index) => Read(() =>
+    {
+        RequireVelocity(trackId, index);
+        float G(int p) => E.MidiEffectGetParam(trackId, index, p);
+        int V(float n) => Math.Clamp((int)MathF.Round(n * 127), 1, 127);
+        int mode = Math.Clamp((int)MathF.Round(G(VMode)), 0, 2);
+        float drive = Math.Clamp(G(VDrive), 0.05f, 4f);
+        float lo = Math.Clamp(G(VLo), 0, 1), hi = Math.Clamp(G(VHi), 0, 1);
+        if (lo > hi) (lo, hi) = (hi, lo);
+        lo = MathF.Max(lo, 1 / 127f); hi = MathF.Max(hi, 1 / 127f);
+        int[] ins = { 1, 16, 32, 48, 64, 80, 96, 112, 127 };
+        var curve = Array.ConvertAll(ins, v =>
+        {
+            double n = v / 127.0, shaped;
+            if (mode == 2) shaped = Math.Clamp(G(VFixed), 0, 1);
+            else if (mode == 1) { double c = 2 * n - 1; shaped = Math.Clamp(0.5 + Math.Sign(c) * Math.Pow(Math.Abs(c), 1 / drive) * 0.5, 0, 1); }
+            else shaped = Math.Pow(n, 1 / drive);
+            return V((float)(lo + shaped * (hi - lo)));
+        });
+        var sc = new float[25];
+        int sn = E.MidiEffectScope(trackId, index, sc);
+        int total = sn >= 25 ? (int)sc[24] : 0, have = Math.Min(12, total);
+        var last = new List<VelocityNote>(have);
+        for (int k = 12 - have; k < 12 && 2 * k + 1 < sn; k++) last.Add(new VelocityNote((int)MathF.Round(sc[2 * k] * 127), (int)MathF.Round(sc[2 * k + 1] * 127)));
+        int vlo = V(lo), vhi = V(hi);
+        return new VelocityState(VelModes[mode], MathF.Round(drive, 2), V(G(VFixed)), vlo, vhi, G(VRndOn) >= 0.5f,
+            (int)MathF.Round(Math.Clamp(G(VRnd), 0, 1) * 64), VelDirs[Math.Clamp((int)MathF.Round(G(VDir)), 0, 2)],
+            G(VView) >= 0.5f ? "S" : "L", curve, last.ToArray(), total);
+    });
+
+    [McpServerTool(Name = "set_velocity"), Description(
+        "Set a Nota Velocity's params by name; omit what you don't change. mode: curve | compand | fixed. drive 0.25..4 (1 = linear). "
+        + "fixedValue 1..127 (turns mode to fixed unless mode is given). outLow / outHigh 1..127 — the output range (kept low < high). "
+        + "randomAmount 0..64 velocity (turns Random on unless randomOn is given), randomOn, randomDirection both | up | down, view S|L.")]
+    public Task SetVelocity(int trackId, int index, string? mode = null, float? drive = null, int? fixedValue = null,
+        int? outLow = null, int? outHigh = null, bool? randomOn = null, float? randomAmount = null, string? randomDirection = null,
+        string? view = null) => Mutate(() =>
+    {
+        RequireVelocity(trackId, index);
+        float G(int p) => E.MidiEffectGetParam(trackId, index, p);
+        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        if (drive is { } d) S(VDrive, MathF.Round(Math.Clamp(d, 0.25f, 4f), 2));
+        if (fixedValue is { } fv) { S(VFixed, Math.Clamp(fv, 1, 127) / 127f); S(VMode, 2); }
+        if (mode is not null)
+        {
+            int m = Array.IndexOf(VelModes, mode.Trim().ToLowerInvariant());
+            if (m < 0) throw new ArgumentException($"Unknown mode '{mode}'. Use one of: curve, compand, fixed.");
+            S(VMode, m);
+        }
+        if (outLow is not null || outHigh is not null)
+        {
+            int lo = outLow ?? Math.Clamp((int)MathF.Round(G(VLo) * 127), 1, 127);
+            int hi = outHigh ?? Math.Clamp((int)MathF.Round(G(VHi) * 127), 1, 127);
+            lo = Math.Clamp(lo, 1, 126); hi = Math.Clamp(hi, 2, 127);
+            if (lo >= hi) { if (outHigh is null) hi = lo + 1; else lo = hi - 1; }
+            S(VLo, lo / 127f); S(VHi, hi / 127f);
+        }
+        if (randomAmount is { } r) { S(VRnd, MathF.Round(Math.Clamp(r, 0, 64)) / 64f); S(VRndOn, 1); }
+        if (randomOn is { } on) S(VRndOn, on ? 1 : 0);
+        if (randomDirection is not null)
+        {
+            int di = Array.IndexOf(VelDirs, randomDirection.Trim().ToLowerInvariant());
+            if (di < 0) throw new ArgumentException($"Unknown randomDirection '{randomDirection}'. Use one of: both, up, down.");
+            S(VDir, di);
+        }
+        if (view is not null) S(VView, view.Trim().Equals("S", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+    });
+
     // ---- Nota Random (kind 5) — named access in musical units --------------------------------
     // Param layout mirrors MidiRandom.h: Chance 0, Note Range 1, Vel Amt 2, Time Amt 3, Skip 4, Oct Amt 5,
     // Dist 6, Rate 7, Stay In Scale 8, Locked 9, Seed 10, View 11, Lock Bar 12.

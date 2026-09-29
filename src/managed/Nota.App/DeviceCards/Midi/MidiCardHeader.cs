@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Shell-header pieces shared by the MIDI-effect cards that come in two sizes (Nota Arp,
-// Nota Chord): the MIDI Learn button that mirrors the transport's Learn toggle, and the
+// Shell-header pieces shared by the cards that come in two sizes (Nota Arp, Nota Chord,
+// Nota Synth …): the MIDI Learn button that mirrors the transport's Learn toggle, and the
 // S / L size toggle bound to the device's "View" param (0 = L, 1 = S).
 
 using System;
@@ -41,10 +41,14 @@ internal static class MidiCardHeader
     }
 
     public static Control SizeToggle(DeviceCardContext ctx, int index, int viewParam, Func<bool> isMini)
+        => SizeToggle(ctx, isMini, mini => ctx.Engine.MidiEffectSetParam(ctx.TrackId, index, viewParam, mini ? 1f : 0f));
+
+    /// <summary>The S / L toggle over any size store — a MIDI effect's View param, or an
+    /// instrument's "view" param (InstrumentView). Flipping it rebuilds the chain.</summary>
+    public static Control SizeToggle(DeviceCardContext ctx, Func<bool> isMini, Action<bool> setMini)
     {
-        var e = ctx.Engine; int t = ctx.TrackId;
         var size = DeviceCardKit.Segments(new[] { "S", "L" }, () => isMini() ? 0 : 1,
-            i => { e.MidiEffectSetParam(t, index, viewParam, i == 0 ? 1f : 0f); ctx.RequestRebuild(); }, out _, padX: 0, minSegWidth: 16, fontSize: 8);
+            i => { setMini(i == 0); ctx.RequestRebuild(); }, out _, padX: 0, minSegWidth: 16, fontSize: 8);
         ToolTip.SetTip(size, "Card size: S (mini) / L (full)");
         return size;
     }

@@ -49,7 +49,11 @@ public static class PresetService
                 doc.BuiltinKind = ik;
                 doc.NamedParams = new Dictionary<string, float>(pc);
                 for (int i = 0; i < pc; i++)
-                    doc.NamedParams[engine.PluginParamId(trackId, -1, i)] = engine.PluginParamGet(trackId, -1, i);
+                {
+                    string id = engine.PluginParamId(trackId, -1, i);
+                    if (InstrumentView.IsViewParam(id)) continue;   // the card size is editor state, not sound
+                    doc.NamedParams[id] = engine.PluginParamGet(trackId, -1, i);
+                }
                 return doc;
             }
         }
@@ -148,6 +152,14 @@ public static class PresetService
         engine.MidiEffectSetParam(trackId, index, 7, -engine.MidiEffectGetParam(trackId, index, 7));
     }
 
+    /// <summary>Nota Velocity (MIDI kind 4) before the almanac rework had no Random switch — any
+    /// Random amount was live. Turns the switch on when the old amount was above zero.</summary>
+    public static void VelocityLegacy(IAudioEngine engine, int trackId, int index)
+    {
+        if (engine.MidiEffectParamCount(trackId, index) < 8) return;
+        engine.MidiEffectSetParam(trackId, index, 7, engine.MidiEffectGetParam(trackId, index, 3) > 0f ? 1f : 0f);
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -190,6 +202,7 @@ public static class PresetService
                             engine.MidiEffectSetParam(targetTrackId, mi, i, v);
                     if (doc.BuiltinKind == 1 && !doc.NamedParams.ContainsKey("On 1")) ChordLegacySwitches(engine, targetTrackId, mi);
                     if (doc.BuiltinKind == 3 && doc.NamedParams.ContainsKey("Rate") && !doc.NamedParams.ContainsKey("Division")) LengthLegacy(engine, targetTrackId, mi);
+                    if (doc.BuiltinKind == 4 && !doc.NamedParams.ContainsKey("Random On")) VelocityLegacy(engine, targetTrackId, mi);
                 }
                 return "";
             }
@@ -217,7 +230,8 @@ public static class PresetService
                 {
                     int pc = engine.PluginParamCount(t, -1);
                     for (int i = 0; i < pc; i++)
-                        if (doc.NamedParams.TryGetValue(engine.PluginParamId(t, -1, i), out var v))
+                        if (engine.PluginParamId(t, -1, i) is var pid && !InstrumentView.IsViewParam(pid)
+                            && doc.NamedParams.TryGetValue(pid, out var v))
                             engine.PluginParamSet(t, -1, i, v);
                 }
                 return "";
@@ -265,6 +279,7 @@ public static class PresetService
                 for (int i = 0; i < pc; i++)
                 {
                     string id = engine.PluginParamId(trackId, -1, i);
+                    if (InstrumentView.IsViewParam(id)) continue;   // a preset keeps the card's S / L size
                     bool named = doc.NamedParams is { Count: > 0 } && doc.NamedParams.ContainsKey(id);
                     if (!named && sampler && id is "start" or "end" or "loopstart" or "loopend") continue;
                     if (!named && rhythm && (id.EndsWith("_start") || id.EndsWith("_length") || id.EndsWith("_reverse"))) continue;
@@ -315,6 +330,9 @@ public static class PresetService
                     // A Nota Length preset from before Division: map its Rate (and Key to Len's old sign).
                     if (engine.MidiEffectKind(trackId, deviceIndex) == 3 && doc.NamedParams.ContainsKey("Rate") && !doc.NamedParams.ContainsKey("Division"))
                         LengthLegacy(engine, trackId, deviceIndex);
+                    // A Nota Velocity preset from before the Random switch: its amount was always live.
+                    if (engine.MidiEffectKind(trackId, deviceIndex) == 4 && !doc.NamedParams.ContainsKey("Random On"))
+                        VelocityLegacy(engine, trackId, deviceIndex);
                 }
                 return "";
             }

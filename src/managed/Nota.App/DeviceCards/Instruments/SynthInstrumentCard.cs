@@ -12,6 +12,14 @@
 // A 186px rail stays put on every tab — voice mode, volume, pan, glide, unison spread,
 // velocity tracking and the track's meter — over a status strip that reads the patch back
 // in words. Brass is the parameter itself; teal is modulation (detune, env → cutoff).
+//
+// Two sizes share every value; the S / L toggle in the shell header flips the card (the
+// choice is the synth's "view" param — see InstrumentView — so it persists with the
+// project; a new Synth opens as S):
+//   • L 700 × 260 — the tabs + rail above.
+//   • S 260 × 260 — the filter curve (drag for cutoff / reso, the wave named on it) over
+//     Cutoff · Reso · Attack · Release; voices, glide and output fold into the status line.
+//     The header keeps the full preset picker — presets still set what S can't show.
 
 using System;
 using System.Collections.Generic;
@@ -30,7 +38,20 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
     public bool BodyOnly => true;
     public string Subtitle => "SUBTRACTIVE";
 
-    private const double RailW = 186, TabH = 20, StatusH = 18, RowH = 60;
+    public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? 260 : 700;
+
+    // L: MIDI Learn · S/L. S: S/L only (the shell keeps the same, narrower, preset picker).
+    public Control? HeaderAccessory(DeviceCardContext ctx)
+    {
+        var e = ctx.Engine; int t = ctx.TrackId;
+        if (InstrumentView.Index(e, t) < 0) return null;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        if (!InstrumentView.IsMini(e, t)) row.Children.Add(MidiCardHeader.LearnButton(ctx));
+        row.Children.Add(MidiCardHeader.SizeToggle(ctx, () => InstrumentView.IsMini(e, t), m => InstrumentView.SetMini(e, t, m)));
+        return row;
+    }
+
+    private const double RailW = 186, TabH = 20, StatusH = 18, RowH = 60, MiniRowH = 53;
 
     private static readonly string[] WaveNames = { "Saw", "Square", "Triangle", "Sine" };
     private static readonly string[] FilterNames = { "Off", "LP", "HP", "BP" };
@@ -72,12 +93,13 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         void SetP(string id, float v) { if (I(id) is var i and >= 0) engine.PluginParamSet(track, -1, i, Math.Clamp(v, 0f, 1f)); }
         int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
 
+        bool mini = InstrumentView.IsMini(engine, track);
         var readouts = new List<Action>();          // everything that re-reads a param
         int tab = 0;                                // the open tab: 0 Osc · 1 Env · 2 Filter
         var bodies = new (Control Graph, Control Row)[TabNames.Length];
         var osc = new SynthViz(SynthViz.K.Osc, engine, track, idx);
         var env = new SynthViz(SynthViz.K.Adsr, engine, track, idx);
-        var flt = new SynthViz(SynthViz.K.Filter, engine, track, idx);
+        var flt = new SynthViz(SynthViz.K.Filter, engine, track, idx) { Mini = mini };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         meta.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -132,6 +154,8 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
                 Padding = new Thickness(0, 4, 0, 0), Child = sp,
             };
         }
+
+        if (mini) return BuildMini(ctx, flt, Knob, readouts, Refresh, () => Sel("filtype", 4) == 0, status, meta);
 
         // ---- Osc tab ----------------------------------------------------------
         var pwKnobCell = Knob("pulsewidth", "Pulse W", v => NotaNum.Pct(0.05 + v * 0.90));
@@ -330,7 +354,9 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         rail.Width = RailW;
 
         // ---- status strip -----------------------------------------------------
-        string Summary() => tab switch
+        string Summary() => mini
+            ? $"{VoiceNames[Sel("voicemode", 3)]} · glide {Glide(G("glide"))}"
+            : tab switch
         {
             0 => $"{WaveNames[Sel("wave", 4)]} · unison {UnisonCounts[Sel("unison", 4)]} · detune {Cents(G("detune"))}"
                  + (Sel("wave", 4) == 1 ? $" · pulse {NotaNum.Pct(0.05 + G("pulsewidth") * 0.90)}" : ""),
@@ -341,23 +367,13 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         };
         string Meta()
         {
+            if (mini) return $"out {Db(G("gain"))}";
             int uni = UnisonCounts[Sel("unison", 4)];
             string mode = VoiceNames[Sel("voicemode", 3)].ToUpperInvariant();
             string oct = Octaves(G("octave"));
             return $"{mode} · UNISON {uni} · OCT {oct} · {Db(G("gain"))}";
         }
-        var statusBar = new Grid
-        {
-            Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10,
-            Background = NotaPalette.SurfaceAbyss,
-        };
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
+        var statusHost = StatusStrip(status, meta);
 
         // ---- assembly ---------------------------------------------------------
         var body = new Grid
@@ -376,6 +392,70 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         };
         ShowTab();
         return root;
+    }
+
+    // ---- S: the mini card -------------------------------------------------------
+    // One island: the filter window fills it, the four main knobs sit under it, spaced
+    // evenly across the 260 card; the status strip carries voices / glide / output.
+    private static Control BuildMini(DeviceCardContext ctx, SynthViz flt,
+        Func<string, string, Func<float, string>, double, double, IBrush?, Control> knob,
+        List<Action> readouts, Action refresh, Func<bool> filterOff, TextBlock status, TextBlock meta)
+    {
+        var cells = new[]
+        {
+            knob("cutoff", "Cutoff", KHz, 34, 52, null),
+            knob("resonance", "Reso", v => v.ToString("0.00", NotaNum.Culture), 34, 52, null),
+            knob("attack", "Attack", v => Secs(v, 0.001, 2.0), 34, 52, null),
+            knob("release", "Release", v => Secs(v, 0.002, 3.0), 34, 52, null),
+        };
+        var knobRow = new Grid { Height = MiniRowH, ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
+        for (int i = 0; i < cells.Length; i++)
+        {
+            cells[i].HorizontalAlignment = HorizontalAlignment.Center;
+            cells[i].VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(cells[i], i); knobRow.Children.Add(cells[i]);
+        }
+        // Off bypasses the filter — its two knobs go inactive but stay editable.
+        var cutKnob = FindKnob(cells[0]); var resoKnob = FindKnob(cells[1]);
+        readouts.Add(() =>
+        {
+            bool off = filterOff();
+            if (cutKnob is not null) cutKnob.IsDim = off;
+            if (resoKnob is not null) resoKnob.IsDim = off;
+        });
+
+        var inner = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 4, Margin = new Thickness(6, 6, 6, 0) };
+        inner.Children.Add(flt);
+        Grid.SetRow(knobRow, 1); inner.Children.Add(knobRow);
+        var island = SectionBox(inner);
+        island.Margin = new Thickness(NotaSpace.DeviceGap);
+
+        var statusHost = StatusStrip(status, meta);
+        DockPanel.SetDock(statusHost, Dock.Bottom);
+        var root = new DockPanel
+        {
+            LastChildFill = true, Background = NotaPalette.Gutter,
+            Children = { statusHost, island },
+        };
+        refresh();
+        return root;
+    }
+
+    // The 18px strip under the card: the patch in words on the left, a mono readout right.
+    private static Border StatusStrip(TextBlock status, TextBlock meta)
+    {
+        var bar = new Grid
+        {
+            Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10,
+            Background = NotaPalette.SurfaceAbyss,
+        };
+        bar.Children.Add(status);
+        Grid.SetColumn(meta, 1); bar.Children.Add(meta);
+        return new Border
+        {
+            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = bar,
+        };
     }
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)

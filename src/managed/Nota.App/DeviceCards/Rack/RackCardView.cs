@@ -1152,7 +1152,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { ActionChip("Save preset", () => _ctx.RequestRackPresetSave(sc)) } });
         int pc = a.ChainInstrumentParamCount(sc);
         if (pc == 0) body.Children.Add(new TextBlock { Text = "No parameters", FontSize = 9, Foreground = TextTertiary });
-        for (int p = 0; p < pc; p++) body.Children.Add(RackInstParamRow(a, sc, p));
+        for (int p = 0; p < pc; p++)
+            if (a.ChainInstrumentParamName(sc, p) != "View") body.Children.Add(RackInstParamRow(a, sc, p));   // the card size isn't sound
 
         Control fullBtn;
         if (ik == -1) fullBtn = ActionChip("Full", () => { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } });

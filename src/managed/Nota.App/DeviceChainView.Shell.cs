@@ -85,7 +85,11 @@ public sealed partial class DeviceChainView
     private float[] CaptureParams(ChainKind k, int di)
     { int n = ParamCount(k, di); var a = new float[n]; for (int i = 0; i < n; i++) a[i] = GetP(k, di, i); return a; }
     private void ApplyParams(ChainKind k, int di, float[] p)
-    { int n = Math.Min(p.Length, ParamCount(k, di)); for (int i = 0; i < n; i++) SetPr(k, di, i, p[i]); }
+    {
+        int n = Math.Min(p.Length, ParamCount(k, di));
+        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
+        for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]);
+    }
 
     internal readonly record struct ShellSpec(
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,

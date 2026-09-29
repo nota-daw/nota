@@ -91,6 +91,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - Nota Scale has 35 presets. The automation menu lists its settings, and each note of the
   Custom scale is under Custom Notes. MCP gets new tools for it: `get_scale`, `set_scale`
   and `set_scale_note`.
+- Nota Velocity has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The TRANSFER graph shows the curve, the band Random can move a note within, the Out range
+  as dashed lines and the last 12 notes as dots. Each new note pops in, and the curve glides
+  to its new shape when you change a setting. LAST 12 NOTES shows each note's velocity in as
+  an outline and out as a fill.
+- Nota Velocity's Random has its own on/off switch, so you can turn it off without losing
+  the amount. Random goes up to ±64. Drive now goes from 0.25 to 4 (it stopped at 2). A note
+  never comes out at velocity 0. Projects and presets from older versions sound the same.
+- Nota Velocity has 32 presets. The automation menu lists its settings, and MCP gets new
+  tools for it: `get_velocity` and `set_velocity`.
+- Nota Synth now comes in two sizes too: the full card and a small 260-pixel one with the
+  filter curve and four knobs (Cutoff, Reso, Attack, Release). Switch with S / L in the card's
+  header. A new Synth opens small. The project remembers each Synth's size, and presets
+  don't change it.
 
 ### Fixed
 - Nota Scale no longer leaves notes hanging when you change the scale, root or fold while a

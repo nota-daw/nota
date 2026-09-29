@@ -2272,11 +2272,42 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Len("Legato Glide",      mode: 0, div: 3, legato: true);
         Len("Legato Bar Pad",    mode: 0, div: 5, legato: true, clip: true);
         Len("Clip-Safe Quarter", mode: 0, div: 3, clip: true, rnd: 0.1f);
-        // ---- Nota Velocity (MIDI, kind 4) — Mode 0 Curve/1 Compand/2 Fixed; Drive 1 = linear
-        Midi("velocity", 4, "Soft Hands", ("Mode", 0f), ("Drive", 1.4f));
-        Midi("velocity", 4, "Humanize",   ("Mode", 0f), ("Drive", 1f), ("Random", 0.25f));
-        Midi("velocity", 4, "Compress",   ("Mode", 1f), ("Drive", 0.6f));
-        Midi("velocity", 4, "Fixed 100",  ("Mode", 2f), ("Fixed", 0.79f));
+        // ---- Nota Velocity (MIDI, kind 4) — almanac rework. Mode 0 Curve / 1 Compand / 2 Fixed;
+        // drive 0.25..4 (1 = linear; Curve > 1 lifts soft notes, Compand > 1 stretches to the edges);
+        // value / Out range as MIDI velocities 1..127; Random ±0..64, dir 0 Both / 1 Up / 2 Down,
+        // off unless rnd is given.
+        Vel("Init");
+        Vel("Humanize",            rnd: 16);
+        Vel("Humanize Subtle",     rnd: 6);
+        Vel("Humanize Loose",      rnd: 28);
+        Vel("Soft Hands",          drive: 1.4f);
+        Vel("Light Touch",         drive: 2f);
+        Vel("Feather",             drive: 3f, lo: 30, hi: 110);
+        Vel("Heavy Hands",         drive: 0.6f);
+        Vel("Hard Hitter",         drive: 0.35f);
+        Vel("Stiff Keyboard Fix",  drive: 1.8f, lo: 20);
+        Vel("Soft Pedal",          drive: 1.2f, hi: 90);
+        Vel("Gentle Compress",     mode: 1, drive: 0.7f);
+        Vel("Tight Compress",      mode: 1, drive: 0.45f);
+        Vel("Squash",              mode: 1, drive: 0.3f, lo: 60, hi: 110);
+        Vel("Expand Dynamics",     mode: 1, drive: 1.6f);
+        Vel("Accent Maker",        mode: 1, drive: 2.5f);
+        Vel("Mid Band",            mode: 1, lo: 50, hi: 90);
+        Vel("Fixed 127",           mode: 2, value: 127);
+        Vel("Fixed 100",           mode: 2, value: 100);
+        Vel("Fixed 64",            mode: 2, value: 64);
+        Vel("Ghost 30",            mode: 2, value: 30);
+        Vel("Drum Machine",        mode: 2, value: 100, rnd: 6);
+        Vel("Accent Lottery",      mode: 2, value: 90, rnd: 30, dir: 1);
+        Vel("Pad Floor",           lo: 40, hi: 100);
+        Vel("Quiet Layer",         hi: 60);
+        Vel("Loud Only",           lo: 90);
+        Vel("Push Up",             rnd: 20, dir: 1);
+        Vel("Pull Down",           rnd: 20, dir: 2);
+        Vel("Ghost Notes",         drive: 0.5f, lo: 10, hi: 70, rnd: 8);
+        Vel("Loose Soft Hands",    drive: 1.5f, rnd: 12);
+        Vel("Tight Groove",        mode: 1, drive: 0.5f, lo: 70, hi: 115, rnd: 5);
+        Vel("Chaos",               rnd: 64);
         // ---- Nota Random (MIDI, kind 5) — almanac rework. Note ±0..12 st; Vel / Time / Skip / Oct
         // amounts 0..1 (±64 velocity, ≤100 ms late, 0..100 % dropped, ±2 octaves); Dist 0 Gauss /
         // 1 Even / 2 Walk; Rate 0 per note / 1 per bar. A locked preset carries its seed, so the
@@ -2541,6 +2572,12 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         float vel = 0, float key = 0, float rnd = 0, bool legato = false, bool clip = false)
         => Midi("notelength", 3, name, ("Mode", mode), ("Division", div), ("Ms", ms), ("Percent", pct), ("Trigger", trig),
             ("Vel to Len", vel), ("Key to Len", key), ("Random", rnd), ("Legato", legato ? 1 : 0), ("Clip Limit", clip ? 1 : 0), ("Gate", 1));
+
+    // A Nota Velocity preset (MIDI kind 4) in musical units; every sound param is named so switching
+    // presets is exact.
+    private void Vel(string name, int mode = 0, float drive = 1f, int value = 100, int lo = 1, int hi = 127, int rnd = 0, int dir = 0)
+        => Midi("velocity", 4, name, ("Mode", mode), ("Drive", drive), ("Fixed", value / 127f), ("Out Low", lo / 127f), ("Out High", hi / 127f),
+            ("Random", rnd > 0 ? rnd / 64f : 0.25f), ("Random Dir", dir), ("Random On", rnd > 0 ? 1 : 0));
 
     // A Nota Random preset (MIDI kind 5); every sound param is named so switching presets is exact.
     // seed > 0 locks the roll on that seed (bar 0's roll repeats every bar).

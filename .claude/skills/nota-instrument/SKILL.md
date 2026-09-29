@@ -161,6 +161,12 @@ Follow the mockup language:
     shell header; the toggle writes `View` and calls `ctx.RequestRebuild()`. Per-card UI
     state that should survive the rebuild (active tab, selected lane) lives in a static map
     keyed by (track, index), not in the singleton body.
+  - Plumbing (instruments, Nota Synth is the reference): append a `"view"` plugin param to the
+    DSP (its default in the constructor is the instrument's default size — Synth opens as S);
+    `InstrumentView` (Nota.Application) finds/reads/writes it, and presets, A/B, the automation
+    menu (by id) and the rack chain card (by the name "View") already skip it. The card implements
+    `IInstrumentCard.WidthFor(engine, track)` + `HeaderAccessory(ctx)` with
+    `MidiCardHeader.SizeToggle(ctx, isMini, setMini)`; the shell goes compact under 300px.
 - **Lay panels as a signal chain**: bordered titled sections left→right with `▸`
   arrows (Osc → Noise → Filter → Amp). Each panel = `Border` (SurfaceCard fill,
   1px border, radius 7) with a bold section title.
