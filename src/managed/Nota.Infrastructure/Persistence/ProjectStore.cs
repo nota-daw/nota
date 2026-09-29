@@ -25,4 +25,7 @@ public sealed class ProjectStore : IProjectStore
             doc.Transport.TimeSigNumerator, doc.Transport.TimeSigDenominator);
         return new ProjectLoadResult(transport, warnings);
     }
+
+    public string Fingerprint(IAudioEngine engine, TransportState transport)
+        => ProjectService.SerializeManifest(ProjectService.Capture(engine, transport, new List<string>()));
 }

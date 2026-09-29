@@ -23,4 +23,9 @@ public interface IProjectStore
     /// <summary>Loads a bundle and applies it to a reset engine. Returns the transport
     /// to restore + downgrade warnings.</summary>
     ProjectLoadResult Load(IAudioEngine engine, string dir);
+
+    /// <summary>A comparable snapshot of the project's current state (the serialized
+    /// manifest, nothing written to disk). Two equal fingerprints mean no change —
+    /// used to detect unsaved edits.</summary>
+    string Fingerprint(IAudioEngine engine, TransportState transport);
 }

@@ -8274,6 +8274,17 @@ Console.WriteLine("-- M7-7: crash recovery --");
     Check(!new RecoveryService(rdir).CrashDetected(), "clean shutdown clears the marker");
 
     try { System.IO.Directory.Delete(rdir, true); } catch { /* best-effort cleanup */ }
+
+    // Unsaved-changes detection: the fingerprint is stable while nothing changes and
+    // differs after an edit (drives the Save / Don't Save / Cancel prompt on quit).
+    var store = new ProjectStore();
+    var tr = new TransportState(120.0, 1.0, false, false);
+    int fpTrack = engine.AddInstrumentTrack();
+    string fp0 = store.Fingerprint(engine, tr);
+    Check(store.Fingerprint(engine, tr) == fp0, "project fingerprint stable without edits");
+    engine.SetTrackName(fpTrack, "Fingerprint probe");
+    Check(store.Fingerprint(engine, tr) != fp0, "project fingerprint changes after an edit");
+    Check(store.Fingerprint(engine, tr with { Bpm = 121.0 }) != store.Fingerprint(engine, tr), "project fingerprint tracks transport");
 }
 
 // ===================== M7-8: xrun / dropout telemetry ======================

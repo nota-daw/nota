@@ -35,16 +35,48 @@ public partial class MainWindow
         catch { /* autosave is best-effort — never disrupt the session */ }
     }
 
+    // Set once the user has answered the unsaved-changes prompt, so the re-issued Close()
+    // goes straight through; _closePromptOpen guards against a second prompt meanwhile.
+    private bool _closeConfirmed;
+    private bool _closePromptOpen;
+
     private void OnMainWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (!_closeConfirmed && HasUnsavedChanges())
+        {
+            e.Cancel = true;
+            if (!_closePromptOpen)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ConfirmCloseAsync());
+            return;
+        }
+
         CloseFloatingDetail();   // tear down the popped-out Devices/Clip window, if any
         ShutdownGamepad();       // stop the IOKit pad thread before the engine dies
         _recovery.EndSessionClean();
     }
 
+    // Save / Don't Save / Cancel before quitting with unsaved edits. Save that is cancelled
+    // (file panel dismissed) or fails keeps the app open.
+    private async Task ConfirmCloseAsync()
+    {
+        _closePromptOpen = true;
+        try
+        {
+            var choice = await new SaveChangesWindow("Unsaved changes",
+                "Do you really want to quit without saving your changes?")
+                .ShowDialog<SaveChoice>(this);
+            if (choice == SaveChoice.Cancel) return;
+            if (choice == SaveChoice.Save && !await DoSaveAsync(saveAs: false)) return;
+            _closeConfirmed = true;
+        }
+        finally { _closePromptOpen = false; }
+        Close();
+    }
+
     private async void OnOpenedRecoveryCheck(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        MarkProjectClean();   // the fresh startup project counts as unmodified
 
         // What's New shows once per new app version, ahead of the launcher.
         await ShowWhatsNewIfNeeded();
@@ -74,6 +106,7 @@ public partial class MainWindow
         OpenProject(info.BundlePath);
         _projectPath = info.OriginalPath;   // next Save targets the real bundle (null → prompt)
         UpdateWindowTitle();
+        _cleanFingerprint = null;           // recovered work is unsaved until the user saves it
         if (_vm is not null) _vm.StatusText = "Recovered unsaved work.";
         try { _recovery.ClearRecovery(); } catch { }
     }
