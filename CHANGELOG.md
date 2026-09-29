@@ -32,6 +32,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Changed
+- ⌘A now selects all clips in the arrangement. Automation mode moved to ⌘⇧A.
 - Nota Arp has a new look and two sizes: a full card and a small 260-pixel one. Switch
   between them with S / L in the card's header. Both sizes share the same presets, and the
   preset you pick stays selected when you switch size. The Pattern view shows the notes the arp

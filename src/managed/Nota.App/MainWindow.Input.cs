@@ -22,7 +22,7 @@ public partial class MainWindow
 {
     // Computer-keyboard piano mapping, classic typing-keyboard layout: the A-row is the
     // white keys (A=C4=60 … K=C5) and the Q-row the black keys (W E T Y U). Z/X shift the
-    // octave and C/V the velocity (see the handlers below); Automation mode moved to ⌘A.
+    // octave and C/V the velocity (see the handlers below); Automation mode moved to ⌘⇧A.
     // These are BASE pitches at octave 0 — _typingOctave*12 is added when a note plays.
     private static readonly Dictionary<Key, int> KeyToPitch = new()
     {
@@ -105,15 +105,22 @@ public partial class MainWindow
             return;
         }
 
-        // ⌘/⌃ + A: toggle Automation mode. Moved off plain 'A' (now a piano key) — gated to
-        // when the piano-roll grid isn't focused, where ⌘A instead selects all notes.
-        if (mod && e.Key == Key.A && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0
-            && _editorRoll is not { GridFocused: true })
+        // ⌘/⌃ + ⇧ + A: toggle Automation mode. ⌘/⌃ + A: select all arrangement clips —
+        // gated to when the piano-roll grid isn't focused, where ⌘A instead selects all notes.
+        if (mod && e.Key == Key.A && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
-            AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
-            OnToggleAutomation(AutomationToggle, new RoutedEventArgs());
-            e.Handled = true;
-            return;
+            if ((e.KeyModifiers & KeyModifiers.Shift) != 0)
+            {
+                AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
+                OnToggleAutomation(AutomationToggle, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            }
+            if (_editorRoll is not { GridFocused: true } && Timeline.SelectAllClips())
+            {
+                e.Handled = true;
+                return;
+            }
         }
         bool plainMod = mod && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
         if (plainMod && e.Key == Key.R && _heldKeys.Add(e.Key))

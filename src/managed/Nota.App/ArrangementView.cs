@@ -1300,6 +1300,16 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Cmd+A — select every clip in the arrangement. False when there are none,
+    /// so the key falls through.</summary>
+    public bool SelectAllClips()
+    {
+        var all = _tracks.SelectMany(t => t.Clips.Select(c => (t.Id, c.ClipIndex))).ToList();
+        if (all.Count == 0) return false;
+        SetSelection(all);
+        return true;
+    }
+
     /// <summary>Replaces the selection with the given clips (marquee). Does not open
     /// the detail panel — it only highlights; the primary becomes the first clip.</summary>
     internal void SetSelection(IEnumerable<(int track, int clip)> clips)
