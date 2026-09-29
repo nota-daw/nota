@@ -674,7 +674,10 @@ public sealed partial class ArrangementView : UserControl
                 };
                 if (_automationMode)
                 {
-                    if (_autoTargets.TryGetValue(ti.Id, out var sel))
+                    // First visit to this track's lane: show its first automated param, not Volume.
+                    if (!_autoTargets.TryGetValue(ti.Id, out var sel) && FirstAutomatedTarget(eng, ti.Id) is { } first)
+                        _autoTargets[ti.Id] = sel = first;
+                    if (_autoTargets.ContainsKey(ti.Id))
                         (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId) = sel;
                     tvm.AutoLabel = AutoLabelFor(tvm);
                     LoadAutoPoints(tvm);

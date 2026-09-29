@@ -363,6 +363,7 @@ public partial class MainWindow
     {
         _importEpoch++;                  // imports still running belong to the old graph
         Timeline.ClearPendingImports();
+        Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices
         _editorRoll = null;
         _clipEditor = null;
         _editorTrackId = -1;

@@ -133,6 +133,29 @@ public sealed partial class ArrangementView
         Redraw();
     }
 
+    /// <summary>The first lane on a track that carries points — the top entry of the target
+    /// menu's quick-access section — or null when the track has no automation yet.</summary>
+    private static (AutomationTarget target, int dev, int param, string paramId)? FirstAutomatedTarget(IAudioEngine e, int trackId)
+    {
+        int n = e.AutomationLaneCount(trackId);
+        for (int i = 0; i < n; i++)
+        {
+            var info = e.AutomationLaneInfo(trackId, i);
+            if (info.PointCount <= 0) continue;
+            return info.Target switch
+            {
+                AutomationTarget.Volume or AutomationTarget.Pan => (info.Target, -1, -1, ""),
+                AutomationTarget.PluginParam => (info.Target, info.DeviceIndex, -1, e.AutomationLaneParamId(trackId, i)),
+                _ => (info.Target, info.DeviceIndex, info.ParamIndex, ""),
+            };
+        }
+        return null;
+    }
+
+    /// <summary>Forget every track's chosen lane target (a project was opened / created), so
+    /// the next automation-mode visit picks each track's first automated param again.</summary>
+    public void ForgetAutoTargets() => _autoTargets.Clear();
+
     /// <summary>The device chain reordered / removed effects (midi=false) or MIDI effects on a
     /// track: keep its shown automation target on the same device (the engine moves the lanes
     /// the same way). map: old chain index → new, -1 when the device is gone (→ Volume).</summary>

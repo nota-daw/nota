@@ -16,6 +16,10 @@ created, and the build-and-publish run starts.
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Changed
+- The first time you switch to automation mode, each track that already has automation
+  shows its first automated parameter instead of Volume.
+
 ### Fixed
 - Reordering or removing effects in Devices no longer scrambles their automation: each lane
   stays on its own device and parameter. Removing a device also removes its automation.
