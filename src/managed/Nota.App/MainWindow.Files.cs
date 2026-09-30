@@ -245,6 +245,7 @@ public partial class MainWindow
                 ? $"Opened {System.IO.Path.GetFileName(dir)}"
                 : $"Opened {System.IO.Path.GetFileName(dir)} — {warnings.Count} item(s) downgraded: {warnings[0]}";
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
+            _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
         }
         catch (Exception ex)
         {

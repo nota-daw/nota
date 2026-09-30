@@ -28,7 +28,7 @@ using Nota.Presentation;
 
 namespace Nota.App;
 
-public sealed class PreferencesWindow : NotaWindow
+public sealed partial class PreferencesWindow : NotaWindow
 {
     private static readonly IBrush Panel = NotaPalette.SurfaceCard;
     private static readonly IBrush Sidebar = NotaPalette.SurfaceInset;
@@ -45,7 +45,7 @@ public sealed class PreferencesWindow : NotaWindow
     private static readonly IBrush TextSecondary = NotaPalette.TextSecondary;
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
 
-    private static readonly string[] Sections = { "Audio", "MIDI", "Gamepads", "Plug-ins", "Library", "Appearance", "Shortcuts" };
+    private static readonly string[] Sections = { "Audio", "MIDI", "Gamepads", "Plug-ins", "Get Plug-ins", "Library", "Appearance", "Shortcuts" };
 
     private readonly ObservableCollection<string> _paths = new();
     private readonly MainWindowViewModel? _main;
@@ -98,7 +98,7 @@ public sealed class PreferencesWindow : NotaWindow
         grid.Children.Add(_content);
         SetBody(grid);
 
-        Closed += (_, _) => StopTests();
+        Closed += (_, _) => { StopTests(); CancelStoreWork(); };
         Select(0);
     }
 
@@ -123,8 +123,9 @@ public sealed class PreferencesWindow : NotaWindow
         1 => MidiPane(),
         2 => GamepadsPane(),
         3 => PluginsPane(),
-        4 => LibraryPane(),
-        5 => AppearancePane(),
+        4 => StorePane(),
+        5 => LibraryPane(),
+        6 => AppearancePane(),
         _ => ShortcutsPane(),
     };
 
@@ -488,14 +489,17 @@ public sealed class PreferencesWindow : NotaWindow
         body.Children.Add(SectionLabel("SCAN"));
         var rescanStatus = Caption("");
         var rescan = new Button { Content = "Rescan plugins" };
-        rescan.Click += (_, _) =>
+        rescan.Click += async (_, _) =>
         {
             if (_main is null) { rescanStatus.Text = "Plugin scanning is unavailable in this window."; return; }
-            var workerName = OperatingSystem.IsWindows() ? "nota-scanworker.exe" : "nota-scanworker";
-            var worker = System.IO.Path.Combine(AppContext.BaseDirectory, workerName);
-            if (!System.IO.File.Exists(worker)) { rescanStatus.Text = "Scanner worker not found."; return; }
-            int n = _main.Browser.Scan(worker);
-            rescanStatus.Text = $"Found {n} plugin{(n == 1 ? "" : "s")}.";
+            rescan.IsEnabled = false;
+            rescanStatus.Text = "Scanning…";
+            try
+            {
+                int? n = await PluginScan.RescanAsync(_main);
+                rescanStatus.Text = n is { } c ? $"Found {c} plugin{(c == 1 ? "" : "s")}." : "Scanner worker not found.";
+            }
+            finally { rescan.IsEnabled = true; }
         };
         body.Children.Add(rescan);
         body.Children.Add(rescanStatus);

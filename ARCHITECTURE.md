@@ -127,6 +127,21 @@ JUCE is confined to `pluginhost/`, built as a separate static library and reache
 dependency at all. VST3 is hosted everywhere; AU is macOS-only. Plugin scanning runs
 out-of-process in `nota-scanworker` so a crashing plugin cannot take the app down.
 
+A plugin is found by its JUCE identifier, `<format>-<name>-<path hash>-<uid>`. When no
+catalog entry matches exactly, the lookup falls back to format + name + uid, so a project
+still finds a plugin that lives at another path on this machine.
+
+**Get Plug-ins** (`IPluginStore` → `Infrastructure/PluginStore/`) installs open-source VST3
+plugins listed in the [plugin registry](https://github.com/nota-daw/nota-plugins-registry).
+The registry is one static `index.json` on GitHub Pages, and the repo's README documents its
+manifest. A release asset downloads straight from the plugin's GitHub release and must
+match the size and sha256 pinned in the index. `ArchiveUnpacker` then unpacks it:
+zip / tar / dmg / pkg-payload / deb, and no installer ever runs. The listed bundles are
+copied into `<data>/plugins/VST3/<id>/`, which is registered as a scan path. Set
+`NOTA_PLUGIN_REGISTRY` to point Nota at another index (a URL or a local file). Set
+`NOTA_DATA_DIR` to relocate the data dir, including the native catalog and scan paths, for
+tests.
+
 This module is also the reason Nota's open build is AGPL — see
 [`LICENSES/README.md`](LICENSES/README.md#why-agpl-and-not-gpl).
 

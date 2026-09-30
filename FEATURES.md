@@ -617,6 +617,10 @@ and user presets, automation, persistence and cloning.
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
   paths in Preferences, and Rescan.
+- **Get Plug-ins** — open-source VST3 plugins from the
+  [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry), installed,
+  updated and removed from Preferences (checksum-verified; archives only, installers never
+  run). A project that needs a missing registry plugin offers to install it.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
   window that opens on top and focused, and closes when the device is removed).
 - **State save and restore** in the project, and **bypass**.

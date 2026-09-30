@@ -116,6 +116,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Get Plug-ins.** Preferences has a new Get Plug-ins page. It lists open-source VST3
+  plug-ins from the Nota plugin registry, among them Surge XT, Dexed, Dragonfly Reverb,
+  CHOW Tape Model and Stochas. Install, update or remove one with a click and it shows up
+  in the browser. Each plug-in downloads from its own project's GitHub release and is
+  checked against the registry before it's unpacked. Nota never runs an installer.
+- **Opening a project that uses a missing plug-in** now offers to install it when the
+  registry has it, then reopens the project with the plug-in and its saved settings.
+
+### Fixed
+- A project now finds its plug-ins even when they're installed in a different folder than on
+  the computer that saved it. Before, such a plug-in counted as missing.
+- Rescanning plug-ins removes VST3 plug-ins that were deleted from disk from the browser.
+
 ### Changed
 - VST3 and AU plug-ins get a proper device card with two sizes. The header names the
   plug-in. The small card shows its vendor, format, parameter count and latency, with

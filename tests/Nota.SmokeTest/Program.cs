@@ -100,6 +100,29 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
+if (args.Length >= 1 && args[0] == "--store")
+{
+    Console.WriteLine("-- get plug-ins: registry store --");
+    foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "STORE PASSED" : $"STORE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 3 && args[0] == "--store-catalog")
+{
+    Console.WriteLine("-- get plug-ins: catalog identifiers --");
+    foreach (var (ok, label) in PluginStoreTests.RunCatalog(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "STORE CATALOG PASSED" : $"STORE CATALOG FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 3 && args[0] == "--store-live")
+{
+    Console.WriteLine("-- get plug-ins: live installs --");
+    foreach (var (ok, label) in PluginStoreTests.RunLive(args[1], args[2..])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "STORE LIVE PASSED" : $"STORE LIVE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Browser preset audition alone (fast iteration): `--audition`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--audition")
 {
@@ -13553,6 +13576,10 @@ Console.WriteLine("-- background audio import --");
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
+
+// --- get plug-ins: registry index, install/uninstall from local archives ---
+Console.WriteLine("-- get plug-ins: registry store --");
+foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;
