@@ -72,6 +72,48 @@ public struct NotaAudioClipInfo
     public int Reversed;         // 0/1: plays back-to-front (non-destructive)
 }
 
+/// <summary>Audio-clip ADSR amplitude shape in played time (clip-local beats). Matches native
+/// NotaClipAdsr. Attack ramps 0→1 from the clip start, decay falls to <see cref="Sustain"/>,
+/// release fades to 0 over the clip's last <see cref="ReleaseBeats"/>. <see cref="Identity"/>
+/// (the default for every clip) plays the sample at its full length and level.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct ClipAdsr
+{
+    public double AttackBeats;
+    public double DecayBeats;
+    public double ReleaseBeats;
+    public float Sustain;   // 0..1 linear gain
+    public int Reserved;
+
+    public static ClipAdsr Identity => new() { Sustain = 1f };
+
+    public readonly bool IsIdentity => AttackBeats <= 0 && DecayBeats <= 0 && ReleaseBeats <= 0 && Sustain >= 1f;
+
+    /// <summary>Gain at clip-local beat <paramref name="t"/> of a clip <paramref name="len"/> beats
+    /// long — the same shape the engine renders (see Track.h ClipAdsr::gainAt).</summary>
+    public readonly double GainAt(double t, double len)
+    {
+        double g = t < AttackBeats ? t / AttackBeats
+                 : t < AttackBeats + DecayBeats ? 1 - (1 - Sustain) * ((t - AttackBeats) / DecayBeats)
+                 : Sustain;
+        if (ReleaseBeats > 0 && t > len - ReleaseBeats) g *= Math.Max(0, (len - t) / ReleaseBeats);
+        return Math.Clamp(g, 0, 1);
+    }
+
+    /// <summary>Fits the stages into a clip <paramref name="len"/> beats long: attack+decay and
+    /// release each stay within the clip and never cross each other.</summary>
+    public readonly ClipAdsr Fit(double len)
+    {
+        var a = this;
+        len = Math.Max(0, len);
+        a.Sustain = Math.Clamp(a.Sustain, 0f, 1f);
+        a.AttackBeats = Math.Clamp(a.AttackBeats, 0, len);
+        a.DecayBeats = Math.Clamp(a.DecayBeats, 0, len - a.AttackBeats);
+        a.ReleaseBeats = Math.Clamp(a.ReleaseBeats, 0, len - a.AttackBeats - a.DecayBeats);
+        return a;
+    }
+}
+
 /// <summary>Decoded-sample metadata. Matches native NotaSampleInfo (M7-6b).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSampleInfo

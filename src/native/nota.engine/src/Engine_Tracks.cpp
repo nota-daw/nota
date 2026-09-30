@@ -87,6 +87,37 @@ bool Engine::setClipGain(int32_t trackId, int32_t clipIndex, float gain) {
     return true;
 }
 
+bool Engine::clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) const {
+    if (!out) return false;
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio) return false;
+    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
+    const ClipAdsr& a = t->clips[clipIndex].adsr;
+    out->attack_beats = a.attack;
+    out->decay_beats = a.decay;
+    out->release_beats = a.release;
+    out->sustain = a.sustain;
+    out->reserved = 0;
+    return true;
+}
+
+// ADSR is plain clip data (no cache to rebuild), so this is as cheap as a gain change.
+bool Engine::setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr& in) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Audio) return false;
+    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    auto finite = [](double v) { return std::isfinite(v) ? std::max(0.0, v) : 0.0; };
+    ClipAdsr a;
+    a.attack = finite(in.attack_beats);
+    a.decay = finite(in.decay_beats);
+    a.release = finite(in.release_beats);
+    a.sustain = std::isfinite(in.sustain) ? std::clamp(in.sustain, 0.0f, 1.0f) : 1.0f;
+    auto nt = cloneTrack(*old);
+    nt->clips[clipIndex].adsr = a;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
 // clip deactivate (key 0): an inactive clip stays on the timeline but plays no
 // audio / emits no MIDI. Works on both audio and instrument tracks.
 bool Engine::setClipActive(int32_t trackId, int32_t clipIndex, bool active) {
@@ -984,6 +1015,7 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) {   // keep [sta
 // region's end, so keeping the first beats keeps the region's tail and vice versa.
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
+    left.adsr.release = 0.0;   // the cut is a new, hard end: the tail's release stays with the right piece
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
@@ -1002,6 +1034,7 @@ AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, doub
 }
 AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, double devSR) {
     AudioClip right = src; right.startBeat = src.startBeat + startLocal;
+    right.adsr.attack = 0.0; right.adsr.decay = 0.0;   // the head's attack/decay stay with the left piece
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             right.warpPlayStart = src.warpPlayStart;

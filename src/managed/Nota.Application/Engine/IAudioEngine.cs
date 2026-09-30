@@ -130,6 +130,11 @@ public interface IAudioEngine : IDisposable
     void SetClipWarpTrim(int trackId, int clipIndex, double playStart, double playEnd);
     /// <summary>Sets an audio clip's linear playback gain (runtime).</summary>
     void SetClipGain(int trackId, int clipIndex, float gain);
+    /// <summary>An audio clip's ADSR amplitude shape (<see cref="ClipAdsr.Identity"/> for a
+    /// MIDI clip or a bad index).</summary>
+    ClipAdsr GetClipAdsr(int trackId, int clipIndex);
+    /// <summary>Sets an audio clip's ADSR amplitude shape (one undo step).</summary>
+    void SetClipAdsr(int trackId, int clipIndex, ClipAdsr adsr);
     /// <summary>Clip deactivate (key 0): an inactive clip stays on the timeline but plays
     /// nothing (audio or MIDI). Works on audio and instrument tracks.</summary>
     void SetClipActive(int trackId, int clipIndex, bool active);

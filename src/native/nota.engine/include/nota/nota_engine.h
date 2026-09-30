@@ -96,6 +96,19 @@ typedef struct NotaAudioClipInfo {
     int32_t reversed;          /* 0/1: play the region back-to-front (non-destructive) */
 } NotaAudioClipInfo;
 
+/* Audio-clip ADSR amplitude shape, in played time (clip-local beats). Attack ramps
+ * 0->1 from the clip start, decay falls 1->sustain, sustain holds, release fades to 0
+ * over the last release_beats before the clip end (multiplying the ADS stage, so
+ * overlapping stages on a short clip stay smooth). The default {0,0,0,1} is the
+ * identity: the sample plays its full length at full level. */
+typedef struct NotaClipAdsr {
+    double attack_beats;
+    double decay_beats;
+    double release_beats;
+    float  sustain;            /* 0..1 linear gain */
+    int32_t reserved;          /* 0 */
+} NotaClipAdsr;
+
 /* Decoded-sample metadata (M7-6b). */
 typedef struct NotaSampleInfo {
     int32_t channels;
@@ -791,6 +804,10 @@ NOTA_API NotaResult nota_clip_set_warp_trim(NotaEngine* engine, int32_t track_id
 /* Audio-clip runtime edits: gain (linear) and varispeed transpose (semitones). */
 NOTA_API NotaResult nota_clip_set_gain(NotaEngine* engine, int32_t track_id, int32_t clip_index, float gain);
 NOTA_API NotaResult nota_clip_set_pitch(NotaEngine* engine, int32_t track_id, int32_t clip_index, float semitones);
+/* Audio-clip ADSR (see NotaClipAdsr). get returns 1 if the clip is audio, else 0.
+ * set clamps times to >= 0 and sustain to 0..1; one undo step. */
+NOTA_API int32_t nota_clip_get_adsr(const NotaEngine* engine, int32_t track_id, int32_t clip_index, NotaClipAdsr* out);
+NOTA_API NotaResult nota_clip_set_adsr(NotaEngine* engine, int32_t track_id, int32_t clip_index, const NotaClipAdsr* adsr);
 /* Reverse an audio clip (non-destructive): the played region is read back-to-front.
  * The sample and any warp cache stay in file order — only the read direction flips — so
  * this is as cheap as a gain change and composes with gain/pitch/warp/clip envelopes.

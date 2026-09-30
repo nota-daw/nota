@@ -77,6 +77,8 @@ public sealed partial class ArrangementView
         public int PeakCount;
         /// <summary>Clip gain (linear) — peaks are raw material, the lane scales them by this.</summary>
         public float Gain = 1f;
+        /// <summary>Audio clip ADSR amplitude shape (identity = full length, full level).</summary>
+        public ClipAdsr Adsr = ClipAdsr.Identity;
         public NotaNote[]? Notes;
         public string Name = "";
         /// <summary>True when no clip on the same track ends where this one begins — the head

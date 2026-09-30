@@ -575,9 +575,12 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         // law (unity at centre) so it composes with the track's own pan stage.
         const bool hasVol = !clip.volumeEnvelope.points.empty();
         const bool hasPan = !clip.panEnvelope.points.empty();
-        const bool hasEnv = hasVol || hasPan;
+        const bool hasAdsr = !clip.adsr.isIdentity();
+        const bool hasEnv = hasVol || hasPan || hasAdsr;
+        double lenBeats = 0.0;   // played length (beats) for the ADSR release — set per path below
         auto applyEnv = [&](double p, float& l, float& r) {
             const double b = (p - startSamples) / spb;
+            if (hasAdsr) { const float g = clip.adsr.gainAt(b, lenBeats); l *= g; r *= g; }
             if (hasVol) { const float g = std::clamp(clip.volumeEnvelope.valueAt(b), 0.0f, 1.0f); l *= g; r *= g; }
             if (hasPan) {
                 const float pan = std::clamp(clip.panEnvelope.valueAt(b), -1.0f, 1.0f);
@@ -593,6 +596,7 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
             const WarpCache& wc = *clip.warpCache;
             const double clipDeviceLen = static_cast<double>(wc.frames);
+            lenBeats = clipDeviceLen / spb;
             const double ovStart = std::max(blockStart, startSamples);
             const double ovEnd   = std::min(blockStart + frames, startSamples + clipDeviceLen);
             if (ovEnd <= ovStart) continue;
@@ -626,6 +630,7 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
         const int64_t len = clip.effectiveLength();
         const double clipDeviceLen = len / ratio;
+        lenBeats = clipDeviceLen / spb;
         for (int32_t i = 0; i < frames; ++i) {
             const double p = blockStart + i;
             if (p < startSamples || p >= startSamples + clipDeviceLen) continue;

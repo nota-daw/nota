@@ -132,6 +132,15 @@ public sealed partial class NotaEngine
     public void SetClipGain(int trackId, int clipIndex, float gain)
     { ThrowIfDisposed(); Check(NativeMethods.ClipSetGain(_handle, trackId, clipIndex, gain)); }
 
+    public ClipAdsr GetClipAdsr(int trackId, int clipIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ClipGetAdsr(_handle, trackId, clipIndex, out var a) != 0 ? a : ClipAdsr.Identity;
+    }
+
+    public void SetClipAdsr(int trackId, int clipIndex, ClipAdsr adsr)
+    { ThrowIfDisposed(); Check(NativeMethods.ClipSetAdsr(_handle, trackId, clipIndex, in adsr)); }
+
     /// <summary>Clip deactivate (key 0): an inactive clip stays on the timeline but plays
     /// nothing (audio or MIDI). Works on audio and instrument tracks.</summary>
     public void SetClipActive(int trackId, int clipIndex, bool active)

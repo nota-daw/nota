@@ -28,6 +28,31 @@
 
 namespace nota {
 
+// Per-clip ADSR amplitude shape for audio clips, in PLAYED time (clip-local beats, so it
+// follows trims/reverse the way the ear hears the clip). Attack ramps 0→1 from the clip
+// start, decay falls 1→sustain, sustain holds, and release fades to 0 over the last
+// `release` beats before the clip end. The release multiplies the ADS stage, so on a clip
+// shorter than A+D+R the stages overlap smoothly instead of jumping. The default
+// (0, 0, 1, 0) is the identity: the sample plays its full length at full level.
+struct ClipAdsr {
+    double attack = 0.0;    // beats
+    double decay = 0.0;     // beats
+    float  sustain = 1.0f;  // 0..1 linear gain
+    double release = 0.0;   // beats
+
+    bool isIdentity() const { return attack <= 0.0 && decay <= 0.0 && sustain >= 1.0f && release <= 0.0; }
+
+    // Gain at clip-local beat `t` of a clip `len` beats long.
+    float gainAt(double t, double len) const {
+        double g;
+        if (t < attack)                  g = t / attack;
+        else if (t < attack + decay)     g = 1.0 - (1.0 - sustain) * ((t - attack) / decay);
+        else                             g = sustain;
+        if (release > 0.0 && t > len - release) g *= std::max(0.0, (len - t) / release);
+        return static_cast<float>(std::clamp(g, 0.0, 1.0));
+    }
+};
+
 // A placed audio clip. `startBeat` is the musical anchor on the timeline; the
 // audio itself plays at its natural rate (no time-stretch in MVP — AR/Non-Goal).
 struct AudioClip {
@@ -69,6 +94,8 @@ struct AudioClip {
     // Clip pan envelope (M9 follow-up): value -1..1 (balance law, unity at centre),
     // applied per sample after the volume envelope. Empty = no envelope.
     AutomationLane panEnvelope;
+    // ADSR amplitude shape (identity by default). Applied per sample with the envelopes.
+    ClipAdsr adsr;
 
     int64_t effectiveLength() const {
         if (!sample) return 0;

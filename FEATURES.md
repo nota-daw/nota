@@ -203,6 +203,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   sounds — the editor mirrors the whole view (brackets, warp markers, BPM chips, grid and
   cursor included) so the screen reads left-to-right in playing order — and trims and
   splits mirror, so the audible head and tail follow the edit.
+- **ADSR per audio clip**: attack, decay, sustain and release shape the clip's level in
+  played time. Every audio clip in the arrangement carries three handles, shown on hover or
+  selection — attack and release squares at the top corners, a decay/sustain dot — and the
+  clip editor has an ADSR tab with the same handles over the waveform plus ATTACK / DECAY /
+  SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
+  sample plays its full length at full level; double-click a handle to reset its stage.
+  Editing in either place updates the other, each edit is one undo step, split keeps the
+  attack on the left piece and the release on the right, and the shape is saved with the
+  project.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. A grid-snap toggle governs trimming a warped clip.

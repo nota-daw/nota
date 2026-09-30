@@ -30,7 +30,7 @@ public sealed class ProjectService
     /// per-segment curvature (automationPoint.curve). v5 adds audio-clip pitch + warp
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
-    public const int CurrentFormatVersion = 19;
+    public const int CurrentFormatVersion = 20;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -229,6 +229,8 @@ public sealed class ProjectService
                     if (env.Length > 0) dto.VolumeEnvelope = System.Array.ConvertAll(env, p => new AutomationPointDto(p));
                     var penv = engine.GetClipPanEnvelope(ti.Id, c);     // clip pan envelope (v9)
                     if (penv.Length > 0) dto.PanEnvelope = System.Array.ConvertAll(penv, p => new AutomationPointDto(p));
+                    var adsr = engine.GetClipAdsr(ti.Id, c);            // ADSR (v20); identity is omitted
+                    if (!adsr.IsIdentity) dto.Adsr = new ClipAdsrDto(adsr);
                     t.AudioClips.Add(dto);
                 }
             }
@@ -657,6 +659,8 @@ public sealed class ProjectService
                     engine.SetClipVolumeEnvelope(id, ci, System.Array.ConvertAll(venv, p => p.ToPoint()));
                 if (ac.PanEnvelope is { Length: > 0 } penv)      // clip pan envelope (v9)
                     engine.SetClipPanEnvelope(id, ci, System.Array.ConvertAll(penv, p => p.ToPoint()));
+                if (ac.Adsr is { } adsr)                          // ADSR (v20)
+                    engine.SetClipAdsr(id, ci, adsr.ToAdsr());
             }
 
             // Freeze (M7): restore the frozen-audio buffer so the track re-opens frozen

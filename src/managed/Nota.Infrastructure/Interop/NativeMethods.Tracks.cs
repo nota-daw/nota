@@ -102,6 +102,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_gain")]
     internal static partial NotaResult ClipSetGain(IntPtr engine, int trackId, int clipIndex, float gain);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clip_get_adsr")]
+    internal static partial int ClipGetAdsr(IntPtr engine, int trackId, int clipIndex, out ClipAdsr adsr);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clip_set_adsr")]
+    internal static partial NotaResult ClipSetAdsr(IntPtr engine, int trackId, int clipIndex, in ClipAdsr adsr);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_active")]
     internal static partial NotaResult ClipSetActive(IntPtr engine, int trackId, int clipIndex, int active);
 

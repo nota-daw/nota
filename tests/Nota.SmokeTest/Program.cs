@@ -891,6 +891,76 @@ Console.WriteLine("-- clip reverse --");
 }
 
 // ============== reverse on a WARPED clip (mirrors the stretch cache) =========
+// ============== clip ADSR (per-clip amplitude shape) =========================
+Console.WriteLine("-- clip ADSR --");
+{
+    // A steady sine makes the shape measurable: 4 beats at 120 BPM (2 s).
+    string adw = Path.Combine(Path.GetTempPath(), "nota_smoke_adsr.wav");
+    Nota.SmokeTest.WavWriter.WriteSine(adw, seconds: 2.0, freq: 440.0, sampleRate: 44100);
+    using var ae = new NotaEngine();
+    ae.SetBpm(120); ae.SetTimeSignature(4, 4);
+    int at = ae.AddAudioTrack();
+    int ac = ae.AddAudioClip(at, adw, 0.0);
+    Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR is the identity by default (full length, full level)");
+    Check(ae.TryGetClipInfo(at, ac, out var aci) && aci.LengthBeats > 3.9, "ADSR: clip length known");
+    double aSpb = (ae.SampleRate > 0 ? ae.SampleRate : 48000.0) * 60.0 / 120.0;
+    int total = (int)Math.Round(aci.LengthBeats * aSpb);
+    var abuf = new float[(total + 64) * 2];
+    float Seg(double b0, double b1)   // RMS over clip-local beats [b0, b1)
+    {
+        int f0 = (int)(b0 * aSpb), f1 = (int)(b1 * aSpb);
+        double sum = 0; for (int i = f0 * 2; i < f1 * 2; i++) sum += abuf[i] * (double)abuf[i];
+        return (float)Math.Sqrt(sum / Math.Max(1, (f1 - f0) * 2));
+    }
+    void RenderClip() { Array.Clear(abuf); ae.Seek(0); ae.Play(); ae.RenderOffline(abuf, total); ae.StopTransport(); }
+
+    RenderClip();
+    float full = Seg(0.5, 3.5);
+    Check(full > 0.1f, $"ADSR: identity clip plays at full level ({full:F3})");
+
+    // A=1, D=1 to sustain 0.5, R=1: silent start, full at the attack peak, half on sustain,
+    // quiet near the end.
+    ae.SetClipAdsr(at, ac, new Nota.Application.ClipAdsr { AttackBeats = 1, DecayBeats = 1, Sustain = 0.5f, ReleaseBeats = 1 });
+    var got = ae.GetClipAdsr(at, ac);
+    Check(Math.Abs(got.AttackBeats - 1) < 1e-9 && Math.Abs(got.DecayBeats - 1) < 1e-9
+          && Math.Abs(got.Sustain - 0.5f) < 1e-6 && Math.Abs(got.ReleaseBeats - 1) < 1e-9, "ADSR round-trips through the engine");
+    RenderClip();
+    float head = Seg(0.0, 0.1), peak = Seg(0.9, 1.1), sus = Seg(2.2, 2.8), tail = Seg(3.9, aci.LengthBeats);
+    Check(head < full * 0.15f, $"ADSR: attack starts silent ({head:F3})");
+    Check(Math.Abs(peak - full) < full * 0.15f, $"ADSR: attack reaches full level ({peak:F3} vs {full:F3})");
+    Check(Math.Abs(sus - full * 0.5f) < full * 0.1f, $"ADSR: decay settles on the sustain level ({sus:F3})");
+    Check(tail < full * 0.15f, $"ADSR: release fades to silence ({tail:F3})");
+
+    // Clamps: negative times and out-of-range sustain are sanitised.
+    ae.SetClipAdsr(at, ac, new Nota.Application.ClipAdsr { AttackBeats = -1, DecayBeats = 0, Sustain = 3f, ReleaseBeats = 0 });
+    Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR: negative times / sustain > 1 clamp to the identity");
+
+    // Undo/redo: one structural edit per set.
+    ae.Undo();
+    Check(Math.Abs(ae.GetClipAdsr(at, ac).Sustain - 0.5f) < 1e-6, "ADSR: undo restores the previous shape");
+    ae.Redo();
+    Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR: redo re-applies");
+    ae.Undo();
+
+    // Split: the left piece keeps attack/decay (no release at the cut), the right keeps the release.
+    Check(ae.SplitClip(at, ac, 2.0) == ac + 1, "ADSR: split");
+    var la = ae.GetClipAdsr(at, ac); var ra = ae.GetClipAdsr(at, ac + 1);
+    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0, "ADSR split: left keeps attack + decay, drops release");
+    Check(ra.AttackBeats == 0 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99 && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
+          "ADSR split: right keeps sustain + release, drops attack/decay");
+    ae.Undo();
+
+    // Warped clips shape the stretched output the same way.
+    ae.SetClipWarp(at, ac, true, 3);
+    ae.WarpBuildStep(int.MaxValue);
+    RenderClip();
+    Check(Seg(0.0, 0.1) < full * 0.15f && Seg(2.2, 2.8) > full * 0.3f, "ADSR shapes a warped clip too");
+
+    // A MIDI clip has no ADSR.
+    int mt = ae.AddInstrumentTrack();
+    Check(ae.GetClipAdsr(mt, 0).IsIdentity, "ADSR: non-audio clip reads as identity");
+}
+
 Console.WriteLine("-- clip reverse (warped) --");
 {
     string rww = Path.Combine(Path.GetTempPath(), "nota_smoke_reverse_warp.wav");
@@ -8077,6 +8147,7 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
             { new Nota.Application.AutomationPoint(0.0, 1.0f), new Nota.Application.AutomationPoint(2.0, 0.25f) });
         src.SetClipPanEnvelope(aTrk, aClip, new[]
             { new Nota.Application.AutomationPoint(0.0, -0.5f), new Nota.Application.AutomationPoint(2.0, 0.5f) });
+        src.SetClipAdsr(aTrk, aClip, new Nota.Application.ClipAdsr { AttackBeats = 0.25, DecayBeats = 0.25, Sustain = 0.5f, ReleaseBeats = 0.5 });   // v20
 
         int smpTrk = src.AddSamplerTrack(wav, rootNote: 62, loop: true);
         Check(smpTrk > 0 && src.TrackInstrumentKind(smpTrk) == 1, "sampler track created");
@@ -8119,6 +8190,9 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
         var lpenv = dst.GetClipPanEnvelope(dAudio, 0);
         Check(lpenv.Length == 2 && Math.Abs(lpenv[0].Value + 0.5f) < 1e-6 && Math.Abs(lpenv[1].Value - 0.5f) < 1e-6,
               "clip pan envelope restored (v9)");
+        var ladsr = dst.GetClipAdsr(dAudio, 0);
+        Check(Math.Abs(ladsr.AttackBeats - 0.25) < 1e-9 && Math.Abs(ladsr.DecayBeats - 0.25) < 1e-9
+              && Math.Abs(ladsr.Sustain - 0.5f) < 1e-6 && Math.Abs(ladsr.ReleaseBeats - 0.5) < 1e-9, "clip ADSR restored (v20)");
         var abuf = new float[2 * 8192];
         dst.Seek(0); dst.Play(); dst.RenderOffline(abuf, 8192); dst.StopTransport();
         Check(Rms(abuf, 8192) > 1e-3f, $"restored audio clip is audible (rms={Rms(abuf, 8192):F4})");

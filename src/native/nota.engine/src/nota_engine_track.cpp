@@ -325,6 +325,13 @@ NotaResult nota_clip_set_gain(NotaEngine* e, int32_t track_id, int32_t clip_inde
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipGain(track_id, clip_index, gain) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+int32_t nota_clip_get_adsr(const NotaEngine* e, int32_t track_id, int32_t clip_index, NotaClipAdsr* out) {
+    return (e && CENG(e)->clipAdsr(track_id, clip_index, out)) ? 1 : 0;
+}
+NotaResult nota_clip_set_adsr(NotaEngine* e, int32_t track_id, int32_t clip_index, const NotaClipAdsr* adsr) {
+    if (!e || !adsr) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setClipAdsr(track_id, clip_index, *adsr) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clip_set_active(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t active) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipActive(track_id, clip_index, active != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

@@ -717,6 +717,7 @@ public sealed class PreferencesWindow : NotaWindow
         ("MOUSE", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
             ("Right-click track headers", "A multi-selection gets its own menu: group, colour, freeze, copy, duplicate, delete"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),

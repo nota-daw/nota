@@ -17,6 +17,11 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- **ADSR for audio clips.** Every audio clip now has attack, decay, sustain and release.
+  Hover a clip in the arrangement and drag the handles — the squares in the top corners
+  set the attack and release, the dot sets the decay and the sustain level — or open the
+  clip editor's new ADSR tab for the same handles and exact sliders. Both places stay in
+  sync. A new clip still plays the whole sample at full volume.
 - **Nota Grain has 50 factory presets, and each one brings its own sound.** Until now every
   Grain preset played the same built-in pad. Now a preset loads a source made for it: a
   choir, bowed strings, a church bell, a kalimba, a vowel that moves from "a" to "u", a drum

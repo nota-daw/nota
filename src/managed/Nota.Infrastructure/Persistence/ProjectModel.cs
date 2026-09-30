@@ -231,8 +231,23 @@ public sealed class AudioClipDto
     public double WarpPlayStart { get; set; }  // warped clip trim window start (beats, v11)
     public double WarpPlayEnd { get; set; }    // warped clip trim window end (0 = full, v11)
     public bool Reversed { get; set; }         // plays back-to-front (v19); default false
+    public ClipAdsrDto? Adsr { get; set; }     // ADSR amplitude shape (v20); null = identity
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>An audio clip's ADSR amplitude shape (v20): stage times in clip-local beats,
+/// sustain as linear gain 0..1.</summary>
+public sealed class ClipAdsrDto
+{
+    public double Attack { get; set; }
+    public double Decay { get; set; }
+    public float Sustain { get; set; } = 1f;
+    public double Release { get; set; }
+
+    public ClipAdsrDto() { }
+    public ClipAdsrDto(ClipAdsr a) { Attack = a.AttackBeats; Decay = a.DecayBeats; Sustain = a.Sustain; Release = a.ReleaseBeats; }
+    public ClipAdsr ToAdsr() => new() { AttackBeats = Attack, DecayBeats = Decay, Sustain = Sustain, ReleaseBeats = Release };
 }
 
 /// <summary>A warp marker: source-frame position tied to a musical beat (v6).</summary>

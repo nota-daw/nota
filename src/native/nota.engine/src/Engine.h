@@ -512,6 +512,8 @@ public:
     // Full geometry of an audio clip (false if the clip isn't audio).
     bool    audioClipInfo(int32_t trackId, int32_t clipIndex, NotaAudioClipInfo* out) const;
     bool    setClipGain(int32_t trackId, int32_t clipIndex, float gain);       // audio clip runtime gain
+    bool    clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) const;   // audio clip ADSR
+    bool    setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr& adsr);
     bool    setClipActive(int32_t trackId, int32_t clipIndex, bool active);    // clip deactivate (key 0): audio+MIDI
     bool    setClipPitch(int32_t trackId, int32_t clipIndex, float semitones); // audio clip varispeed transpose
     bool    setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed);  // audio clip plays back-to-front

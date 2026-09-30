@@ -44,6 +44,41 @@ public sealed partial class ArrangementView
         private double _rpMTotal, _rpS0, _rpS1;   // material total + committed window (frames for unwarped, beats for warped)
         private const double EdgePx = 6;
 
+        // ADSR handles on audio clips (shown on hover / selection). A drag previews on the
+        // ClipVM and commits one engine edit (one undo step) on release.
+        private AdsrHandle _adsrDrag;
+        private ClipVM? _adsrClip;
+        private int _adsrTrackId;
+        private ClipAdsr _adsrStart;
+        private double _adsrAnchorBeat, _adsrAnchorLevel;
+        private Point _adsrPress;
+        private int _adsrHoverTrack = -1, _adsrHoverClip = -1;
+        private AdsrHandle _adsrHoverHandle;
+        private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+
+        // The clip's ADSR frame: its span sideways, the content area (under the colour band) for level.
+        private AdsrFrame AdsrFrameOf(ClipVM c, int row)
+        {
+            double top = RowTop(row) + 2 + BandH, bottom = RowTop(row) + RowH(row) - 2;
+            return new AdsrFrame(_o.BeatToX(c.StartBeat), _o.BeatToX(c.StartBeat + c.LengthBeats),
+                                 top + 4, bottom - 3, c.LengthBeats);
+        }
+
+        // The ADSR handle under `p` on an audio clip (lanes view, not automation).
+        private (TrackVM track, ClipVM clip, int row, AdsrHandle handle)? HitAdsr(Point p)
+        {
+            int row = _o.RowAtY(p.Y);
+            if (row < 0 || _o._tracks[row].IsInstrument || _o._tracks[row].IsGroup) return null;
+            var t = _o._tracks[row];
+            foreach (var c in t.Clips)
+            {
+                if (c.IsMidi) continue;
+                var h = ClipAdsrKit.Hit(p, AdsrFrameOf(c, row), c.Adsr);
+                if (h != AdsrHandle.None) return (t, c, row, h);
+            }
+            return null;
+        }
+
         // Press-pending: a clip was pressed but the 4px drag threshold isn't crossed yet, so
         // it's still a potential click (select / narrow selection), not a drag (req 2.3/2.12).
         private bool _pending;
@@ -175,6 +210,28 @@ public sealed partial class ArrangementView
                 return;
             }
 
+            // ADSR handle: double-click resets its stage, a press starts a handle drag. Checked
+            // before the edge trims so the top corners belong to attack/release (as in Ableton).
+            if (HitAdsr(pt.Position) is { } ah)
+            {
+                if (e.ClickCount == 2)
+                {
+                    CommitAdsr(ah.track.Id, ah.clip, ClipAdsrKit.Reset(ah.handle, ah.clip.Adsr.Fit(ah.clip.LengthBeats)));
+                    return;
+                }
+                _o.Select(ah.track.Id, ah.clip.ClipIndex);
+                _adsrDrag = ah.handle;
+                _adsrClip = ah.clip;
+                _adsrTrackId = ah.track.Id;
+                _adsrStart = ah.clip.Adsr.Fit(ah.clip.LengthBeats);
+                (_adsrAnchorBeat, _adsrAnchorLevel) = ClipAdsrKit.Anchor(ah.handle, _adsrStart, ah.clip.LengthBeats);
+                _adsrPress = pt.Position;
+                _lastPos = pt.Position;
+                e.Pointer.Capture(this);
+                InvalidateVisual();
+                return;
+            }
+
             if (e.ClickCount == 2)
             {
                 // Keep the selection in sync with the opened editor (without firing
@@ -267,6 +324,25 @@ public sealed partial class ArrangementView
             _lastPos = pos;
             _lastMods = e.KeyModifiers;
 
+            if (_adsrDrag != AdsrHandle.None && _adsrClip is { } ac)
+            {
+                double dx = pos.X - _adsrPress.X, dy = pos.Y - _adsrPress.Y;
+                if (_adsrDrag == AdsrHandle.AttackOrSustain)
+                {
+                    if (Math.Abs(dx) < 3 && Math.Abs(dy) < 3) return;
+                    _adsrDrag = ClipAdsrKit.Resolve(_adsrDrag, dx, dy);
+                    (_adsrAnchorBeat, _adsrAnchorLevel) = ClipAdsrKit.Anchor(_adsrDrag, _adsrStart, ac.LengthBeats);
+                }
+                int row = _o._tracks.FindIndex(t => t.Id == _adsrTrackId);
+                if (row < 0) return;
+                var f = AdsrFrameOf(ac, row);
+                double beat = _adsrAnchorBeat + dx / Math.Max(1e-9, _o._pixelsPerBeat);
+                double level = _adsrAnchorLevel - dy / Math.Max(1, f.Bottom - f.Top);
+                ac.Adsr = ClipAdsrKit.Drag(_adsrDrag, _adsrStart, beat, level, ac.LengthBeats);
+                InvalidateVisual();
+                return;
+            }
+
             if (_marqueeArmed)
             {
                 if (_rangeActive || Math.Abs(pos.X - _marqueePress.X) >= DragThreshold
@@ -321,7 +397,7 @@ public sealed partial class ArrangementView
                 }
             }
 
-            if (_drag == Drag.None) { UpdateEdgeHover(pos); return; }
+            if (_drag == Drag.None) { if (!UpdateAdsrHover(pos)) UpdateEdgeHover(pos); return; }
             EnsureAutoScroll();
             UpdateActiveDrag(pos, e.KeyModifiers);
         }
@@ -393,6 +469,17 @@ public sealed partial class ArrangementView
         {
             if (_o._automationMode) { AutoPointerReleased(e); return; }
             var eng = _o._engine;
+
+            if (_adsrDrag != AdsrHandle.None)
+            {
+                var clip = _adsrClip;
+                var start = _adsrStart;
+                _adsrDrag = AdsrHandle.None; _adsrClip = null;
+                e.Pointer.Capture(null);
+                if (clip is not null && !clip.Adsr.Equals(start)) CommitAdsr(_adsrTrackId, clip, clip.Adsr);
+                else InvalidateVisual();
+                return;
+            }
 
             // A press that never crossed the drag threshold is a click on a clip: select it,
             // or narrow a multi-selection down to just it (req 2.2/2.12). No model change.
@@ -511,12 +598,14 @@ public sealed partial class ArrangementView
             // that a PointerCaptureLost fired around button-up doesn't wipe the latch before
             // OnPointerReleased turns it into a selection.
             bool active = _drag != Drag.None || _groupMove is not null || _rangeActive
-                          || _autoDrag is not null || _bendLeft is not null || _rangeTrack is not null;
+                          || _autoDrag is not null || _bendLeft is not null || _rangeTrack is not null
+                          || _adsrDrag != AdsrHandle.None;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
             _autoDrag = null; _autoDragTrack = null; _bendLeft = _bendRight = null; _bendTrack = null;
             _rangeTrack = null;
+            _adsrDrag = AdsrHandle.None; _adsrClip = null;
             _autoScroll?.Stop();
             SetResizeCursor(false);
             _o.Refresh();   // reload authoritative clip/automation positions, discarding the preview
@@ -708,7 +797,46 @@ public sealed partial class ArrangementView
             InvalidateVisual();
         }
 
-        protected override void OnPointerExited(PointerEventArgs e) { ClearHover(); ClearEdgeHover(); base.OnPointerExited(e); }
+        protected override void OnPointerExited(PointerEventArgs e) { ClearHover(); ClearEdgeHover(); ClearAdsrHover(); base.OnPointerExited(e); }
+
+        // One engine edit (one undo step); an open clip editor re-reads it, the lane reloads.
+        private void CommitAdsr(int trackId, ClipVM clip, ClipAdsr adsr)
+        {
+            if (_o._engine is not { } eng) return;
+            eng.SetClipAdsr(trackId, clip.ClipIndex, adsr);
+            _o.RaiseClipGeometryChanged(trackId, clip.ClipIndex);
+            _o.Refresh();
+        }
+
+        // Hover over audio clips: which clip shows its ADSR handles, and which handle is hot.
+        // Returns true while a handle is under the pointer (it then owns the cursor).
+        private bool UpdateAdsrHover(Point pos)
+        {
+            int ht = -1, hc = -1; var hh = AdsrHandle.None;
+            if (HitAdsr(pos) is { } a) { ht = a.track.Id; hc = a.clip.ClipIndex; hh = a.handle; }
+            else if (HitTest(pos, out _) is { } c && !c.clip.IsMidi) { ht = c.track.Id; hc = c.clip.ClipIndex; }
+            if (ht != _adsrHoverTrack || hc != _adsrHoverClip || hh != _adsrHoverHandle)
+            {
+                _adsrHoverTrack = ht; _adsrHoverClip = hc; _adsrHoverHandle = hh;
+                InvalidateVisual();
+            }
+            if (hh == AdsrHandle.None)
+            {
+                if (ReferenceEquals(Cursor, HandCursor)) Cursor = ArrowCursor;
+                return false;
+            }
+            ClearEdgeHover();
+            Cursor = HandCursor;
+            return true;
+        }
+
+        private void ClearAdsrHover()
+        {
+            if (ReferenceEquals(Cursor, HandCursor)) Cursor = ArrowCursor;
+            if (_adsrHoverTrack == -1 && _adsrHoverHandle == AdsrHandle.None) return;
+            _adsrHoverTrack = -1; _adsrHoverClip = -1; _adsrHoverHandle = AdsrHandle.None;
+            InvalidateVisual();
+        }
 
         // Which edge (if any) a resize would grab at `pos` — mirrors the press logic so
         // the highlight matches what a drag would do. Updates the resize cursor.
@@ -1087,7 +1215,7 @@ public sealed partial class ArrangementView
                         var edgeHi = Drag.None;
                         if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
                         else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
-                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi, pitches);
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi, pitches, tid, i);
                     }
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
@@ -1181,6 +1309,17 @@ public sealed partial class ArrangementView
                     _          => _pendingClip?.StartBeat ?? 0,
                 };
                 var ft = new FormattedText(_o.FormatBarBeat(tb), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
+                double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
+                double ty = Math.Max(4, _lastPos.Y - 24);
+                ctx.DrawRectangle(TooltipBg, null, new Rect(tx - 5, ty - 3, ft.Width + 10, ft.Height + 6), 3, 3);
+                ctx.DrawText(ft, new Point(tx, ty));
+            }
+
+            // ADSR drag readout: the stage being edited, in time and dB.
+            if (_adsrDrag is not (AdsrHandle.None or AdsrHandle.AttackOrSustain) && _adsrClip is { } adc)
+            {
+                var ft = new FormattedText(ClipAdsrKit.Readout(_adsrDrag, adc.Adsr, _o._engine?.Bpm ?? 120), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
@@ -1316,7 +1455,8 @@ public sealed partial class ArrangementView
         }
 
         private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y,
-                                  double rowH, bool selected, Drag edgeHi = Drag.None, (int lo, int hi)? pitches = null)
+                                  double rowH, bool selected, Drag edgeHi = Drag.None, (int lo, int hi)? pitches = null,
+                                  int trackId = -1, int row = -1)
         {
             double w = Bounds.Width;
             double x0 = _o.BeatToX(c.StartBeat);
@@ -1361,6 +1501,8 @@ public sealed partial class ArrangementView
                 ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + BandH + 2));
             }
 
+            if (!c.IsMidi && row >= 0) DrawAdsr(ctx, c, trackId, row, selected, content, NotaPalette.BgSunken);
+
             // Deactivated clip (key 0): grey it out with a dark scrim so it reads as "off"
             // while still showing its content/geometry. Inset so the (selection) border stays.
             if (!c.Active)
@@ -1368,6 +1510,24 @@ public sealed partial class ArrangementView
         }
 
         private const double BandH = 2;   // clip colour band along the top edge
+
+        // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is
+        // hovered, selected or being edited. Drawn in the clip's own colour; the hot handle is brass.
+        private void DrawAdsr(DrawingContext ctx, ClipVM c, int trackId, int row, bool selected, IBrush ink, IBrush body)
+        {
+            bool editing = _adsrDrag != AdsrHandle.None && ReferenceEquals(c, _adsrClip);
+            bool hovered = _adsrHoverTrack == trackId && _adsrHoverClip == c.ClipIndex;
+            bool handles = editing || hovered || selected;
+            if (c.Adsr.IsIdentity && !handles) return;
+            var f = AdsrFrameOf(c, row);
+            if (f.Right - f.Left < 12) return;
+            using var _ = ctx.PushClip(new Rect(f.Left, RowTop(row) + 2, f.Right - f.Left, RowH(row) - 4));
+            var a = c.Adsr.Fit(c.LengthBeats);
+            if (!a.IsIdentity) ClipAdsrKit.DrawCurve(ctx, f, a, new Pen(ink, 1.2));
+            if (!handles) return;
+            var hot = editing ? _adsrDrag : hovered ? _adsrHoverHandle : AdsrHandle.None;
+            ClipAdsrKit.DrawHandles(ctx, f, a, hot, ink, NotaPalette.Accent, new Pen(body, 1));
+        }
 
         // Which clips carry their name (design 1a's "labels" choice). A clip that was named by
         // hand always shows it — that name was authored to be read.
@@ -1454,8 +1614,10 @@ public sealed partial class ArrangementView
             // that fall in it. This keeps the waveform solid on wide/zoomed clips instead
             // of leaving gaps between sparse fixed-position bars.
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
+            var adsr = c.Adsr.Fit(c.LengthBeats);
+            bool shaped = !adsr.IsIdentity;
             var geo = new StreamGeometry();
-            using (var g = geo.Open())
+            using (var gc = geo.Open())
                 for (double px = vx0; px < vx1; px += 1)
                 {
                     int b0 = Math.Clamp((int)((px - r.X) / r.Width * c.PeakCount), 0, c.PeakCount - 1);
@@ -1463,9 +1625,11 @@ public sealed partial class ArrangementView
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, c.Peaks[b * 2]); max = Math.Max(max, c.Peaks[b * 2 + 1]); }
                     if (min > max) continue;
-                    // Clip gain scales the drawn waveform, matching the clip editor.
-                    min = Math.Clamp(min * c.Gain, -1f, 1f); max = Math.Clamp(max * c.Gain, -1f, 1f);
-                    AddRect(g, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
+                    // Clip gain (and the ADSR shape) scales the drawn waveform, matching the clip editor.
+                    float g = c.Gain;
+                    if (shaped) g *= (float)adsr.GainAt((px + 0.5 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
+                    min = Math.Clamp(min * g, -1f, 1f); max = Math.Clamp(max * g, -1f, 1f);
+                    AddRect(gc, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
             ctx.DrawGeometry(brush, null, geo);
         }

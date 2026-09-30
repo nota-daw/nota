@@ -6,7 +6,9 @@
 // editing one, the Snap switch, the file's format) over the 232px inspector (CLIP,
 // PLAYBACK, WARP) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
 // the wave in the track colour, everything past the clip's played region darkened rather
-// than hidden. Envelope is a mode of the canvas, not a checkbox.
+// than hidden. Envelope and ADSR are modes of the canvas, not checkboxes. ADSR edits the
+// clip's amplitude shape with the same handles the arrangement shows on the clip
+// (ClipAdsrKit), so an edit in either place shows up in the other.
 
 using System;
 using System.Globalization;
@@ -40,6 +42,11 @@ public sealed class AudioClipEditorView : UserControl
     private readonly TextBlock _hint = Hint("");
     private readonly Border _envTargetDrop;
     private Action _syncGain = () => { }, _syncReverse = () => { }, _syncWarp = () => { }, _syncSnap = () => { };
+    private Action _syncAttack = () => { }, _syncDecay = () => { }, _syncSustain = () => { }, _syncRelease = () => { };
+    private ClipAdsr _adsr = ClipAdsr.Identity;
+    private int _mode;   // 0 = Sample, 1 = Envelope, 2 = ADSR
+    private readonly ContentControl _inspectorBody = new();
+    private Control _sampleSections = null!, _adsrSections = null!;
 
     private double _startBeat;
     private double _lengthBeats = 4;
@@ -88,6 +95,7 @@ public sealed class AudioClipEditorView : UserControl
             else _engine.SetClipVolumeEnvelope(TrackId, ClipIndex, pts);
             _onChanged();
         };
+        _wave.AdsrCommitted = SetAdsr;
 
         // CLIP — where it sits, and its length (± one beat).
         var clip = Section("CLIP",
@@ -123,7 +131,28 @@ public sealed class AudioClipEditorView : UserControl
         var warp = Section(SectionTitle("WARP", _markerCount), 8,
             warpRow, Pair(detect, transients), Card(KeyValue("Detected", _detectedText)));
 
-        var inspector = Inspector(Sections(clip, playback, warp), _hint);
+        // ADSR — the clip's amplitude shape (the ADSR tab swaps the inspector to it). Times
+        // run on a square-law slider over the clip length, so short attacks stay fine-grained.
+        var attack = SliderRow("ATTACK", 52, () => TimeNorm(_adsr.AttackBeats),
+            v => SetAdsrStage(AdsrHandle.Attack, NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.AttackBeats), out _syncAttack,
+            reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Attack, _adsr)), valueW: 52);
+        var decay = SliderRow("DECAY", 52, () => TimeNorm(_adsr.DecayBeats),
+            v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.DecayBeats), out _syncDecay,
+            reset: () => { var a = _adsr; a.DecayBeats = 0; SetAdsr(a); }, valueW: 52);
+        var sustain = SliderRow("SUSTAIN", 52, () => _adsr.Sustain,
+            v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + _adsr.DecayBeats, v), () => ClipAdsrKit.SustainText(_adsr.Sustain), out _syncSustain,
+            reset: () => { var a = _adsr; a.Sustain = 1f; SetAdsr(a); }, valueW: 52);
+        var release = SliderRow("RELEASE", 52, () => TimeNorm(_adsr.ReleaseBeats),
+            v => SetAdsrStage(AdsrHandle.Release, _lengthBeats - NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.ReleaseBeats), out _syncRelease,
+            reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Release, _adsr)), valueW: 52);
+        var resetAll = ClipEditorKit.Button("Reset", () => SetAdsr(ClipAdsr.Identity));
+        ToolTip.SetTip(resetAll, "Play the whole sample at full level");
+        var adsr = Section(SectionTitle("ADSR"), 10, attack, decay, sustain, release, resetAll);
+
+        _sampleSections = Sections(clip, playback, warp);
+        _adsrSections = Sections(adsr);
+        _inspectorBody.Content = _sampleSections;
+        var inspector = Inspector(_inspectorBody, _hint);
 
         // Column 1: the waveform (row 0), a horizontal zoom scrollbar (row 1), and a
         // floating overlay (Canvas with null background → clicks pass through except the
@@ -156,8 +185,8 @@ public sealed class AudioClipEditorView : UserControl
         Grid.SetColumn(col1, 1);
         grid.Children.Add(col1);
 
-        // Header: Sample | Envelope, the target while editing an envelope, Snap, the format.
-        var tabs = Segments(new[] { "Sample", "Envelope" }, 0, i => SetEnvMode(i == 1), out _);
+        // Header: Sample | Envelope | ADSR, the target while editing an envelope, Snap, the format.
+        var tabs = Segments(new[] { "Sample", "Envelope", "ADSR" }, 0, SetMode, out _);
         _envTargetDrop = Dropdown(_envTargetText, a => ShowMenu(a, EnvTargets, _envTarget, SetEnvTarget));
         _envTargetDrop.IsVisible = false;
         var snap = SwitchRow("Snap", () => _snapToGrid, ToggleSnap, out _syncSnap);
@@ -292,6 +321,7 @@ public sealed class AudioClipEditorView : UserControl
 
         // Clip envelope: clip-local domain = warpBeats when warped, else clip length.
         LoadEnvelope();
+        LoadAdsr();
         SyncWaveScroll();
     }
 
@@ -381,13 +411,44 @@ public sealed class AudioClipEditorView : UserControl
         _detectedText.Foreground = found ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
     }
 
-    private void SetEnvMode(bool on)
+    private void SetMode(int mode)
     {
-        _envMode = on;
-        _envTargetDrop.IsVisible = on;
-        _wave.SetEnvMode(on);
+        _mode = mode;
+        _envMode = mode == 1;
+        _envTargetDrop.IsVisible = _envMode;
+        _wave.SetEnvMode(_envMode);
+        _wave.SetAdsrMode(mode == 2);
+        _inspectorBody.Content = mode == 2 ? _adsrSections : _sampleSections;
         PaintHint();
     }
+
+    // ---- ADSR ----------------------------------------------------------------
+    private void LoadAdsr()
+    {
+        _adsr = _engine.GetClipAdsr(TrackId, ClipIndex);
+        _wave.SetAdsr(_adsr, _lengthBeats, _engine.Bpm);
+        SyncAdsr();
+    }
+
+    private void SyncAdsr() { _syncAttack(); _syncDecay(); _syncSustain(); _syncRelease(); }
+
+    // One engine edit (one undo step); the arrangement reloads and draws the same shape.
+    private void SetAdsr(ClipAdsr a)
+    {
+        _adsr = a.Fit(_lengthBeats);
+        _engine.SetClipAdsr(TrackId, ClipIndex, _adsr);
+        _wave.SetAdsr(_adsr, _lengthBeats, _engine.Bpm);
+        SyncAdsr();
+        _onChanged();
+    }
+
+    // A slider moves one stage the way its handle would (it stops at its neighbours).
+    private void SetAdsrStage(AdsrHandle h, double beat, double level)
+        => SetAdsr(ClipAdsrKit.Drag(h, _adsr, beat, level, _lengthBeats));
+
+    private double TimeNorm(double beats) => _lengthBeats > 0 ? Math.Sqrt(Math.Clamp(beats / _lengthBeats, 0, 1)) : 0;
+    private double NormTime(double v) => v * v * _lengthBeats;
+    private string AdsrTime(double beats) => NotaNum.Time(beats * 60.0 / Math.Max(1, _engine.Bpm));
 
     private void SetEnvTarget(int target)
     {
@@ -396,9 +457,12 @@ public sealed class AudioClipEditorView : UserControl
         LoadEnvelope();
     }
 
-    private void PaintHint() => _hint.Text = _envMode
-        ? "Click — point · drag — move · right-click — delete"
-        : "Double-click the wave — marker · drag — align";
+    private void PaintHint() => _hint.Text = _mode switch
+    {
+        1 => "Click — point · drag — move · right-click — delete",
+        2 => "Drag a handle · double-click — reset",
+        _ => "Double-click the wave — marker · drag — align",
+    };
 
     // Loads the active target's envelope into the waveform with its value axis.
     private void LoadEnvelope()
@@ -503,6 +567,37 @@ public sealed class AudioClipEditorView : UserControl
         private int _envDrag = -1, _envHover = -1;
         private int _selMk = -1;               // marker picked by a click (its position shows in the strip)
         private EnvPt? _envBend;               // segment being bent (M9-D)
+
+        // ADSR (the ADSR tab): the clip's amplitude shape over the PLAYED region, handles from
+        // ClipAdsrKit. Like the envelope it runs in played time, so it never mirrors.
+        private ClipAdsr _adsr = ClipAdsr.Identity;
+        private double _adsrLen = 1, _bpm = 120;
+        private bool _adsrMode;
+        private AdsrHandle _adsrDrag, _adsrHover;
+        private ClipAdsr _adsrStart;
+        private double _adsrAnchorBeat, _adsrAnchorLevel;
+        private Point _adsrPress;
+        private static readonly Cursor HandCur = new(StandardCursorType.Hand);
+        /// <summary>Raised when an ADSR handle drag ends (or a handle is reset) with the new shape.</summary>
+        public Action<ClipAdsr>? AdsrCommitted;
+
+        public void SetAdsrMode(bool on) { _adsrMode = on; _adsrHover = AdsrHandle.None; Cursor = ArrowCur; _curKind = StandardCursorType.Arrow; InvalidateVisual(); }
+        public void SetAdsr(ClipAdsr a, double lenBeats, double bpm)
+        {
+            if (_adsrDrag != AdsrHandle.None) return;   // don't yank a handle out from under the hand
+            _adsr = a; _adsrLen = Math.Max(1e-6, lenBeats); _bpm = bpm;
+            InvalidateVisual();
+        }
+
+        // The played region on screen (left→right in playing order) over the wave's value axis.
+        private AdsrFrame AdsrFrameNow(double w, double h)
+        {
+            double xa, xb;
+            if (_srcMode && _srcTotal > 0) { xa = SrcToX(_srcOff, w); xb = SrcToX(_srcOff + _srcLen, w); }
+            else if (_trimMode && _trimTotal > 0) { xa = BeatToX(_trimStart, w); xb = BeatToX(_trimEnd, w); }
+            else { xa = FracToXView(0, w); xb = FracToXView(1, w); }
+            return new AdsrFrame(Math.Min(xa, xb), Math.Max(xa, xb), WaveTop + 6, h - 6, _adsrLen);
+        }
 
         /// <summary>Raised when markers change (drag/add/delete) with the full sorted list.</summary>
         public Action<double[], double[]>? MarkersCommitted;
@@ -674,6 +769,31 @@ public sealed class AudioClipEditorView : UserControl
         {
             double W = Bounds.Width, H = Bounds.Height;
 
+            // ADSR mode takes over the pointer: grab a handle (double-click resets its stage).
+            if (_adsrMode)
+            {
+                if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) return;
+                var p = e.GetPosition(this);
+                var hit = ClipAdsrKit.Hit(p, AdsrFrameNow(W, H), _adsr);
+                if (hit == AdsrHandle.None) return;
+                if (e.ClickCount == 2)
+                {
+                    _adsr = ClipAdsrKit.Reset(hit, _adsr.Fit(_adsrLen));
+                    AdsrCommitted?.Invoke(_adsr);
+                }
+                else
+                {
+                    _adsrDrag = hit;
+                    _adsrStart = _adsr.Fit(_adsrLen);
+                    (_adsrAnchorBeat, _adsrAnchorLevel) = ClipAdsrKit.Anchor(hit, _adsrStart, _adsrLen);
+                    _adsrPress = p;
+                    e.Pointer.Capture(this);
+                }
+                e.Handled = true;
+                InvalidateVisual();
+                return;
+            }
+
             // BPM chip: drag up/down to scrub the segment tempo (like the global BPM),
             // double-click to type an exact value.
             if (!_envMode && !e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
@@ -790,6 +910,31 @@ public sealed class AudioClipEditorView : UserControl
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
+            if (_adsrDrag != AdsrHandle.None)
+            {
+                var p = e.GetPosition(this);
+                double dx = p.X - _adsrPress.X, dy = p.Y - _adsrPress.Y;
+                if (_adsrDrag == AdsrHandle.AttackOrSustain)
+                {
+                    if (Math.Abs(dx) < 3 && Math.Abs(dy) < 3) return;
+                    _adsrDrag = ClipAdsrKit.Resolve(_adsrDrag, dx, dy);
+                    (_adsrAnchorBeat, _adsrAnchorLevel) = ClipAdsrKit.Anchor(_adsrDrag, _adsrStart, _adsrLen);
+                }
+                var f = AdsrFrameNow(Bounds.Width, Bounds.Height);
+                double beat = _adsrAnchorBeat + dx / Math.Max(1, f.Right - f.Left) * _adsrLen;
+                double level = _adsrAnchorLevel - dy / Math.Max(1, f.Bottom - f.Top);
+                _adsr = ClipAdsrKit.Drag(_adsrDrag, _adsrStart, beat, level, _adsrLen);
+                InvalidateVisual();
+                return;
+            }
+            if (_adsrMode)   // ADSR mode: light the handle under the pointer
+            {
+                var hv = ClipAdsrKit.Hit(e.GetPosition(this), AdsrFrameNow(Bounds.Width, Bounds.Height), _adsr);
+                if (hv != _adsrHover) { _adsrHover = hv; InvalidateVisual(); }
+                Cursor = hv != AdsrHandle.None ? HandCur : ArrowCur;
+                _curKind = StandardCursorType.Arrow;
+                return;
+            }
             if (_bpmScrubSeg >= 0)   // drag up = faster (0.5 BPM/px, like the global BPM)
             {
                 double dy = _bpmScrubStartY - e.GetPosition(this).Y;
@@ -864,6 +1009,14 @@ public sealed class AudioClipEditorView : UserControl
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
+            if (_adsrDrag != AdsrHandle.None)
+            {
+                _adsrDrag = AdsrHandle.None;
+                e.Pointer.Capture(null);
+                if (!_adsr.Equals(_adsrStart)) AdsrCommitted?.Invoke(_adsr);
+                InvalidateVisual();
+                return;
+            }
             if (_bpmScrubSeg >= 0) { _bpmScrubSeg = -1; e.Pointer.Capture(null); Commit(); return; }   // push the scrubbed warp (one undo step)
             if (_envDrag >= 0 || _envBend is not null) { _envDrag = -1; _envBend = null; e.Pointer.Capture(null); CommitEnv(); return; }
             if (_srcDrag >= 0)
@@ -884,7 +1037,8 @@ public sealed class AudioClipEditorView : UserControl
 
         protected override void OnPointerExited(PointerEventArgs e)
         {
-            if (_hoverMk != -1 || _bpmHoverSeg != -1 || _envHover != -1) { _hoverMk = -1; _bpmHoverSeg = -1; _envHover = -1; InvalidateVisual(); }
+            if (_hoverMk != -1 || _bpmHoverSeg != -1 || _envHover != -1 || _adsrHover != AdsrHandle.None)
+            { _hoverMk = -1; _bpmHoverSeg = -1; _envHover = -1; _adsrHover = AdsrHandle.None; InvalidateVisual(); }
             SetCursorKind(StandardCursorType.Arrow);
             base.OnPointerExited(e);
         }
@@ -984,6 +1138,9 @@ public sealed class AudioClipEditorView : UserControl
             // zooming magnifies the waveform and only the visible slice is drawn.
             double mid = top + wh / 2;
             ctx.DrawLine(MidPen, new Point(0, mid), new Point(w, mid));
+            var adsrF = AdsrFrameNow(w, h);
+            var adsrFit = _adsr.Fit(_adsrLen);
+            bool shaped = !adsrFit.IsIdentity;
             if (_peaks is not null && _count > 0 && wh > 4)
             {
                 double amp = wh / 2 - 6;
@@ -995,8 +1152,15 @@ public sealed class AudioClipEditorView : UserControl
                     if (_reversed) fx -= bw;
                     if (fx + bw < 0) { if (_reversed) break; continue; }
                     if (fx > w) { if (_reversed) continue; break; }
-                    float mn = (float)Math.Clamp(_peaks[i * 2] * _gain, -1.0, 1.0);
-                    float mx = (float)Math.Clamp(_peaks[i * 2 + 1] * _gain, -1.0, 1.0);
+                    // The ADSR shapes the played region the way it sounds (outside it is darkened anyway).
+                    double g = _gain;
+                    if (shaped)
+                    {
+                        double bt = adsrF.Beat(fx + bw / 2);
+                        if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
+                    }
+                    float mn = (float)Math.Clamp(_peaks[i * 2] * g, -1.0, 1.0);
+                    float mx = (float)Math.Clamp(_peaks[i * 2 + 1] * g, -1.0, 1.0);
                     ctx.FillRectangle(_wave, new Rect(fx, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
                 }
             }
@@ -1117,6 +1281,26 @@ public sealed class AudioClipEditorView : UserControl
                         ctx.DrawEllipse(hot ? NodeHot : NodeFill, NodeRing, new Point(EnvBeatToX(p.beat, w), EnvValToY(p.val, h)), 4.5, 4.5);
                     }
             }
+
+            // ADSR: in its tab the wave dims under a wash and the shape is drawn in brass with its
+            // handles (plus the stage readout while dragging); otherwise a quiet line keeps it in view.
+            if (_adsrMode)
+            {
+                ctx.FillRectangle(EnvWash, new Rect(0, top, w, wh));
+                ClipAdsrKit.DrawCurve(ctx, adsrF, adsrFit, EnvPen);
+                var hot = _adsrDrag != AdsrHandle.None ? _adsrDrag : _adsrHover;
+                ClipAdsrKit.DrawHandles(ctx, adsrF, adsrFit, hot, NodeFill, NodeHot, NodeRing);
+                if (_adsrDrag is not (AdsrHandle.None or AdsrHandle.AttackOrSustain))
+                {
+                    var ft = new FormattedText(ClipAdsrKit.Readout(_adsrDrag, adsrFit, _bpm), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
+                    double cw = ft.Width + 12;
+                    var chip = new Rect(Math.Clamp(adsrF.Left + 8, 2, Math.Max(2, w - cw - 2)), top + 6, cw, 16);
+                    ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), 3, 3);
+                    ctx.DrawText(ft, new Point(chip.X + 6, chip.Y + (16 - ft.Height) / 2));
+                }
+            }
+            else if (shaped && !_envMode)
+                ClipAdsrKit.DrawCurve(ctx, adsrF, adsrFit, EnvPenDim);
 
             if (_frac >= 0 && _frac <= 1)
             {

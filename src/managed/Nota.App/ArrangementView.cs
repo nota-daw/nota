@@ -753,7 +753,11 @@ public sealed partial class ArrangementView : UserControl
                         cvm.PeakCount = eng.GetClipPeaks(ti.Id, c, peaks, buckets);
                         cvm.Peaks = peaks;
                     }
-                    if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai)) cvm.Gain = ai.Gain;
+                    if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai))
+                    {
+                        cvm.Gain = ai.Gain;
+                        cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
+                    }
                     tvm.Clips.Add(cvm);
                 }
                 MarkClipRuns(tvm);
