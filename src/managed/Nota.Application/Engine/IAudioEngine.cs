@@ -300,6 +300,8 @@ public interface IAudioEngine : IDisposable
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>
     bool SetTrackGrainSample(int trackId, string path, int rootNote = 60);
+    /// <summary>Sets a Nota Grain's root note — the key that plays the sample at its own pitch.</summary>
+    bool SetTrackGrainRoot(int trackId, int rootNote);
     /// <summary>Grain sample info (sample id / root). True if the track is a Nota Grain.</summary>
     bool TryGetGrainInfo(int trackId, out NotaSamplerInfo info);
     /// <summary>Nota Rhythm Phase 2 — load a one-shot into a drum voice (switches it to Sample).</summary>

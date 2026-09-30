@@ -750,6 +750,9 @@ public sealed partial class NotaEngine
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }
 
+    public bool SetTrackGrainRoot(int trackId, int rootNote)
+    { ThrowIfDisposed(); return NativeMethods.SetTrackGrainRoot(_handle, trackId, rootNote) != 0; }
+
     public bool TryGetGrainInfo(int trackId, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.TrackGrainInfo(_handle, trackId, out info) != 0; }
 

@@ -26,6 +26,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   computer the first time a preset needs one, so they don't add to the download. The
   Basics presets still keep whatever sample you dropped in. Previews in the browser play
   each preset with its own source.
+- **Nota Grain lets you set the root note of your own sample.** The Pitch tab has a ROOT
+  control: the key that plays the sample at its recorded pitch. Step it with − / + or the
+  mouse wheel. When you drop a file whose name names a note ("Pad_F#3.wav"), Grain takes
+  the root from it; otherwise it's C4. Double-click the root to go back to the one in the
+  file name. The root is saved with the project.
 - Import MIDI files. `.mid` files now show up in the browser's Files tab, and you can drag
   them from there or straight from Finder / Explorer. Drop one on the arrangement and it
   becomes a MIDI clip at that spot. A file with several parts spreads out: the first part

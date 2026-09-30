@@ -246,6 +246,9 @@ int32_t nota_track_set_grain_sample(NotaEngine* e, int32_t track_id, const char*
     if (!e || !path) return 0;
     return ENG(e)->setTrackGrainSample(track_id, std::string(path), root) ? 1 : 0;
 }
+int32_t nota_track_set_grain_root(NotaEngine* e, int32_t track_id, int32_t root) {
+    return (e && ENG(e)->setTrackGrainRoot(track_id, root)) ? 1 : 0;
+}
 int32_t nota_track_grain_info(const NotaEngine* e, int32_t track_id, NotaSamplerInfo* out) {
     return (e && CENG(e)->grainInfo(track_id, out)) ? 1 : 0;
 }

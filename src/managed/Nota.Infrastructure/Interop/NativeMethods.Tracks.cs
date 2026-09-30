@@ -350,6 +350,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_set_grain_sample", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int SetTrackGrainSample(IntPtr engine, int trackId, string path, int rootNote);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_grain_root")]
+    internal static partial int SetTrackGrainRoot(IntPtr engine, int trackId, int rootNote);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_grain_info")]
     internal static partial int TrackGrainInfo(IntPtr engine, int trackId, out NotaSamplerInfo info);
 

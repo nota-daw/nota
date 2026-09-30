@@ -572,6 +572,8 @@ NOTA_API int32_t nota_engine_add_sampler_instrument_track(NotaEngine* engine);
 NOTA_API int32_t nota_track_set_sampler_sample(NotaEngine* engine, int32_t track_id, const char* path_utf8, int32_t root_note);
 /* Loads a sample file into an existing Nota Grain track (kind 10, keeps params). 1 = ok. */
 NOTA_API int32_t nota_track_set_grain_sample(NotaEngine* engine, int32_t track_id, const char* path_utf8, int32_t root_note);
+/* Sets the Grain's root note — the key that plays the sample at its own pitch (lock-free). 1 = ok. */
+NOTA_API int32_t nota_track_set_grain_root(NotaEngine* engine, int32_t track_id, int32_t root_note);
 /* Sets the Sampler's root note (lock-free). 1 = ok. */
 NOTA_API int32_t nota_track_set_sampler_root(NotaEngine* engine, int32_t track_id, int32_t root_note);
 /* Live playback position of the Sampler (0..1 of the sample, -1 = silent) for the UI cursor. */

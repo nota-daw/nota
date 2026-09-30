@@ -2795,6 +2795,8 @@ Console.WriteLine("-- Nota Grain --");
     { int n = 16000; var sp = new float[n]; for (int i = 0; i < n; i++) sp[i] = (float)(Math.Sin(2 * Math.PI * 330 * i / 32000.0) * 0.5); using var w = new Nota.Infrastructure.WavWriter(gpath, 32000, 1, WavBitDepth.Float32); w.WriteFrames(sp, n); }
     Check(ge.SetTrackGrainSample(t, gpath, 60), "loads a sample into Nota Grain");
     Check(ge.TryGetGrainInfo(t, out var giS) && giS.SampleId != 0, "grain reports its loaded sample id");
+    Check(ge.SetTrackGrainRoot(t, 57) && ge.TryGetGrainInfo(t, out var giRoot) && giRoot.RootNote == 57 && giRoot.SampleId == giS.SampleId,
+        "set grain root keeps the sample and reports the new root");
     ge.PluginParamSet(t, -1, posI, 0.4f);
 
     string gdir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "nota-grain-proj-" + System.Guid.NewGuid().ToString("N"));
@@ -2810,6 +2812,7 @@ Console.WriteLine("-- Nota Grain --");
         ProjectService.Apply(gloaded, gdst, gdir);
         int rt = -1; for (int i = 0; i < gdst.TrackCount; i++) if (gdst.TryGetTrackInfo(i, out var tinf) && gdst.TrackInstrumentKind(tinf.Id) == 10) { rt = tinf.Id; break; }
         Check(rt > 0 && gdst.TryGetGrainInfo(rt, out var giR) && giR.SampleId != 0, "reloaded Grain still has its sample");
+        Check(rt > 0 && gdst.TryGetGrainInfo(rt, out var giRR) && giRR.RootNote == 57, "reloaded Grain keeps its root note");
         Check(rt > 0 && Math.Abs(gdst.PluginParamGet(rt, -1, posI) - 0.4f) < 1e-3, "reloaded Grain restores its params");
     }
     finally { try { System.IO.Directory.Delete(gdir, true); } catch { } try { System.IO.File.Delete(gpath); } catch { } }

@@ -282,6 +282,14 @@ bool Engine::setTrackGrainSample(int32_t trackId, const std::string& path, int32
     return true;
 }
 
+bool Engine::setTrackGrainRoot(int32_t trackId, int32_t rootNote) {
+    auto t = findTrackAuthoring(trackId);
+    auto* gr = t && t->instrument ? dynamic_cast<GrainSynth*>(t->instrument.get()) : nullptr;
+    if (!gr) return false;
+    gr->setRoot(rootNote);   // lock-free atomic; the synth is shared across snapshots
+    return true;
+}
+
 int32_t Engine::addSamplerTrack(const std::string& path, int32_t rootNote, bool loop) {
     auto sample = decodeAudioFile(path);
     if (!sample || sample->empty()) return 0;

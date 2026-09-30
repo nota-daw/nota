@@ -222,9 +222,13 @@ public partial class MainWindow
                     else { ShowDevices(t); _vm.StatusText = $"Loaded {item.Name}"; }
                     break;
                 case BrowserItemKind.Sample when kind == 10:                // sample → load into Nota Grain
-                    if (!Engine.SetTrackGrainSample(t, item.Path, 60)) _vm.StatusText = $"Couldn't load {item.Name}.";
-                    else { ShowDevices(t); _vm.StatusText = $"Loaded {item.Name}"; }
+                {
+                    // The root from a note in the file name ("Pad_F#3.wav"), else C4.
+                    int root = SamplerModel.DetectRoot(item.Path) is var d and >= 0 ? d : 60;
+                    if (!Engine.SetTrackGrainSample(t, item.Path, root)) _vm.StatusText = $"Couldn't load {item.Name}.";
+                    else { ShowDevices(t); _vm.StatusText = $"Loaded {item.Name} · root {SamplerModel.NoteName(root)}"; }
                     break;
+                }
                 case BrowserItemKind.Sample:
                     _vm.StatusText = "Drop samples onto the arrangement.";
                     break;

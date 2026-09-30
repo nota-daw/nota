@@ -585,6 +585,7 @@ public:
     bool    rhythmSetMacroMappingCurve(int32_t trackId, int32_t index, int32_t curve);
     void    rhythmClearMacros(int32_t trackId);
     bool    setTrackGrainSample(int32_t trackId, const std::string& path, int32_t rootNote);
+    bool    setTrackGrainRoot(int32_t trackId, int32_t rootNote);
     int32_t addSamplerTrack(const std::string& path, int32_t rootNote, bool loop);
     int32_t addSamplerInstrumentTrack();                                        // empty Sampler (sample loaded later)
     bool    setTrackSamplerSample(int32_t trackId, const std::string& path, int32_t rootNote);
