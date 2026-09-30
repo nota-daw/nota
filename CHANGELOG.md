@@ -93,6 +93,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   many plugins you can still install, counts each filter and lists the download size. The
   theme buttons show a sample of each theme's colour. Shortcuts can be filtered and show
   each key on its own key-cap.
+- **Downloads show their progress at the bottom of Settings, and you can cancel them.** A bar
+  at the bottom of the window shows the plugin being installed, how much has downloaded and
+  a Cancel button. It stays in view while you scroll the list or open another page, and
+  shows the result when the install finishes. Cancelling leaves your plugins as they were.
 - "Add track" in a track's right-click menu puts the new track right after that track. On a
   group it adds the track inside the group.
 - Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after

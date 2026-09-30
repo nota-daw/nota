@@ -140,10 +140,18 @@ public sealed partial class PreferencesWindow : NotaWindow
             Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0), Child = nav,
         };
 
+        // The download dock is its own row under the scrolled pane: it shortens the pane
+        // instead of covering its last rows, and stays put while the user scrolls or switches panes.
+        var column = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        column.Children.Add(_content);
+        var dock = StoreDock();
+        Grid.SetRow(dock, 1);
+        column.Children.Add(dock);
+
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         grid.Children.Add(sidebar);
-        Grid.SetColumn(_content, 1);
-        grid.Children.Add(_content);
+        Grid.SetColumn(column, 1);
+        grid.Children.Add(column);
         SetBody(grid);
 
         Closed += (_, _) => { StopTests(); CancelStoreWork(); };

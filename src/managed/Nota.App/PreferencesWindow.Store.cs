@@ -3,8 +3,10 @@
 //
 // Preferences → Get Plug-ins: browse the Nota plugin registry and install / update /
 // remove open-source VST3 plugins (IPluginStore). One install at a time; it keeps
-// running when the user switches panes and is cancelled when the window closes. After
-// every change the catalog is rescanned so the browser lists the new plugins.
+// running when the user switches panes and is cancelled when the window closes. Its
+// progress and outcome show in a dock at the bottom of the window (visible from every
+// pane), which also cancels it. After every change the catalog is rescanned so the
+// browser lists the new plugins.
 
 using System;
 using System.Collections.Generic;
@@ -33,13 +35,23 @@ public sealed partial class PreferencesWindow
     private string _storeSearch = "";
     private string? _storeBusyId;                    // plugin being installed / removed
     private StoreProgress _storeProgress;
-    private string? _storeMessage;                    // last result or error, shown under the toolbar
-    private CancellationTokenSource? _storeCts;
+    private long _storeBusySize;                      // download size in bytes, 0 = unknown
+    private string? _storeMessage;                    // registry loading / error, shown under the toolbar
+    private string? _storeResult;                     // last install / remove outcome, shown in the dock
+    private int _storeResultSeq;                      // guards the auto-hide of an older result
+    private CancellationTokenSource? _storeCts;       // window lifetime
+    private CancellationTokenSource? _storeJobCts;    // the running install; null when it can't be cancelled
     private Task? _storeLoad;
     private ContentControl? _storeList;               // null while another pane is showing
     private TextBlock[]? _storeCounts;                // mono counts on the filter segments
     private TextBlock? _storeStatus;
-    private ProgressBar? _storeBar;
+
+    // The download dock (built once with the window).
+    private Border _dock = null!;
+    private TextBlock _dockTitle = null!, _dockDetail = null!;
+    private ProgressBar _dockBar = null!;
+    private Button _dockCancel = null!;
+    private Control _dockClose = null!;
 
     private Control StorePane()
     {
@@ -88,7 +100,6 @@ public sealed partial class PreferencesWindow
         Grid.SetColumn(refresh, 2); toolbar.Children.Add(refresh);
 
         _storeStatus = Caption("");
-        _storeBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, IsVisible = false };
         _storeList = new ContentControl();
 
         var body = new StackPanel
@@ -97,12 +108,12 @@ public sealed partial class PreferencesWindow
             Children =
             {
                 intro, toolbar,
-                new StackPanel { Spacing = 6, Children = { _storeStatus, _storeBar } },
+                _storeStatus,
                 _storeList,
                 Caption($"Installed to {_store.PluginsDir}"),
             },
         };
-        body.DetachedFromVisualTree += (_, _) => { _storeList = null; _storeStatus = null; _storeBar = null; _storeCounts = null; };
+        body.DetachedFromVisualTree += (_, _) => { _storeList = null; _storeStatus = null; _storeCounts = null; };
         if (_storePlugins is null) EnsureStoreLoading();
         else RenderStoreList();
         return body;
@@ -191,14 +202,85 @@ public sealed partial class PreferencesWindow
 
     private void UpdateStoreStatus()
     {
-        if (_storeStatus is null || _storeBar is null) return;
-        bool busy = _storeBusyId is not null;
-        _storeStatus.Text = busy ? _storeProgress.Message : _storeMessage ?? "";
+        UpdateDock();
+        if (_storeStatus is null) return;
+        _storeStatus.Text = _storeMessage ?? "";
         _storeStatus.IsVisible = _storeStatus.Text.Length > 0;
-        _storeBar.IsVisible = busy;
-        if (_storeStatus.Parent is Control holder) holder.IsVisible = _storeStatus.IsVisible || busy;
-        _storeBar.IsIndeterminate = busy && _storeProgress.Fraction < 0;
-        if (busy && _storeProgress.Fraction >= 0) _storeBar.Value = _storeProgress.Fraction;
+    }
+
+    // Bottom dock: the running install / removal (message, bytes, bar, Cancel), or the last
+    // outcome with a close button. Hidden when there's neither.
+    private Control StoreDock()
+    {
+        _dockTitle = new TextBlock { FontSize = 12, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        _dockDetail = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
+        _dockCancel = StoreButton("Cancel", enabled: true, CancelStoreInstall);
+        _dockCancel.VerticalAlignment = VerticalAlignment.Center;
+        ToolTip.SetTip(_dockCancel, "Stop the download — nothing is changed");
+        _dockClose = new Button
+        {
+            Content = new Glyph(GlyphKind.Close, 10), Classes = { "ghost" }, Width = 26, Height = 26, Padding = new Thickness(0),
+            Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+        };
+        ((Button)_dockClose).Click += (_, _) => { _storeResult = null; UpdateDock(); };
+
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 12 };
+        head.Children.Add(_dockTitle);
+        Grid.SetColumn(_dockDetail, 1); head.Children.Add(_dockDetail);
+        var left = new StackPanel { Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { head, _dockBar } };
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 16 };
+        grid.Children.Add(left);
+        Grid.SetColumn(_dockCancel, 1); grid.Children.Add(_dockCancel);
+        Grid.SetColumn(_dockClose, 2); grid.Children.Add(_dockClose);
+
+        _dock = new Border
+        {
+            Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(32, 12, 24, 12), MinHeight = 56, Child = grid, IsVisible = false,
+        };
+        return _dock;
+    }
+
+    private void UpdateDock()
+    {
+        bool busy = _storeBusyId is not null;
+        _dock.IsVisible = busy || _storeResult is not null;
+        if (!_dock.IsVisible) return;
+
+        var pr = _storeProgress;
+        _dockTitle.Text = busy ? pr.Message : _storeResult;
+        _dockTitle.Foreground = busy ? TextPrimary : TextSecondary;
+        _dockBar.IsVisible = busy;
+        _dockBar.IsIndeterminate = busy && pr.Fraction < 0;
+        if (busy && pr.Fraction >= 0) _dockBar.Value = pr.Fraction;
+        _dockDetail.Text = !busy || pr.Fraction < 0 ? ""
+            : _storeBusySize > 0
+                ? $"{(pr.Fraction * _storeBusySize / 1048576.0).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(_storeBusySize / 1048576.0, "0.0", "MB")}  ·  {NotaNum.Unit(pr.Fraction * 100, "0", "%")}"
+                : NotaNum.Unit(pr.Fraction * 100, "0", "%");
+        _dockDetail.IsVisible = _dockDetail.Text.Length > 0;
+        _dockCancel.IsVisible = busy && _storeJobCts is not null;
+        _dockCancel.IsEnabled = _storeJobCts is { IsCancellationRequested: false };
+        _dockClose.IsVisible = !busy;
+    }
+
+    private void CancelStoreInstall()
+    {
+        if (_storeJobCts is not { IsCancellationRequested: false } cts) return;
+        cts.Cancel();
+        _storeProgress = _storeProgress with { Message = "Cancelling…" };
+        UpdateDock();
+    }
+
+    // Shows an install / remove outcome in the dock; a success fades out on its own, an error
+    // stays until it's closed.
+    private void SetStoreResult(string? text, bool sticky)
+    {
+        _storeResult = text;
+        int seq = ++_storeResultSeq;
+        if (text is not null && !sticky)
+            DispatcherTimer.RunOnce(() => { if (seq == _storeResultSeq && _storeBusyId is null) { _storeResult = null; UpdateDock(); } }, TimeSpan.FromSeconds(8));
     }
 
     private Control StoreRow(StorePlugin p, InstalledStorePlugin? inst)
@@ -309,25 +391,39 @@ public sealed partial class PreferencesWindow
     {
         if (_storeBusyId is not null) return;
         _storeBusyId = p.Id;
+        _storeBusySize = p.Asset?.Size ?? 0;
         _storeProgress = new StoreProgress(0, $"Downloading {p.Name}…");
+        SetStoreResult(null, sticky: true);
         _storeCts ??= new CancellationTokenSource();
+        var job = _storeJobCts = CancellationTokenSource.CreateLinkedTokenSource(_storeCts.Token);
         RenderStoreList();
-        var progress = new Progress<StoreProgress>(r => { _storeProgress = r; UpdateStoreStatus(); });
+        // A report queued before Cancel must not overwrite "Cancelling…".
+        var progress = new Progress<StoreProgress>(r => { if (job.IsCancellationRequested) return; _storeProgress = r; UpdateDock(); });
         try
         {
-            await _store.InstallAsync(p, progress, _storeCts.Token);
+            await _store.InstallAsync(p, progress, job.Token);
+            _storeJobCts = null;   // the files are in place — too late to cancel
             _storeProgress = new StoreProgress(-1, $"Scanning {p.Name}…");
-            UpdateStoreStatus();
-            _storeMessage = await RescanAfterStoreChange() ? $"{p.Name} {p.Version} is installed — find it in the browser." : $"{p.Name} is installed. Rescan plugins to use it.";
+            UpdateDock();
+            SetStoreResult(await RescanAfterStoreChange() ? $"{p.Name} {p.Version} is installed — find it in the browser." : $"{p.Name} is installed. Rescan plugins to use it.", sticky: false);
         }
-        catch (PluginStoreException e) { _storeMessage = e.Message; }
-        catch (OperationCanceledException) { _storeMessage = null; }
+        catch (OperationCanceledException)
+        {
+            // Window closing: nothing to show. Otherwise the user pressed Cancel.
+            if (_storeCts is { IsCancellationRequested: false }) SetStoreResult($"Installing {p.Name} was cancelled.", sticky: false);
+        }
+        catch (PluginStoreException e) { SetStoreResult(e.Message, sticky: true); }
         catch (Exception e)
         {
             App.Services.GetRequiredService<ILogSink>().Error($"Installing {p.Id} failed", e);
-            _storeMessage = $"Installing {p.Name} failed: {e.Message}";
+            SetStoreResult($"Installing {p.Name} failed: {e.Message}", sticky: true);
         }
-        finally { _storeBusyId = null; }
+        finally
+        {
+            _storeBusyId = null;
+            _storeJobCts = null;
+            job.Dispose();
+        }
         RenderStoreList();
     }
 
@@ -339,15 +435,17 @@ public sealed partial class PreferencesWindow
             "Remove", "Cancel").ShowDialog<bool>(this);
         if (!ok) return;
         _storeBusyId = p.Id;
+        _storeBusySize = 0;
         _storeProgress = new StoreProgress(-1, $"Removing {p.Name}…");
+        SetStoreResult(null, sticky: true);
         RenderStoreList();
         try
         {
             _store.Uninstall(p.Id);
             await RescanAfterStoreChange();
-            _storeMessage = $"{p.Name} was removed.";
+            SetStoreResult($"{p.Name} was removed.", sticky: false);
         }
-        catch (PluginStoreException e) { _storeMessage = e.Message; }
+        catch (PluginStoreException e) { SetStoreResult(e.Message, sticky: true); }
         finally { _storeBusyId = null; }
         RenderStoreList();
     }
