@@ -45,8 +45,6 @@ public partial class MainWindow
 
         if (e.Key == Key.Space)
         {
-            // In the Files list Space auditions the selected sample instead.
-            if (Browser.TryTogglePreview(e.Source)) { e.Handled = true; return; }
             _vm.Transport.PlayStopCommand.Execute(null);
             e.Handled = true;
         }

@@ -136,6 +136,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - A project now finds its plug-ins even when they're installed in a different folder than on
   the computer that saved it. Before, such a plug-in counted as missing.
 - Rescanning plug-ins removes VST3 plug-ins that were deleted from disk from the browser.
+- Space always starts and stops the project, even while a sample or preset is selected in
+  the browser. The browser's preview plays and stops with its play button.
 
 ### Changed
 - VST3 and AU plug-ins get a proper device card with two sizes. The header names the

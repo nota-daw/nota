@@ -141,7 +141,7 @@ public sealed class PreviewPlayer : UserControl
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         _playBtn = Chip(new Panel { Children = { _playGlyph, _stopGlyph } }, 28, 28, 5);
-        ToolTip.SetTip(_playBtn, "Play / Stop (Space)");
+        ToolTip.SetTip(_playBtn, "Play / Stop");
         _playBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { Toggle(); e.Handled = true; } };
 
         _timeNow = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
@@ -321,7 +321,7 @@ public sealed class PreviewPlayer : UserControl
         Replan(play: _autoPresets, wasPlaying);
     }
 
-    /// <summary>Space in a browser list: play the selection, or stop it.</summary>
+    /// <summary>The play button: play the selection, or stop it. Mouse only — Space stays the transport's.</summary>
     public void Toggle()
     {
         if (_playing) Stop();

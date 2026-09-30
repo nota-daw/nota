@@ -192,7 +192,7 @@ public sealed class BrowserView : UserControl
 
     // Pinned preview footer + the status line under it.
     private readonly PreviewPlayer _previewFooter;   // sample / preset auditioner — list tabs
-    // The player stays hidden until the user works a list (click, arrow keys, Space) and hides
+    // The player stays hidden until the user works a list (click, arrow keys) and hides
     // again once a row is dragged or double-clicked onto the project.
     private bool _previewShown;
     private bool _listPointerDown;   // a single click is in progress on a list row
@@ -957,16 +957,6 @@ public sealed class BrowserView : UserControl
         var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.CheckBox, IsChecked = on };
         mi.Click += (_, _) => set(!on);
         return mi;
-    }
-
-    /// <summary>Space while the Files list has focus: the player's Play / Stop. False when
-    /// the key isn't the browser's (another tab, nothing to play) so it falls to the transport.</summary>
-    public bool TryTogglePreview(object? source)
-    {
-        if (_active > PresetsTab || !_previewFooter.HasSample) return false;
-        for (var c = source as StyledElement; c is not null; c = c.Parent)
-            if (c == _pages[_active] || c == _previewFooter) { ShowPreview(true); _previewFooter.Toggle(); return true; }
-        return false;
     }
 
     private void ShowPreview(bool shown)

@@ -932,7 +932,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("BROWSER · PREVIEW", new[]
         {
             ("↑ ↓", "Move through samples, presets and devices · with Auto on, each one plays as it is selected"),
-            ("Space", "Play / stop the selected sample, preset or device (while a browser list has focus)"),
+            ("Click play button", "Play / stop the selected sample, preset or device"),
             ("Click waveform", "Play from that point"),
             ("Click WAVE / SPEC", "Switch the well between the waveform and a live spectrum"),
             ("Scroll on the track button", "Step through the demo tracks an effect preset is heard through"),
