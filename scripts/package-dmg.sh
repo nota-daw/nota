@@ -1,123 +1,65 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Build a distributable macOS **universal** (arm64 + x86_64) Nota.app and wrap it
-# in a compressed .dmg with a drag-to-Applications layout.
+# Build a distributable macOS Nota.app for ONE architecture and wrap it in a
+# compressed .dmg with a drag-to-Applications layout. Run it once per arch:
+# Apple Silicon and Intel each get their own .dmg (half the size of a universal
+# bundle, which had to carry two full self-contained .NET runtimes plus a launcher
+# stub — per-arch ReadyToRun framework assemblies can't be lipo-merged).
 #
-# Why per-arch subtrees + a launcher (NOT lipo-merge everything): .NET
-# self-contained publishes are per-RID, and it is NOT true that "the managed
-# assemblies are identical across RIDs" — some framework assemblies ship from the
-# runtime pack as per-arch ReadyToRun PE images (System.Private.CoreLib.dll above
-# all). lipo only fattens Mach-O, so a flat merged tree keeps the arm64 CoreLib and
-# CoreCLR aborts with BADIMAGEFORMAT (0x8007000B) on Intel — the app just dock-
-# bounces and quits. A single flat folder physically cannot hold both per-arch
-# CoreLibs. So we keep BOTH complete self-contained trees under MacOS/{arm64,x64}
-# and make the bundle's main executable a tiny universal C stub that execs the
-# apphost matching the CPU we're natively running on.
+# Both arches build fine on an Apple Silicon host: clang cross-compiles the
+# x86_64 engine and dotnet cross-publishes osx-x64.
 #
-# Usage:  scripts/package-dmg.sh
-# Output: dist/Nota-<version>-universal.dmg
+# Usage:  scripts/package-dmg.sh arm64|x86_64
+# Output: dist/Nota-<version>-<arch>.dmg
 #         Override output dir with NOTA_DMG_DIR=/some/dir
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:$PATH"
 
+ARCH="${1:-}"
+case "${ARCH}" in
+  arm64)        RID="osx-arm64" ;;
+  x86_64|x64)   ARCH="x86_64"; RID="osx-x64" ;;
+  *) echo "usage: $0 arm64|x86_64" >&2; exit 2 ;;
+esac
+
 APP_NAME="Nota"
 BUNDLE_ID="com.nota.daw"
 VERSION="$(tr -d '[:space:]' < VERSION)"                       # single source of truth
 BUILD_NUMBER="$(echo "${VERSION}" | awk -F. '{ printf "%d%03d%03d", $1, $2, $3 }')"
-NATIVE_BUILD="src/native/nota.engine/build"
+NATIVE_BUILD="$(pwd)/src/native/nota.engine/build-mac-${ARCH}"  # thin, per-arch
 OUT_DIR="${NOTA_DMG_DIR:-dist}"
-DMG="${OUT_DIR}/${APP_NAME}-${VERSION}-universal.dmg"
+DMG="${OUT_DIR}/${APP_NAME}-${VERSION}-${ARCH}.dmg"
 
-WORK="$(pwd)/dist/_universal"                                  # scratch: per-RID publishes
-ARM="${WORK}/arm64"
-X64="${WORK}/x64"
+WORK="$(pwd)/dist/_mac-${ARCH}"                                # scratch
+PUB="${WORK}/publish"
 APP="${WORK}/${APP_NAME}.app"
 CONTENTS="${APP}/Contents"
 
-echo "==> Nota ${VERSION} — universal .dmg"
+echo "==> Nota ${VERSION} — ${ARCH} .dmg"
 rm -rf "${WORK}"
 mkdir -p "${OUT_DIR}"
 
-# 1) Native engine (fat) ------------------------------------------------------
-echo "==> Building native engine (universal arm64+x86_64)…"
+# 1) Native engine (thin, this arch only) -------------------------------------
+echo "==> Building native engine (${ARCH})…"
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE_BUILD}" \
-  -DCMAKE_BUILD_TYPE=Release >/dev/null
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${ARCH}" >/dev/null
 cmake --build "${NATIVE_BUILD}" >/dev/null
 lipo -info "${NATIVE_BUILD}/libnota_engine.dylib"
 
-# 2) Managed publishes, one per arch ------------------------------------------
-publish() {
-  local rid="$1" out="$2"
-  echo "==> Publishing managed (${rid}, self-contained)…"
-  dotnet publish src/managed/Nota.App -c Release -r "${rid}" --self-contained true \
-    -o "${out}" >/dev/null
-}
-publish osx-arm64 "${ARM}"
-publish osx-x64   "${X64}"
+# 2) Managed publish, pointed at this arch's engine ---------------------------
+echo "==> Publishing managed (${RID}, self-contained)…"
+dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
+  -p:NotaNativeDir="${NATIVE_BUILD}" -o "${PUB}" >/dev/null
 
-# 3) Assemble the .app: both runtimes side by side + a universal launcher ------
-# MacOS/arm64 and MacOS/x64 each hold a complete self-contained publish; the
-# bundle's CFBundleExecutable is the "Nota" stub below, which execs the right one.
-echo "==> Assembling ${APP_NAME}.app (per-arch runtimes + launcher)…"
-rm -rf "${APP}"
-mkdir -p "${CONTENTS}/MacOS/arm64" "${CONTENTS}/MacOS/x64" "${CONTENTS}/Resources"
-cp -R "${ARM}/." "${CONTENTS}/MacOS/arm64/"
-cp -R "${X64}/." "${CONTENTS}/MacOS/x64/"
-for a in arm64 x64; do
-  chmod +x "${CONTENTS}/MacOS/${a}/${APP_NAME}.App" \
-           "${CONTENTS}/MacOS/${a}/nota-scanworker" 2>/dev/null || true
-done
-
-echo "==> Compiling universal launcher (${APP_NAME})…"
-LAUNCHER_SRC="$(mktemp -d)/launcher.c"
-cat > "${LAUNCHER_SRC}" <<'CSRC'
-// Universal trampoline: exec the runtime matching the CPU we natively run on.
-// macOS loads this binary's native slice, so uname() reports the real arch
-// (arm64 on Apple Silicon, x86_64 on Intel) — even though the child apphost and
-// its ReadyToRun framework assemblies are per-arch/thin.
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <unistd.h>
-#include <sys/utsname.h>
-#include <mach-o/dyld.h>
-
-int main(int argc, char** argv) {
-    char exe[PATH_MAX];
-    uint32_t sz = (uint32_t)sizeof(exe);
-    if (_NSGetExecutablePath(exe, &sz) != 0) return 127;
-    char dir[PATH_MAX];
-    if (!realpath(exe, dir)) return 127;
-    char* slash = strrchr(dir, '/');
-    if (slash) *slash = '\0';                       // dir = …/Contents/MacOS
-
-    struct utsname u;
-    const char* arch = "x64";                        // default to Intel
-    if (uname(&u) == 0 && strcmp(u.machine, "arm64") == 0) arch = "arm64";
-
-    char target[PATH_MAX];
-    snprintf(target, sizeof(target), "%s/%s/Nota.App", dir, arch);
-
-    char** nargv = (char**)malloc(sizeof(char*) * (size_t)(argc + 1));
-    if (!nargv) return 127;
-    nargv[0] = target;
-    for (int i = 1; i < argc; i++) nargv[i] = argv[i];
-    nargv[argc] = NULL;
-    execv(target, nargv);
-    perror("nota launcher: execv");                  // only reached on failure
-    return 127;
-}
-CSRC
-# -mmacosx-version-min gates on which macOS the OS lets this run; keep it in sync
-# with Info.plist LSMinimumSystemVersion and the engine's CMAKE_OSX_DEPLOYMENT_TARGET.
-# Without it clang stamps the build host's OS (e.g. 26.0) and older Macs refuse it.
-clang -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 \
-  -O2 -o "${CONTENTS}/MacOS/${APP_NAME}" "${LAUNCHER_SRC}"
-chmod +x "${CONTENTS}/MacOS/${APP_NAME}"
+# 3) Assemble the .app --------------------------------------------------------
+echo "==> Assembling ${APP_NAME}.app…"
+mkdir -p "${CONTENTS}/MacOS" "${CONTENTS}/Resources"
+cp -R "${PUB}/." "${CONTENTS}/MacOS/"
+chmod +x "${CONTENTS}/MacOS/${APP_NAME}.App" \
+         "${CONTENTS}/MacOS/nota-scanworker" 2>/dev/null || true
 
 echo "==> Generating app icon (${APP_NAME}.icns)…"
 ICON_SRC="assets/icons/logo.png"
@@ -140,7 +82,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
   <key>CFBundleName</key>            <string>${APP_NAME}</string>
   <key>CFBundleDisplayName</key>     <string>${APP_NAME}</string>
   <key>CFBundleIdentifier</key>      <string>${BUNDLE_ID}</string>
-  <key>CFBundleExecutable</key>      <string>${APP_NAME}</string>
+  <key>CFBundleExecutable</key>      <string>${APP_NAME}.App</string>
   <key>CFBundleIconFile</key>        <string>${APP_NAME}</string>
   <key>CFBundlePackageType</key>     <string>APPL</string>
   <key>CFBundleShortVersionString</key> <string>${VERSION}</string>
@@ -153,27 +95,66 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "==> Ad-hoc signing (deep — lipo invalidated the per-slice signatures)…"
+echo "==> Ad-hoc signing…"
 codesign --force --deep --sign - "${APP}" >/dev/null 2>&1 || \
   echo "   (codesign warning ignored)"
 
-# 5) Build the .dmg -----------------------------------------------------------
+# 4) Build the .dmg -----------------------------------------------------------
 echo "==> Building ${DMG}…"
-STAGE="$(mktemp -d)/dmg"
-mkdir -p "${STAGE}"
-cp -R "${APP}" "${STAGE}/"
-ln -s /Applications "${STAGE}/Applications"                   # drag-to-install target
+# Background art is required: assets/macos/dmg-background.png (660x400) and its
+# @2x (1320x800) are merged into one HiDPI .tiff so Finder picks the right one.
+# Window layout (icon positions, hidden chrome) lives in scripts/dmg-settings.py
+# and is written by dmgbuild straight into .DS_Store — no Finder/AppleScript, so
+# it works headless in CI.
+BG_1X="assets/macos/dmg-background.png"
+BG_2X="assets/macos/dmg-background@2x.png"
+for f in "${BG_1X}" "${BG_2X}"; do
+  [ -f "${f}" ] || { echo "error: missing ${f}" >&2; exit 1; }
+done
+BG_TMP="$(mktemp -d)"
+cp "${BG_1X}" "${BG_TMP}/bg.png"
+sips -s dpiWidth 144 -s dpiHeight 144 "${BG_2X}" --out "${BG_TMP}/bg@2x.png" >/dev/null
+tiffutil -cathidpicheck "${BG_TMP}/bg.png" "${BG_TMP}/bg@2x.png" \
+  -out "${BG_TMP}/background.tiff" >/dev/null 2>&1
+
+# dmgbuild >= 1.6.7 is required: older releases reference the background with a
+# legacy alias that Finder on macOS 26 no longer resolves (plain white window).
+# 1.6.7 needs Python >= 3.10, and on an older interpreter pip silently falls back
+# to 1.6.5 — so pick a new enough Python explicitly (macOS's /usr/bin/python3 is 3.9).
+DMGBUILD_VENV="$(pwd)/dist/_dmgbuild-venv"                     # reused across runs
+DMGBUILD_REQ="dmgbuild>=1.6.7"
+if ! "${DMGBUILD_VENV}/bin/python" -c \
+     'import importlib.metadata as m, sys; v = tuple(map(int, m.version("dmgbuild").split(".")[:3])); sys.exit(v < (1, 6, 7))' \
+     2>/dev/null; then
+  PY=""
+  for c in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "${c}" >/dev/null && "${c}" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
+      PY="${c}"; break
+    fi
+  done
+  [ -n "${PY}" ] || { echo "error: dmgbuild needs Python >= 3.10 (brew install python)" >&2; exit 1; }
+  echo "   (installing ${DMGBUILD_REQ} with ${PY} into ${DMGBUILD_VENV})"
+  rm -rf "${DMGBUILD_VENV}"
+  "${PY}" -m venv "${DMGBUILD_VENV}"
+  "${DMGBUILD_VENV}/bin/pip" install --quiet --upgrade pip "${DMGBUILD_REQ}"
+fi
+
 rm -f "${DMG}"
-hdiutil create -volname "${APP_NAME} ${VERSION}" -srcfolder "${STAGE}" \
-  -fs HFS+ -format UDZO -ov "${DMG}" >/dev/null
-rm -rf "${STAGE}"
+"${DMGBUILD_VENV}/bin/dmgbuild" -s scripts/dmg-settings.py \
+  -D app="${APP}" \
+  -D background="${BG_TMP}/background.tiff" \
+  -D icon="${CONTENTS}/Resources/${APP_NAME}.icns" \
+  "${APP_NAME} ${VERSION}" "${DMG}" >/dev/null
+rm -rf "${BG_TMP}"
 
 echo "==> Verifying:"
-echo -n "   launcher:      "; lipo -archs "${CONTENTS}/MacOS/${APP_NAME}"
-echo -n "   arm64 apphost: "; lipo -archs "${CONTENTS}/MacOS/arm64/${APP_NAME}.App"
-echo -n "   x64 apphost:   "; lipo -archs "${CONTENTS}/MacOS/x64/${APP_NAME}.App"
-echo -n "   arm64 CoreLib: "; file -b "${CONTENTS}/MacOS/arm64/System.Private.CoreLib.dll" | grep -qi 'PE32' && echo "present (per-arch)"
-echo -n "   x64 CoreLib:   "; file -b "${CONTENTS}/MacOS/x64/System.Private.CoreLib.dll" | grep -qi 'PE32' && echo "present (per-arch)"
+echo -n "   apphost: "; lipo -archs "${CONTENTS}/MacOS/${APP_NAME}.App"
+echo -n "   engine:  "; lipo -archs "${CONTENTS}/MacOS/libnota_engine.dylib"
+echo -n "   scanner: "; lipo -archs "${CONTENTS}/MacOS/nota-scanworker"
+for bin in "${APP_NAME}.App" libnota_engine.dylib nota-scanworker; do
+  [ "$(lipo -archs "${CONTENTS}/MacOS/${bin}")" = "${ARCH}" ] || \
+    { echo "error: ${bin} is not ${ARCH}-only" >&2; rm -f "${DMG}"; exit 1; }
+done
 
 echo "==> Done: ${DMG}"
 echo "    (scratch build tree left in ${WORK})"

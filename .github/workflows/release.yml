@@ -6,7 +6,7 @@ name: Release
 # CHANGELOG section as its body; you review the artifacts and publish manually.
 #
 # Artifacts:
-#   macOS   -> Nota-<version>-universal.dmg   (arm64 + x86_64 in one bundle)
+#   macOS   -> Nota-<version>-arm64.dmg , Nota-<version>-x86_64.dmg
 #   Windows -> Nota-Setup-<version>-x64.exe , Nota-Setup-<version>-arm64.exe
 #   Linux   -> Nota-<version>-x86_64.AppImage , Nota-<version>-aarch64.AppImage
 
@@ -63,12 +63,17 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   # --------------------------------------------------------------------------------
-  # macOS — single universal .dmg (arm64 + x86_64).
+  # macOS — one .dmg per arch (Apple Silicon + Intel). Both build on the arm64
+  # runner: clang cross-compiles the x86_64 engine, dotnet cross-publishes osx-x64.
   # --------------------------------------------------------------------------------
   macos:
-    name: Build macOS (universal)
+    name: Build macOS (${{ matrix.arch }})
     needs: guard
-    runs-on: macos-14   # Apple Silicon; the script cross-builds the x86_64 slice
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -78,12 +83,12 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Install build tools
         run: brew install cmake ninja
-      - name: Package universal .dmg
-        run: bash scripts/package-dmg.sh
+      - name: Package ${{ matrix.arch }} .dmg
+        run: bash scripts/package-dmg.sh ${{ matrix.arch }}
       - uses: actions/upload-artifact@v6
         with:
-          name: macos
-          path: dist/Nota-*-universal.dmg
+          name: macos-${{ matrix.arch }}
+          path: dist/Nota-*-${{ matrix.arch }}.dmg
           if-no-files-found: error
 
   # --------------------------------------------------------------------------------

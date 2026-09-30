@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.38.0** (plus changes in development on `main`). This document describes what is
+**0.42.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -27,8 +27,8 @@ Contents
 
 ## Platforms and distribution
 
-- **macOS** (≥ 13.0, universal arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
-  hosting. Distributed as a universal `.dmg` / `.app` (ad-hoc signed).
+- **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
+  hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
 - **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency), WinMM
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
@@ -45,6 +45,10 @@ JUCE module; the engine core is JUCE-free.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation.
+- **Start window**: the logo follows the theme, recent projects sit in one compact list with
+  their dates — click to select, double-click (or the arrow keys and Return) to open.
+- **Quit without saving** dialog names the project and how long its changes have gone
+  unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Transport**: play / stop / record, playhead position.
   - **Stop returns to the launch point** (a seek sets the start anchor).
   - **Follow** — the arrangement follows the cursor (playhead stays centred).
@@ -67,6 +71,7 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   place, move, trim and duplicate clips; grid and snap to bars/beats; scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
+  ⌘A selects every clip; moving several selected clips is one undo step.
   An **Overview** strip above the ruler shows the whole project in miniature with the
   visible span as a window over it — drag it to scroll, drag its edges (or drag vertically)
   to zoom, double-click to fit the project.
@@ -106,7 +111,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
-  `Add track ▸` in a track's own menu.
+  `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
+  it when it is a group).
+- **Several tracks at once**: ⇧-click headers to build a selection (or ⌘A with the headers
+  focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
+  selected tracks, and right-clicking the selection groups, colours or freezes them all —
+  each as one undo step. Copying, duplicating or deleting a group takes its tracks along;
+  pasted tracks land after the selected track, in its group.
 - **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
   Double-click resets to the default.
 - **Reordering** by dragging the name row (with an accent insertion line); returns stay
@@ -131,6 +142,12 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **MIDI clip**: notes (pitch, start, length, velocity).
 - **Piano Roll**: draw, move, stretch and delete notes; quantization; grid length; a
   velocity editor; transposing the selection.
+  - Drag a note's left edge to move its start (the end stays put); stacked notes keep
+    separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
+  - ⌘D duplicates notes over whatever they land on, like clips in the arrangement.
+  - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
+    scale in one undo step.
+  - Zoomed out, the area past the clip's end is darkened and marked with a line.
   - Scroll and zoom are remembered per clip; a new clip centres on its own notes.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
@@ -158,6 +175,11 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   pads audition by name. It is not a second copy of the pattern: the grid **is** the MIDI
   clip, so steps written here appear in the piano roll and notes drawn there light up as
   steps.
+- **MIDI file import**: `.mid` files show in the browser's Files tab and drop from there or
+  from Finder / Explorer. On the arrangement the file becomes MIDI clips at the drop point —
+  the first part on the target track, every other part on its own new track (drum parts get
+  a Nota Rhythm); on a session slot the whole file becomes that slot's clip; double-clicking
+  a MIDI file in the browser puts it on a new track.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
@@ -179,7 +201,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
 - **Audio→MIDI** (right-click an audio clip → Convert):
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
-  - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords.
+  - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
+    chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
+    notes start on the audio's attacks.
   - **Convert Drums** — hit detection + kick/snare/hat classification → a 3-pad kit and a
     MIDI pattern.
   - **Slice to New MIDI Track** — slices the audio at transients (or into 16 beats) across
@@ -224,6 +248,8 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Automation lanes** on tracks, with curved segments (Alt+drag) and points (double-click
   to add, double-click a point to remove).
+- **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
+  shows its first automated parameter.
 - **Draw mode** (the `A` key): drawn automation changes the device parameter in real time,
   and the whole drag is one undo step.
 - **The lane follows focus** — touch any knob or fader on any device (built-in, plugin, or
@@ -236,6 +262,8 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   the transport **Record** button engaged, moving a control writes that parameter's lane.
   A mouse gesture stops writing on release; a hardware control (MIDI knob, fader, gamepad
   stick or trigger) latches and keeps writing until the transport stops.
+- **Stable across device moves** — reordering or removing effects keeps every lane on its own
+  device and parameter; removing a device removes its automation.
 - **Overriding** — touch an automated parameter while not recording and the lane hands
   control to you; the toolbar's **Re-enable Automation** button gives it back.
 - **Reading** during playback and scrubbing (volume and pan controls follow the automation).
@@ -279,7 +307,9 @@ and user presets, automation, persistence and cloning.
   Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
   pan variation, stereo spread, **Dry/Wet** against the sample itself, an LP/HP/BP filter
   and an amp envelope. The card draws the sample with the live grain cloud on it (drag to
-  move Position). Drop a sample from the browser to replace the built-in pad. 50 factory
+  move Position). Drop a sample from the browser to replace the built-in pad; a **ROOT**
+  control (Pitch tab) sets the key that plays it at its recorded pitch, taken from a note in
+  the file name ("Pad_F#3.wav") or C4. 50 factory
   presets in nine folders; every preset outside Basics brings its own source (29 synthesized
   on first use — choir, strings, bells, kalimba, a drum break, an arpeggio, ocean, radio …),
   while Basics shape whatever sample is loaded.
@@ -617,10 +647,20 @@ and user presets, automation, persistence and cloning.
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
   paths in Preferences, and Rescan.
-- **Get Plug-ins** — open-source VST3 plugins from the
-  [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry), installed,
-  updated and removed from Preferences (checksum-verified; archives only, installers never
-  run). A project that needs a missing registry plugin offers to install it.
+- **Downloads** (Settings → Downloads, formerly Get Plug-ins) — open-source VST3 plugins
+  from the [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry)
+  (Surge XT, Dexed, Dragonfly Reverb, CHOW Tape Model, Stochas …), installed, updated and
+  removed with a click (checksum-verified; archives only, installers never run). Instant
+  search and filters with counts, macOS / Windows / Linux icons per plugin (hover for the
+  supported processors), download sizes, and plugins this computer can't install listed
+  last with the reason. A progress bar with **Cancel** stays at the bottom of Settings while
+  an install runs. A project that needs a missing registry plugin offers to install it and
+  reopens with its saved settings. Plugins are found even when installed in a different
+  folder than on the computer that saved the project.
+- **Plugin device card** in two sizes: the small card shows vendor, format, parameter count
+  and latency with Open editor and Save preset; the full card adds every parameter as a knob
+  (with filter and pages, the plugin's own value text, double-click for its default) and a
+  sidechain source where the plugin has one.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
   window that opens on top and focused, and closes when the device is removed).
 - **State save and restore** in the project, and **bypass**.
@@ -653,8 +693,16 @@ and user presets, automation, persistence and cloning.
   favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
-- **Preview** a sample from the browser, and **drag and drop** onto a track, into the grid,
-  or into a rack chain.
+- **Sample player** under the Files tab: the file's real waveform (click to play from a
+  point, hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
+  preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
+  hidden until you use a list and tightens in a narrow browser. Space in the arrangement
+  always drives the project transport.
+- **Drag and drop** onto a track, into the grid, or into a rack chain.
+  - Dropping an effect onto Devices puts it between cards (an accent bar marks the spot) or
+    in place of the card under the pointer; effects and presets also drop onto a return
+    track or the master. While dragging over the arrangement, the target track is outlined
+    in its header too.
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
     Racks are not replaced in place.
@@ -719,7 +767,12 @@ and user presets, automation, persistence and cloning.
   after the first launch on a new version.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
-- **Preferences** — a consistent design (the house checkboxes, sunken fields).
+- **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
+  (each page with an icon and a short description), large switches, latency in
+  milliseconds, theme buttons that preview each theme, and key-cap shortcuts with a filter.
+- **Device window** (a device opened from a Drum Rack, Instrument Rack, Audio Effect Rack or
+  a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
+  S / L size switch; a footer shows where the device sits, its live voice count and type.
 - **Edit Tags** — the browser's tag editor.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
@@ -738,7 +791,8 @@ and user presets, automation, persistence and cloning.
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
-- **Plugins**: scan paths, Rescan.
+- **Plug-ins**: scan paths, Rescan.
+- **Downloads**: the plugin registry installer (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which
   follows the OS appearance and switches with it; the choice applies live and is

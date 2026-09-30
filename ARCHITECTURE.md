@@ -131,10 +131,10 @@ A plugin is found by its JUCE identifier, `<format>-<name>-<path hash>-<uid>`. W
 catalog entry matches exactly, the lookup falls back to format + name + uid, so a project
 still finds a plugin that lives at another path on this machine.
 
-**Get Plug-ins** (`IPluginStore` → `Infrastructure/PluginStore/`) installs open-source VST3
-plugins listed in the [plugin registry](https://github.com/nota-daw/nota-plugins-registry).
-The registry is one static `index.json` on GitHub Pages, and the repo's README documents its
-manifest. A release asset downloads straight from the plugin's GitHub release and must
+**Downloads** (Settings → Downloads, formerly Get Plug-ins; `IPluginStore` →
+`Infrastructure/PluginStore/`) installs open-source VST3 plugins listed in the
+[plugin registry](https://github.com/nota-daw/nota-plugins-registry). The registry is one
+static `index.json` on GitHub Pages, and the repo's README documents its manifest. A release asset downloads straight from the plugin's GitHub release and must
 match the size and sha256 pinned in the index. `ArchiveUnpacker` then unpacks it:
 zip / tar / dmg / pkg-payload / deb, and no installer ever runs. The listed bundles are
 copied into `<data>/plugins/VST3/<id>/`, which is registered as a scan path. Set

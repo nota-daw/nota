@@ -18,6 +18,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{1FAA
 		scripts\build.sh = scripts\build.sh
 		scripts\bundle-mac.sh = scripts\bundle-mac.sh
 		scripts\package-dmg.sh = scripts\package-dmg.sh
+		scripts\dmg-settings.py = scripts\dmg-settings.py
 		scripts\build-win.ps1 = scripts\build-win.ps1
 		scripts\nota.iss = scripts\nota.iss
 		scripts\package-win.ps1 = scripts\package-win.ps1
