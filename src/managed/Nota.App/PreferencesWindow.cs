@@ -702,6 +702,7 @@ public sealed class PreferencesWindow : NotaWindow
             ("Space", "Play / stop the selected sample, preset or device (while a browser list has focus)"),
             ("Click waveform", "Play from that point"),
             ("Click WAVE / SPEC", "Switch the well between the waveform and a live spectrum"),
+            ("Scroll on the track button", "Step through the demo tracks an effect preset is heard through"),
             ("Double-click volume", "Reset the preview volume to 0\u2009dB"),
         }),
         ("GAMEPAD (MACOS)", new[]

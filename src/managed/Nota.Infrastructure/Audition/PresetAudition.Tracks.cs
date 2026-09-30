@@ -52,7 +52,7 @@ public sealed partial class PresetAudition
                 Hits(Kick, 0.95f, 0, 1.5, 2, 4, 5.5, 6), Hits(Snare, 0.85f, 1, 3, 5, 7), Hits(Crash, 0.6f, 0),
                 Every(HatC, 0.5, 0, 8, 0.6f, 0.45f))),
             new DemoPart("bass/Finger Bass", 0.8f, Cat(Pulse(0.5, 0.4, 0.8f, (0, 36), (2, 31), (4, 33), (6, 29)))),
-            new DemoPart("pentad/Poly Keys", 0.55f, Cat(
+            new DemoPart("pentad/Poly Keys", 0.75f, Cat(
                 Chord(0, 1.9, 0.6f, 60, 64, 67), Chord(2, 1.9, 0.6f, 59, 62, 67), Chord(4, 1.9, 0.6f, 57, 60, 64), Chord(6, 1.9, 0.6f, 57, 60, 65))),
         }),
 
@@ -62,7 +62,7 @@ public sealed partial class PresetAudition
             new DemoPart("kit:kompakt", 0.9f, Cat(
                 Hits(Kick, 0.95f, 0, 1, 2, 3, 4, 5, 6, 7), Hits(Clap, 0.8f, 1, 3, 5, 7),
                 Every(HatO, 1, 0.5, 8, 0.55f, 0.55f), Every(HatP, 0.5, 0.25, 8, 0.3f, 0.3f))),
-            new DemoPart("bass/Stab Bass", 0.75f, Cat(Pulse(1, 0.35, 0.85f, (0.5, 33), (4.5, 38)))),
+            new DemoPart("bass/Stab Bass", 2.6f, Cat(Pulse(1, 0.35, 0.85f, (0.5, 33), (4.5, 38)))),
             new DemoPart("operator/Drawbar Organ", 0.5f, Cat(
                 Chord(0.75, 0.3, 0.7f, 57, 60, 64, 67), Chord(1.5, 0.3, 0.6f, 57, 60, 64, 67), Chord(2.75, 0.3, 0.7f, 57, 60, 64, 67),
                 Chord(4.75, 0.3, 0.7f, 57, 60, 62, 65), Chord(5.5, 0.3, 0.6f, 57, 60, 62, 65), Chord(6.75, 0.6, 0.7f, 57, 60, 62, 65))),
@@ -83,7 +83,7 @@ public sealed partial class PresetAudition
             new DemoPart("kit:crate", 0.95f, Cat(
                 Hits(Kick, 0.95f, 0, 0.75, 2.5, 4, 4.75, 6.5, 7.25), Hits(Snare, 0.9f, 1, 3, 5, 7),
                 Every(HatC, 0.5, 0, 8, 0.55f, 0.4f))),
-            new DemoPart("operator/Wurly", 0.55f, Cat(Chord(0, 3.8, 0.6f, 50, 53, 57, 60, 64), Chord(4, 3.8, 0.6f, 43, 53, 57, 59, 64))),
+            new DemoPart("operator/Wurly", 0.65f, Cat(Chord(0, 3.8, 0.6f, 50, 53, 57, 60, 64), Chord(4, 3.8, 0.6f, 43, 53, 57, 59, 64))),
             new DemoPart("bass/Finger Bass", 0.8f, new[]
             {
                 N(0, 1.4, 38, 0.9f), N(2.5, 0.7, 38, 0.8f), N(3.25, 0.6, 41, 0.75f), N(4, 1.9, 31, 0.9f), N(6.5, 0.6, 31, 0.8f), N(7.25, 0.6, 33, 0.75f),
@@ -93,12 +93,12 @@ public sealed partial class PresetAudition
         // Trap — half-time, rolling hats, a gliding 808 and FM bells.
         new(new("trap", "Trap", Genres, "half-time, hat rolls, 808 and bells · 140 BPM"), 140, 8, new[]
         {
-            new DemoPart("kit:neon", 0.9f, Cat(
+            new DemoPart("kit:neon", 1.4f, Cat(
                 Hits(Kick, 0.95f, 0, 2.5, 4, 6.75), Hits(Clap, 0.9f, 2, 6),
                 Every(HatC, 0.5, 0, 3, 0.55f, 0.4f), Every(HatC, 0.25, 3, 4, 0.5f, 0.35f), Every(HatC, 0.5, 4, 7, 0.55f, 0.4f),
                 Every(HatC, 1.0 / 6, 7, 7.5, 0.5f, 0.4f), Hits(HatO, 0.5f, 7.5))),
-            new DemoPart("bass/808 Sub", 0.85f, new[] { N(0, 1.4, 29, 0.95f), N(2.5, 0.9, 29, 0.85f), N(3.5, 0.45, 32, 0.8f), N(4, 2.2, 25, 0.95f), N(6.5, 1.2, 27, 0.85f) }),
-            new DemoPart("operator/FM Bell", 0.4f, Seq(0.8f, 0.5, 0.6f, 77, 80, 84, 80, 77, 80, 85, 84, 77, 80, 84, 80, 75, 77, 80, 72)),
+            new DemoPart("bass/808 Sub", 0.7f, new[] { N(0, 1.4, 29, 0.95f), N(2.5, 0.9, 29, 0.85f), N(3.5, 0.45, 32, 0.8f), N(4, 2.2, 25, 0.95f), N(6.5, 1.2, 27, 0.85f) }),
+            new DemoPart("operator/FM Bell", 2.2f, Seq(0.8f, 0.5, 0.6f, 77, 80, 84, 80, 77, 80, 85, 84, 77, 80, 84, 80, 75, 77, 80, 72)),
         }),
 
         // Drum & bass — two-step breaks, a reese bass and a pad, four bars.
@@ -107,20 +107,20 @@ public sealed partial class PresetAudition
             new DemoPart("kit:breakline", 0.9f, Cat(
                 Bars(4, Hits(Kick, 0.95f, 0, 2.5), Hits(Snare, 0.9f, 1, 3), Hits(Snare, 0.3f, 3.75), Every(HatC, 0.5, 0, 4, 0.5f, 0.35f)),
                 Hits(Crash, 0.6f, 0), Hits(TomHi, 0.7f, 15.25), Hits(TomLo, 0.75f, 15.5))),
-            new DemoPart("bass/Reese Bass", 0.7f, new[] { N(0, 3.9, 33, 0.9f), N(4, 3.9, 29, 0.9f), N(8, 3.9, 36, 0.9f), N(12, 3.5, 31, 0.9f) }),
-            new DemoPart("aurora/Glacier Pad", 0.4f, Cat(
+            new DemoPart("bass/Reese Bass", 0.55f, new[] { N(0, 3.9, 33, 0.9f), N(4, 3.9, 29, 0.9f), N(8, 3.9, 36, 0.9f), N(12, 3.5, 31, 0.9f) }),
+            new DemoPart("aurora/Glacier Pad", 0.9f, Cat(
                 Chord(0, 3.9, 0.5f, 57, 60, 64), Chord(4, 3.9, 0.5f, 53, 57, 60), Chord(8, 3.9, 0.5f, 55, 60, 64), Chord(12, 3.9, 0.5f, 55, 59, 62))),
         }),
 
         // Synthwave — gated 80s kit, octave bass, strings and a sync lead.
         new(new("synthwave", "Synthwave", Genres, "gated 80s kit, octave bass, sync lead · 100 BPM"), 100, 8, new[]
         {
-            new DemoPart("kit:linnwood", 0.85f, Cat(
+            new DemoPart("kit:linnwood", 1.1f, Cat(
                 Hits(Kick, 0.95f, 0, 1, 2, 3, 4, 5, 6, 7), Hits(Snare, 0.9f, 1, 3, 5, 7), Every(HatC, 0.5, 0, 8, 0.5f, 0.4f))),
             new DemoPart("monolith/Fat Bass", 0.7f, Octaves(0.5, (0, 33), (2, 29), (4, 36), (6, 31))),
             new DemoPart("pentad/Analog Strings", 0.4f, Cat(
                 Chord(0, 1.9, 0.55f, 57, 60, 64), Chord(2, 1.9, 0.55f, 53, 57, 60), Chord(4, 1.9, 0.55f, 55, 60, 64), Chord(6, 1.9, 0.55f, 55, 59, 62))),
-            new DemoPart("pentad/Sync Lead", 0.45f, new[] { N(4, 0.7, 76, 0.75f), N(4.75, 0.25, 74, 0.7f), N(5, 0.95, 72, 0.75f), N(6, 0.45, 71, 0.7f), N(6.5, 1.4, 72, 0.8f) }),
+            new DemoPart("pentad/Sync Lead", 1.1f, new[] { N(4, 0.7, 76, 0.75f), N(4.75, 0.25, 74, 0.7f), N(5, 0.95, 72, 0.75f), N(6, 0.45, 71, 0.7f), N(6.5, 1.4, 72, 0.8f) }),
         }),
 
         // Ambient — slow pad chords and sparse vibraphone, no drums.

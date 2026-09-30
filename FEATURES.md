@@ -640,22 +640,27 @@ and user presets, automation, persistence and cloning.
   search box counts the matches.
 - **Preview** a sample from the browser, and **drag and drop** onto a track, into the grid,
   or into a rack chain.
-- **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
-  Effects and Presets tabs and plays the selected factory preset, saved preset or built-in
-  device (its default sound). The preset is rendered offline on a standalone chain (not a
-  track) in a few milliseconds and cached, and the row below is rendered ahead, so ↑ ↓
-  through a folder plays each sound at once. Instruments play a phrase that suits them —
-  a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and bells, a
-  groove for Nota Rhythm, a held chord for Pendulum / Consort. MIDI effects play a phrase
-  that shows what they do into a plain keys patch. Audio effects process a demo — **Beat**,
-  **Keys** or **Loop** (drums, keys and bass), picked per device (dynamics get the beat,
-  reverbs and delays the keys, EQ and drive the loop) — or the **sample** last selected in
-  Files; the source chip changes it. **WAVE / SPEC** in the well switches to a live spectrum
-  of what is playing. Racks, drum kits and plug-in presets aren't previewed (the well says
-  why).
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
     Racks are not replaced in place.
+- **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
+  Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
+  built-in device (its default sound). These tabs have their own **Auto**, off by default:
+  Space / Play auditions, Auto plays on select. The sound is rendered offline on a standalone
+  chain (not a track) in a few milliseconds and cached, and the row below is rendered ahead,
+  so ↑ ↓ through a folder plays each sound at once. Instruments play a phrase that suits
+  them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
+  bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
+  groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
+  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
+  loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
+  Nota's factory kits and presets and levelled alike. A track that suits the effect is
+  picked for you (dynamics hear drums, reverbs and delays keys, EQ and drive the pop mix);
+  the track button in the player picks another (scroll over it to step), or the **sample**
+  last selected in Files.
+  **WAVE / SPEC** in the well switches to a live spectrum of what is playing. Instrument
+  Racks and plug-in presets aren't previewed (the well says why).
 - **Favourites** (★) and **tags** (assign and clear, an editor with a title and colour,
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
