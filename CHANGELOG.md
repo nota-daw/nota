@@ -145,6 +145,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-09-30
+
+### Highlights
+- **Get Plug-ins:** browse and install free open-source VST3 plug-ins (Surge XT, Dexed,
+  Dragonfly Reverb and more) right from Preferences. Opening a project with a missing plug-in
+  offers to install it.
+- **All MIDI effects redesigned:** Arp, Chord, Length, Random, Scale and Velocity get a new
+  look with full and compact card sizes, live views of what they play, and 30+ presets each.
+- **Smarter MIDI effects:** the arp uses every octave with new orders, Chord folds into any
+  key, Length syncs to more note values, and stuck or hanging notes are fixed across the board.
+- **Plug-in cards:** VST3 and AU plug-ins get a proper device card with every parameter as a
+  knob, and Nota Synth gets a compact size too.
+- **Smoother editing:** ⌘A selects all clips, moving several clips no longer loses any, and
+  Space always starts and stops the project.
+
 ### Added
 - **Get Plug-ins.** Preferences has a new Get Plug-ins page. It lists open-source VST3
   plug-ins from the Nota plugin registry, among them Surge XT, Dexed, Dragonfly Reverb,
@@ -153,13 +168,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   checked against the registry before it's unpacked. Nota never runs an installer.
 - **Opening a project that uses a missing plug-in** now offers to install it when the
   registry has it, then reopens the project with the plug-in and its saved settings.
-
-### Fixed
-- A project now finds its plug-ins even when they're installed in a different folder than on
-  the computer that saved it. Before, such a plug-in counted as missing.
-- Rescanning plug-ins removes VST3 plug-ins that were deleted from disk from the browser.
-- Space always starts and stops the project, even while a sample or preset is selected in
-  the browser. The browser's preview plays and stops with its play button.
 
 ### Changed
 - VST3 and AU plug-ins get a proper device card with two sizes. The header names the
@@ -247,6 +255,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   don't change it.
 
 ### Fixed
+- A project now finds its plug-ins even when they're installed in a different folder than on
+  the computer that saved it. Before, such a plug-in counted as missing.
+- Rescanning plug-ins removes VST3 plug-ins that were deleted from disk from the browser.
+- Space always starts and stops the project, even while a sample or preset is selected in
+  the browser. The browser's preview plays and stops with its play button.
 - Moving several selected clips at once no longer deletes or shortens some of them. Before,
   a second move of the same clips could make clips disappear or get cut. A group move is
   now also a single undo step.
