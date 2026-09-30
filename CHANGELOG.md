@@ -92,6 +92,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **A new look for the "quit without saving" dialog.** It shows the project's name and how
   long its changes have gone unsaved. Return saves and Escape cancels. A saved project is
   saved right in the dialog, and Nota quits when it's done.
+- **A new look for the device window.** This is the window that opens a device from a
+  Drum Rack, an Instrument Rack, an Audio Effect Rack or a Nota Rhythm voice. Its title
+  bar shows the device, the track, the preset picker and the bypass switch. A two-size
+  instrument such as Nota Synth also gets its S / L switch there. A bar at the bottom shows
+  where the device sits (pad, chain or voice), its live voice count and its type. On a
+  small window, the preset picker moves to its own row. Effects now open at their own
+  width with the usual padding, and a bypassed effect is marked in the window.
 - **A new look for Settings.** The window is larger, and the sidebar groups its pages
   under Devices, Plug-ins and General, each with an icon. Every page has a short
   description under its title. MIDI inputs and the other on/off options use larger

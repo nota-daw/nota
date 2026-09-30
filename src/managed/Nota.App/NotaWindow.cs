@@ -29,7 +29,13 @@ public abstract class NotaWindow : Window
     // popped-out device chains / clip editors / rack full-UI editors can be mapped too.
     private readonly MidiLearnOverlay _learnGlass = new() { IsHitTestVisible = false };
 
-    protected NotaWindow()
+    protected NotaWindow() : this(0) { }
+
+    /// <summary>With <paramref name="ownTitleBarHeight"/> &gt; 0 the subclass draws its own
+    /// title bar of that height at the top of its body (the device window): the client area
+    /// is still extended under the decorations on macOS/Windows, but no shared bar is built.
+    /// Linux keeps the native frame either way.</summary>
+    protected NotaWindow(double ownTitleBarHeight)
     {
         Background = NotaPalette.BgApp;
 
@@ -44,7 +50,12 @@ public abstract class NotaWindow : Window
         // the window Title) — no extended client area, no custom bar. Matches MainWindow's
         // Linux treatment. macOS/Windows get the frameless modern chrome with a slim custom
         // title bar (extend the client area, 36px band), so every window reads as one family.
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && ownTitleBarHeight > 0)
+        {
+            ExtendClientAreaToDecorationsHint = true;
+            ExtendClientAreaTitleBarHeightHint = ownTitleBarHeight;
+        }
+        else if (!OperatingSystem.IsLinux())
         {
             ExtendClientAreaToDecorationsHint = true;
             ExtendClientAreaTitleBarHeightHint = 36;
@@ -109,8 +120,12 @@ public abstract class NotaWindow : Window
     /// hosted here can be highlighted/selected while learn is armed.</summary>
     public void EnableMidiLearn(MidiLearnService? service) => _learnGlass.Service = service;
 
+    /// <summary>True when the OS draws the window frame and title (Linux): a subclass's own
+    /// title bar then needs no inset for window buttons and does not drag the window.</summary>
+    protected static bool NativeFrame => OperatingSystem.IsLinux();
+
     // Drag the window by its title bar; a double-click toggles maximise when resizable.
-    private void OnChromePressed(object? sender, PointerPressedEventArgs e)
+    protected void OnChromePressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (CanResize && e.ClickCount == 2)
@@ -122,11 +137,4 @@ public abstract class NotaWindow : Window
     }
 
     private IBrush? Res(string key) => this.TryFindResource(key, out var v) && v is IBrush b ? b : null;
-}
-
-/// <summary>Concrete <see cref="NotaWindow"/> for code that builds a one-off popup window
-/// inline (rack sampler / full-UI editors). Set/replace its body via <see cref="SetContent"/>.</summary>
-public sealed class NotaPopupWindow : NotaWindow
-{
-    public void SetContent(Control body) => SetBody(body);
 }

@@ -327,9 +327,9 @@ internal static class DeviceCardKit
     // Clicks are handled so they neither select nor start dragging the card. Shared by the
     // card shell and the rack chain full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18)
     {
-        const double H = 18;
+        double H = height;   // 18 in a card header, 22 in the device window's title bar
         var label = new TextBlock
         {
             Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
@@ -339,7 +339,7 @@ internal static class DeviceCardKit
         DockPanel.SetDock(chevron, Dock.Right);
         var name = new Border
         {
-            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0),   // NaN = stretch to the picker's width Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel { Children = { chevron, label } },
         };
         ToolTip.SetTip(name, "Choose a preset");
@@ -380,7 +380,12 @@ internal static class DeviceCardKit
         {
             Height = H, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Control, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1), Rule(), name, Rule(), Step(+1) } },
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"),
+                Children = { Step(-1), At(Rule(), 1), At(name, 2), At(Rule(), 3), At(Step(+1), 4) },
+            },
         };
+        static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
     }
 }

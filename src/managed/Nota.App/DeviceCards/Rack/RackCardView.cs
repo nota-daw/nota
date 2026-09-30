@@ -421,14 +421,94 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     // Full GUI: hosted plug-in → its native window; built-in Sampler → the tabbed editor
     // (drop-to-load); other built-ins → their bespoke editor hosted over the chain's param
-    // surface via a proxy engine (so Volt/Aurora/… show their real UI, not just knobs).
+    // surface via a proxy engine (so Volt/Aurora/… show their real UI, not just knobs) — both
+    // in the device window, with the card's presets and, for a two-size instrument, S / L.
     private void OpenChainInstrumentGui(IRackAccess a, int sc, Control anchor)
     {
         int ik = a.ChainInstrumentKind(sc);
         if (ik == -1) { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } return; }
-        if (ik == 1) { OpenChainSamplerWindow(anchor, sc, InstrumentPresets(a, sc, ik)); return; }
+        if (ik == 1) { OpenChainSamplerWindow(a, anchor, sc, InstrumentPresets(a, sc, ik)); return; }
         string nm = string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc);
-        OpenFullUiWindow(anchor, nm, tickReg => BuildChainInstrumentBespoke(ik, sc, tickReg), InstrumentPresets(a, sc, ik));
+        var strategy = _irFactory.Resolve(ik, true);
+        var proxy = ChainInstrumentProxy(sc);
+        var presets = InstrumentPresets(a, sc, ik);
+        DeviceWindow win = null!;
+        win = new DeviceWindow(nm, E.GetTrackName(T), strategy.Subtitle, tickReg =>
+        {
+            bool two = InstrumentView.Index(proxy, T) >= 0;
+            double w = strategy.BodyOnly ? strategy.WidthFor(proxy, T) : 700;
+            return new DeviceWindowPage(BuildChainInstrumentBespoke(ik, sc, tickReg, w), w, CardBodyH, WindowPresets(presets, () => win.Refill()),
+                two ? new DeviceWindowSize(InstrumentView.IsMini(proxy, T), m => InstrumentView.SetMini(proxy, T, m)) : null);
+        }, status: () => InstrumentStatus(a, sc, proxy, strategy));
+        win.ShowFrom(anchor);
+    }
+
+    private const double CardBodyH = DeviceCardKit.CardH - DeviceCardKit.HeaderH;
+
+    // ---- device window: where the device lives + a live line for its status bar ----
+
+    // "Drum Rack · pad C1 Kick", "Instrument Rack · chain 2 Lead", "Audio Effect Rack ·
+    // chain 1", "Nota Rhythm · voice 3".
+    private string ChainLocation(IRackAccess a, int sc)
+    {
+        switch (a)
+        {
+            case InstrumentRackAccess:
+                string n = E.RackChainName(T, sc);
+                if (E.TrackInstrumentKind(T) == 4)
+                    return $"Drum Rack · pad {NoteName(a.ChainTriggerNote(sc))}{(n.Length > 0 ? " " + n : "")}";
+                return $"Instrument Rack · chain {sc + 1}{(n.Length > 0 ? " " + n : "")}";
+            case EffectRackAccess:
+                return $"Audio Effect Rack · chain {sc + 1}";
+            case RhythmVoiceAccess:
+                return $"Nota Rhythm · voice {sc + 1}";
+            default:
+                return $"chain {sc + 1}";
+        }
+    }
+
+    private string InstrumentStatus(IRackAccess a, int sc, IAudioEngine proxy, IInstrumentCard strategy)
+    {
+        string where = ChainLocation(a, sc);
+        int v = proxy.InstrumentVoiceCount(T);
+        if (v < 0) return where;
+        string voices = strategy.VoiceLabel(proxy, T, v) ?? $"{Math.Max(0, v)}/16";
+        return $"{where} · voices {voices}";
+    }
+
+    private string DeviceStatus(IRackAccess a, int sc, int d)
+    {
+        int n = a.ChainDeviceCount(sc);
+        return d < n ? $"{ChainLocation(a, sc)} · effect {d + 1} of {n}" : ChainLocation(a, sc);
+    }
+
+    // A chain effect's bypass for its window; a flip there rebuilds the rack card so the
+    // slot follows (the window reads the state live, so a flip on the card follows too).
+    private DeviceWindowBypass ChainDeviceBypass(IRackAccess a, int sc, int d) => new(
+        () => d < a.ChainDeviceCount(sc) && a.ChainDeviceBypassed(sc, d),
+        b =>
+        {
+            if (d >= a.ChainDeviceCount(sc)) return;
+            a.SetChainDeviceBypassed(sc, d, b);
+            _ctx.RequestRebuild();
+        });
+
+    // The chain presets as the window's picker; applying one re-fills the window (so every
+    // control shows the new values) and nudges the rack's inline faders.
+    private DeviceWindowPresets? WindowPresets(ChainPresets presets, Action refill)
+    {
+        var items = presets.Items;
+        if (items.Count == 0) return null;
+        int cur = -1;
+        if (_chainPresetIds.TryGetValue(presets.Key, out var curId))
+            for (int i = 0; i < items.Count; i++) if (items[i].Id == curId) { cur = i; break; }
+        return new DeviceWindowPresets(items.Select(p => p.Name).ToList(), cur, i =>
+        {
+            presets.Apply(items[i].Id);
+            _chainPresetIds[presets.Key] = items[i].Id;
+            _ctx.InvokeRackParamRefreshers();
+            refill();
+        });
     }
 
     // ---- full-UI popup header: the device's name + its factory-preset picker ----
@@ -465,47 +545,10 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         return proxy;
     }
 
-    // The card shell's header, for a popup: name on the left, preset picker on the right.
-    // Applying a preset re-fills the popup (so every control shows the new values) and
-    // nudges the rack's inline faders.
-    private Control WithPopupHeader(string title, ChainPresets presets, Control content, Action refill)
-    {
-        var name = new TextBlock
-        {
-            Text = title, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
-            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Children = { name } };
-        var items = presets.Items;
-        if (items.Count > 0)
-        {
-            int cur = -1;
-            if (_chainPresetIds.TryGetValue(presets.Key, out var curId))
-                for (int i = 0; i < items.Count; i++) if (items[i].Id == curId) { cur = i; break; }
-            void Apply(int i)
-            {
-                presets.Apply(items[i].Id);
-                _chainPresetIds[presets.Key] = items[i].Id;
-                _ctx.InvokeRackParamRefreshers();
-                refill();
-            }
-            void Step(int dir) { int n = items.Count; Apply(cur < 0 ? (dir > 0 ? 0 : n - 1) : ((cur + dir) % n + n) % n); }
-            var picker = PresetPicker(items.Select(p => p.Name).ToList(), cur, cur >= 0 ? items[cur].Name : "", Apply, Step);
-            Grid.SetColumn(picker, 1); grid.Children.Add(picker);
-        }
-        var header = new Border
-        {
-            Height = HeaderH, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(NotaSpace.DeviceInsetWide, 0), Child = grid,
-        };
-        DockPanel.SetDock(header, Dock.Top);
-        return new DockPanel { Children = { header, content } };
-    }
-
     // Host a built-in instrument's own editor for a rack chain: a DispatchProxy redirects
     // the editor's plugin-param calls (track, -1, i) to the chain surface (track, chain, i);
     // a local tick drives its live graphs + knob follow.
-    private Control BuildChainInstrumentBespoke(int ik, int sc, Action<Action> tickReg)
+    private Control BuildChainInstrumentBespoke(int ik, int sc, Action<Action> tickReg, double width = 700)
     {
         var proxy = ChainInstrumentProxy(sc);
         var faders = new System.Collections.Generic.List<(int i, Knob k, TextBlock v, Func<float, string>? fmt)>();
@@ -514,43 +557,44 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             _ => { }, () => 0, _ => { }, tickReg, () => { }, () => { }, _ => { }, () => { }, _ctx.Factory);
         var body = _irFactory.Resolve(ik, true).Build(ctx);
         tickReg(() => { viz?.Invoke(); foreach (var f in faders) { if (f.k.Dragging) continue; float v = proxy.PluginParamGet(T, -1, f.i); if (Math.Abs(v - f.k.Value) > 1e-3) { f.k.Value = v; f.v.Text = (f.fmt ?? Pct)(v); } } });
-        return new Border { Width = 700, Height = DeviceCardKit.CardH - DeviceCardKit.HeaderH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = body };
+        return new Border { Width = width, Height = CardBodyH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = body };
     }
 
     // Sampler pop-out that also accepts a dropped sample file (browser or Finder) → load it
     // into the chain's Sampler and rebuild the editor.
-    private void OpenChainSamplerWindow(Control anchor, int sc, ChainPresets presets)
+    private void OpenChainSamplerWindow(IRackAccess a, Control anchor, int sc, ChainPresets presets)
     {
         var acc = new ChainSamplerAccess(E, T, sc);
-        var ticks = new System.Collections.Generic.List<Action>();
-        var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-        timer.Tick += (_, _) => { for (int i = 0; i < ticks.Count; i++) ticks[i](); };
-        var win = new NotaPopupWindow { Title = "Nota Sampler", SizeToContent = SizeToContent.WidthAndHeight, CanResize = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        void Rebuild()
+        DeviceWindow win = null!;
+        win = new DeviceWindow("Nota Sampler", E.GetTrackName(T), _irFactory.Resolve(1, true).Subtitle, tickReg =>
         {
-            ticks.Clear();
-            var wrap = new Border { Width = 700, Height = DeviceCardKit.CardH - DeviceCardKit.HeaderH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = SamplerInstrumentCard.BuildEditor(E, acc, ticks.Add) };
+            var wrap = new Border { Width = 700, Height = CardBodyH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = SamplerInstrumentCard.BuildEditor(E, acc, tickReg) };
             DragDrop.SetAllowDrop(wrap, true);
             DragDrop.AddDragOverHandler(wrap, (_, e) => { if (!BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.None; return; } e.DragEffects = DragDropEffects.Copy; e.Handled = true; });
-            DragDrop.AddDropHandler(wrap, (_, e) => { foreach (var it in BrowserView.DroppedItems(e)) if (it.Kind == Nota.Presentation.BrowserItemKind.Sample) { acc.LoadSample(it.Path); Rebuild(); break; } e.Handled = true; });
-            win.SetContent(WithPopupHeader("Nota Sampler", presets, wrap, Rebuild));
-        }
-        Rebuild();
-        win.Opened += (_, _) => timer.Start();
-        win.Closed += (_, _) => timer.Stop();
-        ShowPopup(win, anchor);
+            DragDrop.AddDropHandler(wrap, (_, e) => { foreach (var it in BrowserView.DroppedItems(e)) if (it.Kind == Nota.Presentation.BrowserItemKind.Sample) { acc.LoadSample(it.Path); win.Refill(); break; } e.Handled = true; });
+            return new DeviceWindowPage(wrap, 700, CardBodyH, WindowPresets(presets, () => win.Refill()));
+        }, status: () => InstrumentStatus(a, sc, ChainInstrumentProxy(sc), _irFactory.Resolve(1, true)));
+        win.ShowFrom(anchor);
     }
     private void OpenChainInstrumentParams(IRackAccess a, int sc, Control anchor)
     {
         string nm = string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc);
-        OpenFullUiWindow(anchor, nm + " · params", _ => ParamGridContent(nm, a.ChainInstrumentParamCount(sc), p => RackInstParamRow(a, sc, p)));
+        OpenParamWindow(anchor, nm, a.ChainInstrumentParamCount(sc), p => RackInstParamRow(a, sc, p), () => InstrumentStatus(a, sc, ChainInstrumentProxy(sc), _irFactory.Resolve(a.ChainInstrumentKind(sc), true)));
     }
     private void OpenChainDeviceGui(IRackAccess a, int sc, int d, Control anchor)
     {
         int kind = a.ChainDeviceBuiltinKind(sc, d);
         if (kind < 0) { a.OpenChainDeviceEditor(sc, d); return; }   // hosted plug-in → native window
         string nm = a.ChainDeviceName(sc, d);
-        OpenFullUiWindow(anchor, nm, tickReg => BuildChainDeviceBespoke(a, sc, d, kind, tickReg), DevicePresets(a, sc, d, kind));   // built-in → its real device card
+        var strategy = _irDeviceFactory.Resolve(kind);
+        var presets = DevicePresets(a, sc, d, kind);
+        DeviceWindow win = null!;
+        win = new DeviceWindow(nm, E.GetTrackName(T), strategy.Subtitle ?? "", tickReg =>   // built-in → its real device card
+        {
+            double w = strategy.AutoWidth ? double.NaN : strategy.Width;
+            return new DeviceWindowPage(BuildChainDeviceBespoke(a, sc, d, kind, tickReg), w, CardBodyH, WindowPresets(presets, () => win.Refill()));
+        }, ChainDeviceBypass(a, sc, d), () => DeviceStatus(a, sc, d));
+        win.ShowFrom(anchor);
     }
 
     // Host a built-in effect's own device card for a rack chain: a DispatchProxy redirects
@@ -560,13 +604,15 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         var proxy = ChainDeviceProxy(a, sc, d, kind);
         var ctx = new DeviceCardContext(proxy, T, tickReg, () => { }, (_, _, _, _) => { }, _ => { }, _ => { }, () => sc, _ => { }, tickReg, () => { }, () => { }, _ => { }, () => { }, _ctx.Factory);
-        var body = _irDeviceFactory.Resolve(kind).Build(ctx, a.AutomationDeviceIndex);
-        return new Border { Width = 700, Height = DeviceCardKit.CardH - DeviceCardKit.HeaderH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = body };
+        var strategy = _irDeviceFactory.Resolve(kind);
+        var body = strategy.Build(ctx, a.AutomationDeviceIndex);
+        // As in the device chain: the almanac body inset (6) unless the body pads itself.
+        return strategy.FullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body };
     }
     private void OpenChainDeviceParams(IRackAccess a, int sc, int d, Control anchor)
     {
         string dnm = a.ChainDeviceName(sc, d);
-        OpenFullUiWindow(anchor, dnm + " · params", _ => ParamGridContent(dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p)));
+        OpenParamWindow(anchor, dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p), () => DeviceStatus(a, sc, d), ChainDeviceBypass(a, sc, d));
     }
 
     private void ShowAddChainMenu(IRackAccess a, Control anchor)
@@ -1157,64 +1203,36 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
         Control fullBtn;
         if (ik == -1) fullBtn = ActionChip("Full", () => { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } });
-        else if (ik == 1) { Border b = null!; b = ActionChip("Full", () => OpenChainSamplerWindow(b, sc, InstrumentPresets(a, sc, ik))); fullBtn = b; }
-        else fullBtn = FullUiChip(nm, _ => ParamGridContent(nm, a.ChainInstrumentParamCount(sc), p => RackInstParamRow(a, sc, p)));
+        else if (ik == 1) { Border b = null!; b = ActionChip("Full", () => OpenChainSamplerWindow(a, b, sc, InstrumentPresets(a, sc, ik))); fullBtn = b; }
+        else fullBtn = FullUiChip(nm, a.ChainInstrumentParamCount(sc), p => RackInstParamRow(a, sc, p), () => ChainLocation(a, sc));
         return DeviceCardShell(nm, fullBtn, body, 180);
     }
 
-    // A roomy, non-bespoke "full UI": every param as a knob in a 3-column grid.
-    private Control ParamGridContent(string title, int count, Func<int, Control> row)
+    // A roomy, non-bespoke "full UI": every param as a knob in a 3-column grid (the name
+    // is on the device window's title bar).
+    private static Control ParamGridContent(int count, Func<int, Control> row)
     {
         var wrap = new WrapPanel { MaxWidth = 456 };
         for (int p = 0; p < count; p++) wrap.Children.Add(new Border { Width = 148, Margin = new Thickness(2, 3), Child = row(p) });
         var scroll = new ScrollViewer { Content = wrap, MaxHeight = 360, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        return new Border { Width = 476, Background = NotaPalette.BgApp, Padding = new Thickness(10), Child =
-            new StackPanel { Spacing = 7, Children = { new TextBlock { Text = title, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary }, scroll } } };
+        return new Border { Padding = new Thickness(10), Child = scroll };
     }
 
-    // A small header button that pops out a device's full UI in a floating window.
-    private Border FullUiChip(string title, Func<Action<Action>, Control> build)
+    // Every param as knobs, in the device window (no presets or sizes: it is not the card).
+    private void OpenParamWindow(Control anchor, string name, int count, Func<int, Control> row, Func<string> status, DeviceWindowBypass? bypass = null)
+    {
+        var win = new DeviceWindow(name, E.GetTrackName(T), "PARAMS",
+            _ => new DeviceWindowPage(ParamGridContent(count, row), 476, double.NaN), bypass,
+            () => $"{status()} · {count} parameter{(count == 1 ? "" : "s")}");
+        win.ShowFrom(anchor);
+    }
+
+    // A small header button that pops out a device's knobs in the device window.
+    private Border FullUiChip(string name, int count, Func<int, Control> row, Func<string> status, DeviceWindowBypass? bypass = null)
     {
         Border chip = null!;
-        chip = ActionChip("Full", () => OpenFullUiWindow(chip, title, build));
+        chip = ActionChip("Full", () => OpenParamWindow(chip, name, count, row, status, bypass));
         return chip;
-    }
-
-    // With presets, the popup gets the name + preset header, and applying one rebuilds the
-    // content (fresh tick list) so the editor shows the new values.
-    private void OpenFullUiWindow(Control anchor, string title, Func<Action<Action>, Control> build, ChainPresets? presets = null)
-    {
-        var ticks = new List<Action>();
-        var win = new NotaPopupWindow
-        {
-            Title = title, SizeToContent = SizeToContent.WidthAndHeight, CanResize = false,
-            ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-        void Fill()
-        {
-            ticks.Clear();
-            var content = build(ticks.Add);
-            win.SetContent(presets is null ? content : WithPopupHeader(title, presets, content, Fill));
-        }
-        Fill();
-        var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-        timer.Tick += (_, _) => { for (int i = 0; i < ticks.Count; i++) ticks[i](); };
-        win.Opened += (_, _) => { if (ticks.Count > 0) timer.Start(); };
-        win.Closed += (_, _) => timer.Stop();
-        ShowPopup(win, anchor);
-    }
-
-    // Show a rack full-UI/params popup over its owner and, if that owner is the main
-    // window, wire the popup's MIDI-learn glass to the shared service so its controls
-    // can be highlighted/selected while learn is armed.
-    private static void ShowPopup(NotaPopupWindow win, Control anchor)
-    {
-        if (TopLevel.GetTopLevel(anchor) is Window owner)
-        {
-            if (owner is MainWindow mw) win.EnableMidiLearn(mw.LearnService);
-            win.Show(owner);
-        }
-        else win.Show();
     }
 
     private Control ChainDeviceCard(IRackAccess a, int sc, int d)
@@ -1226,7 +1244,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         // Full UI: hosted-plugin effect → its native window; built-in effect → roomy knob grid.
         ctrls.Children.Add(a.ChainDeviceBuiltinKind(sc, d) < 0
             ? ActionChip("Full", () => a.OpenChainDeviceEditor(sc, d))
-            : FullUiChip(dnm, _ => ParamGridContent(dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p))));
+            : FullUiChip(dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p), () => DeviceStatus(a, sc, d), ChainDeviceBypass(a, sc, d)));
         ctrls.Children.Add(Glyph(GlyphKind.StepLeft, d > 0, () => { a.MoveChainDevice(sc, d, d - 1); _ctx.RequestRebuild(); }));
         ctrls.Children.Add(Glyph(GlyphKind.StepRight, d < dc - 1, () => { a.MoveChainDevice(sc, d, d + 1); _ctx.RequestRebuild(); }));
         ctrls.Children.Add(Glyph(GlyphKind.Close, true, () => { a.RemoveChainDevice(sc, d); _ctx.RequestRebuild(); }));
