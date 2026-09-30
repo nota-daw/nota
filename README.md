@@ -51,15 +51,21 @@ A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised li
   chains.
 - **MIDI editing** — piano roll (draw/move/stretch, quantize, velocity, live edits as one
   undo step); input from a MIDI keyboard, the computer keyboard, or a **gamepad** (macOS);
-  **audio→MIDI** (melody / harmony / drums / slice).
+  **MIDI file import** (drag a `.mid` in); **audio→MIDI** (melody / harmony / drums / slice).
 - **Audio** — recording (inputs and internal buses), WAV/AIFF/FLAC/MP3 import, clip
-  editing with fades and gain, and **warp / time-stretch** (Complex / Complex Pro).
+  editing with fades, gain and a per-clip **ADSR**, and **warp / time-stretch** (Complex /
+  Complex Pro).
 - **~35 built-in devices** — synths (subtractive, wavetable, FM, granular, physical,
   drum-machine and more), a full effects suite (EQ, dynamics, reverb/delay, saturation,
   limiting, utility), MIDI effects (arp, scale, chord, …), and Instrument / Drum / Audio
   Effect **racks** with macros.
 - **Plugin hosting** — VST3 everywhere, AU on macOS: native GUIs, state save/restore, PDC,
   transport sync; parameters are automatable and MIDI-learnable.
+- **Downloads** — install open-source VST3 plugins (Surge XT, Dexed, Dragonfly Reverb …)
+  in one click from Settings, straight from the
+  [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry).
+- **Browser previews** — hear presets, drum kits and effects before loading them, and
+  audition samples in the Files tab's player.
 - **Automation & MIDI Learn** — draw/record automation on any parameter; map hardware
   controllers to almost anything.
 - **Export** — master and stems to WAV (pcm16/pcm24/float32), true-peak normalize, dither,
@@ -67,6 +73,19 @@ A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised li
 - **AI control (MCP)** — an optional loopback MCP server lets Claude drive the open project
   (off by default).
 - **Cross-platform** — macOS, Windows and Linux, for both x64 and arm64.
+
+## Nota plugin registry
+
+Nota now has its own plugin registry —
+**[nota-daw/nota-plugins-registry](https://github.com/nota-daw/nota-plugins-registry)**.
+It is the list of open-source VST3 plugins that Nota installs from **Settings → Downloads**:
+one JSON manifest per plugin, pinned to a release asset's size and sha256, and published as a
+single `index.json`.
+
+**Writing a plugin?** Add it to the registry so every Nota user can install it in one click.
+The registry's [README](https://github.com/nota-daw/nota-plugins-registry#readme) explains what
+gets in (an OSI license, a VST3 in an archive rather than an installer, stable release tags)
+and how to add a plugin or a new version — then open a pull request there.
 
 ## Prerequisites
 
@@ -95,6 +114,20 @@ sudo apt install build-essential cmake ninja-build libasound2-dev libx11-dev lib
 > pulls the X11/freetype/fontconfig libs.
 
 ## Build & run (development)
+
+**Don't forget the submodules.** JUCE (plugin hosting) lives in a git submodule at
+`src/native/nota.engine/vendor/JUCE`, and the native build fails without it. Clone with
+submodules:
+
+```bash
+git clone --recurse-submodules https://github.com/nota-daw/nota.git
+```
+
+or, in a checkout you already have (also after a pull that moves the submodule):
+
+```bash
+git submodule update --init --recursive
+```
 
 Each platform has a build script that compiles the native engine, builds the managed
 app, and runs the smoke test. Then run the app with `dotnet run`.

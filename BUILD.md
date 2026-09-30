@@ -11,6 +11,16 @@ covers the details — per-platform prerequisites and manual step-by-step builds
 - Avalonia templates, only if you are scaffolding new projects —
   `dotnet new install Avalonia.Templates`.
 
+## Submodules
+
+JUCE (plugin hosting) is a git submodule at `src/native/nota.engine/vendor/JUCE`; the native
+build fails without it. Clone with `git clone --recurse-submodules`, or initialize it in an
+existing checkout (and again after a pull that moves it):
+
+```bash
+git submodule update --init --recursive
+```
+
 ## Quick start
 
 ```bash

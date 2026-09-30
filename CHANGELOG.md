@@ -16,7 +16,33 @@ created, and the build-and-publish run starts.
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+## [Unreleased]
+
+## [0.42.1] — 2026-09-30
+
+### Highlights
+- **Downloads:** install free open-source plug-ins (Surge XT, Dexed, Dragonfly Reverb and
+  more) right from Settings, with progress and Cancel. A project with a missing plug-in
+  offers to install it.
+- **ADSR for audio clips:** shape any clip's attack, decay, sustain and release with handles
+  in the arrangement or in the clip editor.
+- **Hear it before you load it:** the browser previews presets, drum kits and effects, has a
+  new sample player for files, and takes MIDI files — drop one to get its clips.
+- **Nota Grain** gets 50 presets that each bring their own sound, and a root note for your
+  own samples.
+- **All MIDI effects redesigned:** Arp, Chord, Length, Random, Scale and Velocity get two card
+  sizes, live views of what they play, 30+ presets each, and no more stuck notes.
+- **A fresh look** for Settings, the start window, the quit dialog, the device window and
+  plug-in cards, plus editing several tracks at once and ⌘A to select all clips.
+
 ### Added
+- **Get Plug-ins.** Preferences has a new Get Plug-ins page. It lists open-source VST3
+  plug-ins from the Nota plugin registry, among them Surge XT, Dexed, Dragonfly Reverb,
+  CHOW Tape Model and Stochas. Install, update or remove one with a click and it shows up
+  in the browser. Each plug-in downloads from its own project's GitHub release and is
+  checked against the registry before it's unpacked. Nota never runs an installer.
+- **Opening a project that uses a missing plug-in** now offers to install it when the
+  registry has it, then reopens the project with the plug-in and its saved settings.
 - **ADSR for audio clips.** Every audio clip now has attack, decay, sustain and release.
   Hover a clip in the arrangement and drag the handles — the squares in the top corners
   set the attack and release, the dot sets the decay and the sustain level — or open the
@@ -84,90 +110,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   focus, ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the selected
   tracks. Right-clicking a selection opens a menu for the whole set: group, colour, freeze,
   copy, cut, paste, duplicate and delete. Each command is one undo step.
-
-### Changed
-- **A new look for the start window.** The Nota logo follows the light and dark themes,
-  and recent projects sit in one compact list with their dates. Click a project to select
-  it and double-click to open it, or use the arrow keys and Return.
-- **A new look for the "quit without saving" dialog.** It shows the project's name and how
-  long its changes have gone unsaved. Return saves and Escape cancels. A saved project is
-  saved right in the dialog, and Nota quits when it's done.
-- **A new look for the device window.** This is the window that opens a device from a
-  Drum Rack, an Instrument Rack, an Audio Effect Rack or a Nota Rhythm voice. Its title
-  bar shows the device, the track, the preset picker and the bypass switch. A two-size
-  instrument such as Nota Synth also gets its S / L switch there. A bar at the bottom shows
-  where the device sits (pad, chain or voice), its live voice count and its type. On a
-  small window, the preset picker moves to its own row. Effects now open at their own
-  width with the usual padding, and a bypassed effect is marked in the window.
-- **A new look for Settings.** The window is larger, and the sidebar groups its pages
-  under Devices, Plug-ins and General, each with an icon. Every page has a short
-  description under its title. MIDI inputs and the other on/off options use larger
-  switches. Latency shows in milliseconds. Get Plug-ins is now called Downloads, shows how
-  many plugins you can still install, counts each filter and lists the download size. The
-  theme buttons show a sample of each theme's colour. Shortcuts can be filtered and show
-  each key on its own key-cap.
-- **Downloads show their progress at the bottom of Settings, and you can cancel them.** A bar
-  at the bottom of the window shows the plugin being installed, how much has downloaded and
-  a Cancel button. It stays in view while you scroll the list or open another page, and
-  shows the result when the install finishes. Cancelling leaves your plugins as they were.
-- **The Downloads list is faster and shows where each plugin runs.** Searching and filtering
-  the whole registry is instant now. Each plugin shows macOS, Windows and Linux icons for
-  the systems it's made for. Hover an icon to see which processors it supports. Plugins your
-  computer can't install are listed last, under their own heading, and say why. A progress
-  bar shows while the list loads or refreshes.
-- "Add track" in a track's right-click menu puts the new track right after that track. On a
-  group it adds the track inside the group.
-- Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after
-  the selected track, in its group.
-- The first time you switch to automation mode, each track that already has automation
-  shows its first automated parameter instead of Volume.
-- While dragging from the browser over the arrangement, the target track is outlined in its
-  header too, and the outline stays visible over the lane's clips.
-- **Convert Harmony to New MIDI Track** is much cleaner. Overtones no longer come out as extra
-  notes. Held chords no longer break into short fragments. Slightly detuned recordings map to
-  the right notes. The shimmer of chorused or detuned sounds no longer adds neighbouring
-  semitones. Notes start on the audio's attacks, and a re-struck chord comes out as new notes.
-
-### Fixed
-- Reordering or removing effects in Devices no longer scrambles their automation: each lane
-  stays on its own device and parameter. Removing a device also removes its automation.
-- In the piano roll you can now drag a note's left edge to change where it starts; its end
-  stays put.
-- Stacked notes (a chord) no longer hide each other's velocity. Grab a stem by its cap to
-  pick one, or select several notes and drag any of their stems to move them all together.
-  ⇧-click a stem to add it to the selection.
-- Duplicating notes (⌘D) now replaces the notes the copy lands on, like duplicating a clip in
-  the arrangement. Before, the copy was stacked on top of them.
-- When you zoom out in the piano roll, the area past the clip's end is darkened and marked
-  with a line, so you can see where the clip ends.
-- Right-clicking empty space on a track now always opens a menu. It used to show nothing
-  when there was no copied clip.
-
-## [Unreleased]
-
-## [0.42.1] — 2026-09-30
-
-### Highlights
-- **Get Plug-ins:** browse and install free open-source VST3 plug-ins (Surge XT, Dexed,
-  Dragonfly Reverb and more) right from Preferences. Opening a project with a missing plug-in
-  offers to install it.
-- **All MIDI effects redesigned:** Arp, Chord, Length, Random, Scale and Velocity get a new
-  look with full and compact card sizes, live views of what they play, and 30+ presets each.
-- **Smarter MIDI effects:** the arp uses every octave with new orders, Chord folds into any
-  key, Length syncs to more note values, and stuck or hanging notes are fixed across the board.
-- **Plug-in cards:** VST3 and AU plug-ins get a proper device card with every parameter as a
-  knob, and Nota Synth gets a compact size too.
-- **Smoother editing:** ⌘A selects all clips, moving several clips no longer loses any, and
-  Space always starts and stops the project.
-
-### Added
-- **Get Plug-ins.** Preferences has a new Get Plug-ins page. It lists open-source VST3
-  plug-ins from the Nota plugin registry, among them Surge XT, Dexed, Dragonfly Reverb,
-  CHOW Tape Model and Stochas. Install, update or remove one with a click and it shows up
-  in the browser. Each plug-in downloads from its own project's GitHub release and is
-  checked against the registry before it's unpacked. Nota never runs an installer.
-- **Opening a project that uses a missing plug-in** now offers to install it when the
-  registry has it, then reopens the project with the plug-in and its saved settings.
 
 ### Changed
 - VST3 and AU plug-ins get a proper device card with two sizes. The header names the
@@ -253,6 +195,47 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   filter curve and four knobs (Cutoff, Reso, Attack, Release). Switch with S / L in the card's
   header. A new Synth opens small. The project remembers each Synth's size, and presets
   don't change it.
+- **A new look for the start window.** The Nota logo follows the light and dark themes,
+  and recent projects sit in one compact list with their dates. Click a project to select
+  it and double-click to open it, or use the arrow keys and Return.
+- **A new look for the "quit without saving" dialog.** It shows the project's name and how
+  long its changes have gone unsaved. Return saves and Escape cancels. A saved project is
+  saved right in the dialog, and Nota quits when it's done.
+- **A new look for the device window.** This is the window that opens a device from a
+  Drum Rack, an Instrument Rack, an Audio Effect Rack or a Nota Rhythm voice. Its title
+  bar shows the device, the track, the preset picker and the bypass switch. A two-size
+  instrument such as Nota Synth also gets its S / L switch there. A bar at the bottom shows
+  where the device sits (pad, chain or voice), its live voice count and its type. On a
+  small window, the preset picker moves to its own row. Effects now open at their own
+  width with the usual padding, and a bypassed effect is marked in the window.
+- **A new look for Settings.** The window is larger, and the sidebar groups its pages
+  under Devices, Plug-ins and General, each with an icon. Every page has a short
+  description under its title. MIDI inputs and the other on/off options use larger
+  switches. Latency shows in milliseconds. Get Plug-ins is now called Downloads, shows how
+  many plugins you can still install, counts each filter and lists the download size. The
+  theme buttons show a sample of each theme's colour. Shortcuts can be filtered and show
+  each key on its own key-cap.
+- **Downloads show their progress at the bottom of Settings, and you can cancel them.** A bar
+  at the bottom of the window shows the plugin being installed, how much has downloaded and
+  a Cancel button. It stays in view while you scroll the list or open another page, and
+  shows the result when the install finishes. Cancelling leaves your plugins as they were.
+- **The Downloads list is faster and shows where each plugin runs.** Searching and filtering
+  the whole registry is instant now. Each plugin shows macOS, Windows and Linux icons for
+  the systems it's made for. Hover an icon to see which processors it supports. Plugins your
+  computer can't install are listed last, under their own heading, and say why. A progress
+  bar shows while the list loads or refreshes.
+- "Add track" in a track's right-click menu puts the new track right after that track. On a
+  group it adds the track inside the group.
+- Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after
+  the selected track, in its group.
+- The first time you switch to automation mode, each track that already has automation
+  shows its first automated parameter instead of Volume.
+- While dragging from the browser over the arrangement, the target track is outlined in its
+  header too, and the outline stays visible over the lane's clips.
+- **Convert Harmony to New MIDI Track** is much cleaner. Overtones no longer come out as extra
+  notes. Held chords no longer break into short fragments. Slightly detuned recordings map to
+  the right notes. The shimmer of chorused or detuned sounds no longer adds neighbouring
+  semitones. Notes start on the audio's attacks, and a re-struck chord comes out as new notes.
 
 ### Fixed
 - A project now finds its plug-ins even when they're installed in a different folder than on
@@ -273,6 +256,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - Nota Random no longer leaves a transposed note hanging when you bypass it while it sounds.
 - Nota Chord no longer leaves notes hanging when you change its shifts while a key is held,
   or when two held keys share a note.
+- Reordering or removing effects in Devices no longer scrambles their automation: each lane
+  stays on its own device and parameter. Removing a device also removes its automation.
+- In the piano roll you can now drag a note's left edge to change where it starts; its end
+  stays put.
+- Stacked notes (a chord) no longer hide each other's velocity. Grab a stem by its cap to
+  pick one, or select several notes and drag any of their stems to move them all together.
+  ⇧-click a stem to add it to the selection.
+- Duplicating notes (⌘D) now replaces the notes the copy lands on, like duplicating a clip in
+  the arrangement. Before, the copy was stacked on top of them.
+- When you zoom out in the piano roll, the area past the clip's end is darkened and marked
+  with a line, so you can see where the clip ends.
+- Right-clicking empty space on a track now always opens a menu. It used to show nothing
+  when there was no copied clip.
 
 ## [0.41.5] — 2026-09-25
 
