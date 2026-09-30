@@ -18,6 +18,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.42.2] — 2026-09-30
+
+### Highlights
+- **Smaller Mac downloads:** separate installers for Apple Silicon and Intel Macs, each about
+  half the size of the old one.
+- **A nicer Mac installer window** that shows you where to drag Nota.
+
 ### Changed
 - macOS now ships as **two downloads**: `Nota-<version>-arm64.dmg` for Apple Silicon and
   `Nota-<version>-x86_64.dmg` for Intel Macs, each about half the size of the old universal
