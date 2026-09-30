@@ -147,6 +147,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_can_redo")]
     internal static partial int CanRedo(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_undo_group_begin")]
+    internal static partial void UndoGroupBegin(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_undo_group_end")]
+    internal static partial void UndoGroupEnd(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_reset")]
     internal static partial void Reset(IntPtr engine);
 
@@ -164,6 +170,18 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_preview_active")]
     internal static partial int PreviewActive(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_preview_file_at", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult PreviewFileAt(IntPtr engine, string path, double startSeconds);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_preview_loop")]
+    internal static partial NotaResult SetPreviewLoop(IntPtr engine, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_preview_gain")]
+    internal static partial NotaResult SetPreviewGain(IntPtr engine, float gain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_preview_position")]
+    internal static partial double PreviewPosition(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_preview_selftest")]
     internal static partial int PreviewSelfTest(IntPtr engine);

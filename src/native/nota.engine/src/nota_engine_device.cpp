@@ -133,6 +133,7 @@ int32_t     nota_midi_effect_kind(const NotaEngine* e, int32_t t, int32_t i) { r
 int32_t     nota_midi_effect_last_in(const NotaEngine* e, int32_t t, int32_t i) { return e ? CENG(e)->midiEffectLastIn(t, i) : -1; }
 int32_t     nota_midi_effect_last_out(const NotaEngine* e, int32_t t, int32_t i) { return e ? CENG(e)->midiEffectLastOut(t, i) : -1; }
 int32_t     nota_midi_effect_scope(const NotaEngine* e, int32_t t, int32_t i, float* out, int32_t max_n) { return e ? CENG(e)->midiEffectScope(t, i, out, max_n) : 0; }
+void        nota_midi_effect_command(NotaEngine* e, int32_t t, int32_t i, int32_t cmd) { if (e) ENG(e)->midiEffectCommand(t, i, cmd); }
 const char* nota_midi_effect_name(const NotaEngine* e, int32_t t, int32_t i) { return e ? CENG(e)->midiEffectName(t, i) : ""; }
 int32_t     nota_midi_effect_param_count(const NotaEngine* e, int32_t t, int32_t i) { return e ? CENG(e)->midiEffectParamCount(t, i) : 0; }
 const char* nota_midi_effect_param_name(const NotaEngine* e, int32_t t, int32_t i, int32_t p) { return e ? CENG(e)->midiEffectParamName(t, i, p) : ""; }
@@ -358,6 +359,14 @@ const char* nota_plugin_param_name(const NotaEngine* e, int32_t track_id, int32_
     static std::string s; // owned by the engine, valid until the next call
     s = e ? CENG(e)->pluginParamName(track_id, device_index, param_index) : std::string{};
     return s.c_str();
+}
+const char* nota_plugin_param_text(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t param_index) {
+    static std::string s; // owned by the engine, valid until the next call
+    s = e ? CENG(e)->pluginParamText(track_id, device_index, param_index) : std::string{};
+    return s.c_str();
+}
+float nota_plugin_param_default(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t param_index) {
+    return e ? CENG(e)->pluginParamDefault(track_id, device_index, param_index) : 0.0f;
 }
 float nota_plugin_param_get(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t param_index) {
     return e ? CENG(e)->pluginParamGet(track_id, device_index, param_index) : 0.0f;

@@ -35,10 +35,12 @@ public partial class App : Avalonia.Application
         services.AddSingleton<ILogSink, LogSink>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IPluginCatalog, PluginCatalog>();
+        services.AddSingleton<IPluginStore, PluginStore>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();
         services.AddSingleton<IProjectStore, ProjectStore>();
         services.AddSingleton<IPresetStore, PresetStore>();
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
+        services.AddSingleton<IPresetAudition, PresetAudition>();
         services.AddSingleton<IDrumKits, DrumKitService>();
         services.AddSingleton<IBrowserLibrary, BrowserLibraryService>();
         services.AddSingleton<IAudioDeviceService, AudioDeviceService>();
@@ -77,6 +79,10 @@ public partial class App : Avalonia.Application
         // Palette variant (Preferences → Appearance), applied before the first window
         // paints so nothing flashes graphite on the way to paper.
         NotaThemeService.Set(Services.GetRequiredService<ISettingsService>().Current.Theme);
+
+        // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
+        try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
+        catch (Exception e) { log.Error("Couldn't register the Get Plug-ins folder", e); }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

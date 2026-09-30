@@ -76,6 +76,7 @@ public partial class MainWindow : Window
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
+    private bool _trackHeadersFocused;
 
     private IAudioEngine Engine => _vm!.Engine;
 
@@ -169,22 +170,19 @@ public partial class MainWindow : Window
         Timeline.Engine = vm.Engine;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
+        Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
-        // Arrangement context menus add tracks through the toolbar's own handlers, so the two
-        // routes seed, refresh and report identically.
-        Timeline.AddTrackRequested += kind =>
+        // Arrangement context menus add tracks through the toolbar's own path, so the two
+        // routes seed, refresh and report identically; the menu's row places the new track.
+        Timeline.AddTrackRequested += (kind, anchor) =>
         {
-            switch (kind)
-            {
-                case NewTrackKind.Instrument: OnAddInstrumentClicked(this, new RoutedEventArgs()); break;
-                case NewTrackKind.Audio:      OnAddAudioClicked(this, new RoutedEventArgs()); break;
-                case NewTrackKind.Return:     OnAddReturnClicked(this, new RoutedEventArgs()); break;
-            }
+            if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
+            else AddTrack(kind, anchor);
         };
 
         _masterMeter = new MeterBar(horizontal: true);
@@ -271,6 +269,7 @@ public partial class MainWindow : Window
         vm.RecordingTick += () => { Timeline.Refresh(rebuildHeaders: false); ReloadEditorNotes(); };
         // Hit Record with nothing armed → auto-arm the selected/last track (M-fix).
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
+        vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
@@ -281,7 +280,8 @@ public partial class MainWindow : Window
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         Browser.SetViewModel(vm.Browser);
         Browser.ItemActivated += OnBrowserItemActivated;
-        Browser.PreviewRequested += OnBrowserPreview;
+        Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
+        Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
         Browser.RevealRequested += OnBrowserReveal;
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
         Browser.EditTagsRequested += OnBrowserEditTags;
@@ -289,6 +289,7 @@ public partial class MainWindow : Window
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits);
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
         _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
@@ -352,6 +353,8 @@ public partial class MainWindow : Window
         {
             if (e.Source is Visual v)
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+            // Likewise the track-header column: while it has focus, Cmd+A/C/X/V/D and Delete act on tracks.
+            _trackHeadersFocused = Timeline.IsVisible && Timeline.IsInTrackHeaders(e);
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // Global transport keys (Space = Play/Stop, Return = Stop) must win over whatever
@@ -431,25 +434,31 @@ public partial class MainWindow : Window
 
     }
 
-    private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e)
+    private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Instrument);
+    private void OnAddAudioClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Audio);
+
+    // Adds an instrument (with a seed MIDI clip) or audio track. From a track's context menu
+    // the new track lands after that row — or inside it, for a group; the toolbar appends.
+    // Creation + placement are one undo step.
+    private void AddTrack(NewTrackKind kind, int anchorTrackId = -1)
     {
         if (_vm is null) return;
-        int trackId = Engine.AddInstrumentTrack();
-        Engine.AddMidiClip(trackId, 0.0, 4.0);
+        int trackId;
+        Engine.BeginUndoGroup();
+        try
+        {
+            trackId = kind == NewTrackKind.Instrument ? Engine.AddInstrumentTrack() : Engine.AddAudioTrack();
+            if (kind == NewTrackKind.Instrument) Engine.AddMidiClip(trackId, 0.0, 4.0);
+            Timeline.PlaceNewTrack(trackId, anchorTrackId);
+        }
+        finally { Engine.EndUndoGroup(); }
         Timeline.Refresh();
+        if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();   // new track shows in the graph/sidebar
-        _vm.StatusText = $"Instrument track {trackId} (synth)";
-    }
-
-    private void OnAddAudioClicked(object? sender, RoutedEventArgs e)
-    {
-        if (_vm is null) return;
-        int trackId = Engine.AddAudioTrack();
-        Timeline.Refresh();
-        _session?.Refresh();
-        if (_modular?.IsVisible == true) _modular.Refresh();
-        _vm.StatusText = $"Audio track {trackId} — arm it and hit Rec to record input";
+        _vm.StatusText = kind == NewTrackKind.Instrument
+            ? $"Instrument track {trackId} (synth)"
+            : $"Audio track {trackId} — arm it and hit Rec to record input";
     }
 
     private void OnAddReturnClicked(object? sender, RoutedEventArgs e)
@@ -576,6 +585,17 @@ public partial class MainWindow : Window
         bool on = SnapToggle.IsChecked == true;
         Timeline.SnapEnabled = on;
         if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
+    }
+
+    /// <summary>Whether MIDI Learn is armed — device cards with their own Learn button
+    /// (Nota Arp) mirror it.</summary>
+    internal bool MidiLearnArmed => _learn?.Armed == true;
+
+    /// <summary>Flip MIDI Learn exactly as the transport-bar button does.</summary>
+    internal void ToggleMidiLearn()
+    {
+        MidiLearnBtn.IsChecked = MidiLearnBtn.IsChecked != true;
+        OnToggleMidiLearn(MidiLearnBtn, new RoutedEventArgs());
     }
 
     // MIDI Learn: arm/disarm the overlay and reveal the mappings tab so the user

@@ -53,13 +53,19 @@ public sealed partial class DeviceChainView : UserControl
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
     public event Action? Changed;
 
+    /// <summary>Raised when this view reorders / removes effects (midi=false) or MIDI effects
+    /// (midi=true) on a track: map is old chain index → new index, or -1 when the device is gone.
+    /// Lets index-addressed state elsewhere (the arrangement's automation target) follow it.</summary>
+    public event Action<int, bool, Func<int, int>>? DevicesRemapped;
+
     /// <summary>Raised to save a device/instrument as a preset (M7-4c); arg is the
     /// device index, or -1 for the track's instrument. MainWindow does the prompt+save.</summary>
     public event Action<int>? PresetSaveRequested;
 
     /// <summary>Raised when a browser item is dropped on the device panel; MainWindow
-    /// routes it (effect → the shown track; instrument → a rack chain / drum pad).</summary>
-    public event Action<BrowserItem>? ItemDropped;
+    /// routes it (effect → the shown track at the target slot; instrument → replaces the
+    /// track's instrument, or a rack chain / drum pad).</summary>
+    public event Action<BrowserItem, DeviceDropTarget>? ItemDropped;
 
     /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
     public event Action<string>? StatusMessage;
@@ -87,24 +93,8 @@ public sealed partial class DeviceChainView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        Content = new Panel { Children = { scroller, _dropGlow } };
-
-        DragDrop.SetAllowDrop(this, true);
-        DragDrop.AddDragOverHandler(this, (_, e) =>
-        {
-            bool ok = BrowserView.IsAcceptableDrag(e);
-            e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
-            _dropGlow.IsVisible = ok;
-        });
-        DragDrop.AddDragLeaveHandler(this, (_, _) => _dropGlow.IsVisible = false);
-        DragDrop.AddDropHandler(this, (_, e) =>
-        {
-            _dropGlow.IsVisible = false;
-            var items = BrowserView.DroppedItems(e);
-            if (items.Count == 0) return;
-            foreach (var item in items) ItemDropped?.Invoke(item);
-            e.Handled = true;
-        });
+        Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        HookBrowserDrop();
     }
 
     public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; Rebuild(); }
@@ -152,6 +142,7 @@ public sealed partial class DeviceChainView : UserControl
     private void Rebuild()
     {
         _row.Children.Clear();
+        _instrumentCard = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
@@ -162,7 +153,7 @@ public sealed partial class DeviceChainView : UserControl
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
         for (int i = 0; i < midiCount; i++) _row.Children.Add(MidiDeviceCard(i, midiCount));
 
-        if (IsInstrumentTrack(_trackId)) _row.Children.Add(InstrumentCard());
+        if (IsInstrumentTrack(_trackId)) _row.Children.Add(_instrumentCard = InstrumentCard());
 
         int count = _engine.TrackDeviceCount(_trackId);
         for (int i = 0; i < count; i++) _row.Children.Add(DeviceCard(i, count));
@@ -185,6 +176,7 @@ public sealed partial class DeviceChainView : UserControl
         double width;
         bool fullBleed = false;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
+        if (kind == -1) return PluginCardFor(ChainKind.Effect, index, count);   // hosted VST3 / AU
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
@@ -217,7 +209,7 @@ public sealed partial class DeviceChainView : UserControl
                () => { foreach (var r in _rackParamRefreshers) r(); },
                Rebuild,
                c => RackPresetSaveRequested?.Invoke(c),
-               () => _dropGlow.IsVisible = false,
+               ClearDropHints,
                _factory);
 
     // ---- instrument / sends / add ----------------------------------------

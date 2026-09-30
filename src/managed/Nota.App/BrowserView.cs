@@ -8,11 +8,10 @@
 // drops to tertiary ink so names scan on their distinctive word, and the device
 // type sits at the right edge as a quiet tag. A search box filters the active list
 // live, a ⋮ button holds the view options, chips filter by favorite/tag, a status
-// line counts what is on screen, and a pinned preview footer auditions the selected
-// sample (Files tab). Double-clicking an item raises ItemActivated; the footer ▶ (or
-// Auto-audition on selection) raises PreviewRequested. Brushes bind via
-// GetResourceObservable (the control is built during MainWindow's XAML load, before
-// it is attached). Rows are drag sources (M7-5).
+// line counts what is on screen, and a pinned preview footer auditions the selection — a
+// sample, a preset or a built-in device (list tabs, see PreviewPlayer). Double-clicking an
+// item raises ItemActivated. Brushes bind via GetResourceObservable (the control is built
+// during MainWindow's XAML load, before it is attached). Rows are drag sources (M7-5).
 
 using System;
 using System.Collections.ObjectModel;
@@ -48,8 +47,8 @@ public sealed class BrowserView : UserControl
     public static bool IsBrowserDrag => CurrentDrag is not null;
 
     // --- external file drops (from Finder / other programs) -----------------
-    // Audio extensions Nota can import as a clip / sample. Anything else in an
-    // external drag is ignored.
+    // Audio extensions Nota can import as a clip / sample; MIDI files (MidiFileReader)
+    // import as MIDI clips. Anything else in an external drag is ignored.
     private static readonly HashSet<string> AudioExts = new(StringComparer.OrdinalIgnoreCase)
     { ".wav", ".wave", ".aif", ".aiff", ".flac", ".mp3", ".ogg", ".m4a", ".aac" };
 
@@ -59,9 +58,9 @@ public sealed class BrowserView : UserControl
     public static bool IsAcceptableDrag(DragEventArgs e)
         => IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File);
 
-    /// <summary>Local paths of the audio files carried by an external drag (empty if
-    /// none / not a file drag).</summary>
-    private static List<string> ExternalAudioFiles(DragEventArgs e)
+    /// <summary>Local paths of the audio / MIDI files carried by an external drag (empty
+    /// if none / not a file drag).</summary>
+    private static List<string> ExternalFiles(DragEventArgs e)
     {
         var paths = new List<string>();
         if (!e.DataTransfer.Contains(DataFormat.File)) return paths;
@@ -70,23 +69,25 @@ public sealed class BrowserView : UserControl
         foreach (var f in files)
         {
             var p = f.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(p) && AudioExts.Contains(System.IO.Path.GetExtension(p))) paths.Add(p!);
+            if (!string.IsNullOrEmpty(p)
+                && (AudioExts.Contains(System.IO.Path.GetExtension(p)) || Nota.Application.Midi.MidiFileReader.IsMidiFile(p)))
+                paths.Add(p!);
         }
         return paths;
     }
 
     /// <summary>The items a drop should load: the internal browser item (any kind), or
-    /// one synthesized Sample item per external audio file. Empty when there's nothing
-    /// we can use (e.g. a non-audio external file). Callers that take one use [0].</summary>
+    /// one synthesized Sample / MidiFile item per external file. Empty when there's nothing
+    /// we can use (e.g. an unsupported external file). Callers that take one use [0].</summary>
     public static IReadOnlyList<BrowserItem> DroppedItems(DragEventArgs e)
     {
         if (CurrentDrag is { } item) return new[] { item };
         var list = new List<BrowserItem>();
-        foreach (var p in ExternalAudioFiles(e))
+        foreach (var p in ExternalFiles(e))
             list.Add(new BrowserItem
             {
                 Name = System.IO.Path.GetFileNameWithoutExtension(p),
-                Kind = BrowserItemKind.Sample,
+                Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(p) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
                 Path = p,
             });
         return list;
@@ -150,7 +151,8 @@ public sealed class BrowserView : UserControl
     }
 
     private const int TabCount = 7;   // Instr / FX / MIDI / Files / Preset / Proj / Map
-    private const int FilesTab = 3;   // the only tab with a sample auditioner
+    private const int FilesTab = 3;   // samples: the player auditions the file
+    private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
@@ -189,19 +191,17 @@ public sealed class BrowserView : UserControl
     private readonly Border _emptyWrap;
 
     // Pinned preview footer + the status line under it.
-    private readonly Button _previewBtn;
-    private readonly Path _previewIcon;
-    private readonly TextBlock _previewName;
-    private readonly TextBlock _previewSub;
-    private readonly ToggleButton _autoAudition;
-    private readonly PreviewWaveform _previewWave;
-    private readonly Border _previewFooter;   // sample auditioner — Files tab only
+    private readonly PreviewPlayer _previewFooter;   // sample / preset auditioner — list tabs
+    // The player stays hidden until the user works a list (click, arrow keys) and hides
+    // again once a row is dragged or double-clicked onto the project.
+    private bool _previewShown;
+    private bool _listPointerDown;   // a single click is in progress on a list row
     private readonly Border _statusBar;
     private readonly TextBlock _statusText;
-    private BrowserItem? _footerItem;
 
     public event Action<BrowserItem>? ItemActivated;
-    public event Action<BrowserItem>? PreviewRequested;
+    /// <summary>The Files tab's sample player (status messages ride its StatusChanged).</summary>
+    public PreviewPlayer Preview => _previewFooter;
     /// <summary>Reveal a sample / folder / project in the system file manager.</summary>
     public event Action<BrowserItem>? RevealRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
@@ -326,8 +326,8 @@ public sealed class BrowserView : UserControl
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
 
-        _previewFooter = BuildPreviewFooter(out _previewBtn, out _previewIcon, out _previewName,
-                                            out _previewSub, out _autoAudition, out _previewWave);
+        _previewFooter = new PreviewPlayer { IsVisible = false };
+        _previewFooter.SetContext(files: _active == FilesTab);
 
         // Status line: what the active tab is showing, counted.
         _statusText = new TextBlock { FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
@@ -606,8 +606,12 @@ public sealed class BrowserView : UserControl
         _content.Content = isMap ? (Control?)_midiMap : _pages[index];
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
-        // The sample auditioner only makes sense for the Files tab.
-        _previewFooter.IsVisible = index == FilesTab;
+        // The auditioner follows the list tabs: samples in Files, presets and built-in devices
+        // in Instr / FX / MIDI / Presets. It picks up the new tab's selection.
+        bool auditions = index <= PresetsTab;
+        UpdatePreviewVisibility();
+        _previewFooter.SetContext(files: index == FilesTab);
+        if (auditions) SyncPreview(_pages[index]);
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
         _statusBar.IsVisible = !isMap;
@@ -841,7 +845,7 @@ public sealed class BrowserView : UserControl
     {
         BrowserItemKind.Folder => "",
         BrowserItemKind.Preset => it.Depth > 0 ? "" : it.Sub,
-        BrowserItemKind.Sample => System.IO.Path.GetExtension(it.Path).TrimStart('.').ToLowerInvariant(),
+        BrowserItemKind.Sample or BrowserItemKind.MidiFile => System.IO.Path.GetExtension(it.Path).TrimStart('.').ToLowerInvariant(),
         // A column of "project" down a tab that is only projects says nothing.
         BrowserItemKind.Project => "",
         _ => it.Sub,
@@ -955,75 +959,35 @@ public sealed class BrowserView : UserControl
         return mi;
     }
 
-    // --- preview footer --------------------------------------------------------
-
-    private Border BuildPreviewFooter(out Button playBtn, out Path playIcon, out TextBlock name,
-                                      out TextBlock sub, out ToggleButton auto, out PreviewWaveform wave)
+    private void ShowPreview(bool shown)
     {
-        // Row 1: filename + format info (mono).
-        name = new TextBlock { Text = "—", FontSize = 10, VerticalAlignment = VerticalAlignment.Bottom };
-        name.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
-        sub = new TextBlock { Text = "", FontSize = 9, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 0) };
-        sub.Classes.Add("Mono");
-        sub.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var infoRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6), Children = { name, sub } };
-
-        // Row 2: play button + waveform strip.
-        playIcon = new Path { Data = Geometry.Parse(IconPlay), Stretch = Stretch.Uniform, Width = 10, Height = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        // A raised button with a brass glyph: the transport's Play is the main window's one solid brass action.
-        playIcon.BindResource(Shape.FillProperty, "Brush.AccentBright");
-        playBtn = new Button { Content = playIcon, Width = 26, Height = 26, Padding = new Thickness(0), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
-        var pb = playBtn;
-        pb.Click += (_, _) => { if (_footerItem is { } it && it.Kind == BrowserItemKind.Sample) PreviewRequested?.Invoke(it); };
-        wave = new PreviewWaveform { Height = 30, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var playRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        Grid.SetColumn(pb, 0);
-        Grid.SetColumn(wave, 1);
-        playRow.Children.Add(pb);
-        playRow.Children.Add(wave);
-
-        // Row 3: Auto-audition chip + preview volume bar (decorative — not wired).
-        auto = new ToggleButton { Content = "Auto-audition", FontSize = 9, Padding = new Thickness(6, 0), Height = 18, VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(auto, "Audition a sample when it is selected");
-        var volFillOuter = new Border { Width = 50, Height = 3, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
-        volFillOuter.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        var volFill = new Border { Width = 32, Height = 3, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left };
-        volFill.BindResource(Border.BackgroundProperty, "Brush.BorderStrong");
-        volFillOuter.Child = volFill;
-        ToolTip.SetTip(volFillOuter, "Set the preview volume (not available yet)");
-        var row3 = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center, Children = { auto, Caption("vol"), volFillOuter },
-        };
-
-        var footer = new Border
-        {
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(10, 8),
-            Child = new StackPanel { Children = { infoRow, playRow, row3 } },
-        };
-        footer.BindResource(Border.BackgroundProperty, "Brush.Panel");
-        footer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        return footer;
+        _previewShown = shown;
+        UpdatePreviewVisibility();
     }
 
-    private void UpdateFooter(BrowserItem? item)
+    private void UpdatePreviewVisibility() => _previewFooter.IsVisible = _previewShown && _active <= PresetsTab;
+
+    // A row left the browser for the project: stop its audition and put the player away.
+    private void DismissPreview()
     {
-        _footerItem = item;
-        bool isSample = item is { Kind: BrowserItemKind.Sample };
-        _previewName.Text = item?.Name ?? "—";
-        _previewSub.Text = isSample && !string.IsNullOrEmpty(item!.Sub) ? "· " + item.Sub : "";
-        _previewBtn.IsEnabled = isSample;
-        _previewWave.SetSample(isSample ? item!.Name : null);
-        if (isSample && (_autoAudition.IsChecked ?? false)) PreviewRequested?.Invoke(item!);
+        _listPointerDown = false;
+        _previewFooter.StopPlayback();
+        ShowPreview(false);
     }
 
-    private TextBlock Caption(string text)
+    // Hands the player a list's selection and the row below it (which the player pre-renders,
+    // so arrowing down plays at once).
+    private void SyncPreview(ListBox list)
     {
-        var t = new TextBlock { Text = text, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        return t;
+        var item = list.SelectedItem as BrowserItem;
+        BrowserItem? next = null;
+        if (item is not null && list.ItemsSource is System.Collections.IList rows)
+        {
+            int i = rows.IndexOf(item);
+            for (int j = i + 1; i >= 0 && j < rows.Count; j++)
+                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind != BrowserItemKind.Folder) { next = r; break; }
+        }
+        _previewFooter.SetItem(item, next);
     }
 
     private ListBox NewList(IDataTemplate itemTemplate) => new()
@@ -1037,14 +1001,26 @@ public sealed class BrowserView : UserControl
     {
         list.DoubleTapped += (_, _) =>
         {
-            if (list.SelectedItem is BrowserItem { IsGroup: false } item) ItemActivated?.Invoke(item);
+            if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
+            // Folders (sample dirs, preset categories) are navigation: double-click opens them.
+            if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
+            else { DismissPreview(); ItemActivated?.Invoke(item); }
         };
         list.SelectionChanged += (_, _) =>
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
-            if (_active >= 0 && list == _pages[_active]) UpdateFooter(list.SelectedItem as BrowserItem);
+            if (_active <= PresetsTab && list == _pages[_active])
+            {
+                SyncPreview(list);
+                // Keyboard navigation reveals at once; a click waits for release, so a row
+                // pressed only to be dragged away doesn't flash the player.
+                if (!_listPointerDown) ShowPreview(true);
+            }
         };
+        list.AddHandler(InputElement.PointerPressedEvent, (object? _, PointerPressedEventArgs e) =>
+                _listPointerDown = e.ClickCount < 2 && e.GetCurrentPoint(list).Properties.IsLeftButtonPressed,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
         // Drag source (M7-5): start a copy-drag when the pointer leaves the row.
         // Must use handledEventsToo — ListBoxItem marks PointerPressed as Handled for
         // selection, so a plain `+=` (handled=false) never fires and the drag never
@@ -1052,7 +1028,12 @@ public sealed class BrowserView : UserControl
         list.AddHandler(InputElement.PointerPressedEvent, OnRowPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerMovedEvent, OnRowMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerReleasedEvent,
-            (object? _, PointerReleasedEventArgs _) => { _pressedItem = null; _pressArgs = null; },
+            (object? _, PointerReleasedEventArgs _) =>
+            {
+                _pressedItem = null; _pressArgs = null;
+                if (_listPointerDown && _active <= PresetsTab && list == _pages[_active]) ShowPreview(true);
+                _listPointerDown = false;
+            },
             RoutingStrategies.Bubble, handledEventsToo: true);
         // Right-click / context menu: favorites + tags on device rows, reveal on files,
         // open / reveal / delete on projects.
@@ -1086,6 +1067,7 @@ public sealed class BrowserView : UserControl
         var item = _pressedItem;
         var args = _pressArgs;
         _pressedItem = null; _pressArgs = null; // start the drag once
+        DismissPreview();
 
         // Single native pasteboard item (one format → one drag image → one
         // pasteboard item: macOS is satisfied). The payload rides CurrentDrag.
@@ -1329,6 +1311,7 @@ public sealed class BrowserView : UserControl
         switch (item.Kind)
         {
             case BrowserItemKind.Sample:
+            case BrowserItemKind.MidiFile:
             // A saved preset file on disk. Synthetic rows (factory presets, drum kits)
             // carry a scheme instead of a path and have nothing to reveal.
             case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):

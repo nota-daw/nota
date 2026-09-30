@@ -176,6 +176,16 @@ public sealed partial class ArrangementView : UserControl
         Background = NotaPalette.AccentBright,
     };
 
+    // Browser drag-over: a ring over the target row's header — the scrolling tracks' and the
+    // return/master footer's (the lanes get their own wash + edge).
+    private readonly Border _headerDropRing = DropRing();
+    private readonly Border _footerDropRing = DropRing();
+    private static Border DropRing() => new()
+    {
+        IsVisible = false, IsHitTestVisible = false, Width = HeaderW,
+        BorderThickness = new Thickness(2), BorderBrush = DropEdge, Background = DropWash,
+    };
+
     // Return/Master section pinned under the scrolling tracks (no scroll).
     private readonly Canvas _footerHeaders;
     private readonly FooterLaneControl _footerLanes;
@@ -193,6 +203,8 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Freeze / Live Freeze entries for a track's context menu (empty when the track
     /// can't be frozen). Built by MainWindow, which owns the freeze state and commands.</summary>
     public Func<int, IReadOnlyList<Control>>? FreezeMenuItems;
+    /// <summary>Freeze entries for the multi-track context menu (the selected ids, row order).</summary>
+    public Func<IReadOnlyList<int>, IReadOnlyList<Control>>? FreezeTracksMenuItems;
     /// <summary>Called at the start of a full <see cref="Refresh"/>, before the track model is
     /// rebuilt — MainWindow drops live-freeze links whose tracks were deleted or undone.</summary>
     public Action? RefreshStarting;
@@ -207,8 +219,10 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int, ClipConvertMode>? ConvertClipRequested;
     /// <summary>A context menu asked for a new track. MainWindow owns creation — the seed
     /// MIDI clip, the session / modular / device-chain refreshes and the status line — so the
-    /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.</summary>
-    public event Action<NewTrackKind>? AddTrackRequested;
+    /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.
+    /// The id is the track the menu was opened on (-1 = none): the new track lands after it,
+    /// or inside it for a group (see <see cref="PlaceNewTrack"/>).</summary>
+    public event Action<NewTrackKind, int>? AddTrackRequested;
     /// <summary>Raised after a clip's start/length changed in place (edge-drag trim or
     /// stretch): track id, clip index. An open clip editor re-reads its geometry from this.</summary>
     public event Action<int, int>? ClipGeometryChanged;
@@ -303,7 +317,7 @@ public sealed partial class ArrangementView : UserControl
         // below the tracks) so instruments/samples can be dropped anywhere.
         DragDrop.SetAllowDrop(scroller, true);
         DragDrop.AddDragOverHandler(scroller, OnLaneDragOver);
-        DragDrop.AddDragLeaveHandler(scroller, (_, _) => { DropTrackIndex = -1; _lanes.InvalidateVisual(); });
+        DragDrop.AddDragLeaveHandler(scroller, (_, _) => SetDropTrack(-1));
         DragDrop.AddDropHandler(scroller, OnLaneDrop);
         // Right-click the empty area below the tracks → paste a copied track there (the
         // header cards / lanes are top-anchored, so clicks below them land on the scroller).
@@ -343,6 +357,11 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(_footerLanes, 1);
         _footer.Children.Add(footerHeaderPanel);
         _footer.Children.Add(_footerLanes);
+        // Effects / presets dropped on a return or the master go on that bus.
+        DragDrop.SetAllowDrop(_footer, true);
+        DragDrop.AddDragOverHandler(_footer, OnFooterDragOver);
+        DragDrop.AddDragLeaveHandler(_footer, (_, _) => SetFooterDropRow(-1));
+        DragDrop.AddDropHandler(_footer, OnFooterDrop);
 
         // Bottom: horizontal scrollbar under the lanes.
         var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -534,26 +553,44 @@ public sealed partial class ArrangementView : UserControl
     internal void SetLoopRegion(double startBeat, double endBeat)
     {
         if (_engine is null) return;
-        double s = Math.Max(0, Snap(Math.Min(startBeat, endBeat)));
-        double e = Math.Max(s + _snapBeats, Snap(Math.Max(startBeat, endBeat)));
+        var (s, e) = SnapLoopRange(startBeat, endBeat);
         _engine.SetLoop(true, s, e);
         _loopActive = true; _loopS = s; _loopE = e; _loopDragging = false;
         Redraw();
         LoopChanged?.Invoke();
     }
 
+    private (double Start, double End) SnapLoopRange(double a, double b)
+    {
+        double s = Math.Max(0, Snap(Math.Min(a, b)));
+        return (s, Math.Max(s + _snapBeats, Snap(Math.Max(a, b))));
+    }
+
     /// <summary>Loop over the beat span of the current clip selection. False if nothing selected.</summary>
     public bool LoopSelection()
     {
-        if (_engine is null || _sel.Count == 0) return false;
+        if (_engine is null || ClipSelectionSpan() is not { } span) return false;
+        SetLoopRegion(span.Start, span.End);
+        return true;
+    }
+
+    private (double Start, double End)? ClipSelectionSpan()
+    {
+        if (_sel.Count == 0) return null;
         double min = double.MaxValue, max = double.MinValue;
         foreach (var t in _tracks)
             foreach (var c in t.Clips)
                 if (_sel.Contains((t.Id, c.ClipIndex)))
                 { min = Math.Min(min, c.StartBeat); max = Math.Max(max, c.StartBeat + c.LengthBeats); }
-        if (max <= min) return false;
-        SetLoopRegion(min, max);
-        return true;
+        return max > min ? (min, max) : null;
+    }
+
+    /// <summary>The (snapped) loop region the current selection asks for — a time-range
+    /// selection wins, else the span of the selected clips. Null when nothing is selected.</summary>
+    public (double Start, double End)? SelectionLoopRange()
+    {
+        if (HasTimeSelection) return SnapLoopRange(_timeSelStart, _timeSelEnd);
+        return ClipSelectionSpan() is { } span ? SnapLoopRange(span.Start, span.End) : null;
     }
 
     /// <summary>Pushes fresh per-track meter readings into the header meters (~30 Hz, M6-2),
@@ -674,7 +711,10 @@ public sealed partial class ArrangementView : UserControl
                 };
                 if (_automationMode)
                 {
-                    if (_autoTargets.TryGetValue(ti.Id, out var sel))
+                    // First visit to this track's lane: show its first automated param, not Volume.
+                    if (!_autoTargets.TryGetValue(ti.Id, out var sel) && FirstAutomatedTarget(eng, ti.Id) is { } first)
+                        _autoTargets[ti.Id] = sel = first;
+                    if (_autoTargets.ContainsKey(ti.Id))
                         (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId) = sel;
                     tvm.AutoLabel = AutoLabelFor(tvm);
                     LoadAutoPoints(tvm);
@@ -713,7 +753,11 @@ public sealed partial class ArrangementView : UserControl
                         cvm.PeakCount = eng.GetClipPeaks(ti.Id, c, peaks, buckets);
                         cvm.Peaks = peaks;
                     }
-                    if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai)) cvm.Gain = ai.Gain;
+                    if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai))
+                    {
+                        cvm.Gain = ai.Gain;
+                        cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
+                    }
                     tvm.Clips.Add(cvm);
                 }
                 MarkClipRuns(tvm);
@@ -990,13 +1034,67 @@ public sealed partial class ArrangementView : UserControl
     {
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
-        int ti = ok ? RowAtY(e.GetPosition(_lanes).Y) : -1;
-        if (ti != DropTrackIndex) { DropTrackIndex = ti; _lanes.InvalidateVisual(); }
+        SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
+    }
+
+    // Marks row ti (-1 = none) as the browser drop target: lane wash + header ring.
+    private void SetDropTrack(int ti)
+    {
+        if (ti == DropTrackIndex) return;
+        DropTrackIndex = ti;
+        _lanes.InvalidateVisual();
+        _headerDropRing.IsVisible = ti >= 0 && ti < _tracks.Count;
+        if (!_headerDropRing.IsVisible) return;
+        Canvas.SetTop(_headerDropRing, RowTop(ti));
+        _headerDropRing.Height = RowHeightAt(ti);
+    }
+
+    // The return/master footer row at y: returns first, master last; -1 outside.
+    private int FooterRowAt(double y)
+    {
+        int row = (int)Math.Floor(y / FooterRowH);
+        return y >= 0 && row <= _returns.Count ? row : -1;
+    }
+    private int FooterRowTrackId(int row)
+        => row < 0 ? -1 : row < _returns.Count ? _returns[row].Id : _engine?.MasterTrackId ?? -1;
+
+    // Only effects and presets have a home on a bus; instruments / samples belong on tracks.
+    private static bool IsBusDrop()
+        => BrowserView.CurrentDrag is { Kind: BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.Preset };
+
+    private void OnFooterDragOver(object? sender, DragEventArgs e)
+    {
+        bool ok = IsBusDrop();
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        SetFooterDropRow(ok ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
+    }
+
+    private void OnFooterDrop(object? sender, DragEventArgs e)
+    {
+        int row = FooterRowAt(e.GetPosition(_footerHeaders).Y);
+        SetFooterDropRow(-1);
+        if (!IsBusDrop() || BrowserView.CurrentDrag is not { } item) return;
+        int trackId = FooterRowTrackId(row);
+        if (trackId <= 0) return;
+        ItemDropped?.Invoke(item, trackId, 0);
+        e.Handled = true;
+    }
+
+    internal int FooterDropRow = -1;   // footer row under a browser drag (-1 none); drawn by FooterLaneControl
+    private void SetFooterDropRow(int row)
+    {
+        if (row == FooterDropRow) return;
+        FooterDropRow = row;
+        _footerLanes.InvalidateVisual();
+        _footerDropRing.IsVisible = row >= 0;
+        if (row < 0) return;
+        Canvas.SetTop(_footerDropRing, row * FooterRowH);
+        _footerDropRing.Height = FooterRowH;
     }
 
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
-        DropTrackIndex = -1; _lanes.InvalidateVisual();
+        SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;
         var p = e.GetPosition(_lanes);
@@ -1010,9 +1108,10 @@ public sealed partial class ArrangementView : UserControl
             ItemDropped?.Invoke(items[i], i == 0 ? trackId : -1, beat);
         e.Handled = true;
     }
-    internal void Select(int trackId, int clipIndex)
+    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false)
     {
         if (HasTimeSelection) ClearTimeSelection();   // clip- and time-selection are exclusive (1.2.5)
+        if (!keepTrackSet) _selTracks.Clear();        // any other selection resets the header multi-selection
         int prev = SelTrackId;
         SelTrackId = trackId;
         SelClipIndex = clipIndex;
@@ -1234,14 +1333,6 @@ public sealed partial class ArrangementView : UserControl
         return true;
     }
 
-    /// <summary>Cmd+L over a time selection: loop exactly that range. False when there's no range.</summary>
-    public bool LoopTimeSelection()
-    {
-        if (_engine is null || !HasTimeSelection) return false;
-        SetLoopRegion(_timeSelStart, _timeSelEnd);
-        return true;
-    }
-
     /// <summary>Duplicate the time selection right after its end and move the selection onto
     /// the copy, so repeated presses chain (req 4.1-range).</summary>
     public bool DuplicateTimeSelection()
@@ -1298,6 +1389,16 @@ public sealed partial class ArrangementView : UserControl
         }
         if (any) { Select(-1, -1); Refresh(); }
         return any;
+    }
+
+    /// <summary>Cmd+A — select every clip in the arrangement. False when there are none,
+    /// so the key falls through.</summary>
+    public bool SelectAllClips()
+    {
+        var all = _tracks.SelectMany(t => t.Clips.Select(c => (t.Id, c.ClipIndex))).ToList();
+        if (all.Count == 0) return false;
+        SetSelection(all);
+        return true;
     }
 
     /// <summary>Replaces the selection with the given clips (marquee). Does not open
@@ -1419,6 +1520,7 @@ public sealed partial class ArrangementView : UserControl
             _headers.Children.Add(card);
         }
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
+        _headers.Children.Add(_headerDropRing);  // browser drop target (kept invisible until a drag)
         _headers.Height = Math.Max(RowHeight, RowsHeight);
     }
 
@@ -1674,9 +1776,9 @@ public sealed partial class ArrangementView : UserControl
                 try { _engine?.OpenPluginEditor(t.Id, -1); } catch { /* builtin/no editor: no-op */ }
                 return;
             }
-            // Ctrl/Cmd-click extends the multi-track selection (used to form a group).
+            // Shift- (or Ctrl/Cmd-) click adds the track to the multi-selection; again removes it.
             if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed
-                && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+                && (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0)
             {
                 ToggleTrackInSelection(t.Id); e.Handled = true; return;
             }
@@ -1734,14 +1836,10 @@ public sealed partial class ArrangementView : UserControl
     // "Add …" entries shared by the arrangement's track-level menus. Return is left enabled
     // when the buses are full, like the toolbar's + Return — MainWindow says so in the status
     // line rather than the menu going quietly dead.
-    private IEnumerable<MenuItem> AddTrackItems()
+    private IEnumerable<MenuItem> AddTrackItems(int anchorTrackId = -1)
     {
         MenuItem Item(string header, NewTrackKind kind)
-        {
-            var mi = new MenuItem { Header = header };
-            mi.Click += (_, _) => AddTrackRequested?.Invoke(kind);
-            return mi;
-        }
+            => MenuKit.Item(header, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind, anchorTrackId));
         yield return Item("Add instrument track", NewTrackKind.Instrument);
         yield return Item("Add audio track", NewTrackKind.Audio);
         yield return Item("Add return track", NewTrackKind.Return);
@@ -1755,15 +1853,8 @@ public sealed partial class ArrangementView : UserControl
         var flyout = new MenuFlyout();
         foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
         flyout.Items.Add(new Separator());
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard() };
-        paste.Click += (_, _) =>
-        {
-            int nid = _engine.PasteTrack();
-            if (nid > 0) Select(nid, -1);
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        paste.Click += (_, _) => PasteTracksAfter(-1);
         flyout.Items.Add(paste);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
@@ -1771,20 +1862,23 @@ public sealed partial class ArrangementView : UserControl
     private void ShowTrackMenu(Control anchor, int trackId)
     {
         if (_engine is null) return;
+        // Right-click inside a multi-selection acts on the whole set.
+        var selected = SelectedTrackIds();
+        if (selected.Count > 1 && selected.Contains(trackId)) { ShowTracksMenu(anchor, selected); return; }
         var flyout = new MenuFlyout();
 
-        var rename = new MenuItem { Header = "Rename…" };
+        var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
-        var color = BuildColorSubmenu(trackId);
+        var color = BuildColorSubmenu(new[] { trackId });
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked.
-        bool isAudio = _tracks.Any(v => v.Id == trackId && !v.IsInstrument && !v.IsReturn);
+        bool isAudio = _tracks.Any(v => v.Id == trackId && !v.IsInstrument && !v.IsReturn && !v.IsGroup);
         MenuItem? recInput = null;
         if (isAudio)
         {
             int cur = _engine.GetTrackRecordInput(trackId);
-            recInput = new MenuItem { Header = "Record input" };
+            recInput = new MenuItem { Header = "Record input", Icon = MenuKit.Icon(GlyphKind.Input) };
             MenuItem Src(string label, int source)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = cur == source };
@@ -1808,7 +1902,7 @@ public sealed partial class ArrangementView : UserControl
         if (isInstr)
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            midiFrom = new MenuItem { Header = "MIDI from" };
+            midiFrom = new MenuItem { Header = "MIDI from", Icon = MenuKit.Icon(GlyphKind.Note) };
             MenuItem Src(string label, int src)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = curSrc == src };
@@ -1822,52 +1916,30 @@ public sealed partial class ArrangementView : UserControl
                 midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id));
         }
 
-        var copy = new MenuItem { Header = "Copy track" };
-        copy.Click += (_, _) => _engine.CopyTrack(trackId);
-        var cut = new MenuItem { Header = "Cut track" };
-        cut.Click += (_, _) =>
-        {
-            if (!_engine.CopyTrack(trackId)) return;
-            _engine.RemoveTrack(trackId);
-            if (SelTrackId == trackId) SelTrackId = -1;
-            Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
-        };
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard() };
-        paste.Click += (_, _) =>
-        {
-            int nid = _engine.PasteTrack();
-            if (nid > 0) Select(nid, -1);
-            Refresh(); SessionChanged?.Invoke(); TrackSelected?.Invoke(SelTrackId);
-        };
+        // Clipboard + lifecycle go through the same set commands as the keys (a group carries
+        // its children); paste lands right after this track.
+        var one = new[] { trackId };
+        var copy = new MenuItem { Header = "Copy track", Icon = MenuKit.Icon(GlyphKind.Copy), InputGesture = MenuKit.CopyKey };
+        copy.Click += (_, _) => _engine.CopyTracks(one);
+        var cut = new MenuItem { Header = "Cut track", Icon = MenuKit.Icon(GlyphKind.Cut), InputGesture = MenuKit.CutKey };
+        cut.Click += (_, _) => CutTracks(one);
+        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        paste.Click += (_, _) => PasteTracksAfter(trackId);
 
-        var dup = new MenuItem { Header = "Duplicate track" };
-        dup.Click += (_, _) =>
-        {
-            int nid = _engine.DuplicateTrack(trackId);
-            if (nid > 0) Select(nid, -1);
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
-        var del = new MenuItem { Header = "Delete track" };
-        del.Click += (_, _) =>
-        {
-            _engine.RemoveTrack(trackId);
-            if (SelTrackId == trackId) SelTrackId = -1;
-            Refresh();
-            SessionChanged?.Invoke();
-            TrackSelected?.Invoke(SelTrackId);
-        };
+        var dup = new MenuItem { Header = "Duplicate track", Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateKey };
+        dup.Click += (_, _) => DuplicateTracks(one);
+        var del = new MenuItem { Header = "Delete track", Icon = MenuKit.Icon(GlyphKind.Trash), InputGesture = MenuKit.DeleteKey };
+        del.Click += (_, _) => DeleteTracks(one);
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
         // new group; "Ungroup" dissolves the group this track is/belongs to.
-        var group = new MenuItem { Header = "Group tracks" };
+        var group = new MenuItem { Header = "Group tracks", Icon = MenuKit.Icon(GlyphKind.Folder), InputGesture = MenuKit.GroupKey };
         group.Click += (_, _) => GroupTracks(trackId);
         int ungroupId = GroupToUngroupFor(trackId);
         MenuItem? ungroup = null;
         if (ungroupId > 0)
         {
-            ungroup = new MenuItem { Header = "Ungroup" };
+            ungroup = new MenuItem { Header = "Ungroup", Icon = MenuKit.Icon(GlyphKind.Ungroup), InputGesture = MenuKit.UngroupKey };
             ungroup.Click += (_, _) => UngroupGroup(ungroupId);
         }
 
@@ -1886,8 +1958,8 @@ public sealed partial class ArrangementView : UserControl
         flyout.Items.Add(new Separator());
         flyout.Items.Add(group);
         if (ungroup is not null) flyout.Items.Add(ungroup);
-        var addTrack = new MenuItem { Header = "Add track" };   // submenu: this menu is long already
-        foreach (var mi in AddTrackItems()) addTrack.Items.Add(mi);
+        var addTrack = new MenuItem { Header = "Add track", Icon = MenuKit.Icon(GlyphKind.Plus) };   // submenu: this menu is long already
+        foreach (var mi in AddTrackItems(trackId)) addTrack.Items.Add(mi);
 
         flyout.Items.Add(new Separator());
         flyout.Items.Add(addTrack);
@@ -2030,10 +2102,18 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // Colour ▸ one submenu per base hue, each with normal / light / dark shades shown as
-    // swatches, plus Auto. Picking sets the track's stored palette index.
-    private MenuItem BuildColorSubmenu(int trackId)
+    // swatches, plus Auto. Picking sets the stored palette index of every given track.
+    private MenuItem BuildColorSubmenu(IReadOnlyList<int> trackIds)
     {
-        var color = new MenuItem { Header = "Color" };
+        void SetColor(int ci)
+        {
+            if (_engine is null) return;
+            _engine.BeginUndoGroup();
+            try { foreach (var id in trackIds) _engine.SetTrackColorIndex(id, ci); }
+            finally { _engine.EndUndoGroup(); }
+            Refresh(); SessionChanged?.Invoke();
+        }
+        var color = new MenuItem { Header = "Color", Icon = MenuKit.Icon(GlyphKind.Palette) };
         for (int b = 0; b < PaletteBases; b++)
         {
             var baseItem = new MenuItem { Header = TrackColorNames[b], Icon = Swatch(b * PaletteShades) };
@@ -2041,13 +2121,13 @@ public sealed partial class ArrangementView : UserControl
             {
                 int ci = b * PaletteShades + s;
                 var shade = new MenuItem { Header = TrackColorNames[b] + ShadeNames[s], Icon = Swatch(ci) };
-                shade.Click += (_, _) => { _engine?.SetTrackColorIndex(trackId, ci); Refresh(); SessionChanged?.Invoke(); };
+                shade.Click += (_, _) => SetColor(ci);
                 baseItem.Items.Add(shade);
             }
             color.Items.Add(baseItem);
         }
         var autoColor = new MenuItem { Header = "Auto" };
-        autoColor.Click += (_, _) => { _engine?.SetTrackColorIndex(trackId, -1); Refresh(); SessionChanged?.Invoke(); };
+        autoColor.Click += (_, _) => SetColor(-1);
         color.Items.Add(new Separator());
         color.Items.Add(autoColor);
         return color;
@@ -2163,6 +2243,7 @@ public sealed partial class ArrangementView : UserControl
         Canvas.SetLeft(master, 0);
         Canvas.SetTop(master, y);
         _footerHeaders.Children.Add(master);
+        _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
     }
 
     private Control BuildSlimRow(string title, string sub, int colorIndex, int trackId, string bgKey, bool masterSpine = false)
@@ -2209,10 +2290,10 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return;
         var flyout = new MenuFlyout();
-        var rename = new MenuItem { Header = "Rename…" };
+        var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
         flyout.Items.Add(rename);
-        flyout.Items.Add(BuildColorSubmenu(trackId));
+        flyout.Items.Add(BuildColorSubmenu(new[] { trackId }));
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -2269,6 +2350,7 @@ public sealed partial class ArrangementView : UserControl
     // Browser drag-over: the lane the drop would land on glows (bright accent wash + edge).
     private static readonly IBrush DropWash = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);
     private static readonly IBrush DropEdge = NotaPalette.Wash(NotaPalette.AccentBright, 0xC0);
+    private static readonly IPen DropEdgePen = new Pen(DropEdge, 2);
     internal int DropTrackIndex = -1;   // -1 = no drag over; set by OnLaneDragOver, drawn by LaneControl
     // In-progress audio take (M-fix): audio clips only materialise on stop, so a
     // translucent red region grows from the take start to the playhead as feedback.

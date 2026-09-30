@@ -28,6 +28,8 @@ struct MidiEv {
     bool    on;     // true = note-on, false = note-off
     int32_t pitch;  // 0..127
     float   vel;    // 0..1 (note-on)
+    float   dur = 0.0f;   // note-on from a clip: its length in beats (0 = unknown, e.g. played live).
+                          // Lets a device that needs the length up front (Nota Length's Gate %) use it.
 };
 
 class MidiDevice {
@@ -70,6 +72,10 @@ public:
     // A float scope buffer for the editor (e.g. Nota Velocity's recent in/out pairs). Writes
     // up to maxN floats into out, returns the count. 0 = no scope. Message-thread read.
     virtual int32_t midiScope(float* /*out*/, int32_t /*maxN*/) const { return 0; }
+
+    // An editor command (e.g. Nota Arp: 1 = restart the pattern). Message thread; the
+    // device hands it to the audio thread itself (an atomic flag). Unknown = ignored.
+    virtual void midiCommand(int32_t /*cmd*/) {}
 
     // Deep copy for track duplication (rebuilt by midiKind() + copied params by the
     // engine; live state starts fresh). Returns nullptr if the engine should handle it.

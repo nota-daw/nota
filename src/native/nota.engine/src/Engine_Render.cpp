@@ -312,7 +312,7 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                 float vel = note.velocity;
                 if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel};
+                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel, static_cast<float>((offS - onS) / spb)};
                 // Chase: a note already held at the jump point starts sounding right here.
                 if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
                     evs[n++] = {0, true, note.pitch, vel};
@@ -498,7 +498,7 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
             const double onAbs = it * L + note.startBeat;
             const double offAbs = onAbs + note.lengthBeats;
             if (onAbs >= p && onAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity};
+                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity, static_cast<float>(note.lengthBeats)};
             if (offAbs >= p && offAbs < p + db && n < 1024)
                 evs[n++] = {static_cast<int32_t>((offAbs - p) * spb), false, note.pitch, 0.0f};
         }
@@ -575,9 +575,12 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         // law (unity at centre) so it composes with the track's own pan stage.
         const bool hasVol = !clip.volumeEnvelope.points.empty();
         const bool hasPan = !clip.panEnvelope.points.empty();
-        const bool hasEnv = hasVol || hasPan;
+        const bool hasAdsr = !clip.adsr.isIdentity();
+        const bool hasEnv = hasVol || hasPan || hasAdsr;
+        double lenBeats = 0.0;   // played length (beats) for the ADSR release — set per path below
         auto applyEnv = [&](double p, float& l, float& r) {
             const double b = (p - startSamples) / spb;
+            if (hasAdsr) { const float g = clip.adsr.gainAt(b, lenBeats); l *= g; r *= g; }
             if (hasVol) { const float g = std::clamp(clip.volumeEnvelope.valueAt(b), 0.0f, 1.0f); l *= g; r *= g; }
             if (hasPan) {
                 const float pan = std::clamp(clip.panEnvelope.valueAt(b), -1.0f, 1.0f);
@@ -593,6 +596,7 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
             const WarpCache& wc = *clip.warpCache;
             const double clipDeviceLen = static_cast<double>(wc.frames);
+            lenBeats = clipDeviceLen / spb;
             const double ovStart = std::max(blockStart, startSamples);
             const double ovEnd   = std::min(blockStart + frames, startSamples + clipDeviceLen);
             if (ovEnd <= ovStart) continue;
@@ -626,6 +630,7 @@ void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst
         const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
         const int64_t len = clip.effectiveLength();
         const double clipDeviceLen = len / ratio;
+        lenBeats = clipDeviceLen / spb;
         for (int32_t i = 0; i < frames; ++i) {
             const double p = blockStart + i;
             if (p < startSamples || p >= startSamples + clipDeviceLen) continue;

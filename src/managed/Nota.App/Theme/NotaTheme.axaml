@@ -353,6 +353,7 @@
   </Style>
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.AccentHover}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
   </Style>
 
   <Style Selector="Button.ghost">
@@ -1147,6 +1148,13 @@
   </Style>
   <Style Selector="MenuItem:disabled">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+  </Style>
+  <!-- Shortcut on the right of an item (MenuItem.InputGesture): the label's own ink, faded,
+       so it follows hover / disabled but stays secondary to the command name. -->
+  <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="Foreground" Value="{Binding $parent[MenuItem].Foreground}"/>
+    <Setter Property="Opacity" Value="0.45"/>
+    <Setter Property="Margin" Value="20,0,0,0"/>
   </Style>
 
   <Style Selector="Separator">

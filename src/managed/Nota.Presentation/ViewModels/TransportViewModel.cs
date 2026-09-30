@@ -43,6 +43,10 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     /// armed (0 = none). Lets "hit Record" work without a separate arm click.</summary>
     public Func<int>? RecordArmTarget { get; set; }
 
+    /// <summary>Supplies the loop region the current arrangement selection asks for (a
+    /// selected clip / time range), or null. Turning the loop on uses it when present.</summary>
+    public Func<(double Start, double End)?>? SelectionLoopRange { get; set; }
+
     /// <summary>Fired after auto-arming a track so the track headers can refresh.</summary>
     public event Action? TracksChanged;
 
@@ -67,7 +71,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         if (_syncingLoop) return;   // reflecting engine state, not a user toggle
         // Toggle over the current region (set from the arrangement ruler / "Loop
         // selection"); fall back to the first four bars if none has been set.
+        // Turning it on with something selected in the arrangement loops that selection.
         double s = _engine.LoopStart, e = _engine.LoopEnd;
+        if (value && SelectionLoopRange?.Invoke() is { } sel) (s, e) = sel;
         if (e <= s) { s = 0; e = 4 * BeatsPerBar; }
         _engine.SetLoop(value, s, e);
         LoopRangeText = FormatRange(s, e);

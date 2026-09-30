@@ -24,6 +24,9 @@ internal enum GlyphKind
     StepLeft, StepRight,           // filled small triangles (◀ ▶ as "move")
     Edit, Freeze, PopOut, Cycle, Dot, Bypass, Plus, Grip, Minus,
     Headphones,                    // input monitoring
+    // Context-menu icons
+    Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Reverse, Folder, Ungroup,
+    Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
 }
 
 internal sealed class Glyph : Control
@@ -216,6 +219,171 @@ internal sealed class Glyph : Control
                 }
                 ctx.DrawGeometry(null, pen, g);
                 Stroke(ctx, pen, new Point(cx - s * 0.12, cy - rr - s * 0.14), new Point(cx, cy - rr), new Point(cx - s * 0.12, cy - rr + s * 0.14));
+                break;
+            }
+            case GlyphKind.Copy:
+            {
+                // A sheet in front of another whose top-left edges peek out.
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - s * 0.12, cy - s * 0.12, s * 0.5, s * 0.5), 1));
+                Stroke(ctx, pen, new Point(cx - s * 0.38, cy + s * 0.14), new Point(cx - s * 0.38, cy - s * 0.38), new Point(cx + s * 0.14, cy - s * 0.38));
+                break;
+            }
+            case GlyphKind.Cut:
+            {
+                // Scissors: two crossing blades over two finger rings.
+                double rr = s * 0.13;
+                ctx.DrawEllipse(null, pen, new Point(cx - s * 0.24, cy + s * 0.28), rr, rr);
+                ctx.DrawEllipse(null, pen, new Point(cx + s * 0.24, cy + s * 0.28), rr, rr);
+                ctx.DrawLine(pen, new Point(cx - s * 0.16, cy + s * 0.16), new Point(cx + s * 0.22, cy - s * 0.42));
+                ctx.DrawLine(pen, new Point(cx + s * 0.16, cy + s * 0.16), new Point(cx - s * 0.22, cy - s * 0.42));
+                break;
+            }
+            case GlyphKind.Paste:
+            {
+                // A clipboard: the board and its clip.
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - s * 0.34, cy - s * 0.3, s * 0.68, s * 0.74), 1));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx - s * 0.2, cy - s * 0.46, s * 0.4, s * 0.28), 1));
+                break;
+            }
+            case GlyphKind.Trash:
+            {
+                ctx.DrawLine(pen, new Point(cx - s * 0.4, cy - s * 0.24), new Point(cx + s * 0.4, cy - s * 0.24));
+                Stroke(ctx, pen, new Point(cx - s * 0.12, cy - s * 0.26), new Point(cx - s * 0.12, cy - s * 0.4), new Point(cx + s * 0.12, cy - s * 0.4), new Point(cx + s * 0.12, cy - s * 0.26));
+                Stroke(ctx, pen, new Point(cx - s * 0.28, cy - s * 0.2), new Point(cx - s * 0.22, cy + s * 0.4), new Point(cx + s * 0.22, cy + s * 0.4), new Point(cx + s * 0.28, cy - s * 0.2));
+                break;
+            }
+            case GlyphKind.Duplicate:
+            {
+                // A clip and its filled twin right after it.
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - s * 0.42, cy - s * 0.22, s * 0.36, s * 0.44), 1));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + s * 0.04, cy - s * 0.26, s * 0.42, s * 0.52), 1));
+                break;
+            }
+            case GlyphKind.Split:
+            {
+                // Two clip halves either side of a cut line.
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx - s * 0.46, cy - s * 0.22, s * 0.3, s * 0.44), 1));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + s * 0.16, cy - s * 0.22, s * 0.3, s * 0.44), 1));
+                ctx.DrawLine(pen, new Point(cx, cy - s * 0.44), new Point(cx, cy + s * 0.44));
+                break;
+            }
+            case GlyphKind.Consolidate:
+            {
+                // Converging strokes folding into one block.
+                Stroke(ctx, pen, new Point(cx - s * 0.42, cy - s * 0.32), new Point(cx - s * 0.1, cy), new Point(cx - s * 0.42, cy + s * 0.32));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + s * 0.04, cy - s * 0.28, s * 0.4, s * 0.56), 1));
+                break;
+            }
+            case GlyphKind.Reverse:
+            {
+                // ⇄: one arrow each way.
+                double y1 = cy - s * 0.2, y2 = cy + s * 0.2, d = s * 0.4, hd = s * 0.15;
+                ctx.DrawLine(pen, new Point(cx - d, y1), new Point(cx + d, y1));
+                Stroke(ctx, pen, new Point(cx + d - hd, y1 - hd), new Point(cx + d, y1), new Point(cx + d - hd, y1 + hd));
+                ctx.DrawLine(pen, new Point(cx + d, y2), new Point(cx - d, y2));
+                Stroke(ctx, pen, new Point(cx - d + hd, y2 - hd), new Point(cx - d, y2), new Point(cx - d + hd, y2 + hd));
+                break;
+            }
+            case GlyphKind.Folder:
+            {
+                var g = new StreamGeometry();
+                using (var c = g.Open())
+                {
+                    c.BeginFigure(new Point(cx - s * 0.42, cy + s * 0.34), false);
+                    c.LineTo(new Point(cx - s * 0.42, cy - s * 0.34));
+                    c.LineTo(new Point(cx - s * 0.1, cy - s * 0.34));
+                    c.LineTo(new Point(cx + s * 0.02, cy - s * 0.2));
+                    c.LineTo(new Point(cx + s * 0.42, cy - s * 0.2));
+                    c.LineTo(new Point(cx + s * 0.42, cy + s * 0.34));
+                    c.EndFigure(true);
+                }
+                ctx.DrawGeometry(null, pen, g);
+                break;
+            }
+            case GlyphKind.Ungroup:
+            {
+                // Two blocks pulled apart.
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - s * 0.42, cy - s * 0.42, s * 0.36, s * 0.36), 1));
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx + s * 0.06, cy + s * 0.06, s * 0.36, s * 0.36), 1));
+                break;
+            }
+            case GlyphKind.Palette:
+            {
+                // Three swatches.
+                double dr = s * 0.15;
+                ctx.DrawEllipse(ink, null, new Point(cx, cy - s * 0.24), dr, dr);
+                ctx.DrawEllipse(ink, null, new Point(cx - s * 0.26, cy + s * 0.2), dr, dr);
+                ctx.DrawEllipse(ink, null, new Point(cx + s * 0.26, cy + s * 0.2), dr, dr);
+                break;
+            }
+            case GlyphKind.Note:
+            {
+                // An eighth note: head, stem, flag.
+                ctx.DrawEllipse(ink, null, new Point(cx - s * 0.12, cy + s * 0.26), s * 0.18, s * 0.14);
+                Stroke(ctx, pen, new Point(cx + s * 0.05, cy + s * 0.24), new Point(cx + s * 0.05, cy - s * 0.42), new Point(cx + s * 0.34, cy - s * 0.2));
+                break;
+            }
+            case GlyphKind.Input:
+            {
+                // An arrow entering a bracket.
+                ctx.DrawLine(pen, new Point(cx - s * 0.44, cy), new Point(cx + s * 0.08, cy));
+                Stroke(ctx, pen, new Point(cx - s * 0.1, cy - s * 0.18), new Point(cx + s * 0.08, cy), new Point(cx - s * 0.1, cy + s * 0.18));
+                Stroke(ctx, pen, new Point(cx + s * 0.08, cy - s * 0.38), new Point(cx + s * 0.38, cy - s * 0.38), new Point(cx + s * 0.38, cy + s * 0.38), new Point(cx + s * 0.08, cy + s * 0.38));
+                break;
+            }
+            case GlyphKind.Arrow:
+            {
+                ctx.DrawLine(pen, new Point(cx - s * 0.4, cy), new Point(cx + s * 0.38, cy));
+                Stroke(ctx, pen, new Point(cx + s * 0.12, cy - s * 0.26), new Point(cx + s * 0.38, cy), new Point(cx + s * 0.12, cy + s * 0.26));
+                break;
+            }
+            case GlyphKind.Grid:
+            {
+                // 2×2 slots: the session grid.
+                double q = s * 0.34, o = s * 0.04;
+                for (int i = 0; i < 2; i++)
+                    for (int j = 0; j < 2; j++)
+                        ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + (i == 0 ? -q - o : o), cy + (j == 0 ? -q - o : o), q, q), 1));
+                break;
+            }
+            case GlyphKind.Select:
+            {
+                // Four corner marks framing a range.
+                double d = s * 0.4, l = s * 0.22;
+                Stroke(ctx, pen, new Point(cx - d, cy - d + l), new Point(cx - d, cy - d), new Point(cx - d + l, cy - d));
+                Stroke(ctx, pen, new Point(cx + d - l, cy - d), new Point(cx + d, cy - d), new Point(cx + d, cy - d + l));
+                Stroke(ctx, pen, new Point(cx + d, cy + d - l), new Point(cx + d, cy + d), new Point(cx + d - l, cy + d));
+                Stroke(ctx, pen, new Point(cx - d + l, cy + d), new Point(cx - d, cy + d), new Point(cx - d, cy + d - l));
+                break;
+            }
+            case GlyphKind.Save:
+            {
+                // An arrow dropping into a tray.
+                ctx.DrawLine(pen, new Point(cx, cy - s * 0.42), new Point(cx, cy + s * 0.12));
+                Stroke(ctx, pen, new Point(cx - s * 0.2, cy - s * 0.08), new Point(cx, cy + s * 0.12), new Point(cx + s * 0.2, cy - s * 0.08));
+                Stroke(ctx, pen, new Point(cx - s * 0.4, cy + s * 0.1), new Point(cx - s * 0.4, cy + s * 0.38), new Point(cx + s * 0.4, cy + s * 0.38), new Point(cx + s * 0.4, cy + s * 0.1));
+                break;
+            }
+            case GlyphKind.List:
+            {
+                for (int i = -1; i <= 1; i++)
+                    ctx.DrawLine(pen, new Point(cx - s * 0.38, cy + i * s * 0.3), new Point(cx + s * 0.38, cy + i * s * 0.3));
+                break;
+            }
+            case GlyphKind.Compare:
+            {
+                // A / B: a square, half filled.
+                double d = s * 0.38;
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - d, cy - d, d * 2, d * 2), 1));
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx - d, cy - d, d, d * 2), 1));
+                break;
+            }
+            case GlyphKind.Flatten:
+            {
+                // A wave above the flat line it becomes.
+                Stroke(ctx, pen, new Point(cx - s * 0.42, cy - s * 0.1), new Point(cx - s * 0.21, cy - s * 0.38), new Point(cx, cy - s * 0.1),
+                    new Point(cx + s * 0.21, cy - s * 0.38), new Point(cx + s * 0.42, cy - s * 0.1));
+                ctx.DrawLine(pen, new Point(cx - s * 0.42, cy + s * 0.3), new Point(cx + s * 0.42, cy + s * 0.3));
                 break;
             }
         }

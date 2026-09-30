@@ -88,6 +88,9 @@ const char* nota_track_automation_lane_param_id(const NotaEngine* e, int32_t tra
 int32_t nota_engine_automation_write_selftest(NotaEngine* e) {
     return (e && ENG(e)->automationWriteSelfTest()) ? 1 : 0;
 }
+int32_t nota_engine_automation_device_remap_selftest(NotaEngine* e) {
+    return (e && ENG(e)->automationDeviceRemapSelfTest()) ? 1 : 0;
+}
 void nota_engine_set_automation_record(NotaEngine* e, int32_t on) {
     if (e) ENG(e)->setAutomationRecord(on != 0);
 }

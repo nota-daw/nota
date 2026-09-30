@@ -143,6 +143,7 @@ public sealed partial class NotaEngine
     public int MidiEffectLastIn(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectLastIn(_handle, trackId, index); }
     public int MidiEffectLastOut(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectLastOut(_handle, trackId, index); }
     public int MidiEffectScope(int trackId, int index, float[] outv) { ThrowIfDisposed(); return NativeMethods.MidiEffectScope(_handle, trackId, index, outv, outv.Length); }
+    public void MidiEffectCommand(int trackId, int index, int cmd) { ThrowIfDisposed(); NativeMethods.MidiEffectCommand(_handle, trackId, index, cmd); }
     public string MidiEffectName(int trackId, int index) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectName(_handle, trackId, index)) ?? ""; }
     public int MidiEffectParamCount(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectParamCount(_handle, trackId, index); }
     public string MidiEffectParamName(int trackId, int index, int paramIndex) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectParamName(_handle, trackId, index, paramIndex)) ?? ""; }
@@ -267,6 +268,10 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamId(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
     public string PluginParamName(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamName(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
+    public string PluginParamText(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamText(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
+    public float PluginParamDefault(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return NativeMethods.PluginParamDefault(_handle, trackId, deviceIndex, paramIndex); }
     public float PluginParamGet(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginParamGet(_handle, trackId, deviceIndex, paramIndex); }
     public void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized)

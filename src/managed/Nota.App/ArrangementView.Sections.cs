@@ -315,20 +315,20 @@ public sealed partial class ArrangementView
             var flyout = new MenuFlyout();
             if (s is not null)
             {
-                var rename = new MenuItem { Header = "Rename…" };
+                var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
                 rename.Click += (_, _) => _o.RenameSection(this, s);
-                var loop = new MenuItem { Header = "Loop section" };
+                var loop = new MenuItem { Header = "Loop section", Icon = MenuKit.Icon(GlyphKind.Cycle) };
                 loop.Click += (_, _) => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats);   // raises LoopChanged itself
-                var select = new MenuItem { Header = "Select section" };
+                var select = new MenuItem { Header = "Select section", Icon = MenuKit.Icon(GlyphKind.Select) };
                 select.Click += (_, _) => _o.SelectSectionRange(s);
-                var dup = new MenuItem { Header = "Duplicate" };
+                var dup = new MenuItem { Header = "Duplicate", Icon = MenuKit.Icon(GlyphKind.Duplicate) };
                 dup.Click += (_, _) =>
                 {
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
                     copy.Name = s.Name;
                     _o.SectionsEdited();
                 };
-                var del = new MenuItem { Header = "Delete" };
+                var del = new MenuItem { Header = "Delete", Icon = MenuKit.Icon(GlyphKind.Trash) };
                 del.Click += (_, _) => _o.RemoveSection(s);
                 flyout.Items.Add(rename);
                 flyout.Items.Add(loop);
@@ -339,12 +339,12 @@ public sealed partial class ArrangementView
             }
             else
             {
-                var add = new MenuItem { Header = "Add section here" };
+                var add = new MenuItem { Header = "Add section here", Icon = MenuKit.Icon(GlyphKind.Plus) };
                 add.Click += (_, _) => _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8);
                 flyout.Items.Add(add);
                 if (_o._sections.Count > 0)
                 {
-                    var clear = new MenuItem { Header = "Delete all sections" };
+                    var clear = new MenuItem { Header = "Delete all sections", Icon = MenuKit.Icon(GlyphKind.Trash) };
                     clear.Click += (_, _) => { _o.ClearSections(); _o.SectionsChangedRaise(); };
                     flyout.Items.Add(clear);
                 }

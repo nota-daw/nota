@@ -4,7 +4,8 @@
 // Arrangement · track groups (submix buses). A Group track owns child tracks and its own
 // device chain; groups may nest. This file holds the view-side glue: the hierarchical row
 // ordering (DFS over the groupId forest, collapse-filtered), collapse state, the multi-track
-// selection used to form a group, and the create/ungroup commands.
+// selection (grouping + the track commands in ArrangementView.Tracks.cs), and the
+// create/ungroup commands.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -15,8 +16,8 @@ public sealed partial class ArrangementView
 {
     // Collapsed group ids (subtree hidden in the arrangement). View state; persisted per project.
     private readonly HashSet<int> _collapsed = new();
-    // Multi-track selection used for "Group" (Ctrl/Cmd-click headers). The primary SelTrackId
-    // is treated as part of the set even when this is empty.
+    // Multi-track header selection (Shift/Cmd-click, Cmd+A). The primary SelTrackId is treated
+    // as part of the set even when this is empty; any other Select() clears it.
     private readonly HashSet<int> _selTracks = new();
 
     internal IReadOnlyCollection<int> CollapsedGroups => _collapsed;
@@ -98,15 +99,20 @@ public sealed partial class ArrangementView
         Refresh();
     }
 
-    // ---- multi-track selection (for grouping) -----------------------------
+    // ---- multi-track selection (Shift/Cmd-click headers, Cmd+A) --------------
     private bool IsTrackMultiSelected(int trackId) => _selTracks.Contains(trackId) || trackId == SelTrackId;
 
     private void ToggleTrackInSelection(int trackId)
     {
-        // Seed the set with the current primary so Ctrl-click extends rather than replaces.
-        if (_selTracks.Count == 0 && SelTrackId > 0) _selTracks.Add(SelTrackId);
-        if (!_selTracks.Remove(trackId)) _selTracks.Add(trackId);
-        Select(trackId, -1);   // make it primary + show its devices
+        // Seed the set with the current primary so the click extends rather than replaces.
+        if (_selTracks.Count == 0 && _tracks.Any(t => t.Id == SelTrackId)) _selTracks.Add(SelTrackId);
+        if (_selTracks.Add(trackId)) { Select(trackId, -1, keepTrackSet: true); return; }   // make it primary + show its devices
+
+        // Second click removes it; the primary (device panel) moves to another member, if any.
+        _selTracks.Remove(trackId);
+        int next = _tracks.FirstOrDefault(t => _selTracks.Contains(t.Id))?.Id ?? -1;
+        if (next > 0) Select(next, -1, keepTrackSet: true);
+        else Select(-1, -1);
     }
 
     private void ClearTrackMultiSelection() => _selTracks.Clear();

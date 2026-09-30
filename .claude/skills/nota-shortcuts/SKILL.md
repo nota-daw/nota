@@ -21,7 +21,10 @@ Shortcuts pane matches.
 `src/managed/Nota.App/PreferencesWindow.cs` → the static **`ShortcutGroups`** array (feeds
 `ShortcutsPane`). It's grouped: `TRANSPORT`, `ARRANGEMENT & EDITING`, `PIANO ROLL`,
 `PLAY NOTES (COMPUTER KEYBOARD)`, `MOUSE`. Each row is `(Key, Action)`; the `Key` string is
-mono-rendered as a key-cap, the `Action` is a short sentence. Use `⌘` for Meta/Ctrl, `⇧`
+split on spaces and each token becomes its own mono key-cap (`/` and `·` stay plain
+separators) — as long as every token is a key: no lower-case letters, or one of `Space`
+`Return` `Delete` `Tab` `Esc` (`IsKeyToken`). Anything else (`Drag note edge`, `Face
+buttons`) is a gesture and shows as plain text. The `Action` is a short sentence. Use `⌘` for Meta/Ctrl, `⇧`
 for Shift, `⌥` for Alt, and the arrow glyphs `← → ↑ ↓`. Keep actions imperative and terse
 (design language: sentence case, `·`/` / ` as separators).
 
@@ -51,7 +54,7 @@ map changes, update the `PLAY NOTES` group (white vs. black keys, and the starti
 5. Visually verify (see [nota-ui-verify] memory): the pane can't be reached by a click in a
    headless run, so temporarily open it via an env-guarded hook in
    `MainWindow.OnDataContextChanged` (`new PreferencesWindow(new SettingsViewModel(settings),
-   _vm).Show(this)`), and select the Shortcuts section (index 5) — e.g. a temporary env read
+   _vm).Show(this)`), and select the Shortcuts section (index 7) — e.g. a temporary env read
    in front of the constructor's `Select(0)`. Screenshot with `screencapture -x -o -l<winid>`
    (get the id from the `winlist` swift helper), check the rows read correctly, then **revert
    the temp hooks** and rebuild.

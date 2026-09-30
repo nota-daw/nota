@@ -10,7 +10,11 @@ public readonly record struct TransportState(double Bpm, double MasterVolume, bo
 
 /// <summary>Outcome of loading a project: the transport to restore + any items that
 /// were downgraded/skipped (referential-integrity warnings).</summary>
-public readonly record struct ProjectLoadResult(TransportState Transport, IReadOnlyList<string> Warnings);
+public readonly record struct ProjectLoadResult(TransportState Transport, IReadOnlyList<string> Warnings)
+{
+    /// <summary>Hosted-plugin identifiers the project uses that aren't installed (distinct).</summary>
+    public IReadOnlyList<string> MissingPlugins { get; init; } = [];
+}
 
 /// <summary>Save/load of the <c>.nota</c> project bundle. Hides the on-disk document
 /// model and the engine-capture/apply mechanics behind a use-case surface.</summary>
@@ -23,4 +27,9 @@ public interface IProjectStore
     /// <summary>Loads a bundle and applies it to a reset engine. Returns the transport
     /// to restore + downgrade warnings.</summary>
     ProjectLoadResult Load(IAudioEngine engine, string dir);
+
+    /// <summary>A comparable snapshot of the project's current state (the serialized
+    /// manifest, nothing written to disk). Two equal fingerprints mean no change —
+    /// used to detect unsaved edits.</summary>
+    string Fingerprint(IAudioEngine engine, TransportState transport);
 }

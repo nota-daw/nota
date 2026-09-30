@@ -33,6 +33,11 @@ public sealed class PresetDocument
     /// units; instrument values are normalized 0..1.</summary>
     public System.Collections.Generic.Dictionary<string, float>? NamedParams { get; set; }
 
+    /// <summary>Nota Grain factory presets: the factory source (GrainSources id) the
+    /// preset loads before its params. Null = keep whatever sample is loaded.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GrainSource { get; set; }
+
     // Plugin: stable identity + base64-encoded state blob.
     public string PluginId { get; set; } = "";
     public string StateBase64 { get; set; } = "";

@@ -15,16 +15,18 @@ namespace Nota.App;
 // SwitchTrack (almanac § Controls), for call sites that want a self-toggling control.
 internal sealed class ToggleSwitch : Control
 {
-    private readonly SwitchTrack _track = new();
+    private readonly SwitchTrack _track;
     public event Action<bool>? Changed;
-    public ToggleSwitch(bool on)
+    public ToggleSwitch(bool on, bool large = false)
     {
-        _track.IsOn = on;
-        Width = SwitchTrack.W; Height = SwitchTrack.H;
+        _track = new SwitchTrack(large) { IsOn = on };
+        Width = _track.Width; Height = _track.Height;
         Cursor = new Cursor(StandardCursorType.Hand);
         LogicalChildren.Add(_track); VisualChildren.Add(_track);
     }
     public bool IsOn { get => _track.IsOn; set => _track.IsOn = value; }
+    /// <summary>Flip it as a click would (fires Changed) — for a row whose label is clickable too.</summary>
+    public void Toggle() { _track.IsOn = !_track.IsOn; Changed?.Invoke(_track.IsOn); }
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         // Left button only — right-click bubbles to the CV-modulate / MIDI Learn menu.
@@ -32,5 +34,5 @@ internal sealed class ToggleSwitch : Control
         _track.IsOn = !_track.IsOn; Changed?.Invoke(_track.IsOn); e.Handled = true;
     }
     protected override Size ArrangeOverride(Size finalSize) { _track.Arrange(new Rect(finalSize)); return finalSize; }
-    protected override Size MeasureOverride(Size availableSize) { _track.Measure(availableSize); return new Size(SwitchTrack.W, SwitchTrack.H); }
+    protected override Size MeasureOverride(Size availableSize) { _track.Measure(availableSize); return new Size(Width, Height); }
 }

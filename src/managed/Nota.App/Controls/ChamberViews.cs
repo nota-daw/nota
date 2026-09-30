@@ -137,7 +137,7 @@ internal sealed class ChamberIrView : Control
         {
             _hover = false; InvalidateVisual();
             foreach (var it in BrowserView.DroppedItems(e))
-                if (it.Path is { Length: > 0 } p) { FileDropped?.Invoke(p); break; }
+                if (it.Kind != Nota.Presentation.BrowserItemKind.MidiFile && it.Path is { Length: > 0 } p) { FileDropped?.Invoke(p); break; }
             e.Handled = true;
         });
     }

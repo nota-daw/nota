@@ -4,6 +4,7 @@
 // Engine — hosted plugins & device chain (M3): load instrument/effect, device CRUD/params/bypass/editor/state, clone helpers, kind/id introspection, PDC latency.
 
 #include "Engine.h"
+#include "DeviceFactory.h"
 #include "Amp.h"
 #include "AutoFilter.h"
 #include "AudioFile.h"
@@ -281,6 +282,14 @@ bool Engine::setTrackGrainSample(int32_t trackId, const std::string& path, int32
     return true;
 }
 
+bool Engine::setTrackGrainRoot(int32_t trackId, int32_t rootNote) {
+    auto t = findTrackAuthoring(trackId);
+    auto* gr = t && t->instrument ? dynamic_cast<GrainSynth*>(t->instrument.get()) : nullptr;
+    if (!gr) return false;
+    gr->setRoot(rootNote);   // lock-free atomic; the synth is shared across snapshots
+    return true;
+}
+
 int32_t Engine::addSamplerTrack(const std::string& path, int32_t rootNote, bool loop) {
     auto sample = decodeAudioFile(path);
     if (!sample || sample->empty()) return 0;
@@ -547,6 +556,7 @@ bool Engine::moveDevice(int32_t trackId, int32_t fromIndex, int32_t toIndex) {
     auto dev = nt->devices[fromIndex];
     nt->devices.erase(nt->devices.begin() + fromIndex);
     nt->devices.insert(nt->devices.begin() + toIndex, dev);
+    remapAutomationAfterDeviceChange(*nt, false, -1, fromIndex, toIndex);   // lanes follow their device
     republishWithTrack(trackId, nt);
     remapCvLinksAfterDeviceChange(trackId, -1, fromIndex, toIndex);  // keep CV-link targets valid
     return true; // order change doesn't affect total chain latency (PDC unchanged)
@@ -560,6 +570,7 @@ bool Engine::removeDevice(int32_t trackId, int32_t deviceIndex) {
     if (old->devices[deviceIndex]) old->devices[deviceIndex]->closeEditor();
     auto nt = cloneTrack(*old);
     nt->devices.erase(nt->devices.begin() + deviceIndex);
+    remapAutomationAfterDeviceChange(*nt, false, deviceIndex, -1, -1);     // drop/shift its lanes
     republishWithTrack(trackId, nt);
     remapCvLinksAfterDeviceChange(trackId, deviceIndex, -1, -1);   // drop/shift CV-link targets
     recomputePdc();
@@ -573,7 +584,7 @@ Device* Engine::deviceAt(int32_t trackId, int32_t deviceIndex) const {
 }
 
 // Fresh built-in instances, used to read a parameter's factory default value.
-static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
+std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Eq>();
         case 1: return std::make_shared<Compressor>();
@@ -603,7 +614,7 @@ static std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
         default: return nullptr;   // Rack / plugin: no simple per-param default
     }
 }
-static std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
+std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Synth>();
         case 1: return std::make_shared<Sampler>();      // empty; a sample is loaded later
@@ -639,7 +650,7 @@ bool Engine::setTrackBuiltinInstrument(int32_t trackId, int32_t kind) {
 }
 
 // --- MIDI effects (before the instrument) ---------------------------------
-static std::shared_ptr<MidiDevice> makeMidiDevice(int32_t kind) {
+std::shared_ptr<MidiDevice> makeMidiDevice(int32_t kind) {
     switch (kind) {
         case 0: return std::make_shared<Arpeggiator>();
         case 1: return std::make_shared<MidiChord>();
@@ -689,6 +700,7 @@ bool Engine::moveMidiEffect(int32_t trackId, int32_t fromIndex, int32_t toIndex)
     auto md = nt->midiEffects[fromIndex];
     nt->midiEffects.erase(nt->midiEffects.begin() + fromIndex);
     nt->midiEffects.insert(nt->midiEffects.begin() + toIndex, md);
+    remapAutomationAfterDeviceChange(*nt, true, -1, fromIndex, toIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -698,6 +710,7 @@ bool Engine::removeMidiEffect(int32_t trackId, int32_t index) {
     if (!old || index < 0 || index >= static_cast<int32_t>(old->midiEffects.size())) return false;
     auto nt = cloneTrack(*old);
     nt->midiEffects.erase(nt->midiEffects.begin() + index);
+    remapAutomationAfterDeviceChange(*nt, true, index, -1, -1);
     republishWithTrack(trackId, nt);
     if (nt->instrument) nt->instrument->allNotesOff();   // drop any arp-driven voices
     return true;
@@ -727,6 +740,7 @@ bool        Engine::midiEffectBypassed(int32_t t, int32_t i) const { auto* m = m
 int32_t     Engine::midiEffectLastIn(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastIn() : -1; }
 int32_t     Engine::midiEffectLastOut(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastOut() : -1; }
 int32_t     Engine::midiEffectScope(int32_t t, int32_t i, float* out, int32_t maxN) const { auto* m = midiDeviceAt(t, i); return m ? m->midiScope(out, maxN) : 0; }
+void        Engine::midiEffectCommand(int32_t t, int32_t i, int32_t cmd) { if (auto* m = midiDeviceAt(t, i)) m->midiCommand(cmd); }
 void        Engine::setMidiEffectCcDest(int32_t t, int32_t i, int32_t dev, int32_t param) { if (auto* m = midiDeviceAt(t, i)) m->setCcDest(dev, param); }
 void        Engine::setMidiEffectCcDepth(int32_t t, int32_t i, float d) { if (auto* m = midiDeviceAt(t, i)) m->setCcDepth(d); }
 int32_t     Engine::midiEffectCcDestDevice(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->ccDestDevice() : -2; }

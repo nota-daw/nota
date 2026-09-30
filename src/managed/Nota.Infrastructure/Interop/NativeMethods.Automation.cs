@@ -30,6 +30,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_automation_write_selftest")]
     internal static partial int AutomationWriteSelfTest(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_automation_device_remap_selftest")]
+    internal static partial int AutomationDeviceRemapSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_automation_record")]
     internal static partial void SetAutomationRecord(IntPtr engine, int on);
 

@@ -207,6 +207,10 @@ public partial class MainWindow
                 case BrowserItemKind.Sample:
                     _ = ImportAudioInBackgroundAsync(item.Path, -1, 0.0);
                     break;
+                case BrowserItemKind.MidiFile:
+                    ImportMidiFileToArrangement(item, -1, 0.0);
+                    Timeline.Refresh();
+                    break;
                 case BrowserItemKind.Project:
                     OpenProject(item.Path);
                     return; // OpenProject rebuilds everything itself
@@ -288,27 +292,14 @@ public partial class MainWindow
         await new TagEditorWindow(lib, key).ShowDialog(this);
     }
 
-    private void OnBrowserPreview(BrowserItem item)
-    {
-        if (_vm is null || string.IsNullOrEmpty(item.Path)) return;
-        try
-        {
-            Engine.PreviewFile(item.Path);
-            _vm.StatusText = $"Previewing {item.Name}";
-        }
-        catch (Exception ex)
-        {
-            _vm.StatusText = $"Preview failed: {ex.Message}";
-        }
-    }
-
     private async void OnSavePreset(int deviceIndex)
     {
         if (_vm is null || _deviceChain is null) return;
         int trackId = _deviceChain.TrackId;
         if (trackId <= 0) { _vm.StatusText = "Select a track first."; return; }
 
-        string label = deviceIndex < 0 ? "Instrument" : Engine.DeviceName(trackId, deviceIndex);
+        string label = Engine.DeviceName(trackId, deviceIndex);
+        if (string.IsNullOrEmpty(label)) label = "Instrument";
         var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;
 

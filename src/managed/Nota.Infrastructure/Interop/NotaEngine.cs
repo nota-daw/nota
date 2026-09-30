@@ -137,6 +137,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public bool Redo() { ThrowIfDisposed(); return NativeMethods.Redo(_handle) == NativeMethods.NotaResult.Ok; }
     public bool CanUndo { get { ThrowIfDisposed(); return NativeMethods.CanUndo(_handle) != 0; } }
     public bool CanRedo { get { ThrowIfDisposed(); return NativeMethods.CanRedo(_handle) != 0; } }
+    public void BeginUndoGroup() { ThrowIfDisposed(); NativeMethods.UndoGroupBegin(_handle); }
+    public void EndUndoGroup() { ThrowIfDisposed(); NativeMethods.UndoGroupEnd(_handle); }
 
     // --- Project load (M7-6) -----------------------------------------------
 
@@ -167,6 +169,25 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Decodes and auditions <paramref name="path"/> through the live output (one at a time).</summary>
     public void PreviewFile(string path)
     { ThrowIfDisposed(); Check(NativeMethods.PreviewFile(_handle, path)); }
+
+    /// <summary>Auditions <paramref name="path"/> from <paramref name="startSeconds"/> in (reuses the loaded file).</summary>
+    public void PreviewFileAt(string path, double startSeconds)
+    { ThrowIfDisposed(); Check(NativeMethods.PreviewFileAt(_handle, path, startSeconds)); }
+
+    /// <summary>Loops the audition until stopped.</summary>
+    public void SetPreviewLoop(bool on)
+    { ThrowIfDisposed(); Check(NativeMethods.SetPreviewLoop(_handle, on ? 1 : 0)); }
+
+    /// <summary>Audition level, linear gain.</summary>
+    public void SetPreviewGain(float gain)
+    { ThrowIfDisposed(); Check(NativeMethods.SetPreviewGain(_handle, gain)); }
+
+    /// <summary>Audition playhead in seconds into the file.</summary>
+    public double PreviewPosition
+    { get { ThrowIfDisposed(); return NativeMethods.PreviewPosition(_handle); } }
+
+    public int ReadPreviewScope(float[] output)
+    { ThrowIfDisposed(); return NativeMethods.PreviewScope(_handle, output, Math.Min(output.Length, 4096)); }
 
     /// <summary>Stops the current audition.</summary>
     public void StopPreview()

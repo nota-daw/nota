@@ -157,19 +157,15 @@ public sealed partial class DeviceChainView
         SelectDevice(kind, di);
         var flyout = new MenuFlyout();
         header?.Invoke(flyout);
-        void Add(string header, bool enabled, Action act)
-        {
-            var mi = new MenuItem { Header = header, IsEnabled = enabled };
-            mi.Click += (_, _) => act();
-            flyout.Items.Add(mi);
-        }
+        void Add(string header, GlyphKind icon, bool enabled, Action act, KeyGesture? gesture = null)
+            => flyout.Items.Add(MenuKit.Item(header, icon, act, gesture, enabled));
         bool selectable = SelectableKind(kind);
-        Add("Copy", selectable, CopySelectedDevice);
-        Add("Cut", selectable, CutSelectedDevice);
-        Add("Paste", _clip != null, PasteDevice);
-        Add("Delete", selectable, DeleteSelectedDevice);
+        Add("Copy", GlyphKind.Copy, selectable, CopySelectedDevice, MenuKit.CopyKey);
+        Add("Cut", GlyphKind.Cut, selectable, CutSelectedDevice, MenuKit.CutKey);
+        Add("Paste", GlyphKind.Paste, _clip != null, PasteDevice, MenuKit.PasteKey);
+        Add("Delete", GlyphKind.Trash, selectable, DeleteSelectedDevice, MenuKit.DeleteKey);
         flyout.Items.Add(new Separator());
-        Add("Save preset", true, () => PresetSaveRequested?.Invoke(di));
+        Add("Save preset", GlyphKind.Save, true, () => PresetSaveRequested?.Invoke(di));
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 

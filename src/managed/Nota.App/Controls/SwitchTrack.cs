@@ -22,7 +22,11 @@ internal sealed class SwitchTrack : Control
     private static readonly IBrush KnobOff = NotaPalette.TextTertiary;
 
     public const double W = 18, H = 10, KnobD = 7, Inset = 1.5;
+    // The settings-window size: a 28×16 track with a 12px knob inset 2 — a standalone row
+    // toggle at the shell scale, not a parameter inside a device card.
+    public const double LargeW = 28, LargeH = 16, LargeKnobD = 12, LargeInset = 2;
 
+    private readonly double _w, _h, _knob, _inset;
     private bool _on, _dim;
 
     public bool IsOn { get => _on; set { if (_on == value) return; _on = value; InvalidateVisual(); } }
@@ -30,17 +34,18 @@ internal sealed class SwitchTrack : Control
     /// <summary>On, but inert — the section it gates is switched off. Loses brass, keeps position.</summary>
     public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }
 
-    public SwitchTrack()
+    public SwitchTrack(bool large = false)
     {
-        Width = W; Height = H;
+        (_w, _h, _knob, _inset) = large ? (LargeW, LargeH, LargeKnobD, LargeInset) : (W, H, KnobD, Inset);
+        Width = _w; Height = _h;
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
     }
 
     public override void Render(DrawingContext ctx)
     {
         var track = _on ? (_dim || !IsEffectivelyEnabled ? TrackDim : TrackOn) : TrackOff;
-        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, W, H), H / 2));
-        double x = _on ? W - Inset - KnobD : Inset;
-        ctx.DrawEllipse(_on ? KnobOn : KnobOff, null, new Point(x + KnobD / 2, H / 2), KnobD / 2, KnobD / 2);
+        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, _w, _h), _h / 2));
+        double x = _on ? _w - _inset - _knob : _inset;
+        ctx.DrawEllipse(_on ? KnobOn : KnobOff, null, new Point(x + _knob / 2, _h / 2), _knob / 2, _knob / 2);
     }
 }

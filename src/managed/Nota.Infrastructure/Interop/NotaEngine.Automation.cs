@@ -26,6 +26,9 @@ public sealed partial class NotaEngine
     public bool AutomationWriteSelfTest()
     { ThrowIfDisposed(); return NativeMethods.AutomationWriteSelfTest(_handle) != 0; }
 
+    public bool AutomationDeviceRemapSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.AutomationDeviceRemapSelfTest(_handle) != 0; }
+
     // --- automation write / record (M9-C). deviceIndex < 0 = instrument. ---
     /// <summary>While on, a control gesture records into that parameter's lane. The
     /// transport record button drives this — <see cref="SetRecording"/> sets it too.</summary>

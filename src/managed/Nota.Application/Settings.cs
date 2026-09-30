@@ -56,6 +56,20 @@ public sealed class Settings
     public bool BrowserFavoritesFirst { get; set; } = true;
     /// <summary>The browser is folded down to its icon rail.</summary>
     public bool BrowserCollapsed { get; set; }
+    /// <summary>Files tab player: selecting a sample auditions it.</summary>
+    public bool BrowserPreviewAuto { get; set; } = true;
+    /// <summary>Files tab player: loop the audition until stopped.</summary>
+    public bool BrowserPreviewLoop { get; set; }
+    /// <summary>Files tab player: fader position 0..1 (gain = v², so 0.7 ≈ −6 dB, 1 = 0 dB).</summary>
+    public double BrowserPreviewVolume { get; set; } = 0.7;
+    /// <summary>Browser player: the demo track effect presets are heard through — a track id
+    /// ("drums", "house" …), "auto" (chosen per effect) or "sample" (the Files tab's sample).</summary>
+    public string BrowserPreviewFxTrack { get; set; } = "auto";
+    /// <summary>Browser player on the Instr / FX / MIDI / Presets tabs: selecting a preset or
+    /// device plays it. Off by default (Files has its own, BrowserPreviewAuto).</summary>
+    public bool BrowserPresetPreviewAuto { get; set; }
+    /// <summary>Browser player: the well shows the live spectrum instead of the waveform.</summary>
+    public bool BrowserPreviewSpectrum { get; set; }
 
     // --- arrangement view options (View menu) --------------------------------
     /// <summary>How many clips print their name on the lane: 0 every clip, 1 the head of each

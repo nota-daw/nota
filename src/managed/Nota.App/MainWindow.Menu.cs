@@ -77,6 +77,8 @@ public partial class MainWindow
             _vm.StatusText = "Duplicated notes";
             return;
         }
+        // Track headers focused: duplicate the selected tracks.
+        if (_trackHeadersFocused && Timeline.DuplicateSelectedTracks()) { _vm.StatusText = "Duplicated track(s)"; return; }
         // In automation mode a selected range duplicates the envelope slice (chains on repeat).
         if (Timeline.AutomationMode && Timeline.DuplicateAutoSelection()) { _vm.StatusText = "Duplicated automation"; return; }
         // A time-range selection duplicates the covered slice (chains on repeat) before clips.
@@ -121,24 +123,28 @@ public partial class MainWindow
     private void OnMenuCopy(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = "Copied track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = "Copied notes"; return; }
         if (Timeline.CopySelectedClip()) _vm.StatusText = "Copied clip";
     }
     private void OnMenuCut(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = "Cut track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = "Cut notes"; return; }
         if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip"; }
     }
     private void OnMenuPaste(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = "Pasted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = "Pasted notes"; return; }
         if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip"; }
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = "Deleted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = "Deleted notes"; return; }
         if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = "Deleted clip(s)"; }
     }
@@ -189,9 +195,17 @@ public partial class MainWindow
     private void OnMenuLoop(object? sender, EventArgs e)
     {
         if (_vm is null) return;
-        // A time-range selection wins: loop exactly that range (and enable looping).
-        if (Timeline.LoopTimeSelection()) { _vm.StatusText = "Loop set to selection"; return; }
-        _vm.Transport.LoopOn = !_vm.Transport.LoopOn;
+        // A selection (time range, else selected clips) sets the loop to exactly that
+        // range and enables it; pressing again once it already loops it turns looping off.
+        var t = _vm.Transport;
+        if (Timeline.SelectionLoopRange() is { } r
+            && !(t.LoopOn && Engine.LoopStart == r.Start && Engine.LoopEnd == r.End))
+        {
+            Timeline.SetLoopRegion(r.Start, r.End);
+            _vm.StatusText = "Loop set to selection";
+            return;
+        }
+        t.LoopOn = !t.LoopOn;
     }
     private void OnMenuMetronome(object? sender, EventArgs e) { if (_vm is not null) _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn; }
 }

@@ -219,17 +219,24 @@ public sealed class SampleTools(IAudioEngine engine, IEngineDispatch dispatch, I
     private static double Db(float lin) => lin <= 1e-5f ? -100 : 20 * Math.Log10(lin);
 
     [McpServerTool(Name = "add_grain_track"), Description(
-        "Add a Grain (granular) instrument track and load an audio file to granulate. Returns the track id.")]
-    public Task<int> AddGrainTrack(string path, int rootNote = 60) => Mutate(() =>
+        "Add a Grain (granular) instrument track and load an audio file to granulate. Returns the track id. detectRoot = take the "
+        + "root from a note in the file name, falling back to rootNote.")]
+    public Task<int> AddGrainTrack(string path, int rootNote = 60, bool detectRoot = false) => Mutate(() =>
     {
         int id = E.AddGrainSynthTrack();
-        if (id > 0) E.SetTrackGrainSample(id, path, rootNote);
+        if (id > 0) E.SetTrackGrainSample(id, path, RootFor(path, rootNote, detectRoot));
         return id;
     });
 
-    [McpServerTool(Name = "load_grain_sample"), Description("Load an audio file into an existing Grain granular track (kind 10).")]
-    public Task<bool> LoadGrainSample(int trackId, string path, int rootNote = 60)
-        => Mutate(() => E.SetTrackGrainSample(trackId, path, rootNote));
+    [McpServerTool(Name = "load_grain_sample"), Description(
+        "Load an audio file into an existing Grain granular track (kind 10). detectRoot = take the root from a note in the file "
+        + "name, falling back to rootNote.")]
+    public Task<bool> LoadGrainSample(int trackId, string path, int rootNote = 60, bool detectRoot = false)
+        => Mutate(() => E.SetTrackGrainSample(trackId, path, RootFor(path, rootNote, detectRoot)));
+
+    [McpServerTool(Name = "set_grain_root"), Description(
+        "Set a Grain track's root note (the MIDI note that plays the sample at its original pitch, C4 = 60).")]
+    public Task<bool> SetGrainRoot(int trackId, int rootNote) => Mutate(() => E.SetTrackGrainRoot(trackId, rootNote));
 
     [McpServerTool(Name = "get_grain_info"), Description("Read a Grain track's loaded sample: root note, channels, frame count, sample rate.")]
     public Task<SamplerInfo> GetGrainInfo(int trackId) => Read(() =>

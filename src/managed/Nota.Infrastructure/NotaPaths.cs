@@ -31,7 +31,10 @@ public static class NotaPaths
     private static string ResolveDataDir()
     {
         string root;
-        if (OperatingSystem.IsWindows())
+        // NOTA_DATA_DIR (tests) relocates the data root; the native plugin host honours it too.
+        if (Environment.GetEnvironmentVariable("NOTA_DATA_DIR") is { Length: > 0 } over)
+            root = over;
+        else if (OperatingSystem.IsWindows())
         {
             // %APPDATA% == Roaming AppData; on Windows SpecialFolder.ApplicationData maps here.
             root = Path.Combine(

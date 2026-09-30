@@ -70,7 +70,8 @@ public:
 
     // Sample plumbing — mirrors Sampler so the engine's sample-load / bundling reuse it.
     std::shared_ptr<SampleBuffer> sample() const { return sample_; }
-    int32_t rootNote() const { return rootNote_; }
+    int32_t rootNote() const { return rootNote_.load(std::memory_order_relaxed); }
+    void    setRoot(int32_t r) { rootNote_.store(std::clamp(r, 0, 127), std::memory_order_relaxed); }
     bool loopEnabled() const { return false; }
 
     // Live read positions of the active voices (0..1 through the sample), for the UI's
@@ -94,7 +95,7 @@ public:
     }
 
     void setSample(std::shared_ptr<SampleBuffer> s, int32_t rootNote, bool /*loop*/) {
-        if (s && !s->empty()) { sample_ = std::move(s); rootNote_ = rootNote; }
+        if (s && !s->empty()) { sample_ = std::move(s); setRoot(rootNote); }
     }
 
     // ---- parameters ----
@@ -137,7 +138,7 @@ public:
     std::shared_ptr<Instrument> clone() const override {
         auto s = std::make_shared<GrainSynth>();
         for (int i = 0; i < kNumParams; ++i) s->pn_[i].store(pn_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-        s->sample_ = sample_; s->rootNote_ = rootNote_; s->setSampleRate(sampleRate_);
+        s->sample_ = sample_; s->setRoot(rootNote()); s->setSampleRate(sampleRate_);
         return s;
     }
 
@@ -179,6 +180,7 @@ public:
         const double spread    = get(Spread);
         const double posRandFr = (double)get(PosRand) * 0.25 * slen;
         const double pitchRand = (double)get(PitchRand) * 12.0;
+        const int    root      = rootNote();
         const double panRand   = get(PanRand);
         const int    ftype     = std::clamp((int)std::lround(get(FilterType) * 2.0f), 0, 2);
         const double fbase     = expMap(get(FilterFreq), 60.0, 18000.0);
@@ -202,7 +204,7 @@ public:
             if (!v.active) continue;
             v.base = basePos01(v.pitch, mode) * slen;
             if (mode != 0) v.scanOff = 0.0;
-            const double semis = (mode == 2 ? 0.0 : (v.pitch - rootNote_)) + coarse + fine;
+            const double semis = (mode == 2 ? 0.0 : (v.pitch - root)) + coarse + fine;
             v.dryRate = std::pow(2.0, semis / 12.0) * srcRatio;
         }
 
@@ -240,7 +242,7 @@ public:
                     if (g) {
                         double pos = v.readPos + (sprayFr + posRandFr) * (rnd() * 2.0 - 1.0);
                         pos = std::clamp(pos, 0.0, (double)std::max<int64_t>(0, slen - 2));
-                        const double semis = (mode == 2 ? 0.0 : (v.pitch - rootNote_)) + coarse + fine + pitchRand * (rnd() * 2.0 - 1.0);
+                        const double semis = (mode == 2 ? 0.0 : (v.pitch - root)) + coarse + fine + pitchRand * (rnd() * 2.0 - 1.0);
                         g->pos = pos; g->age = 0.0; g->len = grainLen;
                         g->rate = std::pow(2.0, semis / 12.0) * srcRatio;
                         double pan = 0.5 + (spread * 0.5 + panRand * 0.5) * (rnd() * 2.0 - 1.0);
@@ -385,7 +387,7 @@ private:
     }
 
     double sampleRate_ = 44100.0;
-    int32_t rootNote_ = 60;
+    std::atomic<int32_t> rootNote_{60};
     std::shared_ptr<SampleBuffer> sample_;
     uint32_t rng_ = 0x1234567u;
     std::atomic<float> pn_[kNumParams];

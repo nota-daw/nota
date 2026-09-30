@@ -9,6 +9,9 @@
 //   Filter  the response curve for the chosen type, a drag pad for cutoff (X) / reso (Y),
 //           with the envelope's reach on the cutoff drawn as a teal ghost
 //
+// Filter also draws the mini (S) card's one graph (Mini = true): no Hz axis, a soft brass
+// wash under the curve, and the captions cut to "LP · Saw" and the cutoff in brass.
+//
 // All three read the engine's normalized params straight and denormalise them with the
 // exact maps Synth.h uses, so the scales are real. Drawn through NotaGraph — well ground,
 // hairline frame, corner axis labels, no fills under curves.
@@ -43,6 +46,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     private readonly Dictionary<string, int> _idx;
     private int _drag = -1;   // Env: 0 attack · 1 decay/sustain · 2 release. Filter: 0 pad.
 
+    /// <summary>The mini (S) card's filter window: short captions, no axis, a wash under the curve.</summary>
+    public bool Mini { get; init; }
+
     public SynthViz(K k, IAudioEngine engine, int track, Dictionary<string, int> idx)
     {
         _k = k; _e = engine; _t = track; _idx = idx;
@@ -73,7 +79,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     private int FilType() => Math.Clamp((int)Math.Round(G("filtype") * 3), 0, 3);
 
     private (double x0, double x1, double top, double bot) Geo()
-        => (Pad, Math.Max(Pad + 1, Bounds.Width - Pad), Pad + 11, Math.Max(Pad + 12, Bounds.Height - Pad - 9));
+        => (Pad, Math.Max(Pad + 1, Bounds.Width - Pad), Pad + 11, Math.Max(Pad + 12, Bounds.Height - Pad - (Mini ? 0 : 9)));
 
     private void Text(DrawingContext ctx, string t, double x, double y, IBrush ink, double size = 8)
         => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, ink), new Point(x, y));
@@ -191,6 +197,8 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     }
 
     private static readonly string[] WaveWords = { "saw", "square", "triangle", "sine" };
+    private static readonly string[] WaveNames = { "Saw", "Square", "Triangle", "Sine" };
+    private static readonly IBrush Wash = NotaPalette.Wash(NotaPalette.Accent, 0x18);
 
     private void RenderOsc(DrawingContext ctx, double x0, double x1, double top, double bot)
     {
@@ -285,8 +293,8 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         if (type == 0)
         {
             ctx.DrawLine(new Pen(NotaPalette.BorderStrong, NotaGraph.PrimaryWidth), new Point(x0, flatY), new Point(x1, flatY));
-            Text(ctx, "filter off · signal passes", x0 + 1, Pad - 3, TextTertiary);
-            HzAxis(ctx, x0, x1, bot);
+            Text(ctx, Mini ? $"Off · {WaveNames[Wave()]}" : "filter off · signal passes", x0 + 1, Pad - 3, TextTertiary);
+            if (!Mini) HzAxis(ctx, x0, x1, bot);
             return;
         }
 
@@ -297,6 +305,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
             double modCut = Math.Clamp(cut + env * 4.0 / Math.Log2(18000.0 / 20.0), 0, 1);
             DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(Teal, NotaGraph.SecondaryWidth));
         }
+        if (Mini) DrawCurve(ctx, x0, x1, top, bot, cut, res, type, null, Wash);
         DrawCurve(ctx, x0, x1, top, bot, cut, res, type, new Pen(Brass, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
 
         double cx = x0 + cut * span;
@@ -305,6 +314,13 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
 
         double hz = ExpMap(cut, 20, 18000);
         string[] names = { "Off", "LP", "HP", "BP" };
+        if (Mini)
+        {
+            Text(ctx, $"{names[type]} · {WaveNames[Wave()]}", x0 + 1, Pad - 3, TextTertiary);
+            string hzs = NotaNum.Hz(hz);
+            Text(ctx, hzs, x1 - 1 - MeasureW(hzs), Pad - 3, NotaPalette.AccentBright);
+            return;
+        }
         Text(ctx, $"{names[type]} 12 dB/oct · {NotaNum.Hz(hz)} · Q {res.ToString("0.00", NotaNum.Culture)}", x0 + 1, Pad - 3, TextTertiary);
         if (Math.Abs(env) > 0.01)
         {
@@ -318,9 +334,10 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     private static double CurveTop(double top, double bot, double res)
     { double flat = top + (bot - top) * 0.34; return Math.Max(top + 2, flat - res * (flat - top) * 0.92); }
 
-    // The magnitude curve as a polyline, by filter type (1 LP · 2 HP · 3 BP).
+    // The magnitude curve as a polyline, by filter type (1 LP · 2 HP · 3 BP). With a
+    // `fill`, the area under it down to the floor instead (the mini card's wash).
     private static void DrawCurve(DrawingContext ctx, double x0, double x1, double top, double bot,
-        double cut, double res, int type, IPen pen)
+        double cut, double res, int type, IPen? pen, IBrush? fill = null)
     {
         double span = x1 - x0, cx = x0 + cut * span;
         double flatY = top + (bot - top) * 0.34;
@@ -334,7 +351,20 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
             case 3:  p.Add(new(x0, bot)); p.Add(new(kx, mid)); p.Add(new(cx, peakY)); p.Add(new(rx, mid)); p.Add(new(x1, bot)); break;
             default: p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new((cx + x1) / 2, mid)); p.Add(new(x1, bot)); break;
         }
-        for (int i = 1; i < p.Count; i++) ctx.DrawLine(pen, p[i - 1], p[i]);
+        if (fill is not null)
+        {
+            var geo = new StreamGeometry();
+            using (var g = geo.Open())
+            {
+                g.BeginFigure(new Point(x0, bot), true);
+                foreach (var pt in p) g.LineTo(pt);
+                g.LineTo(new Point(x1, bot));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(fill, null, geo);
+            return;
+        }
+        for (int i = 1; i < p.Count; i++) ctx.DrawLine(pen!, p[i - 1], p[i]);
     }
 
     private void HzAxis(DrawingContext ctx, double x0, double x1, double bot)

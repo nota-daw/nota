@@ -28,4 +28,13 @@ internal interface IInstrumentCard
     /// <summary>Voice readout for the shell header (e.g. "3/5"), or null for the default
     /// "active/16". Called on the live-refresh tick. Only used when BodyOnly.</summary>
     string? VoiceLabel(Nota.Application.IAudioEngine engine, int trackId, int active) => null;
+
+    /// <summary>Card width for this track's instrument — a card with S / L sizes (the
+    /// instrument's "view" param, see InstrumentView) returns 260 for S. A width under 300
+    /// makes the shell compact (no type badge, a narrower preset picker). Only used when BodyOnly.</summary>
+    double WidthFor(Nota.Application.IAudioEngine engine, int trackId) => CardWidth;
+
+    /// <summary>Extra controls for the shell header, left of the bypass (e.g. the S / L
+    /// toggle). Only used when BodyOnly.</summary>
+    Control? HeaderAccessory(DeviceCardContext ctx) => null;
 }

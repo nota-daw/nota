@@ -80,6 +80,9 @@ public static class ProjectMigrations
         // v18 -> v19: audio clips gain Reversed (non-destructive reverse). Absent in v18
         // documents; the default (false = plays forwards) matches old behaviour — no-op.
         new Migration(18, _ => { }),
+        // v19 -> v20: audio clips gain an ADSR amplitude shape (AudioClipDto.Adsr). Absent in
+        // v19 documents; null = identity (full length, full level) matches old behaviour — no-op.
+        new Migration(19, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

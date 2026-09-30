@@ -152,10 +152,7 @@ public partial class MainWindow
     /// ("Nota — Untitled" until the bundle is named).</summary>
     private void UpdateWindowTitle()
     {
-        string name = _projectPath is { Length: > 0 } p
-            ? System.IO.Path.GetFileNameWithoutExtension(p.TrimEnd('/', '\\'))
-            : "Untitled";
-        string title = $"Nota — {name}";
+        string title = $"Nota — {ProjectDisplayName()}";
         Title = title;
         DocTitleText.Text = title;   // frameless title-bar caption mirrors the window title
     }
@@ -180,6 +177,7 @@ public partial class MainWindow
         Timeline.ClearSections();   // …and a clean song structure
         RefreshAfterLoad();
         UpdateWindowTitle();
+        MarkProjectClean();
         _vm.StatusText = "New project.";
     }
 
@@ -236,6 +234,7 @@ public partial class MainWindow
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             RefreshAfterLoad();
             UpdateWindowTitle();
+            MarkProjectClean();
             var warnings = result.Warnings;
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Opened project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
@@ -243,6 +242,7 @@ public partial class MainWindow
                 ? $"Opened {System.IO.Path.GetFileName(dir)}"
                 : $"Opened {System.IO.Path.GetFileName(dir)} — {warnings.Count} item(s) downgraded: {warnings[0]}";
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
+            _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
         }
         catch (Exception ex)
         {
@@ -275,9 +275,11 @@ public partial class MainWindow
         });
     }
 
-    private async Task DoSaveAsync(bool saveAs)
+    /// <summary>Saves the project (prompting for a location when unnamed or Save As).
+    /// Returns true only if the bundle was actually written.</summary>
+    private async Task<bool> DoSaveAsync(bool saveAs)
     {
-        if (_vm is null) return;
+        if (_vm is null) return false;
 
         string? dir = _projectPath;
         if (saveAs || dir is null)
@@ -294,7 +296,7 @@ public partial class MainWindow
                 },
             });
             var chosen = file?.TryGetLocalPath();
-            if (chosen is null) return;
+            if (chosen is null) return false;
             if (!chosen.EndsWith(".nota", StringComparison.OrdinalIgnoreCase)) chosen += ".nota";
             // The save panel may drop an empty placeholder file at the path; the
             // bundle is a folder, so clear it before writing.
@@ -313,17 +315,63 @@ public partial class MainWindow
             _projectPath = dir;
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             UpdateWindowTitle();
+            MarkProjectClean();
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Saved project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
             _vm.StatusText = warnings.Count == 0
                 ? $"Saved {System.IO.Path.GetFileName(dir)}"
                 : $"Saved {System.IO.Path.GetFileName(dir)} — {warnings.Count} unsupported item(s) skipped: {warnings[0]}";
+            return true;
         }
         catch (Exception ex)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Save project failed", ex);
             _vm.StatusText = $"Save failed: {ex.Message}";
+            return false;
         }
+    }
+
+    // --- unsaved-changes tracking ------------------------------------------
+
+    // Manifest fingerprint as of the last New / Open / Save (null = never clean, e.g. a
+    // recovered session). The project is dirty when the current fingerprint differs.
+    private string? _cleanFingerprint;
+
+    private string? CurrentFingerprint()
+    {
+        if (_vm is null) return null;
+        try { return _projects.Fingerprint(Engine, TransportSnapshot()); }
+        catch { return null; }
+    }
+
+    // When the project first differed from its clean state, as seen by the 30 s autosave
+    // tick (NoteDirtySince) — so the quit prompt can say how long changes have waited.
+    private DateTime? _dirtySince;
+
+    /// <summary>Record the current state as saved (after New / Open / Save).</summary>
+    private void MarkProjectClean()
+    {
+        _cleanFingerprint = CurrentFingerprint();
+        _dirtySince = null;
+    }
+
+    private void NoteDirtySince()
+    {
+        if (_dirtySince is null && HasUnsavedChanges()) _dirtySince = DateTime.Now;
+    }
+
+    /// <summary>The open project's name ("Untitled" until the bundle is named).</summary>
+    private string ProjectDisplayName()
+        => _projectPath is { Length: > 0 } p
+            ? System.IO.Path.GetFileNameWithoutExtension(p.TrimEnd('/', '\\'))
+            : "Untitled";
+
+    /// <summary>True if the project changed since it was last created, opened or saved.</summary>
+    private bool HasUnsavedChanges()
+    {
+        if (_vm is null) return false;
+        var now = CurrentFingerprint();
+        return now is null || now != _cleanFingerprint;
     }
 
     // A load/new swaps the whole graph and invalidates old track ids, so clear
@@ -332,6 +380,7 @@ public partial class MainWindow
     {
         _importEpoch++;                  // imports still running belong to the old graph
         Timeline.ClearPendingImports();
+        Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices
         _editorRoll = null;
         _clipEditor = null;
         _editorTrackId = -1;

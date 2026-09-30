@@ -64,6 +64,13 @@ NotaResult nota_engine_set_track_group(NotaEngine* e, int32_t track_id, int32_t 
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setTrackGroup(track_id, group_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+int32_t nota_engine_duplicate_tracks(NotaEngine* e, const int32_t* track_ids, int32_t n, int32_t* out_ids, int32_t cap) {
+    return e ? ENG(e)->duplicateTracks(track_ids, n, out_ids, cap) : -1;
+}
+NotaResult nota_engine_remove_tracks(NotaEngine* e, const int32_t* track_ids, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->removeTracks(track_ids, n) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 
 // ---- Send / return buses (M6-1) -------------------------------------------
 int32_t nota_engine_add_return_track(NotaEngine* e) {
@@ -239,6 +246,9 @@ int32_t nota_track_set_grain_sample(NotaEngine* e, int32_t track_id, const char*
     if (!e || !path) return 0;
     return ENG(e)->setTrackGrainSample(track_id, std::string(path), root) ? 1 : 0;
 }
+int32_t nota_track_set_grain_root(NotaEngine* e, int32_t track_id, int32_t root) {
+    return (e && ENG(e)->setTrackGrainRoot(track_id, root)) ? 1 : 0;
+}
 int32_t nota_track_grain_info(const NotaEngine* e, int32_t track_id, NotaSamplerInfo* out) {
     return (e && CENG(e)->grainInfo(track_id, out)) ? 1 : 0;
 }
@@ -288,6 +298,13 @@ NotaResult nota_clip_move_to_track(NotaEngine* e, int32_t src_track_id, int32_t 
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->moveClipToTrack(src_track_id, clip_index, source_track_id, new_start_beat) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_clips_block_move(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices,
+                                 const int32_t* dest_track_ids, const double* new_starts, int32_t n) {
+    if (!e || !track_ids || !clip_indices || !dest_track_ids || !new_starts || n <= 0) return NOTA_ERR_INVALID_ARG;
+    std::vector<Engine::ClipMoveReq> moves; moves.reserve(n);
+    for (int32_t i = 0; i < n; ++i) moves.push_back({ track_ids[i], clip_indices[i], dest_track_ids[i], new_starts[i] });
+    return ENG(e)->moveClipBlock(moves) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clip_trim(NotaEngine* e, int32_t track_id, int32_t clip_index, double new_start_beat, double new_length_beats) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->trimClip(track_id, clip_index, new_start_beat, new_length_beats) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
@@ -307,6 +324,13 @@ NotaResult nota_clip_set_warp_trim(NotaEngine* e, int32_t track_id, int32_t clip
 NotaResult nota_clip_set_gain(NotaEngine* e, int32_t track_id, int32_t clip_index, float gain) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipGain(track_id, clip_index, gain) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_clip_get_adsr(const NotaEngine* e, int32_t track_id, int32_t clip_index, NotaClipAdsr* out) {
+    return (e && CENG(e)->clipAdsr(track_id, clip_index, out)) ? 1 : 0;
+}
+NotaResult nota_clip_set_adsr(NotaEngine* e, int32_t track_id, int32_t clip_index, const NotaClipAdsr* adsr) {
+    if (!e || !adsr) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setClipAdsr(track_id, clip_index, *adsr) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 NotaResult nota_clip_set_active(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t active) {
     if (!e) return NOTA_ERR_INVALID_ARG;
@@ -489,6 +513,13 @@ NotaResult nota_track_copy(NotaEngine* e, int32_t track_id) {
 }
 int32_t nota_track_paste(NotaEngine* e) {
     return e ? ENG(e)->pasteTrack() : -1;
+}
+NotaResult nota_track_copy_many(NotaEngine* e, const int32_t* track_ids, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyTracks(track_ids, n) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_paste_after(NotaEngine* e, int32_t after_track_id, int32_t* out_ids, int32_t cap) {
+    return e ? ENG(e)->pasteTracks(after_track_id, out_ids, cap) : -1;
 }
 int32_t nota_track_has_clipboard(NotaEngine* e) {
     return (e && CENG(e)->hasTrackClipboard()) ? 1 : 0;

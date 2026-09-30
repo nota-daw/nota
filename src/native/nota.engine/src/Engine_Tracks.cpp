@@ -26,6 +26,8 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <set>
+#include <type_traits>
 
 namespace nota {
 
@@ -81,6 +83,37 @@ bool Engine::setClipGain(int32_t trackId, int32_t clipIndex, float gain) {
     if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
     auto nt = cloneTrack(*old);
     nt->clips[clipIndex].gain = gain < 0.0f ? 0.0f : gain;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+bool Engine::clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) const {
+    if (!out) return false;
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio) return false;
+    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
+    const ClipAdsr& a = t->clips[clipIndex].adsr;
+    out->attack_beats = a.attack;
+    out->decay_beats = a.decay;
+    out->release_beats = a.release;
+    out->sustain = a.sustain;
+    out->reserved = 0;
+    return true;
+}
+
+// ADSR is plain clip data (no cache to rebuild), so this is as cheap as a gain change.
+bool Engine::setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr& in) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Audio) return false;
+    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    auto finite = [](double v) { return std::isfinite(v) ? std::max(0.0, v) : 0.0; };
+    ClipAdsr a;
+    a.attack = finite(in.attack_beats);
+    a.decay = finite(in.decay_beats);
+    a.release = finite(in.release_beats);
+    a.sustain = std::isfinite(in.sustain) ? std::clamp(in.sustain, 0.0f, 1.0f) : 1.0f;
+    auto nt = cloneTrack(*old);
+    nt->clips[clipIndex].adsr = a;
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -982,6 +1015,7 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) {   // keep [sta
 // region's end, so keeping the first beats keeps the region's tail and vice versa.
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
+    left.adsr.release = 0.0;   // the cut is a new, hard end: the tail's release stays with the right piece
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
@@ -1000,6 +1034,7 @@ AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, doub
 }
 AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, double devSR) {
     AudioClip right = src; right.startBeat = src.startBeat + startLocal;
+    right.adsr.attack = 0.0; right.adsr.decay = 0.0;   // the head's attack/decay stay with the left piece
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             right.warpPlayStart = src.warpPlayStart;
@@ -1191,6 +1226,124 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
         if (t->id() == srcTrackId)       g->tracks.push_back(nsrc);
         else if (t->id() == sourceTrackId) g->tracks.push_back(ndst);
         else                             g->tracks.push_back(t);
+    }
+    publishRaw(std::move(g));
+    return true;
+}
+
+bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
+    lastPlaced_.clear();
+    lastMoveKeptDeviceAuto_ = false;
+    if (moves.empty() || !authoring_) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+
+    // Validate everything up front (all-or-nothing) and clone each touched track once.
+    std::map<int32_t, std::shared_ptr<Track>> clones;
+    std::set<std::pair<int32_t,int32_t>> seen;
+    for (const auto& m : moves) {
+        auto src = findTrackAuthoring(m.srcTrackId);
+        auto dst = findTrackAuthoring(m.dstTrackId);
+        if (!src || !dst || src->type() != dst->type() || src->type() == TrackType::Return) return false;
+        if (m.srcTrackId == kMasterTrackId || m.dstTrackId == kMasterTrackId) return false;
+        const size_t n = src->type() == TrackType::Instrument ? src->midiClips.size() : src->clips.size();
+        if (m.clipIndex < 0 || m.clipIndex >= static_cast<int32_t>(n)) return false;
+        if (!seen.emplace(m.srcTrackId, m.clipIndex).second) return false;   // same clip twice
+        if (!clones.count(m.srcTrackId)) clones[m.srcTrackId] = cloneTrack(*src);
+        if (!clones.count(m.dstTrackId)) clones[m.dstTrackId] = cloneTrack(*dst);
+    }
+
+    // Snapshot each moving clip (+ the automation in its span) from the pre-move tracks.
+    struct Item { const ClipMoveReq* req; bool midi; MidiClip mc; AudioClip ac; double oldStart, len, newStart;
+                  bool sameTrack, layoutMatch; std::vector<AutomationLane> snips; };
+    std::vector<Item> items; items.reserve(moves.size());
+    for (const auto& m : moves) {
+        const Track& src = *clones[m.srcTrackId];
+        Item it{ &m, src.type() == TrackType::Instrument, {}, {}, 0, 0, std::max(0.0, m.newStartBeat),
+                 m.srcTrackId == m.dstTrackId, true, {} };
+        if (it.midi) { it.mc = src.midiClips[m.clipIndex]; it.oldStart = it.mc.startBeat; it.len = it.mc.lengthBeats; it.mc.startBeat = it.newStart; }
+        else         { it.ac = src.clips[m.clipIndex]; it.oldStart = it.ac.startBeat; it.len = audioDisplayLenBeats(it.ac, spb, devSR); it.ac.startBeat = it.newStart; }
+        it.layoutMatch = it.sameTrack || tracksDeviceLayoutMatch(src, *clones[m.dstTrackId]);
+        const bool follow = !automationLock_ && it.len > 1e-6 && (!it.sameTrack || std::abs(it.newStart - it.oldStart) > 1e-9);
+        if (follow) it.snips = captureClipAutomation(src, it.oldStart, it.oldStart + it.len);
+        items.push_back(std::move(it));
+    }
+
+    // Rebuild each touched track's clip list: clips staying on the track keep their slot (new
+    // start), clips leaving are dropped, and every stationary clip is carved by all incoming
+    // ranges. Cross-track arrivals are appended afterwards.
+    std::map<int32_t, std::vector<std::pair<double,double>>> incoming;   // dst track → landing ranges
+    for (const auto& it : items) incoming[it.req->dstTrackId].emplace_back(it.newStart, it.newStart + it.len);
+    std::map<std::pair<int32_t,int32_t>, size_t> itemOf;                  // (src track, index) → item
+    for (size_t i = 0; i < items.size(); ++i) itemOf[{ items[i].req->srcTrackId, items[i].req->clipIndex }] = i;
+    std::vector<int32_t> newIndex(items.size(), -1);
+
+    for (auto& [tid, nt] : clones) {
+        const auto& ranges = incoming[tid];
+        auto rebuild = [&](auto& clips, auto carve) {
+            std::remove_reference_t<decltype(clips)> out; out.reserve(clips.size() + 2 * ranges.size());
+            for (int32_t ci = 0; ci < static_cast<int32_t>(clips.size()); ++ci) {
+                auto f = itemOf.find({ tid, ci });
+                if (f != itemOf.end()) {
+                    auto& it = items[f->second];
+                    if (!it.sameTrack) continue;   // leaves this track
+                    newIndex[f->second] = static_cast<int32_t>(out.size());
+                    if constexpr (std::is_same_v<std::decay_t<decltype(clips[0])>, MidiClip>) out.push_back(it.mc);
+                    else out.push_back(it.ac);
+                    continue;
+                }
+                std::remove_reference_t<decltype(clips)> pieces{ clips[ci] };
+                for (const auto& [s, e] : ranges) carve(pieces, s, e);
+                for (auto& p : pieces) out.push_back(std::move(p));
+            }
+            clips.swap(out);
+        };
+        if (nt->type() == TrackType::Instrument)
+            rebuild(nt->midiClips, [](std::vector<MidiClip>& v, double s, double e){ midiOverwriteRange(v, s, e); });
+        else
+            rebuild(nt->clips, [&](std::vector<AudioClip>& v, double s, double e){ audioOverwriteRange(v, s, e, spb, devSR); });
+    }
+    for (size_t i = 0; i < items.size(); ++i) {
+        auto& it = items[i];
+        if (it.sameTrack) continue;
+        Track& dst = *clones[it.req->dstTrackId];
+        if (it.midi) { dst.midiClips.push_back(it.mc); newIndex[i] = static_cast<int32_t>(dst.midiClips.size()) - 1; }
+        else         { dst.clips.push_back(it.ac);     newIndex[i] = static_cast<int32_t>(dst.clips.size()) - 1; }
+    }
+
+    // Automation follows (req 8.3.1/8.3.4): lift every source span first, then re-land, so
+    // one clip's landing never gets erased by another's lift. Cross-track moves between
+    // differing device layouts carry only Volume/Pan; device/plugin points stay behind.
+    constexpr double eps = 1e-6;
+    for (auto& it : items) {
+        if (it.snips.empty()) continue;
+        Track& src = *clones[it.req->srcTrackId];
+        if (it.layoutMatch) { removeAutomationInRange(src, it.oldStart, it.oldStart + it.len); continue; }
+        for (const auto& s : it.snips)
+            if (s.target != AutomationTarget::Volume && s.target != AutomationTarget::Pan) { lastMoveKeptDeviceAuto_ = true; break; }
+        for (auto& lane : src.automation) {
+            if (lane.target != AutomationTarget::Volume && lane.target != AutomationTarget::Pan) continue;
+            auto& pts = lane.points;
+            pts.erase(std::remove_if(pts.begin(), pts.end(),
+                        [&](const AutomationPoint& p){ return p.beat >= it.oldStart - eps && p.beat <= it.oldStart + it.len + eps; }),
+                      pts.end());
+        }
+    }
+    for (auto& it : items)
+        if (!it.snips.empty())
+            applyClipAutomation(*clones[it.req->dstTrackId], it.req->dstTrackId, it.snips, it.newStart, it.len, it.layoutMatch);
+
+    for (size_t i = 0; i < items.size(); ++i) lastPlaced_.emplace_back(items[i].req->dstTrackId, newIndex[i]);
+
+    // Publish every touched track at once — a single undo checkpoint for the whole group.
+    pushUndo();
+    auto g = std::make_shared<Graph>();
+    g->sceneCount   = authoring_->sceneCount;
+    g->masterVolume = authoring_->masterVolume;
+    g->masterTrack  = authoring_->masterTrack;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        auto it = clones.find(t->id());
+        g->tracks.push_back(it != clones.end() ? it->second : t);
     }
     publishRaw(std::move(g));
     return true;
@@ -2384,34 +2537,129 @@ bool Engine::setTrackGroup(int32_t trackId, int32_t groupId) {
     return true;
 }
 
-// --- track clipboard (copy/cut/paste) --------------------------------------
-bool Engine::copyTrack(int32_t trackId) {
-    auto src = findTrackAuthoring(trackId);
-    if (!src) return false;
-    trackClipboard_ = deepCloneTrack(*src, 0);   // id is a placeholder; paste assigns a real one
-    return true;
+// --- multi-track sets (header multi-selection) -----------------------------
+std::vector<std::shared_ptr<Track>> Engine::expandTrackSet(const int32_t* ids, int32_t n) const {
+    std::vector<std::shared_ptr<Track>> out;
+    if (!ids || n <= 0) return out;
+    std::set<int32_t> want(ids, ids + n);
+    // A track belongs when it or any ancestor group is in the set.
+    auto inSet = [&](const Track& t) {
+        if (want.count(t.id())) return true;
+        for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {
+            if (want.count(a)) return true;
+            auto p = findTrackAuthoring(a);
+            a = p ? p->groupId() : -1;
+        }
+        return false;
+    };
+    for (auto& t : authoring_->tracks) if (inSet(*t)) out.push_back(t);
+    return out;
 }
-bool Engine::hasTrackClipboard() const { return trackClipboard_ != nullptr; }
-int32_t Engine::pasteTrack() {
-    if (!trackClipboard_) return -1;
-    if (trackClipboard_->type() == TrackType::Return) return -1;  // return-bus identity can't be duplicated
-    const int32_t newId = nextTrackId_++;
-    auto nt = deepCloneTrack(*trackClipboard_, newId);            // re-clone so repeat pastes stay independent
-    nt->setGroupId(-1);                                           // paste lands top-level (its group may not exist)
+
+std::vector<int32_t> Engine::insertTrackClones(const std::vector<std::shared_ptr<Track>>& src,
+                                               int32_t afterId, int32_t rootParent, bool keepParent) {
+    std::map<int32_t, int32_t> remap;   // source id -> copy id
+    for (auto& s : src) if (s->type() != TrackType::Return) remap[s->id()] = nextTrackId_++;
+    std::vector<std::shared_ptr<Track>> clones;
+    std::vector<int32_t> newIds;
+    for (auto& s : src) {
+        if (s->type() == TrackType::Return) continue;   // return-bus identity can't be duplicated
+        auto nt = deepCloneTrack(*s, remap[s->id()]);
+        auto it = remap.find(s->groupId());
+        nt->setGroupId(it != remap.end() ? it->second : keepParent ? s->groupId() : rootParent);
+        clones.push_back(nt);
+        newIds.push_back(nt->id());
+    }
+    if (clones.empty()) return newIds;
+
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
-    g->tracks.reserve(authoring_->tracks.size() + 1);
+    g->tracks.reserve(authoring_->tracks.size() + clones.size());
     for (auto& t : authoring_->tracks) g->tracks.push_back(t);
-    // Append after the last non-return track so it sits with the regular tracks.
-    int32_t insertAt = static_cast<int32_t>(g->tracks.size());
+    int32_t insertAt = -1;
     for (int32_t i = 0; i < static_cast<int32_t>(g->tracks.size()); ++i)
-        if (g->tracks[i]->type() == TrackType::Return) { insertAt = i; break; }
-    g->tracks.insert(g->tracks.begin() + insertAt, nt);
+        if (g->tracks[i]->id() == afterId && g->tracks[i]->type() != TrackType::Return) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+        // Append after the last non-return track so the copies sit with the regular tracks.
+        insertAt = static_cast<int32_t>(g->tracks.size());
+        for (int32_t i = 0; i < static_cast<int32_t>(g->tracks.size()); ++i)
+            if (g->tracks[i]->type() == TrackType::Return) { insertAt = i; break; }
+    }
+    g->tracks.insert(g->tracks.begin() + insertAt, clones.begin(), clones.end());
     publish(std::move(g));
     recomputePdc();
-    return newId;
+    return newIds;
+}
+
+int32_t Engine::duplicateTracks(const int32_t* ids, int32_t n, int32_t* outIds, int32_t cap) {
+    auto set = expandTrackSet(ids, n);
+    set.erase(std::remove_if(set.begin(), set.end(),
+                             [](const std::shared_ptr<Track>& t) { return t->type() == TrackType::Return; }),
+              set.end());
+    if (set.empty()) return -1;
+    auto newIds = insertTrackClones(set, set.back()->id(), -1, /*keepParent*/ true);
+    const int32_t count = static_cast<int32_t>(newIds.size());
+    if (outIds) for (int32_t i = 0; i < count && i < cap; ++i) outIds[i] = newIds[i];
+    return count > 0 ? count : -1;
+}
+
+bool Engine::removeTracks(const int32_t* ids, int32_t n) {
+    auto set = expandTrackSet(ids, n);
+    if (set.empty()) return false;
+    std::set<int32_t> drop;
+    for (auto& t : set) {
+        // Plugin windows shouldn't outlive the track (it survives in undo history, so only hide).
+        if (t->instrument) t->instrument->closeEditor();
+        for (auto& d : t->devices) if (d) d->closeEditor();
+        drop.insert(t->id());
+    }
+    auto g = std::make_shared<Graph>();
+    g->sceneCount = authoring_->sceneCount;
+    g->masterVolume = authoring_->masterVolume;
+    g->masterTrack = authoring_->masterTrack;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks)
+        if (!drop.count(t->id())) g->tracks.push_back(t);
+    publish(std::move(g));
+    recomputePdc();
+    return true;
+}
+
+// --- track clipboard (copy/cut/paste) --------------------------------------
+bool Engine::copyTrack(int32_t trackId) { return copyTracks(&trackId, 1); }
+
+bool Engine::copyTracks(const int32_t* ids, int32_t n) {
+    auto set = expandTrackSet(ids, n);
+    if (set.empty()) return false;
+    std::vector<std::shared_ptr<Track>> clip;
+    clip.reserve(set.size());
+    for (auto& t : set) clip.push_back(deepCloneTrack(*t, t->id()));   // source id kept for re-linking
+    trackClipboard_ = std::move(clip);
+    return true;
+}
+
+bool Engine::hasTrackClipboard() const { return !trackClipboard_.empty(); }
+
+int32_t Engine::pasteTrack() {
+    std::vector<int32_t> ids(trackClipboard_.size());
+    int32_t n = pasteTracks(-1, ids.data(), static_cast<int32_t>(ids.size()));
+    return n > 0 ? ids[0] : -1;
+}
+
+int32_t Engine::pasteTracks(int32_t afterTrackId, int32_t* outIds, int32_t cap) {
+    if (trackClipboard_.empty()) return -1;
+    // Land next to the anchor, in its group; without one, top-level (the source groups may be gone).
+    int32_t parent = -1;
+    auto anchor = findTrackAuthoring(afterTrackId);
+    if (anchor && anchor->type() != TrackType::Return && anchor->id() != kMasterTrackId)
+        parent = anchor->groupId();
+    else afterTrackId = -1;
+    auto newIds = insertTrackClones(trackClipboard_, afterTrackId, parent, /*keepParent*/ false);
+    const int32_t count = static_cast<int32_t>(newIds.size());
+    if (outIds) for (int32_t i = 0; i < count && i < cap; ++i) outIds[i] = newIds[i];
+    return count > 0 ? count : -1;
 }
 
 

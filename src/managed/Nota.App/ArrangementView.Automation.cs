@@ -133,6 +133,44 @@ public sealed partial class ArrangementView
         Redraw();
     }
 
+    /// <summary>The first lane on a track that carries points — the top entry of the target
+    /// menu's quick-access section — or null when the track has no automation yet.</summary>
+    private static (AutomationTarget target, int dev, int param, string paramId)? FirstAutomatedTarget(IAudioEngine e, int trackId)
+    {
+        int n = e.AutomationLaneCount(trackId);
+        for (int i = 0; i < n; i++)
+        {
+            var info = e.AutomationLaneInfo(trackId, i);
+            if (info.PointCount <= 0) continue;
+            return info.Target switch
+            {
+                AutomationTarget.Volume or AutomationTarget.Pan => (info.Target, -1, -1, ""),
+                AutomationTarget.PluginParam => (info.Target, info.DeviceIndex, -1, e.AutomationLaneParamId(trackId, i)),
+                _ => (info.Target, info.DeviceIndex, info.ParamIndex, ""),
+            };
+        }
+        return null;
+    }
+
+    /// <summary>Forget every track's chosen lane target (a project was opened / created), so
+    /// the next automation-mode visit picks each track's first automated param again.</summary>
+    public void ForgetAutoTargets() => _autoTargets.Clear();
+
+    /// <summary>The device chain reordered / removed effects (midi=false) or MIDI effects on a
+    /// track: keep its shown automation target on the same device (the engine moves the lanes
+    /// the same way). map: old chain index → new, -1 when the device is gone (→ Volume).</summary>
+    internal void RemapAutoTargets(int trackId, bool midi, Func<int, int> map)
+    {
+        if (!_autoTargets.TryGetValue(trackId, out var sel)) return;
+        bool onChain = midi ? sel.target == AutomationTarget.MidiDeviceParam
+                            : sel.target == AutomationTarget.DeviceParam
+                              || (sel.target == AutomationTarget.PluginParam && sel.dev >= 0);
+        if (!onChain) return;
+        int ni = map(sel.dev);
+        _autoTargets[trackId] = ni >= 0 ? sel with { dev = ni } : (AutomationTarget.Volume, -1, -1, "");
+        // Refresh() (raised by the chain's Changed) rebuilds the lanes from _autoTargets.
+    }
+
     /// <summary>Select a hosted-plugin parameter (by stable id) as the lane target (M9-B3).</summary>
     internal void SetAutoPluginTarget(TrackVM t, int deviceIndex, string paramId)
     {
@@ -441,12 +479,125 @@ public sealed partial class ArrangementView
                 int mpc = e.MidiEffectParamCount(t.Id, m);
                 if (mpc <= 0) continue;
                 var mMenu = new MenuItem { Header = e.MidiEffectName(t.Id, m) };
-                int shown = Math.Min(mpc, 16);   // globals (+ a few lanes); per-step lanes are edited in the grid
-                for (int p = 0; p < shown; p++)
+                MenuItem MLeaf(int mm, int pp, string? label = null) => Leaf(label ?? e.MidiEffectParamName(t.Id, mm, pp), $"M:{mm}:{pp}",
+                    () => SetAutoTarget(t, AutomationTarget.MidiDeviceParam, mm, pp), automated);
+                if (e.MidiEffectKind(t.Id, m) == 0 && mpc > ArpGrid.PView)
                 {
-                    int mm = m, pp = p;
-                    mMenu.Items.Add(Leaf(e.MidiEffectParamName(t.Id, m, p), $"M:{mm}:{pp}",
-                        () => SetAutoTarget(t, AutomationTarget.MidiDeviceParam, mm, pp), automated));
+                    // Nota Arp: its globals by name, then Groove ▸ lane ▸ step 1–16 (the View
+                    // size toggle is editor state, not a sound parameter).
+                    (int p, string label)[] globals =
+                    {
+                        (ArpGrid.GRate, "Rate"), (ArpGrid.GSync, "Sync"), (ArpGrid.GFreeRate, "Free Rate"), (ArpGrid.GOrder, "Order"),
+                        (ArpGrid.GGate, "Gate"), (ArpGrid.GSwing, "Swing"), (ArpGrid.PVelAmt, "Vel Amt"), (ArpGrid.GOctaves, "Octaves"),
+                        (ArpGrid.GOctaveMode, "Octave Mode"), (ArpGrid.GRetrig, "Retrig"), (ArpGrid.GHold, "Hold"),
+                        (ArpGrid.GTranspose, "Transpose"), (ArpGrid.GLoop, "Steps"), (ArpGrid.GLoopMode, "Loop Mode"),
+                    };
+                    foreach (var (p, label) in globals) mMenu.Items.Add(MLeaf(m, p, label));
+                    var groove = new MenuItem { Header = "Groove" };
+                    (string name, int b)[] lanes =
+                    {
+                        ("Velocity", ArpGrid.LVel), ("Length", ArpGrid.LLen), ("Chance", ArpGrid.LChance), ("Ratchet", ArpGrid.LRatchet),
+                        ("Transpose", ArpGrid.LTransp), ("Step On", ArpGrid.LOn), ("CC", ArpGrid.LCC),
+                    };
+                    foreach (var (name, b) in lanes)
+                    {
+                        var lm = new MenuItem { Header = name };
+                        for (int st = 0; st < ArpGrid.Steps; st++) lm.Items.Add(MLeaf(m, b + st, $"Step {st + 1}"));
+                        groove.Items.Add(lm);
+                    }
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(groove);
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 1 && mpc > ChordMidiBody.PView)
+                {
+                    // Nota Chord: the globals, then Shifts ▸ Shift N ▸ semitones / on / velocity
+                    // (View, the card size, is editor state).
+                    (int p, string label)[] globals =
+                    {
+                        (ChordMidiBody.Strum, "Strum"), (ChordMidiBody.Spread, "Spread"), (ChordMidiBody.KeepRoot, "Keep Root"),
+                        (ChordMidiBody.Fold, "Fold in Scale"), (ChordMidiBody.FoldKey, "Fold Key"), (ChordMidiBody.FoldMode, "Fold Mode"),
+                    };
+                    foreach (var (p, label) in globals) mMenu.Items.Add(MLeaf(m, p, label));
+                    var shifts = new MenuItem { Header = "Shifts" };
+                    for (int s = 0; s < ChordMidiBody.Slots; s++)
+                    {
+                        var sm = new MenuItem { Header = $"Shift {s + 1}" };
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.Voice1 + s, "Semitones"));
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.On1 + s, "On"));
+                        sm.Items.Add(MLeaf(m, ChordMidiBody.Vel1 + s, "Velocity"));
+                        shifts.Items.Add(sm);
+                    }
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(shifts);
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 2 && mpc > ScaleMidiBody.PView)
+                {
+                    // Nota Scale: the key, fold and range by name, then Notes ▸ each scale degree of
+                    // the Custom mask. View (the card size) is editor state.
+                    (int p, string label)[] ps =
+                    {
+                        (ScaleMidiBody.PRoot, "Root"), (ScaleMidiBody.PScale, "Scale"), (ScaleMidiBody.PFold, "Fold"),
+                        (ScaleMidiBody.PTranspose, "Transpose"), (ScaleMidiBody.PRangeLo, "Range Low"), (ScaleMidiBody.PRangeHi, "Range High"),
+                        (ScaleMidiBody.PFollowKey, "Follow Key"), (ScaleMidiBody.PLearn, "Learn"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    var notes = new MenuItem { Header = "Custom Notes" };
+                    string[] degrees = { "Root", "♭2", "2", "♭3", "3", "4", "♭5", "5", "♭6", "6", "♭7", "7" };
+                    for (int d = 0; d < 12; d++) notes.Items.Add(MLeaf(m, ScaleMidiBody.PMask0 + d, degrees[d]));
+                    mMenu.Items.Add(new Separator());
+                    mMenu.Items.Add(notes);
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 3 && mpc > LengthMidiBody.PView)
+                {
+                    // Nota Length: its sound params by name. Rate / Gate (pre-Division sync) and
+                    // View (the card size) are not offered.
+                    (int p, string label)[] ps =
+                    {
+                        (LengthMidiBody.PMode, "Mode"), (LengthMidiBody.PDivision, "Division (Sync)"), (LengthMidiBody.PMs, "Length (ms)"),
+                        (LengthMidiBody.PPercent, "Length (Gate %)"), (LengthMidiBody.PTrigger, "Start From"),
+                        (LengthMidiBody.PVelToLen, "Vel → Len"), (LengthMidiBody.PKeyToLen, "Key → Len"), (LengthMidiBody.PRandom, "Random"),
+                        (LengthMidiBody.PLegato, "Legato"), (LengthMidiBody.PClipLimit, "Clip Length Limit"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 4 && mpc > VelocityModel.PView)
+                {
+                    // Nota Velocity: MODE, then OUT RANGE / RANDOM. View (the card size) is editor state.
+                    (int p, string label)[] ps =
+                    {
+                        (VelocityModel.PMode, "Mode"), (VelocityModel.PDrive, "Drive"), (VelocityModel.PFixed, "Value (Fixed)"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    mMenu.Items.Add(new Separator());
+                    (int p, string label)[] outs =
+                    {
+                        (VelocityModel.POutLo, "Out Low"), (VelocityModel.POutHi, "Out High"),
+                        (VelocityModel.PRandomOn, "Random On"), (VelocityModel.PRandom, "Random"), (VelocityModel.PRandomDir, "Random Direction"),
+                    };
+                    foreach (var (p, label) in outs) mMenu.Items.Add(MLeaf(m, p, label));
+                }
+                else if (e.MidiEffectKind(t.Id, m) == 5 && mpc > RandomModel.PLockBar)
+                {
+                    // Nota Random: WHAT VARIES, then DICE. View (the card size) and Lock Bar (set by
+                    // the Lock button) are not offered.
+                    (int p, string label)[] ps =
+                    {
+                        (RandomModel.PNoteRange, "Note"), (RandomModel.PVelAmt, "Velocity"), (RandomModel.PTimeAmt, "Timing"),
+                        (RandomModel.PSkip, "Skip"), (RandomModel.POctAmt, "Octave"),
+                    };
+                    foreach (var (p, label) in ps) mMenu.Items.Add(MLeaf(m, p, label));
+                    mMenu.Items.Add(new Separator());
+                    (int p, string label)[] dice =
+                    {
+                        (RandomModel.PChance, "Chance"), (RandomModel.PDist, "Distribution"), (RandomModel.PRate, "Rate"),
+                        (RandomModel.PSeed, "Seed"), (RandomModel.PLocked, "Lock"), (RandomModel.PStayInScale, "Stay In Scale"),
+                    };
+                    foreach (var (p, label) in dice) mMenu.Items.Add(MLeaf(m, p, label));
+                }
+                else
+                {
+                    int shown = Math.Min(mpc, 16);   // globals (+ a few lanes); per-step lanes are edited in the grid
+                    for (int p = 0; p < shown; p++) mMenu.Items.Add(MLeaf(m, p));
                 }
                 flyout.Items.Add(mMenu);
             }
@@ -509,7 +660,7 @@ public sealed partial class ArrangementView
         {
             string id = e.PluginParamId(t.Id, -1, i);
             string nm = e.PluginParamName(t.Id, -1, i);
-            if (id.Length == 0) continue;
+            if (id.Length == 0 || InstrumentView.IsViewParam(id)) continue;   // the card size isn't sound
             string grp = Head(nm);
             if (grp.Length > 0 && sizes[grp] < 2) grp = "";
             string leaf = grp.Length > 0 ? nm[(grp.Length + 1)..] : nm;

@@ -26,6 +26,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -108,10 +109,21 @@ public:
     // --- audio preview / audition (M7-4a) ---
     // Decode a file and mix it into the live output without a track, so the
     // browser can audition samples. One preview at a time.
-    bool previewFile(const std::string& path);
+    bool previewFile(const std::string& path, double startSeconds = 0.0);
     void stopPreview();
+    void setPreviewLoop(bool on) { previewLoop_.store(on, std::memory_order_relaxed); }
+    void setPreviewGain(float g) { previewGain_.store(g < 0.0f ? 0.0f : g, std::memory_order_relaxed); }
+    double previewPosition() const { return previewPosSec_.load(std::memory_order_relaxed); }
     bool isPreviewActive() const { return previewActive_.load(std::memory_order_relaxed); }
     bool previewSelfTest();   // feed a synthetic buffer, render offline, no device
+    // Preset audition: rendered buffers (see Audition.h) kept by key in a small LRU, so
+    // stepping back through a list replays without a re-render. Message thread.
+    void auditionStore(const std::string& key, std::shared_ptr<SampleBuffer> buf);
+    bool auditionCached(const std::string& key) const;
+    bool previewCached(const std::string& key, double startSeconds);   // false = not cached
+    // The last `n` (≤ kPreviewScope) mono samples the preview voice played, oldest first.
+    int32_t previewScope(float* out, int32_t n) const;
+    static constexpr int32_t kPreviewScope = 4096;
 
     // --- xrun / dropout telemetry (M7-8) ---
     // The backend's overload listener bumps this off the RT thread; the UI polls
@@ -212,6 +224,8 @@ public:
     int32_t     pluginParamCount(int32_t trackId, int32_t deviceIndex) const;
     std::string pluginParamId(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    float       pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float       pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     void        pluginParamSet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float normalized);
     int32_t     pluginParamIndexOfId(int32_t trackId, int32_t deviceIndex, const std::string& id) const;
@@ -235,6 +249,7 @@ public:
     void    reenableAutomation();        // hand the overridden lanes back to playback
     bool    automationOverridden() const { return !overrides_.empty(); }
     bool    automationWriteSelfTest();   // device-free: touch, latch, override/re-enable
+    bool    automationDeviceRemapSelfTest();   // lanes follow their device on move/remove
 
     // --- debug oscillator (M0) ---
     void setToneEnabled(bool enabled);
@@ -326,6 +341,13 @@ public:
     bool    ungroup(int32_t groupId);                    // dissolve; children reparent up one level
     bool    setTrackGroup(int32_t trackId, int32_t groupId); // move track into groupId (-1 = top-level)
 
+    // Multi-track ops (arrangement header multi-selection). A set expands to every descendant
+    // of each group in it and keeps engine order; each op is one snapshot / undo step.
+    // duplicateTracks inserts the copies after the set's last member, members keeping their
+    // own groups; removeTracks drops the whole set. Unknown ids are ignored.
+    int32_t duplicateTracks(const int32_t* ids, int32_t n, int32_t* outIds, int32_t cap); // -> copies made, -1 none
+    bool    removeTracks(const int32_t* ids, int32_t n);
+
     // --- send/return buses (M6-1) ---
     int32_t addReturnTrack();                            // aux bus: device chain -> master
     void    setTrackSend(int32_t trackId, int32_t bus, float level); // post-fader send (atomic)
@@ -378,6 +400,13 @@ public:
     // or audio→audio; atomic — both tracks change in one publish). Same-track falls
     // back to moveClip.
     bool    moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sourceTrackId, double newStartBeat);
+    // Group move (multi-selection drag): every clip moves at once, so a moved clip only
+    // carves the clips that stay put — never another member of the group. Clips that stay
+    // on their track keep their index; cross-track ones are appended to the destination.
+    // All-or-nothing validation, one undo step; lastPlaced() reports each clip's new
+    // (trackId, clipIndex) in request order.
+    struct ClipMoveReq { int32_t srcTrackId; int32_t clipIndex; int32_t dstTrackId; double newStartBeat; };
+    bool    moveClipBlock(const std::vector<ClipMoveReq>& moves);
     bool    trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, double newLengthBeats);
     // Grid resize for an audio clip (grid-relative): warped clips (or unwarped
     // clips dragged past their source length) stretch to newLengthBeats; unwarped
@@ -453,10 +482,15 @@ public:
     bool    setTrackColorIndex(int32_t trackId, int32_t colorIndex);
     int32_t trackColorIndex(int32_t trackId) const;
 
-    // Track clipboard (copy/cut/paste). copyTrack stores a fully independent clone;
-    // pasteTrack appends a fresh copy (new id + cloned DSP). Cut = copy + removeTrack.
+    // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
+    // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
+    // cloned DSP) after afterTrackId inside its group — or top-level after the last regular
+    // track when afterTrackId is -1 — with group links inside the set following the copies.
+    // copyTrack / pasteTrack are the single-track forms. Cut = copy + removeTracks.
     bool    copyTrack(int32_t trackId);
-    int32_t pasteTrack();                      // -> new track id, or -1
+    int32_t pasteTrack();                      // -> first new track id, or -1
+    bool    copyTracks(const int32_t* ids, int32_t n);
+    int32_t pasteTracks(int32_t afterTrackId, int32_t* outIds, int32_t cap);   // -> tracks pasted, -1 none
     bool    hasTrackClipboard() const;
 
     // --- project load (M7-6) ---
@@ -478,6 +512,8 @@ public:
     // Full geometry of an audio clip (false if the clip isn't audio).
     bool    audioClipInfo(int32_t trackId, int32_t clipIndex, NotaAudioClipInfo* out) const;
     bool    setClipGain(int32_t trackId, int32_t clipIndex, float gain);       // audio clip runtime gain
+    bool    clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) const;   // audio clip ADSR
+    bool    setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr& adsr);
     bool    setClipActive(int32_t trackId, int32_t clipIndex, bool active);    // clip deactivate (key 0): audio+MIDI
     bool    setClipPitch(int32_t trackId, int32_t clipIndex, float semitones); // audio clip varispeed transpose
     bool    setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed);  // audio clip plays back-to-front
@@ -553,6 +589,7 @@ public:
     bool    rhythmSetMacroMappingCurve(int32_t trackId, int32_t index, int32_t curve);
     void    rhythmClearMacros(int32_t trackId);
     bool    setTrackGrainSample(int32_t trackId, const std::string& path, int32_t rootNote);
+    bool    setTrackGrainRoot(int32_t trackId, int32_t rootNote);
     int32_t addSamplerTrack(const std::string& path, int32_t rootNote, bool loop);
     int32_t addSamplerInstrumentTrack();                                        // empty Sampler (sample loaded later)
     bool    setTrackSamplerSample(int32_t trackId, const std::string& path, int32_t rootNote);
@@ -638,6 +675,7 @@ public:
     int32_t     midiEffectLastIn(int32_t trackId, int32_t index) const;   // last remapped note-on IN value (Scale pitch / Velocity vel), -1 = none
     int32_t     midiEffectLastOut(int32_t trackId, int32_t index) const;  // last remapped note-on OUT value, -1 = none
     int32_t     midiEffectScope(int32_t trackId, int32_t index, float* out, int32_t maxN) const;   // float scope (Nota Velocity in/out pairs)
+    void        midiEffectCommand(int32_t trackId, int32_t index, int32_t cmd);                        // editor command (Nota Arp: 1 = restart)
     const char* midiEffectName(int32_t trackId, int32_t index) const;
     int32_t     midiEffectParamCount(int32_t trackId, int32_t index) const;
     const char* midiEffectParamName(int32_t trackId, int32_t index, int32_t paramIndex) const;
@@ -846,6 +884,12 @@ public:
     bool redo();
     bool canUndo() const { return !undoStack_.empty(); }
     bool canRedo() const { return !redoStack_.empty(); }
+    // Undo group: every checkpoint pushed between begin and end collapses into one undo
+    // step (the state before the first edit), so a compound UI edit — e.g. swapping a
+    // device in place as add + move + remove — undoes with one step. Nests; an end
+    // without a begin is ignored.
+    void beginUndoGroup();
+    void endUndoGroup();
 
     // --- offline render (tests / export) ---
     void renderOffline(float* out, int32_t frames);
@@ -907,6 +951,11 @@ private:
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
     void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to);
+    // Keep automation-lane deviceIndex valid after an effect (midi=false) or MIDI effect
+    // (midi=true) on `nt` was removed (removedIndex>=0; its lanes are dropped) or moved
+    // (from/to). Edits `nt` in place before it is published, so it shares the device
+    // edit's undo step; also fixes in-flight write / override lane references.
+    void remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t removedIndex, int32_t from, int32_t to);
 
     // automation write (M9-C, message thread)
     void sampleAutomationWritesAt(double beat);  // grow active lanes to (beat, control-value)
@@ -985,8 +1034,9 @@ private:
     // can re-select exactly what it produced.
     std::vector<std::pair<int32_t,int32_t>> lastPlaced_;
 
-    // Track clipboard: a fully independent clone of the copied track (null = empty).
-    std::shared_ptr<Track>              trackClipboard_;
+    // Track clipboard: fully independent clones of the copied set, engine order (empty = none).
+    // Each clone keeps its source id so paste can re-link group membership inside the set.
+    std::vector<std::shared_ptr<Track>> trackClipboard_;
 
     // Automation carried with clips (copy/cut/paste/duplicate). captureClipAutomation
     // pulls the points in [start,end] out of every lane, offset to clip-relative beats.
@@ -1013,6 +1063,13 @@ private:
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
     std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
+    // The tracks in ids plus every descendant of a group among them, in engine order.
+    std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
+    // Publishes fresh deep clones of src (returns skipped) after afterId, or before the
+    // returns when afterId isn't a regular track. Group links inside the set follow the
+    // copies; a member whose group is outside the set keeps it (keepParent) or joins rootParent.
+    std::vector<int32_t> insertTrackClones(const std::vector<std::shared_ptr<Track>>& src,
+                                           int32_t afterId, int32_t rootParent, bool keepParent);
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
     void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne);
 
@@ -1027,19 +1084,36 @@ private:
     // Audio preview / audition (M7-4a): the message thread publishes a decoded
     // buffer via previewLive_ (raw ptr), keeping it alive in previewHold_ and
     // retiring the old one — same lifetime dance as the graph snapshots, so the
-    // audio thread never reads a freed buffer.
+    // audio thread never reads a freed buffer. The retired list is message-thread
+    // only: each entry carries the audio thread's render epoch at retirement and is
+    // freed once two more renders have finished (none can still hold its pointer),
+    // so the audio thread neither touches the list nor frees memory.
+    void publishPreview(std::shared_ptr<SampleBuffer> buf);
+    void reapPreview();
     std::shared_ptr<SampleBuffer>              previewHold_;
-    std::vector<std::shared_ptr<SampleBuffer>> previewRetired_;
+    std::vector<std::pair<uint64_t, std::shared_ptr<SampleBuffer>>> previewRetired_;
+    std::atomic<uint64_t>      previewEpoch_{0};   // audio thread: +1 per renderPreview call
     std::atomic<SampleBuffer*> previewLive_{nullptr};
     std::atomic<bool>          previewActive_{false};
     std::atomic<bool>          previewRestart_{false};
+    std::atomic<double>        previewStartSec_{0.0}; // where a restart begins (source seconds)
+    std::atomic<bool>          previewLoop_{false};
+    std::atomic<float>         previewGain_{1.0f};    // linear, ramped per block
+    std::atomic<double>        previewPosSec_{0.0};   // playhead published for the UI
+    std::string                previewPath_;          // message thread: the file previewHold_ decodes
     double                     previewPos_ = 0.0;   // audio-thread only, source frames
+    float                      previewGainCur_ = 1.0f; // audio-thread only
+    std::atomic<float>         previewScope_[kPreviewScope] = {};  // mono ring, audio thread writes
+    std::atomic<int64_t>       previewScopeW_{0};                   // samples written so far
+    std::list<std::pair<std::string, std::shared_ptr<SampleBuffer>>> auditionCache_;   // MRU first
 
     // Undo/redo snapshot stacks (M6-6). Hold retained Graph snapshots; entries
     // are cheap (metadata only — sample buffers are shared via shared_ptr).
     std::vector<std::shared_ptr<Graph>> undoStack_;
     std::vector<std::shared_ptr<Graph>> redoStack_;
     static constexpr size_t kMaxUndoDepth = 128;
+    int32_t undoGroupDepth_ = 0;     // open beginUndoGroup() calls
+    size_t  undoGroupBase_  = 0;     // undoStack_ size when the outermost group began
 
     std::atomic<float> masterVolume_{1.0f};
     std::atomic<float> masterPeakL_{0.0f};

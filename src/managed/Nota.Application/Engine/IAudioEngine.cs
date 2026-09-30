@@ -59,6 +59,8 @@ public interface IAudioEngine : IDisposable
     int CreateGroup(int[] trackIds);             // group tracks under a new group; returns group id or -1
     void Ungroup(int groupId);                   // dissolve; children reparent up one level
     void SetTrackGroup(int trackId, int groupId); // move a track into groupId (-1 = top-level)
+    int[] DuplicateTracks(int[] trackIds);       // set (+ group children) after its last member; new ids
+    bool RemoveTracks(int[] trackIds);           // set (+ group children), one undo step
 
     // --- Send / return buses (M6-1) ----------------------------------------
     int AddReturnTrack();
@@ -112,6 +114,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Moves a clip to another same-type track — instrument→instrument or
     /// audio→audio (atomic). Same-track == MoveClip.</summary>
     void MoveClipToTrack(int srcTrackId, int clipIndex, int destTrackId, double newStartBeat);
+    /// <summary>Moves a group of clips at once (multi-selection drag): they carve only the
+    /// clips that stay put, never each other; same-track clips keep their index. One undo
+    /// step; <see cref="LastPlacedClips"/> reports each new position in request order.</summary>
+    bool MoveClipBlock((int trackId, int clipIndex, int destTrackId, double newStartBeat)[] moves);
     void TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats);
     /// <summary>Grid resize for an audio clip (grid-relative): warped clips (or unwarped
     /// clips dragged past their source length) stretch; unwarped clips within source
@@ -124,6 +130,11 @@ public interface IAudioEngine : IDisposable
     void SetClipWarpTrim(int trackId, int clipIndex, double playStart, double playEnd);
     /// <summary>Sets an audio clip's linear playback gain (runtime).</summary>
     void SetClipGain(int trackId, int clipIndex, float gain);
+    /// <summary>An audio clip's ADSR amplitude shape (<see cref="ClipAdsr.Identity"/> for a
+    /// MIDI clip or a bad index).</summary>
+    ClipAdsr GetClipAdsr(int trackId, int clipIndex);
+    /// <summary>Sets an audio clip's ADSR amplitude shape (one undo step).</summary>
+    void SetClipAdsr(int trackId, int clipIndex, ClipAdsr adsr);
     /// <summary>Clip deactivate (key 0): an inactive clip stays on the timeline but plays
     /// nothing (audio or MIDI). Works on audio and instrument tracks.</summary>
     void SetClipActive(int trackId, int clipIndex, bool active);
@@ -217,6 +228,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
+    bool CopyTracks(int[] trackIds);             // a group brings its children
+    int[] PasteTracks(int afterTrackId);         // after the anchor, inside its group (-1 = end); new ids
     bool HasTrackClipboard();
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
@@ -292,6 +305,8 @@ public interface IAudioEngine : IDisposable
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>
     bool SetTrackGrainSample(int trackId, string path, int rootNote = 60);
+    /// <summary>Sets a Nota Grain's root note — the key that plays the sample at its own pitch.</summary>
+    bool SetTrackGrainRoot(int trackId, int rootNote);
     /// <summary>Grain sample info (sample id / root). True if the track is a Nota Grain.</summary>
     bool TryGetGrainInfo(int trackId, out NotaSamplerInfo info);
     /// <summary>Nota Rhythm Phase 2 — load a one-shot into a drum voice (switches it to Sample).</summary>
@@ -410,6 +425,8 @@ public interface IAudioEngine : IDisposable
     int MidiEffectLastOut(int trackId, int index);
     /// <summary>Float scope buffer for a MIDI effect editor (Nota Velocity in/out pairs); returns count written.</summary>
     int MidiEffectScope(int trackId, int index, float[] outv);
+    /// <summary>Send an editor command to a MIDI effect (Nota Arp: 1 = restart the pattern).</summary>
+    void MidiEffectCommand(int trackId, int index, int cmd);
     string MidiEffectName(int trackId, int index);
     int MidiEffectParamCount(int trackId, int index);
     string MidiEffectParamName(int trackId, int index, int paramIndex);
@@ -691,6 +708,10 @@ public interface IAudioEngine : IDisposable
     bool Redo();
     bool CanUndo { get; }
     bool CanRedo { get; }
+    /// <summary>Opens an undo group: the edits made until the matching
+    /// <see cref="EndUndoGroup"/> undo as one step. Nests.</summary>
+    void BeginUndoGroup();
+    void EndUndoGroup();
 
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
@@ -753,9 +774,31 @@ public interface IAudioEngine : IDisposable
 
     // --- Audio preview / audition (M7-4a) ----------------------------------
     void PreviewFile(string path);
+    /// <summary>Auditions <paramref name="path"/> from <paramref name="startSeconds"/> in;
+    /// the file already loaded is reused without a re-decode (waveform seek).</summary>
+    void PreviewFileAt(string path, double startSeconds);
     void StopPreview();
     bool IsPreviewActive { get; }
+    /// <summary>Loop the audition until stopped.</summary>
+    void SetPreviewLoop(bool on);
+    /// <summary>Audition level as linear gain (1 = unity).</summary>
+    void SetPreviewGain(float gain);
+    /// <summary>Audition playhead, seconds into the file.</summary>
+    double PreviewPosition { get; }
     bool PreviewSelfTest();
+    /// <summary>The last <paramref name="output"/>.Length (≤ 4096) mono samples the preview
+    /// voice played, oldest first. Returns the count written.</summary>
+    int ReadPreviewScope(float[] output);
+
+    // --- Preset audition ------------------------------------------------------
+    /// <summary>A fresh offline audition chain at the engine's sample rate (see
+    /// <see cref="IAuditionRig"/>). Safe to call from any thread.</summary>
+    IAuditionRig CreateAuditionRig();
+    /// <summary>UI thread: keeps a rendered rig's audio under <paramref name="key"/> (small LRU).</summary>
+    void StoreAudition(IAuditionRig rig, string key);
+    bool IsAuditionCached(string key);
+    /// <summary>Plays the cached audition from <paramref name="startSeconds"/>; false = not cached.</summary>
+    bool PreviewAuditionAt(string key, double startSeconds);
 
     // --- xrun / dropout telemetry (M7-8) -----------------------------------
     int XrunCount { get; }
@@ -773,11 +816,16 @@ public interface IAudioEngine : IDisposable
     string PluginParamId(int trackId, int deviceIndex, int paramIndex);
     string PluginParamName(int trackId, int deviceIndex, int paramIndex);
     float PluginParamGet(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>The plugin's own text for a param's current value ("−12.0 dB"), or "" when it has none.</summary>
+    string PluginParamText(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>The plugin's default for a param, normalized 0..1.</summary>
+    float PluginParamDefault(int trackId, int deviceIndex, int paramIndex);
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);
     int PluginLastTouchedParam(int trackId, int deviceIndex);   // "Learn" (M9-B3)
     bool AutomationWriteSelfTest();   // M9-C: device-free write-path check
+    bool AutomationDeviceRemapSelfTest();   // lanes follow their device on reorder / remove
     // Automation record (M9-C). There are no record modes: lanes always play back, and
     // a control gesture records while automation record is on (the transport record
     // button drives it). deviceIndex < 0 = instrument; paramId for PluginParam.

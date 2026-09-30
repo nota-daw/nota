@@ -16,7 +16,121 @@ created, and the build-and-publish run starts.
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Added
+- **ADSR for audio clips.** Every audio clip now has attack, decay, sustain and release.
+  Hover a clip in the arrangement and drag the handles — the squares in the top corners
+  set the attack and release, the dot sets the decay and the sustain level — or open the
+  clip editor's new ADSR tab for the same handles and exact sliders. Both places stay in
+  sync. A new clip still plays the whole sample at full volume.
+- **Nota Grain has 50 factory presets, and each one brings its own sound.** Until now every
+  Grain preset played the same built-in pad. Now a preset loads a source made for it: a
+  choir, bowed strings, a church bell, a kalimba, a vowel that moves from "a" to "u", a drum
+  break, an arpeggio, ocean waves, a radio between stations and more (29 in all). They're
+  in nine folders: Basics, Pads, Voices & Choirs, Bass, Keys & Plucks, Bells & Mallets,
+  Drones & Atmospheres, Loops & Sequences and Textures & FX. The sources are made on your
+  computer the first time a preset needs one, so they don't add to the download. The
+  Basics presets still keep whatever sample you dropped in. Previews in the browser play
+  each preset with its own source.
+- **Nota Grain lets you set the root note of your own sample.** The Pitch tab has a ROOT
+  control: the key that plays the sample at its recorded pitch. Step it with − / + or the
+  mouse wheel. When you drop a file whose name names a note ("Pad_F#3.wav"), Grain takes
+  the root from it; otherwise it's C4. Double-click the root to go back to the one in the
+  file name. The root is saved with the project.
+- Import MIDI files. `.mid` files now show up in the browser's Files tab, and you can drag
+  them from there or straight from Finder / Explorer. Drop one on the arrangement and it
+  becomes a MIDI clip at that spot. A file with several parts spreads out: the first part
+  goes on the track you dropped on, and each of the others gets its own new track (drum
+  parts get a Nota Rhythm). Drop one on a session slot and the whole file becomes that
+  slot's clip. Double-clicking a MIDI file in the browser puts it on a new track.
+- Preview presets before loading them. The browser's player now also sits under the
+  Instruments, Audio Effects, MIDI Effects and Presets tabs. Select a preset, a drum kit or a
+  built-in device and press Space or Play to hear it; turn on Auto there to hear each one as
+  you select it (it's off by default on these tabs, and the Files tab keeps its own Auto).
+  Instruments play a phrase that suits them: a chord for a pad, a riff for a bass, a line for
+  a lead. Drum Rack and Nota Rhythm kits play a groove at a tempo that fits the kit. MIDI
+  effects play a short phrase through a simple keys sound. Audio effects process a demo
+  track: Drums, Keys or Bass on their own, or a short Pop, House, Techno, Hip-Hop, Trap,
+  Drum & Bass, Synthwave or Ambient loop. A track that suits the effect is picked for you.
+  Choose another with the track button in the player (or scroll over it), including the
+  sample you last selected in Files. Sounds are prepared in the background and remembered,
+  and the next one is prepared ahead, so ↑ ↓ through a folder plays each one at once. Click **SPEC** in
+  the waveform to see a live spectrum instead. Instrument Racks and plug-in presets can't be
+  previewed yet.
+- A new sample player at the bottom of the browser's Files tab. It shows the file's real
+  waveform: click it to play from that point, hover to see the time. It also has Play / Stop,
+  a time readout, Loop, Auto (a file plays as soon as you select it) and a preview volume
+  fader (double-click it for 0 dB). With the Files list focused, ↑ ↓ move through the
+  files and Space plays or stops the selected one. Auto, Loop and the volume are remembered.
+  In a narrow browser the player tightens instead of overlapping: Auto becomes just its dot,
+  the total time and then Loop hide, and the volume folds into the speaker icon (click it
+  for the fader).
+- Factory presets in the browser are sorted into folders inside each device, on the
+  Instruments, Audio Effects and MIDI Effects tabs. Instruments use Pads, Bass, Leads,
+  Keys & Plucks, Bells & Mallets and more. Effects use Vocals, Drums, Mix & Bus, Mastering,
+  Ambient, Sidechain and more. MIDI effects have their own folders, such as Triads and
+  Sevenths for Chord and Grooves and Ratchets for Arp. An Init preset stays at the top.
+  Searching opens the folders that contain a match, and searching a folder name
+  (for example "Mastering") lists that folder in every device. Double-click a folder to open it.
+- **Remove out of scale** in the MIDI clip editor, next to the Scale key and mode: with
+  Scale on it deletes every note outside the scale in one undo step. The button is live
+  only while the clip has such notes.
+- Dropping an effect from the browser onto Devices puts it where you point: between cards
+  (an accent bar marks the spot) or in place of the card under the pointer (the card is
+  outlined). Dropping an instrument there replaces the track's instrument. Either way it is
+  one undo step.
+- Effects and presets can be dropped on a return track or the master in the arrangement.
+- Work with several tracks at once. ⇧-click track headers to select them (⇧-click again to
+  deselect), or click the headers and press ⌘A to select every track. With the headers in
+  focus, ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the selected
+  tracks. Right-clicking a selection opens a menu for the whole set: group, colour, freeze,
+  copy, cut, paste, duplicate and delete. Each command is one undo step.
+
+### Changed
+- **A new look for the start window.** The Nota logo follows the light and dark themes,
+  and recent projects sit in one compact list with their dates. Click a project to select
+  it and double-click to open it, or use the arrow keys and Return.
+- **A new look for the "quit without saving" dialog.** It shows the project's name and how
+  long its changes have gone unsaved. Return saves and Escape cancels. A saved project is
+  saved right in the dialog, and Nota quits when it's done.
+- **A new look for the device window.** This is the window that opens a device from a
+  Drum Rack, an Instrument Rack, an Audio Effect Rack or a Nota Rhythm voice. Its title
+  bar shows the device, the track, the preset picker and the bypass switch. A two-size
+  instrument such as Nota Synth also gets its S / L switch there. A bar at the bottom shows
+  where the device sits (pad, chain or voice), its live voice count and its type. On a
+  small window, the preset picker moves to its own row. Effects now open at their own
+  width with the usual padding, and a bypassed effect is marked in the window.
+- **A new look for Settings.** The window is larger, and the sidebar groups its pages
+  under Devices, Plug-ins and General, each with an icon. Every page has a short
+  description under its title. MIDI inputs and the other on/off options use larger
+  switches. Latency shows in milliseconds. Get Plug-ins is now called Downloads, shows how
+  many plugins you can still install, counts each filter and lists the download size. The
+  theme buttons show a sample of each theme's colour. Shortcuts can be filtered and show
+  each key on its own key-cap.
+- **Downloads show their progress at the bottom of Settings, and you can cancel them.** A bar
+  at the bottom of the window shows the plugin being installed, how much has downloaded and
+  a Cancel button. It stays in view while you scroll the list or open another page, and
+  shows the result when the install finishes. Cancelling leaves your plugins as they were.
+- **The Downloads list is faster and shows where each plugin runs.** Searching and filtering
+  the whole registry is instant now. Each plugin shows macOS, Windows and Linux icons for
+  the systems it's made for. Hover an icon to see which processors it supports. Plugins your
+  computer can't install are listed last, under their own heading, and say why. A progress
+  bar shows while the list loads or refreshes.
+- "Add track" in a track's right-click menu puts the new track right after that track. On a
+  group it adds the track inside the group.
+- Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after
+  the selected track, in its group.
+- The first time you switch to automation mode, each track that already has automation
+  shows its first automated parameter instead of Volume.
+- While dragging from the browser over the arrangement, the target track is outlined in its
+  header too, and the outline stays visible over the lane's clips.
+- **Convert Harmony to New MIDI Track** is much cleaner. Overtones no longer come out as extra
+  notes. Held chords no longer break into short fragments. Slightly detuned recordings map to
+  the right notes. The shimmer of chorused or detuned sounds no longer adds neighbouring
+  semitones. Notes start on the audio's attacks, and a re-struck chord comes out as new notes.
+
 ### Fixed
+- Reordering or removing effects in Devices no longer scrambles their automation: each lane
+  stays on its own device and parameter. Removing a device also removes its automation.
 - In the piano roll you can now drag a note's left edge to change where it starts; its end
   stays put.
 - Stacked notes (a chord) no longer hide each other's velocity. Grab a stem by its cap to
@@ -30,6 +144,122 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   when there was no copied clip.
 
 ## [Unreleased]
+
+### Added
+- **Get Plug-ins.** Preferences has a new Get Plug-ins page. It lists open-source VST3
+  plug-ins from the Nota plugin registry, among them Surge XT, Dexed, Dragonfly Reverb,
+  CHOW Tape Model and Stochas. Install, update or remove one with a click and it shows up
+  in the browser. Each plug-in downloads from its own project's GitHub release and is
+  checked against the registry before it's unpacked. Nota never runs an installer.
+- **Opening a project that uses a missing plug-in** now offers to install it when the
+  registry has it, then reopens the project with the plug-in and its saved settings.
+
+### Fixed
+- A project now finds its plug-ins even when they're installed in a different folder than on
+  the computer that saved it. Before, such a plug-in counted as missing.
+- Rescanning plug-ins removes VST3 plug-ins that were deleted from disk from the browser.
+- Space always starts and stops the project, even while a sample or preset is selected in
+  the browser. The browser's preview plays and stops with its play button.
+
+### Changed
+- VST3 and AU plug-ins get a proper device card with two sizes. The header names the
+  plug-in. The small card shows its vendor, format, parameter count and latency, with
+  Open editor and Save preset. The full card adds every parameter as a knob, with a filter
+  and pages (the mouse wheel turns them), and a sidechain source for plug-ins that have
+  one. Knobs show the plug-in's own values (such as "−12.0 dB"), and a double-click
+  restores the plug-in's default.
+- The browser's preview player stays out of the way until you use it. It is hidden at
+  launch, appears once you click or arrow through a list (or press Space there), and hides
+  again when you drag or double-click an item into the project.
+- ⌘A now selects all clips in the arrangement. Automation mode moved to ⌘⇧A.
+- Nota Arp has a new look and two sizes: a full card and a small 260-pixel one. Switch
+  between them with S / L in the card's header. Both sizes share the same presets, and the
+  preset you pick stays selected when you switch size. The Pattern view shows the notes the arp
+  will play, one step at a time, and the Groove view has the per-step lanes. As it plays, a
+  marker moves across the steps.
+- Nota Arp's note orders now use every octave you set. For example, Up · Down over two
+  octaves goes up to the top note and back down. There are two new orders, Down · Up and
+  Diverge. A ratchet now repeats that step's note.
+- New in Nota Arp: Vel Amt sets how much the Velocity lane shapes the notes. Retrig has a
+  new Beat mode that starts the pattern again on every bar. Restart starts it from step 1.
+- Nota Arp has 30 presets. Switching presets now also resets the steps the new preset
+  doesn't set.
+- The automation menu lists all of Nota Arp's settings, and every step is under Groove.
+  MCP gets new tools for the arp: `get_arp`, `set_arp`, `set_arp_lane`, `set_arp_step` and
+  `restart_arp`.
+- Nota Chord has a new look in the same two sizes as the arp, a full card and a small
+  260-pixel one. Each of the six shifts now has its own on/off switch, a ruler from −12 to
+  +12 semitones with the interval's name, and a velocity offset you drag sideways. The
+  keyboard shows three octaves and lights the chord as it's strummed: live while you hold a
+  key, and once per bar as a preview while the transport runs.
+- Nota Chord's Fold in scale can use any key, major or minor (it used the major scale of
+  each played note). Spread now opens the chord in two steps: first every other shift goes
+  up an octave, then all of them. Velocity offsets are in MIDI steps (−64…+63), and the
+  default is Maj7 with a 30 ms strum. Projects and presets from older versions load with the
+  same shifts switched on as before.
+- Nota Chord has 34 presets. The automation menu lists its settings, and each shift's
+  semitones, switch and velocity are under Shifts. MCP gets new tools for it: `get_chord`,
+  `set_chord` and `set_chord_shift`.
+- Nota Length has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The GATE window now shows a bar of five notes and what happens to each: the note played in
+  is outlined, the note that comes out is filled, and a band shows how far Random can move
+  it. A playhead runs across the bar, and Random picks new lengths on every pass.
+- Nota Length's Sync mode has eight lengths, from 1/32 to a whole bar, plus dotted 1/8 and
+  triplet 1/4. Vel → Len and Key → Len now go both ways: plus makes loud (or low) notes
+  longer, minus makes them shorter. Legato now holds each note until the next one starts.
+  Clip length limit stops a note at the end of the bar. Projects and presets from older
+  versions load with the same lengths as before.
+- Nota Length has 32 presets. The automation menu lists its settings, and MCP gets new tools
+  for it: `get_length` and `set_length`.
+- Nota Random has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The OUTPUT window shows a bar of eight notes: the note played in is dashed, the note that
+  comes out is filled (brighter when louder), and a skipped note gets a ×. A playhead runs
+  across the bar, and every bar is a new roll. The DICE panel draws the chosen distribution
+  from the same dice the device uses.
+- Nota Random's Lock now holds the roll you see on screen and repeats it every bar; Reroll
+  moves to the next seed. Stay in scale keeps notes in C major. Timing now delays notes by
+  up to 100 ms.
+- Nota Random has 32 presets. The automation menu lists its settings, and MCP gets new tools
+  for it: `get_random` and `set_random`.
+- Nota Scale has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The NOTE MAP shows C to B as keys: scale notes are filled, the root is outlined, and every
+  other note shows where it goes. Click a note to add it or take it out. The note you play
+  lights up, along with the note it turns into, and fades out when you let go.
+- Nota Scale's Learn is now a mode: while it's on, the notes you play pass through and
+  become a new Custom scale. Follow key now finds the key that best fits what you play.
+  Clear leaves only the root.
+- Nota Scale has 35 presets. The automation menu lists its settings, and each note of the
+  Custom scale is under Custom Notes. MCP gets new tools for it: `get_scale`, `set_scale`
+  and `set_scale_note`.
+- Nota Velocity has a new look in the same two sizes, a full card and a small 260-pixel one.
+  The TRANSFER graph shows the curve, the band Random can move a note within, the Out range
+  as dashed lines and the last 12 notes as dots. Each new note pops in, and the curve glides
+  to its new shape when you change a setting. LAST 12 NOTES shows each note's velocity in as
+  an outline and out as a fill.
+- Nota Velocity's Random has its own on/off switch, so you can turn it off without losing
+  the amount. Random goes up to ±64. Drive now goes from 0.25 to 4 (it stopped at 2). A note
+  never comes out at velocity 0. Projects and presets from older versions sound the same.
+- Nota Velocity has 32 presets. The automation menu lists its settings, and MCP gets new
+  tools for it: `get_velocity` and `set_velocity`.
+- Nota Synth now comes in two sizes too: the full card and a small 260-pixel one with the
+  filter curve and four knobs (Cutoff, Reso, Attack, Release). Switch with S / L in the card's
+  header. A new Synth opens small. The project remembers each Synth's size, and presets
+  don't change it.
+
+### Fixed
+- Moving several selected clips at once no longer deletes or shortens some of them. Before,
+  a second move of the same clips could make clips disappear or get cut. A group move is
+  now also a single undo step.
+- Nota Scale no longer leaves notes hanging when you change the scale, root or fold while a
+  key is held, or when two held keys land on the same note.
+- Nota Length's Gate % below 100 % now shortens notes from a clip. Before, a note always
+  lasted at least as long as it was held.
+- Nota Length no longer leaves notes hanging when you bypass it while a note is sounding.
+- Nota Random's Timing now really moves notes. Before, a shift longer than a few milliseconds
+  was cut short, so most notes played on time.
+- Nota Random no longer leaves a transposed note hanging when you bypass it while it sounds.
+- Nota Chord no longer leaves notes hanging when you change its shifts while a key is held,
+  or when two held keys share a note.
 
 ## [0.41.5] — 2026-09-25
 

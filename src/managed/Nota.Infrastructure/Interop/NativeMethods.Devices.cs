@@ -103,6 +103,9 @@ internal static partial class NativeMethods
     internal static partial int MidiEffectLastOut(IntPtr engine, int trackId, int index);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_scope")]
     internal static partial int MidiEffectScope(IntPtr engine, int trackId, int index, [Out] float[] outv, int maxN);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_command")]
+    internal static partial void MidiEffectCommand(IntPtr engine, int trackId, int index, int cmd);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_name")]
     internal static partial IntPtr MidiEffectName(IntPtr engine, int trackId, int index);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_param_count")]
@@ -217,6 +220,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_name")]
     internal static partial IntPtr PluginParamName(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_text")]
+    internal static partial IntPtr PluginParamText(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_default")]
+    internal static partial float PluginParamDefault(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_get")]
     internal static partial float PluginParamGet(IntPtr engine, int trackId, int deviceIndex, int paramIndex);

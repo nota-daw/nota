@@ -4,13 +4,15 @@
 namespace Nota.Application;
 
 /// <summary>A shipped factory preset for a built-in instrument or effect, described
-/// for the browser. Grouped under its parent device (BuiltinKind + IsInstrument).</summary>
+/// for the browser. Grouped under its parent device (BuiltinKind + IsInstrument), then
+/// into a <see cref="Category"/> folder (Pads, Bass, Vocals, Mastering …) when it has one.</summary>
 public readonly record struct FactoryPresetInfo(
     string Id,            // stable synthetic id; the browser row's Path is "factory:" + Id
     string DisplayName,
     bool IsInstrument,    // groups under the Instruments tree
     int BuiltinKind,      // parent built-in device kind
-    bool IsMidiEffect = false); // groups under the MIDI tree (else FX when not an instrument)
+    bool IsMidiEffect = false,  // groups under the MIDI tree (else FX when not an instrument)
+    string Category = "");      // folder inside the device; "" = loose at the device's top (Init)
 
 /// <summary>The built-in (read-only) preset library shipped with the app.</summary>
 public interface IFactoryPresets

@@ -127,6 +127,22 @@ std::string Engine::pluginParamName(int32_t trackId, int32_t deviceIndex, int32_
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamName(paramIndex) : std::string{};
 }
+std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return {};
+    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamText(paramIndex) : std::string{};
+    if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return {};
+    auto& d = t->devices[deviceIndex];
+    return d ? d->pluginParamText(paramIndex) : std::string{};
+}
+float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return 0.0f;
+    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamDefault(paramIndex) : 0.0f;
+    if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return 0.0f;
+    auto& d = t->devices[deviceIndex];
+    return d ? d->pluginParamDefault(paramIndex) : 0.0f;
+}
 float Engine::pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0.0f;
@@ -450,6 +466,90 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
     republishWithTrack(trackId, nt);
     return index;
+}
+
+// --- device edit → lane index fix-up (message thread) -----------------------
+
+void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t removedIndex, int32_t from, int32_t to) {
+    // Lanes on the effect chain (DeviceParam / PluginParam >= 0) or the MIDI-FX chain.
+    auto onChain = [midi](const AutomationLane& l) {
+        if (midi) return l.target == AutomationTarget::MidiDeviceParam;
+        return l.target == AutomationTarget::DeviceParam ||
+               (l.target == AutomationTarget::PluginParam && l.deviceIndex >= 0);
+    };
+    // New chain position of `idx` (-1 = its device was removed).
+    auto remap = [&](int32_t idx) -> int32_t {
+        if (removedIndex >= 0) return idx == removedIndex ? -1 : idx > removedIndex ? idx - 1 : idx;
+        if (idx == from) return to;
+        if (from < to) { if (idx > from && idx <= to) return idx - 1; }
+        else           { if (idx >= to && idx < from) return idx + 1; }
+        return idx;
+    };
+
+    // laneMap: old lane index → new lane index (-1 = dropped with its device).
+    std::vector<int32_t> laneMap(nt.automation.size());
+    std::vector<AutomationLane> kept;
+    kept.reserve(nt.automation.size());
+    for (size_t i = 0; i < nt.automation.size(); ++i) {
+        AutomationLane& l = nt.automation[i];
+        if (onChain(l)) {
+            const int32_t ni = remap(l.deviceIndex);
+            if (ni < 0) { laneMap[i] = -1; continue; }
+            l.deviceIndex = ni;
+        }
+        laneMap[i] = static_cast<int32_t>(kept.size());
+        kept.push_back(std::move(l));
+    }
+    nt.automation = std::move(kept);
+
+    // In-flight gestures on this track address lanes by index and targets by device.
+    const int32_t trackId = nt.id();
+    auto laneGone = [&](int32_t& laneIndex) {
+        if (laneIndex < 0 || laneIndex >= static_cast<int32_t>(laneMap.size())) return true;
+        laneIndex = laneMap[laneIndex];
+        return laneIndex < 0;
+    };
+    std::erase_if(activeWrites_, [&](ActiveWrite& aw) {
+        if (aw.trackId != trackId) return false;
+        if (laneGone(aw.laneIndex)) return true;
+        const auto tgt = static_cast<AutomationTarget>(aw.target);
+        const bool chain = midi ? tgt == AutomationTarget::MidiDeviceParam
+                                : tgt == AutomationTarget::DeviceParam ||
+                                  (tgt == AutomationTarget::PluginParam && aw.deviceIndex >= 0);
+        if (chain) aw.deviceIndex = remap(aw.deviceIndex);
+        return false;
+    });
+    std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
+}
+
+bool Engine::automationDeviceRemapSelfTest() {
+    // Two effects, a lane on each: reordering the chain keeps every lane on its own
+    // device; removing a device drops its lanes and shifts the rest.
+    const int32_t tid = addInstrumentTrack();
+    const int32_t d0 = addTrackBuiltinDevice(tid, 3);   // Delay   @0
+    const int32_t d1 = addTrackBuiltinDevice(tid, 4);   // Utility @1
+    const int32_t d2 = addTrackBuiltinDevice(tid, 2);   // Reverb  @2
+    if (d0 != 0 || d1 != 1 || d2 != 2) { removeTrack(tid); return false; }
+    const int32_t dp = static_cast<int32_t>(AutomationTarget::DeviceParam);
+    addAutomationLane(tid, dp, 0, 1);                    // lane 0 → Delay
+    addAutomationLane(tid, dp, 1, 2);                    // lane 1 → Utility
+    addAutomationLane(tid, dp, 2, 3);                    // lane 2 → Reverb
+    addAutomationLane(tid, static_cast<int32_t>(AutomationTarget::Volume), -1, -1);   // lane 3
+    auto devOf = [&](int32_t lane) {
+        int32_t dev = -9;
+        automationLaneInfo(tid, lane, nullptr, &dev, nullptr, nullptr);
+        return dev;
+    };
+    auto kindOf = [&](int32_t lane) { return trackDeviceBuiltinKind(tid, devOf(lane)); };
+
+    moveDevice(tid, 0, 2);                               // Utility, Reverb, Delay
+    bool ok = kindOf(0) == 3 && kindOf(1) == 4 && kindOf(2) == 2 && devOf(3) == -1;
+    moveDevice(tid, 2, 0);                               // Delay, Utility, Reverb
+    ok = ok && devOf(0) == 0 && devOf(1) == 1 && devOf(2) == 2;
+    removeDevice(tid, 1);                                // Delay, Reverb — Utility's lane goes
+    ok = ok && automationLaneCount(tid) == 3 && kindOf(0) == 3 && kindOf(1) == 2 && devOf(2) == -1;
+    removeTrack(tid);
+    return ok;
 }
 
 int32_t Engine::automationLaneCount(int32_t trackId) const {

@@ -96,6 +96,19 @@ typedef struct NotaAudioClipInfo {
     int32_t reversed;          /* 0/1: play the region back-to-front (non-destructive) */
 } NotaAudioClipInfo;
 
+/* Audio-clip ADSR amplitude shape, in played time (clip-local beats). Attack ramps
+ * 0->1 from the clip start, decay falls 1->sustain, sustain holds, release fades to 0
+ * over the last release_beats before the clip end (multiplying the ADS stage, so
+ * overlapping stages on a short clip stay smooth). The default {0,0,0,1} is the
+ * identity: the sample plays its full length at full level. */
+typedef struct NotaClipAdsr {
+    double attack_beats;
+    double decay_beats;
+    double release_beats;
+    float  sustain;            /* 0..1 linear gain */
+    int32_t reserved;          /* 0 */
+} NotaClipAdsr;
+
 /* Decoded-sample metadata (M7-6b). */
 typedef struct NotaSampleInfo {
     int32_t channels;
@@ -156,6 +169,79 @@ NOTA_API double nota_engine_sample_rate(const NotaEngine* engine);
 NOTA_API NotaResult nota_engine_preview_file(NotaEngine* engine, const char* path);
 NOTA_API NotaResult nota_engine_stop_preview(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_preview_active(const NotaEngine* engine);
+/* Audition from start_seconds into the file. Re-auditioning the file already loaded
+ * (a waveform seek, a replay) reuses its decoded buffer. */
+NOTA_API NotaResult nota_engine_preview_file_at(NotaEngine* engine, const char* path, double start_seconds);
+/* Loop the audition until stopped (1) or play it once (0). */
+NOTA_API NotaResult nota_engine_set_preview_loop(NotaEngine* engine, int32_t on);
+/* Audition level, linear gain (1 = unity), ramped over one block. */
+NOTA_API NotaResult nota_engine_set_preview_gain(NotaEngine* engine, float gain);
+/* Playhead of the audition in seconds into the file (last rendered block). */
+NOTA_API double     nota_engine_preview_position(const NotaEngine* engine);
+/* The last n (≤ 4096) mono samples the preview voice played, oldest first — for a live
+ * spectrum / scope under the browser player. Returns the count written. */
+NOTA_API int32_t    nota_engine_preview_scope(const NotaEngine* engine, float* out, int32_t n);
+
+/* ---- Preset audition --------------------------------------------------------
+ * A standalone chain (MIDI effects -> built-in instrument -> audio effects) that renders a
+ * phrase offline into a buffer: not a track, never in the graph, so it is built, rendered
+ * and destroyed on any worker thread. An effect-only rig plays a source (a demo loop or a
+ * file) through its devices. The finished buffer is stored in the engine's audition cache
+ * under a key (message thread) and played on the preview voice with preview_cached_at, so
+ * loop / gain / position / scope work as for a sample.
+ *   create -> set_instrument / add_device / add_midi_effect (+ params) -> render
+ *   -> peaks -> nota_engine_audition_store (UI thread) -> destroy. */
+typedef struct NotaAudition NotaAudition;
+typedef struct NotaAuditionNote {
+    double  start_beat;
+    double  length_beats;
+    int32_t pitch;      /* 0..127 */
+    float   velocity;   /* 0..1 */
+} NotaAuditionNote;
+#define NOTA_AUDITION_ROLLING 1   /* the instrument sees a rolling transport (generative synths) */
+NOTA_API NotaAudition* nota_audition_create(double sample_rate);
+NOTA_API void    nota_audition_destroy(NotaAudition* rig);
+/* 1 = ok. Instrument kinds as nota_engine_set_track_builtin_instrument (no racks). */
+NOTA_API int32_t nota_audition_set_instrument(NotaAudition* rig, int32_t kind);
+/* Normalized value by plugin-param id; 1 = the id exists. */
+NOTA_API int32_t nota_audition_instrument_param(NotaAudition* rig, const char* id, float value);
+/* Appends a built-in audio effect / MIDI effect; returns its index or -1. */
+NOTA_API int32_t nota_audition_add_device(NotaAudition* rig, int32_t kind);
+NOTA_API int32_t nota_audition_device_param(NotaAudition* rig, int32_t index, const char* name, float value);
+NOTA_API int32_t nota_audition_add_midi_effect(NotaAudition* rig, int32_t kind);
+NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, const char* name, float value);
+/* The Sampler's or Nota Grain's sample, played at its own pitch on root_note (NULL / "" =
+ * the Sampler's procedural keys tone at C4; Grain keeps its built-in pad). */
+NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8, int32_t root_note);
+/* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
+ * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
+ * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */
+NOTA_API int32_t nota_audition_set_source_file(NotaAudition* rig, const char* path_utf8, double max_seconds);
+NOTA_API int32_t nota_audition_add_source_from(NotaAudition* rig, const NotaAudition* part, float gain);
+NOTA_API int32_t nota_audition_use_cached_source(NotaAudition* rig, const char* key);
+NOTA_API int32_t nota_audition_cache_source(NotaAudition* rig, const char* key, float target_peak);
+/* Kits (Drum Rack / Nota Rhythm): a pad instrument instead of a built-in one. A pad plays a
+ * one-shot file on its note with gain, pan (-1..1) and a choke group (0 = none), through its
+ * own effects. Returns the pad / device index or -1. */
+NOTA_API int32_t nota_audition_use_kit(NotaAudition* rig);
+NOTA_API int32_t nota_audition_kit_add_pad(NotaAudition* rig, int32_t note, const char* path_utf8,
+                                           float gain, float pan, int32_t choke);
+NOTA_API int32_t nota_audition_kit_pad_add_device(NotaAudition* rig, int32_t pad, int32_t kind);
+NOTA_API int32_t nota_audition_kit_pad_device_param(NotaAudition* rig, int32_t pad, int32_t device,
+                                                    const char* name, float value);
+/* Renders the notes (beats at bpm) for phrase_beats, then the tail until it falls silent or
+ * max_tail_seconds pass. Returns frames rendered, or -1 (cancelled / nothing to play). */
+NOTA_API int64_t nota_audition_render(NotaAudition* rig, const NotaAuditionNote* notes, int32_t count,
+                                      double bpm, double phrase_beats, double max_tail_seconds, int32_t flags);
+/* Any thread: makes a running render return -1 within one block. */
+NOTA_API void    nota_audition_cancel(NotaAudition* rig);
+NOTA_API int32_t nota_audition_peaks(const NotaAudition* rig, float* out_min_max, int32_t max_points);
+NOTA_API double  nota_audition_seconds(const NotaAudition* rig);
+/* Message thread: keep the rendered buffer under `key` (a small LRU). */
+NOTA_API NotaResult nota_engine_audition_store(NotaEngine* engine, const NotaAudition* rig, const char* key);
+NOTA_API int32_t    nota_engine_audition_cached(const NotaEngine* engine, const char* key);
+/* Plays the cached audition from start_seconds; 0 = not cached. */
+NOTA_API int32_t    nota_engine_preview_cached_at(NotaEngine* engine, const char* key, double start_seconds);
 
 /* ---- xrun / dropout telemetry (M7-8) -------------------------------------
  * Running count of audio-device overloads/dropouts since launch. The UI polls
@@ -252,6 +338,10 @@ NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine,
 NOTA_API int32_t     nota_plugin_param_count(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API const char* nota_plugin_param_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* The plugin's display text for a param's current value ("-12.0 dB", unit appended), and its
+ * normalized default. Engine-owned string, valid until the next call. */
+NOTA_API const char* nota_plugin_param_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+NOTA_API float       nota_plugin_param_default(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API float       nota_plugin_param_get(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API NotaResult  nota_plugin_param_set(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, float normalized);
 /* Add (or reuse) a PluginParam automation lane bound to a stable paramID; the
@@ -266,6 +356,8 @@ NOTA_API int32_t nota_plugin_last_touched_param(NotaEngine* engine, int32_t trac
 /* ---- automation write / record (M9-C) -----------------------------------
  * Device-free self-test of the write path (touch, latch, override/re-enable). */
 NOTA_API int32_t nota_engine_automation_write_selftest(NotaEngine* engine);
+/* Self-test: reordering / removing effects keeps each lane on its own device. */
+NOTA_API int32_t nota_engine_automation_device_remap_selftest(NotaEngine* engine);
 /* There are no record modes: lanes always play back, and gestures record while
  * automation record is on (the transport record button drives it — engaging it
  * via nota_engine_set_recording sets this too). begin/end bracket a control
@@ -337,6 +429,13 @@ NOTA_API int32_t    nota_engine_add_group_track(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_create_group(NotaEngine* engine, const int32_t* track_ids, int32_t n);
 NOTA_API NotaResult nota_engine_ungroup(NotaEngine* engine, int32_t group_id);
 NOTA_API NotaResult nota_engine_set_track_group(NotaEngine* engine, int32_t track_id, int32_t group_id);
+/* Multi-track ops (header multi-selection). The set expands to every descendant of a group in
+ * it; each call is one undo step. duplicate inserts the copies after the set's last member
+ * (memberships kept) and writes up to cap new ids, returning the count (-1 none); remove
+ * drops the whole set. */
+NOTA_API int32_t    nota_engine_duplicate_tracks(NotaEngine* engine, const int32_t* track_ids, int32_t n,
+                                                 int32_t* out_ids, int32_t cap);
+NOTA_API NotaResult nota_engine_remove_tracks(NotaEngine* engine, const int32_t* track_ids, int32_t n);
 
 /* ---- Send / return buses (M6-1) ----------------------------------------- */
 /* Adds a return (aux) track: an effect bus that other tracks send to, running
@@ -490,6 +589,8 @@ NOTA_API int32_t nota_engine_add_sampler_instrument_track(NotaEngine* engine);
 NOTA_API int32_t nota_track_set_sampler_sample(NotaEngine* engine, int32_t track_id, const char* path_utf8, int32_t root_note);
 /* Loads a sample file into an existing Nota Grain track (kind 10, keeps params). 1 = ok. */
 NOTA_API int32_t nota_track_set_grain_sample(NotaEngine* engine, int32_t track_id, const char* path_utf8, int32_t root_note);
+/* Sets the Grain's root note — the key that plays the sample at its own pitch (lock-free). 1 = ok. */
+NOTA_API int32_t nota_track_set_grain_root(NotaEngine* engine, int32_t track_id, int32_t root_note);
 /* Sets the Sampler's root note (lock-free). 1 = ok. */
 NOTA_API int32_t nota_track_set_sampler_root(NotaEngine* engine, int32_t track_id, int32_t root_note);
 /* Live playback position of the Sampler (0..1 of the sample, -1 = silent) for the UI cursor. */
@@ -550,6 +651,10 @@ NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_redo(const NotaEngine* engine);
+/* Undo group: the edits made between begin and end undo as ONE step (e.g. replacing a
+ * device in place = add + move + remove). Nests; pair every begin with an end. */
+NOTA_API void       nota_engine_undo_group_begin(NotaEngine* engine);
+NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,
@@ -678,6 +783,12 @@ NOTA_API NotaResult nota_clip_move(NotaEngine* engine, int32_t track_id, int32_t
 /* Move a clip to another same-type track (instrument→instrument or audio→audio,
  * atomic). Same-track == nota_clip_move. */
 NOTA_API NotaResult nota_clip_move_to_track(NotaEngine* engine, int32_t src_track_id, int32_t clip_index, int32_t source_track_id, double new_start_beat);
+/* Group move (multi-selection drag): moves n clips at once — clip i of track_ids[i] at
+ * clip_indices[i] lands on dest_track_ids[i] at new_starts[i]. Moved clips carve only the
+ * clips that stay put (never each other); same-track clips keep their index. One undo step;
+ * nota_clips_last_placed then reports each clip's new (track, index) in request order. */
+NOTA_API NotaResult nota_clips_block_move(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices,
+                                          const int32_t* dest_track_ids, const double* new_starts, int32_t n);
 NOTA_API NotaResult nota_clip_trim(NotaEngine* engine, int32_t track_id, int32_t clip_index, double new_start_beat, double new_length_beats);
 /* Grid resize for an audio clip (grid-relative): warped clips (or unwarped clips
  * dragged past their source length) stretch; unwarped clips within source bounds
@@ -693,6 +804,10 @@ NOTA_API NotaResult nota_clip_set_warp_trim(NotaEngine* engine, int32_t track_id
 /* Audio-clip runtime edits: gain (linear) and varispeed transpose (semitones). */
 NOTA_API NotaResult nota_clip_set_gain(NotaEngine* engine, int32_t track_id, int32_t clip_index, float gain);
 NOTA_API NotaResult nota_clip_set_pitch(NotaEngine* engine, int32_t track_id, int32_t clip_index, float semitones);
+/* Audio-clip ADSR (see NotaClipAdsr). get returns 1 if the clip is audio, else 0.
+ * set clamps times to >= 0 and sustain to 0..1; one undo step. */
+NOTA_API int32_t nota_clip_get_adsr(const NotaEngine* engine, int32_t track_id, int32_t clip_index, NotaClipAdsr* out);
+NOTA_API NotaResult nota_clip_set_adsr(NotaEngine* engine, int32_t track_id, int32_t clip_index, const NotaClipAdsr* adsr);
 /* Reverse an audio clip (non-destructive): the played region is read back-to-front.
  * The sample and any warp cache stay in file order — only the read direction flips — so
  * this is as cheap as a gain change and composes with gain/pitch/warp/clip envelopes.
@@ -789,10 +904,15 @@ NOTA_API NotaResult nota_track_set_name(NotaEngine* engine, int32_t track_id, co
 NOTA_API int32_t    nota_track_get_name(NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
 NOTA_API NotaResult nota_track_set_color(NotaEngine* engine, int32_t track_id, int32_t color_index);
 NOTA_API int32_t    nota_track_get_color(NotaEngine* engine, int32_t track_id);
-/* Track clipboard: copy stores an independent clone, paste appends a fresh copy (new id).
- * Cut = copy + nota_engine_remove_track. has_clipboard: 1 when a track is copied. */
+/* Track clipboard: copy stores independent clones (a group brings its children), paste
+ * appends fresh copies (new ids) top-level. copy_many / paste_after are the multi-track forms:
+ * paste_after lands the copies after after_track_id inside its group (-1 = top-level at the
+ * end), writes up to cap new ids and returns the count (-1 none). Cut = copy + remove.
+ * has_clipboard: 1 when tracks are copied. */
 NOTA_API NotaResult nota_track_copy(NotaEngine* engine, int32_t track_id);
-NOTA_API int32_t    nota_track_paste(NotaEngine* engine);   /* -> new track id, or -1 */
+NOTA_API int32_t    nota_track_paste(NotaEngine* engine);   /* -> first new track id, or -1 */
+NOTA_API NotaResult nota_track_copy_many(NotaEngine* engine, const int32_t* track_ids, int32_t n);
+NOTA_API int32_t    nota_track_paste_after(NotaEngine* engine, int32_t after_track_id, int32_t* out_ids, int32_t cap);
 NOTA_API int32_t    nota_track_has_clipboard(NotaEngine* engine);
 /* Record input source for an audio track (internal resampling): 0 = hardware input,
  * -1 = master bus, >0 = another track's post-fader output (by id). */
@@ -889,6 +1009,8 @@ NOTA_API int32_t     nota_midi_effect_last_in(const NotaEngine* engine, int32_t 
 NOTA_API int32_t     nota_midi_effect_last_out(const NotaEngine* engine, int32_t track_id, int32_t index);
 /* Float scope buffer for a MIDI effect editor (Nota Velocity in/out pairs); returns count written. */
 NOTA_API int32_t     nota_midi_effect_scope(const NotaEngine* engine, int32_t track_id, int32_t index, float* out, int32_t max_n);
+/* An editor command to a MIDI effect (Nota Arp: 1 = restart the pattern). */
+NOTA_API void        nota_midi_effect_command(NotaEngine* engine, int32_t track_id, int32_t index, int32_t cmd);
 /* Map/CC routing: the effect's CC lane modulates an audio-device param on the track. */
 NOTA_API void        nota_midi_effect_set_cc_dest(NotaEngine* engine, int32_t track_id, int32_t index, int32_t dest_device, int32_t dest_param);
 NOTA_API void        nota_midi_effect_set_cc_depth(NotaEngine* engine, int32_t track_id, int32_t index, float depth);

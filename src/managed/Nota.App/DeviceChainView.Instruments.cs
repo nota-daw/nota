@@ -18,17 +18,21 @@ public sealed partial class DeviceChainView
         int kind = _engine.TrackInstrumentKind(_trackId);
         if (kind == 3) return new RackCardView(NewCardContext()).BuildInstrumentRackCard();   // Instrument Rack
         if (kind == 4) return DrumRackCard();
+        if (kind == -1) return PluginCardFor(ChainKind.Instrument, -1, 1);   // hosted VST3 / AU
         // Built-in Sampler + synths (Synth/Physical/Aurora/Volt) → their strategy; anything
         // else (or a synth reporting no params) → the generic Open-GUI card.
         bool hasParams = _engine.PluginParamCount(_trackId, -1) > 0;
         var strategy = _instrumentFactory.Resolve(kind, hasParams);
-        var body = strategy.Build(NewCardContext());
+        var ctx = NewCardContext();
+        var body = strategy.Build(ctx);
         if (!strategy.BodyOnly) return body;   // card owns its whole frame (not yet migrated)
+        double width = strategy.WidthFor(_engine, _trackId);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: strategy.Subtitle, DeviceIndex: -1, Count: 1,
             Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
-            PresetKind: kind, IsInstrument: true, Width: strategy.CardWidth, Kind: ChainKind.Instrument,
-            VoiceLabel: strategy.VoiceLabel, Presets: kind == Nota.Application.RhythmModel.Kind ? KitPresets() : null);
+            PresetKind: kind, IsInstrument: true, Width: width, Kind: ChainKind.Instrument,
+            VoiceLabel: strategy.VoiceLabel, Presets: kind == Nota.Application.RhythmModel.Kind ? KitPresets() : null,
+            HeaderExtra: strategy.HeaderAccessory(ctx), Compact: width < 300);
         return BuildCardShell(spec, body);
     }
 

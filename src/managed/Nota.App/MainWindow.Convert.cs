@@ -201,12 +201,14 @@ public partial class MainWindow
         Status($"Converted melody: {notes.Count} notes → new track {t}");
     }
 
-    // Convert Harmony: STFT peak-picking (AudioHarmony) → polyphonic note spans on a new Nota Synth
-    // track. Approximate (MVP) — best on sustained chords / pads.
+    // Convert Harmony: harmonic-sum pitch estimation (AudioHarmony) → polyphonic note spans on a new
+    // Nota Synth track. Approximate — best on sustained chords / pads.
     private async Task ConvertHarmonyAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
         prog.Report(ProgressReport.Indeterminate("Detecting harmony…"));
-        var spans = await Task.Run(() => AudioHarmony.Detect(mono, sr));
+        // Shortest kept note: an eighth (half a beat) at the clip's own beats-per-second.
+        double secPerBeat = clipBeats > 0 ? mono.Length / sr / clipBeats : 0.5;
+        var spans = await Task.Run(() => AudioHarmony.Detect(mono, sr, minNoteSec: 0.5 * secPerBeat));
         if (spans.Count == 0) { Status("No harmony found."); return; }
         double toBeat = mono.Length > 0 ? clipBeats / mono.Length : 0;
         var notes = new List<NotaNote>(spans.Count);

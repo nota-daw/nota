@@ -203,6 +203,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   sounds — the editor mirrors the whole view (brackets, warp markers, BPM chips, grid and
   cursor included) so the screen reads left-to-right in playing order — and trims and
   splits mirror, so the audible head and tail follow the edit.
+- **ADSR per audio clip**: attack, decay, sustain and release shape the clip's level in
+  played time. Every audio clip in the arrangement carries three handles, shown on hover or
+  selection — attack and release squares at the top corners, a decay/sustain dot — and the
+  clip editor has an ADSR tab with the same handles over the waveform plus ATTACK / DECAY /
+  SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
+  sample plays its full length at full level; double-click a handle to reset its stage.
+  Editing in either place updates the other, each edit is one undo step, split keeps the
+  attack on the left piece and the release on the right, and the shape is saved with the
+  project.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. A grid-snap toggle governs trimming a warped clip.
@@ -256,7 +265,9 @@ and user presets, automation, persistence and cloning.
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
   stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
   Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
-  Osc · Env · Filter tabs with draggable envelope and filter graphs. 25 factory presets.
+  Osc · Env · Filter tabs with draggable envelope and filter graphs. Two sizes (L 700 /
+  S 260, S by default): S is the draggable filter curve over Cutoff · Reso · Attack ·
+  Release; the size is saved with the project. 25 factory presets.
 - **Nota Sampler** — sampler (one-shot and loop: Off / Fwd / Ping / Rev), voice modes
   Poly 16 / Mono / Choke, Glide (legato in Mono), loop crossfade, sample Gain, pitch
   Keytrack, filter key-tracking and Env → Cutoff, Vel→Vol, Output; Sample · Pitch · Env ·
@@ -268,8 +279,10 @@ and user presets, automation, persistence and cloning.
   Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
   pan variation, stereo spread, **Dry/Wet** against the sample itself, an LP/HP/BP filter
   and an amp envelope. The card draws the sample with the live grain cloud on it (drag to
-  move Position). Drop a sample from the browser to replace the built-in pad. 25 factory
-  presets.
+  move Position). Drop a sample from the browser to replace the built-in pad. 50 factory
+  presets in nine folders; every preset outside Basics brings its own source (29 synthesized
+  on first use — choir, strings, bells, kalimba, a drum break, an arpeggio, ocean, radio …),
+  while Basics shape whatever sample is loaded.
 - **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
   one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
   its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a
@@ -522,18 +535,45 @@ and user presets, automation, persistence and cloning.
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 
 ### MIDI effects
-- **Nota Arp** — arpeggiator: step sequencer with Velocity/Length/Chance/Ratchet/Transpose
-  lanes, Order, Oct 1–4, Dir (↑↓↕?), Hold/Retrig, Free/Sync, Gate/Swing.
-- **Nota Scale** — snap to a scale: Root, Major/Minor/Dorian/Phryg/Penta/Custom, Fold
-  (Nearest/Down/Up), NOTE MAP, Range, Follow Key, Learn/Clear.
-- **Nota Length** (formerly Note Length) — note lengths: Sync/ms/Gate %, Vel→Len, Key→Len,
-  Random, Legato, clip length limit; a GATE visualiser.
-- **Nota Velocity** — velocity transformation: Curve/Compand/Fixed, Drive, Random, Out
-  Range, Random Dir, and a Last 12 histogram.
-- **Nota Random** — randomization: Chance, Gauss/Even/Walk, Lock seed / Re-roll,
-  Note/Velocity/Timing/Skip/Octave amounts, Distribution, Rate, Stay in scale.
-- **Nota Chord** — chord generator: Maj7/Min7/Sus4/5th/Custom, 6 voices with offset and
-  velocity, Strum, Keep root, Fold in scale, Spread; a preview keyboard.
+- **Nota Arp** — arpeggiator in two sizes (L 700 / S 260, S·L toggle; one preset list and
+  current preset for both): 9 orders (Up, Down,
+  Up·Down, Down·Up, Converge, Diverge, Random, Chord, As played) over 1–4 octaves; a live
+  Pattern view of the notes each step plays and a Groove view of five per-step lanes
+  (Velocity/Length/Chance/Ratchet/Transpose) plus step mute; Free/Sync (1/1…1/32), Gate,
+  Swing, Vel Amt, Retrig Off/Note/Beat, Transpose, Steps 1–16, Hold, Restart. 30 presets,
+  full automation, MCP tools (`get_arp` / `set_arp` / `set_arp_lane` / `set_arp_step` / `restart_arp`).
+- **Nota Scale** — snaps notes into a scale, in two sizes (L 700 / S 260, S·L toggle; one
+  preset list for both): Root, Major/Minor/Dorian/Phryg/Penta/Custom (older scales such as
+  Lydian or Harmonic minor still load and show by name), Fold Nearest/Down/Up, Transpose, a
+  clickable NOTE MAP (C → B as key cells: scale notes filled, root outlined, the rest showing
+  where they fold; the note playing lights up with its target and fades out), last IN → OUT,
+  Range (outside passes through), Follow key (the root follows what you play), Learn (a mode
+  that builds a Custom scale from the notes you play) and Clear. Held notes release correctly
+  when the scale changes. 35 presets, full automation, MCP tools (`get_scale` / `set_scale` /
+  `set_scale_note`).
+- **Nota Length** (formerly Note Length) — forces note lengths: Sync (1/32 … 1/1, 1/8., 1/4T) /
+  ms / Gate % (of the held length; clip notes can also shorten), start from note-on or
+  note-off, bipolar Vel → Len and Key → Len, Random, Legato (to the next note), Clip length
+  limit (the bar line). Two sizes (L 700 / S 260) with an animated GATE window: one bar of five
+  notes, input outlined, output filled, Random's range as a band. 32 presets, full
+  automation, MCP tools (`get_length` / `set_length`).
+- **Nota Velocity** — velocity transformation: Curve / Compand / Fixed, Drive (0.25 … 4) or
+  the Fixed value, Out range (1 … 127, never 0), Random ±0 … 64 with its own switch and Both /
+  Up / Down. Two sizes (L 700 / S 260) with an animated TRANSFER graph (curve, Random's band,
+  the last 12 notes as dots) and a LAST 12 NOTES histogram (in outlined, out filled). 32
+  presets, full automation, MCP tools (`get_velocity` / `set_velocity`).
+- **Nota Random** — randomization: Chance; Note (±12 st) / Velocity (±64) / Timing (up to
+  100 ms late) / Skip / Octave (±2) amounts; Gauss / Even / Walk; Per note / Per bar; Stay in
+  scale (C major); seed with Reroll and Lock (holds the roll on screen, repeating it every bar).
+  Two sizes (L 700 / S 260) with an animated OUTPUT window (one bar of eight notes, input dashed,
+  output filled by velocity, × for skipped) and a DICE histogram drawn from the same generator.
+  32 presets, full automation, MCP tools (`get_random` / `set_random`).
+- **Nota Chord** — chord generator in two sizes (L 700 / S 260, S·L toggle; one preset list
+  for both): TYPE Maj7/Min7/Sus4/5th/Custom, six switchable shifts (±12 st ruler + interval
+  name + velocity offset), Strum 0–100 ms (low → high), Spread (every other / all shifts up an
+  octave), Keep root, Fold in scale (any key, major / minor); a three-octave RESULT keyboard
+  that lights a held chord as it strums (and previews the strum once per bar). 34 presets,
+  full automation, MCP tools (`get_chord` / `set_chord` / `set_chord_shift`).
 
 ### Racks
 - **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains
@@ -577,6 +617,10 @@ and user presets, automation, persistence and cloning.
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
   paths in Preferences, and Rescan.
+- **Get Plug-ins** — open-source VST3 plugins from the
+  [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry), installed,
+  updated and removed from Preferences (checksum-verified; archives only, installers never
+  run). A project that needs a missing registry plugin offers to install it.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
   window that opens on top and focused, and closes when the device is removed).
 - **State save and restore** in the project, and **bypass**.
@@ -600,6 +644,11 @@ and user presets, automation, persistence and cloning.
   device type sits at the right edge as a quiet tag (a plug-in's tag names its format and
   vendor, which tells the AU and VST3 builds of one plug-in apart). The name always wins
   the room: the tag gives way rather than truncating it.
+- **Factory presets in folders**: a built-in device expands into category folders — Pads /
+  Bass / Leads / Keys & Plucks … for instruments, Vocals / Drums / Mix & Bus / Mastering /
+  Ambient / Sidechain … for effects, Triads / Sevenths, Grooves / Ratchets … for MIDI
+  effects — with its Init loose on top. Search opens the folders around the hits, and a
+  folder name ("Mastering") lists that folder in every device.
 - **View options** (the ⋮ button beside the search box): show type tags, group by source,
   favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
@@ -609,6 +658,24 @@ and user presets, automation, persistence and cloning.
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
     Racks are not replaced in place.
+- **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
+  Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
+  built-in device (its default sound). These tabs have their own **Auto**, off by default:
+  Space / Play auditions, Auto plays on select. The sound is rendered offline on a standalone
+  chain (not a track) in a few milliseconds and cached, and the row below is rendered ahead,
+  so ↑ ↓ through a folder plays each sound at once. Instruments play a phrase that suits
+  them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
+  bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
+  groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
+  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
+  loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
+  Nota's factory kits and presets and levelled alike. A track that suits the effect is
+  picked for you (dynamics hear drums, reverbs and delays keys, EQ and drive the pop mix);
+  the track button in the player picks another (scroll over it to step), or the **sample**
+  last selected in Files.
+  **WAVE / SPEC** in the well switches to a live spectrum of what is playing. Instrument
+  Racks and plug-in presets aren't previewed (the well says why).
 - **Favourites** (★) and **tags** (assign and clear, an editor with a title and colour,
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.

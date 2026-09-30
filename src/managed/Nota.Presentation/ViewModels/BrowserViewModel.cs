@@ -19,6 +19,8 @@ public enum BrowserItemKind
     /// <summary>A section header row (BUILT-IN / PLUG-INS) inside a flattened list — never
     /// selectable, draggable or activatable.</summary>
     Group,
+    /// <summary>A Standard MIDI File (.mid) — drops as MIDI clip(s).</summary>
+    MidiFile,
 }
 
 /// <summary>Active library filter for the device tabs (Instr / FX / MIDI).</summary>
@@ -50,9 +52,10 @@ public sealed class BrowserItem
     /// <summary>True for a scanned AU/VST3 row (as opposed to one of Nota's own devices).</summary>
     public bool IsPlugin => Kind is BrowserItemKind.PluginInstrument or BrowserItemKind.PluginEffect;
 
-    // --- tree (Instruments / FX): a built-in device parent with factory-preset children ---
-    public int Depth { get; init; }                            // 0 = device/plugin, 1 = preset child
-    public List<BrowserItem> Children { get; } = new();        // factory presets under this device
+    // --- tree (Instruments / FX / MIDI): a built-in device parent with factory-preset children,
+    // filed into category folders (Pads, Bass, Vocals …) with any unfiled presets loose on top ---
+    public int Depth { get; init; }                            // 0 = device/plugin, 1 = folder or preset, 2 = preset in a folder
+    public List<BrowserItem> Children { get; } = new();        // presets and category folders under this device
     public bool HasChildren => Children.Count > 0;
     public bool IsExpanded { get; set; }                       // toggled by the view-model
 
@@ -267,21 +270,39 @@ public sealed partial class BrowserViewModel : ObservableObject
         };
         _fxTree.AddRange(fxs.OrderBy(x => x.Name).ToList());
 
-        // Attach factory presets as children of their parent built-in device.
+        // Attach factory presets under their parent built-in device: unfiled ones (Init) loose
+        // at the top, the rest in a folder per category, folders in catalog order.
+        var folders = new Dictionary<(BrowserItem, string), BrowserItem>();
         foreach (var fp in _factory.All())
         {
             var tree = fp.IsMidiEffect ? _midiTree : fp.IsInstrument ? _instrTree : _fxTree;
             var parentKind = fp.IsMidiEffect ? BrowserItemKind.BuiltinMidiEffect
                 : fp.IsInstrument ? BrowserItemKind.BuiltinInstrument : BrowserItemKind.BuiltinEffect;
             var parent = tree.Find(d => d.BuiltinKind == fp.BuiltinKind && d.Kind == parentKind);
-            parent?.Children.Add(new BrowserItem
+            if (parent is null) continue;
+            bool filed = fp.Category.Length > 0;
+            var preset = new BrowserItem
             {
                 Name = fp.DisplayName,
                 Kind = BrowserItemKind.Preset,
-                Sub = "preset",
+                Sub = filed ? fp.Category : "preset",
                 Path = "factory:" + fp.Id,
-                Depth = 1,
-            });
+                Depth = filed ? 2 : 1,
+            };
+            if (!filed) { parent.Children.Insert(parent.Children.Count(c => !c.HasChildren), preset); continue; }
+            if (!folders.TryGetValue((parent, fp.Category), out var folder))
+            {
+                folder = new BrowserItem
+                {
+                    Name = fp.Category,
+                    Kind = BrowserItemKind.Folder,
+                    Path = $"category:{parent.LibraryKey}/{fp.Category}",
+                    Depth = 1,
+                };
+                folders[(parent, fp.Category)] = folder;
+                parent.Children.Add(folder);
+            }
+            folder.Children.Add(preset);
         }
         // Factory drum kits hang under the Drum Rack and Nota Rhythm alongside their presets —
         // a kit is what a "preset" means for those two, and both share the one set of kits.
@@ -302,9 +323,13 @@ public sealed partial class BrowserViewModel : ObservableObject
                     });
             }
 
-        // Preset groups start collapsed; the user expands a device to reveal its presets.
+        // Preset groups start collapsed; the user expands a device to reveal its folders.
         foreach (var tree in new[] { _instrTree, _fxTree, _midiTree })
-            foreach (var d in tree) d.IsExpanded = false;
+            foreach (var d in tree)
+            {
+                d.IsExpanded = false;
+                foreach (var c in d.Children) c.IsExpanded = false;
+            }
 
         int count = _catalog.Count;
         for (int i = 0; i < count; i++)
@@ -343,6 +368,8 @@ public sealed partial class BrowserViewModel : ObservableObject
     {
         if (!item.HasChildren) return;
         item.IsExpanded = !item.IsExpanded;
+        int deviceTab = DeviceTabOf(item);
+        if (deviceTab >= 0) { RebuildVisible(deviceTab); return; }
         if (item.Kind == BrowserItemKind.Folder)
         {
             // Remember folder expansion across full rescans (settings change / refresh). Folders
@@ -361,6 +388,16 @@ public sealed partial class BrowserViewModel : ObservableObject
         });
     }
 
+    // The device tab (0 Instr / 1 FX / 2 MIDI) a preset category folder belongs to, or -1.
+    private int DeviceTabOf(BrowserItem item)
+    {
+        if (item.Kind != BrowserItemKind.Folder) return -1;
+        if (_instrTree.Any(d => d.Children.Contains(item))) return 0;
+        if (_fxTree.Any(d => d.Children.Contains(item))) return 1;
+        if (_midiTree.Any(d => d.Children.Contains(item))) return 2;
+        return -1;
+    }
+
     /// <summary>Sets the live search query for a tree tab (0 = Instruments, 1 = FX,
     /// 2 = MIDI, 3 = Files, 4 = Presets) and refreshes its visible list.</summary>
     public void FilterTree(int tab, string query)
@@ -373,7 +410,8 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     // Flatten a tree into its visible ObservableCollection, honouring expand state and
     // the current query. With a query, matching is name/sub substring; a matching device
-    // shows all its presets, and a device with matching presets shows just those. With
+    // shows its category folders, and a device with matching presets shows just those
+    // (inside their folders, which a query opens). With
     // GroupBySource on, a BUILT-IN / PLUG-INS header carrying the section's device count
     // is emitted ahead of each run — so it is clear where Nota's own devices end.
     private void RebuildVisible(int tab)
@@ -395,7 +433,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         foreach (var node in ordered)
         {
             if (!PassesLibraryFilter(node)) continue;   // header favorite/tag chip
-            if (q.Length == 0 || Matches(node, q) || node.Children.Any(c => Matches(c, q)))
+            if (q.Length == 0 || Matches(node, q) || AnyMatch(node.Children, q))
                 devices.Add(node);
         }
 
@@ -418,21 +456,44 @@ public sealed partial class BrowserViewModel : ObservableObject
             }
             dst.Add(node);
             // No query: presets follow only while the device is expanded. With a query, a
-            // device that matched shows all of its presets; one that didn't shows the hits.
+            // device that matched shows its folders as if expanded; one that didn't shows the hits.
+            if (q.Length == 0) { if (node.IsExpanded) AddPresetRows(node.Children, "", dst); }
+            else AddPresetRows(node.Children, Matches(node, q) ? "" : q, dst);
+        }
+    }
+
+    // A device's preset rows: loose presets, then category folders with their presets. With
+    // no query, a folder shows its presets only while expanded; with one, a folder shows up
+    // open when its name or any of its presets match (a name hit reveals all of them).
+    private static void AddPresetRows(List<BrowserItem> children, string q, ObservableCollection<BrowserItem> dst)
+    {
+        foreach (var c in children)
+        {
+            if (!c.HasChildren)
+            {
+                if (q.Length == 0 || Matches(c, q)) dst.Add(c);
+                continue;
+            }
             if (q.Length == 0)
             {
-                if (node.IsExpanded) foreach (var c in node.Children) dst.Add(c);
+                dst.Add(c);
+                if (c.IsExpanded) foreach (var p in c.Children) dst.Add(p);
             }
-            else if (Matches(node, q))
+            else if (Matches(c, q))
             {
-                foreach (var c in node.Children) dst.Add(c);
+                dst.Add(c);
+                foreach (var p in c.Children) dst.Add(p);
             }
-            else
+            else if (c.Children.Any(p => Matches(p, q)))
             {
-                foreach (var c in node.Children) if (Matches(c, q)) dst.Add(c);
+                dst.Add(c);
+                foreach (var p in c.Children) if (Matches(p, q)) dst.Add(p);
             }
         }
     }
+
+    private static bool AnyMatch(List<BrowserItem> nodes, string q)
+        => nodes.Any(n => Matches(n, q) || AnyMatch(n.Children, q));
 
     /// <summary>Device rows on a tab, split by source — for the browser's status line.
     /// Counts what is actually visible (search + favorite/tag filter applied).</summary>
@@ -453,8 +514,8 @@ public sealed partial class BrowserViewModel : ObservableObject
            || it.Sub.Contains(q, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Scans the configured samples folder into a navigable folder tree (M7-4a).
-    /// Folders become expandable parent nodes; audio files are leaves. Only folders on a
-    /// path to an audio file appear.</summary>
+    /// Folders become expandable parent nodes; audio and MIDI files are leaves. Only folders
+    /// on a path to such a file appear.</summary>
     public void RebuildSamples()
     {
         _sampleTree.Clear();
@@ -465,7 +526,8 @@ public sealed partial class BrowserViewModel : ObservableObject
         // Folder nodes keyed by absolute directory path (reused while placing files).
         var folders = new Dictionary<string, BrowserItem>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in EnumerateFilesSafe(root)
-                     .Where(p => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant()))
+                     .Where(p => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant())
+                                 || Nota.Application.Midi.MidiFileReader.IsMidiFile(p))
                      .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                      .Take(MaxSamples))
         {
@@ -474,7 +536,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             parentChildren.Add(new BrowserItem
             {
                 Name = Path.GetFileName(path),
-                Kind = BrowserItemKind.Sample,
+                Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(path) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
                 Sub = "",
                 Path = path,
                 Depth = depth,

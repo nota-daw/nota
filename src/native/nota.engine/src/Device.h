@@ -75,6 +75,10 @@ public:
     virtual std::string pluginParamId(int32_t index) const { (void)index; return {}; }
     virtual std::string pluginParamName(int32_t index) const { (void)index; return {}; }
     virtual float       pluginParamGet(int32_t index) const { (void)index; return 0.0f; }
+    // The plugin's own display text for the current value ("-12.0 dB"), and its default
+    // (normalized). Message thread; empty / 0 when the device has no such param.
+    virtual std::string pluginParamText(int32_t index) const { (void)index; return {}; }
+    virtual float       pluginParamDefault(int32_t index) const { (void)index; return 0.0f; }
     virtual void        pluginParamSet(int32_t index, float normalized) { (void)index; (void)normalized; }
     virtual int32_t     pluginParamIndexOfId(const std::string& id) const { (void)id; return -1; }
     // "Learn" (M9-B3): index of the parameter last moved in the plugin's own GUI

@@ -44,6 +44,25 @@ public sealed partial class NotaEngine
     /// <summary>Move a track into groupId (-1 = top-level). Rejects cycles/returns.</summary>
     public void SetTrackGroup(int trackId, int groupId) { ThrowIfDisposed(); NativeMethods.SetTrackGroup(_handle, trackId, groupId); }
 
+    /// <summary>Duplicates a set of tracks (a group brings its children) after the set's last
+    /// member, as one undo step. Returns the new ids in engine order (empty on failure).</summary>
+    public int[] DuplicateTracks(int[] trackIds)
+    {
+        ThrowIfDisposed();
+        if (trackIds is not { Length: > 0 }) return Array.Empty<int>();
+        var buf = new int[TrackCount + 1];   // a copy can't outnumber the existing tracks
+        int n = NativeMethods.DuplicateTracks(_handle, trackIds, trackIds.Length, buf, buf.Length);
+        return n > 0 ? buf[..Math.Min(n, buf.Length)] : Array.Empty<int>();
+    }
+
+    /// <summary>Removes a set of tracks (a group takes its children) as one undo step.</summary>
+    public bool RemoveTracks(int[] trackIds)
+    {
+        ThrowIfDisposed();
+        return trackIds is { Length: > 0 }
+            && NativeMethods.RemoveTracks(_handle, trackIds, trackIds.Length) == NativeMethods.NotaResult.Ok;
+    }
+
     // --- Send / return buses (M6-1) ----------------------------------------
 
     /// <summary>Adds a return (aux) effect bus. Returns the track id (>0), or 0 if all return slots are used.</summary>
@@ -82,6 +101,18 @@ public sealed partial class NotaEngine
     public void MoveClipToTrack(int srcTrackId, int clipIndex, int destTrackId, double newStartBeat)
     { ThrowIfDisposed(); Check(NativeMethods.ClipMoveToTrack(_handle, srcTrackId, clipIndex, destTrackId, newStartBeat)); }
 
+    /// <summary>Moves a group of clips at once (multi-selection drag): they carve only the clips
+    /// that stay put, never each other; same-track clips keep their index. One undo step;
+    /// <see cref="LastPlacedClips"/> reports each clip's new position in request order.</summary>
+    public bool MoveClipBlock((int trackId, int clipIndex, int destTrackId, double newStartBeat)[] moves)
+    {
+        ThrowIfDisposed();
+        if (moves.Length == 0) return false;
+        var t = new int[moves.Length]; var c = new int[moves.Length]; var d = new int[moves.Length]; var s = new double[moves.Length];
+        for (int i = 0; i < moves.Length; i++) (t[i], c[i], d[i], s[i]) = moves[i];
+        return NativeMethods.ClipsBlockMove(_handle, t, c, d, s, moves.Length) == NativeMethods.NotaResult.Ok;
+    }
+
     /// <summary>Trims/resizes a clip to a new start + length in beats.</summary>
     public void TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats)
     { ThrowIfDisposed(); Check(NativeMethods.ClipTrim(_handle, trackId, clipIndex, newStartBeat, newLengthBeats)); }
@@ -100,6 +131,15 @@ public sealed partial class NotaEngine
     /// <summary>Sets an audio clip's linear playback gain (runtime).</summary>
     public void SetClipGain(int trackId, int clipIndex, float gain)
     { ThrowIfDisposed(); Check(NativeMethods.ClipSetGain(_handle, trackId, clipIndex, gain)); }
+
+    public ClipAdsr GetClipAdsr(int trackId, int clipIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ClipGetAdsr(_handle, trackId, clipIndex, out var a) != 0 ? a : ClipAdsr.Identity;
+    }
+
+    public void SetClipAdsr(int trackId, int clipIndex, ClipAdsr adsr)
+    { ThrowIfDisposed(); Check(NativeMethods.ClipSetAdsr(_handle, trackId, clipIndex, in adsr)); }
 
     /// <summary>Clip deactivate (key 0): an inactive clip stays on the timeline but plays
     /// nothing (audio or MIDI). Works on audio and instrument tracks.</summary>
@@ -342,6 +382,24 @@ public sealed partial class NotaEngine
     /// <summary>Pastes the clipboard track as a new track. Returns the new track id, or -1.</summary>
     public int PasteTrack()
     { ThrowIfDisposed(); return NativeMethods.TrackPaste(_handle); }
+
+    /// <summary>Copies a set of tracks (a group brings its children) to the clipboard.</summary>
+    public bool CopyTracks(int[] trackIds)
+    {
+        ThrowIfDisposed();
+        return trackIds is { Length: > 0 }
+            && NativeMethods.TrackCopyMany(_handle, trackIds, trackIds.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>Pastes the clipboard tracks after <paramref name="afterTrackId"/>, inside its
+    /// group (-1 = top-level at the end), as one undo step. Returns the new ids in engine order.</summary>
+    public int[] PasteTracks(int afterTrackId)
+    {
+        ThrowIfDisposed();
+        var buf = new int[4096];   // far above any real clipboard; paste reports the full count
+        int n = NativeMethods.TrackPasteAfter(_handle, afterTrackId, buf, buf.Length);
+        return n > 0 ? buf[..Math.Min(n, buf.Length)] : Array.Empty<int>();
+    }
 
     /// <summary>True when a track has been copied to the clipboard.</summary>
     public bool HasTrackClipboard()
@@ -700,6 +758,9 @@ public sealed partial class NotaEngine
 
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }
+
+    public bool SetTrackGrainRoot(int trackId, int rootNote)
+    { ThrowIfDisposed(); return NativeMethods.SetTrackGrainRoot(_handle, trackId, rootNote) != 0; }
 
     public bool TryGetGrainInfo(int trackId, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.TrackGrainInfo(_handle, trackId, out info) != 0; }

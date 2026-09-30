@@ -12,6 +12,8 @@
 // The first eight parameters keep their original index and meaning, so projects
 // saved before the oscillator/voice sections existed load unchanged (setState
 // reads whatever floats are present and leaves the rest at their defaults).
+// The last one, View, is editor state (the card's S / L size) — it persists and
+// clones with the patch but the managed layer keeps it out of presets/automation.
 
 #pragma once
 
@@ -34,7 +36,9 @@ public:
     enum Param {
         Wave = 0, Attack, Decay, Sustain, Release, Cutoff, Resonance, Gain,
         FilType, FilEnv, PulseWidth, Detune, Octave, Unison, Spread,
-        Glide, VelAmp, Pan, VoiceMode, kNumParams
+        Glide, VelAmp, Pan, VoiceMode,
+        View,           // editor state, not sound: the card size (0 = L, 1 = S)
+        kNumParams
     };
 
     Synth() {
@@ -58,6 +62,7 @@ public:
         pn_[VelAmp].store(1.0f);          // full velocity tracking — the pre-2026 behaviour
         pn_[Pan].store(0.5f);             // centre
         pn_[VoiceMode].store(0.0f);       // Poly 16
+        pn_[View].store(1.0f);            // a new Synth opens as the mini (S) card
     }
 
     int32_t kind() const override { return 0; } // built-in Synth (M7-6) — project compat
@@ -71,14 +76,14 @@ public:
         static const char* ids[] = {
             "wave", "attack", "decay", "sustain", "release", "cutoff", "resonance", "gain",
             "filtype", "filenv", "pulsewidth", "detune", "octave", "unison", "spread",
-            "glide", "velamp", "pan", "voicemode" };
+            "glide", "velamp", "pan", "voicemode", "view" };
         return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
     }
     std::string pluginParamName(int32_t i) const override {
         static const char* nm[] = {
             "Wave", "Attack", "Decay", "Sustain", "Release", "Cutoff", "Resonance", "Gain",
             "Filter Type", "Env →Cutoff", "Pulse Width", "Detune", "Octave", "Unison", "Spread",
-            "Glide", "Vel →Vol", "Pan", "Voice Mode" };
+            "Glide", "Vel →Vol", "Pan", "Voice Mode", "View" };
         return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
     }
     float pluginParamGet(int32_t i) const override {

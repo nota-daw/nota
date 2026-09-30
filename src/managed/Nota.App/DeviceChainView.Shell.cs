@@ -38,7 +38,7 @@ public sealed partial class DeviceChainView
     // back restores them, and keyed so a MIDI effect and an audio effect at the same index
     // don't collide. Sig ties an entry to the device it was made for: when that slot now
     // holds a different device (swapped, removed behind our back, undo), the card starts fresh.
-    private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; }
+    private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; public PluginCard.ViewState Plugin = new(); }
     private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _cardExtra = new();   // trackId → key → extra
     private static int ExtraKey(ChainKind k, int di) => k switch { ChainKind.Instrument => -1, ChainKind.Midi => -1000 - di, _ => di };
     private static ChainKind KeyKind(int key) => key >= 0 ? ChainKind.Effect : key == -1 ? ChainKind.Instrument : ChainKind.Midi;
@@ -67,6 +67,7 @@ public sealed partial class DeviceChainView
     // map: old index → new index, or -1 when the device is gone.
     private void RemapExtras(ChainKind k, Func<int, int> map)
     {
+        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);
@@ -85,13 +86,17 @@ public sealed partial class DeviceChainView
     private float[] CaptureParams(ChainKind k, int di)
     { int n = ParamCount(k, di); var a = new float[n]; for (int i = 0; i < n; i++) a[i] = GetP(k, di, i); return a; }
     private void ApplyParams(ChainKind k, int di, float[] p)
-    { int n = Math.Min(p.Length, ParamCount(k, di)); for (int i = 0; i < n; i++) SetPr(k, di, i, p[i]); }
+    {
+        int n = Math.Min(p.Length, ParamCount(k, di));
+        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
+        for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]);
+    }
 
     internal readonly record struct ShellSpec(
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
         Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null,
-        CardPresets? Presets = null);
+        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false);   // Compact: a mini card — no type badge, a narrower preset picker
 
     /// <summary>A card's own preset list, in place of the factory presets for its kind — the
     /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
@@ -115,11 +120,12 @@ public sealed partial class DeviceChainView
         // a new slot; Delete removes the selected card.
         var name = new TextBlock
         {
-            Text = s.Name, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+            // A compact card drops the family prefix ("Nota Arp" → "Arp") to leave room for the presets.
+            Text = s.Compact && s.Name.StartsWith("Nota ", StringComparison.Ordinal) ? s.Name[5..] : s.Name, FontSize = NotaType.DeviceName, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = s.Compact ? 6 : 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
 
         // Type badge (mono caps). An instrument that reports its voices shows them here, live,
         // as the badge's value — e.g. "SYNTH · 3/16".
@@ -139,7 +145,8 @@ public sealed partial class DeviceChainView
                 badge.Text = type.Length > 0 ? $"{type} · {voices}" : voices;
             });
         }
-        if (badge.Text.Length > 0 || s.IsInstrument) right.Children.Add(badge);
+        if ((badge.Text.Length > 0 || s.IsInstrument) && !s.Compact) right.Children.Add(badge);
+        if (s.HeaderExtra is { } headerExtra) right.Children.Add(headerExtra);
 
         if (s.Bypassable)
         {
@@ -200,7 +207,10 @@ public sealed partial class DeviceChainView
             int n = presets.Count; if (n == 0) return;
             ApplyPreset(curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n);
         }
-        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset));
+        // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
+        // the preset belongs to the device, not to the card size.
+        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+            nameWidth: s.Compact ? 74 : 132));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
 
@@ -209,9 +219,9 @@ public sealed partial class DeviceChainView
         {
             if (presets.Count > 0)
             {
-                var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}" };
-                var prev = new MenuItem { Header = "Previous preset" }; prev.Click += (_, _) => StepPreset(-1);
-                var next = new MenuItem { Header = "Next preset" }; next.Click += (_, _) => StepPreset(+1);
+                var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}", Icon = MenuKit.Icon(GlyphKind.List) };
+                var prev = new MenuItem { Header = "Previous preset", Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
+                var next = new MenuItem { Header = "Next preset", Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
                 for (int i = 0; i < presets.Count; i++)
                 {
@@ -225,7 +235,7 @@ public sealed partial class DeviceChainView
             // A / B compare of two full-parameter snapshots.
             float[] Capture() => CaptureParams(s.Kind, di);
             if (extra.A == null) { extra.A = Capture(); extra.B = (float[])extra.A.Clone(); extra.Active = 0; }
-            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}" };
+            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}", Icon = MenuKit.Icon(GlyphKind.Compare) };
             void Switch(int slot)
             {
                 if (slot == extra.Active) return;
@@ -236,14 +246,14 @@ public sealed partial class DeviceChainView
             }
             var toA = new MenuItem { Header = "A", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 0 }; toA.Click += (_, _) => Switch(0);
             var toB = new MenuItem { Header = "B", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 1 }; toB.Click += (_, _) => Switch(1);
-            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A" };
+            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A", Icon = MenuKit.Icon(GlyphKind.Copy) };
             copy.Click += (_, _) => { var c = Capture(); if (extra.Active == 0) extra.B = (float[])c.Clone(); else extra.A = (float[])c.Clone(); };
             ab.Items.Add(toA); ab.Items.Add(toB); ab.Items.Add(new Separator()); ab.Items.Add(copy);
             flyout.Items.Add(ab);
             if (s.CanMove)
             {
-                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0 }; left.Click += (_, _) => Move(di - 1);
-                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1 }; rightMi.Click += (_, _) => Move(di + 1);
+                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0, Icon = MenuKit.Icon(GlyphKind.StepLeft) }; left.Click += (_, _) => Move(di - 1);
+                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1, Icon = MenuKit.Icon(GlyphKind.StepRight) }; rightMi.Click += (_, _) => Move(di + 1);
                 flyout.Items.Add(left); flyout.Items.Add(rightMi);
             }
             flyout.Items.Add(new Separator());

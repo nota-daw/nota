@@ -31,20 +31,68 @@ public partial class MainWindow
     private void OnAutosaveTick()
     {
         if (_vm is null) return;
+        NoteDirtySince();
         try { _recovery.Autosave(Engine, TransportSnapshot(), _projectPath); }
         catch { /* autosave is best-effort — never disrupt the session */ }
     }
 
+    // Set once the user has answered the unsaved-changes prompt, so the re-issued Close()
+    // goes straight through; _closePromptOpen guards against a second prompt meanwhile.
+    private bool _closeConfirmed;
+    private bool _closePromptOpen;
+
     private void OnMainWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (!_closeConfirmed && HasUnsavedChanges())
+        {
+            e.Cancel = true;
+            if (!_closePromptOpen)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ConfirmCloseAsync());
+            return;
+        }
+
         CloseFloatingDetail();   // tear down the popped-out Devices/Clip window, if any
         ShutdownGamepad();       // stop the IOKit pad thread before the engine dies
         _recovery.EndSessionClean();
     }
 
+    // Save / Don't Save / Cancel before quitting with unsaved edits. Save that is cancelled
+    // (file panel dismissed) or fails keeps the app open.
+    private async Task ConfirmCloseAsync()
+    {
+        _closePromptOpen = true;
+        try
+        {
+            // A named project saves in place with the prompt up ("Saving…"); an untitled one
+            // needs the file panel, so the prompt closes first.
+            bool named = _projectPath is not null;
+            var choice = await new SaveChangesWindow("Unsaved changes",
+                "Do you really want to quit without saving your changes?",
+                ProjectDisplayName(), UnsavedAgeText(),
+                named ? () => DoSaveAsync(saveAs: false) : null)
+                .ShowDialog<SaveChoice>(this);
+            if (choice == SaveChoice.Cancel) return;
+            if (choice == SaveChoice.Save && !named && !await DoSaveAsync(saveAs: false)) return;
+            _closeConfirmed = true;
+        }
+        finally { _closePromptOpen = false; }
+        Close();
+    }
+
+    // "unsaved changes · 14 min" — how long the oldest unsaved edit has waited.
+    private string UnsavedAgeText()
+    {
+        var age = _dirtySince is { } since ? DateTime.Now - since : TimeSpan.Zero;
+        string when = age.TotalMinutes < 1 ? "just now"
+            : age.TotalHours < 1 ? NotaNum.F($"{(int)age.TotalMinutes}{NotaNum.Thin}min")
+            : NotaNum.F($"{(int)age.TotalHours}{NotaNum.Thin}h {age.Minutes}{NotaNum.Thin}min");
+        return "unsaved changes · " + when;
+    }
+
     private async void OnOpenedRecoveryCheck(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        MarkProjectClean();   // the fresh startup project counts as unmodified
 
         // What's New shows once per new app version, ahead of the launcher.
         await ShowWhatsNewIfNeeded();
@@ -74,6 +122,7 @@ public partial class MainWindow
         OpenProject(info.BundlePath);
         _projectPath = info.OriginalPath;   // next Save targets the real bundle (null → prompt)
         UpdateWindowTitle();
+        _cleanFingerprint = null;           // recovered work is unsaved until the user saves it
         if (_vm is not null) _vm.StatusText = "Recovered unsaved work.";
         try { _recovery.ClearRecovery(); } catch { }
     }

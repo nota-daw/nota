@@ -72,6 +72,23 @@ NotaResult nota_engine_stop_preview(NotaEngine* e) {
 int32_t nota_engine_preview_active(const NotaEngine* e) {
     return (e && CENG(e)->isPreviewActive()) ? 1 : 0;
 }
+NotaResult nota_engine_preview_file_at(NotaEngine* e, const char* path, double start_seconds) {
+    if (!e || !path) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->previewFile(std::string(path), start_seconds) ? NOTA_OK : NOTA_ERR_UNKNOWN;
+}
+NotaResult nota_engine_set_preview_loop(NotaEngine* e, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setPreviewLoop(on != 0);
+    return NOTA_OK;
+}
+NotaResult nota_engine_set_preview_gain(NotaEngine* e, float gain) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setPreviewGain(gain);
+    return NOTA_OK;
+}
+double nota_engine_preview_position(const NotaEngine* e) {
+    return e ? CENG(e)->previewPosition() : 0.0;
+}
 int32_t nota_engine_preview_selftest(NotaEngine* e) {
     return (e && ENG(e)->previewSelfTest()) ? 1 : 0;
 }
@@ -198,6 +215,8 @@ int32_t nota_engine_can_undo(const NotaEngine* e) {
 int32_t nota_engine_can_redo(const NotaEngine* e) {
     return e ? (CENG(e)->canRedo() ? 1 : 0) : 0;
 }
+void nota_engine_undo_group_begin(NotaEngine* e) { if (e) ENG(e)->beginUndoGroup(); }
+void nota_engine_undo_group_end(NotaEngine* e) { if (e) ENG(e)->endUndoGroup(); }
 
 // ---- Project reset (M7-6) -------------------------------------------------
 

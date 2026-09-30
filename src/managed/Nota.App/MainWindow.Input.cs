@@ -22,7 +22,7 @@ public partial class MainWindow
 {
     // Computer-keyboard piano mapping, classic typing-keyboard layout: the A-row is the
     // white keys (A=C4=60 … K=C5) and the Q-row the black keys (W E T Y U). Z/X shift the
-    // octave and C/V the velocity (see the handlers below); Automation mode moved to ⌘A.
+    // octave and C/V the velocity (see the handlers below); Automation mode moved to ⌘⇧A.
     // These are BASE pitches at octave 0 — _typingOctave*12 is added when a note plays.
     private static readonly Dictionary<Key, int> KeyToPitch = new()
     {
@@ -105,15 +105,31 @@ public partial class MainWindow
             return;
         }
 
-        // ⌘/⌃ + A: toggle Automation mode. Moved off plain 'A' (now a piano key) — gated to
-        // when the piano-roll grid isn't focused, where ⌘A instead selects all notes.
-        if (mod && e.Key == Key.A && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0
-            && _editorRoll is not { GridFocused: true })
+        // Track headers focused (the last click landed in the header column): ⌘A selects every
+        // track, ⌘C/X/V/D copy/cut/paste/duplicate the selected tracks, Delete removes them.
+        // Anything with nothing to act on falls through to the clip handling below.
+        if (_trackHeadersFocused && Timeline.IsVisible && HandleTrackKey(e))
         {
-            AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
-            OnToggleAutomation(AutomationToggle, new RoutedEventArgs());
             e.Handled = true;
             return;
+        }
+
+        // ⌘/⌃ + ⇧ + A: toggle Automation mode. ⌘/⌃ + A: select all arrangement clips —
+        // gated to when the piano-roll grid isn't focused, where ⌘A instead selects all notes.
+        if (mod && e.Key == Key.A && (e.KeyModifiers & KeyModifiers.Alt) == 0)
+        {
+            if ((e.KeyModifiers & KeyModifiers.Shift) != 0)
+            {
+                AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
+                OnToggleAutomation(AutomationToggle, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            }
+            if (_editorRoll is not { GridFocused: true } && Timeline.SelectAllClips())
+            {
+                e.Handled = true;
+                return;
+            }
         }
         bool plainMod = mod && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
         if (plainMod && e.Key == Key.R && _heldKeys.Add(e.Key))
@@ -234,6 +250,35 @@ public partial class MainWindow
             e.Handled = true;
         }
         else base.OnKeyDown(e);
+    }
+
+    // Track-header keys (see HandleKeyDown). True when the key acted on tracks.
+    private bool HandleTrackKey(KeyEventArgs e)
+    {
+        if (_vm is null) return false;
+        bool extra = (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) != 0;
+        if (ArrangementView.IsPrimaryDown(e.KeyModifiers) && !extra)
+        {
+            switch (e.Key)
+            {
+                case Key.A: return Timeline.SelectAllTracks();
+                case Key.C: return Report(Timeline.CopySelectedTracks(), "Copied track(s)");
+                case Key.X: return Report(Timeline.CutSelectedTracks(), "Cut track(s)");
+                case Key.V: return Report(Timeline.PasteTracks(), "Pasted track(s)");
+                // macOS: the Edit menu's ⌘D accelerator gets there first (OnMenuDuplicate).
+                case Key.D when !OperatingSystem.IsMacOS(): return Report(Timeline.DuplicateSelectedTracks(), "Duplicated track(s)");
+            }
+            return false;
+        }
+        if (e.KeyModifiers == KeyModifiers.None && (e.Key == Key.Delete || e.Key == Key.Back))
+            return Report(Timeline.DeleteSelectedTracks(), "Deleted track(s)");
+        return false;
+
+        bool Report(bool done, string status)
+        {
+            if (done) _vm.StatusText = status;
+            return done;
+        }
     }
 
     protected override void OnKeyUp(KeyEventArgs e) => HandleKeyUp(e);

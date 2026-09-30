@@ -15,7 +15,6 @@ namespace Nota.App;
 
 internal sealed class DeviceCardFactory
 {
-    private readonly IDeviceBody _plugin = new PluginDeviceBody();
     private readonly IDeviceBody _generic = new GenericParamDeviceBody();
     private readonly Dictionary<int, IDeviceBody> _byKind = new()
     {
@@ -46,11 +45,10 @@ internal sealed class DeviceCardFactory
         [25] = new ChorusDeviceBody(),
     };
 
-    /// <summary>Resolve the body for a device: -1 = hosted plugin, a mapped built-in kind,
-    /// or the generic param-bar fallback for any built-in without a bespoke body.
-    /// Note: the Audio Effect Rack (kind 5) is still handled inline by the view.</summary>
+    /// <summary>Resolve the body for a built-in device: its mapped body, or the generic
+    /// param-bar fallback. Hosted plug-ins (-1) and the Audio Effect Rack (5) are built by
+    /// the view (PluginCard / RackCardView).</summary>
     public IDeviceBody Resolve(int builtinKind)
-        => builtinKind < 0 ? _plugin
-         : _byKind.TryGetValue(builtinKind, out var body) ? body
+        => _byKind.TryGetValue(builtinKind, out var body) ? body
          : _generic;
 }

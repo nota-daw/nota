@@ -99,6 +99,13 @@ juce::KnownPluginList& catalog() {
 //   Windows -> %APPDATA%\Nota
 //   Linux   -> ~/.config/Nota
 juce::File notaSupportDir() {
+    // NOTA_DATA_DIR (tests) relocates the catalog + scan paths, like NotaPaths.DataDir.
+    // Needed because on macOS JUCE resolves the home folder via NSHomeDirectory(), not $HOME.
+    if (const char* over = std::getenv("NOTA_DATA_DIR"); over != nullptr && *over != '\0') {
+        juce::File dir{juce::CharPointer_UTF8(over)};
+        dir.createDirectory();
+        return dir;
+    }
 #if JUCE_MAC
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                    .getChildFile("Application Support")
@@ -219,6 +226,12 @@ extern "C" NOTA_API int32_t nota_pluginhost_scan(const char* worker_path) {
     const juce::String workerPath{juce::CharPointer_UTF8(worker_path)};
     if (!juce::File(workerPath).existsAsFile()) return -2;
 
+    // Forget VST3 bundles that are gone from disk (uninstalled, e.g. via Get Plug-ins),
+    // so the browser stops listing them. AU lives in the system registry — left alone.
+    for (const auto& t : catalog().getTypes())
+        if (t.pluginFormatName == "VST3" && !juce::File(t.fileOrIdentifier).exists())
+            catalog().removeType(t);
+
     for (const char* formatName : kFormatOrder) {
         auto* format = findFormat(formatName);
         if (format == nullptr) continue;
@@ -282,6 +295,22 @@ extern "C" NOTA_API int32_t nota_pluginhost_index_of_id(const char* identifier) 
     const auto types = catalog().getTypes();
     for (int i = 0; i < types.size(); ++i)
         if (types.getReference(i).createIdentifierString() == want) return i;
+
+    // Fallback: JUCE ids are "<format>-<name>-<hex path hash>-<hex uid>", so the same
+    // plugin at another path (another machine, or Nota's managed plugin folder, whose
+    // path holds the user name) never matches exactly. Match format + name + uid instead.
+    const int uidDash = want.lastIndexOfChar('-');
+    const int hashDash = uidDash > 0 ? want.substring(0, uidDash).lastIndexOfChar('-') : -1;
+    if (hashDash <= 0) return -1;
+    const auto prefix = want.substring(0, hashDash);
+    const auto uid = want.substring(uidDash + 1);
+    for (int i = 0; i < types.size(); ++i) {
+        const auto& t = types.getReference(i);
+        if (t.pluginFormatName + "-" + t.name == prefix
+            && (juce::String::toHexString(t.uniqueId) == uid
+                || juce::String::toHexString(t.deprecatedUid) == uid))
+            return i;
+    }
     return -1;
 }
 
@@ -490,6 +519,22 @@ std::string paramNameImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (i < 0 || i >= params.size()) return {};
     return params[i]->getName(64).toStdString();
 }
+std::string paramTextImpl(juce::AudioPluginInstance* p, int32_t i) {
+    if (p == nullptr) return {};
+    const auto& params = p->getParameters();
+    if (i < 0 || i >= params.size()) return {};
+    auto* prm = params[i];
+    juce::String text = prm->getCurrentValueAsText().trim();
+    juce::String unit = prm->getLabel().trim();
+    if (text.isNotEmpty() && unit.isNotEmpty() && !text.endsWithIgnoreCase(unit)) text << " " << unit;
+    return text.toStdString();
+}
+float paramDefaultImpl(juce::AudioPluginInstance* p, int32_t i) {
+    if (p == nullptr) return 0.0f;
+    const auto& params = p->getParameters();
+    if (i < 0 || i >= params.size()) return 0.0f;
+    return params[i]->getDefaultValue();
+}
 float paramGetImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (p == nullptr) return 0.0f;
     const auto& params = p->getParameters();
@@ -620,6 +665,8 @@ public:
     int32_t     pluginParamCount() const override { return paramCountImpl(plugin_.get()); }
     std::string pluginParamId(int32_t i) const override { return paramIdImpl(plugin_.get(), i); }
     std::string pluginParamName(int32_t i) const override { return paramNameImpl(plugin_.get(), i); }
+    std::string pluginParamText(int32_t i) const override { return paramTextImpl(plugin_.get(), i); }
+    float       pluginParamDefault(int32_t i) const override { return paramDefaultImpl(plugin_.get(), i); }
     float       pluginParamGet(int32_t i) const override { return paramGetImpl(plugin_.get(), i); }
     void        pluginParamSet(int32_t i, float v) override { paramSetImpl(plugin_.get(), i, v); }
     int32_t     pluginParamIndexOfId(const std::string& id) const override { return paramIndexOfIdImpl(plugin_.get(), id); }
@@ -772,6 +819,8 @@ public:
     int32_t     pluginParamCount() const override { return paramCountImpl(plugin_.get()); }
     std::string pluginParamId(int32_t i) const override { return paramIdImpl(plugin_.get(), i); }
     std::string pluginParamName(int32_t i) const override { return paramNameImpl(plugin_.get(), i); }
+    std::string pluginParamText(int32_t i) const override { return paramTextImpl(plugin_.get(), i); }
+    float       pluginParamDefault(int32_t i) const override { return paramDefaultImpl(plugin_.get(), i); }
     float       pluginParamGet(int32_t i) const override { return paramGetImpl(plugin_.get(), i); }
     void        pluginParamSet(int32_t i, float v) override { paramSetImpl(plugin_.get(), i, v); }
     int32_t     pluginParamIndexOfId(const std::string& id) const override { return paramIndexOfIdImpl(plugin_.get(), id); }

@@ -70,7 +70,7 @@ public partial class MainWindow
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) continue;
             var name = Path.GetFileNameWithoutExtension(path.TrimEnd('/', '\\'));
             string modified;
-            try { modified = Directory.GetLastWriteTime(path).ToString("g"); }
+            try { modified = Directory.GetLastWriteTime(path).ToString("MM/dd/yyyy HH:mm", NotaNum.Culture); }
             catch { modified = ""; }
             items.Add(new RecentProjectItem(name, path, modified));
         }
