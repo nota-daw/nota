@@ -55,8 +55,9 @@ public:
     bool    deviceParam(int32_t index, const std::string& name, float value);
     int32_t addMidiEffect(int32_t kind);
     bool    midiParam(int32_t index, const std::string& name, float value);
-    // The Sampler's sample: a file, or (empty path) a procedural keys tone rooted at C4.
-    bool    setSamplerSample(const std::string& path);
+    // The Sampler's or Nota Grain's sample, rooted at rootNote: a file, or (empty path, the
+    // Sampler only) a procedural keys tone rooted at C4.
+    bool    setSamplerSample(const std::string& path, int32_t rootNote = 60);
     bool    setSourceFile(const std::string& path, double maxSeconds);
     // Mixes another rig's rendered result into this rig's source (a demo track's part).
     bool    addSourceFrom(const AuditionRig& part, float gain);

@@ -23,8 +23,9 @@ public interface IAuditionRig : IDisposable
     /// <summary>Appends a built-in MIDI effect; its index, or -1.</summary>
     int AddMidiEffect(int kind);
     bool MidiParam(int index, string name, float value);
-    /// <summary>The Sampler's sample; null = a procedural keys tone at C4.</summary>
-    bool SetSamplerSample(string? path);
+    /// <summary>The Sampler's or Nota Grain's sample, played at its own pitch on
+    /// <paramref name="rootNote"/>; null = the Sampler's procedural keys tone at C4.</summary>
+    bool SetSamplerSample(string? path, int rootNote = 60);
     /// <summary>Effect source: the first <paramref name="maxSeconds"/> of an audio file.</summary>
     bool SetSourceFile(string path, double maxSeconds);
     /// <summary>A fresh rig at the same rate, to render one part of a demo track.</summary>

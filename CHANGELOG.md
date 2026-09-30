@@ -17,6 +17,15 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- **Nota Grain has 50 factory presets, and each one brings its own sound.** Until now every
+  Grain preset played the same built-in pad. Now a preset loads a source made for it: a
+  choir, bowed strings, a church bell, a kalimba, a vowel that moves from "a" to "u", a drum
+  break, an arpeggio, ocean waves, a radio between stations and more (29 in all). They're
+  in nine folders: Basics, Pads, Voices & Choirs, Bass, Keys & Plucks, Bells & Mallets,
+  Drones & Atmospheres, Loops & Sequences and Textures & FX. The sources are made on your
+  computer the first time a preset needs one, so they don't add to the download. The
+  Basics presets still keep whatever sample you dropped in. Previews in the browser play
+  each preset with its own source.
 - Import MIDI files. `.mid` files now show up in the browser's Files tab, and you can drag
   them from there or straight from Finder / Explorer. Drop one on the arrangement and it
   becomes a MIDI clip at that spot. A file with several parts spreads out: the first part

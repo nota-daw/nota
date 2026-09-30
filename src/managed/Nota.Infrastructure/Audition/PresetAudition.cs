@@ -95,6 +95,13 @@ public sealed partial class PresetAudition : IPresetAudition
                         if (!rig.SetInstrument(kind)) return false;
                         foreach (var (id, v) in named)
                             if (!InstrumentView.IsViewParam(id)) rig.InstrumentParam(id, v);
+                        // A Nota Grain factory preset is heard on its own source.
+                        if (kind == 10 && !string.IsNullOrEmpty(doc.GrainSource))
+                        {
+                            var src = Grain.GrainSources.ById(doc.GrainSource);
+                            var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
+                            if (src is null || path is null || !rig.SetSamplerSample(path, src.Root)) return false;
+                        }
                         return true;
                     },
                     phrase.Notes, Bpm, phrase.Beats, phrase.Tail, phrase.Rolling);

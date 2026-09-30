@@ -45,7 +45,7 @@ public sealed partial class NotaEngine
         public bool DeviceParam(int index, string name, float value) => NativeMethods.AuditionDeviceParam(Handle, index, name, value) != 0;
         public int AddMidiEffect(int kind) => NativeMethods.AuditionAddMidiEffect(Handle, kind);
         public bool MidiParam(int index, string name, float value) => NativeMethods.AuditionMidiParam(Handle, index, name, value) != 0;
-        public bool SetSamplerSample(string? path) => NativeMethods.AuditionSetSamplerSample(Handle, path) != 0;
+        public bool SetSamplerSample(string? path, int rootNote = 60) => NativeMethods.AuditionSetSamplerSample(Handle, path, rootNote) != 0;
         public bool AddSourceFrom(IAuditionRig part, float gain)
             => part is AuditionRig p && NativeMethods.AuditionAddSourceFrom(Handle, p.Handle, gain) != 0;
         public bool UseCachedSource(string key) => NativeMethods.AuditionUseCachedSource(Handle, key) != 0;

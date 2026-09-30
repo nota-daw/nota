@@ -710,42 +710,76 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                                              ("dcoarse", 0.0667f), ("dlevel", 1f), ("datk", 0.14f), ("dsus", 0.85f), ("drel", 0.3f),
                                              ("veltofm", 0.85f), ("filfreq", 0.7f), ("volume", 0.8f));
 
-        // ---- Nota Grain (kind 10) — granular, 25 presets. Scan Mode 0 Scan · .5 Freeze · 1 Key;
-        //      Scan 0.5 = still (±4×, 0.625 = 1×); Coarse 0.5 = 0 st (±24, 0.75 = +12); window
-        //      0 Hann · 1/3 Gauss · 2/3 Tukey · 1 Tri; filter 0 LP · .5 HP · 1 BP; Dry/Wet 1 = the
-        //      cloud alone, 0 = the sample played straight. Presets shape whatever sample is
-        //      loaded (the built-in pad until you drop your own).
+        // ---- Nota Grain (kind 10) — granular, 50 presets. Every preset outside Basics brings its
+        //      own source (GrainSources: rendered once, then loaded with the preset); Basics shape
+        //      whatever sample is loaded. Scan Mode 0 Scan · .5 Freeze · 1 Key (C4 reads Position,
+        //      an octave moves a third of the file, unpitched); Scan .5 = still (±4×, .625 = 1×);
+        //      Size 4 ms·100^v (.5 ≈ 40 ms, .7 ≈ 100 ms, .75 ≈ 125 ms, .9 ≈ 250 ms); Density =
+        //      overlap 1 + 7v; Spray / Pos Rand ±25 % of the file at 1; Coarse .5 = 0 st (±24,
+        //      .25 = −12, .75 = +12); window 0 Hann · 1/3 Gauss · 2/3 Tukey · 1 Tri; filter 0 LP ·
+        //      .5 HP · 1 BP, freq 60 Hz·300^v (.5 ≈ 1 k, .7 ≈ 3.2 k, .9 ≈ 10 k); attack 1 ms·3000^v,
+        //      release 3 ms·2000^v; Dry/Wet 1 = the cloud alone, 0 = the sample played straight.
         Section("Basics");
         Inst("grain", 10, "Half Frozen",  ("scanmode", 0.5f), ("grainsize", 0.7f), ("density", 0.8f), ("spread", 0.6f), ("posrand", 0.1f), ("drywet", 0.5f), ("attack", 0.5f), ("release", 0.7f), ("volume", 0.8f));
         Inst("grain", 10, "Sample Plus",  ("scanmode", 0.5f), ("grainsize", 0.45f), ("density", 0.7f), ("spread", 0.8f), ("panrand", 0.6f), ("pitchrand", 0.02f), ("drywet", 0.25f), ("attack", 0.1f), ("release", 0.5f), ("volume", 0.8f));
         Inst("grain", 10, "Plain Sampler",("drywet", 0f), ("filfreq", 1f), ("attack", 0.05f), ("release", 0.45f), ("volume", 0.8f));
+        Inst("grain", 10, "Slow Scan",    ("scanmode", 0f), ("scan", 0.56f), ("position", 0f), ("grainsize", 0.6f), ("density", 0.8f), ("spread", 0.6f), ("posrand", 0.05f), ("attack", 0.3f), ("release", 0.6f), ("volume", 0.8f));
         Section("Pads");
-        Inst("grain", 10, "Frozen Choir", ("scanmode", 0.5f), ("position", 0.3f), ("spray", 0.2f), ("grainsize", 0.5f), ("density", 0.8f), ("spread", 0.6f), ("posrand", 0.15f), ("attack", 0.3f), ("release", 0.6f), ("filfreq", 0.9f), ("volume", 0.8f));
-        Inst("grain", 10, "Drift Cloud",  ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.6f), ("density", 0.7f), ("spread", 0.7f), ("posrand", 0.3f), ("panrand", 0.5f), ("attack", 0.2f), ("release", 0.7f), ("volume", 0.78f));
-        Inst("grain", 10, "Shimmer",      ("scanmode", 0.5f), ("coarse", 0.75f), ("grainsize", 0.5f), ("density", 0.8f), ("pitchrand", 0.1f), ("spread", 0.6f), ("filfreq", 1f), ("release", 0.6f), ("volume", 0.76f));
-        Inst("grain", 10, "Slow Bloom",   ("scanmode", 0.5f), ("grainshape", 1f / 3f), ("grainsize", 0.8f), ("density", 0.9f), ("spread", 0.7f), ("posrand", 0.2f), ("attack", 0.85f), ("release", 0.9f), ("filfreq", 0.75f), ("volume", 0.78f));
-        Inst("grain", 10, "Glass Halo",   ("scanmode", 0.5f), ("coarse", 0.75f), ("fine", 0.52f), ("grainsize", 0.55f), ("density", 0.85f), ("pitchrand", 0.05f), ("spread", 0.8f), ("panrand", 0.6f), ("filtype", 0.5f), ("filfreq", 0.35f), ("attack", 0.7f), ("release", 0.85f), ("volume", 0.74f));
-        Inst("grain", 10, "Dust Cloud",   ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.2f), ("density", 0.95f), ("spray", 0.5f), ("posrand", 0.6f), ("panrand", 0.8f), ("spread", 0.9f), ("filtype", 1f), ("filfreq", 0.42f), ("filreso", 0.35f), ("attack", 0.5f), ("release", 0.75f), ("volume", 0.8f));
-        Inst("grain", 10, "Detuned Swarm",("scanmode", 0.5f), ("fine", 0.52f), ("pitchrand", 0.03f), ("grainsize", 0.55f), ("density", 1f), ("spread", 1f), ("panrand", 0.7f), ("attack", 0.6f), ("release", 0.7f), ("volume", 0.76f));
+        Grain("Warm Ensemble", "saw-ensemble", ("scanmode", 0.5f), ("position", 0.4f), ("spray", 0.1f), ("grainsize", 0.7f), ("density", 0.85f), ("spread", 0.7f), ("posrand", 0.1f), ("filfreq", 0.75f), ("attack", 0.55f), ("release", 0.7f), ("volume", 0.9f));
+        Grain("Slow Bloom",    "saw-ensemble", ("scanmode", 0f), ("scan", 0.53f), ("grainshape", 1f / 3f), ("grainsize", 0.8f), ("density", 0.9f), ("spread", 0.7f), ("posrand", 0.2f), ("filfreq", 0.6f), ("filreso", 0.2f), ("attack", 0.85f), ("release", 0.9f), ("volume", 1f));
+        Grain("Glass Pad",     "glass-pad",    ("scanmode", 0.5f), ("position", 0.35f), ("spray", 0.2f), ("grainsize", 0.65f), ("density", 0.9f), ("spread", 0.8f), ("panrand", 0.4f), ("posrand", 0.1f), ("filfreq", 0.85f), ("attack", 0.6f), ("release", 0.8f), ("volume", 0.97f));
+        Grain("Shimmer",       "glass-pad",    ("scanmode", 0.5f), ("coarse", 0.75f), ("grainsize", 0.55f), ("density", 0.85f), ("pitchrand", 0.03f), ("spread", 1f), ("panrand", 0.6f), ("filtype", 0.5f), ("filfreq", 0.3f), ("attack", 0.7f), ("release", 0.85f), ("volume", 1f));
+        Grain("Tape Memory",   "tape-chord",   ("scanmode", 0f), ("scan", 0.53f), ("position", 0.1f), ("grainsize", 0.75f), ("density", 0.8f), ("spread", 0.5f), ("posrand", 0.08f), ("filfreq", 0.7f), ("attack", 0.5f), ("release", 0.75f), ("volume", 0.64f));
+        Grain("String Cloud",  "strings",      ("scanmode", 0.5f), ("position", 0.5f), ("spray", 0.2f), ("grainsize", 0.6f), ("density", 0.9f), ("spread", 0.8f), ("posrand", 0.15f), ("filfreq", 0.8f), ("attack", 0.6f), ("release", 0.75f), ("volume", 0.71f));
+        Grain("Brass Haze",    "brass",        ("scanmode", 0.5f), ("position", 0.6f), ("spray", 0.1f), ("grainsize", 0.7f), ("density", 0.8f), ("spread", 0.5f), ("posrand", 0.08f), ("filfreq", 0.65f), ("attack", 0.5f), ("release", 0.65f), ("volume", 0.76f));
+        Section("Voices & Choirs");
+        Grain("Frozen Choir",  "choir",        ("scanmode", 0.5f), ("position", 0.45f), ("spray", 0.2f), ("grainsize", 0.55f), ("density", 0.85f), ("spread", 0.7f), ("posrand", 0.12f), ("filfreq", 0.85f), ("attack", 0.45f), ("release", 0.7f), ("volume", 0.63f));
+        Grain("Angel Octave",  "choir",        ("scanmode", 0.5f), ("position", 0.5f), ("coarse", 0.75f), ("grainsize", 0.6f), ("density", 0.9f), ("pitchrand", 0.02f), ("spread", 1f), ("panrand", 0.5f), ("filfreq", 0.85f), ("attack", 0.7f), ("release", 0.85f), ("volume", 0.64f));
+        Grain("Vowel Drift",   "vowels",       ("scanmode", 0f), ("scan", 0.56f), ("position", 0f), ("grainsize", 0.5f), ("density", 0.8f), ("spread", 0.5f), ("posrand", 0.03f), ("attack", 0.3f), ("release", 0.6f), ("volume", 0.58f));
+        Grain("Vowel Slicer",  "vowels",       ("scanmode", 1f), ("position", 0.5f), ("spray", 0.02f), ("grainsize", 0.55f), ("density", 0.75f), ("spread", 0.4f), ("posrand", 0.02f), ("attack", 0.15f), ("release", 0.5f), ("volume", 0.65f));
+        Grain("Whisper Cloud", "whisper",      ("scanmode", 0.5f), ("position", 0.4f), ("spray", 0.3f), ("grainsize", 0.4f), ("density", 0.95f), ("posrand", 0.4f), ("panrand", 0.8f), ("spread", 0.9f), ("filtype", 1f), ("filfreq", 0.6f), ("filreso", 0.3f), ("attack", 0.5f), ("release", 0.75f), ("volume", 1f));
         Section("Bass");
-        Inst("grain", 10, "Sub Grain",    ("scanmode", 0.5f), ("coarse", 0.25f), ("grainsize", 0.6f), ("density", 0.7f), ("filfreq", 0.4f), ("filreso", 0.2f), ("volume", 0.85f));
-        Inst("grain", 10, "Grain Bass",   ("scanmode", 0.5f), ("coarse", 0.25f), ("grainsize", 0.7f), ("density", 0.65f), ("spread", 0.1f), ("panrand", 0f), ("posrand", 0.02f), ("filfreq", 0.45f), ("filreso", 0.25f), ("attack", 0.1f), ("decay", 0.45f), ("sustain", 0.7f), ("release", 0.35f), ("drywet", 0.4f), ("volume", 0.85f));
+        Grain("Sub Grain",     "sub",          ("scanmode", 0.5f), ("position", 0.3f), ("spray", 0f), ("grainsize", 0.75f), ("density", 0.7f), ("spread", 0.05f), ("panrand", 0f), ("posrand", 0.02f), ("filfreq", 0.5f), ("attack", 0.05f), ("release", 0.3f), ("drywet", 0.5f), ("volume", 0.86f));
+        Grain("Grain Bass",    "saw-bass",     ("scanmode", 0.5f), ("position", 0.02f), ("spray", 0f), ("grainsize", 0.65f), ("density", 0.7f), ("spread", 0.15f), ("panrand", 0.05f), ("posrand", 0.01f), ("filfreq", 0.55f), ("filreso", 0.25f), ("attack", 0.03f), ("decay", 0.45f), ("sustain", 0.7f), ("release", 0.3f), ("drywet", 0.4f), ("volume", 0.91f));
+        Grain("Growl Cloud",   "fm-growl",     ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.5f), ("density", 0.75f), ("spray", 0.05f), ("spread", 0.25f), ("panrand", 0.1f), ("posrand", 0.03f), ("filfreq", 0.6f), ("filreso", 0.3f), ("attack", 0.03f), ("release", 0.3f), ("volume", 0.62f));
+        Grain("Pluck Bass",    "nylon",        ("scanmode", 0.5f), ("position", 0f), ("spray", 0f), ("posrand", 0f), ("coarse", 0.25f), ("grainsize", 0.55f), ("density", 0.6f), ("spread", 0.1f), ("panrand", 0f), ("filfreq", 0.6f), ("attack", 0f), ("decay", 0.62f), ("sustain", 0f), ("release", 0.35f), ("drywet", 0.3f), ("volume", 1f));
+        Grain("Deep Swell",    "drone",        ("scanmode", 0.5f), ("position", 0.5f), ("spray", 0.1f), ("grainsize", 0.9f), ("density", 0.9f), ("spread", 0.3f), ("posrand", 0.05f), ("filfreq", 0.45f), ("attack", 0.45f), ("release", 0.7f), ("volume", 1f));
         Section("Keys & Plucks");
-        Inst("grain", 10, "Key Scan",     ("scanmode", 1f), ("grainsize", 0.4f), ("density", 0.6f), ("spread", 0.4f), ("attack", 0.05f), ("release", 0.4f), ("volume", 0.82f));
-        Inst("grain", 10, "Key Morph",    ("scanmode", 1f), ("grainshape", 1f / 3f), ("grainsize", 0.55f), ("density", 0.75f), ("spread", 0.5f), ("posrand", 0.08f), ("attack", 0.4f), ("release", 0.6f), ("volume", 0.8f));
         // Dry/Wet puts the sample's own attack under the cloud.
-        Inst("grain", 10, "Grain Keys",   ("scanmode", 0.5f), ("grainsize", 0.6f), ("density", 0.7f), ("spray", 0.05f), ("posrand", 0.03f), ("attack", 0.2f), ("decay", 0.5f), ("sustain", 0.4f), ("release", 0.55f), ("drywet", 0.55f), ("volume", 0.82f));
-        Inst("grain", 10, "Soft Pluck",   ("scanmode", 0.5f), ("grainsize", 0.5f), ("density", 0.6f), ("attack", 0.1f), ("decay", 0.45f), ("sustain", 0f), ("release", 0.45f), ("filfreq", 0.7f), ("drywet", 0.5f), ("volume", 0.85f));
-        Inst("grain", 10, "Granular Perc",("scanmode", 0.5f), ("grainsize", 0.3f), ("density", 0.6f), ("posrand", 0.2f), ("attack", 0f), ("decay", 0.35f), ("sustain", 0f), ("release", 0.3f), ("filfreq", 0.8f), ("filreso", 0.3f), ("volume", 0.85f));
+        Grain("Grain Keys",    "epiano",       ("scanmode", 0.5f), ("position", 0.02f), ("spray", 0.03f), ("posrand", 0.02f), ("grainsize", 0.6f), ("density", 0.7f), ("attack", 0.05f), ("decay", 0.68f), ("sustain", 0.35f), ("release", 0.55f), ("drywet", 0.55f), ("volume", 1f));
+        Grain("Soft Pluck",    "nylon",        ("scanmode", 0.5f), ("position", 0f), ("spray", 0f), ("posrand", 0.01f), ("grainsize", 0.5f), ("density", 0.6f), ("filfreq", 0.7f), ("attack", 0.02f), ("decay", 0.65f), ("sustain", 0f), ("release", 0.45f), ("drywet", 0.5f), ("volume", 1f));
+        Grain("Nylon Halo",    "nylon",        ("scanmode", 0.5f), ("position", 0.12f), ("spray", 0.1f), ("grainsize", 0.7f), ("density", 0.9f), ("spread", 0.8f), ("pitchrand", 0.015f), ("posrand", 0.1f), ("attack", 0.3f), ("release", 0.75f), ("volume", 0.99f));
+        Grain("Harp Scan",     "harp-run",     ("scanmode", 0f), ("scan", 0.625f), ("position", 0f), ("spray", 0.01f), ("posrand", 0.01f), ("grainsize", 0.5f), ("density", 0.7f), ("spread", 0.5f), ("attack", 0.02f), ("release", 0.5f), ("volume", 0.46f));
+        Grain("Box Slicer",    "music-box",    ("scanmode", 1f), ("position", 0.3f), ("spray", 0.01f), ("posrand", 0.01f), ("grainsize", 0.5f), ("density", 0.6f), ("spread", 0.4f), ("attack", 0.02f), ("decay", 0.7f), ("sustain", 0.6f), ("release", 0.45f), ("volume", 1f));
+        Grain("Organ Keys",    "organ",        ("scanmode", 0.5f), ("position", 0.3f), ("spray", 0.05f), ("grainsize", 0.5f), ("density", 0.7f), ("spread", 0.5f), ("attack", 0.02f), ("decay", 0.5f), ("sustain", 0.8f), ("release", 0.35f), ("drywet", 0.6f), ("volume", 0.83f));
+        Grain("Breath Lead",   "flute",        ("scanmode", 0.5f), ("position", 0.4f), ("spray", 0.1f), ("grainsize", 0.55f), ("density", 0.85f), ("spread", 0.4f), ("posrand", 0.05f), ("attack", 0.25f), ("release", 0.5f), ("drywet", 1f), ("volume", 1f));
+        Section("Bells & Mallets");
+        Grain("Kalimba Cloud", "kalimba",      ("scanmode", 0.5f), ("position", 0f), ("spray", 0f), ("posrand", 0.02f), ("grainsize", 0.45f), ("density", 0.7f), ("spread", 0.5f), ("attack", 0f), ("decay", 0.7f), ("sustain", 0f), ("release", 0.6f), ("drywet", 0.6f), ("volume", 0.41f));
+        Grain("Marimba Grains","marimba",      ("scanmode", 0.5f), ("position", 0.01f), ("spray", 0f), ("posrand", 0.05f), ("grainsize", 0.35f), ("density", 0.6f), ("spread", 0.4f), ("attack", 0f), ("decay", 0.62f), ("sustain", 0f), ("release", 0.45f), ("drywet", 0.5f), ("volume", 0.65f));
+        Grain("Frozen Bell",   "bell",         ("scanmode", 0.5f), ("position", 0.08f), ("spray", 0.1f), ("grainsize", 0.7f), ("density", 0.9f), ("spread", 0.8f), ("posrand", 0.08f), ("attack", 0.5f), ("release", 0.85f), ("volume", 0.38f));
+        Grain("Bell Tower",    "bell",         ("scanmode", 0f), ("scan", 0.625f), ("position", 0f), ("spray", 0f), ("posrand", 0.01f), ("grainsize", 0.6f), ("density", 0.7f), ("spread", 0.5f), ("attack", 0f), ("decay", 0.8f), ("sustain", 0.2f), ("release", 0.8f), ("drywet", 0.7f), ("volume", 0.42f));
+        Grain("Music Box Drift","music-box",   ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.5f), ("density", 0.75f), ("spread", 0.7f), ("panrand", 0.4f), ("posrand", 0.03f), ("attack", 0.3f), ("release", 0.7f), ("volume", 0.71f));
+        Grain("Glass Chimes",  "chimes",       ("scanmode", 0.5f), ("position", 0.5f), ("spray", 0.4f), ("posrand", 0.6f), ("grainsize", 0.6f), ("density", 0.7f), ("spread", 1f), ("panrand", 0.8f), ("attack", 0.1f), ("release", 0.7f), ("volume", 0.78f));
+        Section("Drones & Atmospheres");
+        Grain("Deep Drone",    "drone",        ("scanmode", 0f), ("scan", 0.52f), ("grainsize", 0.9f), ("density", 0.9f), ("spread", 0.5f), ("posrand", 0.05f), ("filfreq", 0.5f), ("attack", 0.8f), ("release", 0.9f), ("volume", 1f));
+        Grain("Ocean Air",     "ocean",        ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.7f), ("density", 0.9f), ("spread", 1f), ("panrand", 0.6f), ("posrand", 0.1f), ("attack", 0.7f), ("release", 0.85f), ("volume", 1f));
+        Grain("Bowed Metal",   "metal",        ("scanmode", 0.5f), ("position", 0.4f), ("spray", 0.2f), ("grainsize", 0.6f), ("density", 0.9f), ("spread", 0.8f), ("posrand", 0.2f), ("attack", 0.6f), ("release", 0.85f), ("volume", 0.58f));
+        Grain("Low Choir",     "choir",        ("scanmode", 0.5f), ("position", 0.5f), ("coarse", 0.25f), ("grainsize", 0.85f), ("density", 1f), ("spread", 0.7f), ("posrand", 0.1f), ("filfreq", 0.55f), ("attack", 0.8f), ("release", 0.9f), ("volume", 0.83f));
+        Grain("Tape Ghosts",   "tape-chord",   ("scanmode", 0f), ("scan", 0.45f), ("grainsize", 0.6f), ("density", 0.8f), ("spread", 0.8f), ("posrand", 0.2f), ("pitchrand", 0.01f), ("filfreq", 0.55f), ("attack", 0.7f), ("release", 0.85f), ("volume", 0.95f));
+        Grain("Dust Cloud",    "rain",         ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.2f), ("density", 0.95f), ("spray", 0.5f), ("posrand", 0.6f), ("panrand", 0.8f), ("spread", 0.9f), ("filtype", 1f), ("filfreq", 0.75f), ("filreso", 0.35f), ("attack", 0.5f), ("release", 0.75f), ("volume", 1f));
+        // The Held-chord preview suits these: a loop or a sequence makes its own rhythm.
+        Section("Loops & Sequences");
+        Grain("Break Stutter", "drums",        ("scanmode", 0.5f), ("position", 0.5f), ("grainshape", 2f / 3f), ("grainsize", 0.75f), ("density", 0f), ("spray", 0.1f), ("posrand", 0.1f), ("spread", 0.3f), ("attack", 0.02f), ("release", 0.3f), ("volume", 0.85f));
+        Grain("Break Scan",    "drums",        ("scanmode", 0f), ("scan", 0.625f), ("position", 0f), ("grainshape", 2f / 3f), ("grainsize", 0.45f), ("density", 0.6f), ("spray", 0f), ("posrand", 0f), ("spread", 0.3f), ("attack", 0.02f), ("release", 0.3f), ("volume", 0.98f));
+        Grain("Arp Smear",     "arp",          ("scanmode", 0f), ("scan", 0.625f), ("position", 0f), ("grainsize", 0.6f), ("density", 0.85f), ("spread", 0.8f), ("posrand", 0.02f), ("filfreq", 0.75f), ("attack", 0.1f), ("release", 0.5f), ("volume", 0.52f));
+        Grain("Glitch Spray",  "bits",         ("scanmode", 0.5f), ("grainsize", 0.15f), ("density", 0.9f), ("spray", 0.6f), ("posrand", 0.5f), ("pitchrand", 0.3f), ("attack", 0.02f), ("release", 0.2f), ("volume", 0.61f));
+        Grain("Bit Rain",      "bits",         ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.05f), ("density", 0.35f), ("spray", 0.8f), ("posrand", 0.8f), ("pitchrand", 0.5f), ("panrand", 1f), ("filtype", 0.5f), ("filfreq", 0.45f), ("attack", 0.05f), ("release", 0.4f), ("volume", 0.84f));
         Section("Textures & FX");
-        Inst("grain", 10, "Glitch Spray", ("scanmode", 0.5f), ("grainsize", 0.15f), ("density", 0.9f), ("spray", 0.6f), ("posrand", 0.5f), ("pitchrand", 0.3f), ("attack", 0.02f), ("release", 0.2f), ("volume", 0.8f));
-        Inst("grain", 10, "Tape Stretch", ("scanmode", 0f), ("scan", 0.52f), ("grainshape", 2f / 3f), ("grainsize", 0.75f), ("density", 0.8f), ("posrand", 0.05f), ("spread", 0.3f), ("attack", 0.6f), ("release", 0.7f), ("volume", 0.8f));
-        Inst("grain", 10, "Reverse Tide", ("scanmode", 0f), ("scan", 0.4f), ("grainsize", 0.6f), ("density", 0.75f), ("spread", 0.6f), ("panrand", 0.4f), ("attack", 0.65f), ("release", 0.8f), ("volume", 0.8f));
-        Inst("grain", 10, "Wide Scan",    ("scanmode", 0f), ("scan", 0.6f), ("grainsize", 0.5f), ("density", 0.8f), ("spread", 1f), ("panrand", 1f), ("posrand", 0.15f), ("drywet", 0.8f), ("attack", 0.4f), ("release", 0.7f), ("volume", 0.78f));
-        Inst("grain", 10, "Stutter",      ("scanmode", 0.5f), ("grainshape", 2f / 3f), ("grainsize", 0.35f), ("density", 0f), ("spray", 0.3f), ("posrand", 0.2f), ("attack", 0.02f), ("release", 0.3f), ("volume", 0.82f));
-        Inst("grain", 10, "Bit Rain",     ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.05f), ("density", 0.35f), ("spray", 0.8f), ("posrand", 0.8f), ("pitchrand", 0.5f), ("panrand", 1f), ("filtype", 0.5f), ("filfreq", 0.45f), ("attack", 0.05f), ("release", 0.4f), ("volume", 0.78f));
-        Inst("grain", 10, "Broken Radio", ("scanmode", 0f), ("scan", 0.7f), ("grainsize", 0.25f), ("density", 0.5f), ("spray", 0.4f), ("pitchrand", 0.15f), ("filtype", 1f), ("filfreq", 0.6f), ("filreso", 0.6f), ("volume", 0.8f));
-        Inst("grain", 10, "Deep Drone",   ("scanmode", 0f), ("scan", 0.52f), ("coarse", 0.25f), ("grainsize", 0.9f), ("density", 0.9f), ("spread", 0.5f), ("filfreq", 0.5f), ("attack", 0.8f), ("release", 0.9f), ("volume", 0.84f));
+        Grain("Broken Radio",  "radio",        ("scanmode", 0f), ("scan", 0.7f), ("grainsize", 0.25f), ("density", 0.5f), ("spray", 0.4f), ("pitchrand", 0.15f), ("filtype", 1f), ("filfreq", 0.6f), ("filreso", 0.6f), ("volume", 1f));
+        Grain("Reverse Bells", "bell",         ("scanmode", 0f), ("scan", 0.4f), ("position", 0.3f), ("grainsize", 0.6f), ("density", 0.75f), ("spread", 0.6f), ("panrand", 0.4f), ("attack", 0.65f), ("release", 0.8f), ("volume", 0.84f));
+        Grain("Whisper Swarm", "whisper",      ("scanmode", 0f), ("scan", 0.7f), ("grainsize", 0.15f), ("density", 1f), ("posrand", 0.5f), ("panrand", 1f), ("pitchrand", 0.2f), ("spread", 1f), ("attack", 0.3f), ("release", 0.6f), ("volume", 0.73f));
+        Grain("Detuned Swarm", "strings",      ("scanmode", 0.5f), ("fine", 0.52f), ("pitchrand", 0.03f), ("grainsize", 0.55f), ("density", 1f), ("spread", 1f), ("panrand", 0.7f), ("attack", 0.6f), ("release", 0.7f), ("volume", 0.75f));
+        Grain("Metal Rain",    "chimes",       ("scanmode", 0.5f), ("grainshape", 1f), ("grainsize", 0.1f), ("density", 0.6f), ("spray", 0.7f), ("posrand", 0.7f), ("pitchrand", 0.25f), ("panrand", 1f), ("spread", 1f), ("attack", 0.02f), ("release", 0.6f), ("volume", 1f));
 
         // ---- Nota Flux (kind 11) — vector-morph synth, 25 presets. Vector (X,Y) blends the
         //      corners WARM (0,0) · GLASS (1,0) · MOOG (0,1) · GRAIN (1,1); target: 0 Filter,
@@ -2462,6 +2496,13 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     private void Inst(string group, int kind, string name, params (string Id, float Value)[] ps)
         => Add(group, name, "builtin-instrument", kind, isInstrument: true, isMidi: false, ps);
+
+    // A Nota Grain preset that loads its own factory source (GrainSources id) with its params.
+    private void Grain(string name, string source, params (string Id, float Value)[] ps)
+    {
+        Inst("grain", 10, name, ps);
+        _byId["grain/" + name].GrainSource = source;
+    }
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-effect", kind, isInstrument: false, isMidi: false, ps);

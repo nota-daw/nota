@@ -270,8 +270,10 @@ and user presets, automation, persistence and cloning.
   Gauss / Tukey / Tri) sprayed around it, coarse/fine pitch, per-grain position, pitch and
   pan variation, stereo spread, **Dry/Wet** against the sample itself, an LP/HP/BP filter
   and an amp envelope. The card draws the sample with the live grain cloud on it (drag to
-  move Position). Drop a sample from the browser to replace the built-in pad. 25 factory
-  presets.
+  move Position). Drop a sample from the browser to replace the built-in pad. 50 factory
+  presets in nine folders; every preset outside Basics brings its own source (29 synthesized
+  on first use — choir, strings, bells, kalimba, a drum break, an arpeggio, ocean, radio …),
+  while Basics shape whatever sample is loaded.
 - **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
   one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
   its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a

@@ -234,7 +234,7 @@ public static class PresetService
                             && doc.NamedParams.TryGetValue(pid, out var v))
                             engine.PluginParamSet(t, -1, i, v);
                 }
-                return "";
+                return LoadGrainSource(doc, engine, t);
             }
             case "plugin-effect":
             {
@@ -258,6 +258,16 @@ public static class PresetService
             default:
                 return "Unknown preset type.";
         }
+    }
+
+    // A Nota Grain factory preset plays its own source: render it on first use, then load it.
+    private static string LoadGrainSource(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        if (doc.BuiltinKind != 10 || string.IsNullOrEmpty(doc.GrainSource)) return "";
+        var src = Grain.GrainSources.ById(doc.GrainSource);
+        var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
+        if (src is null || path is null) return $"Couldn't prepare the sample \"{doc.GrainSource}\".";
+        return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : $"Couldn't load the sample \"{src.Name}\".";
     }
 
     /// <summary>Applies a preset to an EXISTING instrument/device in place (no new track/
@@ -286,7 +296,7 @@ public static class PresetService
                     float v = named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i);
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
-                return "";
+                return kind == 10 ? LoadGrainSource(doc, engine, trackId) : "";
             }
             case "builtin-effect":
             {

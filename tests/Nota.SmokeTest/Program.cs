@@ -2912,26 +2912,59 @@ Console.WriteLine("-- Nota Grain --");
         Check(held > 0.01f && held > alone * 5, $"Grain: an overlapping repeat of a note keeps sounding (RMS {held:F3} vs {alone:F4} released)");
     }
 
-    // Factory presets: 25 ship, every named param is a real Grain id, each applies in place
-    // and renders audible and finite.
+    // Factory presets: 50 ship in folders, every named param is a real Grain id, every preset
+    // outside Basics names a factory source that renders, each applies in place (loading its
+    // source on its root) and renders audible and finite.
     {
         var cat = new FactoryPresetCatalog();
         var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 10).ToList();
-        Check(mine.Count == 25, $"Nota Grain ships 25 factory presets (got {mine.Count})");
+        Check(mine.Count == 50, $"Nota Grain ships 50 factory presets (got {mine.Count})");
+        var folders = mine.Select(p => p.Category).Distinct().ToList();
+        Check(folders.Count >= 8 && mine.All(p => p.Category.Length > 0), $"Grain presets are filed in folders ({string.Join(", ", folders)})");
         var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !gIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
         Check(bad.Count == 0, $"every Grain preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
+        var srcBad = mine.Where(p => (p.Category == "Basics") != (cat.Document(p.Id)!.GrainSource is null)
+                                     || cat.Document(p.Id)!.GrainSource is { } sid && Nota.Infrastructure.Grain.GrainSources.ById(sid) is null)
+                         .Select(p => p.DisplayName).ToList();
+        Check(srcBad.Count == 0, $"every Grain preset outside Basics names a known source{(srcBad.Count > 0 ? " — bad: " + string.Join(", ", srcBad) : "")}");
+        var used = mine.Select(p => cat.Document(p.Id)!.GrainSource).Where(x => x is not null).Distinct().Count();
+        Check(used == Nota.Infrastructure.Grain.GrainSources.All.Count, $"every Grain source is used by a preset ({used}/{Nota.Infrastructure.Grain.GrainSources.All.Count})");
+
+        // Each source renders finite, non-silent and levelled under the ceiling.
+        var srcOff = new System.Collections.Generic.List<string>();
+        foreach (var src in Nota.Infrastructure.Grain.GrainSources.All)
+        {
+            var d = Nota.Infrastructure.Grain.GrainSourceLibrary.Render(src);
+            double pk = 0, acc = 0; bool fin = true;
+            foreach (var x in d) { if (!float.IsFinite(x)) fin = false; pk = Math.Max(pk, Math.Abs(x)); acc += x * x; }
+            double srms = Math.Sqrt(acc / d.Length);
+            if (!fin || pk > 0.9 || srms < 0.01 || d.Length / 2 != (int)(src.Seconds * 48000)) srcOff.Add($"{src.Id} (peak {pk:F2}, RMS {srms:F3})");
+        }
+        Check(srcOff.Count == 0, $"every Grain source renders finite, audible, under −1 dBFS{(srcOff.Count > 0 ? " — off: " + string.Join(", ", srcOff) : "")}");
+
         gx.SetClipNotes(g, 0, new[] { new NotaNote(48, 0.0, 1.5, 0.9f), new NotaNote(60, 0.0, 1.5, 0.9f), new NotaNote(67, 0.5, 1.0, 0.9f) });
         var off = new System.Collections.Generic.List<string>();
+        var roots = new System.Collections.Generic.List<string>();
         var pbuf = new float[GrainFrames(2.0) * 2];
+        float lo = float.MaxValue, hi = 0; string loN = "", hiN = "";
         foreach (var p in mine)
         {
-            if (cat.ApplyInPlace(gx, p.Id, g, -1).Length != 0) { off.Add($"{p.DisplayName} (apply)"); continue; }
+            if (cat.ApplyInPlace(gx, p.Id, g, -1) is { Length: > 0 } warn) { off.Add($"{p.DisplayName} (apply: {warn})"); continue; }
+            if (cat.Document(p.Id)!.GrainSource is { } sid)
+            {
+                var src = Nota.Infrastructure.Grain.GrainSources.ById(sid)!;
+                if (!gx.TryGetGrainInfo(g, out var gi) || gi.SampleId == 0 || gi.RootNote != src.Root) roots.Add($"{p.DisplayName} (root {gi.RootNote})");
+            }
             gx.Seek(0.0); gx.Play(); GrainRender(pbuf); GrainStop();
             bool ok = true; foreach (var x in pbuf) if (!float.IsFinite(x) || Math.Abs(x) > 1.01f) { ok = false; break; }
             float r = Rms(pbuf, pbuf.Length / 2);
             if (!ok || r < 0.005f) off.Add($"{p.DisplayName} (RMS {r:F3})");
+            if (r < lo) { lo = r; loN = p.DisplayName; }
+            if (r > hi) { hi = r; hiN = p.DisplayName; }
         }
+        Check(roots.Count == 0, $"every sourced Grain preset loads its sample on the source's root{(roots.Count > 0 ? " — off: " + string.Join(", ", roots) : "")}");
         Check(off.Count == 0, $"every Grain preset is audible and finite{(off.Count > 0 ? " — off: " + string.Join(", ", off) : "")}");
+        Console.WriteLine($"   (Grain preset RMS {lo:F3} {loN} … {hi:F3} {hiN})");
     }
 }
 

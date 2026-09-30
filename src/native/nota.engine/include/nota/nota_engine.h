@@ -197,8 +197,9 @@ NOTA_API int32_t nota_audition_add_device(NotaAudition* rig, int32_t kind);
 NOTA_API int32_t nota_audition_device_param(NotaAudition* rig, int32_t index, const char* name, float value);
 NOTA_API int32_t nota_audition_add_midi_effect(NotaAudition* rig, int32_t kind);
 NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, const char* name, float value);
-/* The Sampler's sample (NULL / "" = a procedural keys tone at C4). */
-NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8);
+/* The Sampler's or Nota Grain's sample, played at its own pitch on root_note (NULL / "" =
+ * the Sampler's procedural keys tone at C4; Grain keeps its built-in pad). */
+NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8, int32_t root_note);
 /* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
  * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
  * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */

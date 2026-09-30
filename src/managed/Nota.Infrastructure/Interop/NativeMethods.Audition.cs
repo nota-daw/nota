@@ -43,7 +43,7 @@ internal static partial class NativeMethods
     internal static partial int AuditionMidiParam(IntPtr rig, int index, string name, float value);
 
     [LibraryImport(Lib, EntryPoint = "nota_audition_set_sampler_sample", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int AuditionSetSamplerSample(IntPtr rig, string? path);
+    internal static partial int AuditionSetSamplerSample(IntPtr rig, string? path, int rootNote);
 
     [LibraryImport(Lib, EntryPoint = "nota_audition_add_source_from")]
     internal static partial int AuditionAddSourceFrom(IntPtr rig, IntPtr part, float gain);

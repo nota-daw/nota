@@ -15,6 +15,7 @@
 #include "AudioFile.h"
 #include "Device.h"
 #include "DeviceFactory.h"
+#include "GrainSynth.h"
 #include "Instrument.h"
 #include "MidiDevice.h"
 #include "Sampler.h"
@@ -123,13 +124,19 @@ bool AuditionRig::midiParam(int32_t index, const std::string& name, float value)
     return false;
 }
 
-bool AuditionRig::setSamplerSample(const std::string& path) {
+bool AuditionRig::setSamplerSample(const std::string& path, int32_t rootNote) {
+    if (auto* grain = dynamic_cast<GrainSynth*>(inst_.get())) {
+        auto buf = path.empty() ? nullptr : decodeAudioFile(path);
+        if (!buf || buf->empty()) return false;
+        grain->setSample(buf, rootNote, false);
+        return true;
+    }
     auto* sampler = dynamic_cast<Sampler*>(inst_.get());
     if (!sampler) return false;
     std::shared_ptr<SampleBuffer> buf = path.empty() ? nullptr : decodeAudioFile(path);
     if (buf && !buf->empty()) {
         buf->buildPeakTable();
-        sampler->setSample(buf, 60, false);
+        sampler->setSample(buf, rootNote, false);
         return true;
     }
     sampler->setSample(keysTone(sr_), 60, false);
