@@ -86,6 +86,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   copy, cut, paste, duplicate and delete. Each command is one undo step.
 
 ### Changed
+- **A new look for the start window.** The Nota logo follows the light and dark themes,
+  and recent projects sit in one compact list with their dates. Click a project to select
+  it and double-click to open it, or use the arrow keys and Return.
 - **A new look for Settings.** The window is larger, and the sidebar groups its pages
   under Devices, Plug-ins and General, each with an icon. Every page has a short
   description under its title. MIDI inputs and the other on/off options use larger
@@ -97,6 +100,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at the bottom of the window shows the plugin being installed, how much has downloaded and
   a Cancel button. It stays in view while you scroll the list or open another page, and
   shows the result when the install finishes. Cancelling leaves your plugins as they were.
+- **The Downloads list is faster and shows where each plugin runs.** Searching and filtering
+  the whole registry is instant now. Each plugin shows macOS, Windows and Linux icons for
+  the systems it's made for. Hover an icon to see which processors it supports. Plugins your
+  computer can't install are listed last, under their own heading, and say why. A progress
+  bar shows while the list loads or refreshes.
 - "Add track" in a track's right-click menu puts the new track right after that track. On a
   group it adds the track inside the group.
 - Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after

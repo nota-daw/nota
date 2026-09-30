@@ -49,7 +49,7 @@ public abstract class NotaWindow : Window
             ExtendClientAreaToDecorationsHint = true;
             ExtendClientAreaTitleBarHeightHint = 36;
 
-            var titleText = new TextBlock
+            var titleText = _chromeTitle = new TextBlock
             {
                 Classes = { "Caption" },
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -70,7 +70,7 @@ public abstract class NotaWindow : Window
             Grid.SetColumn(titleText, 1);
             row.Children.Add(titleText);
 
-            var bar = new Border
+            var bar = _chromeBar = new Border
             {
                 Height = 36,
                 Background = Res("Brush.ChromeBg"),
@@ -86,6 +86,20 @@ public abstract class NotaWindow : Window
 
         dock.Children.Add(bodyLayer);   // fills the remaining space
         base.Content = dock;
+    }
+
+    private Border? _chromeBar;
+    private TextBlock? _chromeTitle;
+
+    /// <summary>Let the title bar dissolve into the body: no band colour, no hairline, no
+    /// title — only the traffic lights and the drag area remain. For launcher-style windows
+    /// whose body carries its own identity (the start screen).</summary>
+    protected void BlendTitleBar()
+    {
+        if (_chromeBar is null) return;
+        _chromeBar.Background = Brushes.Transparent;   // still hit-tested, so it drags
+        _chromeBar.BorderThickness = default;
+        if (_chromeTitle is not null) _chromeTitle.IsVisible = false;
     }
 
     /// <summary>Set the window's body (below the title bar). Use this instead of Content.</summary>

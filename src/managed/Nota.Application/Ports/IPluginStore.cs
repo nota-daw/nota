@@ -21,6 +21,10 @@ public sealed record StorePlugin(
 {
     /// <summary>Optional caveat from the registry (e.g. "factory content is a separate download").</summary>
     public string? Notes { get; init; }
+
+    /// <summary>Every asset key the newest version ships (e.g. macos-universal, windows-x64),
+    /// including platforms other than this one.</summary>
+    public IReadOnlyList<string> Platforms { get; init; } = [];
 }
 
 /// <summary>One downloadable release asset and the VST3 bundles inside it.</summary>

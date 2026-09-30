@@ -50,6 +50,8 @@ internal static class PluginStoreTests
         var mac = RegistryIndex.Parse(sample, ["macos-arm64", "macos-universal"]).Single();
         yield return (mac.Asset is { Platform: "macos-universal", Archive: "dmg", Inner: "Dual.pkg" },
             "…falling back along the platform keys (arm64 → universal), nested archive kept");
+        yield return (mac.Platforms.Order().SequenceEqual(["linux-x64", "macos-universal"]),
+            "…and lists every platform the version ships for");
         yield return (RegistryIndex.Parse(sample, ["windows-x64"]).Single().Asset is null,
             "a plugin without a build for this platform stays listed, with no asset");
         var broken = sample.Replace("\"plugins\": [", "\"plugins\": [{\"id\": \"half\"},");

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Welcome screen — the launcher shown on startup (see MainWindow.ShowWelcomeAsync).
-// Brand header, New / Open actions, a list of recent projects, and shortcuts to
+// Welcome screen — the launcher shown on startup (see MainWindow.ShowWelcomeAsync), as
+// drawn in nota-design/Nota Start.html. Brand header, New / Open actions, a list of
+// recent projects (click selects, double-click / Return opens, ↑ ↓ move), and shortcuts to
 // Settings and What's New, plus banners for crash recovery and a newer release on
 // GitHub. New / Open / a recent project close the launcher and hand
 // off to the main window; Settings and What's New open as child dialogs so the user
@@ -14,8 +15,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 
@@ -41,48 +45,41 @@ public sealed class WelcomeWindow : NotaWindow
     {
         Title = "Welcome to Nota";
         Width = 640;
-        Height = 560;   // + title-bar band
+        Height = 560;   // including the title-bar band
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = NotaPalette.BgApp;
+        Background = NotaPalette.Panel;
+        BlendTitleBar();
+
+        _recent = recent;
+        _onOpenRecent = onOpenRecent;
 
         var root = new Grid
         {
-            Margin = new Thickness(28, 20, 28, 24),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*,Auto"),
+            Margin = new Thickness(28, 12, 28, 20),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"),
         };
 
         // --- Brand header --------------------------------------------------
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var logo = new Image { Width = 56, Height = 56, VerticalAlignment = VerticalAlignment.Center };
-        try
-        {
-            using var s = AssetLoader.Open(new Uri("avares://Nota.App/Assets/logo.png"));
-            logo.Source = new Bitmap(s);
-        }
-        catch { /* decorative */ }
-        Grid.SetColumn(logo, 0);
-        header.Children.Add(logo);
-
-        var brand = new StackPanel
-        {
-            Margin = new Thickness(16, 0, 0, 0),
-            Spacing = 2,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        header.Children.Add(new BrandMark { VerticalAlignment = VerticalAlignment.Center });
+        var brand = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         brand.Children.Add(new TextBlock
         {
             Text = "Nota",
-            FontSize = 26,
+            FontSize = NotaType.Title,
             FontWeight = FontWeight.SemiBold,
-            Foreground = NotaPalette.TextPrimary,
+            LetterSpacing = -0.4,
+            LineHeight = NotaType.Title,
+            Foreground = NotaPalette.TextHeading,
         });
         brand.Children.Add(new TextBlock
         {
-            Classes = { "Caption" },
             Text = $"Version {AppInfo.Version} · Engine {App.Services.GetRequiredService<EngineBuildInfo>().Version} · Desktop DAW",
+            FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Value,
+            Foreground = NotaPalette.TextMuted,
         });
-        Grid.SetColumn(brand, 1);
         header.Children.Add(brand);
         Grid.SetRow(header, 0);
         root.Children.Add(header);
@@ -91,12 +88,12 @@ public sealed class WelcomeWindow : NotaWindow
         var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Margin = new Thickness(0, 24, 0, 20),
+            Spacing = 8,
+            Margin = new Thickness(0, 20, 0, 20),
         };
-        var newBtn = new Button { Content = "New project", Classes = { "primary" } };
+        var newBtn = new Button { Content = "New project", Classes = { "primary" }, FontWeight = FontWeight.SemiBold };
         newBtn.Click += (_, _) => { Close(); onNew(); };
-        var openBtn = new Button { Content = "Open project…", Classes = { "secondary" } };
+        var openBtn = new Button { Content = "Open project…" };
         openBtn.Click += (_, _) => { Close(); onOpen(); };
         actions.Children.Add(newBtn);
         actions.Children.Add(openBtn);
@@ -104,75 +101,126 @@ public sealed class WelcomeWindow : NotaWindow
         root.Children.Add(actions);
 
         // --- Recent projects ----------------------------------------------
-        var recentLabel = new TextBlock
+        var recentHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        recentHead.Children.Add(new TextBlock { Classes = { "SectionLabel" }, Text = "RECENT PROJECTS", VerticalAlignment = VerticalAlignment.Bottom });
+        recentHead.Children.Add(new TextBlock
         {
-            Classes = { "SectionLabel" },
-            Text = "Recent projects",
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        Grid.SetRow(recentLabel, 2);
-        root.Children.Add(recentLabel);
+            Text = recent.Count.ToString(NotaNum.Culture),
+            FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Eyebrow,
+            Foreground = NotaPalette.TextDisabled,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 1),
+        });
 
-        Control recentBody;
+        Control wellBody;
         if (recent.Count == 0)
         {
-            recentBody = new TextBlock
+            wellBody = new TextBlock
             {
-                Classes = { "Caption" },
-                Text = "No recent projects yet — create one to get started.",
-                VerticalAlignment = VerticalAlignment.Top,
+                Text = "No recent projects",
+                FontSize = NotaType.Body,
+                Foreground = NotaPalette.TextTertiary,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
             };
         }
         else
         {
-            var list = new StackPanel { Spacing = 4 };
-            foreach (var item in recent)
+            var list = new StackPanel();
+            for (int i = 0; i < recent.Count; i++)
             {
-                // Match New / Open: close the launcher, then hand off to the main window.
-                list.Children.Add(RecentRow(item, p => { Close(); onOpenRecent(p); }));
+                var row = new RecentRow(recent[i]);
+                int index = i;
+                row.PointerPressed += (_, e) =>
+                {
+                    if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
+                    Select(index);
+                    if (e.ClickCount == 2) OpenRecent(index);
+                    e.Handled = true;
+                };
+                _rows.Add(row);
+                list.Children.Add(row);
             }
-            recentBody = new ScrollViewer
+            wellBody = _scroll = new ScrollViewer
             {
                 Content = list,
                 HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             };
+            Select(0);
         }
-        Grid.SetRow(recentBody, 3);
-        root.Children.Add(recentBody);
+
+        var well = new Border
+        {
+            Background = NotaPalette.BgSunken,
+            BorderBrush = NotaPalette.GraphBorder,
+            BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Panel,
+            Padding = new Thickness(4),
+            ClipToBounds = true,
+            Child = wellBody,
+        };
+        well[!Border.BoxShadowProperty] = well.GetResourceObservable("Shadow.Sunken").ToBinding();
+
+        var recentPanel = new DockPanel();
+        DockPanel.SetDock(recentHead, Dock.Top);
+        recentPanel.Children.Add(recentHead);
+        recentPanel.Children.Add(well);
+        Grid.SetRow(recentPanel, 2);
+        root.Children.Add(recentPanel);
 
         // --- Footer: show-on-startup + Settings / What's New --------------
         var footer = new Grid
         {
-            Margin = new Thickness(0, 16, 0, 0),
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
+            Margin = new Thickness(0, 20, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"),
         };
 
-        var startupCheck = new CheckBox
+        var startupTrack = new SwitchTrack { IsOn = showOnStartup };
+        var startup = new Border
         {
-            Content = "Show on startup",
-            IsChecked = showOnStartup,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    startupTrack,
+                    new TextBlock
+                    {
+                        Text = "Show on startup",
+                        FontSize = NotaType.Body,
+                        Foreground = NotaPalette.TextStrong,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                },
+            },
         };
-        startupCheck.IsCheckedChanged += (_, _) => onShowOnStartupChanged(startupCheck.IsChecked == true);
-        Grid.SetColumn(startupCheck, 0);
-        footer.Children.Add(startupCheck);
+        startup.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(startup).Properties.IsLeftButtonPressed) return;
+            startupTrack.IsOn = !startupTrack.IsOn;
+            onShowOnStartupChanged(startupTrack.IsOn);
+            e.Handled = true;
+        };
+        Grid.SetColumn(startup, 0);
+        footer.Children.Add(startup);
 
-        var settingsBtn = new Button { Content = "Settings", Classes = { "ghost" } };
+        var settingsBtn = FooterLink("Settings");
         settingsBtn.Click += (_, _) => onSettings();
-        Grid.SetColumn(settingsBtn, 1);
+        Grid.SetColumn(settingsBtn, 2);
         footer.Children.Add(settingsBtn);
 
-        var whatsNewBtn = new Button
-        {
-            Content = "What's New",
-            Classes = { "ghost" },
-            Margin = new Thickness(8, 0, 0, 0),
-        };
+        var whatsNewBtn = FooterLink("What's New");
+        whatsNewBtn.Margin = new Thickness(8, 0, 0, 0);
         whatsNewBtn.Click += (_, _) => onWhatsNew();
-        Grid.SetColumn(whatsNewBtn, 2);
+        Grid.SetColumn(whatsNewBtn, 3);
         footer.Children.Add(whatsNewBtn);
 
-        Grid.SetRow(footer, 4);
+        Grid.SetRow(footer, 3);
         root.Children.Add(footer);
 
         // Banners (crash recovery, available update) stack above the content. The update
@@ -201,6 +249,57 @@ public sealed class WelcomeWindow : NotaWindow
 
         SetBody(outer);
     }
+
+    private readonly IReadOnlyList<RecentProjectItem> _recent;
+    private readonly Action<string> _onOpenRecent;
+    private readonly List<RecentRow> _rows = new();
+    private ScrollViewer? _scroll;
+    private int _selected = -1;
+    private bool _opening;
+
+    // ↑ / ↓ move the selection through the recent list, Return opens it.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (_rows.Count > 0 && !_opening)
+        {
+            switch (e.Key)
+            {
+                case Key.Down: Select(Math.Min(_rows.Count - 1, _selected + 1)); e.Handled = true; break;
+                case Key.Up: Select(Math.Max(0, _selected - 1)); e.Handled = true; break;
+                case Key.Enter: OpenRecent(_selected); e.Handled = true; break;
+            }
+        }
+        if (!e.Handled) base.OnKeyDown(e);
+    }
+
+    private void Select(int index)
+    {
+        if (index < 0 || index >= _rows.Count) return;
+        if (_selected >= 0) _rows[_selected].IsSelected = false;
+        _selected = index;
+        _rows[index].IsSelected = true;
+        _rows[index].BringIntoView();
+    }
+
+    // Mark the row "Opening…", let that frame land, then close the launcher and hand the
+    // project to the main window (loading blocks the UI thread).
+    private void OpenRecent(int index)
+    {
+        if (_opening || index < 0 || index >= _rows.Count) return;
+        _opening = true;
+        _rows[index].ShowOpening();
+        var path = _recent[index].Path;
+        Dispatcher.UIThread.Post(() => { Close(); _onOpenRecent(path); }, DispatcherPriority.Background);
+    }
+
+    // A quiet text button in the footer: Ink 3, a hover wash, no face.
+    private static Button FooterLink(string text) => new()
+    {
+        Content = text,
+        Classes = { "ghost" },
+        Padding = new Thickness(10, 0),
+        Foreground = NotaPalette.TextSecondary,
+    };
 
     private readonly StackPanel _banners;
 
@@ -280,51 +379,77 @@ public sealed class WelcomeWindow : NotaWindow
         };
     }
 
-    // A clickable card for one recent project: name over its path, modified date on the
-    // right. A ghost Button gives the standard hover wash for free.
-    private static Button RecentRow(RecentProjectItem item, Action<string> onOpenRecent)
+    // One line of the recent list: name left, modified date right in mono. The selected
+    // row takes the brass wash and a 2px brass edge; hover washes the others.
+    private sealed class RecentRow : Border
     {
-        var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock
-        {
-            Text = item.Name,
-            FontSize = 13,
-            Foreground = NotaPalette.TextPrimary,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        text.Children.Add(new TextBlock
-        {
-            Text = item.Path,
-            FontSize = 11,
-            Foreground = NotaPalette.TextTertiary,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
+        private readonly Border _edge;
+        private readonly TextBlock _name, _meta;
+        private bool _selected, _hover;
 
-        var date = new TextBlock
+        public RecentRow(RecentProjectItem item)
         {
-            Text = item.Modified,
-            FontSize = 11,
-            Foreground = NotaPalette.TextTertiary,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0),
-        };
+            Height = 28;
+            CornerRadius = NotaRadius.Badge;
+            Padding = new Thickness(12, 0, 10, 0);
+            Transitions = new Transitions
+            {
+                new BrushTransition { Property = BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120), Easing = new CubicEaseOut() },
+            };
+            ToolTip.SetTip(this, item.Path);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        Grid.SetColumn(text, 0);
-        Grid.SetColumn(date, 1);
-        grid.Children.Add(text);
-        grid.Children.Add(date);
+            _edge = new Border
+            {
+                Width = 2,
+                Margin = new Thickness(-12, 7, 0, 7),
+                CornerRadius = NotaRadius.Bar,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            _name = new TextBlock
+            {
+                Text = item.Name,
+                FontSize = NotaType.Name,
+                FontWeight = FontWeight.Medium,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            _meta = new TextBlock
+            {
+                Text = item.Modified,
+                FontFamily = NotaFonts.MonoFamily,
+                FontSize = NotaType.Value,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+            };
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            Grid.SetColumn(_meta, 1);
+            grid.Children.Add(_name);
+            grid.Children.Add(_meta);
 
-        var btn = new Button
+            var layer = new Panel();
+            layer.Children.Add(grid);
+            layer.Children.Add(_edge);
+            Child = layer;
+
+            PointerEntered += (_, _) => { _hover = true; Paint(); };
+            PointerExited += (_, _) => { _hover = false; Paint(); };
+            Paint();
+        }
+
+        public bool IsSelected { get => _selected; set { _selected = value; Paint(); } }
+
+        public void ShowOpening()
         {
-            Classes = { "ghost" },
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(12, 8),
-            Content = grid,
-        };
-        ToolTip.SetTip(btn, item.Path);
-        btn.Click += (_, _) => onOpenRecent(item.Path);
-        return btn;
+            _meta.Text = "Opening…";
+            _meta.Foreground = NotaPalette.AccentHover;
+        }
+
+        private void Paint()
+        {
+            Background = _selected ? NotaPalette.AccentSubtle : _hover ? NotaPalette.SurfaceRaised : NotaPalette.Wash(NotaPalette.SurfaceRaised, 0);
+            _edge.Background = _selected ? NotaPalette.Accent : null;
+            _name.Foreground = _selected ? NotaPalette.TextPrimary : NotaPalette.TextStrong;
+            _meta.Foreground = _selected ? NotaPalette.TextSecondary : NotaPalette.TextMuted;
+        }
     }
 }

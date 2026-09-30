@@ -84,6 +84,7 @@ public static class RegistryIndex
             Asset: asset)
         {
             Notes = Str(p, "notes"),
+            Platforms = assets.EnumerateObject().Select(a => a.Name).ToList(),
         };
     }
 
