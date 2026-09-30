@@ -164,11 +164,14 @@ cmake --build src/native/nota.engine/build
 
 All scripts write to `dist/`.
 
-**macOS** — universal `.app` and `.dmg`:
+**macOS** — `.app` and one `.dmg` per arch (an Apple Silicon host builds both):
 ```bash
-scripts/bundle-mac.sh          # -> /Applications/Nota.app (ad-hoc signed)
-scripts/package-dmg.sh         # -> dist/Nota-<version>-universal.dmg
+scripts/bundle-mac.sh              # -> /Applications/Nota.app (ad-hoc signed)
+scripts/package-dmg.sh arm64       # -> dist/Nota-<version>-arm64.dmg
+scripts/package-dmg.sh x86_64      # -> dist/Nota-<version>-x86_64.dmg
 ```
+The installer window's background comes from `assets/macos/dmg-background.png`
+(660×400) and its `@2x` (1320×800); both are required.
 
 **Windows** — Inno Setup installer (x64 / arm64; one x64 host cross-builds both):
 ```powershell

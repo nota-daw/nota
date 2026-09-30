@@ -27,8 +27,8 @@ Contents
 
 ## Platforms and distribution
 
-- **macOS** (≥ 13.0, universal arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
-  hosting. Distributed as a universal `.dmg` / `.app` (ad-hoc signed).
+- **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
+  hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
 - **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency), WinMM
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).

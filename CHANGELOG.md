@@ -18,6 +18,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- macOS now ships as **two downloads**: `Nota-<version>-arm64.dmg` for Apple Silicon and
+  `Nota-<version>-x86_64.dmg` for Intel Macs, each about half the size of the old universal
+  `.dmg`. The universal build is gone.
+- The macOS installer window has a designed background with a drag-to-Applications arrow.
+
 ## [0.42.1] — 2026-09-30
 
 ### Highlights
