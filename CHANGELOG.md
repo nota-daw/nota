@@ -89,6 +89,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **A new look for the start window.** The Nota logo follows the light and dark themes,
   and recent projects sit in one compact list with their dates. Click a project to select
   it and double-click to open it, or use the arrow keys and Return.
+- **A new look for the "quit without saving" dialog.** It shows the project's name and how
+  long its changes have gone unsaved. Return saves and Escape cancels. A saved project is
+  saved right in the dialog, and Nota quits when it's done.
 - **A new look for Settings.** The window is larger, and the sidebar groups its pages
   under Devices, Plug-ins and General, each with an icon. Every page has a short
   description under its title. MIDI inputs and the other on/off options use larger

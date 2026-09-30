@@ -152,10 +152,7 @@ public partial class MainWindow
     /// ("Nota — Untitled" until the bundle is named).</summary>
     private void UpdateWindowTitle()
     {
-        string name = _projectPath is { Length: > 0 } p
-            ? System.IO.Path.GetFileNameWithoutExtension(p.TrimEnd('/', '\\'))
-            : "Untitled";
-        string title = $"Nota — {name}";
+        string title = $"Nota — {ProjectDisplayName()}";
         Title = title;
         DocTitleText.Text = title;   // frameless title-bar caption mirrors the window title
     }
@@ -347,8 +344,27 @@ public partial class MainWindow
         catch { return null; }
     }
 
+    // When the project first differed from its clean state, as seen by the 30 s autosave
+    // tick (NoteDirtySince) — so the quit prompt can say how long changes have waited.
+    private DateTime? _dirtySince;
+
     /// <summary>Record the current state as saved (after New / Open / Save).</summary>
-    private void MarkProjectClean() => _cleanFingerprint = CurrentFingerprint();
+    private void MarkProjectClean()
+    {
+        _cleanFingerprint = CurrentFingerprint();
+        _dirtySince = null;
+    }
+
+    private void NoteDirtySince()
+    {
+        if (_dirtySince is null && HasUnsavedChanges()) _dirtySince = DateTime.Now;
+    }
+
+    /// <summary>The open project's name ("Untitled" until the bundle is named).</summary>
+    private string ProjectDisplayName()
+        => _projectPath is { Length: > 0 } p
+            ? System.IO.Path.GetFileNameWithoutExtension(p.TrimEnd('/', '\\'))
+            : "Untitled";
 
     /// <summary>True if the project changed since it was last created, opened or saved.</summary>
     private bool HasUnsavedChanges()

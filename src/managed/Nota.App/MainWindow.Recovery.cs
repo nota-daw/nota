@@ -31,6 +31,7 @@ public partial class MainWindow
     private void OnAutosaveTick()
     {
         if (_vm is null) return;
+        NoteDirtySince();
         try { _recovery.Autosave(Engine, TransportSnapshot(), _projectPath); }
         catch { /* autosave is best-effort — never disrupt the session */ }
     }
@@ -62,15 +63,30 @@ public partial class MainWindow
         _closePromptOpen = true;
         try
         {
+            // A named project saves in place with the prompt up ("Saving…"); an untitled one
+            // needs the file panel, so the prompt closes first.
+            bool named = _projectPath is not null;
             var choice = await new SaveChangesWindow("Unsaved changes",
-                "Do you really want to quit without saving your changes?")
+                "Do you really want to quit without saving your changes?",
+                ProjectDisplayName(), UnsavedAgeText(),
+                named ? () => DoSaveAsync(saveAs: false) : null)
                 .ShowDialog<SaveChoice>(this);
             if (choice == SaveChoice.Cancel) return;
-            if (choice == SaveChoice.Save && !await DoSaveAsync(saveAs: false)) return;
+            if (choice == SaveChoice.Save && !named && !await DoSaveAsync(saveAs: false)) return;
             _closeConfirmed = true;
         }
         finally { _closePromptOpen = false; }
         Close();
+    }
+
+    // "unsaved changes · 14 min" — how long the oldest unsaved edit has waited.
+    private string UnsavedAgeText()
+    {
+        var age = _dirtySince is { } since ? DateTime.Now - since : TimeSpan.Zero;
+        string when = age.TotalMinutes < 1 ? "just now"
+            : age.TotalHours < 1 ? NotaNum.F($"{(int)age.TotalMinutes}{NotaNum.Thin}min")
+            : NotaNum.F($"{(int)age.TotalHours}{NotaNum.Thin}h {age.Minutes}{NotaNum.Thin}min");
+        return "unsaved changes · " + when;
     }
 
     private async void OnOpenedRecoveryCheck(object? sender, EventArgs e)
