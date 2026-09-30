@@ -5,6 +5,10 @@ name: Release
 # commit contained in `main`. The GitHub release is created as a DRAFT with the matching
 # CHANGELOG section as its body; you review the artifacts and publish manually.
 #
+# Manual run (Actions -> Release -> Run workflow): builds the chosen platforms from
+# any branch, without a tag, and only uploads the build artifacts — no release is
+# created. Use it to check a platform build before tagging.
+#
 # Artifacts:
 #   macOS   -> Nota-<version>-arm64.dmg , Nota-<version>-x86_64.dmg
 #   Windows -> Nota-Setup-<version>-x64.exe , Nota-Setup-<version>-arm64.exe
@@ -14,6 +18,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Platforms to build (no release is created)
+        type: choice
+        default: macos
+        options: [macos, windows, linux, all]
 
 permissions:
   contents: write   # create the release + upload assets
@@ -24,7 +35,7 @@ jobs:
   # CHANGELOG section. Every build job depends on this, so a bad tag never builds.
   # --------------------------------------------------------------------------------
   guard:
-    name: Validate release tag
+    name: ${{ github.event_name == 'push' && 'Validate release tag' || 'Read version' }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -37,6 +48,13 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
+          # Manual run: no tag to validate — just take the version from the branch.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$(tr -d '[:space:]' < VERSION)"
+            echo "Manual build of $GITHUB_REF_NAME (version $version)"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           version="${GITHUB_REF_NAME#v}"
           echo "Release tag: $GITHUB_REF_NAME  (version $version)"
 
@@ -65,11 +83,14 @@ jobs:
   # --------------------------------------------------------------------------------
   # macOS — one .dmg per arch (Apple Silicon + Intel). Both build on the arm64
   # runner: clang cross-compiles the x86_64 engine, dotnet cross-publishes osx-x64.
+  # macos-26 for the same Xcode 26 toolchain the engine is developed with; the
+  # minimum macOS the app runs on is set by the deployment target (13.0), not here.
   # --------------------------------------------------------------------------------
   macos:
     name: Build macOS (${{ matrix.arch }})
     needs: guard
-    runs-on: macos-14
+    if: github.event_name == 'push' || contains(fromJSON('["macos","all"]'), inputs.platforms)
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +123,7 @@ jobs:
   windows:
     name: Build Windows (x64 + arm64)
     needs: guard
+    if: github.event_name == 'push' || contains(fromJSON('["windows","all"]'), inputs.platforms)
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v5
@@ -129,6 +151,7 @@ jobs:
   linux:
     name: Build Linux (${{ matrix.arch }})
     needs: guard
+    if: github.event_name == 'push' || contains(fromJSON('["linux","all"]'), inputs.platforms)
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +189,7 @@ jobs:
   release:
     name: Create draft release
     needs: [guard, macos, windows, linux]
+    if: github.event_name == 'push'   # manual runs only build, never release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

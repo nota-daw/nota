@@ -18,6 +18,20 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:$PATH"
 
+# Run a noisy step with its output in a log; on failure print the tail so CI
+# shows the actual compiler/publish error instead of a bare "exit code 1".
+quiet() {
+  local log rc=0; log="$(mktemp -t nota-step)"
+  "$@" >"${log}" 2>&1 || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    echo "error: step failed (exit ${rc}): $*" >&2
+    echo "----- last 80 lines of output -----" >&2
+    tail -n 80 "${log}" >&2
+    exit "${rc}"
+  fi
+  rm -f "${log}"
+}
+
 ARCH="${1:-}"
 case "${ARCH}" in
   arm64)        RID="osx-arm64" ;;
@@ -44,15 +58,15 @@ mkdir -p "${OUT_DIR}"
 
 # 1) Native engine (thin, this arch only) -------------------------------------
 echo "==> Building native engine (${ARCH})…"
-cmake -G Ninja -S src/native/nota.engine -B "${NATIVE_BUILD}" \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${ARCH}" >/dev/null
-cmake --build "${NATIVE_BUILD}" >/dev/null
+quiet cmake -G Ninja -S src/native/nota.engine -B "${NATIVE_BUILD}" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${ARCH}"
+quiet cmake --build "${NATIVE_BUILD}"
 lipo -info "${NATIVE_BUILD}/libnota_engine.dylib"
 
 # 2) Managed publish, pointed at this arch's engine ---------------------------
 echo "==> Publishing managed (${RID}, self-contained)…"
-dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  -p:NotaNativeDir="${NATIVE_BUILD}" -o "${PUB}" >/dev/null
+quiet dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
+  -p:NotaNativeDir="${NATIVE_BUILD}" -o "${PUB}"
 
 # 3) Assemble the .app --------------------------------------------------------
 echo "==> Assembling ${APP_NAME}.app…"
@@ -140,11 +154,11 @@ if ! "${DMGBUILD_VENV}/bin/python" -c \
 fi
 
 rm -f "${DMG}"
-"${DMGBUILD_VENV}/bin/dmgbuild" -s scripts/dmg-settings.py \
+quiet "${DMGBUILD_VENV}/bin/dmgbuild" -s scripts/dmg-settings.py \
   -D app="${APP}" \
   -D background="${BG_TMP}/background.tiff" \
   -D icon="${CONTENTS}/Resources/${APP_NAME}.icns" \
-  "${APP_NAME} ${VERSION}" "${DMG}" >/dev/null
+  "${APP_NAME} ${VERSION}" "${DMG}"
 rm -rf "${BG_TMP}"
 
 echo "==> Verifying:"
