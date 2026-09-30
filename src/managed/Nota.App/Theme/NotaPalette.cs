@@ -77,6 +77,16 @@ internal static class NotaPalette
         Changed?.Invoke();
     }
 
+    /// <summary>The colour <paramref name="slot"/> holds in <paramref name="variant"/>, whatever
+    /// the current one is — for previews of a variant (the theme picker's swatches). Read it
+    /// at draw time like any other colour.</summary>
+    public static Color ColorIn(SolidColorBrush slot, NotaThemeVariant variant)
+    {
+        foreach (var s in Slots)
+            if (ReferenceEquals(s.Brush, slot)) return variant == NotaThemeVariant.Dark ? s.Dark : s.Light;
+        return slot.Color;
+    }
+
     /// <summary>A translucent tint of a palette slot. Shared per (slot, alpha) and
     /// re-tinted with its source, so washes follow the theme like any other token.</summary>
     public static SolidColorBrush Wash(SolidColorBrush src, byte alpha)

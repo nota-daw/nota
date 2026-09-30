@@ -199,6 +199,7 @@ now points at the new hue.
 | Tab segment (`Seg`) in container (`SegGroup`) | 24 in 30 |
 | Filter chip (`Chip`) | 20 |
 | Switch | 18 × 10, knob 7, inset 1.5 |
+| Switch, Settings rows | 28 × 16, knob 12, inset 2 (`SwitchTrack(large: true)`) |
 | Knob (`KnobSecondary` / `KnobRegular` / `KnobMain`) | 34 / 36 / 44 · `KnobInline` 24 in a table row |
 | Parameter cell (`ParamCell`) | 53 tall |
 | Slider track | 3, handle 6 × 7 |
@@ -293,7 +294,7 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 |---|---|
 | `Knob` | 52-grid: groove r21 stroke 5, 270° from −135°, cap r14, pointer 2.4 Brass Light. Sizes snap to 34 / 36 / 44; `Inline` pins 24 for a knob inside a table row. `IsModified`, `IsDim`, `ArcColor` for a modulation source. |
 | `DeviceCardKit.KnobCell` | Knob → label 7/700 caps → value mono 7, no gap; 53 tall under a 34 knob. Label and value go Brass Light when modified or `emphasised`. |
-| `SwitchTrack` / `DeviceCardKit.Switch` | 18 × 10, knob 7, inset 1.5; on = brass + panel-coloured knob right, off = Track off + Ink 5 knob left. Word to the right, caps 7 in a device, 11 in the shell. |
+| `SwitchTrack` / `DeviceCardKit.Switch` | 18 × 10, knob 7, inset 1.5; on = brass + panel-coloured knob right, off = Track off + Ink 5 knob left. Word to the right, caps 7 in a device, 11 in the shell. The Settings window uses the large 28 × 16 size (knob 12, inset 2) with a 12px sentence. |
 | `DeviceCardKit.Segments` | Sunken container; selected = solid brass with dark text. 9 px in a device, 11 in the shell (`ToggleButton.seg` in `Border.segmented`). |
 | `SliderTrack` / `DeviceCardKit.SliderRow` | Label · 3 px well track · 6 × 7 handle · fixed-width mono value right. Bipolar fills from centre. Inactive loses brass, keeps the number. |
 | `MiniFader`, `PanBar`, `VFader` | Track-header gain and pan, mixer fader — same drag contract. |

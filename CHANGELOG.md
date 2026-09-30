@@ -86,6 +86,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   copy, cut, paste, duplicate and delete. Each command is one undo step.
 
 ### Changed
+- **A new look for Settings.** The window is larger, and the sidebar groups its pages
+  under Devices, Plug-ins and General, each with an icon. Every page has a short
+  description under its title. MIDI inputs and the other on/off options use larger
+  switches. Latency shows in milliseconds. Get Plug-ins is now called Downloads, shows how
+  many plugins you can still install, counts each filter and lists the download size. The
+  theme buttons show a sample of each theme's colour. Shortcuts can be filtered and show
+  each key on its own key-cap.
 - "Add track" in a track's right-click menu puts the new track right after that track. On a
   group it adds the track inside the group.
 - Copying, duplicating or deleting a group now includes its tracks. Pasted tracks go after
