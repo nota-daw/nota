@@ -17,6 +17,12 @@ created, and the build-and-publish run starts.
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
+- Import MIDI files. `.mid` files now show up in the browser's Files tab, and you can drag
+  them from there or straight from Finder / Explorer. Drop one on the arrangement and it
+  becomes a MIDI clip at that spot. A file with several parts spreads out: the first part
+  goes on the track you dropped on, and each of the others gets its own new track (drum
+  parts get a Nota Rhythm). Drop one on a session slot and the whole file becomes that
+  slot's clip. Double-clicking a MIDI file in the browser puts it on a new track.
 - Preview presets before loading them. The browser's player now also sits under the
   Instruments, Audio Effects, MIDI Effects and Presets tabs. Select a preset, a drum kit or a
   built-in device and press Space or Play to hear it; turn on Auto there to hear each one as
@@ -92,6 +98,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Changed
+- The browser's preview player stays out of the way until you use it. It is hidden at
+  launch, appears once you click or arrow through a list (or press Space there), and hides
+  again when you drag or double-click an item into the project.
 - ⌘A now selects all clips in the arrangement. Automation mode moved to ⌘⇧A.
 - Nota Arp has a new look and two sizes: a full card and a small 260-pixel one. Switch
   between them with S / L in the card's header. Both sizes share the same presets, and the

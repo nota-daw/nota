@@ -338,6 +338,13 @@ public sealed class PreviewPlayer : UserControl
         _playWhenReady = null;
     }
 
+    /// <summary>Stops whatever is playing (the browser is hiding the player).</summary>
+    public void StopPlayback()
+    {
+        _playWhenReady = null;
+        if (_playing) Stop();
+    }
+
     private static AuditionSubject? SubjectOf(BrowserItem? item) => item switch
     {
         { IsGroup: true } => null,

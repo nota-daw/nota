@@ -33,6 +33,9 @@ public partial class MainWindow
                     // Decodes in the background; the track shows a filling placeholder meanwhile.
                     _ = ImportAudioInBackgroundAsync(item.Path, TrackIsAudio(trackId) ? trackId : -1, beat);
                     break;
+                case BrowserItemKind.MidiFile:
+                    ImportMidiFileToArrangement(item, trackId, beat);
+                    break;
                 case BrowserItemKind.BuiltinInstrument:
                 {
                     // Dropped on an existing (non-rack) instrument track → swap its instrument;
@@ -94,6 +97,9 @@ public partial class MainWindow
                     if (instrumentTrack) { _vm.StatusText = "Drop samples onto audio slots."; break; }
                     if (Engine.AddSessionAudioFile(trackId, scene, item.Path))
                         _vm.StatusText = $"Added {item.Name} to slot";
+                    break;
+                case BrowserItemKind.MidiFile:
+                    ImportMidiFileToSlot(item, trackId, scene, instrumentTrack);
                     break;
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
@@ -221,6 +227,9 @@ public partial class MainWindow
                     break;
                 case BrowserItemKind.Sample:
                     _vm.StatusText = "Drop samples onto the arrangement.";
+                    break;
+                case BrowserItemKind.MidiFile:
+                    _vm.StatusText = "Drop MIDI files onto the arrangement or a session slot.";
                     break;
                 default:                                                    // effects + presets
                     RouteToTrack(item, t);

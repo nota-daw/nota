@@ -19,6 +19,8 @@ public enum BrowserItemKind
     /// <summary>A section header row (BUILT-IN / PLUG-INS) inside a flattened list — never
     /// selectable, draggable or activatable.</summary>
     Group,
+    /// <summary>A Standard MIDI File (.mid) — drops as MIDI clip(s).</summary>
+    MidiFile,
 }
 
 /// <summary>Active library filter for the device tabs (Instr / FX / MIDI).</summary>
@@ -512,8 +514,8 @@ public sealed partial class BrowserViewModel : ObservableObject
            || it.Sub.Contains(q, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Scans the configured samples folder into a navigable folder tree (M7-4a).
-    /// Folders become expandable parent nodes; audio files are leaves. Only folders on a
-    /// path to an audio file appear.</summary>
+    /// Folders become expandable parent nodes; audio and MIDI files are leaves. Only folders
+    /// on a path to such a file appear.</summary>
     public void RebuildSamples()
     {
         _sampleTree.Clear();
@@ -524,7 +526,8 @@ public sealed partial class BrowserViewModel : ObservableObject
         // Folder nodes keyed by absolute directory path (reused while placing files).
         var folders = new Dictionary<string, BrowserItem>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in EnumerateFilesSafe(root)
-                     .Where(p => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant()))
+                     .Where(p => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant())
+                                 || Nota.Application.Midi.MidiFileReader.IsMidiFile(p))
                      .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                      .Take(MaxSamples))
         {
@@ -533,7 +536,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             parentChildren.Add(new BrowserItem
             {
                 Name = Path.GetFileName(path),
-                Kind = BrowserItemKind.Sample,
+                Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(path) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
                 Sub = "",
                 Path = path,
                 Depth = depth,

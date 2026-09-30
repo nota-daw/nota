@@ -224,7 +224,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             {
                 hover(false);
                 foreach (var it in BrowserView.DroppedItems(e))
-                    if (it.Path is { Length: > 0 } p && engine.SetRhythmVoiceSample(track, voice, p))
+                    if (it.Kind != Nota.Presentation.BrowserItemKind.MidiFile && it.Path is { Length: > 0 } p && engine.SetRhythmVoiceSample(track, voice, p))
                     {
                         Loaded(voice);
                         ctx.NotifyChanged(); ctx.RequestRebuild();

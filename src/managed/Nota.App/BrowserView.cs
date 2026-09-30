@@ -47,8 +47,8 @@ public sealed class BrowserView : UserControl
     public static bool IsBrowserDrag => CurrentDrag is not null;
 
     // --- external file drops (from Finder / other programs) -----------------
-    // Audio extensions Nota can import as a clip / sample. Anything else in an
-    // external drag is ignored.
+    // Audio extensions Nota can import as a clip / sample; MIDI files (MidiFileReader)
+    // import as MIDI clips. Anything else in an external drag is ignored.
     private static readonly HashSet<string> AudioExts = new(StringComparer.OrdinalIgnoreCase)
     { ".wav", ".wave", ".aif", ".aiff", ".flac", ".mp3", ".ogg", ".m4a", ".aac" };
 
@@ -58,9 +58,9 @@ public sealed class BrowserView : UserControl
     public static bool IsAcceptableDrag(DragEventArgs e)
         => IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File);
 
-    /// <summary>Local paths of the audio files carried by an external drag (empty if
-    /// none / not a file drag).</summary>
-    private static List<string> ExternalAudioFiles(DragEventArgs e)
+    /// <summary>Local paths of the audio / MIDI files carried by an external drag (empty
+    /// if none / not a file drag).</summary>
+    private static List<string> ExternalFiles(DragEventArgs e)
     {
         var paths = new List<string>();
         if (!e.DataTransfer.Contains(DataFormat.File)) return paths;
@@ -69,23 +69,25 @@ public sealed class BrowserView : UserControl
         foreach (var f in files)
         {
             var p = f.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(p) && AudioExts.Contains(System.IO.Path.GetExtension(p))) paths.Add(p!);
+            if (!string.IsNullOrEmpty(p)
+                && (AudioExts.Contains(System.IO.Path.GetExtension(p)) || Nota.Application.Midi.MidiFileReader.IsMidiFile(p)))
+                paths.Add(p!);
         }
         return paths;
     }
 
     /// <summary>The items a drop should load: the internal browser item (any kind), or
-    /// one synthesized Sample item per external audio file. Empty when there's nothing
-    /// we can use (e.g. a non-audio external file). Callers that take one use [0].</summary>
+    /// one synthesized Sample / MidiFile item per external file. Empty when there's nothing
+    /// we can use (e.g. an unsupported external file). Callers that take one use [0].</summary>
     public static IReadOnlyList<BrowserItem> DroppedItems(DragEventArgs e)
     {
         if (CurrentDrag is { } item) return new[] { item };
         var list = new List<BrowserItem>();
-        foreach (var p in ExternalAudioFiles(e))
+        foreach (var p in ExternalFiles(e))
             list.Add(new BrowserItem
             {
                 Name = System.IO.Path.GetFileNameWithoutExtension(p),
-                Kind = BrowserItemKind.Sample,
+                Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(p) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
                 Path = p,
             });
         return list;
@@ -190,6 +192,10 @@ public sealed class BrowserView : UserControl
 
     // Pinned preview footer + the status line under it.
     private readonly PreviewPlayer _previewFooter;   // sample / preset auditioner — list tabs
+    // The player stays hidden until the user works a list (click, arrow keys, Space) and hides
+    // again once a row is dragged or double-clicked onto the project.
+    private bool _previewShown;
+    private bool _listPointerDown;   // a single click is in progress on a list row
     private readonly Border _statusBar;
     private readonly TextBlock _statusText;
 
@@ -320,7 +326,7 @@ public sealed class BrowserView : UserControl
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
 
-        _previewFooter = new PreviewPlayer();
+        _previewFooter = new PreviewPlayer { IsVisible = false };
         _previewFooter.SetContext(files: _active == FilesTab);
 
         // Status line: what the active tab is showing, counted.
@@ -603,7 +609,7 @@ public sealed class BrowserView : UserControl
         // The auditioner follows the list tabs: samples in Files, presets and built-in devices
         // in Instr / FX / MIDI / Presets. It picks up the new tab's selection.
         bool auditions = index <= PresetsTab;
-        _previewFooter.IsVisible = auditions;
+        UpdatePreviewVisibility();
         _previewFooter.SetContext(files: index == FilesTab);
         if (auditions) SyncPreview(_pages[index]);
         // Favorite/tag filter chips apply only to the device tabs.
@@ -839,7 +845,7 @@ public sealed class BrowserView : UserControl
     {
         BrowserItemKind.Folder => "",
         BrowserItemKind.Preset => it.Depth > 0 ? "" : it.Sub,
-        BrowserItemKind.Sample => System.IO.Path.GetExtension(it.Path).TrimStart('.').ToLowerInvariant(),
+        BrowserItemKind.Sample or BrowserItemKind.MidiFile => System.IO.Path.GetExtension(it.Path).TrimStart('.').ToLowerInvariant(),
         // A column of "project" down a tab that is only projects says nothing.
         BrowserItemKind.Project => "",
         _ => it.Sub,
@@ -959,8 +965,24 @@ public sealed class BrowserView : UserControl
     {
         if (_active > PresetsTab || !_previewFooter.HasSample) return false;
         for (var c = source as StyledElement; c is not null; c = c.Parent)
-            if (c == _pages[_active] || c == _previewFooter) { _previewFooter.Toggle(); return true; }
+            if (c == _pages[_active] || c == _previewFooter) { ShowPreview(true); _previewFooter.Toggle(); return true; }
         return false;
+    }
+
+    private void ShowPreview(bool shown)
+    {
+        _previewShown = shown;
+        UpdatePreviewVisibility();
+    }
+
+    private void UpdatePreviewVisibility() => _previewFooter.IsVisible = _previewShown && _active <= PresetsTab;
+
+    // A row left the browser for the project: stop its audition and put the player away.
+    private void DismissPreview()
+    {
+        _listPointerDown = false;
+        _previewFooter.StopPlayback();
+        ShowPreview(false);
     }
 
     // Hands the player a list's selection and the row below it (which the player pre-renders,
@@ -992,14 +1014,23 @@ public sealed class BrowserView : UserControl
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
             if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
-            else { _previewFooter.StopAudition(); ItemActivated?.Invoke(item); }
+            else { DismissPreview(); ItemActivated?.Invoke(item); }
         };
         list.SelectionChanged += (_, _) =>
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
-            if (_active <= PresetsTab && list == _pages[_active]) SyncPreview(list);
+            if (_active <= PresetsTab && list == _pages[_active])
+            {
+                SyncPreview(list);
+                // Keyboard navigation reveals at once; a click waits for release, so a row
+                // pressed only to be dragged away doesn't flash the player.
+                if (!_listPointerDown) ShowPreview(true);
+            }
         };
+        list.AddHandler(InputElement.PointerPressedEvent, (object? _, PointerPressedEventArgs e) =>
+                _listPointerDown = e.ClickCount < 2 && e.GetCurrentPoint(list).Properties.IsLeftButtonPressed,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
         // Drag source (M7-5): start a copy-drag when the pointer leaves the row.
         // Must use handledEventsToo — ListBoxItem marks PointerPressed as Handled for
         // selection, so a plain `+=` (handled=false) never fires and the drag never
@@ -1007,7 +1038,12 @@ public sealed class BrowserView : UserControl
         list.AddHandler(InputElement.PointerPressedEvent, OnRowPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerMovedEvent, OnRowMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerReleasedEvent,
-            (object? _, PointerReleasedEventArgs _) => { _pressedItem = null; _pressArgs = null; },
+            (object? _, PointerReleasedEventArgs _) =>
+            {
+                _pressedItem = null; _pressArgs = null;
+                if (_listPointerDown && _active <= PresetsTab && list == _pages[_active]) ShowPreview(true);
+                _listPointerDown = false;
+            },
             RoutingStrategies.Bubble, handledEventsToo: true);
         // Right-click / context menu: favorites + tags on device rows, reveal on files,
         // open / reveal / delete on projects.
@@ -1041,6 +1077,7 @@ public sealed class BrowserView : UserControl
         var item = _pressedItem;
         var args = _pressArgs;
         _pressedItem = null; _pressArgs = null; // start the drag once
+        DismissPreview();
 
         // Single native pasteboard item (one format → one drag image → one
         // pasteboard item: macOS is satisfied). The payload rides CurrentDrag.
@@ -1284,6 +1321,7 @@ public sealed class BrowserView : UserControl
         switch (item.Kind)
         {
             case BrowserItemKind.Sample:
+            case BrowserItemKind.MidiFile:
             // A saved preset file on disk. Synthetic rows (factory presets, drum kits)
             // carry a scheme instead of a path and have nothing to reveal.
             case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):

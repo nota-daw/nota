@@ -207,6 +207,10 @@ public partial class MainWindow
                 case BrowserItemKind.Sample:
                     _ = ImportAudioInBackgroundAsync(item.Path, -1, 0.0);
                     break;
+                case BrowserItemKind.MidiFile:
+                    ImportMidiFileToArrangement(item, -1, 0.0);
+                    Timeline.Refresh();
+                    break;
                 case BrowserItemKind.Project:
                     OpenProject(item.Path);
                     return; // OpenProject rebuilds everything itself
