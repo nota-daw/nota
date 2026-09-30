@@ -382,9 +382,9 @@ internal static class DesignTokenCheck
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
         yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
-        // Accepted exceptions (decided 2026-09-16): plug-in / parameter stubs are narrow; the
-        // Bass and Physical instruments keep their wider layouts.
-        var exempt = new HashSet<string> { "PluginDeviceBody.cs", "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
+        // Accepted exceptions (decided 2026-09-16): parameter stubs are narrow; the Bass and
+        // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.)
+        var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
             "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
         var off = Directory.EnumerateFiles(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))

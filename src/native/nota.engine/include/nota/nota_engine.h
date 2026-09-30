@@ -325,6 +325,10 @@ NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine,
 NOTA_API int32_t     nota_plugin_param_count(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API const char* nota_plugin_param_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* The plugin's display text for a param's current value ("-12.0 dB", unit appended), and its
+ * normalized default. Engine-owned string, valid until the next call. */
+NOTA_API const char* nota_plugin_param_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+NOTA_API float       nota_plugin_param_default(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API float       nota_plugin_param_get(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API NotaResult  nota_plugin_param_set(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, float normalized);
 /* Add (or reuse) a PluginParam automation lane bound to a stable paramID; the

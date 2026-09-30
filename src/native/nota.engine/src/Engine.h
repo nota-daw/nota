@@ -224,6 +224,8 @@ public:
     int32_t     pluginParamCount(int32_t trackId, int32_t deviceIndex) const;
     std::string pluginParamId(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    float       pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float       pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     void        pluginParamSet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float normalized);
     int32_t     pluginParamIndexOfId(int32_t trackId, int32_t deviceIndex, const std::string& id) const;

@@ -490,6 +490,22 @@ std::string paramNameImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (i < 0 || i >= params.size()) return {};
     return params[i]->getName(64).toStdString();
 }
+std::string paramTextImpl(juce::AudioPluginInstance* p, int32_t i) {
+    if (p == nullptr) return {};
+    const auto& params = p->getParameters();
+    if (i < 0 || i >= params.size()) return {};
+    auto* prm = params[i];
+    juce::String text = prm->getCurrentValueAsText().trim();
+    juce::String unit = prm->getLabel().trim();
+    if (text.isNotEmpty() && unit.isNotEmpty() && !text.endsWithIgnoreCase(unit)) text << " " << unit;
+    return text.toStdString();
+}
+float paramDefaultImpl(juce::AudioPluginInstance* p, int32_t i) {
+    if (p == nullptr) return 0.0f;
+    const auto& params = p->getParameters();
+    if (i < 0 || i >= params.size()) return 0.0f;
+    return params[i]->getDefaultValue();
+}
 float paramGetImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (p == nullptr) return 0.0f;
     const auto& params = p->getParameters();
@@ -620,6 +636,8 @@ public:
     int32_t     pluginParamCount() const override { return paramCountImpl(plugin_.get()); }
     std::string pluginParamId(int32_t i) const override { return paramIdImpl(plugin_.get(), i); }
     std::string pluginParamName(int32_t i) const override { return paramNameImpl(plugin_.get(), i); }
+    std::string pluginParamText(int32_t i) const override { return paramTextImpl(plugin_.get(), i); }
+    float       pluginParamDefault(int32_t i) const override { return paramDefaultImpl(plugin_.get(), i); }
     float       pluginParamGet(int32_t i) const override { return paramGetImpl(plugin_.get(), i); }
     void        pluginParamSet(int32_t i, float v) override { paramSetImpl(plugin_.get(), i, v); }
     int32_t     pluginParamIndexOfId(const std::string& id) const override { return paramIndexOfIdImpl(plugin_.get(), id); }
@@ -772,6 +790,8 @@ public:
     int32_t     pluginParamCount() const override { return paramCountImpl(plugin_.get()); }
     std::string pluginParamId(int32_t i) const override { return paramIdImpl(plugin_.get(), i); }
     std::string pluginParamName(int32_t i) const override { return paramNameImpl(plugin_.get(), i); }
+    std::string pluginParamText(int32_t i) const override { return paramTextImpl(plugin_.get(), i); }
+    float       pluginParamDefault(int32_t i) const override { return paramDefaultImpl(plugin_.get(), i); }
     float       pluginParamGet(int32_t i) const override { return paramGetImpl(plugin_.get(), i); }
     void        pluginParamSet(int32_t i, float v) override { paramSetImpl(plugin_.get(), i, v); }
     int32_t     pluginParamIndexOfId(const std::string& id) const override { return paramIndexOfIdImpl(plugin_.get(), id); }

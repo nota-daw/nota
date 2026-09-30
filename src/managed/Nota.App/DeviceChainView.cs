@@ -176,6 +176,7 @@ public sealed partial class DeviceChainView : UserControl
         double width;
         bool fullBleed = false;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
+        if (kind == -1) return PluginCardFor(ChainKind.Effect, index, count);   // hosted VST3 / AU
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;

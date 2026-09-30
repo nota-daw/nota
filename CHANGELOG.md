@@ -112,6 +112,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Changed
+- VST3 and AU plug-ins get a proper device card with two sizes. The header names the
+  plug-in. The small card shows its vendor, format, parameter count and latency, with
+  Open editor and Save preset. The full card adds every parameter as a knob, with a filter
+  and pages (the mouse wheel turns them), and a sidechain source for plug-ins that have
+  one. Knobs show the plug-in's own values (such as "−12.0 dB"), and a double-click
+  restores the plug-in's default.
 - The browser's preview player stays out of the way until you use it. It is hidden at
   launch, appears once you click or arrow through a list (or press Space there), and hides
   again when you drag or double-click an item into the project.

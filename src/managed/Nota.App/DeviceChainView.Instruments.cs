@@ -18,6 +18,7 @@ public sealed partial class DeviceChainView
         int kind = _engine.TrackInstrumentKind(_trackId);
         if (kind == 3) return new RackCardView(NewCardContext()).BuildInstrumentRackCard();   // Instrument Rack
         if (kind == 4) return DrumRackCard();
+        if (kind == -1) return PluginCardFor(ChainKind.Instrument, -1, 1);   // hosted VST3 / AU
         // Built-in Sampler + synths (Synth/Physical/Aurora/Volt) → their strategy; anything
         // else (or a synth reporting no params) → the generic Open-GUI card.
         bool hasParams = _engine.PluginParamCount(_trackId, -1) > 0;

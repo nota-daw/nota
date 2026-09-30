@@ -298,7 +298,8 @@ public partial class MainWindow
         int trackId = _deviceChain.TrackId;
         if (trackId <= 0) { _vm.StatusText = "Select a track first."; return; }
 
-        string label = deviceIndex < 0 ? "Instrument" : Engine.DeviceName(trackId, deviceIndex);
+        string label = Engine.DeviceName(trackId, deviceIndex);
+        if (string.IsNullOrEmpty(label)) label = "Instrument";
         var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;
 

@@ -369,7 +369,10 @@ Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width fro
 - A bypassed card keeps its layout and turns to the disabled look via `Inactive`.
 
 Width exceptions, by decision: **Bass 1060, Physical 720** (squeezing them would be a
-redesign) and the host-plugin / parameter-list stubs (230, 190). Rhythm moved onto the
+redesign) and the parameter-list stub (190). A hosted plug-in (VST3 / AU) is a two-size
+card like the S / L instruments: **S 260** names it (name, vendor, format, kind, params,
+latency) over *Open editor* and *Save preset*; **L 700** adds its parameters as a paged,
+filterable knob grid (and the sidechain source when it has a bus). Rhythm moved onto the
 700 frame with its redesign.
 
 ## Shell

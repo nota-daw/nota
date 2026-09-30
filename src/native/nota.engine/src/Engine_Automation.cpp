@@ -127,6 +127,22 @@ std::string Engine::pluginParamName(int32_t trackId, int32_t deviceIndex, int32_
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamName(paramIndex) : std::string{};
 }
+std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return {};
+    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamText(paramIndex) : std::string{};
+    if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return {};
+    auto& d = t->devices[deviceIndex];
+    return d ? d->pluginParamText(paramIndex) : std::string{};
+}
+float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return 0.0f;
+    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamDefault(paramIndex) : 0.0f;
+    if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return 0.0f;
+    auto& d = t->devices[deviceIndex];
+    return d ? d->pluginParamDefault(paramIndex) : 0.0f;
+}
 float Engine::pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0.0f;

@@ -811,6 +811,10 @@ public interface IAudioEngine : IDisposable
     string PluginParamId(int trackId, int deviceIndex, int paramIndex);
     string PluginParamName(int trackId, int deviceIndex, int paramIndex);
     float PluginParamGet(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>The plugin's own text for a param's current value ("−12.0 dB"), or "" when it has none.</summary>
+    string PluginParamText(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>The plugin's default for a param, normalized 0..1.</summary>
+    float PluginParamDefault(int trackId, int deviceIndex, int paramIndex);
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);

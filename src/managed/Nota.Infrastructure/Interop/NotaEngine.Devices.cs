@@ -268,6 +268,10 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamId(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
     public string PluginParamName(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamName(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
+    public string PluginParamText(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamText(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
+    public float PluginParamDefault(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return NativeMethods.PluginParamDefault(_handle, trackId, deviceIndex, paramIndex); }
     public float PluginParamGet(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginParamGet(_handle, trackId, deviceIndex, paramIndex); }
     public void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized)
