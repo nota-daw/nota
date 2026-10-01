@@ -85,27 +85,34 @@ internal static partial class BundleContent
         }
     }
 
-    /// <summary>Deletes files in <c>samples/</c> and <c>plugin-states/</c> that the saved
-    /// document no longer references: superseded content, legacy <c>sample-N.wav</c> /
-    /// <c>state-N.bin</c> names, and temp files left by an interrupted save.</summary>
+    /// <summary>Deletes files in <c>samples/</c> and <c>plugin-states/</c> that neither the
+    /// saved document nor any version in the project's history references: superseded
+    /// content, legacy <c>sample-N.wav</c> / <c>state-N.bin</c> names, and temp files left by
+    /// an interrupted save. Prunes nothing when the history can't be read.</summary>
     public static void PruneUnreferenced(string bundleDir, ProjectDocument doc)
     {
-        Prune(Path.Combine(bundleDir, SamplesDir), SamplesDir, doc.SampleRefs.ContainsKey, ".wav");
-        Prune(Path.Combine(bundleDir, StatesDir), StatesDir, doc.StateBlobs.ContainsKey, ".bin");
+        if (ProjectHistory.PinnedBinaries(bundleDir) is not { } pinned) return;
+        bool Keep(string rel) => doc.SampleRefs.ContainsKey(rel) || doc.StateBlobs.ContainsKey(rel) || pinned.Contains(rel);
+        foreach (var relDir in new[] { SamplesDir, StatesDir })
+        {
+            string dir = Path.Combine(bundleDir, relDir);
+            if (!Directory.Exists(dir)) continue;
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                string name = Path.GetFileName(file);
+                if (!IsSaveOutput(name, relDir) || Keep($"{relDir}/{name}")) continue;
+                try { File.Delete(file); } catch { /* in use or read-only: leave it for the next save */ }
+            }
+        }
     }
 
-    private static void Prune(string dir, string relDir, Func<string, bool> referenced, string ext)
+    /// <summary>Is <paramref name="name"/> (in <paramref name="relDir"/>) a file a save writes —
+    /// a sample / state or its temp? Anything else in those folders isn't ours to delete.</summary>
+    public static bool IsSaveOutput(string name, string relDir)
     {
-        if (!Directory.Exists(dir)) return;
-        foreach (var file in Directory.EnumerateFiles(dir))
-        {
-            string name = Path.GetFileName(file);
-            // Only touch what a save writes; anything else in the folder isn't ours.
-            if (!name.EndsWith(ext, StringComparison.OrdinalIgnoreCase)
-                && !name.EndsWith(ext + ".tmp", StringComparison.OrdinalIgnoreCase)) continue;
-            if (referenced($"{relDir}/{name}")) continue;
-            try { File.Delete(file); } catch { /* in use or read-only: leave it for the next save */ }
-        }
+        string ext = relDir == SamplesDir ? ".wav" : ".bin";
+        return name.EndsWith(ext, StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(ext + ".tmp", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Hex(ReadOnlySpan<byte> hash) => Convert.ToHexString(hash[..HashBytes]).ToLowerInvariant();

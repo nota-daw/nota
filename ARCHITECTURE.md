@@ -170,6 +170,17 @@ The dirty check captures with session names instead (`contentNames: false`) and 
 audio. Older bundles (`sample-N.wav`, `state-N.bin`) load as is and migrate on their next
 save.
 
+**Version history** (`ProjectHistory`, port `IProjectHistory`) lives in `.history/` inside
+the bundle. A version is the bundle's top-level files — the manifest and its sidecars —
+stored by content hash in `.history/objects/` (Brotli), plus the list of binaries its
+manifest references. Binaries are not copied: being content-named, they stay in
+`samples/` / `plugin-states/` and are shared by every version that uses them.
+`.history/versions.json` holds the tree (parent links, head, labels, notes, stars).
+Checking a version out writes its top-level files back (manifest last) and moves the head;
+the next save on top of an older version branches. A save's prune keeps every binary some
+version references, and prunes nothing if the history can't be read. Deleting a version
+re-parents its children and collects objects and binaries nothing needs any more.
+
 `analysis/` holds a cache of imported audio — each file's waveform overview (min/max per
 512 frames) and detected tempo, as `<content fingerprint>.npk` — so re-importing a file
 is instant. It is disposable: delete it and entries are rebuilt on the next import. While

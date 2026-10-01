@@ -141,6 +141,15 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Project version history alone (fast iteration): `--history`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--history")
+{
+    Console.WriteLine("-- project: version history --");
+    foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HISTORY PASSED" : $"HISTORY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Opt-in hosted-plugin check (M3-3): `--hostcheck <path-to-nota-scanworker>`.
 // Loads a hosted AU instrument and effect and confirms audio flows through them.
 if (args.Length >= 2 && args[0] == "--hostcheck")
@@ -13590,6 +13599,8 @@ foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");
 foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+Console.WriteLine("-- project: version history --");
+foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");
