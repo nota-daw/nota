@@ -18,6 +18,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- **Faster saves of projects with audio:** a save now writes only new recordings and
+  imports instead of every sample again, and the same audio used in several places is
+  stored once. Background autosave no longer rewrites the project's audio either. Older
+  projects are converted on their next save.
+
 ## [0.42.2] — 2026-09-30
 
 ### Highlights

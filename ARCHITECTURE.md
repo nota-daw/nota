@@ -160,6 +160,16 @@ referenced samples into `samples/` and plugin state blobs into `plugin-states/`,
 writes `project.json` atomically (temp file + rename) with an auto-backup. Loading
 replays the document through the same structural-edit operations the UI uses.
 
+The binaries are **content-addressed** (`BundleContent`): `samples/<hash>.wav` and
+`plugin-states/<hash>.bin`, where `<hash>` is the first 128 bits of a SHA-256 of the
+content. Identical content shares one file, a save skips files already on disk (new ones
+are written temp + rename), names stay stable across sessions, and after the manifest is
+replaced the files it no longer references are deleted. Hashing a sample reads its whole
+buffer, so hashes are cached per engine sample id and seeded from the file names on load.
+The dirty check captures with session names instead (`contentNames: false`) and reads no
+audio. Older bundles (`sample-N.wav`, `state-N.bin`) load as is and migrate on their next
+save.
+
 `analysis/` holds a cache of imported audio — each file's waveform overview (min/max per
 512 frames) and detected tempo, as `<content fingerprint>.npk` — so re-importing a file
 is instant. It is disposable: delete it and entries are rebuilt on the next import. While
