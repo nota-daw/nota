@@ -38,6 +38,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IPluginStore, PluginStore>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();
         services.AddSingleton<IProjectStore, ProjectStore>();
+        services.AddSingleton<IProjectHistory>(_ => new ProjectHistory(AppInfo.Version));
         services.AddSingleton<IPresetStore, PresetStore>();
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
         services.AddSingleton<IPresetAudition, PresetAudition>();

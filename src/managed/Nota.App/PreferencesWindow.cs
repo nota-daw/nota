@@ -886,6 +886,13 @@ public sealed partial class PreferencesWindow : NotaWindow
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
+        ("FILE", new[]
+        {
+            ("⌘N   ⌘O", "New project / open a project"),
+            ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
+            ("⌥⌘S", "Save a version with a note"),
+            ("⌘I   ⌘⇧E", "Import audio / export audio"),
+        }),
         ("TRANSPORT", new[]
         {
             ("Space", "Play / Stop"),

@@ -238,6 +238,9 @@ public sealed partial class ProjectHistory : IProjectHistory
         }
     }
 
+    /// <summary>Does the bundle keep a version history?</summary>
+    public static bool Exists(string bundleDir) => File.Exists(Path.Combine(bundleDir, HistoryDir, VersionsFile));
+
     /// <summary>Binaries any version references, for the save's prune to keep. Empty when
     /// there is no history; null when it can't be read — then nothing may be pruned.</summary>
     internal static IReadOnlySet<string>? PinnedBinaries(string bundleDir)

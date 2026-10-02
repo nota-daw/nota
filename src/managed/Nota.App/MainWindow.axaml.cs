@@ -160,6 +160,7 @@ public partial class MainWindow : Window
         MidiLearn.Bind(RecordBtn, MidiTarget.TransportRecord, "Record");
 
         _projects = App.Services.GetRequiredService<IProjectStore>();
+        _history = App.Services.GetRequiredService<IProjectHistory>();
         _presets = App.Services.GetRequiredService<IPresetStore>();
         _factory = App.Services.GetRequiredService<IFactoryPresets>();
         _kits = App.Services.GetRequiredService<IDrumKits>();

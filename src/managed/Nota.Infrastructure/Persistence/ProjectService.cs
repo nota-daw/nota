@@ -842,7 +842,8 @@ public sealed class ProjectService
     /// <summary>Writes the document (and its referenced samples) into the `.nota`
     /// bundle folder. Binaries are content-named, so ones already on disk are skipped;
     /// each new one is written temp + rename. Atomic manifest (temp + rename); backs up
-    /// any existing manifest into <c>backups/</c>; then deletes binaries the manifest no
+    /// any existing manifest into <c>backups/</c> (unless the bundle keeps a version history);
+    /// then deletes binaries the manifest no
     /// longer references. Sample data is read from <paramref name="engine"/> (the one
     /// <see cref="Capture"/> read from).</summary>
     public static void Save(ProjectDocument doc, string bundleDir, IAudioEngine engine)
@@ -870,7 +871,7 @@ public sealed class ProjectService
         }
 
         string manifest = Path.Combine(bundleDir, ManifestName);
-        if (File.Exists(manifest))
+        if (File.Exists(manifest) && !ProjectHistory.Exists(bundleDir))   // the version history supersedes backups/
         {
             string backups = Path.Combine(bundleDir, "backups");
             Directory.CreateDirectory(backups);
