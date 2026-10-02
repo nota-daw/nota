@@ -47,3 +47,12 @@ Name: "{commondesktop}\Nota"; Filename: "{app}\Nota.App.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Nota.App.exe"; Description: "Launch Nota"; Flags: nowait postinstall skipifsilent
+; In-app update (AppUpdater): the installer runs /SILENT with /relaunch=1 after "Restart
+; now": start Nota again, un-elevated, once the files are in place.
+Filename: "{app}\Nota.App.exe"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
+
+[Code]
+function RelaunchAfterUpdate: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:relaunch|0}') = '1');
+end;

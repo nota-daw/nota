@@ -42,6 +42,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<ISampleAnalyzer, SampleAnalyzer>();
         services.AddSingleton<ISampleIndex, SampleLibraryIndex>();
         services.AddSingleton<IModelStore>(_ => new ModelStore());
+        services.AddSingleton<IAppUpdater>(_ => new AppUpdater(AppInfo.Version));
         services.AddSingleton<IClipAi, ClipAi>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();
         services.AddSingleton<IProjectStore, ProjectStore>();
@@ -95,6 +96,9 @@ public partial class App : Avalonia.Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // A downloaded update installs once the app is gone (see AppUpdater).
+            desktop.Exit += (_, _) => Services.GetRequiredService<IAppUpdater>().RunPendingInstall();
+
             // Show the splash immediately, then defer the heavy engine spin-up to a
             // background dispatcher tick so the splash actually paints before the audio
             // backend loads (a synchronous VM resolve here would freeze the launch).

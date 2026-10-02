@@ -125,6 +125,14 @@ if (args.Length >= 1 && args[0] == "--smart-samples")
     Console.WriteLine(failures == 0 ? "SMART SAMPLES PASSED" : $"SMART SAMPLES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Self-update alone: `--updater`.
+if (args.Length >= 1 && args[0] == "--updater")
+{
+    Console.WriteLine("-- self-update --");
+    foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "UPDATER PASSED" : $"UPDATER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // AI models store alone: `--models`.
 if (args.Length >= 1 && args[0] == "--models")
 {
@@ -13667,6 +13675,10 @@ foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
 // --- ai models: model + runtime install/uninstall from local assets ---
 Console.WriteLine("-- ai models: store --");
 foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
+
+// --- self-update: release parsing, download + verify, install helpers ---
+Console.WriteLine("-- self-update --");
+foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

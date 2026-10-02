@@ -801,6 +801,11 @@ and user presets, automation, persistence and cloning.
   frame).
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
   after the first launch on a new version.
+- **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
+  downloads the build for this platform (with progress, checked against the release's
+  sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.
+  This covers the macOS .app, the Windows installer (run silently) and the Linux AppImage.
+  Other copies fall back to a link to the release page.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General

@@ -74,6 +74,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Over MCP**, an AI can list the installed models, separate a clip into stems and
   transcribe a clip into a MIDI track (`list_ai_models`, `separate_stems`,
   `convert_audio_to_midi`). Installing a model stays with you.
+- **Updates install themselves.** When a new version is out, the banner on the start screen
+  now has an **Update** button: Nota downloads the new version with a progress bar and
+  checks it against the release's checksum. Then click **Restart now**, or **Later** to
+  install it the next time you quit. Works with the macOS app, the Windows installer and
+  the Linux AppImage. Copies that can't replace themselves (for example, one run straight
+  from the disk image) still link to the release page.
 
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and

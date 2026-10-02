@@ -220,3 +220,22 @@ The native engine is built by CMake + Ninja, separately from the managed app; th
 project copies the resulting `libnota_engine.{dylib,so}` / `nota_engine.dll` plus
 `nota-scanworker` next to the managed binary for P/Invoke. See [`README.md`](README.md)
 for commands and [`BUILD.md`](BUILD.md) for details.
+
+## Updates
+
+The welcome screen asks GitHub for the latest published release (`IAppUpdater` →
+`Infrastructure/Update/AppUpdater.cs`) and picks the asset `release.yml` builds for this OS
+and architecture. **Update** downloads it into `<data>/updates/` and checks its size and the
+sha256 `digest` GitHub reports for the asset. On macOS the `.dmg` is mounted and its
+`Nota.app` copied out and version-checked. Nothing touches the installed app while Nota runs.
+On exit (`desktop.Exit` in `App`) `RunPendingInstall` starts a small detached script. It
+waits for the process to end, then puts the new build in place: it swaps the `.app` bundle
+on macOS (rolling back on failure) or renames over the AppImage on Linux. On Windows it runs
+the Inno Setup installer with `/SILENT`, and `/relaunch=1` makes the installer start Nota
+again as the original user. **Restart now** quits through the normal close path, with the
+relaunch flag set.
+
+Only a packaged install in a writable location updates in place: an `.app` that isn't
+translocated or running off the disk image, an Inno install folder, or `$APPIMAGE`. Dev
+builds and everything else get the old **Download** button, which opens the release page.
+`NOTA_UPDATE_API` points the check at another release JSON (a URL or a local file).
