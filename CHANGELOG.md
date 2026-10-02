@@ -18,6 +18,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Version history:** every save keeps a version of the project, and the new **History**
+  tab in the browser shows them as a tree. Switch back to any version, or open one as a
+  separate copy; saving on top of an older version starts a new branch, so nothing is lost.
+  Each version describes itself — "Added Bass · Tempo 120.00 → 124.00", "Mix of Vocals" — so
+  the list reads without notes. Name, note, star and delete versions from the right-click menu. **File → Save Version with
+  Note…** (⌥⌘S) asks what changed. Versions share their audio, so a version costs only what it
+  adds. **Save As** takes the whole history to the new project. The tab's menu clears out
+  every unnamed version at once (named, starred, noted and branch-tip versions stay). History
+  is on by default; **Settings → Library → Version history** turns it off after a warning —
+  that erases the open project's history, and other projects' on their next save. Over MCP,
+  an AI can list versions, save one with a note before an experiment, switch back, and name,
+  note or star versions.
+
+### Changed
+- **Faster saves of projects with audio:** a save now writes only new recordings and
+  imports instead of every sample again, and the same audio used in several places is
+  stored once. Background autosave no longer rewrites the project's audio either. Older
+  projects are converted on their next save.
+
 ## [0.42.2] — 2026-09-30
 
 ### Highlights

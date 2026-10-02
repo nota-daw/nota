@@ -30,6 +30,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public event Action? RecordingTick;
     /// <summary>Fired every ~30 s so the window can autosave a crash-recovery snapshot (M7-7).</summary>
     public event Action? AutosaveRequested;
+    /// <summary>Version history was just turned off in Settings: the window erases the open
+    /// project's history.</summary>
+    public event Action? VersionHistoryTurnedOff;
+
+    /// <summary>Turns version history on or off and persists it. Turning it off (the caller has
+    /// confirmed) erases the open project's history; other projects lose theirs on their next save.</summary>
+    public void SetKeepVersionHistory(bool on)
+    {
+        if (Settings.Current.KeepVersionHistory == on) return;
+        Settings.Current.KeepVersionHistory = on;
+        Settings.Save();
+        if (!on) VersionHistoryTurnedOff?.Invoke();
+    }
 
     [ObservableProperty] private string _engineInfo = "";
     [ObservableProperty] private string _statusText = "";

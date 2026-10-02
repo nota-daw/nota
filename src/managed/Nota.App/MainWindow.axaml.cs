@@ -160,6 +160,9 @@ public partial class MainWindow : Window
         MidiLearn.Bind(RecordBtn, MidiTarget.TransportRecord, "Record");
 
         _projects = App.Services.GetRequiredService<IProjectStore>();
+        _history = App.Services.GetRequiredService<IProjectHistory>();
+        SetUpHistoryTab();
+        App.Services.GetRequiredService<ProjectVersionsBridge>().Target = this;   // MCP version tools
         _presets = App.Services.GetRequiredService<IPresetStore>();
         _factory = App.Services.GetRequiredService<IFactoryPresets>();
         _kits = App.Services.GetRequiredService<IDrumKits>();
@@ -319,6 +322,7 @@ public partial class MainWindow : Window
         MainContent.Children.Add(_modular);
 
         vm.AutosaveRequested += OnAutosaveTick;
+        vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)

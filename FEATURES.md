@@ -45,6 +45,13 @@ JUCE module; the engine core is JUCE-free.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation.
+- **Version history**: every save records a version inside the project. The browser's
+  **History** tab draws them as a branching tree (the current one has a brass dot), each
+  described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
+  to any version, open one as a copy, or name, note, star and delete versions. Saving on top
+  of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
+  unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
+  audio, so each costs only what it adds; **Save As** carries the history along.
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open.
 - **Quit without saving** dialog names the project and how long its changes have gone
@@ -676,7 +683,8 @@ and user presets, automation, persistence and cloning.
 
 - An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
   MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
-  category → device → preset), **Projects**, and **Map** (MIDI Learn mappings). A hairline
+  category → device → preset), **Projects**, **Map** (MIDI Learn mappings) and **History**
+  (the open project's versions). A hairline
   separates the device tabs from the library tabs, and the active one carries a brass edge.
 - **A compact index**: single-line rows, sectioned into **BUILT-IN** and **PLUG-INS** with
   counts, so it is clear where Nota's own devices end and the scanned plug-ins begin. The
@@ -813,7 +821,9 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome.
-- **Project**: `get_overview` (a full snapshot).
+- **Project**: `get_overview` (a full snapshot); version history — `list_versions` (with what
+  each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
+  star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a

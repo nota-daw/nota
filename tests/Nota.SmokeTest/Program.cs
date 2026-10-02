@@ -132,6 +132,28 @@ if (args.Length >= 1 && args[0] == "--audition")
     return failures == 0 ? 0 : 1;
 }
 
+// Content-addressed bundle alone (fast iteration): `--bundle`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--bundle")
+{
+    Console.WriteLine("-- project: content-addressed bundle --");
+    foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BUNDLE PASSED" : $"BUNDLE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Project version history alone (fast iteration): `--history`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--history")
+{
+    Console.WriteLine("-- project: version history --");
+    foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunSummary()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunCleanup()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HISTORY PASSED" : $"HISTORY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Opt-in hosted-plugin check (M3-3): `--hostcheck <path-to-nota-scanworker>`.
 // Loads a hosted AU instrument and effect and confirms audio flows through them.
 if (args.Length >= 2 && args[0] == "--hostcheck")
@@ -3374,7 +3396,7 @@ Console.WriteLine("-- Sampler --");
         Check(ne.PluginParamGet(st, -1, ni["loopmode"]) == 0.5f, "reloading the sample keeps a forward loop");
         Reset();
 
-        // The name round-trips through a project (the bundle stores sample-N.wav).
+        // The name round-trips through a project (the bundle names the file by content hash).
         var nw = new System.Collections.Generic.List<string>();
         var ndoc = ProjectService.Capture(ne, new TransportState(120.0, 1.0, false, false), nw);
         string nb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "nota-sampname-" + System.Guid.NewGuid().ToString("N") + ".nota");
@@ -8189,7 +8211,8 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
         ProjectService.Save(doc, dir, src);
         int wavCount = System.IO.Directory.Exists(System.IO.Path.Combine(dir, "samples"))
             ? System.IO.Directory.GetFiles(System.IO.Path.Combine(dir, "samples"), "*.wav").Length : 0;
-        Check(wavCount >= 3, $"sample files written to samples/ ({wavCount})");
+        // One file decoded three times: identical audio → one content-named file.
+        Check(wavCount >= 1, $"sample files written to samples/ ({wavCount})");
 
         var loaded = ProjectService.Load(dir);
         using var dst = new NotaEngine();
@@ -13576,6 +13599,16 @@ Console.WriteLine("-- background audio import --");
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
+
+// --- project: content-addressed bundle (samples / plugin states named by hash) ---
+Console.WriteLine("-- project: content-addressed bundle --");
+foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+Console.WriteLine("-- project: version history --");
+foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunSummary()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunCleanup()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

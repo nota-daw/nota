@@ -25,6 +25,7 @@
             <NativeMenuItem Header="Open…" Click="OnMenuOpen" Gesture="Cmd+O"/>
             <NativeMenuItem Header="Save" Click="OnMenuSave" Gesture="Cmd+S"/>
             <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
+            <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Cmd+I"/>
             <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>

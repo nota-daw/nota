@@ -70,6 +70,15 @@ public static class NotaNum
     public static string Time(double seconds)
         => seconds < 0.9995 ? (seconds * 1000).ToString("0", Culture) + Thin + "ms" : seconds.ToString("0.00", Culture) + Thin + "s";
 
+    /// <summary>Disk size: "640 KB", "1.2 MB", "3.40 GB" (whole KB, one decimal MB, two GB).</summary>
+    public static string Bytes(long bytes)
+    {
+        const double K = 1024, M = K * K, G = M * K;
+        return bytes < M ? Math.Max(1, Math.Round(bytes / K)).ToString("0", Culture) + Thin + "KB"
+             : bytes < G ? (bytes / M).ToString("0.0", Culture) + Thin + "MB"
+             : (bytes / G).ToString("0.00", Culture) + Thin + "GB";
+    }
+
     /// <summary>A number followed by its unit, thin-spaced.</summary>
     public static string Unit(double v, string format, string unit) => v.ToString(format, Culture) + Thin + unit;
 }

@@ -178,12 +178,14 @@ public partial class MainWindow
         RefreshAfterLoad();
         UpdateWindowTitle();
         MarkProjectClean();
+        HistoryChanged?.Invoke();   // a new project has no history yet
         _vm.StatusText = "New project.";
     }
 
     private void OnMenuOpen(object? sender, EventArgs e) => _ = DoOpenAsync();
     private void OnMenuSave(object? sender, EventArgs e) => _ = DoSaveAsync(saveAs: false);
     private void OnMenuSaveAs(object? sender, EventArgs e) => _ = DoSaveAsync(saveAs: true);
+    private void OnMenuSaveVersion(object? sender, EventArgs e) => _ = SaveVersionWithNoteAsync();
 
     private async Task DoOpenAsync()
     {
@@ -235,6 +237,7 @@ public partial class MainWindow
             RefreshAfterLoad();
             UpdateWindowTitle();
             MarkProjectClean();
+            HistoryChanged?.Invoke();    // the History tab shows this project's versions
             var warnings = result.Warnings;
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Opened project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
@@ -275,52 +278,42 @@ public partial class MainWindow
         });
     }
 
-    /// <summary>Saves the project (prompting for a location when unnamed or Save As).
+    /// <summary>Saves the project (prompting for a location when unnamed or Save As) and
+    /// records a version in its history, with <paramref name="note"/> if given.
     /// Returns true only if the bundle was actually written.</summary>
-    private async Task<bool> DoSaveAsync(bool saveAs)
+    private async Task<bool> DoSaveAsync(bool saveAs, string? note = null)
     {
         if (_vm is null) return false;
 
         string? dir = _projectPath;
         if (saveAs || dir is null)
         {
-            Activate();
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Save Nota project",
-                DefaultExtension = "nota",
-                SuggestedFileName = "Untitled.nota",
-                FileTypeChoices = new[]
-                {
-                    new FilePickerFileType("Nota project") { Patterns = new[] { "*.nota" } }
-                },
-            });
-            var chosen = file?.TryGetLocalPath();
-            if (chosen is null) return false;
-            if (!chosen.EndsWith(".nota", StringComparison.OrdinalIgnoreCase)) chosen += ".nota";
-            // The save panel may drop an empty placeholder file at the path; the
-            // bundle is a folder, so clear it before writing.
-            if (System.IO.File.Exists(chosen)) System.IO.File.Delete(chosen);
-            dir = chosen;
+            dir = await PickProjectPathAsync("Save Nota project", "Untitled.nota");
+            if (dir is null) return false;
         }
 
+        string? previousPath = _projectPath;
         try
         {
+            // Save As over another project replaces it — its history goes with it.
+            if (previousPath is null || !SamePath(previousPath, dir)) DropReplacedHistory(dir);
             var warnings = _projects.Save(Engine, TransportSnapshot(), dir);
             _learn?.SaveMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
             Timeline.SaveSections(dir);  // arrangement song sections (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle
+            string? historyNote = RecordVersion(dir, previousPath, note);   // after every sidecar is written
             _projectPath = dir;
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             UpdateWindowTitle();
             MarkProjectClean();
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Saved project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
-            _vm.StatusText = warnings.Count == 0
+            _vm.StatusText = (warnings.Count == 0
                 ? $"Saved {System.IO.Path.GetFileName(dir)}"
-                : $"Saved {System.IO.Path.GetFileName(dir)} — {warnings.Count} unsupported item(s) skipped: {warnings[0]}";
+                : $"Saved {System.IO.Path.GetFileName(dir)} — {warnings.Count} unsupported item(s) skipped: {warnings[0]}")
+                + historyNote;
             return true;
         }
         catch (Exception ex)
@@ -329,6 +322,29 @@ public partial class MainWindow
             _vm.StatusText = $"Save failed: {ex.Message}";
             return false;
         }
+    }
+
+    /// <summary>Asks where to put a new <c>.nota</c> bundle. Null if the panel was dismissed.</summary>
+    private async Task<string?> PickProjectPathAsync(string title, string suggestedName)
+    {
+        Activate();
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            DefaultExtension = "nota",
+            SuggestedFileName = suggestedName,
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("Nota project") { Patterns = new[] { "*.nota" } }
+            },
+        });
+        var chosen = file?.TryGetLocalPath();
+        if (chosen is null) return null;
+        if (!chosen.EndsWith(".nota", StringComparison.OrdinalIgnoreCase)) chosen += ".nota";
+        // The save panel may drop an empty placeholder file at the path; the
+        // bundle is a folder, so clear it before writing.
+        if (System.IO.File.Exists(chosen)) System.IO.File.Delete(chosen);
+        return chosen;
     }
 
     // --- unsaved-changes tracking ------------------------------------------

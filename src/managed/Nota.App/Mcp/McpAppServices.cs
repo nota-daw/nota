@@ -65,11 +65,27 @@ public sealed class MidiLearnAccess(MidiLearnService svc) : IMidiLearnAccess
     public void ClearRecentControls() => svc.ClearRecentControls();
 }
 
+/// <summary>Hands the version-history tools the main window, which registers itself once it
+/// exists (the MCP server may start first). Until then every action reports Nota isn't ready.</summary>
+public sealed class ProjectVersionsBridge : IProjectVersionsAccess
+{
+    public IProjectVersionsAccess? Target { get; set; }
+    private IProjectVersionsAccess T => Target ?? throw new InvalidOperationException("Nota's window isn't ready yet.");
+
+    public string? ProjectPath => T.ProjectPath;
+    public bool HasUnsavedChanges => T.HasUnsavedChanges;
+    public bool HistoryEnabled => T.HistoryEnabled;
+    public Task<bool> SaveVersionAsync(string? note) => T.SaveVersionAsync(note);
+    public Task<bool> SwitchToVersionAsync(string versionId) => T.SwitchToVersionAsync(versionId);
+    public void NotifyHistoryChanged() => Target?.NotifyHistoryChanged();
+}
+
 /// <summary>Starts/stops the loopback MCP HTTP server to match the current settings.</summary>
 public sealed class McpService(
     IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, ISettingsService settings, ILogSink log,
     IPluginCatalog pluginCatalog, IFactoryPresets factoryPresets, IPresetStore presetStore, IPresetLibrary presetLibrary,
-    IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits)
+    IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits,
+    ProjectVersionsBridge projectVersions, IProjectHistory projectHistory)
 {
     private readonly NotaMcpServer _server = new();
 
@@ -88,6 +104,8 @@ public sealed class McpService(
         s.AddSingleton(exporter);
         s.AddSingleton(midiDevices);
         s.AddSingleton<IMidiLearnAccess>(new MidiLearnAccess(midiLearn));
+        s.AddSingleton<IProjectVersionsAccess>(projectVersions);
+        s.AddSingleton(projectHistory);
     }
 
     /// <summary>Reconcile the server with <see cref="Settings.McpEnabled"/> / <see cref="Settings.McpPort"/>.</summary>

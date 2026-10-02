@@ -34,6 +34,8 @@ public sealed class Settings
     /// <summary>Show the welcome screen (recent projects launcher) on startup. On by default;
     /// toggled from the welcome screen's "Show on startup" checkbox.</summary>
     public bool ShowWelcomeOnStartup { get; set; } = true;
+    /// <summary>Record a project version on every save (the History tab). On by default.</summary>
+    public bool KeepVersionHistory { get; set; } = true;
     /// <summary>Run the built-in MCP server so an AI (Claude Desktop / Claude Code) can drive the
     /// live app. Off by default; loopback-only. Toggled in Preferences.</summary>
     public bool McpEnabled { get; set; }

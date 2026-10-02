@@ -37,3 +37,34 @@ internal sealed class FakeMidiLearn : Nota.Mcp.IMidiLearnAccess
     public IReadOnlyList<Nota.Mcp.MidiControlSeen> RecentControls() => _seen;
     public void ClearRecentControls() => _seen.Clear();
 }
+
+/// <summary>The version tools' window facade over a real engine + history: save = capture,
+/// save and commit; switch = checkout and re-apply. Unsaved changes are whatever the test says.</summary>
+internal sealed class FakeProjectVersions(Nota.Infrastructure.NotaEngine engine, Nota.Application.IProjectHistory history)
+    : Nota.Mcp.IProjectVersionsAccess
+{
+    public string? ProjectPath { get; set; }
+    public bool HasUnsavedChanges { get; set; }
+    public bool HistoryEnabled { get; set; } = true;
+    public int Redraws { get; private set; }
+
+    public Task<bool> SaveVersionAsync(string? note)
+    {
+        if (ProjectPath is null) return Task.FromResult(false);
+        var doc = Nota.Infrastructure.ProjectService.Capture(engine, new Nota.Application.TransportState(120, 1, false, false), new List<string>());
+        Nota.Infrastructure.ProjectService.Save(doc, ProjectPath, engine);
+        if (HistoryEnabled) history.Commit(ProjectPath, note);
+        HasUnsavedChanges = false;
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> SwitchToVersionAsync(string versionId)
+    {
+        history.Checkout(ProjectPath!, versionId);
+        Nota.Infrastructure.ProjectService.Apply(Nota.Infrastructure.ProjectService.Load(ProjectPath!), engine, ProjectPath!);
+        HasUnsavedChanges = false;
+        return Task.FromResult(true);
+    }
+
+    public void NotifyHistoryChanged() => Redraws++;
+}

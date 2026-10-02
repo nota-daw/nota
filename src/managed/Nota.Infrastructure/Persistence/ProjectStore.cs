@@ -56,5 +56,7 @@ public sealed class ProjectStore : IProjectStore
     }
 
     public string Fingerprint(IAudioEngine engine, TransportState transport)
-        => ProjectService.SerializeManifest(ProjectService.Capture(engine, transport, new List<string>()));
+        // Session names: no audio is read or hashed on this frequent path. Edits inside a
+        // plugin's own state aren't seen here (as before) — only structural/param changes.
+        => ProjectService.SerializeManifest(ProjectService.Capture(engine, transport, new List<string>(), contentNames: false));
 }
