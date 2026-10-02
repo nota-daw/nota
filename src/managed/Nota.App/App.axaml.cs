@@ -21,6 +21,8 @@ public partial class App : Avalonia.Application
     {
         // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
         NotaNum.Install();
+        // Rounded, bordered, clipping Borders clip their child to the inner edge.
+        BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
     }
 
