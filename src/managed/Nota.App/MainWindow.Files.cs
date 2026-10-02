@@ -172,6 +172,7 @@ public partial class MainWindow
         _vm.Transport.LoopOn = false;
         _vm.Transport.TimeSigNumerator = 4;
         _vm.Transport.TimeSigDenominator = 4;
+        _vm.Transport.KeyCode = -1;
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
         Timeline.ClearSections();   // …and a clean song structure
@@ -228,6 +229,7 @@ public partial class MainWindow
             _vm.Transport.LoopOn = result.Transport.LoopOn;
             _vm.Transport.TimeSigNumerator = result.Transport.TimeSigNumerator;
             _vm.Transport.TimeSigDenominator = result.Transport.TimeSigDenominator;
+            _vm.Transport.KeyCode = result.Transport.Key;
             _projectPath = dir;
             _learn?.LoadMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.LoadLayout(dir);   // modular-editor node/island positions (sidecar)

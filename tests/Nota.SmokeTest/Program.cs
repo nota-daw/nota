@@ -8134,7 +8134,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
             { new Nota.Application.AutomationPoint(0, 1.5f), new Nota.Application.AutomationPoint(8, 0.5f) });
 
         var transport = new TransportState(140.0, 0.5, MetronomeOn: true, LoopOn: false,
-            TimeSigNumerator: 7, TimeSigDenominator: 8);
+            TimeSigNumerator: 7, TimeSigDenominator: 8, Key: new Nota.Application.Samples.MusicalKey(6, Nota.Application.Samples.KeyMode.Minor).Code);
         var warnings = new System.Collections.Generic.List<string>();
         var doc = ProjectService.Capture(src, transport, warnings);
         Check(warnings.Count == 0, $"no warnings for a built-in-only project ({warnings.Count})");
@@ -8146,6 +8146,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
         Check(loaded.FormatVersion == ProjectService.CurrentFormatVersion, "format version round-trips");
         Check(Math.Abs(loaded.Transport.Bpm - 140.0) < 1e-9 && loaded.Transport.MetronomeOn, "transport round-trips");
         Check(loaded.Transport.TimeSigNumerator == 7 && loaded.Transport.TimeSigDenominator == 8, "time signature round-trips (7/8)");
+        Check(loaded.Transport.Key == "F#m", $"project key round-trips (F# minor → \"{loaded.Transport.Key}\")");
 
         // Replay into a fresh engine and verify the live state.
         using var dst = new NotaEngine();

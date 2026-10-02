@@ -6,8 +6,10 @@
 //   1. the target track appears at once (translucent, "Processing…") with a placeholder clip;
 //   2. a worker decodes the file block by block — the placeholder's waveform fills in as it
 //      goes (instantly when the analysis cache already knows the file) — then detects tempo;
-//   3. back on the UI thread the decoded buffer is placed (no disk I/O) and auto-warped with
-//      the measured tempo, the warp cache building in small steps so the UI keeps drawing;
+//   3. back on the UI thread the decoded buffer is placed (no disk I/O) and — if the sample
+//      index calls it a loop (or a long take with a tempo) — warped to the project tempo, and
+//      optionally transposed to the project key; the warp cache builds in small steps so the
+//      UI keeps drawing. A one-shot is never warped;
 //   4. the track turns opaque and is selected.
 
 using System;
@@ -15,7 +17,9 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Samples;
 using Nota.Infrastructure;
 
 namespace Nota.App;
@@ -23,6 +27,7 @@ namespace Nota.App;
 public partial class MainWindow
 {
     private readonly AudioAnalysisCache _analysis = new();
+    private ISampleIndex SampleIndex => App.Services.GetRequiredService<ISampleIndex>();
 
     // Bumped on New/Open: an import still running belongs to the previous graph (its track id
     // may now name a different track), so it bows out instead of placing its clip.
@@ -74,7 +79,7 @@ public partial class MainWindow
         try
         {
             string? project = _projectPath;
-            (job, double bpm) = await Task.Run(() => DecodeImport(path, project, progress, cts.Token));
+            (job, double bpm, SampleInfo? info) = await Task.Run(() => DecodeImport(path, project, progress, cts.Token));
             if (job is null) { _vm.StatusText = $"Failed to load {name}"; return; }
             if (!Alive()) { _vm.StatusText = $"Import of {name} cancelled"; return; }
 
@@ -84,12 +89,24 @@ public partial class MainWindow
             placed = true;
             pending.ClipPlaced = true;
 
-            if (bpm > 0)
+            var settings = App.Services.GetRequiredService<ISettingsService>().Current;
+            double warpBpm = WarpTempoFor(info, bpm, settings.SamplesWarpLoops);
+            // Only material that plays in a key moves to it: a hit (an 808 included) would be
+            // varispeeded — shorter, brighter, another sound — so one-shots keep their pitch.
+            int semis = settings.SamplesMatchKey && _vm.Transport.Key is { } projectKey
+                        && info is { Kind: not SampleKind.OneShot, Key: { } sampleKey }
+                ? sampleKey.SemitonesTo(projectKey) : 0;
+            if (warpBpm > 0 || semis != 0)
             {
-                // Warp with the tempo the worker measured, deferring the (heavy) stretch so it
-                // can be built in slices below instead of in one UI-thread block.
+                // Warp with the tempo the index / worker measured, deferring the (heavy) stretch
+                // so it can be built in slices below instead of in one UI-thread block. The
+                // transpose rides the same deferred build (a warped clip keeps its length).
                 Engine.SetDeferWarpBuild(true);
-                try { bpm = Engine.AutoWarpClipAtBpm(t, clip, bpm); }
+                try
+                {
+                    if (warpBpm > 0) warpBpm = Engine.AutoWarpClipAtBpm(t, clip, warpBpm);
+                    if (semis != 0) Engine.SetClipPitch(t, clip, semis);
+                }
                 finally { Engine.SetDeferWarpBuild(false); }
                 Timeline.Refresh();
                 await BuildImportWarpAsync(name, Alive);
@@ -98,9 +115,7 @@ public partial class MainWindow
 
             Timeline.RemovePendingImport(pending);
             Timeline.Select(t, clip);   // the finished import becomes the active track
-            _vm.StatusText = bpm > 0
-                ? string.Format(NotaNum.Culture, "Imported {0} · warped to tempo ({1:0.0} BPM)", name, bpm)
-                : $"Imported {name}";
+            _vm.StatusText = ImportedText(name, info, warpBpm, semis);
         }
         catch (OperationCanceledException)
         {
@@ -121,15 +136,42 @@ public partial class MainWindow
         }
     }
 
+    // The tempo to warp a dropped sample to (0 = leave it unwarped). A one-shot never warps;
+    // a loop warps at the tempo the index settled (its name, or its length) unless the user
+    // turned that off; a long take warps at its heard tempo, as imports always have. With no
+    // index entry (the file couldn't be analysed) the worker's measured tempo decides.
+    private static double WarpTempoFor(SampleInfo? info, double measured, bool warpLoops) => info switch
+    {
+        null => measured,
+        { Kind: SampleKind.OneShot } => 0,
+        { Kind: SampleKind.Loop } => warpLoops ? info.Bpm : 0,
+        _ => info.Bpm,
+    };
+
+    private string ImportedText(string name, SampleInfo? info, double warpedBpm, int semis)
+    {
+        var parts = new System.Collections.Generic.List<string> { $"Imported {name}" };
+        double project = (double)_vm!.Transport.Bpm;
+        if (warpedBpm > 0)
+            parts.Add(info is { Kind: SampleKind.Loop, Bpm: > 0 } && Math.Abs(info.Bpm - project) > 0.01
+                ? $"loop warped {SampleInfo.FormatBpm(info.Bpm)} \u2192 {SampleInfo.FormatBpm(project)}\u2009BPM"
+                : string.Format(NotaNum.Culture, "warped to tempo ({0:0.0}\u2009BPM)", warpedBpm));
+        else if (info?.Kind == SampleKind.OneShot) parts.Add("one-shot, not warped");
+        if (semis != 0 && _vm.Transport.Key is { } k)
+            parts.Add($"transposed {(semis > 0 ? "+" : "\u2212")}{Math.Abs(semis)}\u2009st to {k.Long}");
+        return string.Join(" · ", parts);
+    }
+
     // Worker thread: fingerprint + cache lookup, block-wise decode with throttled waveform
-    // ticks, tempo detection, cache write. Returns (null, 0) when the file can't be decoded.
-    private (IAudioImport? job, double bpm) DecodeImport(string path, string? project,
-                                                         IProgress<ImportTick> progress, CancellationToken ct)
+    // ticks, analysis (via the sample index), cache write. Returns (null, 0, null) when the
+    // file can't be decoded.
+    private (IAudioImport? job, double bpm, SampleInfo? info) DecodeImport(string path, string? project,
+                                                                          IProgress<ImportTick> progress, CancellationToken ct)
     {
         string? key = AudioAnalysisCache.Fingerprint(path);
         var cached = key is null ? null : _analysis.TryLoad(key, project);
         var job = Engine.OpenAudioImport(path);
-        if (job is null) return (null, 0);
+        if (job is null) return (null, 0, null);
         try
         {
             if (cached is not null) job.SeedPeakTable(cached.PeakTable);
@@ -148,16 +190,22 @@ public partial class MainWindow
             {
                 ct.ThrowIfCancellationRequested();
                 int r = job.Step(ImportBlockFrames);
-                if (r < 0) { job.Dispose(); return (null, 0); }
+                if (r < 0) { job.Dispose(); return (null, 0, null); }
                 if (r == 0) break;
                 if (sinceTick.ElapsedMilliseconds >= ImportTickMs) { Report(); sinceTick.Restart(); }
             }
             total = job.TotalFrames;   // a truncated file reports fewer frames once done
             Report();
 
-            double bpm = cached?.Bpm ?? job.DetectTempo();
+            // The library index usually knows a sample already (the Files tab scanned it); a file
+            // from elsewhere is analysed now — from the buffer just decoded — and remembered.
+            var index = SampleIndex;
+            var info = index.Get(path);
+            SampleAnalysis? measured = null;
+            if (info is null && (measured = job.Analyze()) is not null) info = index.Store(path, measured);
+            double bpm = cached?.Bpm ?? measured?.Bpm ?? job.DetectTempo();
             if (key is not null && cached is null) _analysis.Store(key, new AudioAnalysis(job.ReadPeakTable(), bpm), project);
-            return (job, bpm);
+            return (job, bpm, info);
         }
         catch
         {

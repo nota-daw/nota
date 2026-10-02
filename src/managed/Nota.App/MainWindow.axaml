@@ -195,6 +195,14 @@
             </StackPanel>
             <TextBlock Classes="CellLabel" Text="SIG" HorizontalAlignment="Center"/>
           </StackPanel>
+          <!-- Project key: loops dropped in can be transposed to it -->
+          <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="Set the project key — samples can be transposed to it">
+            <StackPanel Spacing="2">
+              <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="14" LineHeight="16"
+                         MinWidth="30" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextTertiary}"/>
+              <TextBlock Classes="CellLabel" Text="KEY" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Button>
           <!-- Clip snap grid: click to cycle -->
           <Button x:Name="SnapChip" Classes="cell" Click="OnCycleSnap" ToolTip.Tip="Cycle the clip snap grid">
             <StackPanel Spacing="2">

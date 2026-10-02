@@ -73,6 +73,15 @@ public sealed class Settings
     /// <summary>Browser player: the well shows the live spectrum instead of the waveform.</summary>
     public bool BrowserPreviewSpectrum { get; set; }
 
+    // --- smart samples (Files tab ⋮ menu) ------------------------------------
+    /// <summary>A loop dropped on the arrangement is warped to the project tempo from the tempo
+    /// the sample index knows; a one-shot never is.</summary>
+    public bool SamplesWarpLoops { get; set; } = true;
+    /// <summary>A loop with a known key dropped on the arrangement is transposed to the project
+    /// key (the shorter way, ±6 semitones; one-shots keep their pitch). Off by default — it
+    /// changes the sound.</summary>
+    public bool SamplesMatchKey { get; set; }
+
     // --- arrangement view options (View menu) --------------------------------
     /// <summary>How many clips print their name on the lane: 0 every clip, 1 the head of each
     /// run (default — a repeated pattern then reads as one block), 2 none.</summary>

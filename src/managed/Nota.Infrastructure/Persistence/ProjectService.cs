@@ -65,6 +65,7 @@ public sealed class ProjectService
                 LoopOn = transport.LoopOn,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
+                Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
             },
         };
 

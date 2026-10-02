@@ -234,6 +234,7 @@ public partial class MainWindow : Window
                 masterVol.Value = vm.Transport.MasterVolume;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
+            else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
         };
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
@@ -289,6 +290,11 @@ public partial class MainWindow : Window
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         Browser.SetViewModel(vm.Browser);
+        Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
+        Browser.ProjectKey = () => vm.Transport.Key;
+        // The library index analyses on worker threads; rows pick up their tempo / key tags on the UI thread.
+        App.Services.GetRequiredService<ISampleIndex>().Changed +=
+            () => Avalonia.Threading.Dispatcher.UIThread.Post(vm.Browser.OnSampleIndexChanged, Avalonia.Threading.DispatcherPriority.Background);
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
@@ -520,6 +526,24 @@ public partial class MainWindow : Window
         (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"), (4.0, "1 bar"),
     };
     private int _snapIndex = 2;   // 1/4
+    private void OnPickProjectKey(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+        KeyPicker.Show(KeyChip, _vm.Transport.Key, "No key", k =>
+        {
+            _vm.Transport.KeyCode = k?.Code ?? -1;
+            _vm.StatusText = k is { } key ? $"Project key: {key.Long}" : "No project key";
+        });
+    }
+
+    // The KEY cell reads "—" in tertiary ink until a key is set.
+    private void ShowProjectKey()
+    {
+        var k = _vm?.Transport.Key;
+        KeyLabel.Text = k?.Short ?? "\u2014";
+        KeyLabel.BindResource(TextBlock.ForegroundProperty, k is null ? "Brush.TextTertiary" : "Brush.TextPrimary");
+    }
+
     private void OnCycleSnap(object? sender, RoutedEventArgs e)
     {
         _snapIndex = (_snapIndex + 1) % SnapSteps.Length;
