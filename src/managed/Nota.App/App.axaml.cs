@@ -39,6 +39,8 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IPluginCatalog, PluginCatalog>();
         services.AddSingleton<IPluginStore, PluginStore>();
         services.AddSingleton<ISampleStore, SampleStore>();
+        services.AddSingleton<ISampleAnalyzer, SampleAnalyzer>();
+        services.AddSingleton<ISampleIndex, SampleLibraryIndex>();
         services.AddSingleton<IModelStore>(_ => new ModelStore());
         services.AddSingleton<IClipAi, ClipAi>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();

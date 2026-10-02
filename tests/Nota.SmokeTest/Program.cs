@@ -116,6 +116,15 @@ if (args.Length >= 1 && args[0] == "--samples")
     Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+if (args.Length >= 2 && args[0] == "--sample-dump") { SmartSampleTests.Dump(args[1]); return 0; }
+// Smart samples (key / tempo / loop analysis, the library index) alone: `--smart-samples`.
+if (args.Length >= 1 && args[0] == "--smart-samples")
+{
+    Console.WriteLine("-- smart samples: analysis + library index --");
+    foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SMART SAMPLES PASSED" : $"SMART SAMPLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // AI models store alone: `--models`.
 if (args.Length >= 1 && args[0] == "--models")
 {
@@ -13649,6 +13658,10 @@ foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
 // --- get samples: sample registry index, pack install/uninstall from local archives ---
 Console.WriteLine("-- get samples: sample registry store --");
 foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+
+// --- smart samples: tempo / key / loop analysis, the library index, filters, similar ---
+Console.WriteLine("-- smart samples: analysis + library index --");
+foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
 
 // --- ai models: model + runtime install/uninstall from local assets ---
 Console.WriteLine("-- ai models: store --");

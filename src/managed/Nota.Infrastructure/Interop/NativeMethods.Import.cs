@@ -48,4 +48,35 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_clip_auto_warp_bpm")]
     internal static partial double ClipAutoWarpBpm(IntPtr engine, int trackId, int clipIndex, double bpm);
+
+    /// <summary>Mirrors NotaSampleAnalysis (doubles first, so no padding surprises).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct NotaSampleAnalysis
+    {
+        public double DurationSec;
+        public double SampleRate;
+        public double Bpm;
+        public int Channels;
+        public int KeyTonic;
+        public int KeyMode;
+        public float KeyConfidence;
+        public float TailRatio;
+        public float PeakDb;
+        public float RmsDb;
+        public fixed float Timbre[16];   // NOTA_TIMBRE_DIMS
+
+        public readonly Nota.Application.Samples.SampleAnalysis ToAnalysis()
+        {
+            var t = new float[16];
+            for (int i = 0; i < t.Length; i++) t[i] = Timbre[i];
+            return new(DurationSec, SampleRate, Channels, Bpm, KeyTonic, KeyMode, KeyConfidence,
+                       TailRatio, PeakDb, RmsDb, t);
+        }
+    }
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_import_analyze")]
+    internal static partial NotaResult AudioImportAnalyze(IntPtr job, out NotaSampleAnalysis analysis);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sample_analyze_file", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult SampleAnalyzeFile(string path, double maxSeconds, out NotaSampleAnalysis analysis);
 }

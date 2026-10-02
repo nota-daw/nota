@@ -62,6 +62,7 @@ set(NOTA_ENGINE_SOURCES
     src/Engine_Render.cpp
     src/WarpStream.cpp
     src/TempoDetect.cpp
+    src/SampleAnalysis.cpp
     src/AudioFile.cpp
     src/AudioImport.cpp
     src/nota_engine_import.cpp
