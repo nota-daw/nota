@@ -374,11 +374,12 @@ public sealed partial class PreferencesWindow
         RenderStoreLists();
     }
 
-    // Both lists, since a job in one disables the Install buttons of the other.
+    // Every list, since a job in one disables the Install buttons of the others.
     private void RenderStoreLists()
     {
         RenderStoreList();
         RenderPackList();
+        RenderModelList();
         UpdateDock();   // RenderStoreList only reaches the dock while the Downloads pane is showing
     }
 }

@@ -68,7 +68,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("PLUG-INS", new[]
         {
             new Page("Plug-ins", "Where Nota looks for VST3", "M9 3 V7 M15 3 V7 M6 7 H18 V11 A6 6 0 0 1 6 11 Z M12 17 V21"),
-            new Page("Downloads", "Plug-ins and sample packs", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
+            new Page("Downloads", "Plug-ins, sample packs and AI models", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
         }),
         ("GENERAL", new[]
         {
