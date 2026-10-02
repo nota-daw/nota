@@ -162,6 +162,7 @@ public partial class MainWindow : Window
         _projects = App.Services.GetRequiredService<IProjectStore>();
         _history = App.Services.GetRequiredService<IProjectHistory>();
         SetUpHistoryTab();
+        App.Services.GetRequiredService<ProjectVersionsBridge>().Target = this;   // MCP version tools
         _presets = App.Services.GetRequiredService<IPresetStore>();
         _factory = App.Services.GetRequiredService<IFactoryPresets>();
         _kits = App.Services.GetRequiredService<IDrumKits>();

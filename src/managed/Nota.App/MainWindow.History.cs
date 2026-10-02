@@ -15,7 +15,7 @@ using Nota.Application;
 
 namespace Nota.App;
 
-public partial class MainWindow : IHistoryHost
+public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
 {
     private IProjectHistory _history = default!;
     private HistoryView? _historyView;
@@ -25,6 +25,17 @@ public partial class MainWindow : IHistoryHost
     Task<bool> IHistoryHost.SwitchToVersionAsync(string versionId) => SwitchToVersionAsync(versionId);
     Task<bool> IHistoryHost.OpenVersionAsCopyAsync(string versionId) => OpenVersionAsCopyAsync(versionId);
     void IHistoryHost.ReportStatus(string text) { if (_vm is not null) _vm.StatusText = text; }
+
+    // MCP version tools (HistoryTools via ProjectVersionsBridge). No dialogs: the tool decides
+    // about unsaved changes, and an untitled project can't be saved without the file panel.
+    string? Nota.Mcp.IProjectVersionsAccess.ProjectPath => _projectPath;
+    bool Nota.Mcp.IProjectVersionsAccess.HasUnsavedChanges => HasUnsavedChanges();
+    bool Nota.Mcp.IProjectVersionsAccess.HistoryEnabled => KeepVersionHistory;
+    Task<bool> Nota.Mcp.IProjectVersionsAccess.SaveVersionAsync(string? note)
+        => _projectPath is null ? Task.FromResult(false) : DoSaveAsync(saveAs: false, note);
+    Task<bool> Nota.Mcp.IProjectVersionsAccess.SwitchToVersionAsync(string versionId)
+        => SwitchToVersionAsync(versionId, askAboutChanges: false);
+    void Nota.Mcp.IProjectVersionsAccess.NotifyHistoryChanged() => HistoryChanged?.Invoke();
 
     /// <summary>Builds the browser's History tab and keeps it in step with the project.</summary>
     private void SetUpHistoryTab()
@@ -117,10 +128,10 @@ public partial class MainWindow : IHistoryHost
 
     /// <summary>Switches the open project to <paramref name="versionId"/>: offers to save
     /// unsaved changes first, restores the version's files and reopens the bundle.</summary>
-    internal async Task<bool> SwitchToVersionAsync(string versionId)
+    internal async Task<bool> SwitchToVersionAsync(string versionId, bool askAboutChanges = true)
     {
         if (_vm is null || _projectPath is not { } dir) return false;
-        if (!await ConfirmLeaveChangesAsync("Switch version",
+        if (askAboutChanges && !await ConfirmLeaveChangesAsync("Switch version",
                 "Save your changes as a new version before switching?")) return false;
         try
         {

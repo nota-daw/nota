@@ -28,7 +28,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   adds. **Save As** takes the whole history to the new project. The tab's menu clears out
   every unnamed version at once (named, starred, noted and branch-tip versions stay). History
   is on by default; **Settings → Library → Version history** turns it off after a warning —
-  that erases the open project's history, and other projects' on their next save.
+  that erases the open project's history, and other projects' on their next save. Over MCP,
+  an AI can list versions, save one with a note before an experiment, switch back, and name,
+  note or star versions.
 
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and

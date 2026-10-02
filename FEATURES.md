@@ -821,7 +821,9 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome.
-- **Project**: `get_overview` (a full snapshot).
+- **Project**: `get_overview` (a full snapshot); version history — `list_versions` (with what
+  each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
+  star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a

@@ -150,6 +150,58 @@ internal static class HistoryTests
         }
     }
 
+    /// <summary>The MCP version tools (list / save / switch / annotate) over a fake window.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunMcp()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-mcp-history-" + Guid.NewGuid().ToString("N") + ".nota");
+        IProjectHistory history = new ProjectHistory("0.0.0-test");
+        using var e = new NotaEngine();
+        var window = new FakeProjectVersions(e, history);
+        var tools = new Nota.Mcp.Tools.HistoryTools(e, new SyncDispatch(), new NoRefresh(), window, history);
+        static bool Throws<T>(Func<Task> f) where T : Exception
+        {
+            try { f().GetAwaiter().GetResult(); return false; } catch (T) { return true; }
+        }
+        try
+        {
+            var none = tools.ListVersions().Result;
+            yield return (none.ProjectPath is null && none.Versions.Length == 0, "an unsaved project lists no versions");
+            yield return (Throws<InvalidOperationException>(() => tools.SaveVersion("x")), "save_version refuses a never-saved project");
+
+            window.ProjectPath = dir;
+            e.SetTrackName(e.AddInstrumentTrack(), "Keys");
+            var v1 = tools.SaveVersion("  before the chorus  ").Result;
+            yield return (v1 is { Current: true, Note: "before the chorus", Parent: null } && v1.Changes?.First == true,
+                "save_version records a version with its note");
+            e.SetTrackName(e.AddInstrumentTrack(), "Strings");
+            var v2 = tools.SaveVersion().Result!;
+            yield return (v2.Parent == v1!.Id && v2.Changes!.TracksAdded.SequenceEqual(["Strings"]), "…and the next one says what changed");
+
+            var list = tools.ListVersions().Result;
+            yield return (list.Versions.Length == 2 && list.Versions.Count(v => v.Current) == 1 && list.Versions[1].Current,
+                "list_versions marks the current version");
+
+            window.HasUnsavedChanges = true;
+            yield return (Throws<InvalidOperationException>(() => tools.SwitchVersion(v1.Id)), "switch_version refuses unsaved changes");
+            yield return (Throws<ArgumentException>(() => tools.SwitchVersion("v-nope", true)), "…and an unknown id");
+            var back = tools.SwitchVersion(v1.Id, discardUnsavedChanges: true).Result;
+            yield return (back.Current && e.TrackCount == 1, $"switch_version with discard restores the version ({e.TrackCount} track)");
+
+            var named = tools.AnnotateVersion(v2.Id, label: "Strings idea", starred: true).Result;
+            yield return (named is { Label: "Strings idea", Starred: true, Current: false } && window.Redraws == 1,
+                "annotate_version names and stars, and redraws the History tab");
+            var cleared = tools.AnnotateVersion(v2.Id, label: "").Result;
+            yield return (cleared.Label is null && cleared.Starred, "an empty label clears it, leaving the rest");
+
+            window.HistoryEnabled = false;
+            yield return (tools.SaveVersion().Result is null, "with history off, save_version saves without a version");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         string tmp = Path.GetTempPath();
