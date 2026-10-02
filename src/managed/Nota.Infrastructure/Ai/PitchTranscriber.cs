@@ -11,13 +11,6 @@ using Microsoft.ML.OnnxRuntime;
 
 namespace Nota.Infrastructure;
 
-/// <summary>A transcribed note: times in seconds from the start of the audio, MIDI pitch, and
-/// the model's mean frame activation (0..1, basic-pitch's "amplitude").</summary>
-public readonly record struct TranscribedNote(double Start, double End, int Pitch, float Amplitude)
-{
-    public int Velocity => Math.Clamp((int)Math.Round(127 * Amplitude), 1, 127);
-}
-
 public sealed class PitchTranscriber : IDisposable
 {
     public const int SampleRate = 22050;

@@ -202,39 +202,8 @@ public sealed class ProjectService
                     if (!engine.TryGetAudioClipInfo(ti.Id, c, out var ac)) continue;
                     string? rel = RegisterSample(doc, engine, ac.SampleId, warnings);
                     if (rel == null) continue;
-                    var dto = new AudioClipDto
-                    {
-                        Sample = rel,
-                        Name = engine.GetClipName(ti.Id, c) is { Length: > 0 } an ? an : null,
-                        Active = !engine.TryGetClipInfo(ti.Id, c, out var gci) || gci.IsActive,
-                        StartBeat = ac.StartBeat,
-                        SourceOffsetFrames = ac.SourceOffsetFrames,
-                        LengthFrames = ac.LengthFrames,
-                        Gain = ac.Gain,
-                        PitchSemitones = ac.PitchSemitones,
-                        WarpEnabled = ac.WarpEnabled,
-                        WarpMode = ac.WarpMode,
-                        WarpBeats = ac.WarpBeats,
-                        WarpPlayStart = ac.WarpPlayStart,
-                        WarpPlayEnd = ac.WarpPlayEnd,
-                        Reversed = ac.Reversed != 0,
-                    };
-                    if (ac.WarpEnabled != 0)
-                    {
-                        var ms = new double[128]; var mb = new double[128];
-                        int nm = Math.Min(engine.GetClipWarpMarkers(ti.Id, c, ms, mb), 128);
-                        if (nm >= 2)
-                        {
-                            dto.WarpMarkers = new List<WarpMarkerDto>(nm);
-                            for (int k = 0; k < nm; k++) dto.WarpMarkers.Add(new WarpMarkerDto { Src = ms[k], Beat = mb[k] });
-                        }
-                    }
-                    var env = engine.GetClipVolumeEnvelope(ti.Id, c);   // clip volume envelope (v8)
-                    if (env.Length > 0) dto.VolumeEnvelope = System.Array.ConvertAll(env, p => new AutomationPointDto(p));
-                    var penv = engine.GetClipPanEnvelope(ti.Id, c);     // clip pan envelope (v9)
-                    if (penv.Length > 0) dto.PanEnvelope = System.Array.ConvertAll(penv, p => new AutomationPointDto(p));
-                    var adsr = engine.GetClipAdsr(ti.Id, c);            // ADSR (v20); identity is omitted
-                    if (!adsr.IsIdentity) dto.Adsr = new ClipAdsrDto(adsr);
+                    var dto = AudioClipState.Capture(engine, ti.Id, c, ac);
+                    dto.Sample = rel;
                     t.AudioClips.Add(dto);
                 }
             }
@@ -650,33 +619,9 @@ public sealed class ProjectService
 
             foreach (var ac in t.AudioClips)
             {
-                int ci = engine.AddAudioClipEx(id, ResolveInBundle(bundleDir, ac.Sample),
-                    ac.StartBeat, ac.SourceOffsetFrames, ac.LengthFrames, ac.Gain);
+                int ci = AudioClipState.Restore(engine, id, ac, ResolveInBundle(bundleDir, ac.Sample));
                 if (ci < 0) { warnings.Add($"Couldn't reload audio clip \"{ac.Sample}\"."); continue; }
                 if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
-                if (ac.Name is { Length: > 0 } acn) engine.SetClipName(id, ci, acn);
-                if (!ac.Active) engine.SetClipActive(id, ci, false);   // clip deactivate (v17)
-                if (ac.PitchSemitones != 0) engine.SetClipPitch(id, ci, ac.PitchSemitones);
-                if (ac.Reversed) engine.SetClipReverse(id, ci, true);   // reverse (v19)
-                if (ac.WarpEnabled != 0)
-                {
-                    engine.SetClipWarp(id, ci, true, ac.WarpMode);
-                    if (ac.WarpMarkers is { Count: >= 2 } wm)
-                    {
-                        var ms = new double[wm.Count]; var mb = new double[wm.Count];
-                        for (int k = 0; k < wm.Count; k++) { ms[k] = wm[k].Src; mb[k] = wm[k].Beat; }
-                        engine.SetClipWarpMarkers(id, ci, ms, mb);   // also sets warpBeats from the last marker
-                    }
-                    else if (ac.WarpBeats > 0) engine.SetClipWarpLength(id, ci, ac.WarpBeats);
-                    if (ac.WarpPlayEnd > 0)   // restore the trim window (v11); 0 = whole warp
-                        engine.SetClipWarpTrim(id, ci, ac.WarpPlayStart, ac.WarpPlayEnd);
-                }
-                if (ac.VolumeEnvelope is { Length: > 0 } venv)   // clip volume envelope (v8)
-                    engine.SetClipVolumeEnvelope(id, ci, System.Array.ConvertAll(venv, p => p.ToPoint()));
-                if (ac.PanEnvelope is { Length: > 0 } penv)      // clip pan envelope (v9)
-                    engine.SetClipPanEnvelope(id, ci, System.Array.ConvertAll(penv, p => p.ToPoint()));
-                if (ac.Adsr is { } adsr)                          // ADSR (v20)
-                    engine.SetClipAdsr(id, ci, adsr.ToAdsr());
             }
 
             // Freeze (M7): restore the frozen-audio buffer so the track re-opens frozen

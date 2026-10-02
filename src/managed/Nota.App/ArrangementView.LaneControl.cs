@@ -1103,10 +1103,12 @@ public sealed partial class ArrangementView
             flyout.Items.Add(new Separator());
             flyout.Items.Add(loop);
 
-            // Audio clip → MIDI: Convert / Slice to New MIDI Track. Drums + Slice
-            // ship now; Melody + Harmony (pitch detection) are disabled until their DSP lands.
+            // Audio clip → stems (AI model) and → MIDI: Convert / Slice to New MIDI Track.
             if (!clip.IsMidi)
             {
+                var stems = new MenuItem { Header = "Separate Stems…", Icon = MenuKit.Icon(GlyphKind.Stems) };
+                stems.Click += (_, _) => _o.SeparateStemsRequested?.Invoke(trackId, idx);
+
                 var convert = new MenuItem { Header = "Convert", Icon = MenuKit.Icon(GlyphKind.Arrow) };
                 MenuItem ConvItem(string header, ClipConvertMode mode, bool enabled)
                 {
@@ -1118,7 +1120,15 @@ public sealed partial class ArrangementView
                 convert.Items.Add(ConvItem("Convert Harmony to New MIDI Track", ClipConvertMode.Harmony, true));
                 convert.Items.Add(ConvItem("Convert Drums to New MIDI Track", ClipConvertMode.Drums, true));
                 convert.Items.Add(ConvItem("Slice to New MIDI Track", ClipConvertMode.Slice, true));
+                if (_o.CanTranscribe?.Invoke() == false)
+                {
+                    var better = new MenuItem { Header = "Get the AI Model for Melody & Harmony…" };
+                    better.Click += (_, _) => _o.TranscriptionModelRequested?.Invoke();
+                    convert.Items.Add(new Separator());
+                    convert.Items.Add(better);
+                }
                 flyout.Items.Add(new Separator());
+                flyout.Items.Add(stems);
                 flyout.Items.Add(convert);
             }
 

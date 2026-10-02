@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Audio clip → MIDI conversion ("Convert / Slice to New MIDI Track").
+// Audio clip → MIDI conversion ("Convert / Slice to New MIDI Track"). Melody and Harmony use
+// the basic-pitch AI model when it's installed (ConvertWithModelAsync), else the DSP below.
 // Phase 1: Convert Drums + Slice, both onto a new Drum Rack. The clip's audio is pulled
 // mono via GetClipAudioMono, analysed by AudioOnsets (pure permissive DSP), sliced to temp
 // WAVs and loaded onto rack pads; a MIDI clip triggers them under the source clip.
@@ -10,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Infrastructure;
 
@@ -48,6 +50,9 @@ public partial class MainWindow
                 {
                     case ClipConvertMode.Drums:   await ConvertDrumsAsync(mono, sr, startBeat, clipBeats, prog); break;
                     case ClipConvertMode.Slice:   await SliceToMidiAsync(mono, sr, startBeat, clipBeats, prog); break;
+                    case ClipConvertMode.Melody when Ai.CanTranscribe:
+                    case ClipConvertMode.Harmony when Ai.CanTranscribe:
+                        await ConvertWithModelAsync(mono, sr, startBeat, clipBeats, mode == ClipConvertMode.Melody, prog); break;
                     case ClipConvertMode.Melody:  await ConvertMelodyAsync(mono, sr, startBeat, clipBeats, prog); break;
                     case ClipConvertMode.Harmony: await ConvertHarmonyAsync(mono, sr, startBeat, clipBeats, prog); break;
                     default: _vm.StatusText = "That converter isn't available yet."; break;
@@ -199,6 +204,35 @@ public partial class MainWindow
         Engine.SetClipNotes(t, mc, notes.ToArray());
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
         Status($"Converted melody: {notes.Count} notes → new track {t}");
+    }
+
+    private static IClipAi Ai => App.Services.GetRequiredService<IClipAi>();
+
+    // Convert Melody / Harmony with the basic-pitch model, when it's installed (Settings →
+    // Downloads → AI Models): polyphonic notes with their own velocities; Melody keeps the
+    // strongest note wherever notes overlap. Otherwise the DSP converters below run.
+    private async Task ConvertWithModelAsync(float[] mono, double sr, double startBeat, double clipBeats, bool melody, IProgress<ProgressReport> prog)
+    {
+        string what = melody ? "melody" : "harmony";
+        prog.Report(ProgressReport.At(0, "Listening for notes…"));
+        var p = new Progress<double>(f => prog.Report(ProgressReport.At(f, "Listening for notes…")));
+        var heard = await Task.Run(() => Ai.Transcribe(mono, sr, p));
+        if (melody) heard = PitchTranscriber.Monophonic(heard);
+        if (heard.Count == 0) { Status($"No {what} found."); return; }
+
+        double toBeat = mono.Length > 0 ? clipBeats / (mono.Length / sr) : 0;   // seconds → beats
+        var notes = new List<NotaNote>(heard.Count);
+        foreach (var n in heard)
+        {
+            double start = Math.Max(0, n.Start) * toBeat;
+            if (start >= clipBeats) continue;
+            notes.Add(new NotaNote(n.Pitch, start, Math.Max(0.05, Math.Min(n.End * toBeat, clipBeats) - start), n.Velocity / 127f));
+        }
+        int t = Engine.AddInstrumentTrack();        // Nota Synth
+        int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
+        Engine.SetClipNotes(t, mc, notes.ToArray());
+        Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
+        Status($"Converted {what}: {notes.Count} notes → new track {t}");
     }
 
     // Convert Harmony: harmonic-sum pitch estimation (AudioHarmony) → polyphonic note spans on a new

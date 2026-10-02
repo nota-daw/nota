@@ -9,6 +9,7 @@
 // where <dir> holds htdemucs.onnx, nmp.onnx and fx/ (raw little-endian float32 files).
 
 using System.Text.Json;
+using Nota.Application;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
@@ -95,6 +96,8 @@ internal static class AiGoldenTests
         yield return (matched >= refNotes.Count * 0.98 && Math.Abs(notes.Count - refNotes.Count) <= Math.Max(2, refNotes.Count / 50),
             $"basic-pitch end to end: {matched}/{refNotes.Count} reference notes matched to a frame ({notes.Count} found)");
 
+        foreach (var r in ClipFlow(runtime, dir, left, right)) yield return r;
+
         // ---- resampler -----------------------------------------------------------------------
         var tone = new float[48000];
         for (int i = 0; i < tone.Length; i++) tone[i] = (float)Math.Sin(2 * Math.PI * 1000 * i / 48000.0);
@@ -102,6 +105,82 @@ internal static class AiGoldenTests
         double rErr = 0;
         for (int i = 200; i < down.Length - 200; i++) rErr = Math.Max(rErr, Math.Abs(down[i] - Math.Sin(2 * Math.PI * 1000 * i / 44100.0)));
         yield return (down.Length == 44100 && rErr < 1e-3, $"resampler 48 → 44.1 kHz keeps a 1 kHz tone (max err {rErr:g3})");
+    }
+
+    // Separate Stems end to end on a real engine: a 48 kHz clip using part of its file, read,
+    // separated, applied as a group of stem tracks shaped like the clip — one undo step — and
+    // the stems summed back sound like the clip.
+    private static IEnumerable<(bool, string)> ClipFlow(string runtime, string dir, float[] left44, float[] right44)
+    {
+        const int rate = 48000;
+        var l = Resampler.Convert(left44, 44100, rate);
+        var r = Resampler.Convert(right44, 44100, rate);
+        var wav = Path.Combine(Path.GetTempPath(), $"nota-ai-clip-{Guid.NewGuid():N}.wav");
+        var inter = new float[l.Length * 2];
+        for (int i = 0; i < l.Length; i++) { inter[2 * i] = l[i]; inter[2 * i + 1] = r[i]; }
+        using (var w = new Nota.Infrastructure.WavWriter(wav, rate, 2, WavBitDepth.Float32)) w.WriteFrames(inter, l.Length);
+
+        using var eng = new NotaEngine();
+        eng.SetBpm(120);
+        int t = eng.AddAudioTrack();
+        eng.SetTrackName(t, "Mix");
+        int c = eng.AddAudioClipEx(t, wav, 4, 2 * rate, 8 * rate, 1f);   // beat 4 (2 s), 8 s from 2 s into the file
+        File.Delete(wav);
+        int before = eng.TrackCount;
+
+        var ai = new ClipAi(eng, new FixedModels(runtime, Path.Combine(dir, "htdemucs.onnx")));
+        var job = ai.ReadStemSource(t, c);
+        int group;
+        using (var stems = ai.Separate(job))
+            group = ai.ApplyStems(job, stems);
+
+        var tracks = Enumerable.Range(0, eng.TrackCount).Select(i => { eng.TryGetTrackInfo(i, out var ti); return ti; }).ToList();
+        var kids = tracks.Where(x => x.GroupId == group).ToList();
+        yield return (group > 0 && eng.TrackCount == before + 5 && tracks[1].Id == group
+                      && kids.Select(k => eng.GetTrackName(k.Id)).SequenceEqual(StemSeparator.Stems),
+            "Separate Stems puts a group of Drums, Bass, Other, Vocals right under the clip's track");
+        eng.TryGetAudioClipInfo(t, c, out var orig);
+        bool shaped = kids.All(k => eng.TryGetAudioClipInfo(k.Id, 0, out var sc)
+            && sc.StartBeat == orig.StartBeat && sc.SourceOffsetFrames == orig.SourceOffsetFrames && sc.LengthFrames == orig.LengthFrames);
+        yield return (shaped, "…each stem clip shaped exactly like the original");
+        yield return (eng.TryGetClipInfo(t, c, out var oc) && !oc.IsActive && eng.GetClipName(kids[3].Id, 0) == "Mix Vocals",
+            "…the original clip switched off, the stem clips named after it");
+
+        eng.Undo();
+        bool undone = eng.TrackCount == before && eng.TryGetClipInfo(t, c, out var uc) && uc.IsActive;
+        eng.Redo();
+        yield return (undone && eng.TrackCount == before + 5, "…as one undo step");
+
+        // The stems summed against the clip itself, over the clip's span (2 s … 10 s).
+        float[] Render()
+        {
+            var buf = new float[11 * rate * 2];
+            eng.Seek(0); eng.Play();
+            eng.RenderOffline(buf, 11 * rate, rate);
+            eng.Stop();
+            return buf;
+        }
+        var sum = Render();
+        eng.SetClipActive(t, c, true);
+        eng.SetTrackMute(group, true);
+        var mix = Render();
+        double err = 0, sig = 0;
+        for (int i = 2 * rate * 2 + 2000; i < 10 * rate * 2 - 2000; i++) { double d = sum[i] - mix[i]; err += d * d; sig += mix[i] * (double)mix[i]; }
+        double snr = 10 * Math.Log10(sig / Math.Max(1e-20, err));
+        yield return (sig > 0 && snr > 15, $"…and the stems add back up to the clip ({snr:0.0} dB)");
+    }
+
+    private sealed class FixedModels(string runtime, string stems) : IModelStore
+    {
+        public IReadOnlyList<StoreModel> Models => [];
+        public StoreModel? Runtime => null;
+        public bool IsInstalled(string id) => true;
+        public long DownloadSize(string id) => 0;
+        public Task InstallAsync(string id, IProgress<StoreProgress>? progress = null, CancellationToken ct = default) => Task.CompletedTask;
+        public void Uninstall(string id) { }
+        public string? RuntimePath => runtime;
+        public string? ModelPath(string id) => id == AiModels.Stems ? stems : null;
+        public event Action? Changed { add { } remove { } }
     }
 
     private static float[] Floats(string path)

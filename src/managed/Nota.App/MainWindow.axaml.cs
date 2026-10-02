@@ -180,6 +180,13 @@ public partial class MainWindow : Window
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
+        Timeline.SeparateStemsRequested += OnSeparateStems;   // audio clip → stem tracks (AI model)
+        Timeline.CanTranscribe = () => Ai.CanTranscribe;
+        Timeline.TranscriptionModelRequested += async () =>
+        {
+            if (await EnsureModelAsync(AiModels.Transcription, "Convert to MIDI") && _vm is not null)
+                _vm.StatusText = "Convert Melody and Convert Harmony now use the AI model.";
+        };
         // Arrangement context menus add tracks through the toolbar's own path, so the two
         // routes seed, refresh and report identically; the menu's row places the new track.
         Timeline.AddTrackRequested += (kind, anchor) =>
