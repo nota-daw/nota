@@ -116,6 +116,22 @@ if (args.Length >= 1 && args[0] == "--samples")
     Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// AI models store alone: `--models`.
+if (args.Length >= 1 && args[0] == "--models")
+{
+    Console.WriteLine("-- ai models: store --");
+    foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS PASSED" : $"MODELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Live installs of the real models: `--models-live <dir> [--stems]`.
+if (args.Length >= 2 && args[0] == "--models-live")
+{
+    Console.WriteLine("-- ai models: live installs --");
+    foreach (var (ok, label) in ModelStoreTests.RunLive(args[1], args.Contains("--stems"))) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS LIVE PASSED" : $"MODELS LIVE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // AI models' DSP ports against the Python originals: `--ai-golden <libonnxruntime> <dir>`.
 if (args.Length >= 3 && args[0] == "--ai-golden")
 {
@@ -13633,6 +13649,10 @@ foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
 // --- get samples: sample registry index, pack install/uninstall from local archives ---
 Console.WriteLine("-- get samples: sample registry store --");
 foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+
+// --- ai models: model + runtime install/uninstall from local assets ---
+Console.WriteLine("-- ai models: store --");
+foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;
