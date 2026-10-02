@@ -10,6 +10,7 @@
   <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
   <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-D9A13F" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
+  <a href="https://t.me/notadaw"><img src="https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white" alt="Downloads"></a>
 </p>
 
 > **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
