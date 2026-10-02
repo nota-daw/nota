@@ -18,6 +18,98 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-10-02
+
+### Highlights
+- **Version history:** every save keeps a version of your project, shown as a tree in the
+  new History tab — go back to any version or open it as a copy, and nothing is ever lost.
+- **Smart samples:** Nota learns the tempo, key and type of every sample, lets you filter by
+  them, finds similar sounds, and fits dropped loops to the project's tempo and key.
+- **Separate Stems:** split any audio clip into drums, bass, vocals and the rest, right on
+  your computer; Convert Melody and Convert Harmony now hear chords too.
+- **Free sample packs and AI models** install from Settings → Downloads, and downloads keep
+  going after Settings closes.
+- **Updates install themselves** with one click from the start screen.
+- Faster saves for projects with audio, and the Files tab now handles big sample libraries.
+
+### Added
+- **Version history:** every save keeps a version of the project, and the new **History**
+  tab in the browser shows them as a tree. Switch back to any version, or open one as a
+  separate copy; saving on top of an older version starts a new branch, so nothing is lost.
+  Each version describes itself — "Added Bass · Tempo 120.00 → 124.00", "Mix of Vocals" — so
+  the list reads without notes. Name, note, star and delete versions from the right-click menu. **File → Save Version with
+  Note…** (⌥⌘S) asks what changed. Versions share their audio, so a version costs only what it
+  adds. **Save As** takes the whole history to the new project. The tab's menu clears out
+  every unnamed version at once (named, starred, noted and branch-tip versions stay). History
+  is on by default; **Settings → Library → Version history** turns it off after a warning —
+  that erases the open project's history, and other projects' on their next save. Over MCP,
+  an AI can list versions, save one with a note before an experiment, switch back, and name,
+  note or star versions.
+- **Sample packs:** **Settings → Downloads** now has a **Sample Packs** side next to
+  Plug-ins. It installs free sample packs — drum kits, a TR-808, sampled basses, guitars,
+  pianos, horns and more — into a **Downloaded** folder in your Samples folder, so they show
+  up in the browser's Files tab. Every pack is licensed for any music, commercial releases
+  included; each downloads from its author's own page and is checked against the registry's
+  checksum before it's unpacked. Only the samples and their docs are installed, and Nota
+  checks there is room for a pack before downloading it. On both sides the filters and
+  search stay at the top while the list scrolls.
+- **Smart samples:** Nota now knows what is in your sample library. In the background it
+  works out each file's **tempo and key**, and whether it is a **loop or a one-shot**. A
+  newly installed pack goes first, and the results are kept, so each file is done once. Tempo
+  and key written in a file's name ("Loop_124_Am") come first; a loop's exact tempo comes from
+  its length. Rows in the **Files** tab show it at the right edge — `124 · Am` for a loop, the
+  note for a tuned hit. New **filter chips** narrow the list: **Loops**, **One-shots**, a
+  **BPM** range ("project tempo ±5 %" is one click away) and a **Key**. A key also shows its
+  relative, so "A minor" finds C major loops too. Right-click a sample → **Show similar
+  sounds** lists the samples that sound most like it.
+- **Project key:** a **KEY** cell in the transport bar, saved with the project.
+- **Loops fit the project when dropped:** a loop dropped on the arrangement warps to the
+  project tempo from the tempo Nota already knows, and the status bar says so ("loop warped
+  124 → 120 BPM"). With **Transpose to project key** on (the Files tab's ⋮ menu), it moves to
+  the project key the shorter way — an A minor loop lands in C minor 3 semitones up. Over MCP,
+  an AI can search the library by kind, tempo, key and name, ask what a file is, find similar
+  sounds, and read or set the project key (`search_samples`, `get_sample_info`,
+  `find_similar_samples`, `get_project_key`, `set_project_key`).
+
+- **Separate Stems:** right-click an audio clip → **Separate Stems…** splits it into
+  **Drums, Bass, Other and Vocals** — a group of four tracks right under the clip's track,
+  each clip lined up with the original (warp, reverse, fades and ADSR included). The original
+  clip is switched off, not deleted, and the whole thing undoes in one step. It runs on this
+  computer with Meta's Demucs model: a three-minute song takes well under a minute, with
+  Cancel.
+- **Better Convert Melody and Convert Harmony:** with Spotify's basic-pitch model installed
+  they hear every note, chords included, with velocities that follow the playing. Without it
+  they work as before, and the Convert menu offers the model.
+- **AI Models** in **Settings → Downloads**, beside Plug-ins and Sample Packs: install or
+  remove the two models. The first one also brings the AI runtime they share (ONNX Runtime);
+  removing the last one removes it. Everything is downloaded from its authors, checked
+  against a pinned checksum, and runs offline — no audio leaves the computer. Separate Stems
+  offers the download the first time you use it.
+- **Over MCP**, an AI can list the installed models, separate a clip into stems and
+  transcribe a clip into a MIDI track (`list_ai_models`, `separate_stems`,
+  `convert_audio_to_midi`). Installing a model stays with you.
+- **Updates install themselves.** When a new version is out, the banner on the start screen
+  now has an **Update** button: Nota downloads the new version with a progress bar and
+  checks it against the release's checksum. Then click **Restart now**, or **Later** to
+  install it the next time you quit. Works with the macOS app, the Windows installer and
+  the Linux AppImage. Copies that can't replace themselves (for example, one run straight
+  from the disk image) still link to the release page.
+
+### Changed
+- **Faster saves of projects with audio:** a save now writes only new recordings and
+  imports instead of every sample again, and the same audio used in several places is
+  stored once. Background autosave no longer rewrites the project's audio either. Older
+  projects are converted on their next save.
+- **Downloads keep going after Settings closes.** Press Install, close Settings, and the
+  download carries on, with its progress in the main window's status bar, a cross to cancel
+  it and the outcome when it's done. Click it to open Settings → Downloads again.
+
+### Fixed
+- **One-shots dropped on the arrangement are no longer warped:** a short hit used to be
+  time-stretched whenever the tempo detector heard a pulse in it.
+- **Big sample libraries in the Files tab:** the browser listed only the first 2,000 files of
+  the Samples folder; it now lists up to 100,000, and searching them stays fast.
+
 ## [0.42.2] — 2026-09-30
 
 ### Highlights

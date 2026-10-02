@@ -5,12 +5,15 @@
 // drawn in nota-design/Nota Start.html. Brand header, New / Open actions, a list of
 // recent projects (click selects, double-click / Return opens, ↑ ↓ move), and shortcuts to
 // Settings and What's New, plus banners for crash recovery and a newer release on
-// GitHub. New / Open / a recent project close the launcher and hand
+// GitHub (which downloads and installs it in place — see IAppUpdater). New / Open / a recent project close the launcher and hand
 // off to the main window; Settings and What's New open as child dialogs so the user
 // stays on the launcher.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -303,18 +306,121 @@ public sealed class WelcomeWindow : NotaWindow
 
     private readonly StackPanel _banners;
 
-    /// <summary>Show a "new version available" banner with a Download button that opens
-    /// the release page in the browser. Called once the background update check resolves.</summary>
-    public void ShowUpdateAvailable(AvailableUpdate update)
+    /// <summary>Show the "new version available" banner. When this install can update itself
+    /// it downloads in place (progress in the banner), then offers Restart now / Later — Later
+    /// installs on quit. Otherwise Download opens the release page. Called once the background
+    /// update check resolves.</summary>
+    public void ShowUpdateAvailable(AppRelease release, IAppUpdater updater, Action restart)
     {
-        Border banner = null!;
-        banner = Banner(
-            "A new version of Nota is available",
-            $"Nota {update.Version} is out — you have {AppInfo.Version}.",
-            actionLabel: "Download",
-            onAction: () => _ = Launcher.LaunchUriAsync(new Uri(update.Url)),
-            onDismiss: () => _banners.Children.Remove(banner));
-        _banners.Children.Add(banner);
+        new UpdateBanner(release, updater, restart, _banners).Attach();
+    }
+
+    // The update banner's states: offer → downloading → ready (or failed → try again).
+    private sealed class UpdateBanner
+    {
+        private readonly AppRelease _release;
+        private readonly IAppUpdater _updater;
+        private readonly Action _restart;
+        private readonly StackPanel _host;
+        private readonly Border _card;
+        private CancellationTokenSource? _cts;
+
+        public UpdateBanner(AppRelease release, IAppUpdater updater, Action restart, StackPanel host)
+        {
+            _release = release;
+            _updater = updater;
+            _restart = restart;
+            _host = host;
+            _card = BannerCard();
+        }
+
+        public void Attach()
+        {
+            if (_updater.PendingVersion == _release.Version) ShowReady();
+            else ShowOffer();
+            _host.Children.Add(_card);
+        }
+
+        private bool CanUpdate => _release.Asset is not null && _updater.CanInstallInPlace;
+
+        private void ShowOffer()
+        {
+            var openPage = () => { _ = Launcher(_card)?.LaunchUriAsync(new Uri(_release.PageUrl)); };
+            _card.Child = CanUpdate
+                ? BannerContent("A new version of Nota is available",
+                    $"Nota {_release.Version} is out — you have {AppInfo.Version}.",
+                    progress: null,
+                    ("Update", true, () => _ = DownloadAsync()),
+                    ("Release notes", false, openPage),
+                    ("Dismiss", false, Remove))
+                : BannerContent("A new version of Nota is available",
+                    $"Nota {_release.Version} is out — you have {AppInfo.Version}.",
+                    progress: null,
+                    ("Download", true, openPage),
+                    ("Dismiss", false, Remove));
+        }
+
+        private async Task DownloadAsync()
+        {
+            _cts = new CancellationTokenSource();
+            var bar = new ProgressBar
+            {
+                Minimum = 0, Maximum = 1, Height = 4, Margin = new Thickness(0, 6, 0, 0),
+                Foreground = NotaPalette.Accent, Background = NotaPalette.BorderDefault,
+            };
+            var size = _release.Asset!.Size / 1048576.0;
+            var content = BannerContent($"Downloading Nota {_release.Version}…",
+                $"0.0 / {NotaNum.Unit(size, "0.0", "MB")}", bar,
+                ("Cancel", false, () => _cts?.Cancel()));
+            _card.Child = content;
+            var message = (TextBlock)((StackPanel)content.Children[0]).Children[1];   // BannerContent's message line
+
+            var progress = new Progress<StoreProgress>(p =>
+            {
+                if (p.Fraction < 0)
+                {
+                    bar.IsIndeterminate = true;
+                    message.Text = p.Message;
+                    return;
+                }
+                bar.Value = p.Fraction;
+                message.Text = $"{(p.Fraction * size).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(size, "0.0", "MB")}"
+                               + $"  ·  {NotaNum.Unit(p.Fraction * 100, "0", "%")}";
+            });
+            try
+            {
+                await _updater.DownloadAsync(_release, progress, _cts.Token);
+                ShowReady();
+            }
+            catch (OperationCanceledException) { ShowOffer(); }
+            catch (Exception e) { ShowFailed(e is StoreException ? e.Message : $"Couldn't download the update: {e.Message}"); }
+            finally { _cts.Dispose(); _cts = null; }
+        }
+
+        private void ShowReady()
+        {
+            _card.Child = BannerContent($"Nota {_release.Version} is ready to install",
+                "Restart Nota to finish updating — or it installs the next time you quit.",
+                progress: null,
+                ("Restart now", true, () => { _updater.RelaunchAfterInstall = true; _restart(); }),
+                ("Later", false, Remove));
+        }
+
+        private void ShowFailed(string error)
+        {
+            _card.Child = BannerContent("The update didn't download", error,
+                progress: null,
+                ("Try again", true, () => _ = DownloadAsync()),
+                ("Dismiss", false, Remove));
+        }
+
+        private void Remove()
+        {
+            _cts?.Cancel();
+            _host.Children.Remove(_card);
+        }
+
+        private static Avalonia.Platform.Storage.ILauncher? Launcher(Visual v) => TopLevel.GetTopLevel(v)?.Launcher;
     }
 
     // Offer to restore a crashed session.
@@ -325,6 +431,28 @@ public sealed class WelcomeWindow : NotaWindow
     // prompt, not an error.
     private static Border Banner(string title, string message, string actionLabel,
                                  Action onAction, Action onDismiss)
+    {
+        var card = BannerCard();
+        card.Child = BannerContent(title, message, progress: null,
+            (actionLabel, true, onAction), ("Dismiss", false, onDismiss));
+        return card;
+    }
+
+    private static Border BannerCard() => new()
+    {
+        Background = NotaPalette.AccentSubtle,
+        BorderBrush = NotaPalette.Accent,
+        BorderThickness = new Thickness(1),
+        CornerRadius = NotaRadius.Panel,
+        Padding = new Thickness(14, 12),
+        Margin = new Thickness(28, 16, 28, 0),
+    };
+
+    // Title + message (+ an optional progress bar) on the left, buttons on the right. The
+    // first "main" button is a plain button (not solid brass: "New project" is this window's
+    // primary action); the rest are ghosts.
+    private static Grid BannerContent(string title, string message, Control? progress,
+                                      params (string Label, bool Main, Action OnClick)[] actions)
     {
         var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock
@@ -341,42 +469,25 @@ public sealed class WelcomeWindow : NotaWindow
             Foreground = NotaPalette.TextSecondary,
             TextWrapping = TextWrapping.Wrap,
         });
-        Grid.SetColumn(text, 0);
+        if (progress is not null) text.Children.Add(progress);
 
-        var recover = new Button
-        {
-            Content = actionLabel,   // not solid brass: "New project" is this window's primary action
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0),
-        };
-        recover.Click += (_, _) => onAction();
-        Grid.SetColumn(recover, 1);
-
-        var dismiss = new Button
-        {
-            Content = "Dismiss",
-            Classes = { "ghost" },
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-        dismiss.Click += (_, _) => onDismiss();
-        Grid.SetColumn(dismiss, 2);
-
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*" + string.Concat(Enumerable.Repeat(",Auto", actions.Length))) };
         grid.Children.Add(text);
-        grid.Children.Add(recover);
-        grid.Children.Add(dismiss);
-
-        return new Border
+        for (int i = 0; i < actions.Length; i++)
         {
-            Background = NotaPalette.AccentSubtle,
-            BorderBrush = NotaPalette.Accent,
-            BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel,
-            Padding = new Thickness(14, 12),
-            Margin = new Thickness(28, 16, 28, 0),
-            Child = grid,
-        };
+            var (label, main, onClick) = actions[i];
+            var button = new Button
+            {
+                Content = label,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(i == 0 ? 12 : 6, 0, 0, 0),
+            };
+            if (!main) button.Classes.Add("ghost");
+            button.Click += (_, _) => onClick();
+            Grid.SetColumn(button, i + 1);
+            grid.Children.Add(button);
+        }
+        return grid;
     }
 
     // One line of the recent list: name left, modified date right in mono. The selected

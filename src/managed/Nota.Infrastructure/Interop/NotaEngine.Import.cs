@@ -64,6 +64,9 @@ public sealed partial class NotaEngine
 
         public double DetectTempo() => NativeMethods.AudioImportDetectTempo(Handle);
 
+        public Nota.Application.Samples.SampleAnalysis? Analyze()
+            => NativeMethods.AudioImportAnalyze(Handle, out var a) == NativeMethods.NotaResult.Ok ? a.ToAnalysis() : null;
+
         public void Dispose()
         {
             var h = Interlocked.Exchange(ref _h, IntPtr.Zero);

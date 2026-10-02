@@ -42,3 +42,31 @@ public interface IMidiLearnAccess
     IReadOnlyList<MidiControlSeen> RecentControls();
     void ClearRecentControls();
 }
+
+/// <summary>Facade over the open project for the version-history tools: what is open, whether
+/// it has unsaved edits, and the two actions that go through the window (save, switch) —
+/// without referencing Nota.App. Implemented in Nota.App over MainWindow; every member runs on
+/// the UI thread (call it inside <see cref="IEngineDispatch.InvokeAsync{T}"/>).</summary>
+public interface IProjectVersionsAccess
+{
+    /// <summary>The open <c>.nota</c> bundle, or null while the project has never been saved.</summary>
+    string? ProjectPath { get; }
+    bool HasUnsavedChanges { get; }
+    /// <summary>Settings → Version history.</summary>
+    bool HistoryEnabled { get; }
+    /// <summary>Saves the project in place, recording a version (with the note, if any).
+    /// False when it couldn't be saved.</summary>
+    Task<bool> SaveVersionAsync(string? note);
+    /// <summary>Restores a version into the bundle and reopens the project, discarding unsaved
+    /// edits (the caller checked). False if it couldn't switch.</summary>
+    Task<bool> SwitchToVersionAsync(string versionId);
+    /// <summary>A tool changed the history directly (a label, note or star): redraw the History tab.</summary>
+    void NotifyHistoryChanged();
+}
+
+/// <summary>The project key (lives on the app's transport, not in the engine), for the
+/// smart-sample tools. A <c>MusicalKey.Code</c>, −1 = none. Runs on the UI thread.</summary>
+public interface IProjectKeyAccess
+{
+    int KeyCode { get; set; }
+}

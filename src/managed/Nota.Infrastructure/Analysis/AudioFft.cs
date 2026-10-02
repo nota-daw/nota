@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Minimal in-house radix-2 FFT (iterative Cooley–Tukey) for offline spectral
-// analysis (Convert Harmony). Pure, permissive — no external DSP dependency.
+// analysis (Convert Harmony, the stem separator's STFT). Pure, permissive — no external DSP
+// dependency.
 
 using System;
 
@@ -45,5 +46,15 @@ public static class AudioFft
                 }
             }
         }
+    }
+
+    /// <summary>In-place inverse FFT, scaled by 1/n (so Inverse(Forward(x)) == x).</summary>
+    public static void Inverse(double[] re, double[] im)
+    {
+        int n = re.Length;
+        for (int i = 0; i < n; i++) im[i] = -im[i];
+        Forward(re, im);
+        double s = 1.0 / n;
+        for (int i = 0; i < n; i++) { re[i] *= s; im[i] = -im[i] * s; }
     }
 }

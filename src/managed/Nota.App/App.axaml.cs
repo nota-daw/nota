@@ -21,6 +21,8 @@ public partial class App : Avalonia.Application
     {
         // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
         NotaNum.Install();
+        // Rounded, bordered, clipping Borders clip their child to the inner edge.
+        BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
     }
 
@@ -36,8 +38,15 @@ public partial class App : Avalonia.Application
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IPluginCatalog, PluginCatalog>();
         services.AddSingleton<IPluginStore, PluginStore>();
+        services.AddSingleton<ISampleStore, SampleStore>();
+        services.AddSingleton<ISampleAnalyzer, SampleAnalyzer>();
+        services.AddSingleton<ISampleIndex, SampleLibraryIndex>();
+        services.AddSingleton<IModelStore>(_ => new ModelStore());
+        services.AddSingleton<IAppUpdater>(_ => new AppUpdater(AppInfo.Version));
+        services.AddSingleton<IClipAi, ClipAi>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();
         services.AddSingleton<IProjectStore, ProjectStore>();
+        services.AddSingleton<IProjectHistory>(_ => new ProjectHistory(AppInfo.Version));
         services.AddSingleton<IPresetStore, PresetStore>();
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
         services.AddSingleton<IPresetAudition, PresetAudition>();
@@ -58,6 +67,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<Nota.Mcp.IEngineDispatch, AvaloniaEngineDispatch>();
         services.AddSingleton<ArrangementRefresh>();
         services.AddSingleton<Nota.Mcp.IArrangementRefresh>(sp => sp.GetRequiredService<ArrangementRefresh>());
+        services.AddSingleton<ProjectVersionsBridge>();
         services.AddSingleton<McpService>();
         // Presentation.
         services.AddSingleton<TransportViewModel>();
@@ -86,6 +96,11 @@ public partial class App : Avalonia.Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // A downloaded update installs once the app is gone (see AppUpdater).
+            desktop.Exit += (_, _) => Services.GetRequiredService<IAppUpdater>().RunPendingInstall();
+            // A Settings → Downloads install still running when the app quits is abandoned.
+            desktop.Exit += (_, _) => DownloadJobs.Shared.CancelAll();
+
             // Show the splash immediately, then defer the heavy engine spin-up to a
             // background dispatcher tick so the splash actually paints before the audio
             // backend loads (a synchronous VM resolve here would freeze the launch).

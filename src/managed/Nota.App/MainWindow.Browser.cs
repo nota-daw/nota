@@ -241,7 +241,7 @@ public partial class MainWindow
         catch (Exception ex) { _vm.StatusText = $"Reveal failed: {ex.Message}"; }
     }
 
-    private static void RevealInFileManager(string path)
+    internal static void RevealInFileManager(string path)
     {
         if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { "-R", path });
         else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"/select,\"{path}\"");

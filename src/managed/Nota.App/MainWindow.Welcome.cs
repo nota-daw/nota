@@ -50,11 +50,16 @@ public partial class MainWindow
             win.Closed += (_, _) => { try { _recovery.ClearRecovery(); } catch { } };
 
         // Look for a newer release in the background; the banner appears if one turns up
-        // while the launcher is still open.
-        _ = UpdateChecker.CheckAsync().ContinueWith(t =>
+        // while the launcher is still open. "Restart now" quits through the normal close path
+        // (the installer runs on exit — see App's Exit hook) and relaunches the new version.
+        var updater = App.Services.GetRequiredService<IAppUpdater>();
+        _ = updater.CheckAsync().ContinueWith(t =>
         {
-            if (t.Result is { } update)
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (win.IsVisible) win.ShowUpdateAvailable(update); });
+            if (t.Result is { } release)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (win.IsVisible) win.ShowUpdateAvailable(release, updater, restart: () => { win.Close(); Close(); });
+                });
         }, TaskScheduler.Default);
 
         await win.ShowDialog(this);

@@ -5,6 +5,7 @@
 
 #include "nota_engine_internal.h"
 #include "AudioImport.h"
+#include "SampleAnalysis.h"
 
 #include <algorithm>
 #include <cstring>
@@ -12,6 +13,24 @@
 
 #define JOB(j) reinterpret_cast<nota::AudioImportJob*>(j)
 #define CJOB(j) reinterpret_cast<const nota::AudioImportJob*>(j)
+
+namespace {
+void fillAnalysis(const nota::SampleBuffer& b, int64_t frames, double totalFrames, NotaSampleAnalysis* out) {
+    const auto f = nota::analyzeSample(b, frames);
+    *out = NotaSampleAnalysis{};
+    out->sample_rate = b.sourceSampleRate;
+    out->duration_sec = b.sourceSampleRate > 0 ? totalFrames / b.sourceSampleRate : 0.0;
+    out->channels = b.channels;
+    out->bpm = f.bpm;
+    out->key_tonic = f.keyTonic;
+    out->key_mode = f.keyMode;
+    out->key_confidence = f.keyConfidence;
+    out->tail_ratio = f.tailRatio;
+    out->peak_db = f.peakDb;
+    out->rms_db = f.rmsDb;
+    std::copy(f.timbre.begin(), f.timbre.end(), out->timbre);
+}
+} // namespace
 
 extern "C" {
 
@@ -57,6 +76,29 @@ int32_t nota_track_add_imported_clip(NotaEngine* e, int32_t track_id, const Nota
 }
 double nota_clip_auto_warp_bpm(NotaEngine* e, int32_t track_id, int32_t clip_index, double bpm) {
     return e ? ENG(e)->autoWarpClip(track_id, clip_index, bpm) : 0.0;
+}
+
+
+NotaResult nota_audio_import_analyze(const NotaAudioImport* job, NotaSampleAnalysis* out) {
+    if (!job || !out || !CJOB(job)->done() || !CJOB(job)->buffer()) return NOTA_ERR_INVALID_ARG;
+    const auto& b = *CJOB(job)->buffer();
+    fillAnalysis(b, b.frames, static_cast<double>(b.frames), out);
+    return NOTA_OK;
+}
+
+NotaResult nota_sample_analyze_file(const char* path, double max_seconds, NotaSampleAnalysis* out) {
+    if (!path || !out) return NOTA_ERR_INVALID_ARG;
+    // Only the head is decoded (and allocated): a long file costs max_seconds, not its length.
+    auto job = nota::AudioImportJob::open(std::string(path), max_seconds);
+    if (!job || !job->buffer()) return NOTA_ERR_INVALID_ARG;
+    while (!job->done())
+        if (job->step(1 << 17) < 0) return NOTA_ERR_INVALID_ARG;
+    const auto& b = *job->buffer();
+    if (b.frames <= 0) return NOTA_ERR_INVALID_ARG;
+    // Uncapped (or a truncated file): what decoded is the file; capped: the header's length.
+    const bool capped = b.frames < job->sourceFrames() && job->decodedFrames() >= b.frames;
+    fillAnalysis(b, b.frames, static_cast<double>(capped ? job->sourceFrames() : b.frames), out);
+    return NOTA_OK;
 }
 
 } // extern "C"

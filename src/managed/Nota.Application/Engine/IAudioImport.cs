@@ -31,4 +31,7 @@ public interface IAudioImport : IDisposable
 
     /// <summary>Tempo of the whole file once done (0 = not detectable).</summary>
     double DetectTempo();
+
+    /// <summary>Tempo, key, envelope and timbre of the whole file once done (null on failure).</summary>
+    Nota.Application.Samples.SampleAnalysis? Analyze();
 }

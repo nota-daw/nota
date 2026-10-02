@@ -217,6 +217,12 @@ public sealed partial class ArrangementView : UserControl
     public event Action<BrowserItem, int, double>? ItemDropped;
     /// <summary>Audio-clip context-menu "Convert / Slice to New MIDI Track" (track id, clip index, mode).</summary>
     public event Action<int, int, ClipConvertMode>? ConvertClipRequested;
+    /// <summary>Audio-clip context-menu "Separate Stems" (track id, clip index).</summary>
+    public event Action<int, int>? SeparateStemsRequested;
+    /// <summary>The Convert submenu's offer to download the basic-pitch model.</summary>
+    public event Action? TranscriptionModelRequested;
+    /// <summary>Whether Convert Melody / Harmony run on the AI model (else the menu offers it).</summary>
+    public Func<bool>? CanTranscribe { get; set; }
     /// <summary>A context menu asked for a new track. MainWindow owns creation — the seed
     /// MIDI clip, the session / modular / device-chain refreshes and the status line — so the
     /// menu only asks, and the toolbar's + buttons and these entries stay one behaviour.

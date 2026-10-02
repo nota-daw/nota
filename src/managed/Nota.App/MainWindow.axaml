@@ -25,6 +25,7 @@
             <NativeMenuItem Header="Open…" Click="OnMenuOpen" Gesture="Cmd+O"/>
             <NativeMenuItem Header="Save" Click="OnMenuSave" Gesture="Cmd+S"/>
             <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
+            <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Cmd+I"/>
             <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>
@@ -194,6 +195,14 @@
             </StackPanel>
             <TextBlock Classes="CellLabel" Text="SIG" HorizontalAlignment="Center"/>
           </StackPanel>
+          <!-- Project key: loops dropped in can be transposed to it -->
+          <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="Set the project key — samples can be transposed to it">
+            <StackPanel Spacing="2">
+              <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="14" LineHeight="16"
+                         MinWidth="30" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextTertiary}"/>
+              <TextBlock Classes="CellLabel" Text="KEY" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Button>
           <!-- Clip snap grid: click to cycle -->
           <Button x:Name="SnapChip" Classes="cell" Click="OnCycleSnap" ToolTip.Tip="Cycle the clip snap grid">
             <StackPanel Spacing="2">
@@ -345,10 +354,12 @@
     <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.ChromeBg}"
             BorderBrush="{DynamicResource Brush.BorderDefault}" BorderThickness="0,1,0,0"
             Height="22" Padding="12,0">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
+        <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
+        <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
         <!-- Background-operation strip: label + thin bar, shown only while a background op runs. -->
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                     VerticalAlignment="Center" Margin="0,0,14,0"
                     IsVisible="{Binding BackgroundBusy}">
           <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding BackgroundLabel}"/>
@@ -359,7 +370,7 @@
                        Foreground="{DynamicResource Brush.Accent}"
                        Background="{DynamicResource Brush.BorderDefault}"/>
         </StackPanel>
-        <TextBlock Grid.Column="2" Classes="Caption Mono"
+        <TextBlock Grid.Column="3" Classes="Caption Mono"
                    VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
       </Grid>
     </Border>

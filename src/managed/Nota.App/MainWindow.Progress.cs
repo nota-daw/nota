@@ -9,6 +9,7 @@
 // regardless of which surface shows it.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Nota.App;
@@ -17,6 +18,10 @@ public partial class MainWindow
 {
     /// <summary>Run <paramref name="work"/> behind a modal progress dialog over this window.</summary>
     private Task RunBlockingAsync(string title, string initial, Func<IProgress<ProgressReport>, Task> work)
+        => ProgressWindow.RunAsync(this, title, initial, work);
+
+    /// <summary>The same with a Cancel button; false when the user cancelled.</summary>
+    private Task<bool> RunBlockingAsync(string title, string initial, Func<IProgress<ProgressReport>, CancellationToken, Task> work)
         => ProgressWindow.RunAsync(this, title, initial, work);
 
     /// <summary>Run <paramref name="work"/> with progress shown in the status bar's background

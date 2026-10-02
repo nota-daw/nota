@@ -110,6 +110,21 @@ Resize semantics differ by clip type: a warped clip **trims** its played window,
 unwarped clip's source region moves — which is what lets a short one-shot be dragged out
 to a whole bar.
 
+### Sample analysis (smart samples)
+
+`SampleAnalysis.cpp` measures a decoded sample off the audio path: tempo (`TempoDetect`),
+key (a chroma of spectral peaks correlated with the Krumhansl–Kessler profiles), the
+envelope facts that tell a loop from a one-shot, and a 16-value timbre fingerprint.
+`nota_sample_analyze_file` decodes only a file's head (`AudioImportJob` with a seconds
+cap), so a long file in the library costs what it analyses, not its length. On the managed
+side `ISampleIndex` (`Infrastructure/SampleStore/SampleLibraryIndex.cs`) scans the Samples
+folder on a few below-normal threads and persists the raw measurements in
+`<data>/sample-index/index.bin`, keyed by path and invalidated by size and date.
+`SampleClassifier` (Application) turns those measurements and the file's name
+(`SampleNameHints`: "Loop_124_Am", a "One Shots" folder) into what the browser shows. It
+runs again on load, so classifier changes need no re-analysis. Names win over the
+analysis, and a loop's tempo is refined from its length.
+
 ## Devices and instruments
 
 Built-in instruments, audio effects, and MIDI effects are registered by an integer
@@ -160,6 +175,30 @@ referenced samples into `samples/` and plugin state blobs into `plugin-states/`,
 writes `project.json` atomically (temp file + rename) with an auto-backup. Loading
 replays the document through the same structural-edit operations the UI uses.
 
+The binaries are **content-addressed** (`BundleContent`): `samples/<hash>.wav` and
+`plugin-states/<hash>.bin`, where `<hash>` is the first 128 bits of a SHA-256 of the
+content. Identical content shares one file, a save skips files already on disk (new ones
+are written temp + rename), names stay stable across sessions, and after the manifest is
+replaced the files it no longer references are deleted. Hashing a sample reads its whole
+buffer, so hashes are cached per engine sample id and seeded from the file names on load.
+The dirty check captures with session names instead (`contentNames: false`) and reads no
+audio. Older bundles (`sample-N.wav`, `state-N.bin`) load as is and migrate on their next
+save.
+
+**Version history** (`ProjectHistory`, port `IProjectHistory`) lives in `.history/` inside
+the bundle. A version is the bundle's top-level files — the manifest and its sidecars —
+stored by content hash in `.history/objects/` (Brotli), plus the list of binaries its
+manifest references. Binaries are not copied: being content-named, they stay in
+`samples/` / `plugin-states/` and are shared by every version that uses them.
+`.history/versions.json` holds the tree (parent links, head, labels, notes, stars).
+Checking a version out writes its top-level files back (manifest last) and moves the head;
+the next save on top of an older version branches. A save's prune keeps every binary some
+version references, and prunes nothing if the history can't be read. Deleting a version
+re-parents its children and collects objects and binaries nothing needs any more.
+Each version also stores what it changed against its parent (`VersionDiff`, from the two
+manifests: tracks added / removed / renamed, tempo, meter, and per track arrangement, sound
+or mix), which the History tab words via `VersionSummary`.
+
 `analysis/` holds a cache of imported audio — each file's waveform overview (min/max per
 512 frames) and detected tempo, as `<content fingerprint>.npk` — so re-importing a file
 is instant. It is disposable: delete it and entries are rebuilt on the next import. While
@@ -181,3 +220,22 @@ The native engine is built by CMake + Ninja, separately from the managed app; th
 project copies the resulting `libnota_engine.{dylib,so}` / `nota_engine.dll` plus
 `nota-scanworker` next to the managed binary for P/Invoke. See [`README.md`](README.md)
 for commands and [`BUILD.md`](BUILD.md) for details.
+
+## Updates
+
+The welcome screen asks GitHub for the latest published release (`IAppUpdater` →
+`Infrastructure/Update/AppUpdater.cs`) and picks the asset `release.yml` builds for this OS
+and architecture. **Update** downloads it into `<data>/updates/` and checks its size and the
+sha256 `digest` GitHub reports for the asset. On macOS the `.dmg` is mounted and its
+`Nota.app` copied out and version-checked. Nothing touches the installed app while Nota runs.
+On exit (`desktop.Exit` in `App`) `RunPendingInstall` starts a small detached script. It
+waits for the process to end, then puts the new build in place: it swaps the `.app` bundle
+on macOS (rolling back on failure) or renames over the AppImage on Linux. On Windows it runs
+the Inno Setup installer with `/SILENT`, and `/relaunch=1` makes the installer start Nota
+again as the original user. **Restart now** quits through the normal close path, with the
+relaunch flag set.
+
+Only a packaged install in a writable location updates in place: an `.app` that isn't
+translocated or running off the disk image, an Inno install folder, or `$APPIMAGE`. Dev
+builds and everything else get the old **Download** button, which opens the release page.
+`NOTA_UPDATE_API` points the check at another release JSON (a URL or a local file).

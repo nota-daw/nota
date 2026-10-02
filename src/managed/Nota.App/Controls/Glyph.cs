@@ -25,7 +25,7 @@ internal enum GlyphKind
     Edit, Freeze, PopOut, Cycle, Dot, Bypass, Plus, Grip, Minus,
     Headphones,                    // input monitoring
     // Context-menu icons
-    Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Reverse, Folder, Ungroup,
+    Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
 }
 
@@ -272,6 +272,16 @@ internal sealed class Glyph : Control
                 // Converging strokes folding into one block.
                 Stroke(ctx, pen, new Point(cx - s * 0.42, cy - s * 0.32), new Point(cx - s * 0.1, cy), new Point(cx - s * 0.42, cy + s * 0.32));
                 ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx + s * 0.04, cy - s * 0.28, s * 0.4, s * 0.56), 1));
+                break;
+            }
+            case GlyphKind.Stems:
+            {
+                // Consolidate the other way: one block fanning out into three strokes.
+                ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(cx - s * 0.44, cy - s * 0.28, s * 0.3, s * 0.56), 1));
+                var fork = new Point(cx - s * 0.04, cy);
+                ctx.DrawLine(pen, fork, new Point(cx + s * 0.44, cy - s * 0.34));
+                ctx.DrawLine(pen, fork, new Point(cx + s * 0.44, cy));
+                ctx.DrawLine(pen, fork, new Point(cx + s * 0.44, cy + s * 0.34));
                 break;
             }
             case GlyphKind.Reverse:

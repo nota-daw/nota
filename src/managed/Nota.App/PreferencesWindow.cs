@@ -2,12 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Settings (nota-design/Nota Settings.html): 880×640 with a 188px sidebar grouped as
-// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads) and General (Library /
-// Appearance / Shortcuts), and a content pane per section under a title + subtitle header.
-// Audio device / sample-rate / buffer are persisted natively (audio.json) and applied by
-// restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan folders go through
-// the catalog. Test: a 440 Hz sine through the master (toggle; stopped when the pane or
-// window goes away) and a 5 s CPU check sampling the live DSP load + dropout count.
+// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
+// and General (Library / Appearance / Shortcuts), and a content pane per section under a
+// title + subtitle header. Audio device / sample-rate / buffer are persisted natively (audio.json)
+// and applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan
+// folders go through the catalog. Test: a 440 Hz sine through the master (toggle; stopped
+// when the pane or window goes away) and a 5 s CPU check sampling the live DSP load +
+// dropout count.
 
 using System;
 using System.Collections.Generic;
@@ -67,11 +68,11 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("PLUG-INS", new[]
         {
             new Page("Plug-ins", "Where Nota looks for VST3", "M9 3 V7 M15 3 V7 M6 7 H18 V11 A6 6 0 0 1 6 11 Z M12 17 V21"),
-            new Page("Downloads", "Nota plugin registry", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
+            new Page("Downloads", "Plug-ins, sample packs and AI models", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
         }),
         ("GENERAL", new[]
         {
-            new Page("Library", "Default save and sample locations", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
+            new Page("Library", "Content folders and version history", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
             new Page("Appearance", "Theme and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
             new Page("Shortcuts", "Keyboard reference", "M3 7 H21 V17 H3 Z M7 11 H7.01 M11 11 H11.01 M15 11 H15.01 M8 14 H16"),
         }),
@@ -154,9 +155,20 @@ public sealed partial class PreferencesWindow : NotaWindow
         grid.Children.Add(column);
         SetBody(grid);
 
-        Closed += (_, _) => { StopTests(); CancelStoreWork(); };
+        // A running download outlives the window (DownloadJobs); only stop listening to it.
+        Jobs.Changed += RenderStoreLists;
+        Jobs.ProgressChanged += UpdateDock;
+        Closed += (_, _) => { StopTests(); Jobs.Changed -= RenderStoreLists; Jobs.ProgressChanged -= UpdateDock; };
         Select(0);
         EnsureStoreLoading();
+        UpdateDock();
+    }
+
+    /// <summary>Switch to Downloads, on the given source (0 plug-ins, 1 sample packs, 2 AI models).</summary>
+    public void ShowDownloads(int source)
+    {
+        _downloadSource = Math.Clamp(source, 0, DownloadSources.Length - 1);
+        Select(DownloadsIndex);
     }
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);
@@ -218,6 +230,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         header.Children.Add(new TextBlock { Text = page.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Bottom });
         header.Children.Add(new TextBlock { Text = page.Subtitle, FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) });
 
+        if (index == DownloadsIndex) { _content.Content = DownloadsPane(header); return; }
+
         // Padding lives inside the scrolled content: a ScrollViewer's own Padding isn't part of
         // its extent, so the last rows of a long pane (Shortcuts) couldn't be scrolled into view.
         _content.Content = new ScrollViewer
@@ -233,7 +247,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     // The Downloads item carries the number of registry plugins not installed yet.
     private void UpdateDownloadsBadge(int count)
     {
-        var badge = _navItems[4].Badge;
+        var badge = _navItems[DownloadsIndex].Badge;
         badge.Text = count.ToString();
         badge.IsVisible = count > 0;
     }
@@ -244,7 +258,6 @@ public sealed partial class PreferencesWindow : NotaWindow
         1 => MidiPane(),
         2 => GamepadsPane(),
         3 => PluginsPane(),
-        4 => StorePane(),
         5 => LibraryPane(),
         6 => AppearancePane(),
         _ => ShortcutsPane(),
@@ -678,7 +691,25 @@ public sealed partial class PreferencesWindow : NotaWindow
             FolderRow("Projects",
                 () => settings.Current.ProjectsFolder, () => settings.ResolvedProjectsFolder(),
                 path => { settings.Current.ProjectsFolder = path; settings.Save(); _main.Browser.RebuildProjects(); }),
-        })));
+        })), VersionHistorySection(_main));
+    }
+
+    // On by default. Turning it off erases history, so it asks first — and stays on if not confirmed.
+    private Control VersionHistorySection(MainWindowViewModel main)
+    {
+        var row = (StackPanel)SwitchRow("Keep a version history of each project", main.Settings.Current.KeepVersionHistory, _ => { });
+        var sw = (ToggleSwitch)row.Children[0];
+        sw.Changed += async on =>
+        {
+            if (on) { main.SetKeepVersionHistory(true); return; }
+            bool ok = await new ConfirmWindow("Turn off version history",
+                "This erases the version history of the open project now, and of any other project the next time you save it. Older versions can't be brought back.",
+                "Turn off and erase", "Cancel").ShowDialog<bool>(this);
+            if (ok) main.SetKeepVersionHistory(false);
+            else sw.IsOn = true;
+        };
+        return Section("VERSION HISTORY", 10, row,
+            Caption("Every save records a version, listed in the browser's History tab. Versions share their audio, so each one costs only what it adds."));
     }
 
     private Control FolderRow(string label, Func<string> get, Func<string> resolved, Action<string> set)
@@ -886,6 +917,13 @@ public sealed partial class PreferencesWindow : NotaWindow
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
+        ("FILE", new[]
+        {
+            ("⌘N   ⌘O", "New project / open a project"),
+            ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
+            ("⌥⌘S", "Save a version with a note"),
+            ("⌘I   ⌘⇧E", "Import audio / export audio"),
+        }),
         ("TRANSPORT", new[]
         {
             ("Space", "Play / Stop"),

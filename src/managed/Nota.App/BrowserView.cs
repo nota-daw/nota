@@ -27,6 +27,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Nota.Application;
+using Nota.Application.Samples;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -108,6 +109,7 @@ public sealed class BrowserView : UserControl
     private const string IconSliders = "M7 4.5 v15 M12 4.5 v15 M17 4.5 v15 M5 9 h4 M10 14.5 h4 M15 7.5 h4";
     // Files — a folder with a raised tab on the left.
     private const string IconFolder = "M3.5 7.5 h5.6 l2.1 2.6 h9.3 v9.4 h-17 z";
+    private const string IconDownloads = "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19";   // as Settings → Downloads
     private const string IconStar = "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z";
     // Presets — a bookmark (a saved snapshot). Distinct from the fader glyphs above.
     private const string IconBookmark = "M6.5 4 h11 v16 l-5.5 -4.4 l-5.5 4.4 z";
@@ -119,6 +121,8 @@ public sealed class BrowserView : UserControl
     // MIDI-learn map — two nodes joined by a link (a control mapped to a parameter).
     private const string IconMap = "M3.4 17.6 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M15.4 6.4 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M7.9 15.7 L16.1 8.3";
     // Collapse / expand — a window with its left sidebar ruled off.
+    // A clock face with a counter-clockwise arrow tail: project version history.
+    private const string IconHistory = "M4.6 9.2 A8 8 0 1 1 4 12 M4.6 9.2 L3.6 5.8 M4.6 9.2 L8 8.6 M12 7.6 V12 L15 14";
     private const string IconSidebar = "M3.5 5.5 h17 v13 h-17 z M9.5 5.5 v13";
     // View options — three centred rules, shortening downward (a sort/·filter glyph).
     private const string IconOptions = "M4 7 H20 M7 12 H17 M10 17 H14";
@@ -150,10 +154,12 @@ public sealed class BrowserView : UserControl
         };
     }
 
-    private const int TabCount = 7;   // Instr / FX / MIDI / Files / Preset / Proj / Map
+    private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
+    private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
+    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab;
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
 
@@ -166,6 +172,7 @@ public sealed class BrowserView : UserControl
     private BrowserViewModel? _vm;
     private ISettingsService? _settings;
     private MidiMapView? _midiMap;
+    private HistoryView? _historyView;
 
     // Collapsed: only the icon rail shows; clicking an icon unfolds the browser on that tab.
     private bool _collapsed;
@@ -213,6 +220,15 @@ public sealed class BrowserView : UserControl
     // Header filter chips (Favorites + one per tag); rebuilt from the VM's tags.
     private readonly Border _chipsHost;
     private readonly ChipStrip _chipsPanel;
+    // Files tab: the sample filter strip (Loops · One-shots · BPM · Key, and "Like …" while
+    // showing similar sounds). Unlike the tag strip it wraps rather than folding into "+N":
+    // it holds at most five fixed chips, and BPM and Key are the point of it.
+    private readonly Border _sampleChipsHost;
+    private readonly WrapPanel _sampleChips;
+
+    /// <summary>The project tempo / key, for the filter's "project" shortcuts.</summary>
+    public Func<double>? ProjectTempo { get; set; }
+    public Func<MusicalKey?>? ProjectKey { get; set; }
     private readonly Border _overflowChip;
     private readonly TextBlock _overflowText;
 
@@ -240,6 +256,7 @@ public sealed class BrowserView : UserControl
             RailTab(4, "Presets", IconBookmark),
             RailTab(5, "Projects", IconDoc),
             RailTab(6, "MIDI map", IconMap),
+            RailTab(7, "History", IconHistory),
         };
         // A hairline above Files and above Map: devices · library · mappings.
         foreach (int i in new[] { 3, 6 })
@@ -326,6 +343,9 @@ public sealed class BrowserView : UserControl
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
         _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
 
+        _sampleChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
+        _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _sampleChips, IsVisible = false };
+
         _previewFooter = new PreviewPlayer { IsVisible = false };
         _previewFooter.SetContext(files: _active == FilesTab);
 
@@ -364,7 +384,7 @@ public sealed class BrowserView : UserControl
         contentHost.Children.Add(_emptyWrap);
 
         var right = new DockPanel();
-        var topStack = new StackPanel { Children = { headerRow, _chipsHost } };
+        var topStack = new StackPanel { Children = { headerRow, _chipsHost, _sampleChipsHost } };
         DockPanel.SetDock(topStack, Dock.Top);
         DockPanel.SetDock(_statusBar, Dock.Bottom);
         DockPanel.SetDock(_previewFooter, Dock.Bottom);
@@ -405,6 +425,13 @@ public sealed class BrowserView : UserControl
     {
         _midiMap = new MidiMapView(learn);
         if (_active == MapTab) _content.Content = _midiMap;
+    }
+
+    /// <summary>Give the browser the project's History tab.</summary>
+    internal void SetHistory(HistoryView view)
+    {
+        _historyView = view;
+        if (_active == HistoryTab) _content.Content = view;
     }
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
@@ -478,6 +505,13 @@ public sealed class BrowserView : UserControl
         // Rebuild the header chips whenever tags/favorites change (also refreshes active state).
         vm.LibraryChanged += RebuildChips;
         RebuildChips();
+        vm.SampleIndexChanged += () => { if (_active == FilesTab) RefreshCounts(); };
+        // A rescan (settings, a pack installed) can leave "similar" mode behind the view's back.
+        vm.Samples.CollectionChanged += (_, _) =>
+        {
+            if (!ReferenceEquals(_chipsAnchor, vm.SimilarAnchor) || _chipsFilter != vm.SampleFilter) RebuildSampleChips();
+        };
+        RebuildSampleChips();
         RefreshCounts();
     }
 
@@ -530,7 +564,7 @@ public sealed class BrowserView : UserControl
     // same thing — what the active tab is showing — so they refresh together.
     private void RefreshCounts()
     {
-        if (_active < 0 || _active == MapTab) return;
+        if (_active < 0 || IsCustomTab(_active)) return;
         _matchCount.Text = VisibleCount(_active).ToString();
         _statusText.Text = StatusFor(_active);
         UpdateEmptyState();
@@ -551,15 +585,18 @@ public sealed class BrowserView : UserControl
     {
         bool searching = !string.IsNullOrEmpty(_search.Text?.Trim());
         bool filtering = tab is 0 or 1 or 2 && _vm is not null && _vm.FilterMode != BrowserFilter.None;
-        if (searching || filtering) return ("No matches", "Try a different search or clear the filters.");
+        bool sampleFilter = tab == FilesTab && _vm is not null && (!_vm.SampleFilter.IsEmpty || _vm.SimilarAnchor is not null);
+        if (sampleFilter && _vm!.IndexProgress.Total > 0)
+            return ("No matches yet", "Nota is still analysing your samples — more matches appear as it goes.");
+        if (searching || filtering || sampleFilter) return ("No matches", "Try a different search or clear the filters.");
         return tab switch
         {
             0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
-            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Folders), then browse them here as a folder tree. You can also drag files in from Finder."),
+            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample Packs, then browse them here as a folder tree. You can also drag files in from Finder."),
             4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
-            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Folders) and it shows up here."),
+            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here."),
         };
     }
 
@@ -585,9 +622,12 @@ public sealed class BrowserView : UserControl
             return $"{bi} built-in · {Plural(pl, "plug-in")}";
         }
         int n = VisibleCount(tab);
+        // Filtered, the folders on screen are only there to hold the matches: count those.
+        if (tab == FilesTab && _vm.SimilarAnchor is not null || tab == FilesTab && !_vm.SampleFilter.IsEmpty)
+            n = System.Linq.Enumerable.Count(_vm.Samples, s => s.Kind != BrowserItemKind.Folder);
         return tab switch
         {
-            3 => Plural(n, "sample"),
+            3 => Plural(n, "sample") + AnalysingSuffix(),
             4 => Plural(n, "preset"),
             _ => Plural(n, "project"),
         };
@@ -595,15 +635,23 @@ public sealed class BrowserView : UserControl
 
     private static string Plural(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
 
+    // " · analysing 34 %" while the library scan runs.
+    private string AnalysingSuffix()
+    {
+        var (done, total) = _vm?.IndexProgress ?? (0, 0);
+        return total > 0 ? $" · analysing {done * 100 / total}\u2009%" : "";
+    }
+
     private void SelectTab(int index)
     {
         if (index == _active) return;
         _active = index;
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
-        // The MIDI-map tab hosts a bespoke editor, not a filtered item list.
-        bool isMap = index == MapTab;
-        _content.Content = isMap ? (Control?)_midiMap : _pages[index];
+        // The MIDI-map and History tabs host bespoke views, not a filtered item list.
+        bool isMap = IsCustomTab(index);
+        _content.Content = index == MapTab ? _midiMap : index == HistoryTab ? (Control?)_historyView : _pages[index];
+        if (index == HistoryTab) _historyView?.Refresh();
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
         // The auditioner follows the list tabs: samples in Files, presets and built-in devices
@@ -614,6 +662,7 @@ public sealed class BrowserView : UserControl
         if (auditions) SyncPreview(_pages[index]);
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
+        _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
         RefreshCounts();
@@ -730,6 +779,15 @@ public sealed class BrowserView : UserControl
             disclosure = new Border { Width = 14 };
         }
 
+        // The Downloaded folder (installed sample packs) carries the Downloads arrow.
+        Control? icon = null;
+        if (item.IsDownloads)
+        {
+            var arrow = new Path { Data = Geometry.Parse(IconDownloads), StrokeThickness = 2.2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
+            arrow.BindResource(Shape.StrokeProperty, "Brush.TextSecondary");
+            icon = new Viewbox { Width = 13, Height = 13, Child = new Canvas { Width = 24, Height = 24, Children = { arrow } } };
+        }
+
         // "Nota" drops to tertiary ink so the eye lands on the distinctive word.
         var prefix = item.Prefix.Length > 0
             ? new TextBlock { Text = item.Prefix, Classes = { "RowPrefix" } }
@@ -742,10 +800,12 @@ public sealed class BrowserView : UserControl
         };
         if (child) name.Classes.Add("child");
 
-        // The type, as a quiet tag on the right edge (toggleable in the ⋮ menu).
-        string tag = RowTag(item);
+        // The type, as a quiet tag on the right edge (toggleable in the ⋮ menu). A sample's
+        // tag is what the index heard — "124 · Am" — and fills in as the scan reaches it.
+        bool sample = item.Kind == BrowserItemKind.Sample;
+        string tag = sample ? SampleTag(item) : RowTag(item);
         TextBlock? tagText = null;
-        if (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true))
+        if (sample || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
             tagText = new TextBlock { Text = tag, Classes = { "RowTag" }, TextTrimming = TextTrimming.CharacterEllipsis };
 
         var row = new IndexRowPanel
@@ -754,6 +814,7 @@ public sealed class BrowserView : UserControl
             Indent = 6 + item.Depth * 12,
             Edge = edge,
             Disclosure = disclosure,
+            Icon = icon,
             Prefix = prefix,
             Name2 = name,
             Markers = BuildRowMarkers(item),   // brass ★ + tag colour dots
@@ -761,10 +822,38 @@ public sealed class BrowserView : UserControl
         };
 
         // The row's full identity lives in the tooltip, where the tag has no room for it
-        // (a plug-in's format, a sample's folder).
+        // (a plug-in's format, a sample's folder, tempo and key).
         string tip = item.Tip.Length > 0 ? item.Tip : item.Sub;
         ToolTip.SetTip(row, tip.Length > 0 ? $"{item.Name} · {tip}" : item.Name);
+        if (sample)
+        {
+            void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs __)
+            {
+                tagText!.Text = SampleTag(item);
+                row.InvalidateArrange();
+            }
+            // Subscribe only while shown: the item outlives its rows (they are rebuilt on every
+            // scroll), so a lasting handler would pin every row ever drawn.
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Retag; item.PropertyChanged += Retag; tagText!.Text = SampleTag(item); };
+            row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Retag;
+            row.PointerEntered += (_, _) =>
+            {
+                var meta = item.Sample?.Describe() ?? "";
+                var parts = new List<string> { item.Name };
+                if (meta.Length > 0) parts.Add(meta);
+                if (tip.Length > 0) parts.Add(tip);
+                ToolTip.SetTip(row, string.Join(" · ", parts));
+            };
+        }
         return row;
+    }
+
+    // "124 · Am", a hit's note, or (until analysed, or with nothing to say) the file type.
+    private string SampleTag(BrowserItem item)
+    {
+        var t = item.Sample?.Tag ?? "";
+        if (t.Length > 0) return t;
+        return (_settings?.Current.BrowserShowTypeTags ?? true) ? RowTag(item) : "";
     }
 
     /// <summary>Lays out one index row. A Grid cannot express the priority this row needs:
@@ -779,6 +868,7 @@ public sealed class BrowserView : UserControl
         public double Indent { get; init; }
         public Border Edge { get; init; } = null!;
         public Control Disclosure { get; init; } = null!;
+        public Control? Icon { get; init; }
         public TextBlock? Prefix { get; init; }
         public TextBlock Name2 { get; init; } = null!;
         public Control? Markers { get; init; }
@@ -798,6 +888,7 @@ public sealed class BrowserView : UserControl
             _built = true;
             Children.Add(Edge);
             Children.Add(Disclosure);
+            if (Icon is not null) Children.Add(Icon);
             if (Prefix is not null) Children.Add(Prefix);
             Children.Add(Name2);
             if (Markers is not null) Children.Add(Markers);
@@ -814,6 +905,11 @@ public sealed class BrowserView : UserControl
             Disclosure.Arrange(new Rect(Indent, 0, Disclosure.DesiredSize.Width, h));
 
             double left = Indent + Disclosure.DesiredSize.Width + 3;
+            if (Icon is not null)
+            {
+                Place(Icon, left, Icon.DesiredSize.Width);
+                left += Icon.DesiredSize.Width + Gap;
+            }
             if (Prefix is not null)
             {
                 Place(Prefix, left, Prefix.DesiredSize.Width);
@@ -943,6 +1039,14 @@ public sealed class BrowserView : UserControl
             if (_settings is not null) { _settings.Current.BrowserFavoritesFirst = v; _settings.Save(); }
             RefreshCounts();
         }));
+        if (_active == FilesTab && _settings is not null)
+        {
+            // What happens when a sample lands on the arrangement.
+            var s = _settings;
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(CheckItem("Warp loops to project tempo", s.Current.SamplesWarpLoops, v => { s.Current.SamplesWarpLoops = v; s.Save(); }));
+            flyout.Items.Add(CheckItem("Transpose to project key", s.Current.SamplesMatchKey, v => { s.Current.SamplesMatchKey = v; s.Save(); }));
+        }
         flyout.Items.Add(new Separator());
         var editTags = new MenuItem { Header = "Edit tags…" };
         editTags.Click += (_, _) => EditTagsRequested?.Invoke(null);
@@ -1117,6 +1221,110 @@ public sealed class BrowserView : UserControl
             flyout.Items.Add(mi);
         }
         if (flyout.Items.Count > 0) flyout.ShowAt(_overflowChip);
+    }
+
+    // --- Files: sample filter chips ------------------------------------------
+
+    private BrowserItem? _chipsAnchor;            // the state the chips were last drawn for
+    private SampleFilter? _chipsFilter;
+
+    private void RebuildSampleChips()
+    {
+        _sampleChips.Children.Clear();
+        if (_vm is null || !_vm.HasSampleIndex) return;
+        var f = _vm.SampleFilter;
+        _chipsAnchor = _vm.SimilarAnchor;
+        _chipsFilter = f;
+        if (_vm.SimilarAnchor is { } anchor)
+        {
+            string stem = System.IO.Path.GetFileNameWithoutExtension(anchor.Name);
+            if (stem.Length > 18) stem = stem[..17] + "…";
+            var like = MakeChip($"Like {stem}", null, true, () => { _vm.ClearSimilar(); RebuildSampleChips(); RefreshCounts(); });
+            ToolTip.SetTip(like, $"Sounds like {anchor.Name}, closest first — click to go back to all samples");
+            _sampleChips.Children.Add(like);
+        }
+        _sampleChips.Children.Add(MakeChip("Loops", null, f.Kind == SampleKind.Loop,
+            () => SetSampleFilter(f with { Kind = f.Kind == SampleKind.Loop ? SampleKind.Unknown : SampleKind.Loop })));
+        _sampleChips.Children.Add(MakeChip("One-shots", null, f.Kind == SampleKind.OneShot,
+            () => SetSampleFilter(f with { Kind = f.Kind == SampleKind.OneShot ? SampleKind.Unknown : SampleKind.OneShot })));
+        ChipBorder? bpm = null, key = null;
+        bpm = MakeChip(f.HasBpm ? f.BpmCaption + "\u2009BPM" : "BPM", null, f.HasBpm, () => ShowBpmFilter(bpm!));
+        key = MakeChip(f.Key?.Long ?? "Key", null, f.Key is not null, () => ShowKeyFilter(key!));
+        ToolTip.SetTip(bpm, "Filter by tempo");
+        ToolTip.SetTip(key, "Filter by key — a key also shows its relative (A minor ↔ C major)");
+        _sampleChips.Children.Add(bpm);
+        _sampleChips.Children.Add(key);
+    }
+
+    private void SetSampleFilter(SampleFilter f)
+    {
+        if (_vm is null) return;
+        _vm.SampleFilter = f;
+        RebuildSampleChips();
+        RefreshCounts();
+    }
+
+    // Min / max fields that filter as you type, plus "around the project tempo" (±5 %, what
+    // warps without audible artefacts) and a reset.
+    private void ShowBpmFilter(Control anchor)
+    {
+        if (_vm is null) return;
+        var f = _vm.SampleFilter;
+        var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+        TextBox Field(double v, string hint) => new()
+        {
+            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 12,
+            Text = v > 0 ? SampleInfo.FormatBpm(v) : "",
+        };
+        var min = Field(f.BpmMin, "min");
+        var max = Field(f.BpmMax, "max");
+        static double Parse(string? s)
+            => double.TryParse((s ?? "").Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var v) && v is > 0 and < 1000 ? v : 0;
+        void Apply() => SetSampleFilter(_vm.SampleFilter with { BpmMin = Parse(min.Text), BpmMax = Parse(max.Text) });
+        min.TextChanged += (_, _) => Apply();
+        max.TextChanged += (_, _) => Apply();
+        var dash = new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center };
+        dash.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        var unit = new TextBlock { Text = "BPM", Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
+        var fields = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { min, dash, max, unit } };
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        if (ProjectTempo?.Invoke() is > 0 and var tempo)
+        {
+            var near = new Button { Content = $"Project tempo ±5\u2009%", Classes = { "ghost" } };
+            ToolTip.SetTip(near, $"Loops within 5\u2009% of {SampleInfo.FormatBpm(tempo)}\u2009BPM warp to it cleanly");
+            near.Click += (_, _) =>
+            {
+                min.Text = SampleInfo.FormatBpm(Math.Floor(tempo * 0.95));
+                max.Text = SampleInfo.FormatBpm(Math.Ceiling(tempo * 1.05));
+            };
+            actions.Children.Add(near);
+        }
+        var any = new Button { Content = "Any tempo", Classes = { "ghost" } };
+        any.Click += (_, _) => { flyout.Hide(); SetSampleFilter(_vm.SampleFilter with { BpmMin = 0, BpmMax = 0 }); };
+        actions.Children.Add(any);
+
+        flyout.Content = new StackPanel { Spacing = 8, Margin = new Thickness(2), Children = { fields, actions } };
+        flyout.ShowAt(anchor);
+    }
+
+    private void ShowKeyFilter(Control anchor)
+    {
+        if (_vm is null) return;
+        var extras = new List<(string, MusicalKey)>();
+        if (ProjectKey?.Invoke() is { } pk) extras.Add(($"Project key · {pk.Short}", pk));
+        KeyPicker.Show(anchor, _vm.SampleFilter.Key, "Any key", k => SetSampleFilter(_vm.SampleFilter with { Key = k }), extras);
+    }
+
+    private async void ShowSimilar(BrowserItem item)
+    {
+        if (_vm is null) return;
+        _statusText.Text = $"Finding sounds like {item.Name}…";
+        int n = await _vm.ShowSimilarAsync(item);
+        RebuildSampleChips();
+        RefreshCounts();
+        if (n == 0) _statusText.Text = "Couldn't analyse that sample";
     }
 
     private void ToggleFilter(BrowserFilter mode, string tagId)
@@ -1310,6 +1518,16 @@ public sealed class BrowserView : UserControl
 
         switch (item.Kind)
         {
+            case BrowserItemKind.Sample when _vm?.HasSampleIndex == true:
+            {
+                var similar = new MenuItem { Header = "Show similar sounds" };
+                similar.Click += (_, _) => ShowSimilar(item);
+                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                reveal.Click += (_, _) => RevealRequested?.Invoke(item);
+                flyout.Items.Add(similar);
+                flyout.Items.Add(reveal);
+                return flyout;
+            }
             case BrowserItemKind.Sample:
             case BrowserItemKind.MidiFile:
             // A saved preset file on disk. Synthetic rows (factory presets, drum kits)

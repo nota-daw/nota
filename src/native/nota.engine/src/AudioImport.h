@@ -21,13 +21,16 @@ public:
     ~AudioImportJob();
 
     // Opens `path` and reads its header. Null when the file can't be opened/decoded.
-    static std::unique_ptr<AudioImportJob> open(const std::string& path);
+    // maxSeconds > 0 decodes only the file's head (analysis): the buffer holds at most that
+    // much and the job is done once it is in; sourceFrames() keeps the real length.
+    static std::unique_ptr<AudioImportJob> open(const std::string& path, double maxSeconds = 0.0);
 
     // Decodes up to maxFrames more. Returns 1 while frames remain, 0 once done, -1 on error.
     int32_t step(int64_t maxFrames);
 
     bool    done() const { return done_; }
     int64_t decodedFrames() const { return decoded_; }
+    int64_t sourceFrames() const { return sourceFrames_; }   // the whole file, even when capped
     const std::shared_ptr<SampleBuffer>& buffer() const { return buf_; }
 
     // Display peaks over the WHOLE file (maxPoints buckets, min/max pairs). Buckets not
@@ -49,6 +52,7 @@ private:
     std::unique_ptr<Decoder> dec_;
     std::shared_ptr<SampleBuffer> buf_;
     int64_t decoded_ = 0;
+    int64_t sourceFrames_ = 0;
     bool done_ = false;
     bool seeded_ = false;
 };

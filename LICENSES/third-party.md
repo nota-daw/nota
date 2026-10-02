@@ -22,6 +22,10 @@ public domain, or AGPL-compatible copyleft.
 | HIIR (Laurent de Soras) | 1.40 | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — see note 4 |
 | Apple CoreAudio / CoreMIDI / AudioToolbox | system | Audio + MIDI I/O (macOS) | system SDK | ✅ in use |
 | Geist / Geist Mono (Vercel) | 1.7.2 | UI and numeric typefaces (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |
+| ONNX Runtime — managed API (`Microsoft.ML.OnnxRuntime.Managed`) | 1.23.2 | Runs the AI models (Separate Stems, Convert to MIDI) | MIT | ✅ in use — see note 6 |
+| ONNX Runtime — native library | 1.23.2 | The same, downloaded with the first AI model | MIT | ✅ downloaded, not bundled — see note 6 |
+| htdemucs (Demucs v4, Meta) | v4 weights, ONNX export | Separate Stems model | MIT | ✅ downloaded, not bundled — see note 6 |
+| basic-pitch (Spotify) | 0.4.0 | Convert Melody / Harmony model | Apache-2.0 | ✅ downloaded, not bundled — see note 6 |
 | Freeverb (algorithm only) | — | Built-in reverb | public domain | ✅ in use — own implementation of the Jezar algorithm; no vendored code (`src/native/nota.engine/src/Reverb.h`) |
 
 Status key: ✅ cleared · ⚠️ cleared with a condition · ⏳ planned · ❌ rejected (incompatible).
@@ -56,6 +60,15 @@ provided the fonts are not sold on their own and the license travels with them
 SemiBold, Bold of each family) are copied unmodified from the `geist` npm package;
 "Geist" is a Reserved Font Name, so a subset or other modification must be renamed.
 They replace Inter, which came in through the `Avalonia.Fonts.Inter` package.
+
+**6 — The AI models and their runtime are downloaded, not shipped.**
+Only ONNX Runtime's managed API (MIT) is in the installer. The native ONNX Runtime library
+(from Microsoft's own release archives, with its `LICENSE` and `ThirdPartyNotices.txt`),
+htdemucs (MIT; exported to ONNX by `nota-daw/nota-models`) and basic-pitch (Apache-2.0,
+from Spotify's repository) are fetched by Settings → Downloads → AI Models into Nota's data
+folder, each pinned to a size and sha256 in `ModelCatalog.cs`. All three licenses permit
+use and redistribution with AGPL software. Nota's STFT, segmenting and note-decoding code
+around the models are its own ports of the reference Python (`src/managed/Nota.Infrastructure/Ai`).
 
 ## Not shipped
 

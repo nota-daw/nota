@@ -108,6 +108,55 @@ if (args.Length >= 1 && args[0] == "--store")
     Console.WriteLine(failures == 0 ? "STORE PASSED" : $"STORE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Get Samples alone: `--samples`.
+if (args.Length >= 1 && args[0] == "--samples")
+{
+    Console.WriteLine("-- get samples: sample registry store --");
+    foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 2 && args[0] == "--sample-dump") { SmartSampleTests.Dump(args[1]); return 0; }
+// Smart samples (key / tempo / loop analysis, the library index) alone: `--smart-samples`.
+if (args.Length >= 1 && args[0] == "--smart-samples")
+{
+    Console.WriteLine("-- smart samples: analysis + library index --");
+    foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SMART SAMPLES PASSED" : $"SMART SAMPLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Self-update alone: `--updater`.
+if (args.Length >= 1 && args[0] == "--updater")
+{
+    Console.WriteLine("-- self-update --");
+    foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "UPDATER PASSED" : $"UPDATER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// AI models store alone: `--models`.
+if (args.Length >= 1 && args[0] == "--models")
+{
+    Console.WriteLine("-- ai models: store --");
+    foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS PASSED" : $"MODELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Live installs of the real models: `--models-live <dir> [--stems]`.
+if (args.Length >= 2 && args[0] == "--models-live")
+{
+    Console.WriteLine("-- ai models: live installs --");
+    foreach (var (ok, label) in ModelStoreTests.RunLive(args[1], args.Contains("--stems"))) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS LIVE PASSED" : $"MODELS LIVE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// AI models' DSP ports against the Python originals: `--ai-golden <libonnxruntime> <dir>`.
+if (args.Length >= 3 && args[0] == "--ai-golden")
+{
+    Console.WriteLine("-- ai models: golden output --");
+    foreach (var (ok, label) in AiGoldenTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AI GOLDEN PASSED" : $"AI GOLDEN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--store-catalog")
 {
     Console.WriteLine("-- get plug-ins: catalog identifiers --");
@@ -129,6 +178,28 @@ if (args.Length >= 1 && args[0] == "--audition")
     Console.WriteLine("-- browser: preset audition --");
     foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "AUDITION PASSED" : $"AUDITION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Content-addressed bundle alone (fast iteration): `--bundle`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--bundle")
+{
+    Console.WriteLine("-- project: content-addressed bundle --");
+    foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BUNDLE PASSED" : $"BUNDLE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Project version history alone (fast iteration): `--history`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--history")
+{
+    Console.WriteLine("-- project: version history --");
+    foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunSummary()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunCleanup()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HISTORY PASSED" : $"HISTORY FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 
@@ -3374,7 +3445,7 @@ Console.WriteLine("-- Sampler --");
         Check(ne.PluginParamGet(st, -1, ni["loopmode"]) == 0.5f, "reloading the sample keeps a forward loop");
         Reset();
 
-        // The name round-trips through a project (the bundle stores sample-N.wav).
+        // The name round-trips through a project (the bundle names the file by content hash).
         var nw = new System.Collections.Generic.List<string>();
         var ndoc = ProjectService.Capture(ne, new TransportState(120.0, 1.0, false, false), nw);
         string nb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "nota-sampname-" + System.Guid.NewGuid().ToString("N") + ".nota");
@@ -8071,7 +8142,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
             { new Nota.Application.AutomationPoint(0, 1.5f), new Nota.Application.AutomationPoint(8, 0.5f) });
 
         var transport = new TransportState(140.0, 0.5, MetronomeOn: true, LoopOn: false,
-            TimeSigNumerator: 7, TimeSigDenominator: 8);
+            TimeSigNumerator: 7, TimeSigDenominator: 8, Key: new Nota.Application.Samples.MusicalKey(6, Nota.Application.Samples.KeyMode.Minor).Code);
         var warnings = new System.Collections.Generic.List<string>();
         var doc = ProjectService.Capture(src, transport, warnings);
         Check(warnings.Count == 0, $"no warnings for a built-in-only project ({warnings.Count})");
@@ -8083,6 +8154,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
         Check(loaded.FormatVersion == ProjectService.CurrentFormatVersion, "format version round-trips");
         Check(Math.Abs(loaded.Transport.Bpm - 140.0) < 1e-9 && loaded.Transport.MetronomeOn, "transport round-trips");
         Check(loaded.Transport.TimeSigNumerator == 7 && loaded.Transport.TimeSigDenominator == 8, "time signature round-trips (7/8)");
+        Check(loaded.Transport.Key == "F#m", $"project key round-trips (F# minor → \"{loaded.Transport.Key}\")");
 
         // Replay into a fresh engine and verify the live state.
         using var dst = new NotaEngine();
@@ -8189,7 +8261,8 @@ Console.WriteLine("-- M7-6b: audio round-trip --");
         ProjectService.Save(doc, dir, src);
         int wavCount = System.IO.Directory.Exists(System.IO.Path.Combine(dir, "samples"))
             ? System.IO.Directory.GetFiles(System.IO.Path.Combine(dir, "samples"), "*.wav").Length : 0;
-        Check(wavCount >= 3, $"sample files written to samples/ ({wavCount})");
+        // One file decoded three times: identical audio → one content-named file.
+        Check(wavCount >= 1, $"sample files written to samples/ ({wavCount})");
 
         var loaded = ProjectService.Load(dir);
         using var dst = new NotaEngine();
@@ -13577,9 +13650,35 @@ Console.WriteLine("-- background audio import --");
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 
+// --- project: content-addressed bundle (samples / plugin states named by hash) ---
+Console.WriteLine("-- project: content-addressed bundle --");
+foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+Console.WriteLine("-- project: version history --");
+foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunSummary()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunCleanup()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
+
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");
 foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
+
+// --- get samples: sample registry index, pack install/uninstall from local archives ---
+Console.WriteLine("-- get samples: sample registry store --");
+foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+
+// --- smart samples: tempo / key / loop analysis, the library index, filters, similar ---
+Console.WriteLine("-- smart samples: analysis + library index --");
+foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
+
+// --- ai models: model + runtime install/uninstall from local assets ---
+Console.WriteLine("-- ai models: store --");
+foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
+
+// --- self-update: release parsing, download + verify, install helpers ---
+Console.WriteLine("-- self-update --");
+foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

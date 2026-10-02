@@ -25,11 +25,19 @@ public partial class MainWindow
     private SolidColorBrush TrackBrush(int trackId)
         => ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(Engine, trackId));
 
-    // Detail-header track chip (1d/1e): colour dot · name · routing/PDC summary.
+    // Detail-header track chip (1d/1e): colour dot · name · live routing/PDC summary.
     // trackId <= 0 shows a plain mode label (e.g. the full-width Mixer).
+    // The summary reads the track's real state (record input, input monitor, MIDI source,
+    // reported latency) and a light poll re-renders it when any of that changes elsewhere.
+    private int _chipTrackId;
+    private string _chipKey = "";
+    private Avalonia.Threading.DispatcherTimer? _chipTimer;
+
     private void SetDetailChip(int trackId, string? modeLabel = null)
     {
         UpdateFreezeButton(trackId);   // M7: header Freeze button follows the shown track
+        _chipTrackId = trackId;
+        _chipKey = "";
         if (trackId <= 0)
         {
             DetailChipHost.Content = new TextBlock
@@ -38,24 +46,76 @@ public partial class MainWindow
             };
             return;
         }
+        if (_chipTimer is null)
+        {
+            _chipTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _chipTimer.Tick += (_, _) => { if (_chipTrackId > 0 && DetailPanel.IsVisible) RenderDetailChip(); };
+            _chipTimer.Start();
+        }
+        RenderDetailChip();
+    }
 
-        bool master = trackId == Engine.MasterTrackId;
-        bool inst = false, ret = false;
-        if (!master)
-            for (int i = 0; i < Engine.TrackCount; i++)
-                if (Engine.TryGetTrackInfo(i, out var ti) && ti.Id == trackId) { inst = ti.IsInstrument; ret = ti.IsReturn; break; }
-
-        string storedName = Engine.GetTrackName(trackId);
-        string name = storedName is { Length: > 0 } ? storedName
-            : master ? "Master" : ret ? $"Return {Engine.TrackReturnIndex(trackId) + 1}" : (inst ? "Inst " : "Audio ") + trackId;
-        string type = master ? "master" : ret ? "return" : inst ? "instrument · MIDI in" : "audio · In 1";
-        double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
-        string summary = string.Format(NotaNum.Culture, "· {0} · Monitor Auto · PDC {1:0.0}\u2009ms", type, ms);
+    private void RenderDetailChip()
+    {
+        int trackId = _chipTrackId;
+        string name = ChipTrackName(trackId);
+        string summary = ChipSummary(trackId);
+        string key = string.Concat(name, "\n", summary, "\n", Engine.GetTrackColorIndex(trackId).ToString(NotaNum.Culture));
+        if (key == _chipKey) return;
+        _chipKey = key;
 
         var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = TrackBrush(trackId), VerticalAlignment = VerticalAlignment.Center };
         var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sumText = new TextBlock { Text = summary, Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
+    }
+
+    private bool ChipTrackInfo(int trackId, out NotaTrackInfo info)
+    {
+        for (int i = 0; i < Engine.TrackCount; i++)
+            if (Engine.TryGetTrackInfo(i, out info) && info.Id == trackId) return true;
+        info = default;
+        return false;
+    }
+
+    private string ChipTrackName(int trackId)
+    {
+        if (trackId == Engine.MasterTrackId) return Engine.GetTrackName(trackId) is { Length: > 0 } m ? m : "Master";
+        string stored = Engine.GetTrackName(trackId);
+        if (stored.Length > 0) return stored;
+        ChipTrackInfo(trackId, out var ti);
+        return ti.IsReturn ? $"Return {Engine.TrackReturnIndex(trackId) + 1}"
+             : ti.IsGroup ? $"Group {trackId}"
+             : (ti.IsInstrument ? "Inst " : "Audio ") + trackId;
+    }
+
+    // "· instrument · MIDI from Inst 1 · PDC 2.7 ms" / "· audio · In Ext · Monitor In · PDC 0.0 ms".
+    private string ChipSummary(int trackId)
+    {
+        var parts = new List<string>();
+        if (trackId == Engine.MasterTrackId) parts.Add("master");
+        else if (ChipTrackInfo(trackId, out var ti))
+        {
+            if (ti.IsReturn) parts.Add("return");
+            else if (ti.IsGroup) parts.Add("group");
+            else if (ti.IsInstrument)
+            {
+                parts.Add("instrument");
+                int src = Engine.GetTrackMidiSource(trackId);
+                if (src > 0) parts.Add("MIDI from " + ChipTrackName(src));
+            }
+            else
+            {
+                parts.Add("audio");
+                int src = Engine.GetTrackRecordInput(trackId);
+                parts.Add("In " + (src == 0 ? "Ext" : src == -1 ? "Master" : ChipTrackName(src)));
+                // A Master source stays silent while monitored (it would feed back).
+                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor In");
+            }
+        }
+        double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
+        parts.Add(string.Format(NotaNum.Culture, "PDC {0:0.0}\u2009ms", ms));
+        return "· " + string.Join(" · ", parts);
     }
 
     // --- bottom detail panel (M4.1-D) --------------------------------------

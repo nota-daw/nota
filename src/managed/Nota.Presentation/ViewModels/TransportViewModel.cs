@@ -24,6 +24,12 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private decimal _bpm = 120; // decimal for NumericUpDown
     [ObservableProperty] private int _timeSigNumerator = 4;
     [ObservableProperty] private int _timeSigDenominator = 4;
+    /// <summary>The project key as a <see cref="Nota.Application.Samples.MusicalKey.Code"/>
+    /// (−1 = none). Managed-only: the engine has no use for it; samples dropped in are
+    /// transposed to it on request.</summary>
+    [ObservableProperty] private int _keyCode = -1;
+
+    public Nota.Application.Samples.MusicalKey? Key => Nota.Application.Samples.MusicalKey.FromCode(KeyCode);
     [ObservableProperty] private double _masterVolume = 1.0;
     [ObservableProperty] private string _masterDbText = "0.0\u2009dB";
     [ObservableProperty] private bool _metronomeOn;

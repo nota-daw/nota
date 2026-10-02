@@ -40,6 +40,12 @@ public sealed class ProjectDocument
     /// <summary>Plugin state blobs: relative bundle path -&gt; bytes. Populated by
     /// Capture, written to <c>plugin-states/</c> by Save; not serialized.</summary>
     [JsonIgnore] public Dictionary<string, byte[]> StateBlobs { get; } = new();
+
+    /// <summary>Name binaries by live id / position (<c>sample-N.wav</c>, <c>state-N.bin</c>)
+    /// instead of by content hash. Cheap — nothing is read or hashed — but only stable within
+    /// a session, so it is for change detection (<see cref="ProjectService.Capture"/> with
+    /// <c>contentNames: false</c>) and never for a document that is saved.</summary>
+    [JsonIgnore] internal bool SessionNames { get; init; }
 }
 
 public sealed class MasterDto
@@ -59,6 +65,9 @@ public sealed class TransportDto
     public bool LoopOn { get; set; }
     public int TimeSigNumerator { get; set; } = 4;
     public int TimeSigDenominator { get; set; } = 4;
+    /// <summary>The project key ("Am", "Eb"); null = none set. Loops dropped in can be
+    /// transposed to it.</summary>
+    public string? Key { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

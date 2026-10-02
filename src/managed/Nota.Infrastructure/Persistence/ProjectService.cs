@@ -47,11 +47,15 @@ public sealed class ProjectService
     /// <summary>Snapshots the engine's current state into a document. Content the
     /// format can't represent yet (hosted plugins) is appended to
     /// <paramref name="warnings"/>. Referenced samples are recorded in
-    /// <see cref="ProjectDocument.SampleRefs"/> for <see cref="Save"/> to write.</summary>
-    public static ProjectDocument Capture(IAudioEngine engine, TransportState transport, List<string> warnings)
+    /// <see cref="ProjectDocument.SampleRefs"/> for <see cref="Save"/> to write.
+    /// <paramref name="contentNames"/> = false names binaries by session id instead of by
+    /// content hash — cheap, for change detection only; such a document must not be saved.</summary>
+    public static ProjectDocument Capture(IAudioEngine engine, TransportState transport, List<string> warnings,
+                                         bool contentNames = true)
     {
         var doc = new ProjectDocument
         {
+            SessionNames = !contentNames,
             SceneCount = engine.SceneCount,
             Transport = new TransportDto
             {
@@ -61,6 +65,7 @@ public sealed class ProjectService
                 LoopOn = transport.LoopOn,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
+                Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
             },
         };
 
@@ -198,39 +203,8 @@ public sealed class ProjectService
                     if (!engine.TryGetAudioClipInfo(ti.Id, c, out var ac)) continue;
                     string? rel = RegisterSample(doc, engine, ac.SampleId, warnings);
                     if (rel == null) continue;
-                    var dto = new AudioClipDto
-                    {
-                        Sample = rel,
-                        Name = engine.GetClipName(ti.Id, c) is { Length: > 0 } an ? an : null,
-                        Active = !engine.TryGetClipInfo(ti.Id, c, out var gci) || gci.IsActive,
-                        StartBeat = ac.StartBeat,
-                        SourceOffsetFrames = ac.SourceOffsetFrames,
-                        LengthFrames = ac.LengthFrames,
-                        Gain = ac.Gain,
-                        PitchSemitones = ac.PitchSemitones,
-                        WarpEnabled = ac.WarpEnabled,
-                        WarpMode = ac.WarpMode,
-                        WarpBeats = ac.WarpBeats,
-                        WarpPlayStart = ac.WarpPlayStart,
-                        WarpPlayEnd = ac.WarpPlayEnd,
-                        Reversed = ac.Reversed != 0,
-                    };
-                    if (ac.WarpEnabled != 0)
-                    {
-                        var ms = new double[128]; var mb = new double[128];
-                        int nm = Math.Min(engine.GetClipWarpMarkers(ti.Id, c, ms, mb), 128);
-                        if (nm >= 2)
-                        {
-                            dto.WarpMarkers = new List<WarpMarkerDto>(nm);
-                            for (int k = 0; k < nm; k++) dto.WarpMarkers.Add(new WarpMarkerDto { Src = ms[k], Beat = mb[k] });
-                        }
-                    }
-                    var env = engine.GetClipVolumeEnvelope(ti.Id, c);   // clip volume envelope (v8)
-                    if (env.Length > 0) dto.VolumeEnvelope = System.Array.ConvertAll(env, p => new AutomationPointDto(p));
-                    var penv = engine.GetClipPanEnvelope(ti.Id, c);     // clip pan envelope (v9)
-                    if (penv.Length > 0) dto.PanEnvelope = System.Array.ConvertAll(penv, p => new AutomationPointDto(p));
-                    var adsr = engine.GetClipAdsr(ti.Id, c);            // ADSR (v20); identity is omitted
-                    if (!adsr.IsIdentity) dto.Adsr = new ClipAdsrDto(adsr);
+                    var dto = AudioClipState.Capture(engine, ti.Id, c, ac);
+                    dto.Sample = rel;
                     t.AudioClips.Add(dto);
                 }
             }
@@ -498,7 +472,11 @@ public sealed class ProjectService
                     {
                         int pc = engine.PluginParamCount(id, -1);
                         for (int p = 0; p < sd.Params.Length && p < pc; p++) engine.PluginParamSet(id, -1, p, sd.Params[p]);
-                        if (sd.Name.Length > 0 && engine.TryGetSamplerInfo(id, out var nsi)) engine.SetSampleName(nsi.SampleId, sd.Name);
+                        if (engine.TryGetSamplerInfo(id, out var nsi))
+                        {
+                            BundleContent.SeedSample(engine, nsi.SampleId, sd.Sample);
+                            if (sd.Name.Length > 0) engine.SetSampleName(nsi.SampleId, sd.Name);
+                        }
                     }
                 }
                 else if (t.Instrument is { Kind: 10, Sampler: { } gd })   // Nota Grain: sample + params
@@ -506,7 +484,9 @@ public sealed class ProjectService
                     id = engine.AddGrainSynthTrack();
                     if (id > 0)
                     {
-                        if (gd.Sample.Length > 0) engine.SetTrackGrainSample(id, ResolveInBundle(bundleDir, gd.Sample), gd.RootNote);
+                        if (gd.Sample.Length > 0 && engine.SetTrackGrainSample(id, ResolveInBundle(bundleDir, gd.Sample), gd.RootNote)
+                            && engine.TryGetGrainInfo(id, out var ggi))
+                            BundleContent.SeedSample(engine, ggi.SampleId, gd.Sample);
                         int pc = engine.PluginParamCount(id, -1);
                         for (int p = 0; p < gd.Params.Length && p < pc; p++) engine.PluginParamSet(id, -1, p, gd.Params[p]);
                     }
@@ -564,8 +544,13 @@ public sealed class ProjectService
                             if (vs.Sample is not { Length: > 0 }) continue;
                             if (!engine.SetRhythmVoiceSample(id, vs.Voice, ResolveInBundle(bundleDir, vs.Sample)))
                                 warnings.Add($"Couldn't reload Rhythm voice sample \"{vs.Sample}\".");
-                            else if (vs.Synth)
-                                engine.InstrumentAction(id, RhythmModel.A_SetSource, vs.Voice, 0f);   // loading switches to Sample
+                            else
+                            {
+                                if (engine.TryGetRhythmVoiceInfo(id, vs.Voice, out var rvi))
+                                    BundleContent.SeedSample(engine, rvi.SampleId, vs.Sample);
+                                if (vs.Synth)
+                                    engine.InstrumentAction(id, RhythmModel.A_SetSource, vs.Voice, 0f);   // loading switches to Sample
+                            }
                         }
                 }
             }
@@ -635,32 +620,9 @@ public sealed class ProjectService
 
             foreach (var ac in t.AudioClips)
             {
-                int ci = engine.AddAudioClipEx(id, ResolveInBundle(bundleDir, ac.Sample),
-                    ac.StartBeat, ac.SourceOffsetFrames, ac.LengthFrames, ac.Gain);
+                int ci = AudioClipState.Restore(engine, id, ac, ResolveInBundle(bundleDir, ac.Sample));
                 if (ci < 0) { warnings.Add($"Couldn't reload audio clip \"{ac.Sample}\"."); continue; }
-                if (ac.Name is { Length: > 0 } acn) engine.SetClipName(id, ci, acn);
-                if (!ac.Active) engine.SetClipActive(id, ci, false);   // clip deactivate (v17)
-                if (ac.PitchSemitones != 0) engine.SetClipPitch(id, ci, ac.PitchSemitones);
-                if (ac.Reversed) engine.SetClipReverse(id, ci, true);   // reverse (v19)
-                if (ac.WarpEnabled != 0)
-                {
-                    engine.SetClipWarp(id, ci, true, ac.WarpMode);
-                    if (ac.WarpMarkers is { Count: >= 2 } wm)
-                    {
-                        var ms = new double[wm.Count]; var mb = new double[wm.Count];
-                        for (int k = 0; k < wm.Count; k++) { ms[k] = wm[k].Src; mb[k] = wm[k].Beat; }
-                        engine.SetClipWarpMarkers(id, ci, ms, mb);   // also sets warpBeats from the last marker
-                    }
-                    else if (ac.WarpBeats > 0) engine.SetClipWarpLength(id, ci, ac.WarpBeats);
-                    if (ac.WarpPlayEnd > 0)   // restore the trim window (v11); 0 = whole warp
-                        engine.SetClipWarpTrim(id, ci, ac.WarpPlayStart, ac.WarpPlayEnd);
-                }
-                if (ac.VolumeEnvelope is { Length: > 0 } venv)   // clip volume envelope (v8)
-                    engine.SetClipVolumeEnvelope(id, ci, System.Array.ConvertAll(venv, p => p.ToPoint()));
-                if (ac.PanEnvelope is { Length: > 0 } penv)      // clip pan envelope (v9)
-                    engine.SetClipPanEnvelope(id, ci, System.Array.ConvertAll(penv, p => p.ToPoint()));
-                if (ac.Adsr is { } adsr)                          // ADSR (v20)
-                    engine.SetClipAdsr(id, ci, adsr.ToAdsr());
+                if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
             }
 
             // Freeze (M7): restore the frozen-audio buffer so the track re-opens frozen
@@ -679,6 +641,8 @@ public sealed class ProjectService
                     if (!engine.AddSessionAudioClip(id, sl.Scene, ResolveInBundle(bundleDir, sa.Sample),
                             sl.LengthBeats, sa.SourceOffsetFrames, sa.LengthFrames, sa.Gain))
                         warnings.Add($"Couldn't reload session take \"{sa.Sample}\".");
+                    else if (engine.TryGetSessionAudioSlot(id, sl.Scene, out var lsa))
+                        BundleContent.SeedSample(engine, lsa.SampleId, sa.Sample);
                 }
                 else
                 {
@@ -822,29 +786,38 @@ public sealed class ProjectService
     // --- disk I/O ----------------------------------------------------------
 
     /// <summary>Writes the document (and its referenced samples) into the `.nota`
-    /// bundle folder. Atomic manifest (temp + rename); backs up any existing
-    /// manifest into <c>backups/</c>. Sample data is read from
-    /// <paramref name="engine"/> (the one <see cref="Capture"/> read from).</summary>
+    /// bundle folder. Binaries are content-named, so ones already on disk are skipped;
+    /// each new one is written temp + rename. Atomic manifest (temp + rename); backs up
+    /// any existing manifest into <c>backups/</c> (unless the bundle keeps a version history);
+    /// then deletes binaries the manifest no
+    /// longer references. Sample data is read from <paramref name="engine"/> (the one
+    /// <see cref="Capture"/> read from).</summary>
     public static void Save(ProjectDocument doc, string bundleDir, IAudioEngine engine)
     {
+        if (doc.SessionNames)
+            throw new InvalidOperationException("A change-detection capture (contentNames: false) can't be saved.");
         Directory.CreateDirectory(bundleDir);
 
         if (doc.SampleRefs.Count > 0)
         {
-            Directory.CreateDirectory(Path.Combine(bundleDir, "samples"));
+            Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.SamplesDir));
             foreach (var kv in doc.SampleRefs)
                 WriteSampleWav(engine, kv.Value, ResolveInBundle(bundleDir, kv.Key));
         }
 
         if (doc.StateBlobs.Count > 0)
         {
-            Directory.CreateDirectory(Path.Combine(bundleDir, "plugin-states"));
+            Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.StatesDir));
             foreach (var kv in doc.StateBlobs)
-                File.WriteAllBytes(ResolveInBundle(bundleDir, kv.Key), kv.Value);
+            {
+                string path = ResolveInBundle(bundleDir, kv.Key);
+                if (File.Exists(path) && new FileInfo(path).Length == kv.Value.Length) continue;
+                BundleContent.WriteAtomic(path, tmp => File.WriteAllBytes(tmp, kv.Value));
+            }
         }
 
         string manifest = Path.Combine(bundleDir, ManifestName);
-        if (File.Exists(manifest))
+        if (File.Exists(manifest) && !ProjectHistory.HasHistory(bundleDir))   // the version history supersedes backups/
         {
             string backups = Path.Combine(bundleDir, "backups");
             Directory.CreateDirectory(backups);
@@ -855,6 +828,9 @@ public sealed class ProjectService
         string tmp = manifest + ".tmp";
         File.WriteAllText(tmp, SerializeManifest(doc));
         File.Move(tmp, manifest, overwrite: true); // atomic replace (NFR-8)
+
+        // Only now that the new manifest is in place: nothing on disk points at these any more.
+        BundleContent.PruneUnreferenced(bundleDir, doc);
     }
 
     /// <summary>Serializes just the manifest JSON (same options Save uses). Used by
@@ -884,40 +860,53 @@ public sealed class ProjectService
 
     // --- helpers -----------------------------------------------------------
 
-    // Records `sampleId` under a bundle-relative path (deduped by id) and returns
-    // that path, or null if the sample is missing from the live graph.
+    // Records `sampleId` under a bundle-relative path named by its content hash
+    // (identical audio shares one file) and returns that path, or null if the sample
+    // is missing from the live graph.
     private static string? RegisterSample(ProjectDocument doc, IAudioEngine engine, long sampleId, List<string> warnings)
     {
         if (sampleId <= 0) return null;
-        string rel = $"samples/sample-{sampleId}.wav";
-        if (!doc.SampleRefs.ContainsKey(rel))
+        if (!engine.TryGetSampleInfo(sampleId, out var info))
         {
-            if (!engine.TryGetSampleInfo(sampleId, out _))
-            {
-                warnings.Add("A referenced sample was missing and was skipped.");
-                return null;
-            }
-            doc.SampleRefs[rel] = sampleId;
+            warnings.Add("A referenced sample was missing and was skipped.");
+            return null;
         }
+        string rel;
+        if (doc.SessionNames) rel = $"{BundleContent.SamplesDir}/sample-{sampleId}.wav";
+        else if (BundleContent.SampleHash(engine, sampleId, info) is { } hash) rel = BundleContent.SampleRel(hash);
+        else
+        {
+            warnings.Add("A referenced sample was empty and was skipped.");
+            return null;
+        }
+        doc.SampleRefs.TryAdd(rel, sampleId);
         return rel;
     }
 
+    // Writes a sample unless its content-named file is already complete on disk.
     private static void WriteSampleWav(IAudioEngine engine, long sampleId, string path)
     {
         if (!engine.TryGetSampleInfo(sampleId, out var info) || info.Channels <= 0 || info.Frames <= 0) return;
+        long dataBytes = info.Frames * info.Channels * sizeof(float);
+        if (File.Exists(path) && new FileInfo(path).Length >= dataBytes) return;
         var data = engine.ReadSample(sampleId);
         if (data.Length == 0) return;
-        int sr = info.SampleRate > 0 ? (int)Math.Round(info.SampleRate) : 44100;
-        using var w = new WavWriter(path, sr, info.Channels, WavBitDepth.Float32);
-        w.WriteFrames(data, (int)info.Frames);
+        BundleContent.WriteAtomic(path, tmp =>
+        {
+            using var w = new WavWriter(tmp, BundleContent.WavSampleRate(info), info.Channels, WavBitDepth.Float32);
+            w.WriteFrames(data, (int)info.Frames);
+        });
     }
 
-    // Records a plugin state blob under a unique bundle-relative path, or null if empty.
+    // Records a plugin state blob under a bundle-relative path named by its content hash
+    // (identical states share one file), or null if empty.
     private static string? RegisterBlob(ProjectDocument doc, byte[] blob)
     {
         if (blob.Length == 0) return null;
-        string rel = $"plugin-states/state-{doc.StateBlobs.Count}.bin";
-        doc.StateBlobs[rel] = blob;
+        string rel = doc.SessionNames
+            ? $"{BundleContent.StatesDir}/state-{doc.StateBlobs.Count}.bin"
+            : BundleContent.StateRel(BundleContent.BlobHash(blob));
+        doc.StateBlobs.TryAdd(rel, blob);
         return rel;
     }
 
