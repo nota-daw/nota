@@ -155,8 +155,29 @@ internal static class SampleStoreTests
         yield return (Directory.Exists(loops) && store.Installed.All(i => i.Id != "loops"),
             "a folder without its pack marker is dropped from the list but not deleted");
 
+        // The browser's Files tab: Downloaded gets its flag (icon) and heads the list.
+        Directory.CreateDirectory(Path.Combine(samples, "Acoustic"));
+        File.WriteAllText(Path.Combine(samples, "Acoustic", "a.wav"), "a");
+        File.WriteAllText(Path.Combine(samples, "Amen.wav"), "a");
+        var browser = new Nota.Presentation.BrowserViewModel(new EmptyPluginCatalog(), new EmptyPresetLibrary(), new FactoryPresetCatalog(), new FolderSettings(samples));
+        var rows = browser.Samples.Select(r => r.Name).ToList();
+        yield return (browser.Samples.FirstOrDefault() is { Name: SamplePacks.FolderName, IsDownloads: true }
+                      && rows.IndexOf("Acoustic") > 0 && rows.IndexOf("Amen.wav") > rows.IndexOf("Acoustic")
+                      && browser.Samples.Count(r => r.IsDownloads) == 1,
+            "the Files tab lists Downloaded first, flagged, ahead of other folders and files");
+
         var offline = new SampleStore(Path.Combine(tmp, "store2"), () => samples, "https://127.0.0.1:1/index.json");
         yield return (Throws(() => offline.FetchAsync().GetAwaiter().GetResult()), "offline with no cache is a clear error");
+    }
+
+    private sealed class FolderSettings(string samples) : ISettingsService
+    {
+        public Settings Current { get; } = new();
+        public void Save() { }
+        public event Action? Changed { add { } remove { } }
+        public string ResolvedSamplesFolder() => samples;
+        public string ResolvedProjectsFolder() => samples;
+        public string PresetsFolder() => samples;
     }
 
     private static string IndexJson(params string[] packs)

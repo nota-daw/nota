@@ -3,6 +3,13 @@
 
 namespace Nota.Application;
 
+public static class SamplePacks
+{
+    /// <summary>The folder inside the Samples folder that registry packs install into; the
+    /// browser's Files tab gives it its own icon and lists it first.</summary>
+    public const string FolderName = "Downloaded";
+}
+
 /// <summary>A sample pack listed in the Nota sample registry (github.com/nota-daw/nota-samples-registry).</summary>
 public sealed record StorePack(
     string Id,

@@ -50,7 +50,7 @@ public sealed class SampleStore : ISampleStore
         _installed = LoadInstalled();
     }
 
-    public string InstallDir => Path.Combine(_samplesFolder(), "Downloaded");
+    public string InstallDir => Path.Combine(_samplesFolder(), SamplePacks.FolderName);
 
     private string InstalledPath => Path.Combine(_root, "installed.json");
 

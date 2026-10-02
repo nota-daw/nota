@@ -58,6 +58,8 @@ public sealed class BrowserItem
     public List<BrowserItem> Children { get; } = new();        // presets and category folders under this device
     public bool HasChildren => Children.Count > 0;
     public bool IsExpanded { get; set; }                       // toggled by the view-model
+    /// <summary>The Files tab's Downloaded folder (installed sample packs): its own icon, listed first.</summary>
+    public bool IsDownloads { get; init; }
 
     public string Display => string.IsNullOrEmpty(Sub) ? Name : $"{Name}  ·  {Sub}";
     public override string ToString() => Display;
@@ -612,14 +614,17 @@ public sealed partial class BrowserViewModel : ObservableObject
             abs = Path.Combine(abs, segments[i]);
             if (!folders.TryGetValue(abs, out var node))
             {
+                bool downloads = i == 0 && string.Equals(segments[0], SamplePacks.FolderName, StringComparison.OrdinalIgnoreCase);
                 node = new BrowserItem
                 {
                     Name = segments[i],
                     Kind = BrowserItemKind.Folder,
                     Sub = "",
+                    Tip = downloads ? "sample packs installed from Settings → Downloads" : "",
                     Path = abs,
                     Depth = i,
                     IsExpanded = _expandedTreeKeys.Contains(abs),
+                    IsDownloads = downloads,
                 };
                 folders[abs] = node;
                 children.Add(node);
@@ -630,11 +635,12 @@ public sealed partial class BrowserViewModel : ObservableObject
         return children;
     }
 
-    // Folders before files, each group alphabetical; recurses into subfolders.
+    // Downloaded first, then folders before files, each group alphabetical; recurses into subfolders.
     private static void SortSampleTree(List<BrowserItem> nodes)
     {
         nodes.Sort((a, b) =>
         {
+            if (a.IsDownloads != b.IsDownloads) return a.IsDownloads ? -1 : 1;
             bool af = a.Kind == BrowserItemKind.Folder, bf = b.Kind == BrowserItemKind.Folder;
             if (af != bf) return af ? -1 : 1;
             return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
