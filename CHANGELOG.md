@@ -18,6 +18,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Version history:** every save keeps a version of the project, and the new **History**
+  tab in the browser shows them as a tree. Switch back to any version, or open one as a
+  separate copy; saving on top of an older version starts a new branch, so nothing is lost.
+  Name, note, star and delete versions from the right-click menu. **File → Save Version with
+  Note…** (⌥⌘S) asks what changed. Versions share their audio, so a version costs only what it
+  adds. **Save As** takes the whole history to the new project.
+
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and
   imports instead of every sample again, and the same audio used in several places is

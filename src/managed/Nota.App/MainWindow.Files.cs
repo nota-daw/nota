@@ -178,6 +178,7 @@ public partial class MainWindow
         RefreshAfterLoad();
         UpdateWindowTitle();
         MarkProjectClean();
+        HistoryChanged?.Invoke();   // a new project has no history yet
         _vm.StatusText = "New project.";
     }
 
@@ -236,6 +237,7 @@ public partial class MainWindow
             RefreshAfterLoad();
             UpdateWindowTitle();
             MarkProjectClean();
+            HistoryChanged?.Invoke();    // the History tab shows this project's versions
             var warnings = result.Warnings;
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Opened project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");

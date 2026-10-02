@@ -14,6 +14,35 @@ namespace Nota.SmokeTest;
 
 internal static class HistoryTests
 {
+    /// <summary>The History tab's tree layout (HistoryGraph): lanes, joins, ordering.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunGraph()
+    {
+        var t0 = new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+        ProjectVersion V(string id, string? parent, int minutes)
+            => new(id, parent, t0.AddMinutes(minutes), null, null, false, "test", 1, 0, true);
+
+        var linear = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState([V("a", null, 0), V("b", "a", 1), V("c", "b", 2)], "c"));
+        yield return (string.Concat(linear.Select(r => r.Version.Id)) == "cba" && linear.All(r => r.Lane == 0 && r.LaneCount == 1),
+            "a linear history is one lane, newest first");
+        yield return (linear[0] is { IsHead: true, FromAbove: false, ToBelow: true } && linear[2] is { FromAbove: true, ToBelow: false },
+            "the newest version opens the lane, the root closes it");
+
+        // a ← b ← c, and d branched from a later.
+        var branch = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState(
+            [V("a", null, 0), V("b", "a", 1), V("c", "b", 2), V("d", "a", 3)], "d"));
+        var byId = branch.ToDictionary(r => r.Version.Id);
+        yield return (string.Concat(branch.Select(r => r.Version.Id)) == "dcba", $"branches interleave by time ({string.Concat(branch.Select(r => r.Version.Id))})");
+        yield return (byId["d"].Lane == 0 && byId["c"].Lane == 1 && byId["b"].Lane == 1 && byId["b"].Through.SequenceEqual([0]),
+            "a second branch takes its own lane while the first passes by");
+        yield return (byId["a"].Lane == 0 && byId["a"].Joins.SequenceEqual([1]) && branch.All(r => r.LaneCount == 2),
+            "both branches join at the version they started from");
+
+        // A clock change: the child claims to be older than its parent — it still draws above it.
+        var skew = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState([V("a", null, 10), V("b", "a", 5)], "b"));
+        yield return (string.Concat(skew.Select(r => r.Version.Id)) == "ba" && skew.All(r => r.Lane == 0),
+            "a child is never drawn below its parent");
+    }
+
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         string tmp = Path.GetTempPath();

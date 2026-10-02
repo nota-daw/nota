@@ -146,6 +146,7 @@ if (args.Length >= 1 && args[0] == "--history")
 {
     Console.WriteLine("-- project: version history --");
     foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "HISTORY PASSED" : $"HISTORY FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -13601,6 +13602,7 @@ Console.WriteLine("-- project: content-addressed bundle --");
 foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
 Console.WriteLine("-- project: version history --");
 foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
+foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

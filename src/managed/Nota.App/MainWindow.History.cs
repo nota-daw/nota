@@ -15,9 +15,24 @@ using Nota.Application;
 
 namespace Nota.App;
 
-public partial class MainWindow
+public partial class MainWindow : IHistoryHost
 {
     private IProjectHistory _history = default!;
+    private HistoryView? _historyView;
+
+    string? IHistoryHost.ProjectPath => _projectPath;
+    bool IHistoryHost.KeepVersionHistory => KeepVersionHistory;
+    Task<bool> IHistoryHost.SwitchToVersionAsync(string versionId) => SwitchToVersionAsync(versionId);
+    Task<bool> IHistoryHost.OpenVersionAsCopyAsync(string versionId) => OpenVersionAsCopyAsync(versionId);
+    void IHistoryHost.ReportStatus(string text) { if (_vm is not null) _vm.StatusText = text; }
+
+    /// <summary>Builds the browser's History tab and keeps it in step with the project.</summary>
+    private void SetUpHistoryTab()
+    {
+        _historyView = new HistoryView(_history, this);
+        Browser.SetHistory(_historyView);
+        HistoryChanged += _historyView.Refresh;
+    }
 
     /// <summary>The open project's history changed (a version was recorded, switched to, or
     /// the project itself changed). The History tab listens.</summary>
@@ -93,7 +108,6 @@ public partial class MainWindow
             return false;
         }
         OpenProject(dir);
-        HistoryChanged?.Invoke();
         if (_history.Read(dir).HeadVersion is { } v) _vm.StatusText = $"Switched to {DescribeVersion(v)}";
         return true;
     }
@@ -128,7 +142,6 @@ public partial class MainWindow
             return false;
         }
         OpenProject(dst);
-        HistoryChanged?.Invoke();
         _vm.StatusText = $"Opened {DescribeVersion(version)} as {Path.GetFileName(dst)}";
         return true;
     }

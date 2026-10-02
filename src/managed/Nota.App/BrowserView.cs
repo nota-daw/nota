@@ -119,6 +119,8 @@ public sealed class BrowserView : UserControl
     // MIDI-learn map — two nodes joined by a link (a control mapped to a parameter).
     private const string IconMap = "M3.4 17.6 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M15.4 6.4 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M7.9 15.7 L16.1 8.3";
     // Collapse / expand — a window with its left sidebar ruled off.
+    // A clock face with a counter-clockwise arrow tail: project version history.
+    private const string IconHistory = "M4.6 9.2 A8 8 0 1 1 4 12 M4.6 9.2 L3.6 5.8 M4.6 9.2 L8 8.6 M12 7.6 V12 L15 14";
     private const string IconSidebar = "M3.5 5.5 h17 v13 h-17 z M9.5 5.5 v13";
     // View options — three centred rules, shortening downward (a sort/·filter glyph).
     private const string IconOptions = "M4 7 H20 M7 12 H17 M10 17 H14";
@@ -150,10 +152,12 @@ public sealed class BrowserView : UserControl
         };
     }
 
-    private const int TabCount = 7;   // Instr / FX / MIDI / Files / Preset / Proj / Map
+    private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
+    private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
+    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab;
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
 
@@ -166,6 +170,7 @@ public sealed class BrowserView : UserControl
     private BrowserViewModel? _vm;
     private ISettingsService? _settings;
     private MidiMapView? _midiMap;
+    private HistoryView? _historyView;
 
     // Collapsed: only the icon rail shows; clicking an icon unfolds the browser on that tab.
     private bool _collapsed;
@@ -240,6 +245,7 @@ public sealed class BrowserView : UserControl
             RailTab(4, "Presets", IconBookmark),
             RailTab(5, "Projects", IconDoc),
             RailTab(6, "MIDI map", IconMap),
+            RailTab(7, "History", IconHistory),
         };
         // A hairline above Files and above Map: devices · library · mappings.
         foreach (int i in new[] { 3, 6 })
@@ -407,6 +413,13 @@ public sealed class BrowserView : UserControl
         if (_active == MapTab) _content.Content = _midiMap;
     }
 
+    /// <summary>Give the browser the project's History tab.</summary>
+    internal void SetHistory(HistoryView view)
+    {
+        _historyView = view;
+        if (_active == HistoryTab) _content.Content = view;
+    }
+
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
 
@@ -530,7 +543,7 @@ public sealed class BrowserView : UserControl
     // same thing — what the active tab is showing — so they refresh together.
     private void RefreshCounts()
     {
-        if (_active < 0 || _active == MapTab) return;
+        if (_active < 0 || IsCustomTab(_active)) return;
         _matchCount.Text = VisibleCount(_active).ToString();
         _statusText.Text = StatusFor(_active);
         UpdateEmptyState();
@@ -601,9 +614,10 @@ public sealed class BrowserView : UserControl
         _active = index;
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
-        // The MIDI-map tab hosts a bespoke editor, not a filtered item list.
-        bool isMap = index == MapTab;
-        _content.Content = isMap ? (Control?)_midiMap : _pages[index];
+        // The MIDI-map and History tabs host bespoke views, not a filtered item list.
+        bool isMap = IsCustomTab(index);
+        _content.Content = index == MapTab ? _midiMap : index == HistoryTab ? (Control?)_historyView : _pages[index];
+        if (index == HistoryTab) _historyView?.Refresh();
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
         // The auditioner follows the list tabs: samples in Files, presets and built-in devices
