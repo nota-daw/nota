@@ -10,6 +10,37 @@ public readonly record struct TranscribedNote(double Start, double End, int Pitc
     public int Velocity => Math.Clamp((int)Math.Round(127 * Amplitude), 1, 127);
 }
 
+/// <summary>Turning transcribed notes into a clip's notes; shared by Convert and its MCP tool.</summary>
+public static class Transcription
+{
+    /// <summary>One line out of a transcription: wherever notes overlap, the strongest one
+    /// wins and the others are dropped (Convert Melody).</summary>
+    public static List<TranscribedNote> Monophonic(IReadOnlyList<TranscribedNote> notes)
+    {
+        var kept = new List<TranscribedNote>();
+        foreach (var n in notes.OrderByDescending(n => n.Amplitude * (n.End - n.Start)))
+            if (!kept.Any(k => k.Start < n.End && n.Start < k.End)) kept.Add(n);
+        kept.Sort((a, b) => a.Start.CompareTo(b.Start));
+        return kept;
+    }
+
+    /// <summary>Transcribed notes as a MIDI clip's notes: <paramref name="audioSeconds"/> of
+    /// audio spans <paramref name="clipBeats"/> (so a warped clip's notes follow its tempo);
+    /// notes are kept inside the clip.</summary>
+    public static NotaNote[] ToClipNotes(IReadOnlyList<TranscribedNote> notes, double audioSeconds, double clipBeats)
+    {
+        double toBeat = audioSeconds > 0 ? clipBeats / audioSeconds : 0;
+        var outp = new List<NotaNote>(notes.Count);
+        foreach (var n in notes)
+        {
+            double start = Math.Max(0, n.Start) * toBeat;
+            if (start >= clipBeats) continue;
+            outp.Add(new NotaNote(n.Pitch, start, Math.Max(0.05, Math.Min(n.End * toBeat, clipBeats) - start), n.Velocity / 127f));
+        }
+        return outp.ToArray();
+    }
+}
+
 /// <summary>An audio clip read for Separate Stems (<see cref="IClipAi.ReadStemSource"/>).</summary>
 public abstract class StemJob
 {

@@ -97,6 +97,7 @@ internal static class AiGoldenTests
             $"basic-pitch end to end: {matched}/{refNotes.Count} reference notes matched to a frame ({notes.Count} found)");
 
         foreach (var r in ClipFlow(runtime, dir, left, right)) yield return r;
+        foreach (var r in McpFlow(runtime, dir, mono)) yield return r;
 
         // ---- resampler -----------------------------------------------------------------------
         var tone = new float[48000];
@@ -170,16 +171,45 @@ internal static class AiGoldenTests
         yield return (sig > 0 && snr > 15, $"…and the stems add back up to the clip ({snr:0.0} dB)");
     }
 
-    private sealed class FixedModels(string runtime, string stems) : IModelStore
+    // The MCP tools over the same pieces: what's installed, convert_audio_to_midi, and the
+    // message an AI gets when a model is missing.
+    private static IEnumerable<(bool, string)> McpFlow(string runtime, string dir, float[] mono22)
+    {
+        var wav = Path.Combine(Path.GetTempPath(), $"nota-ai-mcp-{Guid.NewGuid():N}.wav");
+        using (var w = new Nota.Infrastructure.WavWriter(wav, 22050, 1, WavBitDepth.Float32)) w.WriteFrames(mono22[..(22050 * 8)], 22050 * 8);
+        using var eng = new NotaEngine();
+        eng.SetBpm(120);
+        int t = eng.AddAudioTrack();
+        int c = eng.AddAudioClipEx(t, wav, 0, 0, 0, 1f);
+        File.Delete(wav);
+
+        var store = new FixedModels(runtime, Path.Combine(dir, "htdemucs.onnx"), Path.Combine(dir, "nmp.onnx"));
+        var tools = new Nota.Mcp.Tools.AiTools(eng, new SyncDispatch(), new NoRefresh(), store, new ClipAi(eng, store));
+        var conv = tools.ConvertAudioToMidi(t, c, "harmony").GetAwaiter().GetResult();
+        var notes = eng.GetClipNotes(conv.TrackId, conv.ClipIndex);
+        yield return (conv.Notes > 10 && notes.Length == conv.Notes && notes.All(n => n.StartBeat >= 0 && n.StartBeat < 16 && n.Velocity > 0),
+            $"convert_audio_to_midi puts {conv.Notes} notes on a new track, inside the clip's 16 beats");
+        var mel = tools.ConvertAudioToMidi(t, c, "melody").GetAwaiter().GetResult();
+        var line = eng.GetClipNotes(mel.TrackId, mel.ClipIndex).OrderBy(n => n.StartBeat).ToArray();
+        bool mono = line.Zip(line.Skip(1)).All(p => p.First.StartBeat + p.First.LengthBeats <= p.Second.StartBeat + 1e-9);
+        yield return (mel.Notes > 0 && mel.Notes < conv.Notes && mono, $"…'melody' keeps one line ({mel.Notes} notes, none overlapping)");
+
+        var none = new Nota.Mcp.Tools.AiTools(eng, new SyncDispatch(), new NoRefresh(), new FixedModels(null, null, null), new ClipAi(eng, new FixedModels(null, null, null)));
+        string? msg = null;
+        try { none.SeparateStems(t, c).GetAwaiter().GetResult(); } catch (InvalidOperationException e) { msg = e.Message; }
+        yield return (msg?.Contains("Settings → Downloads → AI Models") == true, "without the model, separate_stems tells the AI to ask the user to install it");
+    }
+
+    private sealed class FixedModels(string? runtime, string? stems, string? transcription = null) : IModelStore
     {
         public IReadOnlyList<StoreModel> Models => [];
         public StoreModel? Runtime => null;
-        public bool IsInstalled(string id) => true;
+        public bool IsInstalled(string id) => ModelPath(id) is not null;
         public long DownloadSize(string id) => 0;
         public Task InstallAsync(string id, IProgress<StoreProgress>? progress = null, CancellationToken ct = default) => Task.CompletedTask;
         public void Uninstall(string id) { }
         public string? RuntimePath => runtime;
-        public string? ModelPath(string id) => id == AiModels.Stems ? stems : null;
+        public string? ModelPath(string id) => id == AiModels.Stems ? stems : id == AiModels.Transcription ? transcription : null;
         public event Action? Changed { add { } remove { } }
     }
 

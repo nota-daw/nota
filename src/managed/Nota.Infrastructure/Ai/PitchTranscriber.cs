@@ -51,17 +51,6 @@ public sealed class PitchTranscriber : IDisposable
         return notes;
     }
 
-    /// <summary>One line out of a transcription: wherever notes overlap, the strongest one
-    /// wins and the others are dropped (Convert Melody).</summary>
-    public static List<TranscribedNote> Monophonic(IReadOnlyList<TranscribedNote> notes)
-    {
-        var kept = new List<TranscribedNote>();
-        foreach (var n in notes.OrderByDescending(n => n.Amplitude * (n.End - n.Start)))
-            if (!kept.Any(k => k.Start < n.End && n.Start < k.End)) kept.Add(n);
-        kept.Sort((a, b) => a.Start.CompareTo(b.Start));
-        return kept;
-    }
-
     // ---- inference (inference.run_inference) -----------------------------------------------
 
     private (float[] Note, float[] Onset, int Frames) Infer(float[] mono, IProgress<double>? progress, CancellationToken ct)

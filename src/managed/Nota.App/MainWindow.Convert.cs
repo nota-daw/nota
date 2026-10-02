@@ -217,22 +217,14 @@ public partial class MainWindow
         prog.Report(ProgressReport.At(0, "Listening for notes…"));
         var p = new Progress<double>(f => prog.Report(ProgressReport.At(f, "Listening for notes…")));
         var heard = await Task.Run(() => Ai.Transcribe(mono, sr, p));
-        if (melody) heard = PitchTranscriber.Monophonic(heard);
-        if (heard.Count == 0) { Status($"No {what} found."); return; }
-
-        double toBeat = mono.Length > 0 ? clipBeats / (mono.Length / sr) : 0;   // seconds → beats
-        var notes = new List<NotaNote>(heard.Count);
-        foreach (var n in heard)
-        {
-            double start = Math.Max(0, n.Start) * toBeat;
-            if (start >= clipBeats) continue;
-            notes.Add(new NotaNote(n.Pitch, start, Math.Max(0.05, Math.Min(n.End * toBeat, clipBeats) - start), n.Velocity / 127f));
-        }
+        if (melody) heard = Transcription.Monophonic(heard);
+        var notes = Transcription.ToClipNotes(heard, mono.Length / sr, clipBeats);
+        if (notes.Length == 0) { Status($"No {what} found."); return; }
         int t = Engine.AddInstrumentTrack();        // Nota Synth
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
-        Engine.SetClipNotes(t, mc, notes.ToArray());
+        Engine.SetClipNotes(t, mc, notes);
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
-        Status($"Converted {what}: {notes.Count} notes → new track {t}");
+        Status($"Converted {what}: {notes.Length} notes → new track {t}");
     }
 
     // Convert Harmony: harmonic-sum pitch estimation (AudioHarmony) → polyphonic note spans on a new

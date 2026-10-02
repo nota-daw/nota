@@ -85,7 +85,7 @@ public sealed class McpService(
     IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, ISettingsService settings, ILogSink log,
     IPluginCatalog pluginCatalog, IFactoryPresets factoryPresets, IPresetStore presetStore, IPresetLibrary presetLibrary,
     IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits,
-    ProjectVersionsBridge projectVersions, IProjectHistory projectHistory)
+    ProjectVersionsBridge projectVersions, IProjectHistory projectHistory, IModelStore models, IClipAi clipAi)
 {
     private readonly NotaMcpServer _server = new();
 
@@ -106,6 +106,8 @@ public sealed class McpService(
         s.AddSingleton<IMidiLearnAccess>(new MidiLearnAccess(midiLearn));
         s.AddSingleton<IProjectVersionsAccess>(projectVersions);
         s.AddSingleton(projectHistory);
+        s.AddSingleton(models);
+        s.AddSingleton(clipAi);
     }
 
     /// <summary>Reconcile the server with <see cref="Settings.McpEnabled"/> / <see cref="Settings.McpPort"/>.</summary>
