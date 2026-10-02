@@ -74,7 +74,17 @@ public sealed class MidiMapView : UserControl
         // Source on the left; the invert toggle rides the right of the same line so the
         // range row below has room for just MIN / MAX.
         var srcRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        srcRow.Children.Add(src);
+        if (m.SourceKind == MidiSourceKind.Phone)
+        {
+            // Nota Remote: a drawn phone outline marks the source, as the gamepad has its word.
+            var phone = new Border
+            {
+                Width = 7, Height = 11, CornerRadius = NotaRadius.Bar, BorderThickness = new Avalonia.Thickness(1.3),
+                BorderBrush = NotaPalette.AccentBright, VerticalAlignment = VerticalAlignment.Center,
+            };
+            srcRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { phone, src } });
+        }
+        else srcRow.Children.Add(src);
 
         var body = new StackPanel { Spacing = 6 };
         body.Children.Add(top);

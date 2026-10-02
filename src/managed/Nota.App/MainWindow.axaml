@@ -58,6 +58,7 @@
         <NativeMenuItem.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Mixer" Click="OnMenuMixer" Gesture="Shift+Cmd+M"/>
+            <NativeMenuItem Header="Connect Phone…" Click="OnMenuConnectPhone"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Toggle browser" Click="OnMenuToggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" Click="OnMenuToggleClip"/>
@@ -309,17 +310,34 @@
         <!--   </Button.Flyout> -->
         <!-- </Button> -->
 
-        <!-- MIDI learn + an input-activity dot, so a silent controller is diagnosable -->
-        <ToggleButton Grid.Column="6" x:Name="MidiLearnBtn" Classes="chip" Margin="8,0,0,0"
-                      Click="OnToggleMidiLearn"
-                      ToolTip.Tip="Map a controller — click a control, then move a knob on the controller">
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Text="MIDI" VerticalAlignment="Center"
-                       Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-            <Ellipse x:Name="MidiDot" Width="5" Height="5" VerticalAlignment="Center"
-                     Fill="{DynamicResource Brush.BorderStrong}"/>
-          </StackPanel>
-        </ToggleButton>
+        <!-- MIDI learn + an input-activity dot, so a silent controller is diagnosable;
+             Remote (Nota Remote) beside it: off / the number of phones, a dot that flashes on
+             each touch from a phone. Click opens Connect Phone. -->
+        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0">
+          <ToggleButton x:Name="MidiLearnBtn" Classes="chip"
+                        Click="OnToggleMidiLearn"
+                        ToolTip.Tip="Map a controller — click a control, then move a knob on the controller">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="MIDI" VerticalAlignment="Center"
+                         Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+              <Ellipse x:Name="MidiDot" Width="5" Height="5" VerticalAlignment="Center"
+                       Fill="{DynamicResource Brush.BorderStrong}"/>
+            </StackPanel>
+          </ToggleButton>
+          <Button x:Name="RemoteBtn" Classes="chip" Click="OnRemoteClick"
+                  ToolTip.Tip="Play and control Nota from a phone">
+            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="2" BorderThickness="1.5"
+                      BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
+              <TextBlock Text="Remote" VerticalAlignment="Center"
+                         Foreground="{Binding $parent[Button].Foreground}"/>
+              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="10" VerticalAlignment="Center"
+                         Foreground="{Binding $parent[Button].Foreground}"/>
+              <Ellipse x:Name="RemoteDot" Width="5" Height="5" VerticalAlignment="Center"
+                       Fill="{DynamicResource Brush.BorderStrong}"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
 
         <Border Grid.Column="7" Width="1" Height="26" Margin="14,0"
                 Background="{DynamicResource Brush.Hairline}"/>

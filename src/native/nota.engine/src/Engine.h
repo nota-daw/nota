@@ -28,6 +28,7 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -37,7 +38,9 @@ namespace nota {
 class RackCore;   // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
 class ClipWarpStream;   // offline warp-cache builder (WarpStream.h); held by unique_ptr in wb_
 
-struct MidiEvent { bool on; int32_t pitch; float velocity; };
+// trackId -1 = ordinary live input (armed / audition tracks); >= 0 = addressed to that
+// one track whatever its arm state (a Nota Remote phone playing its own track).
+struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; };
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
@@ -845,6 +848,10 @@ public:
     int32_t trackMidiSource(int32_t trackId) const;
     void noteOn(int32_t pitch, float velocity);         // lock-free
     void noteOff(int32_t pitch);                         // lock-free
+    // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
+    // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
+    void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
+    void trackNoteOff(int32_t trackId, int32_t pitch);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
@@ -995,6 +1002,8 @@ private:
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
     CommandQueue                  commands_;
     MidiQueue                     liveMidi_;
+    MidiQueue                     remoteMidi_;      // track-addressed notes (any thread → audio)
+    std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
     ControlEventQueue             midiControl_;   // incoming CC/note-on for MIDI-learn (AR-6)
     Transport                     transport_;
@@ -1135,6 +1144,7 @@ private:
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
+    std::atomic<int32_t> recordTrackRt_{-1};   // recordTrackId_ for the audio thread
     int32_t recordClipIndex_ = -1;
     int32_t recordStartStatus_ = 0;   // 0 ok, 1 no armed track, 2 audio input failed
     // When recording auto-starts the transport, stopping the take returns the

@@ -69,6 +69,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<Nota.Mcp.IArrangementRefresh>(sp => sp.GetRequiredService<ArrangementRefresh>());
         services.AddSingleton<ProjectVersionsBridge>();
         services.AddSingleton<McpService>();
+        services.AddSingleton<RemoteService>();
         // Presentation.
         services.AddSingleton<TransportViewModel>();
         services.AddSingleton<BrowserViewModel>();

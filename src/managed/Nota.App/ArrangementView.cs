@@ -200,6 +200,8 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
     /// source, 2 linked frozen. Set by MainWindow; queried while rebuilding headers.</summary>
     public Func<int, int>? FreezeRole;
+    /// <summary>Who plays the track from a phone (Nota Remote), for the header badge; null = nobody.</summary>
+    public Func<int, string?>? PlayerBadge;
     /// <summary>Freeze / Live Freeze entries for a track's context menu (empty when the track
     /// can't be frozen). Built by MainWindow, which owns the freeze state and commands.</summary>
     public Func<int, IReadOnlyList<Control>>? FreezeMenuItems;
@@ -710,6 +712,7 @@ public sealed partial class ArrangementView : UserControl
                     Armed = ti.Armed != 0,
                     Frozen = !ti.IsReturn && !ti.IsGroup && eng.IsTrackFrozen(ti.Id),   // M7
                     LiveRole = FreezeRole?.Invoke(ti.Id) ?? 0,                          // live-freeze (v1.1)
+                    Player = PlayerBadge?.Invoke(ti.Id),                                 // Nota Remote
                     // A stored name (set via the header menu) wins; otherwise the derived default.
                     Name = IsProcessingTrack(ti.Id) ? "Processing…" : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
@@ -1626,7 +1629,9 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var typeTag = TypeTag(t.IsGroup ? "GROUP" : t.IsInstrument ? "MIDI" : "AUDIO");
+        // A phone playing the track (Nota Remote) takes the type tag's place: during a jam
+        // "who plays what" matters more than MIDI / AUDIO.
+        Control typeTag = t.Player is { } player ? PlayerTag(player) : TypeTag(t.IsGroup ? "GROUP" : t.IsInstrument ? "MIDI" : "AUDIO");
         var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         if (t.IsGroup)
         {
@@ -2170,6 +2175,31 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(6, 0, 0, 0),
         };
         return tb;
+    }
+
+    // Nota Remote: the name of whoever plays this track from a phone, in a pill with a drawn
+    // phone outline (design 5a) — "who plays what" during a jam.
+    private Control PlayerTag(string who)
+    {
+        var phone = new Border
+        {
+            Width = 6, Height = 9, CornerRadius = NotaRadius.Bar, BorderThickness = new Thickness(1),
+            BorderBrush = Brush("Brush.TextStrong"), VerticalAlignment = VerticalAlignment.Center,
+        };
+        var name = new TextBlock
+        {
+            Text = who, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
+            VerticalAlignment = VerticalAlignment.Center, MaxWidth = 70, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var pill = new Border
+        {
+            Height = 16, CornerRadius = NotaRadius.Pill, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
+            Background = Brush("Brush.TrackOff"), BorderBrush = Brush("Brush.BorderStrong"), BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
+        };
+        ToolTip.SetTip(pill, $"Played from a phone: {who}");
+        return pill;
     }
 
     // A small 18×16 stateful chip toggle (M/S/●). Danger variant reds when active.

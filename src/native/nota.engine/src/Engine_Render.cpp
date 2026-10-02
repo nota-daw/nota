@@ -250,10 +250,13 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     const double nowBeat = slot ? (slotLen > 0.0 ? std::fmod(slot->localBeats, slotLen) : slot->localBeats)
                                 : blockStartBeat;
 
+    // Track-addressed notes (Nota Remote) are recorded only when they play the take's
+    // track; ordinary live input records onto it whatever it is.
+    const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
     MidiEvent e;
-    while (liveMidi_.pop(e)) {
+    while (liveMidi_.pop(e) || remoteMidi_.pop(e)) {
         if (liveCount_ < kMaxLive) liveEvents_[liveCount_++] = e;
-        if (rec && playing && e.pitch >= 0 && e.pitch < 128) {
+        if (rec && playing && e.pitch >= 0 && e.pitch < 128 && (e.trackId < 0 || e.trackId == recTrack)) {
             if (e.on) {
                 pendingActive_[e.pitch] = true;
                 pendingStart_[e.pitch] = nowBeat;
@@ -323,9 +326,12 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
     }
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
-    if (t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed)) {
-        for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+    // A track-addressed event (Nota Remote) plays only its own track.
+    const bool takesLive = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+    for (int i = 0; i < liveCount_ && n < 1024; ++i) {
+        const MidiEvent& le = liveEvents_[i];
+        if (le.trackId < 0 ? takesLive : le.trackId == t.id())
+            evs[n++] = {0, le.on, le.pitch, le.velocity};
     }
     return n;
 }

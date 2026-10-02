@@ -31,6 +31,7 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
         recordTrackId_ = -1;
+        recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
     }
@@ -153,6 +154,23 @@ void Engine::noteOff(int32_t pitch) {
         liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }
 
+void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
+    {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{true, pitch, velocity, trackId});
+    }
+    if (pitch >= 0 && pitch < 128)
+        liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
+}
+void Engine::trackNoteOff(int32_t trackId, int32_t pitch) {
+    {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{false, pitch, 0.0f, trackId});
+    }
+    if (pitch >= 0 && pitch < 128)
+        liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
+}
+
 // Currently-pressed live-input pitches (keyboard + MIDI), oldest bit order. Lock-free.
 int32_t Engine::liveHeldNotes(int32_t* out, int32_t maxN) const {
     if (!out || maxN <= 0) return 0;
@@ -204,6 +222,7 @@ void Engine::setRecording(bool on) {
 
     if (instT) {
         recordTrackId_ = instT->id();
+        recordTrackRt_.store(recordTrackId_, std::memory_order_relaxed);
         // Overdub into a clip that already spans the playhead, else open one there.
         int32_t idx = -1;
         for (int32_t i = 0; i < static_cast<int32_t>(instT->midiClips.size()); ++i) {

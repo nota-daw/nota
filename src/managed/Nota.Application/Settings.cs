@@ -41,6 +41,15 @@ public sealed class Settings
     public bool McpEnabled { get; set; }
     /// <summary>Loopback TCP port for the MCP HTTP server.</summary>
     public int McpPort { get; set; } = 3900;
+    /// <summary>Nota Remote: serve the phone controller on the local network. Off by default;
+    /// phones pair with a code from the QR. See Settings → Remote.</summary>
+    public bool RemoteEnabled { get; set; }
+    /// <summary>TCP port Nota Remote listens on (all interfaces).</summary>
+    public int RemotePort { get; set; } = 7788;
+    /// <summary>What a phone may do: 0 play notes only, 1 also control the project (mixer,
+    /// transport, macros, XY, Session).</summary>
+    public int RemoteAccess { get; set; } = 1;
+
     /// <summary>Use a connected gamepad as a live note source. Off by default; the
     /// pads play through the armed/audition instrument track like the computer
     /// keyboard. See Preferences → Gamepads.</summary>

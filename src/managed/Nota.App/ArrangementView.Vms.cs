@@ -33,6 +33,7 @@ public sealed partial class ArrangementView
         public bool Soloed;
         public bool Armed;
         public bool Frozen;      // M7: playing a captured buffer instead of the live chain
+        public string? Player;   // Nota Remote: the phone(s) playing this track
         public int LiveRole;     // live-freeze (v1.1): 0 none, 1 sleeping source, 2 linked frozen
         public string Name = "";
         public List<ClipVM> Clips = new();

@@ -190,6 +190,15 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Nota Remote alone (fast iteration): `--remote`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--remote")
+{
+    Console.WriteLine("-- nota remote --");
+    foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "REMOTE PASSED" : $"REMOTE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Project version history alone (fast iteration): `--history`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--history")
 {
@@ -13659,6 +13668,10 @@ foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunSummary()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunCleanup()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
+
+// --- nota remote: track-addressed notes, pairing, a phone session over a real socket ---
+Console.WriteLine("-- nota remote --");
+foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

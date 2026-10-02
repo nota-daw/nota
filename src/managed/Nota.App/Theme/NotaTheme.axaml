@@ -527,6 +527,18 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.AccentBright}"/>
   </Style>
 
+  <!-- A chip lit by a running feature (Remote on): the engaged look, without being a toggle. -->
+  <Style Selector="Button.chip.lit">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.AccentBright}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderBrass}"/>
+  </Style>
+  <Style Selector="Button.chip.lit /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderBrass}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.AccentBright}"/>
+  </Style>
+
   <!-- bg-sunken well (position / BPM / time-sig) -->
   <Style Selector="Border.well">
     <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Sunken}"/>
@@ -1116,6 +1128,14 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="Padding" Value="4"/>
+  </Style>
+  <!-- A flyout whose content draws its own card (Connect Phone): no Fluent frame around it. -->
+  <Style Selector="FlyoutPresenter.bare">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MaxWidth" Value="480"/>
+    <Setter Property="MaxHeight" Value="720"/>
   </Style>
   <Style Selector="ContextMenu">
     <Setter Property="Background" Value="{DynamicResource Brush.SurfaceCard}"/>

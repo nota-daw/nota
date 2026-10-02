@@ -136,6 +136,32 @@ public sealed class MidiLearnService
         return Dispatch(MidiSourceKind.Gamepad, 0, axisId, value127) > 0;
     }
 
+    /// <summary>The mapping a phone control drives, if any. Tied to the control, not the phone,
+    /// so every connected phone drives the same target.</summary>
+    public MidiMapping? PhoneMappingFor(int controlId)
+        => _mappings.FirstOrDefault(m => m.SourceKind == MidiSourceKind.Phone && m.Number == controlId);
+
+    /// <summary>Feed a Nota Remote control (normalized 0..1). Binds the pending control, or
+    /// drives every mapping on it — at full resolution, not quantized to 0..127.</summary>
+    public Nota.Remote.PhoneControlResult HandlePhoneControl(int controlId, double norm)
+    {
+        if (_pending is { } p)
+        {
+            Bind(p, MidiSourceKind.Phone, 0, controlId);
+            LogMidi($"MIDI learn: phone {Nota.Remote.PhoneControls.Name(controlId)} → bound to '{p.Name}'");
+            return Nota.Remote.PhoneControlResult.Bound;
+        }
+        int matched = 0;
+        foreach (var m in _mappings)
+            if (m.SourceKind == MidiSourceKind.Phone && m.Number == controlId)
+            {
+                ApplyNormalized(m, Math.Clamp(norm, 0, 1));
+                matched++;
+            }
+        if (matched > 0) EventCount++;
+        return matched > 0 ? Nota.Remote.PhoneControlResult.Mapped : Nota.Remote.PhoneControlResult.None;
+    }
+
     public void RemoveMapping(MidiMapping m)
     {
         if (_mappings.Remove(m)) MappingsChanged?.Invoke();
@@ -251,13 +277,24 @@ public sealed class MidiLearnService
 
     private void Apply(MidiMapping m, int value127)
     {
+        if (m.Target.IsButton && m.SourceKind == MidiSourceKind.Note)
+        {
+            // A note-on fires; anything else crosses the half-way point (ApplyNormalized).
+            ApplyNormalized(m, value127 > 0 ? 1.0 : 0.0);
+            return;
+        }
+        ApplyNormalized(m, Math.Clamp(value127 / 127.0, 0, 1));
+    }
+
+    private void ApplyNormalized(MidiMapping m, double norm)
+    {
         var t = m.Target;
         if (t.IsButton)
         {
-            // A note-on, or anything else crossing the half-way point. Latch on the edge:
-            // a swept CC or a squeezed trigger sends a run of values past the threshold,
-            // and toggling on each one would make the target flutter.
-            bool on = m.SourceKind == MidiSourceKind.Note ? value127 > 0 : value127 >= 64;
+            // Crossing the half-way point. Latch on the edge: a swept CC or a squeezed
+            // trigger sends a run of values past the threshold, and toggling on each one
+            // would make the target flutter.
+            bool on = norm >= 0.5;
             if (m.Invert) on = !on;
             if (on == m.TriggerLatch) return;
             m.TriggerLatch = on;
@@ -265,7 +302,6 @@ public sealed class MidiLearnService
             return;
         }
 
-        double norm = Math.Clamp(value127 / 127.0, 0, 1);
         if (m.Invert) norm = 1.0 - norm;
         double outv = m.RangeMin + norm * (m.RangeMax - m.RangeMin);   // 0..1 within the mapped window
 
