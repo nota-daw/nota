@@ -110,6 +110,21 @@ Resize semantics differ by clip type: a warped clip **trims** its played window,
 unwarped clip's source region moves — which is what lets a short one-shot be dragged out
 to a whole bar.
 
+### Sample analysis (smart samples)
+
+`SampleAnalysis.cpp` measures a decoded sample off the audio path: tempo (`TempoDetect`),
+key (a chroma of spectral peaks correlated with the Krumhansl–Kessler profiles), the
+envelope facts that tell a loop from a one-shot, and a 16-value timbre fingerprint.
+`nota_sample_analyze_file` decodes only a file's head (`AudioImportJob` with a seconds
+cap), so a long file in the library costs what it analyses, not its length. On the managed
+side `ISampleIndex` (`Infrastructure/SampleStore/SampleLibraryIndex.cs`) scans the Samples
+folder on a few below-normal threads and persists the raw measurements in
+`<data>/sample-index/index.bin`, keyed by path and invalidated by size and date.
+`SampleClassifier` (Application) turns those measurements and the file's name
+(`SampleNameHints`: "Loop_124_Am", a "One Shots" folder) into what the browser shows. It
+runs again on load, so classifier changes need no re-analysis. Names win over the
+analysis, and a loop's tempo is refined from its length.
+
 ## Devices and instruments
 
 Built-in instruments, audio effects, and MIDI effects are registered by an integer

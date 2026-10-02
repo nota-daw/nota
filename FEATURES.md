@@ -56,6 +56,8 @@ JUCE module; the engine core is JUCE-free.
   their dates — click to select, double-click (or the arrow keys and Return) to open.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
+- **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
+  the arrangement can be transposed to it.
 - **Transport**: play / stop / record, playhead position.
   - **Stop returns to the launch point** (a seek sets the start anchor).
   - **Follow** — the arrangement follows the cursor (playhead stays centred).
@@ -720,7 +722,19 @@ and user presets, automation, persistence and cloning.
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
+- **Smart samples**: the Samples folder is analysed in the background — tempo, key, loop or
+  one-shot, and a timbre fingerprint — once per file (results kept across launches, a newly
+  installed pack first; the status line shows the progress). Names win over the analysis
+  ("Loop_124_Am", "Pad C#m 90bpm", a "One Shots" folder), and a loop's exact tempo comes from
+  its length (16 beats in 7.742 s is 124.0). Rows carry `124 · Am` (a tuned hit, its note).
+  **Filter chips** on the Files tab: Loops, One-shots, a BPM range (with "project tempo
+  ±5 %") and a Key (with the project key; a key also matches its relative). **Show similar
+  sounds** (right-click a sample) lists the closest samples of the same kind.
 - **Drag and drop** onto a track, into the grid, or into a rack chain.
+  - A **loop** dropped on the arrangement warps to the project tempo from its known tempo
+    (⋮ → Warp loops to project tempo, on by default); a **one-shot** is never warped. With
+    ⋮ → **Transpose to project key**, a loop moves to the project key the shorter way
+    (±6 semitones, via the relative across major and minor).
   - Dropping an effect onto Devices puts it between cards (an accent bar marks the spot) or
     in place of the card under the pointer; effects and presets also drop onto a return
     track or the master. While dragging over the arrangement, the target track is outlined
@@ -750,7 +764,7 @@ and user presets, automation, persistence and cloning.
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
-  confirmation); Files — Reveal in Finder; Presets — Reveal in Finder.
+  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder.
 - **Hints for empty tabs** — explaining what the tab is and how to add content to it.
 
 ---
@@ -867,6 +881,8 @@ Coverage:
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.
+- **Sample library**: `search_samples` (kind, BPM range, key, words in the path),
+  `get_sample_info`, `find_similar_samples`, `get_project_key` / `set_project_key`.
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,
   survey the controller's CCs and notes, view and edit bindings (range, inversion,
   deletion), and enter learn mode.
