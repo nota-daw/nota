@@ -116,6 +116,39 @@ if (args.Length >= 1 && args[0] == "--samples")
     Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+if (args.Length >= 2 && args[0] == "--sample-dump") { SmartSampleTests.Dump(args[1]); return 0; }
+// Smart samples (key / tempo / loop analysis, the library index) alone: `--smart-samples`.
+if (args.Length >= 1 && args[0] == "--smart-samples")
+{
+    Console.WriteLine("-- smart samples: analysis + library index --");
+    foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SMART SAMPLES PASSED" : $"SMART SAMPLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// AI models store alone: `--models`.
+if (args.Length >= 1 && args[0] == "--models")
+{
+    Console.WriteLine("-- ai models: store --");
+    foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS PASSED" : $"MODELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Live installs of the real models: `--models-live <dir> [--stems]`.
+if (args.Length >= 2 && args[0] == "--models-live")
+{
+    Console.WriteLine("-- ai models: live installs --");
+    foreach (var (ok, label) in ModelStoreTests.RunLive(args[1], args.Contains("--stems"))) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODELS LIVE PASSED" : $"MODELS LIVE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// AI models' DSP ports against the Python originals: `--ai-golden <libonnxruntime> <dir>`.
+if (args.Length >= 3 && args[0] == "--ai-golden")
+{
+    Console.WriteLine("-- ai models: golden output --");
+    foreach (var (ok, label) in AiGoldenTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AI GOLDEN PASSED" : $"AI GOLDEN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--store-catalog")
 {
     Console.WriteLine("-- get plug-ins: catalog identifiers --");
@@ -8101,7 +8134,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
             { new Nota.Application.AutomationPoint(0, 1.5f), new Nota.Application.AutomationPoint(8, 0.5f) });
 
         var transport = new TransportState(140.0, 0.5, MetronomeOn: true, LoopOn: false,
-            TimeSigNumerator: 7, TimeSigDenominator: 8);
+            TimeSigNumerator: 7, TimeSigDenominator: 8, Key: new Nota.Application.Samples.MusicalKey(6, Nota.Application.Samples.KeyMode.Minor).Code);
         var warnings = new System.Collections.Generic.List<string>();
         var doc = ProjectService.Capture(src, transport, warnings);
         Check(warnings.Count == 0, $"no warnings for a built-in-only project ({warnings.Count})");
@@ -8113,6 +8146,7 @@ Console.WriteLine("-- M7-6a: project save/load --");
         Check(loaded.FormatVersion == ProjectService.CurrentFormatVersion, "format version round-trips");
         Check(Math.Abs(loaded.Transport.Bpm - 140.0) < 1e-9 && loaded.Transport.MetronomeOn, "transport round-trips");
         Check(loaded.Transport.TimeSigNumerator == 7 && loaded.Transport.TimeSigDenominator == 8, "time signature round-trips (7/8)");
+        Check(loaded.Transport.Key == "F#m", $"project key round-trips (F# minor → \"{loaded.Transport.Key}\")");
 
         // Replay into a fresh engine and verify the live state.
         using var dst = new NotaEngine();
@@ -13625,6 +13659,14 @@ foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
 // --- get samples: sample registry index, pack install/uninstall from local archives ---
 Console.WriteLine("-- get samples: sample registry store --");
 foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+
+// --- smart samples: tempo / key / loop analysis, the library index, filters, similar ---
+Console.WriteLine("-- smart samples: analysis + library index --");
+foreach (var (ok, label) in SmartSampleTests.Run()) Check(ok, label);
+
+// --- ai models: model + runtime install/uninstall from local assets ---
+Console.WriteLine("-- ai models: store --");
+foreach (var (ok, label) in ModelStoreTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

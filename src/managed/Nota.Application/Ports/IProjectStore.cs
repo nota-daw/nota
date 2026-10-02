@@ -4,9 +4,10 @@
 namespace Nota.Application;
 
 /// <summary>Transport values the App owns, passed across the persistence boundary
-/// so the on-disk model stays UI-framework-free.</summary>
+/// so the on-disk model stays UI-framework-free. <paramref name="Key"/> is the project key
+/// as a <see cref="Samples.MusicalKey.Code"/> (−1 = none set).</summary>
 public readonly record struct TransportState(double Bpm, double MasterVolume, bool MetronomeOn, bool LoopOn,
-    int TimeSigNumerator = 4, int TimeSigDenominator = 4);
+    int TimeSigNumerator = 4, int TimeSigDenominator = 4, int Key = -1);
 
 /// <summary>Outcome of loading a project: the transport to restore + any items that
 /// were downgraded/skipped (referential-integrity warnings).</summary>

@@ -39,6 +39,41 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   checksum before it's unpacked. Only the samples and their docs are installed, and Nota
   checks there is room for a pack before downloading it. On both sides the filters and
   search stay at the top while the list scrolls.
+- **Smart samples:** Nota now knows what is in your sample library. In the background it
+  works out each file's **tempo and key**, and whether it is a **loop or a one-shot**. A
+  newly installed pack goes first, and the results are kept, so each file is done once. Tempo
+  and key written in a file's name ("Loop_124_Am") come first; a loop's exact tempo comes from
+  its length. Rows in the **Files** tab show it at the right edge — `124 · Am` for a loop, the
+  note for a tuned hit. New **filter chips** narrow the list: **Loops**, **One-shots**, a
+  **BPM** range ("project tempo ±5 %" is one click away) and a **Key**. A key also shows its
+  relative, so "A minor" finds C major loops too. Right-click a sample → **Show similar
+  sounds** lists the samples that sound most like it.
+- **Project key:** a **KEY** cell in the transport bar, saved with the project.
+- **Loops fit the project when dropped:** a loop dropped on the arrangement warps to the
+  project tempo from the tempo Nota already knows, and the status bar says so ("loop warped
+  124 → 120 BPM"). With **Transpose to project key** on (the Files tab's ⋮ menu), it moves to
+  the project key the shorter way — an A minor loop lands in C minor 3 semitones up. Over MCP,
+  an AI can search the library by kind, tempo, key and name, ask what a file is, find similar
+  sounds, and read or set the project key (`search_samples`, `get_sample_info`,
+  `find_similar_samples`, `get_project_key`, `set_project_key`).
+
+- **Separate Stems:** right-click an audio clip → **Separate Stems…** splits it into
+  **Drums, Bass, Other and Vocals** — a group of four tracks right under the clip's track,
+  each clip lined up with the original (warp, reverse, fades and ADSR included). The original
+  clip is switched off, not deleted, and the whole thing undoes in one step. It runs on this
+  computer with Meta's Demucs model: a three-minute song takes well under a minute, with
+  Cancel.
+- **Better Convert Melody and Convert Harmony:** with Spotify's basic-pitch model installed
+  they hear every note, chords included, with velocities that follow the playing. Without it
+  they work as before, and the Convert menu offers the model.
+- **AI Models** in **Settings → Downloads**, beside Plug-ins and Sample Packs: install or
+  remove the two models. The first one also brings the AI runtime they share (ONNX Runtime);
+  removing the last one removes it. Everything is downloaded from its authors, checked
+  against a pinned checksum, and runs offline — no audio leaves the computer. Separate Stems
+  offers the download the first time you use it.
+- **Over MCP**, an AI can list the installed models, separate a clip into stems and
+  transcribe a clip into a MIDI track (`list_ai_models`, `separate_stems`,
+  `convert_audio_to_midi`). Installing a model stays with you.
 
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and
@@ -47,6 +82,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   projects are converted on their next save.
 
 ### Fixed
+- **One-shots dropped on the arrangement are no longer warped:** a short hit used to be
+  time-stretched whenever the tempo detector heard a pulse in it.
 - **Big sample libraries in the Files tab:** the browser listed only the first 2,000 files of
   the Samples folder; it now lists up to 100,000, and searching them stays fast.
 

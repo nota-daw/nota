@@ -48,7 +48,7 @@ struct AudioImportJob::Decoder {
 
 AudioImportJob::~AudioImportJob() = default;
 
-std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path) {
+std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, double maxSeconds) {
     std::string ext;
     if (auto dot = path.find_last_of('.'); dot != std::string::npos) ext = path.substr(dot + 1);
     std::transform(ext.begin(), ext.end(), ext.begin(),
@@ -90,10 +90,13 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path) {
         if (!whole || whole->empty()) return nullptr;
         job->buf_ = std::move(whole);
         job->decoded_ = job->buf_->frames;
+        job->sourceFrames_ = job->buf_->frames;
         job->done_ = true;
         return job;
     }
 
+    job->sourceFrames_ = static_cast<int64_t>(total);
+    if (maxSeconds > 0.0) total = std::min<uint64_t>(total, static_cast<uint64_t>(std::max(1.0, maxSeconds * rate)));
     job->buf_->channels = static_cast<int32_t>(channels);
     job->buf_->frames = static_cast<int64_t>(total);
     job->buf_->samples.assign(static_cast<size_t>(total) * channels, 0.0f);

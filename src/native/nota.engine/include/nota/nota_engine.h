@@ -503,6 +503,30 @@ NOTA_API int32_t    nota_track_add_imported_clip(NotaEngine* engine, int32_t tra
 /* Auto-warp with an already-detected tempo (skips detection). Returns the BPM used (0 = failed). */
 NOTA_API double     nota_clip_auto_warp_bpm(NotaEngine* engine, int32_t track_id, int32_t clip_index, double bpm);
 
+/* ---- Sample analysis (browser sample index) ------------------------------ */
+/* What the Files tab knows about a sample: tempo, key, the envelope facts that tell a loop
+ * from a one-shot, and a timbre fingerprint for "similar sounds". Worker-thread safe (no
+ * engine state). timbre layout: 0..11 log-band energy shares (dB/30, 40 Hz–16 kHz),
+ * 12 centroid log2(Hz/1000), 13 flatness 0..1, 14 log10 attack s, 15 log2 analysed s. */
+#define NOTA_TIMBRE_DIMS 16
+typedef struct NotaSampleAnalysis {
+    double  duration_sec;     /* the whole file, not just the analysed head */
+    double  sample_rate;
+    double  bpm;              /* 0 = no steady pulse */
+    int32_t channels;
+    int32_t key_tonic;        /* -1 = atonal, else 0..11 (C..B) */
+    int32_t key_mode;         /* 0 major, 1 minor, -1 tonic only (mode unclear) */
+    float   key_confidence;   /* 0..1 */
+    float   tail_ratio;       /* RMS of the last tenth / whole: ~1 loops, ~0 decaying hits */
+    float   peak_db;
+    float   rms_db;
+    float   timbre[NOTA_TIMBRE_DIMS];
+} NotaSampleAnalysis;
+/* Analyses a finished import (the whole decoded buffer). */
+NOTA_API NotaResult nota_audio_import_analyze(const NotaAudioImport* job, NotaSampleAnalysis* out);
+/* Decodes a file's first max_seconds (<= 0 = all of it) and analyses that. */
+NOTA_API NotaResult nota_sample_analyze_file(const char* path_utf8, double max_seconds, NotaSampleAnalysis* out);
+
 /* ---- Instrument tracks, MIDI clips & notes (M2) -------------------------- */
 /* Adds an instrument track with the built-in Nota Synth. Returns id (>0). */
 NOTA_API int32_t nota_engine_add_instrument_track(NotaEngine* engine);

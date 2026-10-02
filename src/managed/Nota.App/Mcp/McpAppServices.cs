@@ -65,6 +65,11 @@ public sealed class MidiLearnAccess(MidiLearnService svc) : IMidiLearnAccess
     public void ClearRecentControls() => svc.ClearRecentControls();
 }
 
+public sealed class ProjectKeyAccess(Nota.Presentation.TransportViewModel transport) : IProjectKeyAccess
+{
+    public int KeyCode { get => transport.KeyCode; set => transport.KeyCode = value; }
+}
+
 /// <summary>Hands the version-history tools the main window, which registers itself once it
 /// exists (the MCP server may start first). Until then every action reports Nota isn't ready.</summary>
 public sealed class ProjectVersionsBridge : IProjectVersionsAccess
@@ -85,7 +90,8 @@ public sealed class McpService(
     IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, ISettingsService settings, ILogSink log,
     IPluginCatalog pluginCatalog, IFactoryPresets factoryPresets, IPresetStore presetStore, IPresetLibrary presetLibrary,
     IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits,
-    ProjectVersionsBridge projectVersions, IProjectHistory projectHistory)
+    ProjectVersionsBridge projectVersions, IProjectHistory projectHistory, IModelStore models, IClipAi clipAi,
+    ISampleIndex sampleIndex, Nota.Presentation.TransportViewModel transport)
 {
     private readonly NotaMcpServer _server = new();
 
@@ -106,6 +112,10 @@ public sealed class McpService(
         s.AddSingleton<IMidiLearnAccess>(new MidiLearnAccess(midiLearn));
         s.AddSingleton<IProjectVersionsAccess>(projectVersions);
         s.AddSingleton(projectHistory);
+        s.AddSingleton(models);
+        s.AddSingleton(clipAi);
+        s.AddSingleton(sampleIndex);
+        s.AddSingleton<IProjectKeyAccess>(new ProjectKeyAccess(transport));
     }
 
     /// <summary>Reconcile the server with <see cref="Settings.McpEnabled"/> / <see cref="Settings.McpPort"/>.</summary>

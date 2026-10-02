@@ -9,6 +9,7 @@
 // written once and can be surfaced either way.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -34,9 +35,11 @@ public sealed class ProgressWindow : NotaWindow
 {
     private readonly TextBlock _label;
     private readonly ProgressBar _bar;
+    private readonly CancellationTokenSource? _cancel;
 
-    public ProgressWindow(string title, string initial)
+    public ProgressWindow(string title, string initial, CancellationTokenSource? cancel = null)
     {
+        _cancel = cancel;
         Title = title;
         CanResize = false;
         ShowInTaskbar = false;
@@ -63,6 +66,17 @@ public sealed class ProgressWindow : NotaWindow
         var body = new StackPanel { Spacing = 14, Margin = new Thickness(20) };
         body.Children.Add(_label);
         body.Children.Add(_bar);
+        if (cancel is not null)
+        {
+            var stop = new Button { Content = "Cancel", Classes = { "ghost" }, HorizontalAlignment = HorizontalAlignment.Right };
+            stop.Click += (_, _) =>
+            {
+                stop.IsEnabled = false;
+                _label.Text = "Cancelling…";
+                cancel.Cancel();
+            };
+            body.Children.Add(stop);
+        }
         SetBody(body);
     }
 
@@ -70,6 +84,7 @@ public sealed class ProgressWindow : NotaWindow
     public void Report(ProgressReport r)
     {
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Report(r)); return; }
+        if (_cancel?.IsCancellationRequested == true) return;   // keep "Cancelling…" up
         if (!string.IsNullOrEmpty(r.Message)) _label.Text = r.Message;
         if (r.Fraction < 0.0) _bar.IsIndeterminate = true;
         else { _bar.IsIndeterminate = false; _bar.Value = Math.Clamp(r.Fraction, 0.0, 1.0) * 100.0; }
@@ -88,6 +103,25 @@ public sealed class ProgressWindow : NotaWindow
         var dialog = win.ShowDialog(owner);   // modal; completes when the window closes
         await opened.Task;                    // don't close before it's actually on screen
         try { await work(progress); }
+        finally { win.Close(); await dialog; }
+    }
+
+    /// <summary><see cref="RunAsync(Window, string, string, Func{IProgress{ProgressReport}, Task})"/>
+    /// with a Cancel button: <paramref name="work"/> gets a token that Cancel trips. A cancelled
+    /// run returns false (the work's <see cref="OperationCanceledException"/> is swallowed);
+    /// other exceptions propagate.</summary>
+    public static async Task<bool> RunAsync(Window owner, string title, string initial,
+                                            Func<IProgress<ProgressReport>, CancellationToken, Task> work)
+    {
+        using var cts = new CancellationTokenSource();
+        var win = new ProgressWindow(title, initial, cts);
+        var progress = new Progress<ProgressReport>(win.Report);
+        var opened = new TaskCompletionSource();
+        win.Opened += (_, _) => opened.TrySetResult();
+        var dialog = win.ShowDialog(owner);
+        await opened.Task;
+        try { await work(progress, cts.Token); return true; }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { return false; }
         finally { win.Close(); await dialog; }
     }
 

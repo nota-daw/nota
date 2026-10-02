@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Preferences → Downloads: one page for both registries, Plug-ins and Sample Packs, picked
-// with a switch beside the title (PreferencesWindow.Store.cs / .Samples.cs build each half).
+// Preferences → Downloads: one page for Plug-ins, Sample Packs and AI Models, picked with a
+// switch beside the title (PreferencesWindow.Store.cs / .Samples.cs / .Models.cs build each).
 // The title, switch and intro scroll away; the filter / search / Refresh toolbar sticks to the
 // top of the pane. It lives in an overlay above the ScrollViewer, held level with a spacer in
 // the scrolled content until the spacer passes the top edge, and gets a hairline underneath
@@ -20,13 +20,13 @@ namespace Nota.App;
 public sealed partial class PreferencesWindow
 {
     private const int DownloadsIndex = 4;
-    private static readonly string[] DownloadSources = { "Plug-ins", "Sample Packs" };
-    private int _downloadSource;   // 0 = plug-ins, 1 = sample packs; kept for the window's life
+    private static readonly string[] DownloadSources = { "Plug-ins", "Sample Packs", "AI Models" };
+    private int _downloadSource;   // 0 = plug-ins, 1 = sample packs, 2 = AI models; kept for the window's life
 
     private Control DownloadsPane(Control header)
     {
-        var (toolbar, body) = _downloadSource == 0 ? StoreParts() : PackParts();
-        var intro = Caption(_downloadSource == 0 ? StoreIntro : PacksIntro, muted: true);
+        var (toolbar, body) = _downloadSource switch { 0 => StoreParts(), 1 => PackParts(), _ => ModelParts() };
+        var intro = Caption(_downloadSource switch { 0 => StoreIntro, 1 => PacksIntro, _ => ModelsIntro }, muted: true);
         intro.MaxWidth = 600;
         intro.HorizontalAlignment = HorizontalAlignment.Left;
         intro.Margin = new Thickness(0, 0, 0, 4);
@@ -63,6 +63,7 @@ public sealed partial class PreferencesWindow
             VerticalAlignment = VerticalAlignment.Top, Child = toolbar,
             RenderTransform = new TranslateTransform(),
         };
+        if (toolbar is null) intro.Margin = new Thickness(0, 0, 0, 18);   // no toolbar: the list follows the intro
         var content = new StackPanel { Children = { titleRow, intro, spacer, body } };
         var scroll = new ScrollViewer
         {
@@ -78,6 +79,7 @@ public sealed partial class PreferencesWindow
             ((TranslateTransform)pinned.RenderTransform!).Y = Math.Max(0, top);
             pinned.BorderBrush = top < 0 ? Hairline : Brushes.Transparent;
         }
+        if (toolbar is null) return scroll;
         scroll.ScrollChanged += (_, _) => Place();
         pinned.SizeChanged += (_, _) => Place();
         content.LayoutUpdated += (_, _) => Place();

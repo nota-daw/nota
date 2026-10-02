@@ -63,3 +63,10 @@ public interface IProjectVersionsAccess
     /// <summary>A tool changed the history directly (a label, note or star): redraw the History tab.</summary>
     void NotifyHistoryChanged();
 }
+
+/// <summary>The project key (lives on the app's transport, not in the engine), for the
+/// smart-sample tools. A <c>MusicalKey.Code</c>, −1 = none. Runs on the UI thread.</summary>
+public interface IProjectKeyAccess
+{
+    int KeyCode { get; set; }
+}

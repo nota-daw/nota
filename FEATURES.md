@@ -56,6 +56,8 @@ JUCE module; the engine core is JUCE-free.
   their dates — click to select, double-click (or the arrow keys and Return) to open.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
+- **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
+  the arrangement can be transposed to it.
 - **Transport**: play / stop / record, playhead position.
   - **Stop returns to the launch point** (a seek sets the start anchor).
   - **Follow** — the arrangement follows the cursor (playhead stays centred).
@@ -206,7 +208,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     rest centred (a deadzone keeps a worn stick from drifting a mapped parameter);
     triggers are unipolar and rest at zero.
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
-- **Audio→MIDI** (right-click an audio clip → Convert):
+- **Audio→MIDI** (right-click an audio clip → Convert). With the **basic-pitch** AI model
+  installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
+  chords included, with velocities from the playing; Melody keeps the strongest note where notes
+  overlap. Without it they use the DSP below, and the Convert menu offers the model.
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
@@ -243,6 +248,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   Editing in either place updates the other, each edit is one undo step, split keeps the
   attack on the left piece and the release on the right, and the shape is saved with the
   project.
+- **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
+  splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
+  clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
+  reverse, envelopes, ADSR) over a stem file as long as the source, so it lines up sample for
+  sample; the original clip is switched off. One undo step; runs locally (about a third of the
+  clip's length on Apple Silicon) behind a progress dialog with Cancel; clips up to 10 minutes.
+  The first use offers to download the model.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. A grid-snap toggle governs trimming a warped clip.
@@ -664,6 +676,10 @@ and user presets, automation, persistence and cloning.
   an install runs. A project that needs a missing registry plugin offers to install it and
   reopens with its saved settings. Plugins are found even when installed in a different
   folder than on the computer that saved the project.
+- **AI Models** (Settings → Downloads, third side): **htdemucs** (Separate Stems, MIT) and
+  **basic-pitch** (Convert to MIDI, Apache-2.0), plus the **ONNX Runtime** 1.23.2 library they
+  run on, which comes with the first model and goes with the last. Every asset is pinned to a
+  URL, size and sha256 in the app; models install into Nota's data folder and run offline.
 - **Plugin device card** in two sizes: the small card shows vendor, format, parameter count
   and latency with Open editor and Save preset; the full card adds every parameter as a knob
   (with filter and pages, the plugin's own value text, double-click for its default) and a
@@ -706,7 +722,19 @@ and user presets, automation, persistence and cloning.
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
+- **Smart samples**: the Samples folder is analysed in the background — tempo, key, loop or
+  one-shot, and a timbre fingerprint — once per file (results kept across launches, a newly
+  installed pack first; the status line shows the progress). Names win over the analysis
+  ("Loop_124_Am", "Pad C#m 90bpm", a "One Shots" folder), and a loop's exact tempo comes from
+  its length (16 beats in 7.742 s is 124.0). Rows carry `124 · Am` (a tuned hit, its note).
+  **Filter chips** on the Files tab: Loops, One-shots, a BPM range (with "project tempo
+  ±5 %") and a Key (with the project key; a key also matches its relative). **Show similar
+  sounds** (right-click a sample) lists the closest samples of the same kind.
 - **Drag and drop** onto a track, into the grid, or into a rack chain.
+  - A **loop** dropped on the arrangement warps to the project tempo from its known tempo
+    (⋮ → Warp loops to project tempo, on by default); a **one-shot** is never warped. With
+    ⋮ → **Transpose to project key**, a loop moves to the project key the shorter way
+    (±6 semitones, via the relative across major and minor).
   - Dropping an effect onto Devices puts it between cards (an accent bar marks the spot) or
     in place of the card under the pointer; effects and presets also drop onto a return
     track or the master. While dragging over the arrangement, the target track is outlined
@@ -736,7 +764,7 @@ and user presets, automation, persistence and cloning.
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
-  confirmation); Files — Reveal in Finder; Presets — Reveal in Finder.
+  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder.
 - **Hints for empty tabs** — explaining what the tab is and how to add content to it.
 
 ---
@@ -800,7 +828,7 @@ and user presets, automation, persistence and cloning.
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
 - **Plug-ins**: scan paths, Rescan.
-- **Downloads**: the plugin registry installer (see [Plugin hosting](#plugin-hosting)).
+- **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which
   follows the OS appearance and switches with it; the choice applies live and is
@@ -850,6 +878,11 @@ Coverage:
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add and remove chains, parameters, 8 macros.
 - **Export** the master or stems to WAV (pcm16/pcm24/float32).
+- **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
+  Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
+  basic-pitch → a new MIDI track). Installing models stays with the user.
+- **Sample library**: `search_samples` (kind, BPM range, key, words in the path),
+  `get_sample_info`, `find_similar_samples`, `get_project_key` / `set_project_key`.
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,
   survey the controller's CCs and notes, view and edit bindings (range, inversion,
   deletion), and enter learn mode.

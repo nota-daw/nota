@@ -329,8 +329,11 @@ public sealed partial class PreferencesWindow
         try
         {
             await _samples.InstallAsync(p, progress, job.Token);
+            // Analyse the new pack first, so its tempo / key tags and filters work at once.
+            if (_samples.Installed.FirstOrDefault(i => i.Id == p.Id) is { } installed)
+                App.Services.GetRequiredService<ISampleIndex>().Prioritize(installed.Path);
             _main?.Browser.RebuildSamples();
-            SetStoreResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab.", sticky: false);
+            SetStoreResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key.", sticky: false);
         }
         catch (OperationCanceledException)
         {
@@ -374,11 +377,12 @@ public sealed partial class PreferencesWindow
         RenderStoreLists();
     }
 
-    // Both lists, since a job in one disables the Install buttons of the other.
+    // Every list, since a job in one disables the Install buttons of the others.
     private void RenderStoreLists()
     {
         RenderStoreList();
         RenderPackList();
+        RenderModelList();
         UpdateDock();   // RenderStoreList only reaches the dock while the Downloads pane is showing
     }
 }

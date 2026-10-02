@@ -26,7 +26,7 @@ public partial class MainWindow
     private TransportState TransportSnapshot()
         => new((double)_vm!.Transport.Bpm, _vm.Transport.MasterVolume,
                _vm.Transport.MetronomeOn, _vm.Transport.LoopOn,
-               _vm.Transport.TimeSigNumerator, _vm.Transport.TimeSigDenominator);
+               _vm.Transport.TimeSigNumerator, _vm.Transport.TimeSigDenominator, _vm.Transport.KeyCode);
 
     private void OnAutosaveTick()
     {

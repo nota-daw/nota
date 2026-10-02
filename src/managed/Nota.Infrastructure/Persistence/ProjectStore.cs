@@ -24,7 +24,8 @@ public sealed class ProjectStore : IProjectStore
         var transport = new TransportState(
             doc.Transport.Bpm, doc.Transport.MasterVolume,
             doc.Transport.MetronomeOn, doc.Transport.LoopOn,
-            doc.Transport.TimeSigNumerator, doc.Transport.TimeSigDenominator);
+            doc.Transport.TimeSigNumerator, doc.Transport.TimeSigDenominator,
+            Nota.Application.Samples.MusicalKey.Parse(doc.Transport.Key)?.Code ?? -1);
         return new ProjectLoadResult(transport, warnings) { MissingPlugins = MissingPlugins(doc) };
     }
 
