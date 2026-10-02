@@ -116,6 +116,14 @@ if (args.Length >= 1 && args[0] == "--samples")
     Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// AI models' DSP ports against the Python originals: `--ai-golden <libonnxruntime> <dir>`.
+if (args.Length >= 3 && args[0] == "--ai-golden")
+{
+    Console.WriteLine("-- ai models: golden output --");
+    foreach (var (ok, label) in AiGoldenTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AI GOLDEN PASSED" : $"AI GOLDEN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--store-catalog")
 {
     Console.WriteLine("-- get plug-ins: catalog identifiers --");
