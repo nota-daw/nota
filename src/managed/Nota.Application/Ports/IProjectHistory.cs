@@ -3,6 +3,41 @@
 
 namespace Nota.Application;
 
+/// <summary>A track renamed between two versions.</summary>
+public sealed record TrackRename(string From, string To);
+
+/// <summary>What a version changed against its parent, worked out from the two manifests
+/// when it is recorded. Track names stand for tracks; "Master" for the master bus. The
+/// History tab turns it into a one-line description ("Added Bass · Tempo 120.00 → 124.00").</summary>
+public sealed record VersionChanges
+{
+    /// <summary>The first version: no parent to compare with.</summary>
+    public bool First { get; init; }
+    public int TrackCount { get; init; }
+    public IReadOnlyList<string> TracksAdded { get; init; } = [];
+    public IReadOnlyList<string> TracksRemoved { get; init; } = [];
+    public IReadOnlyList<TrackRename> TracksRenamed { get; init; } = [];
+    public double? TempoFrom { get; init; }
+    public double? TempoTo { get; init; }
+    /// <summary>Time signature before / after ("4/4").</summary>
+    public string? MeterFrom { get; init; }
+    public string? MeterTo { get; init; }
+    /// <summary>Tracks whose clips, notes, session slots or automation changed.</summary>
+    public IReadOnlyList<string> Edited { get; init; } = [];
+    /// <summary>Tracks whose instrument, devices or modulation changed.</summary>
+    public IReadOnlyList<string> Sound { get; init; } = [];
+    /// <summary>Tracks whose volume, pan, mute, solo or sends changed.</summary>
+    public IReadOnlyList<string> Mix { get; init; } = [];
+    /// <summary>Audio files no earlier version of this branch had (recordings, imports, bounces).</summary>
+    public int NewAudio { get; init; }
+    /// <summary>Other parts of the project that changed: "sections", "midi map", "layout", "freeze".</summary>
+    public IReadOnlyList<string> Other { get; init; } = [];
+
+    public bool IsEmpty => !First && TracksAdded.Count == 0 && TracksRemoved.Count == 0 && TracksRenamed.Count == 0
+                           && TempoTo is null && MeterTo is null && Edited.Count == 0 && Sound.Count == 0
+                           && Mix.Count == 0 && NewAudio == 0 && Other.Count == 0;
+}
+
 /// <summary>One saved version of a project — a node of the history tree.</summary>
 /// <param name="Parent">The version this one was saved on top of (null for the root).</param>
 /// <param name="AddedBytes">Disk space this version added when it was saved (new audio,
@@ -12,7 +47,11 @@ namespace Nota.Application;
 public sealed record ProjectVersion(
     string Id, string? Parent, DateTimeOffset CreatedAt,
     string? Label, string? Note, bool Starred,
-    string AppVersion, int ProjectFormat, long AddedBytes, bool CanOpen);
+    string AppVersion, int ProjectFormat, long AddedBytes, bool CanOpen)
+{
+    /// <summary>What changed against the parent; null when it couldn't be worked out.</summary>
+    public VersionChanges? Changes { get; init; }
+}
 
 /// <summary>A project's history: every version (oldest first) and the one the working
 /// copy was last saved as or switched to.</summary>

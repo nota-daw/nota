@@ -180,6 +180,9 @@ Checking a version out writes its top-level files back (manifest last) and moves
 the next save on top of an older version branches. A save's prune keeps every binary some
 version references, and prunes nothing if the history can't be read. Deleting a version
 re-parents its children and collects objects and binaries nothing needs any more.
+Each version also stores what it changed against its parent (`VersionDiff`, from the two
+manifests: tracks added / removed / renamed, tempo, meter, and per track arrangement, sound
+or mix), which the History tab words via `VersionSummary`.
 
 `analysis/` holds a cache of imported audio — each file's waveform overview (min/max per
 512 frames) and detected tempo, as `<content fingerprint>.npk` — so re-importing a file

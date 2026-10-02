@@ -9,6 +9,7 @@
 
 using Nota.Application;
 using Nota.Infrastructure;
+using Nota.Presentation;
 
 namespace Nota.SmokeTest;
 
@@ -41,6 +42,76 @@ internal static class HistoryTests
         var skew = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState([V("a", null, 10), V("b", "a", 5)], "b"));
         yield return (string.Concat(skew.Select(r => r.Version.Id)) == "ba" && skew.All(r => r.Lane == 0),
             "a child is never drawn below its parent");
+    }
+
+    /// <summary>What each version changed (VersionDiff) and how it reads (VersionSummary).</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunSummary()
+    {
+        string tmp = Path.GetTempPath();
+        string wav = Path.Combine(tmp, "nota_smoke_summary_sine.wav");
+        WavWriter.WriteSine(wav, seconds: 0.5, freq: 440, sampleRate: 44100);
+        string dir = Path.Combine(tmp, "nota-smoke-summary-" + Guid.NewGuid().ToString("N") + ".nota");
+        IProjectHistory history = new ProjectHistory("0.0.0-test");
+        static string Bpm(double b) => b.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            using var e = new NotaEngine();
+            double bpm = 120;
+            VersionChanges Step(Action edit)
+            {
+                edit();
+                ProjectService.Save(ProjectService.Capture(e, new TransportState(bpm, 1.0, false, false), new List<string>()), dir, e);
+                return history.Commit(dir)!.Changes!;
+            }
+
+            int lead = e.AddInstrumentTrack();
+            var c1 = Step(() => e.SetTrackName(lead, "Lead"));
+            yield return (c1 is { First: true, TrackCount: 1 } && VersionSummary.Headline(c1, Bpm) == "First save · 1 track",
+                $"the first version reads \"{VersionSummary.Headline(c1, Bpm)}\"");
+
+            int bass = 0;
+            var c2 = Step(() => { bass = e.AddInstrumentTrack(); e.SetTrackName(bass, "Bass"); bpm = 124; });
+            yield return (c2.TracksAdded.SequenceEqual(["Bass"]) && c2.TempoFrom == 120 && c2.TempoTo == 124 && c2.Edited.Count == 0,
+                $"an added track and a tempo change are seen ({string.Join(" · ", VersionSummary.Parts(c2, Bpm))})");
+            yield return (VersionSummary.Headline(c2, Bpm) == "Added Bass · Tempo 120.00 → 124.00", "…and lead the headline");
+
+            int vox = 0;
+            var c3 = Step(() => { vox = e.AddAudioTrack(); e.SetTrackName(vox, "Vox"); });
+            var c4 = Step(() => e.AddAudioClipEx(vox, wav, 0, 0, 0, 1f));
+            yield return (c4.NewAudio == 1 && c4.Edited.SequenceEqual(["Vox"]) && c4.TracksAdded.Count == 0,
+                $"a new clip is new audio on an edited track ({string.Join(" · ", VersionSummary.Parts(c4, Bpm))})");
+
+            var c5 = Step(() => e.SetTrackVolume(bass, 0.5f));
+            yield return (c5.Mix.SequenceEqual(["Bass"]) && c5.Edited.Count == 0 && c5.Sound.Count == 0, "a fader move is a mix change");
+
+            var c6 = Step(() => e.SetTrackName(lead, "Strings"));
+            yield return (c6.TracksRenamed.Count == 1 && c6.TracksRenamed[0] == new TrackRename("Lead", "Strings")
+                          && c6.TracksAdded.Count == 0 && c6.TracksRemoved.Count == 0, "a renamed track reads as a rename");
+
+            var c7 = Step(() => { e.RemoveTrack(vox); File.WriteAllText(Path.Combine(dir, "sections.json"), "[]"); });
+            yield return (c7.TracksRemoved.SequenceEqual(["Vox"]) && c7.Other.SequenceEqual(["sections"]),
+                $"a removed track and edited sections are seen ({string.Join(" · ", VersionSummary.Parts(c7, Bpm))})");
+
+            // Versions recorded before summaries existed get one on the next read.
+            string versions = Path.Combine(dir, ".history", "versions.json");
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(versions))!;
+            foreach (var v in json["versions"]!.AsArray()) v!.AsObject().Remove("changes");
+            File.WriteAllText(versions, json.ToJsonString());
+            var back = history.Read(dir).Versions;
+            yield return (back.All(v => v.Changes is not null) && back[1].Changes!.TracksAdded.SequenceEqual(["Bass"]),
+                "older versions get their summary worked out on read");
+            yield return (File.ReadAllText(versions).Contains("\"changes\""), "…and keep it");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+            try { File.Delete(wav); } catch { }
+        }
+
+        var many = new VersionChanges { Edited = ["A", "B", "C", "D"], Mix = ["A", "B", "C"] };
+        yield return (string.Join(" · ", VersionSummary.Parts(many, Bpm)) == "Edited A, B +2 · Mix of 3 tracks",
+            "long lists fold into a count");
+        yield return (VersionSummary.Headline(new VersionChanges(), Bpm) is null, "nothing nameable → no headline");
     }
 
     public static IEnumerable<(bool Ok, string Label)> Run()

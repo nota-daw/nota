@@ -46,7 +46,8 @@ JUCE module; the engine core is JUCE-free.
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation.
 - **Version history**: every save records a version inside the project. The browser's
-  **History** tab draws them as a branching tree (the current one has a brass dot); switch
+  **History** tab draws them as a branching tree (the current one has a brass dot), each
+  described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
   to any version, open one as a copy, or name, note, star and delete versions. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.

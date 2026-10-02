@@ -22,7 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Version history:** every save keeps a version of the project, and the new **History**
   tab in the browser shows them as a tree. Switch back to any version, or open one as a
   separate copy; saving on top of an older version starts a new branch, so nothing is lost.
-  Name, note, star and delete versions from the right-click menu. **File → Save Version with
+  Each version describes itself — "Added Bass · Tempo 120.00 → 124.00", "Mix of Vocals" — so
+  the list reads without notes. Name, note, star and delete versions from the right-click menu. **File → Save Version with
   Note…** (⌥⌘S) asks what changed. Versions share their audio, so a version costs only what it
   adds. **Save As** takes the whole history to the new project.
 

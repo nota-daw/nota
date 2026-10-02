@@ -163,7 +163,10 @@ internal sealed class HistoryView : UserControl
         }
         Grid.SetColumn(when, 4);
         grid.Children.Add(when);
-        ToolTip.SetTip(grid, v.Note is { Length: > 0 } note ? $"{Title(v)} · {note}" : Title(v));
+        var tip = new List<string> { Title(v) };
+        if (Changes(v) is { Length: > 0 } changes && changes != Title(v)) tip.Add(changes);
+        if (v.Note is { Length: > 0 } note && note != Title(v)) tip.Add(note);
+        ToolTip.SetTip(grid, string.Join("\n", tip));
         return grid;
     }
 
@@ -212,6 +215,12 @@ internal sealed class HistoryView : UserControl
         metaText.BindResource(TextBlock.ForegroundProperty, "Brush.TextSecondary");
 
         var stack = new StackPanel { Spacing = 4, Children = { name, metaText } };
+        if (Changes(v) is { Length: > 0 } changes && changes != Title(v))
+        {
+            var what = new TextBlock { Text = changes, Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap, MaxHeight = 48 };
+            what.BindResource(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+            stack.Children.Add(what);
+        }
         if (v.Note is { Length: > 0 } note && note != Title(v))   // the title already shows a one-line note
             stack.Children.Add(new TextBlock { Text = note, Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap, MaxHeight = 64 });
         if (!v.CanOpen)
@@ -311,9 +320,15 @@ internal sealed class HistoryView : UserControl
 
     // --- text ----------------------------------------------------------------
 
-    // The row's name: the label, else the note's first line, else its number in save order.
+    // The row's name: the label, else the note's first line, else what changed, else its
+    // number in save order.
     private string Title(ProjectVersion v)
-        => v.Label ?? v.Note?.Split('\n')[0] ?? (_numbers.TryGetValue(v.Id, out int n) ? $"Version {n}" : "Version");
+        => v.Label ?? v.Note?.Split('\n')[0] ?? VersionSummary.Headline(v.Changes, NotaNum.Bpm)
+           ?? (_numbers.TryGetValue(v.Id, out int n) ? $"Version {n}" : "Version");
+
+    // Everything the version changed, as one line ("" when unknown or nothing nameable).
+    private static string Changes(ProjectVersion v)
+        => v.Changes is null ? "" : string.Join(" · ", VersionSummary.Parts(v.Changes, NotaNum.Bpm));
 
     // "14:32" today, "1 Oct" this year, "1 Oct 2025" before.
     private static string ShortTime(DateTimeOffset t)

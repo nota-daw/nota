@@ -74,6 +74,8 @@ public sealed partial class ProjectHistory : IProjectHistory
         public SortedDictionary<string, string> Files { get; set; } = new(StringComparer.Ordinal);
         /// <summary>Bundle-relative binaries the manifest references (samples/…, plugin-states/…).</summary>
         public List<string> Binaries { get; set; } = new();
+        /// <summary>What changed against the parent (null for versions recorded before this existed).</summary>
+        public VersionChanges? Changes { get; set; }
     }
 
     // --- IProjectHistory ---------------------------------------------------
@@ -84,6 +86,7 @@ public sealed partial class ProjectHistory : IProjectHistory
         {
             var doc = Load(bundleDir);
             if (doc is null) return ProjectHistoryState.Empty;
+            Backfill(bundleDir, doc);
             return new ProjectHistoryState(doc.Versions.Select(ToVersion).ToList(), doc.Head);
         }
     }
@@ -117,6 +120,8 @@ public sealed partial class ProjectHistory : IProjectHistory
                 AddedBytes = added,
                 Files = snap.Files,
                 Binaries = snap.Binaries,
+                Changes = Changes(bundleDir, head, snap.Files, snap.Binaries,
+                    snap.Contents.GetValueOrDefault(snap.Files[ProjectService.ManifestName])),
             };
             doc.Versions.Add(node);
             doc.Head = node.Id;
@@ -460,7 +465,47 @@ public sealed partial class ProjectHistory : IProjectHistory
 
     private static ProjectVersion ToVersion(Node n)
         => new(n.Id, n.Parent, n.CreatedAt, n.Label, n.Note, n.Starred, n.AppVersion, n.ProjectFormat, n.AddedBytes,
-               CanOpen: n.ProjectFormat <= ProjectService.CurrentFormatVersion);
+               CanOpen: n.ProjectFormat <= ProjectService.CurrentFormatVersion) { Changes = n.Changes };
+
+    // --- change summaries --------------------------------------------------
+
+    // What `files` + `binaries` (a version's content; `manifest` its project.json bytes)
+    // changed against `parent`. Null if a manifest can't be read.
+    private static VersionChanges? Changes(string bundleDir, Node? parent, IReadOnlyDictionary<string, string> files,
+                                           IReadOnlyCollection<string> binaries, byte[]? manifest)
+    {
+        try
+        {
+            manifest ??= files.TryGetValue(ProjectService.ManifestName, out var h) ? ReadObject(bundleDir, h) : null;
+            if (manifest is null) return null;
+            var after = JsonNode.Parse(manifest);
+            if (parent is null) return VersionDiff.First(after);
+            var before = parent.Files.TryGetValue(ProjectService.ManifestName, out var ph) && ReadObject(bundleDir, ph) is { } pb
+                ? JsonNode.Parse(pb) : null;
+            if (before is null) return null;
+            var changedFiles = files.Keys.Union(parent.Files.Keys)
+                .Where(f => f != ProjectService.ManifestName
+                            && files.GetValueOrDefault(f) != parent.Files.GetValueOrDefault(f));
+            var known = parent.Binaries.ToHashSet(StringComparer.Ordinal);
+            int newAudio = binaries.Count(b => b.StartsWith(BundleContent.SamplesDir + "/", StringComparison.Ordinal) && !known.Contains(b));
+            return VersionDiff.Compare(before, after, changedFiles, newAudio);
+        }
+        catch (Exception e) when (e is JsonException or IOException or InvalidOperationException) { return null; }
+    }
+
+    // Versions recorded before change summaries existed get one now (once: it is stored).
+    private static void Backfill(string bundleDir, HistoryDoc doc)
+    {
+        bool any = false;
+        foreach (var n in doc.Versions.Where(v => v.Changes is null))
+        {
+            n.Changes = Changes(bundleDir, Find(doc, n.Parent), n.Files, n.Binaries, manifest: null);
+            any |= n.Changes is not null;
+        }
+        if (!any) return;
+        try { Store(bundleDir, doc); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* read-only: work it out again next time */ }
+    }
 
     private static string NewId(HistoryDoc doc)
     {
