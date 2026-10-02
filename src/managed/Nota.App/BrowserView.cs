@@ -570,9 +570,9 @@ public sealed class BrowserView : UserControl
             0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
-            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Folders), then browse them here as a folder tree. You can also drag files in from Finder."),
+            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample Packs, then browse them here as a folder tree. You can also drag files in from Finder."),
             4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
-            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Folders) and it shows up here."),
+            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here."),
         };
     }
 

@@ -78,7 +78,9 @@ public sealed class BrowserItem
 
 public sealed partial class BrowserViewModel : ObservableObject
 {
-    private const int MaxSamples = 2000;
+    // A safety cap on the Files scan, not a browsing limit: installed sample packs alone run to
+    // tens of thousands of files (the tree builds in ~150 ms for 45k).
+    private const int MaxSamples = 100_000;
     private static readonly string[] SampleExts = { ".wav", ".flac", ".mp3" };
 
     private readonly IPluginCatalog _catalog;
@@ -122,9 +124,9 @@ public sealed partial class BrowserViewModel : ObservableObject
     public ObservableCollection<BrowserItem> Instruments { get; } = new();
     public ObservableCollection<BrowserItem> Effects { get; } = new();
     public ObservableCollection<BrowserItem> MidiEffects { get; } = new();
-    public ObservableCollection<BrowserItem> Samples { get; } = new();
+    public BulkObservableCollection<BrowserItem> Samples { get; } = new();
     public ObservableCollection<BrowserItem> Projects { get; } = new();
-    public ObservableCollection<BrowserItem> Presets { get; } = new();
+    public BulkObservableCollection<BrowserItem> Presets { get; } = new();
 
     public BrowserViewModel(IPluginCatalog catalog, IPresetLibrary presets, IFactoryPresets factory,
                             ISettingsService? settings = null, IBrowserLibrary? library = null,
@@ -649,16 +651,17 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     // Shared folder-tree flatten (Files + Presets): both are Folder parents with non-folder
     // leaves, so the same expand/query logic applies.
-    private void RebuildTreeVisible(List<BrowserItem> roots, ObservableCollection<BrowserItem> dst, string q)
+    private void RebuildTreeVisible(List<BrowserItem> roots, BulkObservableCollection<BrowserItem> dst, string q)
     {
-        dst.Clear();
-        foreach (var node in roots) FlattenTree(node, q, ancestorMatched: false, dst);
+        var rows = new List<BrowserItem>();
+        foreach (var node in roots) FlattenTree(node, q, ancestorMatched: false, rows);
+        dst.ReplaceAll(rows);
     }
 
     // Adds `node` (and, for folders, its visible descendants) to `dst`. Returns whether the
     // node ended up visible. With a query, folders auto-expand and survive only if the folder
     // name or some descendant matches; a folder-name hit reveals its whole subtree.
-    private bool FlattenTree(BrowserItem node, string q, bool ancestorMatched, ObservableCollection<BrowserItem> dst)
+    private bool FlattenTree(BrowserItem node, string q, bool ancestorMatched, List<BrowserItem> dst)
     {
         if (node.Kind != BrowserItemKind.Folder)
         {

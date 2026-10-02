@@ -2,12 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Settings (nota-design/Nota Settings.html): 880×640 with a 188px sidebar grouped as
-// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads) and General (Library /
-// Appearance / Shortcuts), and a content pane per section under a title + subtitle header.
-// Audio device / sample-rate / buffer are persisted natively (audio.json) and applied by
-// restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan folders go through
-// the catalog. Test: a 440 Hz sine through the master (toggle; stopped when the pane or
-// window goes away) and a 5 s CPU check sampling the live DSP load + dropout count.
+// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
+// and General (Library / Appearance / Shortcuts), and a content pane per section under a
+// title + subtitle header. Audio device / sample-rate / buffer are persisted natively (audio.json)
+// and applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan
+// folders go through the catalog. Test: a 440 Hz sine through the master (toggle; stopped
+// when the pane or window goes away) and a 5 s CPU check sampling the live DSP load +
+// dropout count.
 
 using System;
 using System.Collections.Generic;
@@ -67,7 +68,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("PLUG-INS", new[]
         {
             new Page("Plug-ins", "Where Nota looks for VST3", "M9 3 V7 M15 3 V7 M6 7 H18 V11 A6 6 0 0 1 6 11 Z M12 17 V21"),
-            new Page("Downloads", "Nota plugin registry", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
+            new Page("Downloads", "Plug-ins and sample packs", "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19"),
         }),
         ("GENERAL", new[]
         {
@@ -218,6 +219,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         header.Children.Add(new TextBlock { Text = page.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Bottom });
         header.Children.Add(new TextBlock { Text = page.Subtitle, FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) });
 
+        if (index == DownloadsIndex) { _content.Content = DownloadsPane(header); return; }
+
         // Padding lives inside the scrolled content: a ScrollViewer's own Padding isn't part of
         // its extent, so the last rows of a long pane (Shortcuts) couldn't be scrolled into view.
         _content.Content = new ScrollViewer
@@ -233,7 +236,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     // The Downloads item carries the number of registry plugins not installed yet.
     private void UpdateDownloadsBadge(int count)
     {
-        var badge = _navItems[4].Badge;
+        var badge = _navItems[DownloadsIndex].Badge;
         badge.Text = count.ToString();
         badge.IsVisible = count > 0;
     }
@@ -244,7 +247,6 @@ public sealed partial class PreferencesWindow : NotaWindow
         1 => MidiPane(),
         2 => GamepadsPane(),
         3 => PluginsPane(),
-        4 => StorePane(),
         5 => LibraryPane(),
         6 => AppearancePane(),
         _ => ShortcutsPane(),

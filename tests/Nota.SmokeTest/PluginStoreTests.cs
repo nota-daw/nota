@@ -195,7 +195,7 @@ internal static class PluginStoreTests
             var sw = System.Diagnostics.Stopwatch.StartNew();
             string? err = null;
             try { store.InstallAsync(p).GetAwaiter().GetResult(); }
-            catch (PluginStoreException e) { err = e.Message; }
+            catch (StoreException e) { err = e.Message; }
             yield return (err is null, $"{id} {p.Version} ({p.Asset.Platform}, {p.Asset.Archive}{(p.Asset.Inner is null ? "" : " → pkg")}) installs in {sw.Elapsed.TotalSeconds:0.0} s {err}");
             if (err is not null || !File.Exists(worker)) continue;
             foreach (var bundle in Directory.GetFileSystemEntries(Path.Combine(store.PluginsDir, id)))
@@ -263,26 +263,26 @@ internal static class PluginStoreTests
 
     // ---- helpers ----------------------------------------------------------------------------
 
-    private sealed class SyncProgress(Action<StoreProgress> report) : IProgress<StoreProgress>
+    internal sealed class SyncProgress(Action<StoreProgress> report) : IProgress<StoreProgress>
     {
         public void Report(StoreProgress value) => report(value);
     }
 
-    private static bool Throws(Action a)
+    internal static bool Throws(Action a)
     {
         try { a(); return false; }
-        catch (PluginStoreException) { return true; }
+        catch (StoreException) { return true; }
     }
 
-    private static string Sha(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+    internal static string Sha(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
 
-    private static void Entry(ZipArchive z, string name, string text)
+    internal static void Entry(ZipArchive z, string name, string text)
     {
         using var s = z.CreateEntry(name).Open();
         s.Write(Encoding.UTF8.GetBytes(text));
     }
 
-    private static void WriteTarGz(string path, params (string Name, string Text)[] files)
+    internal static void WriteTarGz(string path, params (string Name, string Text)[] files)
     {
         using var fs = File.Create(path);
         using var gz = new GZipStream(fs, CompressionLevel.Fastest);

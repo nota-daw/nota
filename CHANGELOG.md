@@ -31,12 +31,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   that erases the open project's history, and other projects' on their next save. Over MCP,
   an AI can list versions, save one with a note before an experiment, switch back, and name,
   note or star versions.
+- **Sample packs:** **Settings → Downloads** now has a **Sample Packs** side next to
+  Plug-ins. It installs free sample packs — drum kits, a TR-808, sampled basses, guitars,
+  pianos, horns and more — into a **Downloaded** folder in your Samples folder, so they show
+  up in the browser's Files tab. Every pack is licensed for any music, commercial releases
+  included; each downloads from its author's own page and is checked against the registry's
+  checksum before it's unpacked. Only the samples and their docs are installed, and Nota
+  checks there is room for a pack before downloading it. On both sides the filters and
+  search stay at the top while the list scrolls.
 
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and
   imports instead of every sample again, and the same audio used in several places is
   stored once. Background autosave no longer rewrites the project's audio either. Older
   projects are converted on their next save.
+
+### Fixed
+- **Big sample libraries in the Files tab:** the browser listed only the first 2,000 files of
+  the Samples folder; it now lists up to 100,000, and searching them stays fast.
 
 ## [0.42.2] — 2026-09-30
 
