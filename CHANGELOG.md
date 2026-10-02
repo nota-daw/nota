@@ -18,6 +18,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-10-02
+
+### Highlights
+- **Version history:** every save keeps a version of your project, shown as a tree in the
+  new History tab — go back to any version or open it as a copy, and nothing is ever lost.
+- **Smart samples:** Nota learns the tempo, key and type of every sample, lets you filter by
+  them, finds similar sounds, and fits dropped loops to the project's tempo and key.
+- **Separate Stems:** split any audio clip into drums, bass, vocals and the rest, right on
+  your computer; Convert Melody and Convert Harmony now hear chords too.
+- **Free sample packs and AI models** install from Settings → Downloads, and downloads keep
+  going after Settings closes.
+- **Updates install themselves** with one click from the start screen.
+- Faster saves for projects with audio, and the Files tab now handles big sample libraries.
+
 ### Added
 - **Version history:** every save keeps a version of the project, and the new **History**
   tab in the browser shows them as a tree. Switch back to any version, or open one as a
