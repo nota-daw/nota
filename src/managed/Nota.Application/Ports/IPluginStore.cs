@@ -61,7 +61,7 @@ public interface IPluginStore
     IReadOnlyList<InstalledStorePlugin> Installed { get; }
 
     /// <summary>Downloads, verifies (size + sha256) and unpacks the plugin's asset, replacing any
-    /// installed version. Throws <see cref="PluginStoreException"/> with a user-facing message.</summary>
+    /// installed version. Throws <see cref="StoreException"/> with a user-facing message.</summary>
     Task InstallAsync(StorePlugin plugin, IProgress<StoreProgress>? progress = null, CancellationToken ct = default);
 
     /// <summary>Removes an installed plugin's files. No-op when it isn't installed.</summary>
@@ -72,4 +72,7 @@ public interface IPluginStore
     StorePlugin? FindProvider(string pluginIdentifier);
 }
 
-public sealed class PluginStoreException(string message, Exception? inner = null) : Exception(message, inner);
+/// <summary>A registry store failure (plugins or sample packs) with a user-facing message.</summary>
+public class StoreException(string message, Exception? inner = null) : Exception(message, inner);
+
+public sealed class PluginStoreException(string message, Exception? inner = null) : StoreException(message, inner);

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Preferences → Get Plug-ins: browse the Nota plugin registry and install / update /
+// Preferences → Downloads → Plug-ins: browse the Nota plugin registry and install / update /
 // remove open-source VST3 plugins (IPluginStore). One install at a time; it keeps
 // running when the user switches panes and is cancelled when the window closes. Its
 // progress and outcome show in a dock at the bottom of the window (visible from every
-// pane), which also cancels it. After every change the catalog is rescanned so the
-// browser lists the new plugins.
+// pane), which also cancels it; Sample Packs (PreferencesWindow.Samples.cs) shares that
+// job state and dock. After every change the catalog is rescanned so the browser lists the
+// new plugins.
 //
 // The list is virtualized (only the rows in view exist), so filtering and searching the
 // whole registry stays instant. Plugins without a build for this computer sink to the end,
@@ -67,12 +68,12 @@ public sealed partial class PreferencesWindow
     private Button _dockCancel = null!;
     private Control _dockClose = null!;
 
-    private Control StorePane()
-    {
-        var intro = Caption("Open-source VST3 plugins from the Nota plugin registry. Each one downloads from the project's own GitHub release, is checked against the registry's checksum and unpacked — installers never run.", muted: true);
-        intro.MaxWidth = 600;
-        intro.HorizontalAlignment = HorizontalAlignment.Left;
+    private const string StoreIntro = "Open-source VST3 plugins from the Nota plugin registry. Each one downloads from the project's own GitHub release, is checked against the registry's checksum and unpacked — installers never run.";
 
+    // The Plug-ins half of Downloads (PreferencesWindow.Downloads.cs): its toolbar pins to the
+    // top while the body scrolls.
+    private (Control Toolbar, Control Body) StoreParts()
+    {
         // Filter segments carry a mono count; RenderStoreList keeps the counts current.
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var segs = new List<ToggleButton>();
@@ -114,9 +115,9 @@ public sealed partial class PreferencesWindow
         Grid.SetColumn(searchField, 1); toolbar.Children.Add(searchField);
         Grid.SetColumn(refresh, 2); toolbar.Children.Add(refresh);
 
+        var list = _storeList = new ContentControl();
         _storeStatus = Caption("");
         _storeLoadBar = new ProgressBar { IsIndeterminate = true, Height = 3, MinWidth = 0, IsVisible = false };
-        _storeList = new ContentControl();
         _storeItems = StoreItems();
 
         var body = new StackPanel
@@ -124,16 +125,21 @@ public sealed partial class PreferencesWindow
             Spacing = 14,
             Children =
             {
-                intro, toolbar,
                 _storeStatus,
                 new StackPanel { Spacing = 6, Children = { _storeLoadBar, _storeList } },
                 Caption($"Installed to {_store.PluginsDir}"),
             },
         };
-        body.DetachedFromVisualTree += (_, _) => { _storeList = null; _storeItems = null; _storeStatus = null; _storeCounts = null; _storeRefresh = null; _storeLoadBar = null; };
+        // Only forget the controls if they are still these: switching to Sample Packs and back
+        // builds the new ones before the old body leaves the tree.
+        body.DetachedFromVisualTree += (_, _) =>
+        {
+            if (_storeList != list) return;
+            _storeList = null; _storeItems = null; _storeStatus = null; _storeCounts = null; _storeRefresh = null; _storeLoadBar = null;
+        };
         EnsureStoreLoading();
         RenderStoreList();
-        return body;
+        return (toolbar, body);
     }
 
     // The registry index is cached on disk, so the window starts this on open: the sidebar's
@@ -152,7 +158,7 @@ public sealed partial class PreferencesWindow
         {
             _storePlugins = await _store.FetchAsync(refresh);
         }
-        catch (PluginStoreException e)
+        catch (StoreException e)
         {
             _storeMessage = e.Message;
         }
@@ -540,7 +546,7 @@ public sealed partial class PreferencesWindow
         SetStoreResult(null, sticky: true);
         _storeCts ??= new CancellationTokenSource();
         var job = _storeJobCts = CancellationTokenSource.CreateLinkedTokenSource(_storeCts.Token);
-        RenderStoreList();
+        RenderStoreLists();
         // A report queued before Cancel must not overwrite "Cancelling…".
         var progress = new Progress<StoreProgress>(r => { if (job.IsCancellationRequested) return; _storeProgress = r; UpdateDock(); });
         try
@@ -556,7 +562,7 @@ public sealed partial class PreferencesWindow
             // Window closing: nothing to show. Otherwise the user pressed Cancel.
             if (_storeCts is { IsCancellationRequested: false }) SetStoreResult($"Installing {p.Name} was cancelled.", sticky: false);
         }
-        catch (PluginStoreException e) { SetStoreResult(e.Message, sticky: true); }
+        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
         catch (Exception e)
         {
             App.Services.GetRequiredService<ILogSink>().Error($"Installing {p.Id} failed", e);
@@ -568,7 +574,7 @@ public sealed partial class PreferencesWindow
             _storeJobCts = null;
             job.Dispose();
         }
-        RenderStoreList();
+        RenderStoreLists();
     }
 
     private async void RemoveFromStore(StorePlugin p)
@@ -582,16 +588,16 @@ public sealed partial class PreferencesWindow
         _storeBusySize = 0;
         _storeProgress = new StoreProgress(-1, $"Removing {p.Name}…");
         SetStoreResult(null, sticky: true);
-        RenderStoreList();
+        RenderStoreLists();
         try
         {
             _store.Uninstall(p.Id);
             await RescanAfterStoreChange();
             SetStoreResult($"{p.Name} was removed.", sticky: false);
         }
-        catch (PluginStoreException e) { SetStoreResult(e.Message, sticky: true); }
+        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
         finally { _storeBusyId = null; }
-        RenderStoreList();
+        RenderStoreLists();
     }
 
     private async Task<bool> RescanAfterStoreChange()

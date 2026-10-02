@@ -108,6 +108,14 @@ if (args.Length >= 1 && args[0] == "--store")
     Console.WriteLine(failures == 0 ? "STORE PASSED" : $"STORE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Get Samples alone: `--samples`.
+if (args.Length >= 1 && args[0] == "--samples")
+{
+    Console.WriteLine("-- get samples: sample registry store --");
+    foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SAMPLES PASSED" : $"SAMPLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--store-catalog")
 {
     Console.WriteLine("-- get plug-ins: catalog identifiers --");
@@ -13613,6 +13621,10 @@ foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");
 foreach (var (ok, label) in PluginStoreTests.Run()) Check(ok, label);
+
+// --- get samples: sample registry index, pack install/uninstall from local archives ---
+Console.WriteLine("-- get samples: sample registry store --");
+foreach (var (ok, label) in SampleStoreTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;

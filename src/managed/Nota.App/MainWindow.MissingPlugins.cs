@@ -22,7 +22,7 @@ public partial class MainWindow
         if (_vm is null || missing.Count == 0) return;
         var store = App.Services.GetRequiredService<IPluginStore>();
         try { await store.FetchAsync(); }
-        catch (PluginStoreException) { return; }
+        catch (StoreException) { return; }
 
         var offers = missing.Select(store.FindProvider).OfType<StorePlugin>()
             .Where(p => p.Asset is not null).DistinctBy(p => p.Id)
@@ -50,7 +50,7 @@ public partial class MainWindow
                     await store.InstallAsync(p, new Progress<StoreProgress>(r =>
                         prog.Report(r.Fraction < 0 ? ProgressReport.Indeterminate(r.Message) : ProgressReport.At(r.Fraction, r.Message))));
                 }
-                catch (PluginStoreException e) { error ??= e.Message; }
+                catch (StoreException e) { error ??= e.Message; }
             }
             prog.Report(ProgressReport.Indeterminate("Scanning plugins…"));
             await PluginScan.RescanAsync(_vm);

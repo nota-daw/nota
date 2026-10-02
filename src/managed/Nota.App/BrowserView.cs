@@ -108,6 +108,7 @@ public sealed class BrowserView : UserControl
     private const string IconSliders = "M7 4.5 v15 M12 4.5 v15 M17 4.5 v15 M5 9 h4 M10 14.5 h4 M15 7.5 h4";
     // Files — a folder with a raised tab on the left.
     private const string IconFolder = "M3.5 7.5 h5.6 l2.1 2.6 h9.3 v9.4 h-17 z";
+    private const string IconDownloads = "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19";   // as Settings → Downloads
     private const string IconStar = "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z";
     // Presets — a bookmark (a saved snapshot). Distinct from the fader glyphs above.
     private const string IconBookmark = "M6.5 4 h11 v16 l-5.5 -4.4 l-5.5 4.4 z";
@@ -570,9 +571,9 @@ public sealed class BrowserView : UserControl
             0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
-            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Folders), then browse them here as a folder tree. You can also drag files in from Finder."),
+            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample Packs, then browse them here as a folder tree. You can also drag files in from Finder."),
             4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
-            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Folders) and it shows up here."),
+            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here."),
         };
     }
 
@@ -744,6 +745,15 @@ public sealed class BrowserView : UserControl
             disclosure = new Border { Width = 14 };
         }
 
+        // The Downloaded folder (installed sample packs) carries the Downloads arrow.
+        Control? icon = null;
+        if (item.IsDownloads)
+        {
+            var arrow = new Path { Data = Geometry.Parse(IconDownloads), StrokeThickness = 2.2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
+            arrow.BindResource(Shape.StrokeProperty, "Brush.TextSecondary");
+            icon = new Viewbox { Width = 13, Height = 13, Child = new Canvas { Width = 24, Height = 24, Children = { arrow } } };
+        }
+
         // "Nota" drops to tertiary ink so the eye lands on the distinctive word.
         var prefix = item.Prefix.Length > 0
             ? new TextBlock { Text = item.Prefix, Classes = { "RowPrefix" } }
@@ -768,6 +778,7 @@ public sealed class BrowserView : UserControl
             Indent = 6 + item.Depth * 12,
             Edge = edge,
             Disclosure = disclosure,
+            Icon = icon,
             Prefix = prefix,
             Name2 = name,
             Markers = BuildRowMarkers(item),   // brass ★ + tag colour dots
@@ -793,6 +804,7 @@ public sealed class BrowserView : UserControl
         public double Indent { get; init; }
         public Border Edge { get; init; } = null!;
         public Control Disclosure { get; init; } = null!;
+        public Control? Icon { get; init; }
         public TextBlock? Prefix { get; init; }
         public TextBlock Name2 { get; init; } = null!;
         public Control? Markers { get; init; }
@@ -812,6 +824,7 @@ public sealed class BrowserView : UserControl
             _built = true;
             Children.Add(Edge);
             Children.Add(Disclosure);
+            if (Icon is not null) Children.Add(Icon);
             if (Prefix is not null) Children.Add(Prefix);
             Children.Add(Name2);
             if (Markers is not null) Children.Add(Markers);
@@ -828,6 +841,11 @@ public sealed class BrowserView : UserControl
             Disclosure.Arrange(new Rect(Indent, 0, Disclosure.DesiredSize.Width, h));
 
             double left = Indent + Disclosure.DesiredSize.Width + 3;
+            if (Icon is not null)
+            {
+                Place(Icon, left, Icon.DesiredSize.Width);
+                left += Icon.DesiredSize.Width + Gap;
+            }
             if (Prefix is not null)
             {
                 Place(Prefix, left, Prefix.DesiredSize.Width);
