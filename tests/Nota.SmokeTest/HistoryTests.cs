@@ -114,6 +114,42 @@ internal static class HistoryTests
         yield return (VersionSummary.Headline(new VersionChanges(), Bpm) is null, "nothing nameable → no headline");
     }
 
+    /// <summary>Bulk delete (History tab clean-up) and Exists.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunCleanup()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-cleanup-" + Guid.NewGuid().ToString("N") + ".nota");
+        IProjectHistory history = new ProjectHistory("0.0.0-test");
+        try
+        {
+            using var e = new NotaEngine();
+            yield return (!history.Exists(dir), "a fresh bundle has no history");
+            var ids = new List<string>();
+            var names = new[] { "Drums", "Bass", "Keys", "Pad" };
+            foreach (var n in names)
+            {
+                e.SetTrackName(e.AddInstrumentTrack(), n);
+                ProjectService.Save(ProjectService.Capture(e, new TransportState(120, 1, false, false), new List<string>()), dir, e);
+                ids.Add(history.Commit(dir)!.Id);
+            }
+            yield return (history.Exists(dir), "a commit creates the history");
+
+            bool refused = false;
+            try { history.DeleteMany(dir, [ids[1], ids[3]]); } catch (ProjectHistoryException) { refused = true; }
+            yield return (refused && history.Read(dir).Versions.Count == 4, "a batch with the current version is refused whole");
+
+            history.DeleteMany(dir, [ids[1], ids[2]]);
+            var left = history.Read(dir).Versions;
+            var last = left.Single(v => v.Id == ids[3]);
+            yield return (left.Count == 2 && last.Parent == ids[0], "deleting a run of versions links the rest up");
+            yield return (last.Changes?.TracksAdded.SequenceEqual(["Bass", "Keys", "Pad"]) == true,
+                $"the survivor is re-described against its new parent ({string.Join(", ", last.Changes?.TracksAdded ?? [])})");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         string tmp = Path.GetTempPath();

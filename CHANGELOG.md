@@ -25,7 +25,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Each version describes itself — "Added Bass · Tempo 120.00 → 124.00", "Mix of Vocals" — so
   the list reads without notes. Name, note, star and delete versions from the right-click menu. **File → Save Version with
   Note…** (⌥⌘S) asks what changed. Versions share their audio, so a version costs only what it
-  adds. **Save As** takes the whole history to the new project.
+  adds. **Save As** takes the whole history to the new project. The tab's menu clears out
+  every unnamed version at once (named, starred, noted and branch-tip versions stay). History
+  is on by default; **Settings → Library → Version history** turns it off after a warning —
+  that erases the open project's history, and other projects' on their next save.
 
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and

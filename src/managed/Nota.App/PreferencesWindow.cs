@@ -71,7 +71,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("GENERAL", new[]
         {
-            new Page("Library", "Default save and sample locations", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
+            new Page("Library", "Content folders and version history", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
             new Page("Appearance", "Theme and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
             new Page("Shortcuts", "Keyboard reference", "M3 7 H21 V17 H3 Z M7 11 H7.01 M11 11 H11.01 M15 11 H15.01 M8 14 H16"),
         }),
@@ -678,7 +678,25 @@ public sealed partial class PreferencesWindow : NotaWindow
             FolderRow("Projects",
                 () => settings.Current.ProjectsFolder, () => settings.ResolvedProjectsFolder(),
                 path => { settings.Current.ProjectsFolder = path; settings.Save(); _main.Browser.RebuildProjects(); }),
-        })));
+        })), VersionHistorySection(_main));
+    }
+
+    // On by default. Turning it off erases history, so it asks first — and stays on if not confirmed.
+    private Control VersionHistorySection(MainWindowViewModel main)
+    {
+        var row = (StackPanel)SwitchRow("Keep a version history of each project", main.Settings.Current.KeepVersionHistory, _ => { });
+        var sw = (ToggleSwitch)row.Children[0];
+        sw.Changed += async on =>
+        {
+            if (on) { main.SetKeepVersionHistory(true); return; }
+            bool ok = await new ConfirmWindow("Turn off version history",
+                "This erases the version history of the open project now, and of any other project the next time you save it. Older versions can't be brought back.",
+                "Turn off and erase", "Cancel").ShowDialog<bool>(this);
+            if (ok) main.SetKeepVersionHistory(false);
+            else sw.IsOn = true;
+        };
+        return Section("VERSION HISTORY", 10, row,
+            Caption("Every save records a version, listed in the browser's History tab. Versions share their audio, so each one costs only what it adds."));
     }
 
     private Control FolderRow(string label, Func<string> get, Func<string> resolved, Action<string> set)

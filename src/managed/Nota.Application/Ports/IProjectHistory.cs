@@ -75,6 +75,9 @@ public sealed class ProjectHistoryException(string message, Exception? inner = n
 /// (the caller then reopens the project). Saving on top of an older version branches.</summary>
 public interface IProjectHistory
 {
+    /// <summary>Does the bundle keep a version history (even a damaged one)?</summary>
+    bool Exists(string bundleDir);
+
     /// <summary>All versions and the head. Empty when the bundle has no history yet.</summary>
     ProjectHistoryState Read(string bundleDir);
 
@@ -93,6 +96,9 @@ public interface IProjectHistory
     /// <summary>Deletes a version (not the head); its children move up to its parent.
     /// Returns the bytes freed.</summary>
     long Delete(string bundleDir, string versionId);
+
+    /// <summary>Deletes several versions at once (none of them the head). Returns the bytes freed.</summary>
+    long DeleteMany(string bundleDir, IReadOnlyCollection<string> versionIds);
 
     /// <summary>Deletes the whole history and every file only it needed.</summary>
     long Erase(string bundleDir);

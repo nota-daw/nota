@@ -45,7 +45,12 @@ public partial class MainWindow : IHistoryHost
     // status-bar suffix when the version couldn't be recorded (the save itself stands).
     private string RecordVersion(string dir, string? previousPath, string? note)
     {
-        if (!KeepVersionHistory) return "";
+        if (!KeepVersionHistory)
+        {
+            // History is off: a project that still has one loses it on save (Settings warned).
+            if (_history.Exists(dir)) EraseHistory(dir);
+            return "";
+        }
         try
         {
             // Save As: the new bundle gets the whole history and the audio its versions use.
@@ -62,6 +67,26 @@ public partial class MainWindow : IHistoryHost
             App.Services.GetRequiredService<ILogSink>().Error("Recording a project version failed", ex);
             return $" · version not recorded: {ex.Message}";
         }
+    }
+
+    // Settings → Version history was turned off (and confirmed): erase the open project's.
+    private void OnVersionHistoryTurnedOff()
+    {
+        if (_projectPath is not { } dir || !_history.Exists(dir)) { HistoryChanged?.Invoke(); return; }
+        long freed = EraseHistory(dir);
+        if (_vm is not null) _vm.StatusText = $"Version history turned off · {NotaNum.Bytes(freed)} freed";
+    }
+
+    private long EraseHistory(string dir)
+    {
+        long freed = 0;
+        try { freed = _history.Erase(dir); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            App.Services.GetRequiredService<ILogSink>().Error("Erasing the project's version history failed", ex);
+        }
+        HistoryChanged?.Invoke();
+        return freed;
     }
 
     // Save As over an existing project replaces it, and its history with it — the new

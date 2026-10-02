@@ -49,7 +49,8 @@ JUCE module; the engine core is JUCE-free.
   **History** tab draws them as a branching tree (the current one has a brass dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
   to any version, open one as a copy, or name, note, star and delete versions. Saving on top
-  of an older version branches. **Save Version with Note…** (⌥⌘S). Versions share their
+  of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
+  unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open.

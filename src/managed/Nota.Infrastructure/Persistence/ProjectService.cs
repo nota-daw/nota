@@ -871,7 +871,7 @@ public sealed class ProjectService
         }
 
         string manifest = Path.Combine(bundleDir, ManifestName);
-        if (File.Exists(manifest) && !ProjectHistory.Exists(bundleDir))   // the version history supersedes backups/
+        if (File.Exists(manifest) && !ProjectHistory.HasHistory(bundleDir))   // the version history supersedes backups/
         {
             string backups = Path.Combine(bundleDir, "backups");
             Directory.CreateDirectory(backups);

@@ -51,6 +51,11 @@ internal sealed class HistoryView : UserControl
         MaxWidth = 220, Margin = new Thickness(20, 0),
     };
     private readonly Border _details = new() { BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(10, 8, 10, 10) };
+    private readonly Button _options = new()
+    {
+        Classes = { "ghost" }, Width = 22, Height = 22, Padding = new Thickness(0), Margin = new Thickness(6, 0, 0, 0),
+        Content = new Path { Data = Geometry.Parse("M4 7 H20 M7 12 H17 M10 17 H14"), Stretch = Stretch.Uniform, Width = 12, Height = 10, StrokeThickness = 1.6, StrokeLineCap = PenLineCap.Round },
+    };
     private ProjectHistoryState _state = ProjectHistoryState.Empty;
     private Dictionary<string, int> _numbers = new();   // version id -> 1-based number in save order
     private string? _dir;
@@ -62,10 +67,15 @@ internal sealed class HistoryView : UserControl
 
         var caption = new TextBlock { Text = "VERSIONS", Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
         _summary.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = RowH, Margin = new Thickness(10, 8, 10, 4) };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Height = RowH, Margin = new Thickness(10, 8, 6, 4) };
         header.Children.Add(caption);
         Grid.SetColumn(_summary, 1);
         header.Children.Add(_summary);
+        Grid.SetColumn(_options, 2);
+        header.Children.Add(_options);
+        _options.Click += (_, _) => BuildOptionsMenu().ShowAt(_options);
+        ((Path)_options.Content!).BindResource(Shape.StrokeProperty, "Brush.TextTertiary");
+        ToolTip.SetTip(_options, "Clean up the history");
 
         _empty.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _details.BindResource(Border.BackgroundProperty, "Brush.Panel");
@@ -126,6 +136,7 @@ internal sealed class HistoryView : UserControl
         _empty.IsVisible = _empty.Text.Length > 0;
         ToolTip.SetTip(_empty, problem is null ? null : "Its versions can't be listed until the file .history/versions.json is repaired.");
 
+        _options.IsVisible = rows.Count > 1;
         if (rows.Count == 0 || _dir is null) _summary.Text = "";
         else
         {
@@ -288,6 +299,43 @@ internal sealed class HistoryView : UserControl
         var del = Item("Delete version…", () => _ = Delete(v), !row.IsHead, GlyphKind.Trash);
         if (row.IsHead) ToolTip.SetTip(del, "Switch to another version to delete this one");
         return menu;
+    }
+
+    private MenuFlyout BuildOptionsMenu()
+    {
+        var menu = new MenuFlyout();
+        var unnamed = UnnamedVersions();
+        var clean = new MenuItem
+        {
+            Header = unnamed.Count == 0 ? "Delete unnamed versions…" : $"Delete {unnamed.Count} unnamed version{(unnamed.Count == 1 ? "" : "s")}…",
+            Icon = MenuKit.Icon(GlyphKind.Trash),
+            IsEnabled = unnamed.Count > 0,
+        };
+        clean.Click += (_, _) => _ = DeleteUnnamed(unnamed);
+        menu.Items.Add(clean);
+        return menu;
+    }
+
+    // Versions nobody marked as worth keeping: not current, unnamed, unstarred, without a note,
+    // and not the latest version of a branch (that would lose the branch's last state).
+    private List<ProjectVersion> UnnamedVersions()
+    {
+        var parents = _state.Versions.Select(v => v.Parent).OfType<string>().ToHashSet();
+        return _state.Versions
+            .Where(v => v.Id != _state.Head && v.Label is null && !v.Starred && v.Note is null && parents.Contains(v.Id))
+            .ToList();
+    }
+
+    private async Task DeleteUnnamed(IReadOnlyList<ProjectVersion> versions)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null || versions.Count == 0) return;
+        bool ok = await new ConfirmWindow("Delete unnamed versions",
+            $"Delete {versions.Count} version{(versions.Count == 1 ? "" : "s")} and the audio only they use? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone.",
+            "Delete", "Cancel").ShowDialog<bool>(owner);
+        if (!ok) return;
+        long freed = 0;
+        Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
+        _host.ReportStatus($"Deleted {versions.Count} version{(versions.Count == 1 ? "" : "s")} · {NotaNum.Bytes(freed)} freed");
     }
 
     private async Task Prompt(string title, string prompt, string? initial, Action<string> apply)

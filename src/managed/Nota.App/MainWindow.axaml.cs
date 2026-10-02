@@ -321,6 +321,7 @@ public partial class MainWindow : Window
         MainContent.Children.Add(_modular);
 
         vm.AutosaveRequested += OnAutosaveTick;
+        vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)

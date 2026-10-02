@@ -176,16 +176,27 @@ public sealed partial class ProjectHistory : IProjectHistory
     public void SetStarred(string bundleDir, string versionId, bool starred)
         => Edit(bundleDir, versionId, n => n.Starred = starred);
 
-    public long Delete(string bundleDir, string versionId)
+    public bool Exists(string bundleDir) => File.Exists(Path.Combine(bundleDir, HistoryDir, VersionsFile));
+
+    public long Delete(string bundleDir, string versionId) => DeleteMany(bundleDir, [versionId]);
+
+    public long DeleteMany(string bundleDir, IReadOnlyCollection<string> versionIds)
     {
         lock (Gate)
         {
             var doc = Load(bundleDir) ?? throw new ProjectHistoryException("This project has no version history.");
-            var node = Find(doc, versionId) ?? throw new ProjectHistoryException("That version no longer exists.");
-            if (node.Id == doc.Head)
+            var nodes = versionIds.Distinct().Select(id => Find(doc, id) ?? throw new ProjectHistoryException("That version no longer exists.")).ToList();
+            if (nodes.Any(n => n.Id == doc.Head))
                 throw new ProjectHistoryException("The current version can't be deleted — switch to another one first.");
-            foreach (var child in doc.Versions.Where(v => v.Parent == node.Id)) child.Parent = node.Parent;
-            doc.Versions.Remove(node);
+            foreach (var node in nodes)
+            {
+                foreach (var child in doc.Versions.Where(v => v.Parent == node.Id))
+                {
+                    child.Parent = node.Parent;
+                    child.Changes = null;   // re-described against its new parent on the next read
+                }
+                doc.Versions.Remove(node);
+            }
             Store(bundleDir, doc);
             return Collect(bundleDir, doc);
         }
@@ -244,7 +255,7 @@ public sealed partial class ProjectHistory : IProjectHistory
     }
 
     /// <summary>Does the bundle keep a version history?</summary>
-    public static bool Exists(string bundleDir) => File.Exists(Path.Combine(bundleDir, HistoryDir, VersionsFile));
+    internal static bool HasHistory(string bundleDir) => File.Exists(Path.Combine(bundleDir, HistoryDir, VersionsFile));
 
     /// <summary>Binaries any version references, for the save's prune to keep. Empty when
     /// there is no history; null when it can't be read — then nothing may be pruned.</summary>
