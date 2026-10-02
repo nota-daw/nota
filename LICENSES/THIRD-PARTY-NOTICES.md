@@ -71,6 +71,22 @@ Public-domain reverb algorithm by Jezar at Dreampoint. Nota ships its **own
 implementation** of the algorithm (`src/native/nota.engine/src/Reverb.h`); no original
 code is vendored.
 
+## ONNX Runtime
+Copyright © Microsoft Corporation.
+Licensed under the **MIT License**. The managed API ships with Nota; the native library is
+downloaded with the first AI model, together with its own license and third-party
+notices. <https://github.com/microsoft/onnxruntime>
+
+## AI models (downloaded on request)
+- **htdemucs** (Demucs v4) — Copyright © Meta Platforms, Inc. and affiliates. Licensed
+  under the **MIT License**. <https://github.com/facebookresearch/demucs>
+- **basic-pitch** — Copyright © Spotify AB. Licensed under the **Apache License 2.0**.
+  <https://github.com/spotify/basic-pitch>
+
+Neither model is part of the Nota download; Settings → Downloads → AI Models fetches them
+when asked. Nota's C# code around them ports the projects' reference Python (spectrogram,
+segmenting, note decoding), under the same licenses' terms.
+
 ## Apple system frameworks
 Portions © Apple Inc. On macOS, Nota calls the CoreAudio, CoreMIDI, AudioToolbox,
 AudioUnit, CoreAudioKit and GameController frameworks provided by the operating system.

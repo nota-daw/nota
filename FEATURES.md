@@ -206,7 +206,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     rest centred (a deadzone keeps a worn stick from drifting a mapped parameter);
     triggers are unipolar and rest at zero.
 - **Highlighting** of the pressed key on the roll's keyboard and as a bar along its row.
-- **Audio→MIDI** (right-click an audio clip → Convert):
+- **Audio→MIDI** (right-click an audio clip → Convert). With the **basic-pitch** AI model
+  installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
+  chords included, with velocities from the playing; Melody keeps the strongest note where notes
+  overlap. Without it they use the DSP below, and the Convert menu offers the model.
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
@@ -243,6 +246,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   Editing in either place updates the other, each edit is one undo step, split keeps the
   attack on the left piece and the release on the right, and the shape is saved with the
   project.
+- **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
+  splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
+  clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
+  reverse, envelopes, ADSR) over a stem file as long as the source, so it lines up sample for
+  sample; the original clip is switched off. One undo step; runs locally (about a third of the
+  clip's length on Apple Silicon) behind a progress dialog with Cancel; clips up to 10 minutes.
+  The first use offers to download the model.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. A grid-snap toggle governs trimming a warped clip.
@@ -664,6 +674,10 @@ and user presets, automation, persistence and cloning.
   an install runs. A project that needs a missing registry plugin offers to install it and
   reopens with its saved settings. Plugins are found even when installed in a different
   folder than on the computer that saved the project.
+- **AI Models** (Settings → Downloads, third side): **htdemucs** (Separate Stems, MIT) and
+  **basic-pitch** (Convert to MIDI, Apache-2.0), plus the **ONNX Runtime** 1.23.2 library they
+  run on, which comes with the first model and goes with the last. Every asset is pinned to a
+  URL, size and sha256 in the app; models install into Nota's data folder and run offline.
 - **Plugin device card** in two sizes: the small card shows vendor, format, parameter count
   and latency with Open editor and Save preset; the full card adds every parameter as a knob
   (with filter and pages, the plugin's own value text, double-click for its default) and a
@@ -800,7 +814,7 @@ and user presets, automation, persistence and cloning.
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
 - **Plug-ins**: scan paths, Rescan.
-- **Downloads**: the plugin registry installer (see [Plugin hosting](#plugin-hosting)).
+- **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which
   follows the OS appearance and switches with it; the choice applies live and is
@@ -850,6 +864,9 @@ Coverage:
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add and remove chains, parameters, 8 macros.
 - **Export** the master or stems to WAV (pcm16/pcm24/float32).
+- **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
+  Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
+  basic-pitch → a new MIDI track). Installing models stays with the user.
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,
   survey the controller's CCs and notes, view and edit bindings (range, inversion,
   deletion), and enter learn mode.

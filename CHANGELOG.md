@@ -40,6 +40,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   checks there is room for a pack before downloading it. On both sides the filters and
   search stay at the top while the list scrolls.
 
+- **Separate Stems:** right-click an audio clip → **Separate Stems…** splits it into
+  **Drums, Bass, Other and Vocals** — a group of four tracks right under the clip's track,
+  each clip lined up with the original (warp, reverse, fades and ADSR included). The original
+  clip is switched off, not deleted, and the whole thing undoes in one step. It runs on this
+  computer with Meta's Demucs model: a three-minute song takes well under a minute, with
+  Cancel.
+- **Better Convert Melody and Convert Harmony:** with Spotify's basic-pitch model installed
+  they hear every note, chords included, with velocities that follow the playing. Without it
+  they work as before, and the Convert menu offers the model.
+- **AI Models** in **Settings → Downloads**, beside Plug-ins and Sample Packs: install or
+  remove the two models. The first one also brings the AI runtime they share (ONNX Runtime);
+  removing the last one removes it. Everything is downloaded from its authors, checked
+  against a pinned checksum, and runs offline — no audio leaves the computer. Separate Stems
+  offers the download the first time you use it.
+- **Over MCP**, an AI can list the installed models, separate a clip into stems and
+  transcribe a clip into a MIDI track (`list_ai_models`, `separate_stems`,
+  `convert_audio_to_midi`). Installing a model stays with you.
+
 ### Changed
 - **Faster saves of projects with audio:** a save now writes only new recordings and
   imports instead of every sample again, and the same audio used in several places is
