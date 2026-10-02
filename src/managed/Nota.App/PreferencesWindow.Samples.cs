@@ -3,14 +3,13 @@
 //
 // Preferences → Downloads → Sample Packs: browse the Nota sample registry and install /
 // update / remove free sample packs (ISampleStore) into the Samples folder. Built like Get Plug-ins
-// (PreferencesWindow.Store.cs) and sharing its job state: one download at a time across both
-// stores, shown in the same dock. A pack's busy key is "pack:<id>" so it can't collide with a
+// (PreferencesWindow.Store.cs) and sharing its job state (DownloadJobs): one download at a time
+// across all of Downloads, shown in the same dock. A pack's busy key is "pack:<id>" so it can't collide with a
 // plugin id. After every change the browser's Files tab is rescanned.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -266,8 +265,8 @@ public sealed partial class PreferencesWindow
             text.Children.Add(new TextBlock { Text = notes, FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
 
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-        bool busy = _storeBusyId is not null;
-        if (_storeBusyId == PackKey(p.Id))
+        bool busy = Jobs.BusyId is not null;
+        if (Jobs.BusyId == PackKey(p.Id))
         {
             actions.Children.Add(StoreButton(inst is null ? "Installing…" : "Working…", enabled: false, () => { }));
         }
@@ -308,73 +307,35 @@ public sealed partial class PreferencesWindow
         return grid;
     }
 
-    private async void InstallPack(StorePack p)
+    private void InstallPack(StorePack p)
     {
-        if (_storeBusyId is not null) return;
-        _storeBusyId = PackKey(p.Id);
-        _storeBusySize = p.Asset.Size;
-        _storeProgress = new StoreProgress(0, $"Downloading {p.Name}…");
-        SetStoreResult(null, sticky: true);
-        _storeCts ??= new CancellationTokenSource();
-        var job = _storeJobCts = CancellationTokenSource.CreateLinkedTokenSource(_storeCts.Token);
-        RenderStoreLists();
-        var progress = new Progress<StoreProgress>(r =>
-        {
-            if (job.IsCancellationRequested) return;
-            // Only the download has a known byte count; the copy stage's fraction is of the unpacked size.
-            if (!r.Message.StartsWith("Downloading", StringComparison.Ordinal)) _storeBusySize = 0;
-            _storeProgress = r;
-            UpdateDock();
-        });
-        try
-        {
-            await _samples.InstallAsync(p, progress, job.Token);
-            // Analyse the new pack first, so its tempo / key tags and filters work at once.
-            if (_samples.Installed.FirstOrDefault(i => i.Id == p.Id) is { } installed)
-                App.Services.GetRequiredService<ISampleIndex>().Prioritize(installed.Path);
-            _main?.Browser.RebuildSamples();
-            SetStoreResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key.", sticky: false);
-        }
-        catch (OperationCanceledException)
-        {
-            if (_storeCts is { IsCancellationRequested: false }) SetStoreResult($"Installing {p.Name} was cancelled.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        catch (Exception e)
-        {
-            App.Services.GetRequiredService<ILogSink>().Error($"Installing pack {p.Id} failed", e);
-            SetStoreResult($"Installing {p.Name} failed: {e.Message}", sticky: true);
-        }
-        finally
-        {
-            _storeBusyId = null;
-            _storeJobCts = null;
-            job.Dispose();
-        }
-        RenderStoreLists();
+        var main = _main;
+        Jobs.Install(PackKey(p.Id), source: 1, p.Name, p.Asset.Size, new StoreProgress(0, $"Downloading {p.Name}…"),
+            (progress, ct) => _samples.InstallAsync(p, progress, ct),
+            () =>
+            {
+                // Analyse the new pack first, so its tempo / key tags and filters work at once.
+                if (_samples.Installed.FirstOrDefault(i => i.Id == p.Id) is { } installed)
+                    App.Services.GetRequiredService<ISampleIndex>().Prioritize(installed.Path);
+                main?.Browser.RebuildSamples();
+                return Task.FromResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key.");
+            });
     }
 
     private async void RemovePack(StorePack p, InstalledStorePack inst)
     {
-        if (_storeBusyId is not null) return;
+        if (Jobs.Busy) return;
         var ok = await new ConfirmWindow("Remove sample pack",
             $"Remove {p.Name}? Its folder ({inst.Path}) is deleted.",
             "Remove", "Cancel").ShowDialog<bool>(this);
         if (!ok) return;
-        _storeBusyId = PackKey(p.Id);
-        _storeBusySize = 0;
-        _storeProgress = new StoreProgress(-1, $"Removing {p.Name}…");
-        SetStoreResult(null, sticky: true);
-        RenderStoreLists();
-        try
+        var main = _main;
+        Jobs.Remove(PackKey(p.Id), source: 1, $"Removing {p.Name}…", async () =>
         {
             await Task.Run(() => _samples.Uninstall(p.Id));
-            _main?.Browser.RebuildSamples();
-            SetStoreResult($"{p.Name} was removed.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        finally { _storeBusyId = null; }
-        RenderStoreLists();
+            main?.Browser.RebuildSamples();
+            return $"{p.Name} was removed.";
+        });
     }
 
     // Every list, since a job in one disables the Install buttons of the others.

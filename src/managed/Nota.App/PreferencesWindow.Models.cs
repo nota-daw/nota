@@ -3,13 +3,12 @@
 //
 // Preferences → Downloads → AI Models: install / remove the models behind Separate Stems and
 // Convert to MIDI (IModelStore), and see the ONNX Runtime they share, which comes with the first
-// model and goes with the last. Shares the store's job state with Plug-ins and Sample Packs: one
-// download at a time, shown in the same dock. A model's busy key is "model:<id>".
+// model and goes with the last. Shares the job state (DownloadJobs) with Plug-ins and Sample Packs:
+// one download at a time, shown in the same dock. A model's busy key is "model:<id>".
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -75,8 +74,8 @@ public sealed partial class PreferencesWindow
         };
 
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-        bool busy = _storeBusyId is not null;
-        if (_storeBusyId == ModelKey(m.Id))
+        bool busy = Jobs.BusyId is not null;
+        if (Jobs.BusyId == ModelKey(m.Id))
             actions.Children.Add(StoreButton(installed ? "Removing…" : "Installing…", enabled: false, () => { }));
         else if (installed)
         {
@@ -113,70 +112,29 @@ public sealed partial class PreferencesWindow
         return grid;
     }
 
-    private async void InstallModel(StoreModel m)
+    private void InstallModel(StoreModel m)
     {
-        if (_storeBusyId is not null) return;
-        _storeBusyId = ModelKey(m.Id);
-        _storeBusySize = _models.DownloadSize(m.Id);
-        _storeProgress = new StoreProgress(0, "Downloading…");
-        SetStoreResult(null, sticky: true);
-        _storeCts ??= new CancellationTokenSource();
-        var job = _storeJobCts = CancellationTokenSource.CreateLinkedTokenSource(_storeCts.Token);
-        RenderStoreLists();
-        var progress = new Progress<StoreProgress>(r =>
-        {
-            if (job.IsCancellationRequested) return;
-            // Each download reports its own fraction; the dock's byte count would mix two files.
-            _storeBusySize = 0;
-            _storeProgress = r;
-            UpdateDock();
-        });
-        try
-        {
-            await _models.InstallAsync(m.Id, progress, job.Token);
-            SetStoreResult(m.Id == AiModels.Stems
+        // Size 0: the model and the runtime download one after the other, each reporting its own
+        // fraction, so a byte count would mix two files.
+        Jobs.Install(ModelKey(m.Id), source: 2, m.Name, 0, new StoreProgress(0, $"Downloading {m.Name}…"),
+            (progress, ct) => _models.InstallAsync(m.Id, progress, ct),
+            () => Task.FromResult(m.Id == AiModels.Stems
                 ? $"{m.Name} is installed — right-click an audio clip and choose Separate Stems."
-                : $"{m.Name} is installed — Convert Melody and Convert Harmony now use it.", sticky: false);
-        }
-        catch (OperationCanceledException)
-        {
-            if (_storeCts is { IsCancellationRequested: false }) SetStoreResult($"Installing {m.Name} was cancelled.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        catch (Exception e)
-        {
-            App.Services.GetRequiredService<ILogSink>().Error($"Installing model {m.Id} failed", e);
-            SetStoreResult($"Installing {m.Name} failed: {e.Message}", sticky: true);
-        }
-        finally
-        {
-            _storeBusyId = null;
-            _storeJobCts = null;
-            job.Dispose();
-        }
-        RenderStoreLists();
+                : $"{m.Name} is installed — Convert Melody and Convert Harmony now use it."));
     }
 
     private async void RemoveModel(StoreModel m)
     {
-        if (_storeBusyId is not null) return;
+        if (Jobs.Busy) return;
         bool last = _models.Models.Count(x => _models.IsInstalled(x.Id)) == 1;
         var ok = await new ConfirmWindow("Remove AI model",
             $"Remove {m.Name}? {m.Feature} will offer to download it again." + (last ? " The AI runtime goes too." : ""),
             "Remove", "Cancel").ShowDialog<bool>(this);
         if (!ok) return;
-        _storeBusyId = ModelKey(m.Id);
-        _storeBusySize = 0;
-        _storeProgress = new StoreProgress(-1, $"Removing {m.Name}…");
-        SetStoreResult(null, sticky: true);
-        RenderStoreLists();
-        try
+        Jobs.Remove(ModelKey(m.Id), source: 2, $"Removing {m.Name}…", async () =>
         {
             await Task.Run(() => _models.Uninstall(m.Id));
-            SetStoreResult($"{m.Name} was removed.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        finally { _storeBusyId = null; }
-        RenderStoreLists();
+            return $"{m.Name} was removed.";
+        });
     }
 }

@@ -155,9 +155,20 @@ public sealed partial class PreferencesWindow : NotaWindow
         grid.Children.Add(column);
         SetBody(grid);
 
-        Closed += (_, _) => { StopTests(); CancelStoreWork(); };
+        // A running download outlives the window (DownloadJobs); only stop listening to it.
+        Jobs.Changed += RenderStoreLists;
+        Jobs.ProgressChanged += UpdateDock;
+        Closed += (_, _) => { StopTests(); Jobs.Changed -= RenderStoreLists; Jobs.ProgressChanged -= UpdateDock; };
         Select(0);
         EnsureStoreLoading();
+        UpdateDock();
+    }
+
+    /// <summary>Switch to Downloads, on the given source (0 plug-ins, 1 sample packs, 2 AI models).</summary>
+    public void ShowDownloads(int source)
+    {
+        _downloadSource = Math.Clamp(source, 0, DownloadSources.Length - 1);
+        Select(DownloadsIndex);
     }
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);

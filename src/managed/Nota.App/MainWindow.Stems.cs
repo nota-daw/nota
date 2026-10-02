@@ -69,6 +69,12 @@ public partial class MainWindow
             return false;
         }
 
+        if (DownloadJobs.Shared.BusyId == "model:" + id)
+        {
+            _vm.StatusText = $"{feature} is waiting for its model — it's downloading (see the status bar).";
+            return false;
+        }
+
         var model = store.Models.First(m => m.Id == id);
         bool withRuntime = store.RuntimePath is null;
         string what = withRuntime ? $"the {model.Name} model and the AI runtime it runs on" : $"the {model.Name} model";

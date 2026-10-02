@@ -86,6 +86,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   imports instead of every sample again, and the same audio used in several places is
   stored once. Background autosave no longer rewrites the project's audio either. Older
   projects are converted on their next save.
+- **Downloads keep going after Settings closes.** Press Install, close Settings, and the
+  download carries on, with its progress in the main window's status bar, a cross to cancel
+  it and the outcome when it's done. Click it to open Settings → Downloads again.
 
 ### Fixed
 - **One-shots dropped on the arrangement are no longer warped:** a short hit used to be

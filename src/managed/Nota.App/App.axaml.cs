@@ -98,6 +98,8 @@ public partial class App : Avalonia.Application
         {
             // A downloaded update installs once the app is gone (see AppUpdater).
             desktop.Exit += (_, _) => Services.GetRequiredService<IAppUpdater>().RunPendingInstall();
+            // A Settings → Downloads install still running when the app quits is abandoned.
+            desktop.Exit += (_, _) => DownloadJobs.Shared.CancelAll();
 
             // Show the splash immediately, then defer the heavy engine spin-up to a
             // background dispatcher tick so the splash actually paints before the audio

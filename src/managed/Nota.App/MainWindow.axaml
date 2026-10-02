@@ -354,10 +354,12 @@
     <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.ChromeBg}"
             BorderBrush="{DynamicResource Brush.BorderDefault}" BorderThickness="0,1,0,0"
             Height="22" Padding="12,0">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
+        <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
+        <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
         <!-- Background-operation strip: label + thin bar, shown only while a background op runs. -->
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                     VerticalAlignment="Center" Margin="0,0,14,0"
                     IsVisible="{Binding BackgroundBusy}">
           <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding BackgroundLabel}"/>
@@ -368,7 +370,7 @@
                        Foreground="{DynamicResource Brush.Accent}"
                        Background="{DynamicResource Brush.BorderDefault}"/>
         </StackPanel>
-        <TextBlock Grid.Column="2" Classes="Caption Mono"
+        <TextBlock Grid.Column="3" Classes="Caption Mono"
                    VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
       </Grid>
     </Border>

@@ -100,6 +100,7 @@ public partial class MainWindow : Window
             ExtendClientAreaTitleBarHeightHint = 36;
         }
         DataContextChanged += OnDataContextChanged;
+        BuildDownloadIndicator();
         // Platform-specific window icon: Windows/Linux get the .ico bundle from
         // assets/icons/windows so the taskbar / alt-tab shows the brand mark. macOS
         // uses the .icns produced by scripts/bundle-mac.sh for the dock/Finder.

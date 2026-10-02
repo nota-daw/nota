@@ -2,11 +2,11 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Preferences → Downloads → Plug-ins: browse the Nota plugin registry and install / update /
-// remove open-source VST3 plugins (IPluginStore). One install at a time; it keeps
-// running when the user switches panes and is cancelled when the window closes. Its
-// progress and outcome show in a dock at the bottom of the window (visible from every
-// pane), which also cancels it; Sample Packs (PreferencesWindow.Samples.cs) shares that
-// job state and dock. After every change the catalog is rescanned so the browser lists the
+// remove open-source VST3 plugins (IPluginStore). One install at a time across all of Downloads
+// (DownloadJobs); it keeps running when the user switches panes or closes the window, and then
+// shows in the main window's status bar. Here its progress and outcome show in a dock at the
+// bottom of the window (visible from every pane), which also cancels it; Sample Packs and AI
+// Models share that dock. After every change the catalog is rescanned so the browser lists the
 // new plugins.
 //
 // The list is virtualized (only the rows in view exist), so filtering and searching the
@@ -16,7 +16,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -26,9 +25,9 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Presentation;
 
 namespace Nota.App;
 
@@ -40,14 +39,8 @@ public sealed partial class PreferencesWindow
     private IReadOnlyList<StorePlugin>? _storePlugins;
     private int _storeFilter;
     private string _storeSearch = "";
-    private string? _storeBusyId;                    // plugin being installed / removed
-    private StoreProgress _storeProgress;
-    private long _storeBusySize;                      // download size in bytes, 0 = unknown
+    private static DownloadJobs Jobs => DownloadJobs.Shared;   // the running install / removal, app-wide
     private string? _storeMessage;                    // registry loading / error, shown under the toolbar
-    private string? _storeResult;                     // last install / remove outcome, shown in the dock
-    private int _storeResultSeq;                      // guards the auto-hide of an older result
-    private CancellationTokenSource? _storeCts;       // window lifetime
-    private CancellationTokenSource? _storeJobCts;    // the running install; null when it can't be cancelled
     private Task? _storeLoad;
     private bool _storeLoading;                       // fetching the registry index
     private ContentControl? _storeList;               // null while another pane is showing
@@ -316,7 +309,7 @@ public sealed partial class PreferencesWindow
         _dockTitle = new TextBlock { FontSize = 12, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         _dockDetail = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
-        _dockCancel = StoreButton("Cancel", enabled: true, CancelStoreInstall);
+        _dockCancel = StoreButton("Cancel", enabled: true, Jobs.Cancel);
         _dockCancel.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_dockCancel, "Stop the download — nothing is changed");
         _dockClose = new Button
@@ -324,7 +317,7 @@ public sealed partial class PreferencesWindow
             Content = new Glyph(GlyphKind.Close, 10), Classes = { "ghost" }, Width = 26, Height = 26, Padding = new Thickness(0),
             Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
-        ((Button)_dockClose).Click += (_, _) => { _storeResult = null; UpdateDock(); };
+        ((Button)_dockClose).Click += (_, _) => Jobs.Dismiss();
 
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 12 };
         head.Children.Add(_dockTitle);
@@ -346,43 +339,30 @@ public sealed partial class PreferencesWindow
 
     private void UpdateDock()
     {
-        bool busy = _storeBusyId is not null;
-        _dock.IsVisible = busy || _storeResult is not null;
+        bool busy = Jobs.Busy;
+        _dock.IsVisible = busy || Jobs.Result is not null;
         if (!_dock.IsVisible) return;
 
-        var pr = _storeProgress;
-        _dockTitle.Text = busy ? pr.Message : _storeResult;
+        var pr = Jobs.Progress;
+        _dockTitle.Text = busy ? pr.Message : Jobs.Result;
         _dockTitle.Foreground = busy ? TextPrimary : TextSecondary;
         _dockBar.IsVisible = busy;
         _dockBar.IsIndeterminate = busy && pr.Fraction < 0;
         if (busy && pr.Fraction >= 0) _dockBar.Value = pr.Fraction;
-        _dockDetail.Text = !busy || pr.Fraction < 0 ? ""
-            : _storeBusySize > 0
-                ? $"{(pr.Fraction * _storeBusySize / 1048576.0).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(_storeBusySize / 1048576.0, "0.0", "MB")}  ·  {NotaNum.Unit(pr.Fraction * 100, "0", "%")}"
-                : NotaNum.Unit(pr.Fraction * 100, "0", "%");
+        _dockDetail.Text = busy ? ProgressDetail(pr, Jobs.Size) : "";
         _dockDetail.IsVisible = _dockDetail.Text.Length > 0;
-        _dockCancel.IsVisible = busy && _storeJobCts is not null;
-        _dockCancel.IsEnabled = _storeJobCts is { IsCancellationRequested: false };
+        _dockCancel.IsVisible = busy && Jobs.Cancellable;
+        _dockCancel.IsEnabled = !Jobs.Cancelling;
         _dockClose.IsVisible = !busy;
     }
 
-    private void CancelStoreInstall()
-    {
-        if (_storeJobCts is not { IsCancellationRequested: false } cts) return;
-        cts.Cancel();
-        _storeProgress = _storeProgress with { Message = "Cancelling…" };
-        UpdateDock();
-    }
-
-    // Shows an install / remove outcome in the dock; a success fades out on its own, an error
-    // stays until it's closed.
-    private void SetStoreResult(string? text, bool sticky)
-    {
-        _storeResult = text;
-        int seq = ++_storeResultSeq;
-        if (text is not null && !sticky)
-            DispatcherTimer.RunOnce(() => { if (seq == _storeResultSeq && _storeBusyId is null) { _storeResult = null; UpdateDock(); } }, TimeSpan.FromSeconds(8));
-    }
+    /// <summary>"12.3 / 40.0 MB · 31 %" while the size is known, else just the percentage; empty
+    /// for an indeterminate stage.</summary>
+    internal static string ProgressDetail(StoreProgress pr, long size)
+        => pr.Fraction < 0 ? ""
+            : size > 0
+                ? $"{(pr.Fraction * size / 1048576.0).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(size / 1048576.0, "0.0", "MB")}  ·  {NotaNum.Unit(pr.Fraction * 100, "0", "%")}"
+                : NotaNum.Unit(pr.Fraction * 100, "0", "%");
 
     private Control StoreRow(StorePlugin p, InstalledStorePlugin? inst)
     {
@@ -410,8 +390,8 @@ public sealed partial class PreferencesWindow
             text.Children.Add(new TextBlock { Text = notes, FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
 
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-        bool busy = _storeBusyId is not null;
-        if (_storeBusyId == p.Id)
+        bool busy = Jobs.BusyId is not null;
+        if (Jobs.BusyId == p.Id)
         {
             actions.Children.Add(StoreButton(inst is null ? "Installing…" : "Working…", enabled: false, () => { }));
         }
@@ -537,80 +517,40 @@ public sealed partial class PreferencesWindow
         _ => kind.ToUpperInvariant(),
     };
 
-    private async void InstallFromStore(StorePlugin p)
+    private void InstallFromStore(StorePlugin p)
     {
-        if (_storeBusyId is not null) return;
-        _storeBusyId = p.Id;
-        _storeBusySize = p.Asset?.Size ?? 0;
-        _storeProgress = new StoreProgress(0, $"Downloading {p.Name}…");
-        SetStoreResult(null, sticky: true);
-        _storeCts ??= new CancellationTokenSource();
-        var job = _storeJobCts = CancellationTokenSource.CreateLinkedTokenSource(_storeCts.Token);
-        RenderStoreLists();
-        // A report queued before Cancel must not overwrite "Cancelling…".
-        var progress = new Progress<StoreProgress>(r => { if (job.IsCancellationRequested) return; _storeProgress = r; UpdateDock(); });
-        try
-        {
-            await _store.InstallAsync(p, progress, job.Token);
-            _storeJobCts = null;   // the files are in place — too late to cancel
-            _storeProgress = new StoreProgress(-1, $"Scanning {p.Name}…");
-            UpdateDock();
-            SetStoreResult(await RescanAfterStoreChange() ? $"{p.Name} {p.Version} is installed — find it in the browser." : $"{p.Name} is installed. Rescan plugins to use it.", sticky: false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Window closing: nothing to show. Otherwise the user pressed Cancel.
-            if (_storeCts is { IsCancellationRequested: false }) SetStoreResult($"Installing {p.Name} was cancelled.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        catch (Exception e)
-        {
-            App.Services.GetRequiredService<ILogSink>().Error($"Installing {p.Id} failed", e);
-            SetStoreResult($"Installing {p.Name} failed: {e.Message}", sticky: true);
-        }
-        finally
-        {
-            _storeBusyId = null;
-            _storeJobCts = null;
-            job.Dispose();
-        }
-        RenderStoreLists();
+        var main = _main;
+        Jobs.Install(p.Id, source: 0, p.Name, p.Asset?.Size ?? 0, new StoreProgress(0, $"Downloading {p.Name}…"),
+            (progress, ct) => _store.InstallAsync(p, progress, ct),
+            async () =>
+            {
+                Jobs.Report(new StoreProgress(-1, $"Scanning {p.Name}…"));
+                return await RescanAfterStoreChange(main)
+                    ? $"{p.Name} {p.Version} is installed — find it in the browser."
+                    : $"{p.Name} is installed. Rescan plugins to use it.";
+            });
     }
 
     private async void RemoveFromStore(StorePlugin p)
     {
-        if (_storeBusyId is not null) return;
+        if (Jobs.Busy) return;
         var ok = await new ConfirmWindow("Remove plugin",
             $"Remove {p.Name}? Projects that use it will load without it until it's installed again.",
             "Remove", "Cancel").ShowDialog<bool>(this);
         if (!ok) return;
-        _storeBusyId = p.Id;
-        _storeBusySize = 0;
-        _storeProgress = new StoreProgress(-1, $"Removing {p.Name}…");
-        SetStoreResult(null, sticky: true);
-        RenderStoreLists();
-        try
+        var main = _main;
+        Jobs.Remove(p.Id, source: 0, $"Removing {p.Name}…", async () =>
         {
             _store.Uninstall(p.Id);
-            await RescanAfterStoreChange();
-            SetStoreResult($"{p.Name} was removed.", sticky: false);
-        }
-        catch (StoreException e) { SetStoreResult(e.Message, sticky: true); }
-        finally { _storeBusyId = null; }
-        RenderStoreLists();
+            await RescanAfterStoreChange(main);
+            return $"{p.Name} was removed.";
+        });
     }
 
-    private async Task<bool> RescanAfterStoreChange()
+    // Static: the job can outlive this window.
+    private static async Task<bool> RescanAfterStoreChange(MainWindowViewModel? main)
     {
-        if (_main is null) return false;
-        return await PluginScan.RescanAsync(_main) is not null;
-    }
-
-    // Called from the constructor's Closed handler chain: stop a running download.
-    private void CancelStoreWork()
-    {
-        _storeCts?.Cancel();
-        _storeCts?.Dispose();
-        _storeCts = null;
+        if (main is null) return false;
+        return await PluginScan.RescanAsync(main) is not null;
     }
 }
