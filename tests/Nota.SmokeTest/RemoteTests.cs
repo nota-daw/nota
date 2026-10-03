@@ -326,6 +326,26 @@ internal static class RemoteTests
         var mix = Wait("mix");
         yield return (mix is { } mx && mx.GetProperty("ch").GetArrayLength() == 1, "the Mixer screen gets channel state");
 
+
+        // The phone's ping claims the notes it holds: a lost off (a browser swallowed the
+        // pointer-up) is healed by the next ping, and a genuinely held note is left alone.
+        Send(new { t = "on", p = 64, v = 0.9 });
+        Thread.Sleep(60);
+        float ringing = Loudest(e);
+        Send(new { t = "ping", c = 2, rtt = 4, h = new int[0] });
+        Thread.Sleep(100);
+        Loudest(e, 30);
+        float healed = Loudest(e, 4);
+        yield return (ringing > 0.005f && healed < 1e-3f,
+            $"a note the phone stops claiming in its ping is released (rms={ringing:F4}→{healed:F5})");
+        Send(new { t = "on", p = 65, v = 0.9 });
+        Thread.Sleep(60);
+        Send(new { t = "ping", c = 3, rtt = 4, h = new[] { 65 } });
+        Thread.Sleep(100);
+        yield return (Loudest(e) > 0.005f, "a note the phone still claims keeps sounding");
+        Send(new { t = "off", p = 65 });
+        Loudest(e, 30);
+
         Send(new { t = "vol", id = inst, v = 0.5, ph = 2 });
         Send(new { t = "mute", id = inst, on = true });
         Wait("none", 150);
@@ -334,6 +354,7 @@ internal static class RemoteTests
         Send(new { t = "play" });
         Wait("none", 120);
         yield return (host.Plays == 1, "transport goes through Nota's transport");
+
 
         access = RemoteAccess.PlayNotes;
         Send(new { t = "mute", id = inst, on = false });

@@ -103,6 +103,12 @@ public sealed partial class RemoteHub
                 // Echo at once, from this thread: the round trip is the link, not the UI tick.
                 if (m.TryGetProperty("rtt", out var rtt) && rtt.TryGetInt32(out int ms)) c.RttMs = ms;
                 c.Send($"{{\"t\":\"pong\",\"c\":{Num(m, "c").ToString(System.Globalization.CultureInfo.InvariantCulture)}}}");
+                // The phone claims the notes it holds; anything it stopped claiming (an off a
+                // browser swallowed in fast multi-touch, one lost to a link flap) is released
+                // instead of ringing until the phone disconnects.
+                if (c.Authenticated && m.TryGetProperty("h", out var held) && held.ValueKind == JsonValueKind.Array)
+                    foreach (var (track, pitch) in c.UnclaimHeld(held))
+                        _engine.TrackNoteOff(track, pitch);
                 return Task.CompletedTask;
         }
         if (!c.Authenticated) return Task.CompletedTask;

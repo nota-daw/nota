@@ -84,6 +84,10 @@ export class App {
   private learnedTimer = 0;
   private pairCode: string | null = null;
   private screenChosen = !!store.get('screen', '');
+  /** The notes this phone told Nota it holds. Sent with every ping: a pointer-up a browser
+   * swallowed (fast multi-touch, a pad replaced by a bank switch) must not ring forever —
+   * Nota releases anything the phone stops claiming. */
+  private held = new Set<number>();
 
   constructor() {
     // A QR link carries the pairing code in the fragment (never sent over the network).
@@ -173,7 +177,7 @@ export class App {
         this.connect();
         return;
       }
-      this.raw({ t: 'ping', c: performance.now(), rtt: this.rtt });
+      this.raw({ t: 'ping', c: performance.now(), rtt: this.rtt, h: [...this.held] });
     };
     tick();
     this.pingTimer = window.setInterval(tick, 1000);
@@ -187,6 +191,7 @@ export class App {
   }
 
   leave() {
+    this.releaseHeld();
     this.raw({ t: 'bye' });
     this.link = 'left';
     this.sheet = null;
@@ -213,6 +218,7 @@ export class App {
         this.name = m.name; store.set('name', m.name);
         this.link = 'ok';
         this.everConnected = true;
+        this.held.clear();   // a fresh socket released everything; the fingers re-claim as they lift
         this.startPing();
         break;
       case 'denied':
@@ -319,26 +325,34 @@ export class App {
 
   // ---- sending -------------------------------------------------------------------------
 
-  private raw(m: object) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
+  private raw(m: object): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify(m));
+    return true;
   }
 
   /** Send when the link is up; while it is down nothing is queued (a late note is worse than none). */
-  send(m: object) {
-    if (this.link === 'ok' || this.link === 'weak') this.raw(m);
+  send(m: object): boolean {
+    if (this.link === 'ok' || this.link === 'weak') return this.raw(m);
+    return false;
   }
 
   get live() { return this.link === 'ok' || this.link === 'weak'; }
 
   noteOn(p: number, v: number) {
     if (p < 0 || p > 127) return;
-    this.send({ t: 'on', p, v: Math.round(v * 1000) / 1000 });
+    if (this.send({ t: 'on', p, v: Math.round(v * 1000) / 1000 })) this.held.add(p);
     if (this.prefs.haptics && navigator.vibrate) { try { navigator.vibrate(8); } catch { /* */ } }
   }
 
   noteOff(p: number) {
     if (p < 0 || p > 127) return;
-    this.send({ t: 'off', p });
+    if (this.send({ t: 'off', p })) this.held.delete(p);
+  }
+
+  /** Let go of everything (the page hid, the phone left): no note outlives the fingers. */
+  releaseHeld() {
+    for (const p of [...this.held]) this.noteOff(p);
   }
 
   /** The transport position now, interpolated between Nota's messages while playing. */

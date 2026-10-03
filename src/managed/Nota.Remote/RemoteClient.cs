@@ -153,6 +153,24 @@ public sealed class RemoteClient
         lock (_notesGate) return _held.Remove(pitch, out track);
     }
 
+    /// <summary>Drop every note the phone no longer claims in its ping (the "h" array) and
+    /// return them for release. A late <c>off</c> that is still in flight is harmless: it
+    /// arrives before the ping did (one socket, in order) or finds nothing held.</summary>
+    internal List<(int Track, int Pitch)> UnclaimHeld(JsonElement claimed)
+    {
+        var keep = new HashSet<int>();
+        foreach (var v in claimed.EnumerateArray())
+            if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int p) && p is >= 0 and <= 127)
+                keep.Add(p);
+        lock (_notesGate)
+        {
+            var gone = _held.Where(kv => !keep.Contains(kv.Key))
+                .Select(kv => (kv.Value, kv.Key)).ToList();
+            foreach (var (_, pitch) in gone) _held.Remove(pitch);
+            return gone;
+        }
+    }
+
     /// <summary>Every note still held (the link dropped, or the phone left): release them.</summary>
     internal List<(int track, int pitch)> TakeAllHeld()
     {

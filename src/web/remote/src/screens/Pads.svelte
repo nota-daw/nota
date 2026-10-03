@@ -41,7 +41,9 @@
     pointers.set(e.pointerId, note);
     down[note] = true;
     app.noteOn(note, vel);
-    if (repeat) {
+    // One repeat chain per note: a second finger must not stack a second timer, or the
+    // release clears only the last one and the first keeps the note repeating forever.
+    if (repeat && !timers.has(note)) {
       const step = () => 60000 / Math.max(20, app.tp.bpm) / RATES[rate].div;
       const tick = () => {
         app.noteOff(note);
@@ -63,7 +65,30 @@
     app.noteOff(note);
   }
 
-  $effect(() => () => { for (const t of timers.values()) clearTimeout(t); });
+  // A browser can swallow a pointer-up in fast multi-touch, and a bank switch replaces the
+  // pads a finger is on. Watch at the window too, and let go of whatever is still mapped to
+  // a pointer when the bank (or the screen) changes — the pads it pressed no longer exist.
+  $effect(() => {
+    const rel = (e: PointerEvent) => release(e);
+    window.addEventListener('pointerup', rel, true);
+    window.addEventListener('pointercancel', rel, true);
+    return () => {
+      window.removeEventListener('pointerup', rel, true);
+      window.removeEventListener('pointercancel', rel, true);
+    };
+  });
+  $effect(() => {
+    void base;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+      for (const note of new Set(pointers.values())) {
+        down[note] = false;
+        app.noteOff(note);
+      }
+      pointers.clear();
+    };
+  });
 </script>
 
 <div class="pads">

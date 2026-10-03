@@ -9,7 +9,10 @@ for (const ev of ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick']) {
   document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 }
 document.addEventListener('touchmove', (e) => { if ((e as TouchEvent).touches.length > 1) e.preventDefault(); }, { passive: false });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') app.wake(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') app.wake();
+  else app.releaseHeld();   // fingers can't still be down on a hidden page
+});
 window.addEventListener('online', () => app.wake());
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
