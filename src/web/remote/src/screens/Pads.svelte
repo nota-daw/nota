@@ -18,7 +18,8 @@
 
   const cols = $derived(form === 'phone' ? 4 : 8);
   const count = $derived(form === 'tablet' ? 32 : 16);
-  const base = $derived(36 + Math.min(app.prefs.bank, form === 'tablet' ? 2 : 3) * 16);
+  // Banks step by an octave (C2, C3…), each covering the sixteen notes from its start.
+  const base = $derived(36 + Math.min(app.prefs.bank, 3) * 12);
   const names = $derived(new Map((app.track?.pads ?? []).map(([n, name]) => [n, name])));
   const lit = $derived(new Set(app.lit));
   const color = $derived(app.track?.color ?? 'var(--accent)');
@@ -30,7 +31,7 @@
     return out;
   });
 
-  const banks = $derived(Array.from({ length: form === 'tablet' ? 3 : 4 }, (_, i) => ({ i, name: noteName(36 + i * 16) })));
+  const banks = $derived(Array.from({ length: 4 }, (_, i) => ({ i, name: noteName(36 + i * 12) })));
 
   function press(e: PointerEvent, note: number) {
     e.preventDefault();

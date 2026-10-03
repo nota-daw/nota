@@ -12,6 +12,7 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Nota.Infrastructure;
 using Nota.Remote;
 
@@ -168,6 +169,21 @@ internal static class RemoteTests
         return port;
     }
 
+    /// <summary>The status line a raw request (no client-side path normalization) gets.</summary>
+    private static int RawStatus(int port, string request)
+    {
+        try
+        {
+            using var c = new TcpClient("127.0.0.1", port);
+            c.GetStream().Write(Encoding.UTF8.GetBytes(request));
+            var buf = new byte[512];
+            int n = c.GetStream().Read(buf, 0, buf.Length);
+            var parts = Encoding.UTF8.GetString(buf, 0, n).Split(' ');
+            return parts.Length > 1 && int.TryParse(parts[1], out int st) ? st : 0;
+        }
+        catch { return 0; }
+    }
+
     private static IEnumerable<(bool, string)> Session()
     {
         using var e = new NotaEngine();
@@ -189,9 +205,23 @@ internal static class RemoteTests
         string page = "";
         try { page = http.GetStringAsync($"http://127.0.0.1:{port}/").GetAwaiter().GetResult(); } catch { }
         yield return (page.Contains("id=\"app\"") && page.Contains("manifest.webmanifest"), "the built phone app is served at / (not the not-built placeholder)");
-        int status = 0;
-        try { status = (int)http.GetAsync($"http://127.0.0.1:{port}/../../etc/passwd").GetAwaiter().GetResult().StatusCode; } catch { }
-        yield return (status is 400 or 404, $"nothing outside the app is served (status {status})");
+
+        // Every asset the page references must be served: a bare MapFallback matches only
+        // dotless paths, so index.html's script would 404 and the page would stay empty.
+        var assets = Regex.Matches(page, "(?:src|href)=\"\\.//?([^\"]+)\"").Select(m => "/" + m.Groups[1].Value.TrimStart('/')).Distinct().ToList();
+        int served = 0;
+        foreach (var a in assets)
+            try { if ((int)http.GetAsync($"http://127.0.0.1:{port}{a}").GetAwaiter().GetResult().StatusCode == 200) served++; } catch { }
+        yield return (assets.Count > 0 && served == assets.Count, $"every asset the page references is served ({served}/{assets.Count})");
+
+        // HttpClient normalizes /../../etc/passwd to /etc/passwd, which must come back as the
+        // app shell — nothing on the computer's disk is ever served. A literal ../ sent over a
+        // raw socket (curl --path-as-is) is refused outright.
+        string shell = "";
+        try { shell = http.GetStringAsync($"http://127.0.0.1:{port}/../../etc/passwd").GetAwaiter().GetResult(); } catch { }
+        yield return (shell.Contains("id=\"app\"") && !shell.Contains("root:"), "a path walk-out gets the app shell, never a file");
+        yield return (RawStatus(port, "GET /../secrets.txt HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n") is 400 or 404,
+            "a literal ../ over a raw socket is refused");
 
         var ws = new ClientWebSocket();
         ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws"), CancellationToken.None).GetAwaiter().GetResult();

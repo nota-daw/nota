@@ -50,7 +50,10 @@ public sealed class RemoteServer : IAsyncDisposable
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, ctx.RequestAborted);
             await hub.RunClientAsync(ws, addr, linked.Token);
         });
-        app.MapFallback(ServeStaticAsync);   // after /ws: everything else is the phone app
+        // After /ws: everything else is the phone app. An explicit pattern, because the
+        // parameterless MapFallback matches "{*path:nonfile}" only — every dotted path
+        // (index.html, the JS, the fonts) would fall past the pipeline into a bare 404.
+        app.MapFallback("/{**path}", ServeStaticAsync);
 
         await app.StartAsync();
         _app = app;

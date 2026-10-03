@@ -18,6 +18,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Nota Remote — your phone as a controller:** the **Remote** button in the top bar (or
+  **View → Connect Phone…**) shows a QR code; scan it with a phone and in five seconds the
+  phone plays Nota — pads, keys with the project's scale and chords, an XY pad with tilt, the
+  mixer, macros and the Session grid, all over the local Wi-Fi with nothing to install. The
+  page Nota serves is a small PWA: "Add to Home Screen" opens it full-screen, and it
+  reconnects by itself after a locked screen or a dropped link. Pairing is a four-digit code
+  that rotates every two minutes; trusted phones reconnect without one until they are
+  forgotten in **Settings → Remote**, which also has the port and what phones may do — play
+  notes only, or play and control the project. A phone is one more controller: its notes
+  record like the computer keyboard's, faders and macros move Nota's controls (one finger,
+  one undo step), and its knobs and XY axes can be mapped through the same MIDI Learn as
+  hardware — every connected phone drives the same mappings. Several phones can play at once,
+  each on its own track, and Nota shows who plays what: the track list and the mixer carry
+  the players' names.
+
 ## [0.43.1] — 2026-10-02
 
 ### Highlights
