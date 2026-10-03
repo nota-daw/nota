@@ -10,6 +10,7 @@
 
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -19,7 +20,7 @@ using Nota.Application.Samples;
 namespace Nota.Remote;
 
 /// <summary>A connected phone, as the popup and Settings list it.</summary>
-public sealed record RemoteDeviceInfo(int ConnectionId, string DeviceId, string Name, string Model, int TrackId, int RttMs, string Screen);
+public sealed record RemoteDeviceInfo(int ConnectionId, string DeviceId, string Name, string Model, int TrackId, int RttMs, string Screen, bool Usb);
 
 public sealed partial class RemoteHub
 {
@@ -53,7 +54,11 @@ public sealed partial class RemoteHub
     /// <summary>The paired phones connected right now.</summary>
     public IReadOnlyList<RemoteDeviceInfo> Devices =>
         _clients.Values.Where(c => c.Authenticated).OrderBy(c => c.ConnectedAt)
-            .Select(c => new RemoteDeviceInfo(c.ConnectionId, c.Device!.Id, c.Name, c.Model, c.TrackId, c.RttMs, c.Screen)).ToList();
+            .Select(c => new RemoteDeviceInfo(c.ConnectionId, c.Device!.Id, c.Name, c.Model, c.TrackId, c.RttMs, c.Screen, UsbLink(c)))
+            .ToList();
+
+    private static bool UsbLink(RemoteClient c)
+        => IPAddress.TryParse(c.Address, out var ip) && RemoteLinks.OnUsbLink(ip);
 
     /// <summary>Names of the phones playing <paramref name="trackId"/> (the track-header badge).</summary>
     public IReadOnlyList<string> PlayersOf(int trackId) =>
@@ -181,6 +186,7 @@ public sealed partial class RemoteHub
             w.WriteString("name", dev.Name);
             w.WriteString("host", HostName);
             w.WriteNumber("conn", c.ConnectionId);
+            w.WriteString("via", UsbLink(c) ? "usb" : "wifi");   // the header's link badge
             if (token is not null) w.WriteString("token", token);
         }));
         _devicesDirty = true;

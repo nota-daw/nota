@@ -111,7 +111,9 @@ public sealed partial class PreferencesWindow
         void Refresh()
         {
             bool on = Enabled();
-            status.Text = !on ? "Off" : remote.Error ?? (remote.Url is { } u ? $"Listening on {u.Replace("http://", "")}" : "On · no network");
+            string listen = remote.Links.Count == 0 ? "On · no network"
+                : "Listening on " + string.Join("  ·  ", remote.Links.Select(l => (l.Usb ? "USB " : "") + l.Address + ":" + settings.Current.RemotePort));
+            status.Text = !on ? "Off" : remote.Error ?? listen;
             statusDot.Fill = !on ? BorderStrong : remote.Error is null ? NotaPalette.SuccessDim : NotaPalette.Danger;
             Inactive.Set(details, !on);
             RenderTrusted();

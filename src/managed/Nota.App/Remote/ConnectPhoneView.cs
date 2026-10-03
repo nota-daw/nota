@@ -54,8 +54,9 @@ internal sealed class ConnectPhoneView : Border
     private void OnChanged() => Dispatcher.UIThread.Post(() =>
     {
         // The code rotating or a phone's latency moving only updates text; a phone coming or
-        // going rebuilds the list.
-        string sig = string.Join("|", _remote.Hub.Devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"));
+        // going, or the network's addresses changing (a cable plugged in), rebuilds.
+        string sig = string.Join("|", _remote.Hub.Devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"))
+            + ";" + string.Join("|", _remote.Links.Select(l => l.Address));
         if (sig != _lastDevices || _qr is null != !_remote.Running) Build();
         else Tick();
     });
@@ -93,27 +94,32 @@ internal sealed class ConnectPhoneView : Border
         }
         if (_remote.Url is null)
         {
-            _body.Children.Add(Note("This computer isn't on a network. Join the same Wi-Fi as the phone, or share the phone's hotspot with it.", new Thickness(18, 0, 18, 18)));
+            _body.Children.Add(Note("This computer isn't on a network. Join the same Wi-Fi as the phone, share the phone's hotspot with it, or plug in a USB cable (USB tethering on the phone; Internet Sharing on the Mac).", new Thickness(18, 0, 18, 18)));
             return;
         }
 
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
-        info.Children.Add(Field("ADDRESS", new TextBlock { Text = _remote.Url!.Replace("http://", ""), FontSize = 13, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextPrimary }));
+        info.Children.Add(Field("ADDRESS", AddressRows()));
         _code = new TextBlock { FontSize = 24, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
         _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.AccentDim, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
         _left = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
         info.Children.Add(Field("CODE", codeRow));
-        info.Children.Add(Note("Point the phone camera at the code. Same Wi-Fi only; the code changes every 2 minutes and after each connection.", new Thickness(0)));
+        bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
+        info.Children.Add(Note(usb
+            ? "Point the phone camera at the code. Over the cable the link is instant and needs no Wi-Fi; the code changes every 2 minutes and after each connection."
+            : "Point the phone camera at the code. Same Wi-Fi only — or plug in a USB cable (USB tethering on the phone; Internet Sharing on the Mac) for an instant link. The code changes every 2 minutes and after each connection.",
+            new Thickness(0)));
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 16, Margin = new Thickness(18, 0, 18, 16) };
         top.Children.Add(_qr);
         Grid.SetColumn(info, 1); top.Children.Add(info);
         _body.Children.Add(top);
 
         var devices = _remote.Hub.Devices;
-        _lastDevices = string.Join("|", devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"));
+        _lastDevices = string.Join("|", devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"))
+            + ";" + string.Join("|", _remote.Links.Select(l => l.Address));
         if (devices.Count > 0)
         {
             var list = new StackPanel();
@@ -132,7 +138,9 @@ internal sealed class ConnectPhoneView : Border
         for (int b = 0; b < 3; b++)
             sig.Children.Add(new Border { Width = 3, Height = 4 + b * 4, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Bottom, Background = b < bars ? c : NotaPalette.BorderStrong });
 
-        string sub = d.RttMs < 0 ? "connecting" : weak ? $"{d.RttMs} ms · weak network" : $"{d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}";
+        string sub = d.RttMs < 0 ? "connecting" : weak ? $"{d.RttMs} ms · weak network"
+            : d.Usb ? $"USB · {d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}"
+            : $"{d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}";
         var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(new TextBlock { Text = d.Name, FontSize = 12, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
         names.Children.Add(new TextBlock { Text = sub, FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
@@ -171,6 +179,30 @@ internal sealed class ConnectPhoneView : Border
         var left = _remote.Pairing.CodeRemaining;
         _left.Text = $"{(int)left.TotalMinutes}:{left.Seconds:00}";
         _ring.SweepAngle = 360 * left.TotalSeconds / RemotePairing.CodeLifetime.TotalSeconds;
+    }
+
+    // The addresses, best first: a "USB" pill on the cable link, the rest dimmer under it.
+    private Control AddressRows()
+    {
+        var links = _remote.Links;
+        var host = _remote.Url!.Replace("http://", "");
+        var first = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        first.Children.Add(new TextBlock { Text = host, FontSize = 13, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        if (links.Count > 0 && links[0].Usb)
+            first.Children.Add(new Border
+            {
+                Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center,
+                Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.BorderBrass, BorderThickness = new Thickness(1),
+                Child = new TextBlock { Text = "USB", FontSize = 8, FontWeight = FontWeight.Bold, LetterSpacing = 1, Foreground = NotaPalette.AccentBright, VerticalAlignment = VerticalAlignment.Center },
+            });
+        var rows = new StackPanel { Spacing = links.Count > 1 ? 3 : 0, Children = { first } };
+        for (int i = 1; i < links.Count; i++)
+            rows.Children.Add(new TextBlock
+            {
+                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 10, FontFamily = NotaFonts.MonoFamily,
+                Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
+            });
+        return rows;
     }
 
     private static Control Field(string label, Control value)

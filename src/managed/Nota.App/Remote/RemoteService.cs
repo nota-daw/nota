@@ -7,6 +7,7 @@
 // Settings page talk to.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -29,6 +30,8 @@ public sealed class RemoteService
     public event Action? Changed;
 
     public bool Running => _server.Running;
+    /// <summary>The port the server listens on (0 before the first start).</summary>
+    public int Port => _server.Port;
     /// <summary>Why the server isn't running although Remote is on (the port is taken…).</summary>
     public string? Error { get; private set; }
 
@@ -43,19 +46,42 @@ public sealed class RemoteService
             HostName = ComputerName(),
         };
         Pairing.Changed += RaiseChanged;
+        // A cable plugged in, Wi-Fi dropped: the addresses (and the QR) follow within a beat.
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => OnNetworkChanged();
     }
+
+    private void OnNetworkChanged()
+    {
+        _linksAt = DateTime.MinValue;   // the USB map may have changed with the addresses
+        _networkRetry?.Dispose();
+        _networkRetry = new System.Threading.Timer(_ => { RaiseChanged(); _networkRetry?.Dispose(); _networkRetry = null; },
+            null, 800, -1);
+    }
+
+    private System.Threading.Timer? _networkRetry;
+    private DateTime _linksAt = DateTime.MinValue;
+    private List<RemoteLink> _links = new();
 
     public void RaiseChanged() => Changed?.Invoke();
 
-    /// <summary>The address a phone opens: http://192.168.1.5:7788 (null without a network).</summary>
-    public string? Url
+    /// <summary>The addresses phones can open, USB first, then Wi-Fi/Ethernet (cached a beat —
+    /// the popup asks every second).</summary>
+    public IReadOnlyList<RemoteLink> Links
     {
         get
         {
-            var ip = RemoteServer.LanAddress();
-            return ip is null ? null : $"http://{ip}:{_server.Port}";
+            if (DateTime.UtcNow - _linksAt > TimeSpan.FromSeconds(1))
+            {
+                _links = RemoteLinks.All();
+                _linksAt = DateTime.UtcNow;
+            }
+            return _links;
         }
     }
+
+    /// <summary>The address a phone opens: the USB one when a cable link is up (millisecond
+    /// latency, no radio), else Wi-Fi/Ethernet. Null without a network.</summary>
+    public string? Url => Links.Count > 0 ? $"http://{Links[0].Address}:{_server.Port}" : null;
 
     /// <summary>What the QR holds: the address with the current code in the fragment, so the
     /// phone pairs the moment the page opens (a fragment never leaves the phone).</summary>

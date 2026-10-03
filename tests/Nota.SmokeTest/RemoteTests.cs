@@ -40,7 +40,34 @@ internal static class RemoteTests
     {
         foreach (var r in Engine()) yield return r;
         foreach (var r in Pairing()) yield return r;
+        foreach (var r in Links()) yield return r;
         foreach (var r in Session()) yield return r;
+    }
+
+    // ---- USB links (the classifier is pure where it can be tested) --------------------------
+
+    private static IEnumerable<(bool, string)> Links()
+    {
+        var ports = RemoteLinks.ParseHardwarePorts(
+            "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: aa\n\n" +
+            "Hardware Port: iPhone USB\nDevice: en7\nEthernet Address: bb\n\n" +
+            "Hardware Port: Thunderbolt Bridge\nDevice: bridge0\nEthernet Address: cc\n\n" +
+            "Hardware Port: USB 10/100/1000 LAN\nDevice: en8\nEthernet Address: dd\n");
+        yield return (ports.Count == 4 && ports["en7"] == "iPhone USB" && ports["en8"].Contains("USB"),
+            "macOS hardware ports parse to their devices (iPhone USB on en7)");
+
+        yield return (RemoteLinks.InSubnet(IPAddress.Parse("192.0.2.2"), IPAddress.Parse("192.0.2.1"), 24),
+            "a phone on the USB subnet is recognised (192.0.2.2 in 192.0.2.1/24)");
+        yield return (!RemoteLinks.InSubnet(IPAddress.Parse("192.168.1.9"), IPAddress.Parse("192.0.2.1"), 24),
+            "a Wi-Fi phone is not on the USB subnet");
+        yield return (RemoteLinks.InSubnet(IPAddress.Parse("192.0.2.2"), IPAddress.Parse("192.0.2.1"), 30)
+            && !RemoteLinks.InSubnet(IPAddress.Parse("192.0.2.4"), IPAddress.Parse("192.0.2.1"), 30),
+            "the prefix length cuts where it should (/30 holds .1 and .2, not .4)");
+        yield return (RemoteLinks.InSubnet(IPAddress.Parse("10.0.0.5"), IPAddress.Parse("10.0.0.1"), 0),
+            "/0 contains everything");
+        yield return (!RemoteLinks.InSubnet(IPAddress.Parse("::1"), IPAddress.Parse("10.0.0.1"), 24)
+            && !RemoteLinks.InSubnet(IPAddress.Parse("10.0.0.5"), IPAddress.Parse("10.0.0.1"), 33),
+            "nonsense prefixes and IPv6 match nothing");
     }
 
     private static IEnumerable<(bool, string)> Engine()

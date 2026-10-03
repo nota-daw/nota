@@ -56,6 +56,8 @@ export class App {
   // ---- link ----
   link = $state<LinkState>('connecting');
   rtt = $state(-1);
+  /** The link the phone came in over — a cable says so in the header ("USB · 2 ms"). */
+  via = $state<'usb' | 'wifi'>('wifi');
   /** This phone's connection id (Nota marks faders another phone holds with theirs). */
   conn = $state(0);
   host = $state(store.get('host', 'Nota'));
@@ -215,6 +217,7 @@ export class App {
         this.deny = null;
         this.host = m.host; store.set('host', m.host);
         this.conn = m.conn;
+        this.via = m.via === 'usb' ? 'usb' : 'wifi';
         this.name = m.name; store.set('name', m.name);
         this.link = 'ok';
         this.everConnected = true;

@@ -134,37 +134,4 @@ public sealed class RemoteServer : IAsyncDisposable
             "<h2>Nota Remote</h2><p>This build of Nota was made without the phone app (Node.js wasn't available). " +
             "Build src/web/remote and rebuild Nota.</p>");
     }
-
-    // ---- the address a phone should use ---------------------------------------------
-
-    /// <summary>The computer's address on the local network: the IPv4 of an interface that is up
-    /// and has a gateway (Wi-Fi or Ethernet), skipping loopback, VPN tunnels and VM bridges.</summary>
-    public static IPAddress? LanAddress()
-    {
-        IPAddress? fallback = null;
-        try
-        {
-            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
-                         .Where(n => n.OperationalStatus == OperationalStatus.Up)
-                         .OrderBy(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? 0
-                                     : n.NetworkInterfaceType == NetworkInterfaceType.Ethernet ? 1 : 2))
-            {
-                if (ni.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) continue;
-                string n = ni.Name.ToLowerInvariant();
-                if (n.StartsWith("utun") || n.StartsWith("bridge") || n.StartsWith("vmnet") || n.StartsWith("docker")
-                    || n.StartsWith("veth") || n.StartsWith("awdl") || n.StartsWith("llw") || n.Contains("virtual")) continue;
-                var props = ni.GetIPProperties();
-                foreach (var ua in props.UnicastAddresses)
-                {
-                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ua.Address)) continue;
-                    var b = ua.Address.GetAddressBytes();
-                    if (b[0] == 169 && b[1] == 254) continue;   // link-local: no DHCP
-                    if (props.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork)) return ua.Address;
-                    fallback ??= ua.Address;
-                }
-            }
-        }
-        catch (NetworkInformationException) { }
-        return fallback;
-    }
 }

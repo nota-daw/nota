@@ -29,8 +29,9 @@
   });
 
   const link = $derived.by(() => {
+    const usb = app.via === 'usb' ? 'USB · ' : '';
     switch (app.link) {
-      case 'ok': return { dot: 'var(--success-dim)', ink: 'var(--ink4)', label: app.rtt >= 0 ? `${app.rtt} ms` : 'Connected' };
+      case 'ok': return { dot: 'var(--success-dim)', ink: 'var(--ink4)', label: app.rtt >= 0 ? `${usb}${app.rtt} ms` : 'Connected' };
       case 'weak': return { dot: 'var(--warning)', ink: 'var(--warning)', label: `Weak · ${app.rtt} ms` };
       case 'lost': case 'connecting': return { dot: 'var(--ink4)', ink: 'var(--ink3)', label: app.link === 'lost' ? 'Reconnecting' : 'Connecting', blink: true };
       case 'down': return { dot: 'var(--danger)', ink: 'var(--danger-bright)', label: 'No connection', blink: true };
@@ -40,7 +41,7 @@
 
   function linkTip() {
     if (app.link === 'weak') app.showToast(`Latency is ${app.rtt} ms. Move closer to the router or put the phone on 5 GHz Wi-Fi.`);
-    else if (app.link === 'ok') app.showToast(`Connected to ${app.host} · ${app.rtt} ms`);
+    else if (app.link === 'ok') app.showToast(`Connected to ${app.host} over ${app.via === 'usb' ? 'USB' : 'Wi-Fi'} · ${app.rtt} ms`);
     else if (app.link === 'lost') app.showToast('Touches are not sent until the link is back.');
   }
 

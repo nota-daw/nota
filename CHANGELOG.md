@@ -32,7 +32,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   one undo step), and its knobs and XY axes can be mapped through the same MIDI Learn as
   hardware — every connected phone drives the same mappings. Several phones can play at once,
   each on its own track, and Nota shows who plays what: the track list and the mixer carry
-  the players' names.
+  the players' names. **USB works too:** a phone on a cable (USB tethering on Android,
+  Internet Sharing on the Mac) gets an instant, radio-free link — Nota notices the cable,
+  puts its address in the QR and marks the phone "USB" in the list.
 
 ## [0.43.1] — 2026-10-02
 
