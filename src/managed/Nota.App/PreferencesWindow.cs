@@ -997,6 +997,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag scene", "Reorder scenes"),
             ("Double-click slot", "Edit the clip · an empty MIDI slot gets a new clip"),
             ("Double-click header", "Rename the track"),
+            ("Right-click header or grid", "Add an instrument, audio or return track · rename or delete one"),
         }),
         ("PIANO ROLL", new[]
         {

@@ -143,6 +143,17 @@ public struct NotaSessionAudioSlot
     public float Gain;
 }
 
+/// <summary>Session audio slots edit through the audio-clip API: a slot's take is the clip at
+/// index <c>-(scene + 2)</c> on its track (arrangement clips are &gt;= 0). Matches the engine's
+/// kSessionClipBase addressing.</summary>
+public static class SessionClip
+{
+    public const int Base = -2;
+    public static int Index(int scene) => Base - scene;
+    /// <summary>The scene a clip index addresses, or -1 for an arrangement clip.</summary>
+    public static int SceneOf(int clipIndex) => clipIndex <= Base ? Base - clipIndex : -1;
+}
+
 /// <summary>How a session clip reacts to its launch button (Session P0).</summary>
 public enum SessionLaunchMode { Trigger = 0, Gate = 1, Toggle = 2, Repeat = 3 }
 

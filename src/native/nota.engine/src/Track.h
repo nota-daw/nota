@@ -317,4 +317,23 @@ private:
     std::atomic<bool>    frozen_{false};            // M7: play frozenBuf instead of the live chain
 };
 
+// Audio clips are addressed by index: >= 0 is an arrangement clip, <= kSessionClipBase is
+// the audio take in a Session slot (scene = kSessionClipBase - index). The clip editing API
+// (warp, region, pitch, gain, envelopes, peaks) takes either, so a slot edits like a clip.
+inline constexpr int32_t kSessionClipBase = -2;
+inline int32_t sessionSceneOfClip(int32_t clipIndex) { return clipIndex <= kSessionClipBase ? kSessionClipBase - clipIndex : -1; }
+inline int32_t sessionClipIndex(int32_t scene) { return kSessionClipBase - scene; }
+
+inline const AudioClip* audioClipRef(const Track& t, int32_t clipIndex) {
+    if (t.type() != TrackType::Audio) return nullptr;
+    if (clipIndex >= 0) return clipIndex < static_cast<int32_t>(t.clips.size()) ? &t.clips[clipIndex] : nullptr;
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return nullptr;
+    const SessionSlot& s = t.sessionSlots[scene];
+    return s.hasClip && s.audio.sample ? &s.audio : nullptr;
+}
+inline AudioClip* audioClipRef(Track& t, int32_t clipIndex) {
+    return const_cast<AudioClip*>(audioClipRef(static_cast<const Track&>(t), clipIndex));
+}
+
 } // namespace nota

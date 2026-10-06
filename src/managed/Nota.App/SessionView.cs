@@ -76,6 +76,8 @@ public sealed partial class SessionView : UserControl
     public event Action<int, int>? SlotSelected;
     /// <summary>Raised after a slot is copied into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
+    /// <summary>A context menu asked for a new track (kind, the track to place it after, or -1 = at the end).</summary>
+    public event Action<NewTrackKind, int>? AddTrackRequested;
     /// <summary>A one-line status message for the main window's status bar.</summary>
     public event Action<string>? Status;
     /// <summary>Raised when a browser item is dropped on a slot (M7-5): item, track id,
@@ -107,6 +109,15 @@ public sealed partial class SessionView : UserControl
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
         };
         var gridArea = new Border { Background = NotaPalette.BgSunken, Child = hScroll };
+        // Right-click on the empty part of the grid: add a track (cells and headers handle their own).
+        gridArea.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(gridArea).Properties.IsRightButtonPressed) return;
+            // Only on the background — a fader's right-click belongs to MIDI Learn.
+            if (e.Source is not (Panel or Border or Avalonia.Controls.Presenters.ScrollContentPresenter or ScrollViewer or BlankCell)) return;
+            e.Handled = true;
+            ShowAddTrackMenu(gridArea, -1);
+        };
 
         _inspectorHost.Background = NotaPalette.Panel;
         _inspectorHost.BorderBrush = NotaPalette.BorderDefault;

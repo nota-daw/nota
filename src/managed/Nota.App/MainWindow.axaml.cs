@@ -330,6 +330,12 @@ public partial class MainWindow : Window
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
         _session.Status += msg => vm.StatusText = msg;
+        // Session context menus add tracks through the same path as the arrangement's.
+        _session.AddTrackRequested += (kind, anchor) =>
+        {
+            if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
+            else AddTrack(kind, anchor);
+        };
         // Selecting a slot selects its track everywhere: devices below, arrangement header.
         _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6

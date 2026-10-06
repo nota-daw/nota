@@ -271,22 +271,14 @@ public sealed partial class SessionView
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };
 
-            if (c.Kind is ColKind.Track or ColKind.Group)
-                PointerPressed += (_, e) =>
-                {
-                    if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-                    if (e.ClickCount == 2)
-                    {
-                        o.PromptText(this, o._engine.GetTrackName(c.TrackId), t =>
-                        {
-                            o._engine.SetTrackName(c.TrackId, t);
-                            o.Refresh();
-                            o.ArrangementChanged?.Invoke();   // the arrangement header shows the same name
-                        });
-                        return;
-                    }
-                    o.Select(new Selection(SelKind.Slot, c.TrackId, o._sel.Scene));
-                };
+            PointerPressed += (_, e) =>
+            {
+                var pp = e.GetCurrentPoint(this).Properties;
+                if (pp.IsRightButtonPressed) { e.Handled = true; o.ShowHeaderMenu(this, c); return; }
+                if (!pp.IsLeftButtonPressed || c.Kind is not (ColKind.Track or ColKind.Group)) return;
+                if (e.ClickCount == 2) { o.PromptRenameTrack(this, c.TrackId); return; }
+                o.Select(new Selection(SelKind.Slot, c.TrackId, o._sel.Scene));
+            };
             Sync();
         }
 
@@ -852,8 +844,52 @@ public sealed partial class SessionView
             bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
             f.Items.Add(MenuKit.Item(stop ? "Remove stop button" : "Add stop button", GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
         }
+        f.Items.Add(new Separator());
+        foreach (var mi in AddTrackItems(c.TrackId)) f.Items.Add(mi);
         f.ShowAt(anchor, showAtPointer: true);
     }
+
+    // "Add …" entries: the new track lands after `anchorTrackId` (inside it for a group), or at the end.
+    private IEnumerable<MenuItem> AddTrackItems(int anchorTrackId)
+    {
+        yield return MenuKit.Item("Add instrument track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId));
+        yield return MenuKit.Item("Add audio track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId));
+        yield return MenuKit.Item("Add return track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId));
+    }
+
+    private void ShowAddTrackMenu(Control anchor, int anchorTrackId)
+    {
+        var f = new MenuFlyout();
+        foreach (var mi in AddTrackItems(anchorTrackId)) f.Items.Add(mi);
+        f.ShowAt(anchor, showAtPointer: true);
+    }
+
+    // Column header menu: rename / delete the track, or add one next to it.
+    private void ShowHeaderMenu(Control anchor, Column c)
+    {
+        var f = new MenuFlyout();
+        if (c.Kind != ColKind.Master)
+        {
+            f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)));
+            f.Items.Add(MenuKit.Item(c.Kind == ColKind.Group ? "Delete group and its tracks" : "Delete track", GlyphKind.Trash, () =>
+            {
+                _engine.RemoveTracks(new[] { c.TrackId });   // a group takes its tracks along, one undo step
+                Refresh();
+                ArrangementChanged?.Invoke();
+            }));
+            f.Items.Add(new Separator());
+        }
+        foreach (var mi in AddTrackItems(c.Kind == ColKind.Master ? -1 : c.TrackId)) f.Items.Add(mi);
+        f.ShowAt(anchor, showAtPointer: true);
+    }
+
+    private void PromptRenameTrack(Control anchor, int trackId)
+        => PromptText(anchor, _engine.GetTrackName(trackId), t =>
+        {
+            _engine.SetTrackName(trackId, t);
+            Refresh();
+            ArrangementChanged?.Invoke();   // the arrangement header shows the same name
+        });
 
     private void ShowSceneMenu(Control anchor, int scene)
     {

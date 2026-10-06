@@ -412,27 +412,21 @@ bool Engine::arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, i
     if (!old || old->type() != TrackType::Audio) return false;
     if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
     if (scene < 0 || scene >= authoring_->sceneCount) return false;
-    const auto sample = old->clips[clipIndex].sample;
-    if (!sample) return false;
-    const float gain = old->clips[clipIndex].gain;
-    const std::string clipName = old->clips[clipIndex].name;
+    if (!old->clips[clipIndex].sample) return false;
     auto nt = cloneTrack(*old);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
+    // The whole clip comes along — its region, warp, pitch, reverse, gain and envelopes —
+    // and the slot loops exactly what the clip plays.
     SessionSlot& s = nt->sessionSlots[scene];
     s.hasClip = true;
-    s.audio = AudioClip{};
-    s.audio.sample = sample;   // session audio loops the whole sample over lengthBeats
-    s.audio.sourceOffsetFrames = 0.0;
-    s.audio.lengthFrames = sample->frames;
-    s.audio.gain = gain;
-    s.name = clipName;
-    // Loop length = the sample's real duration in beats at the current tempo (like a file drop).
-    const double sr = transport_.sampleRate();
-    const double spb = transport_.samplesPerBeat();
-    const double seconds = sample->sourceSampleRate > 0 ? sample->frames / sample->sourceSampleRate : 0.0;
-    s.lengthBeats = (spb > 0.0 && sr > 0.0) ? seconds * sr / spb : 4.0;
-    if (!(s.lengthBeats > 0.0)) s.lengthBeats = 4.0;
+    s.midi = MidiClip{};
+    s.audio = nt->clips[clipIndex];
+    s.audio.startBeat = 0.0;
+    s.audio.active = true;
+    s.name = s.audio.name;
+    s.lengthBeats = 4.0;
+    syncSessionAudioSlot(*nt, sessionClipIndex(scene));
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -539,6 +533,30 @@ int32_t Engine::sessionNoteCount(int32_t trackId, int32_t scene) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || scene < 0 || scene >= static_cast<int32_t>(t->sessionSlots.size())) return 0;
     return static_cast<int32_t>(t->sessionSlots[scene].midi.notes.size());
+}
+
+// --- Session audio slots as clips (S-06) ------------------------------------------
+
+// A clip's played length in beats: the warp window when warped, else its source region at
+// the current tempo (varispeed included).
+double Engine::audioClipBeats(const AudioClip& c) const {
+    if (c.warpEnabled && c.warpBeats > 0.0) return c.warpPlayLen();
+    const double spb = transport_.samplesPerBeat();
+    const double devSR = transport_.sampleRate();
+    if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
+    return static_cast<double>(c.effectiveLength()) * devSR / c.sample->sourceSampleRate / c.pitchRatio() / spb;
+}
+
+// After a clip edit on a slot's audio (clipIndex <= kSessionClipBase): the slot loops the
+// clip, so its loop length follows the clip's played length.
+void Engine::syncSessionAudioSlot(Track& t, int32_t clipIndex) const {
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return;
+    SessionSlot& s = t.sessionSlots[scene];
+    if (!s.hasClip || !s.audio.sample) return;
+    s.audio.startBeat = 0.0;
+    const double beats = audioClipBeats(s.audio);
+    if (beats > 0.0) s.lengthBeats = beats;
 }
 
 // --- Session P0: clip + scene properties --------------------------------------
@@ -850,21 +868,7 @@ void Engine::serviceSessionFollow() {
 
 // Peaks of an audio slot's take (whole sample) for the grid / inspector preview.
 int32_t Engine::sessionSlotPeaks(int32_t trackId, int32_t scene, float* outMinMax, int32_t maxPoints) const {
-    if (!outMinMax || maxPoints <= 0) return 0;
-    auto t = findTrackAuthoring(trackId);
-    const SessionSlot* s = t ? slotAt(*t, scene) : nullptr;
-    if (!s || !s->hasClip || !s->audio.sample) return 0;
-    const SampleBuffer& sb = *s->audio.sample;
-    const int64_t total = sb.frames;
-    if (total <= 0) return 0;
-    const int32_t buckets = static_cast<int32_t>(std::min<int64_t>(maxPoints, total));
-    const int64_t per = total / buckets;
-    for (int32_t b = 0; b < buckets; ++b) {
-        float mn, mx;
-        sb.peakRange(b * per, (b + 1) * per, mn, mx);
-        outMinMax[b * 2] = mn; outMinMax[b * 2 + 1] = mx;
-    }
-    return buckets;
+    return getClipPeaks(trackId, sessionClipIndex(scene), outMinMax, maxPoints);
 }
 
 // --- Session P0: audio thread ---------------------------------------------------

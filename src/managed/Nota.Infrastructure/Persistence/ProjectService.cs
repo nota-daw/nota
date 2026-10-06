@@ -232,17 +232,17 @@ public sealed class ProjectService
                 {
                     string? rel = RegisterSample(doc, engine, sa.SampleId, warnings);
                     if (rel == null) continue;
+                    // The take is a full audio clip (region, warp, pitch, envelopes): saved like one.
+                    var audio = engine.TryGetAudioClipInfo(ti.Id, SessionClip.Index(s), out var sac)
+                        ? AudioClipState.Capture(engine, ti.Id, SessionClip.Index(s), sac)
+                        : new AudioClipDto { SourceOffsetFrames = sa.SourceOffsetFrames, LengthFrames = sa.LengthFrames, Gain = sa.Gain };
+                    audio.Sample = rel;
+                    audio.Name = null;   // the slot carries its own name
                     t.SessionSlots.Add(WithClipProps(engine, ti.Id, new SessionSlotDto
                     {
                         Scene = s,
                         LengthBeats = sa.LengthBeats,
-                        Audio = new AudioClipDto
-                        {
-                            Sample = rel,
-                            SourceOffsetFrames = sa.SourceOffsetFrames,
-                            LengthFrames = sa.LengthFrames,
-                            Gain = sa.Gain,
-                        },
+                        Audio = audio,
                     }));
                 }
             }
@@ -645,8 +645,13 @@ public sealed class ProjectService
                     if (!engine.AddSessionAudioClip(id, sl.Scene, ResolveInBundle(bundleDir, sa.Sample),
                             sl.LengthBeats, sa.SourceOffsetFrames, sa.LengthFrames, sa.Gain))
                         warnings.Add($"Couldn't reload session take \"{sa.Sample}\".");
-                    else if (engine.TryGetSessionAudioSlot(id, sl.Scene, out var lsa))
-                        BundleContent.SeedSample(engine, lsa.SampleId, sa.Sample);
+                    else
+                    {
+                        if (engine.TryGetSessionAudioSlot(id, sl.Scene, out var lsa))
+                            BundleContent.SeedSample(engine, lsa.SampleId, sa.Sample);
+                        AudioClipState.ApplyShape(engine, id, SessionClip.Index(sl.Scene), sa);
+                        engine.SetSessionSlotLength(id, sl.Scene, sl.LengthBeats);   // clip edits resync it; the saved loop wins
+                    }
                 }
                 else
                 {

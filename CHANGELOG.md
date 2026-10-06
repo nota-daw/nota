@@ -52,7 +52,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   column that folds its tracks away; returns and the master close the row; the mixer under the
   grid has I/O, Sends and Mixer sections to show or hide. An empty slot's stop button can be
   removed so a scene keeps that track playing, and the **ARR** badge hands one track back to the
-  Arrangement. All of it is saved with the project and reachable over MCP.
+  Arrangement. Audio slots are full audio clips now — double-click one for the same clip editor
+  as the Arrangement (start / end, warp with markers, pitch, reverse, gain, envelopes, ADSR); a
+  warped loop stays in time when the tempo changes, and an Arrangement clip dragged into a slot
+  keeps its trim and warp. Right-click a column header, a slot or the empty grid to add an
+  instrument, audio or return track (or rename / delete one). All of it is saved with the
+  project and reachable over MCP.
 
 ### Changed
 - **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch

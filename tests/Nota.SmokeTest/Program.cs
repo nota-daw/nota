@@ -7962,6 +7962,62 @@ engine.StopTransport();
     Check(e2.TryGetSceneProps(2, out var lsp) && Math.Abs(lsp.Tempo - 140) < 1e-9, "scene props survive save/load");
 }
 
+// -- Session audio slots are full clips (S-06): warp, region, tempo, arrangement transfer, save --
+{
+    using var e = new NotaEngine();
+    e.SetBpm(120); e.SetLaunchQuant(0.0);
+    var pb = new float[256 * 2];
+    void Run(double beats) { double from = e.PositionBeats; for (int g = 0; g < 20000 && e.PositionBeats - from < beats; g++) { e.RenderOffline(pb, 256); e.Poll(); } }
+    int at = e.AddAudioTrack();
+    Check(e.AddSessionAudioFile(at, 0, wav), "audio slot filled");
+    int sci = SessionClip.Index(0);
+    Check(e.TryGetAudioClipInfo(at, sci, out var sai) && sai.SampleId != 0, "an audio slot reads as an audio clip (session clip index)");
+    Check(e.TryGetClipInfo(at, sci, out var sci0) && Math.Abs(sci0.LengthBeats - e.SessionSlotLength(at, 0)) < 1e-6,
+        "slot clip length matches the slot loop");
+
+    e.SetClipWarp(at, sci, true, 3);
+    e.SetClipWarpLength(at, sci, 4.0);
+    Check(e.TryGetAudioClipInfo(at, sci, out var wai) && wai.WarpEnabled != 0, "warp turns on for a slot");
+    Check(Math.Abs(e.SessionSlotLength(at, 0) - 4.0) < 1e-6, $"slot loop follows the warped clip length ({e.SessionSlotLength(at, 0):F2})");
+    e.SetBpm(90);
+    Check(Math.Abs(e.SessionSlotLength(at, 0) - 4.0) < 1e-6, "warped slot keeps its length in beats across a tempo change");
+    e.LaunchSlot(at, 0);
+    e.Seek(0); Run(0.1);
+    e.RenderOffline(pb, 256);
+    Check(Rms(pb, 256) > 0.001f, $"warped audio slot plays (rms={Rms(pb, 256):F4})");
+    e.StopAllSession(); Run(0.1); e.StopTransport();
+    e.SetBpm(120);
+
+    e.SetClipGain(at, sci, 0.5f);
+    e.SetClipPitch(at, sci, 3);
+    Check(e.TryGetAudioClipInfo(at, sci, out var gai) && Math.Abs(gai.Gain - 0.5f) < 1e-6 && Math.Abs(gai.PitchSemitones - 3) < 1e-6,
+        "gain + pitch edit a slot like a clip");
+
+    // Arrangement -> slot keeps the clip's warp and region.
+    int ac = e.AddAudioClip(at, wav, 8.0);
+    e.SetClipWarp(at, ac, true, 0);
+    e.SetClipWarpLength(at, ac, 2.0);
+    Check(e.ArrangementAudioClipToSession(at, ac, 1), "arrangement audio clip copied to a slot");
+    Check(e.TryGetAudioClipInfo(at, SessionClip.Index(1), out var cai) && cai.WarpEnabled != 0 && Math.Abs(cai.StartBeat) < 1e-9
+        && Math.Abs(e.SessionSlotLength(at, 1) - 2.0) < 1e-6, "the slot keeps the clip's warp + length");
+    int back = e.SessionSlotToArrangement(at, 0, 16.0);
+    Check(back >= 0 && e.TryGetAudioClipInfo(at, back, out var bai) && bai.WarpEnabled != 0 && Math.Abs(bai.StartBeat - 16) < 1e-9,
+        "audio slot -> arrangement carries the warp");
+
+    // Save / load keeps the slot's warp, gain and pitch.
+    var w = new System.Collections.Generic.List<string>();
+    var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), w);
+    string bundle = Path.Combine(Path.GetTempPath(), "nota-slotclip-" + System.Guid.NewGuid().ToString("N") + ".nota");
+    ProjectService.Save(doc, bundle, e);
+    using var e2 = new NotaEngine();
+    ProjectService.Apply(ProjectService.Load(bundle), e2, bundle);
+    int at2 = -1;
+    for (int i = 0; i < e2.TrackCount; i++) if (e2.TryGetTrackInfo(i, out var ti) && ti.Type == 0) at2 = ti.Id;
+    Check(at2 > 0 && e2.TryGetAudioClipInfo(at2, SessionClip.Index(0), out var lai) && lai.WarpEnabled != 0
+        && Math.Abs(lai.Gain - 0.5f) < 1e-6 && Math.Abs(lai.PitchSemitones - 3) < 1e-6
+        && Math.Abs(e2.SessionSlotLength(at2, 0) - 4.0) < 1e-6, "audio slot warp / gain / pitch survive save/load");
+}
+
 // -- Session: copy an arrangement AUDIO clip into a slot --
 {
     using var e = new NotaEngine();

@@ -1197,6 +1197,11 @@ private:
     static constexpr double kGrowingTakeBeats = 4096.0;
     bool    recordSessionGrowing_ = false;
     double  roundedTakeBeats(double beats) const;
+    double  audioClipBeats(const AudioClip& c) const;
+    void    syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
+    // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
+    // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
+    void    mixAudioClip(const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;

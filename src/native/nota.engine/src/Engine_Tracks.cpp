@@ -60,8 +60,8 @@ bool Engine::audioClipInfo(int32_t trackId, int32_t clipIndex, NotaAudioClipInfo
     if (!out) return false;
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
-    const AudioClip& c = t->clips[clipIndex];
+    if (!audioClipRef(*t, clipIndex)) return false;
+    const AudioClip& c = (*audioClipRef(*t, clipIndex));
     out->start_beat = c.startBeat;
     out->source_offset_frames = c.sourceOffsetFrames;
     out->length_frames = c.lengthFrames;
@@ -80,9 +80,10 @@ bool Engine::audioClipInfo(int32_t trackId, int32_t clipIndex, NotaAudioClipInfo
 bool Engine::setClipGain(int32_t trackId, int32_t clipIndex, float gain) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    nt->clips[clipIndex].gain = gain < 0.0f ? 0.0f : gain;
+    (*audioClipRef(*nt, clipIndex)).gain = gain < 0.0f ? 0.0f : gain;
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -91,8 +92,8 @@ bool Engine::clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) con
     if (!out) return false;
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
-    const ClipAdsr& a = t->clips[clipIndex].adsr;
+    if (!audioClipRef(*t, clipIndex)) return false;
+    const ClipAdsr& a = (*audioClipRef(*t, clipIndex)).adsr;
     out->attack_beats = a.attack;
     out->decay_beats = a.decay;
     out->release_beats = a.release;
@@ -105,7 +106,7 @@ bool Engine::clipAdsr(int32_t trackId, int32_t clipIndex, NotaClipAdsr* out) con
 bool Engine::setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr& in) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto finite = [](double v) { return std::isfinite(v) ? std::max(0.0, v) : 0.0; };
     ClipAdsr a;
     a.attack = finite(in.attack_beats);
@@ -113,7 +114,8 @@ bool Engine::setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr&
     a.release = finite(in.release_beats);
     a.sustain = std::isfinite(in.sustain) ? std::clamp(in.sustain, 0.0f, 1.0f) : 1.0f;
     auto nt = cloneTrack(*old);
-    nt->clips[clipIndex].adsr = a;
+    (*audioClipRef(*nt, clipIndex)).adsr = a;
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -240,8 +242,9 @@ const AudioClip* Engine::warpBuildTargetClip() const {
     if (!wb_.building) return nullptr;
     auto t = findTrackAuthoring(wb_.trackId);
     if (!t || t->type() != TrackType::Audio) return nullptr;
-    if (wb_.clipIndex < 0 || wb_.clipIndex >= static_cast<int32_t>(t->clips.size())) return nullptr;
-    const AudioClip& c = t->clips[wb_.clipIndex];
+    const AudioClip* cp = audioClipRef(*t, wb_.clipIndex);   // an arrangement clip or a session slot's
+    if (!cp) return nullptr;
+    const AudioClip& c = *cp;
     if (!c.warpEnabled || c.warpCache) return nullptr;
     if (!wb_.cache || warpCacheFrames(c, transport_.samplesPerBeat(), transport_.sampleRate()) != wb_.cache->frames)
         return nullptr;
@@ -258,6 +261,8 @@ int64_t Engine::warpBuildRemainingFrames() const {
         if (t->type() != TrackType::Audio) continue;
         for (auto& c : t->clips)
             if (c.warpEnabled && !c.warpCache) sum += warpCacheFrames(c, spb, devSR);
+        for (auto& sl : t->sessionSlots)
+            if (sl.hasClip && sl.audio.warpEnabled && !sl.audio.warpCache) sum += warpCacheFrames(sl.audio, spb, devSR);
     }
     // The in-progress clip is still un-cached above, so its full length was counted —
     // subtract what's already rendered so the bar reflects real progress.
@@ -285,6 +290,12 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
                     const AudioClip& c = t->clips[i];
                     if (c.warpEnabled && !c.warpCache && warpCacheFrames(c, spb, devSR) > 0) {
                         target = &c; tid = t->id(); ci = static_cast<int32_t>(i); break;
+                    }
+                }
+                for (size_t sc = 0; !target && sc < t->sessionSlots.size(); ++sc) {
+                    const SessionSlot& sl = t->sessionSlots[sc];
+                    if (sl.hasClip && sl.audio.warpEnabled && !sl.audio.warpCache && warpCacheFrames(sl.audio, spb, devSR) > 0) {
+                        target = &sl.audio; tid = t->id(); ci = sessionClipIndex(static_cast<int32_t>(sc));
                     }
                 }
                 if (target) break;
@@ -321,10 +332,9 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
         // Finished this clip: install its cache via an atomic republish, then continue.
         if (wb_.offset >= wb_.cache->frames) {
             auto old = findTrackAuthoring(wb_.trackId);
-            if (old && old->type() == TrackType::Audio
-                && wb_.clipIndex < static_cast<int32_t>(old->clips.size())) {
+            if (old && audioClipRef(*old, wb_.clipIndex)) {
                 auto nt = cloneTrack(*old);
-                nt->clips[wb_.clipIndex].warpCache = std::const_pointer_cast<const WarpCache>(wb_.cache);
+                audioClipRef(*nt, wb_.clipIndex)->warpCache = std::const_pointer_cast<const WarpCache>(wb_.cache);
                 republishWithTrackRaw(wb_.trackId, nt);   // no undo entry — a cache isn't an edit
             }
             wb_ = {};   // clear the cursor (also frees the stretcher)
@@ -356,11 +366,15 @@ void Engine::reconfigureAllWarpStreams(double spb, double devSR) {
     g->tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks) {
         bool warped = false;
-        if (t->type() == TrackType::Audio)
+        if (t->type() == TrackType::Audio) {
             for (auto& c : t->clips) if (c.warpEnabled && c.sample) { warped = true; break; }
+            for (auto& sl : t->sessionSlots) if (sl.hasClip && sl.audio.warpEnabled && sl.audio.sample) { warped = true; break; }
+        }
         if (!warped) { g->tracks.push_back(t); continue; }
         auto nt = cloneTrack(*t);
         for (auto& c : nt->clips) if (c.warpEnabled && c.sample) configureClipWarp(c, spb, devSR);
+        for (auto& sl : nt->sessionSlots)   // session audio slots warp like clips (S-06)
+            if (sl.hasClip && sl.audio.warpEnabled && sl.audio.sample) configureClipWarp(sl.audio, spb, devSR);
         g->tracks.push_back(std::move(nt));
         any = true;
     }
@@ -370,10 +384,11 @@ void Engine::reconfigureAllWarpStreams(double spb, double devSR) {
 bool Engine::setClipPitch(int32_t trackId, int32_t clipIndex, float semitones) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    nt->clips[clipIndex].pitchSemitones = semitones;
-    configureClipWarp(nt->clips[clipIndex], transport_.samplesPerBeat(), transport_.sampleRate()); // pitch is baked into the warp
+    (*audioClipRef(*nt, clipIndex)).pitchSemitones = semitones;
+    configureClipWarp((*audioClipRef(*nt, clipIndex)), transport_.samplesPerBeat(), transport_.sampleRate()); // pitch is baked into the warp
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -384,9 +399,10 @@ bool Engine::setClipPitch(int32_t trackId, int32_t clipIndex, float semitones) {
 bool Engine::setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    nt->clips[clipIndex].reversed = reversed;
+    (*audioClipRef(*nt, clipIndex)).reversed = reversed;
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -394,9 +410,9 @@ bool Engine::setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed) {
 bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32_t mode) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     // On enable, auto-detect the source tempo and snap the clip's length to the
@@ -408,6 +424,7 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
     c.warpEnabled = enabled;
     if (mode >= 0) c.warpMode = static_cast<WarpMode>(mode);
     configureClipWarp(c, spb, devSR);
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -415,16 +432,17 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
 double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex, double knownBpm) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return 0.0;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return 0.0;
+    if (!audioClipRef(*old, clipIndex)) return 0.0;
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
     const double bpm = seedAutoWarp(c, spb, devSR, knownBpm);
     if (bpm <= 0.0) return 0.0;   // detection failed: leave the clip unchanged
     c.warpEnabled = true;
     configureClipWarp(c, spb, devSR);
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return bpm;
 }
@@ -432,11 +450,11 @@ double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex, double knownBpm)
 double Engine::beatWarpClip(int32_t trackId, int32_t clipIndex) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return 0.0;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return 0.0;
+    if (!audioClipRef(*old, clipIndex)) return 0.0;
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
 
     // Establish the beat grid from the detected tempo (rounded musical length).
@@ -472,6 +490,7 @@ double Engine::beatWarpClip(int32_t trackId, int32_t clipIndex) {
     c.warpMarkers = std::move(markers);
     c.warpPlayStart = 0.0; c.warpPlayEnd = 0.0;   // fresh warp → play the whole material
     configureClipWarp(c, spb, devSR);
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return bpm;
 }
@@ -479,10 +498,10 @@ double Engine::beatWarpClip(int32_t trackId, int32_t clipIndex) {
 bool Engine::setClipWarpLength(int32_t trackId, int32_t clipIndex, double beats) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     if (beats < 0.25) beats = 0.25;
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     c.warpBeats = beats;
     // The end marker owns the total length; keep interior markers within it.
     if (!c.warpMarkers.empty()) {
@@ -491,6 +510,7 @@ bool Engine::setClipWarpLength(int32_t trackId, int32_t clipIndex, double beats)
     }
     clampWarpPlay(c);   // keep the trim window valid for the new length
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate());
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -499,10 +519,10 @@ bool Engine::setClipWarpMarkers(int32_t trackId, int32_t clipIndex,
                                 const double* srcFrames, const double* beats, int32_t count) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     if (count < 2 || !srcFrames || !beats) return false;
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     c.warpMarkers.clear();
     c.warpMarkers.reserve(count);
     for (int32_t i = 0; i < count; ++i) c.warpMarkers.push_back({ srcFrames[i], beats[i] });
@@ -511,6 +531,7 @@ bool Engine::setClipWarpMarkers(int32_t trackId, int32_t clipIndex,
     c.warpBeats = c.warpMarkers.back().beat;
     clampWarpPlay(c);   // preserve the trim window across marker edits (clamped to new length)
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate());
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -521,17 +542,18 @@ bool Engine::setClipWarpMarkers(int32_t trackId, int32_t clipIndex,
 bool Engine::setClipWarpTrim(int32_t trackId, int32_t clipIndex, double playStart, double playEnd) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
-    const AudioClip& oc = old->clips[clipIndex];
+    if (!audioClipRef(*old, clipIndex)) return false;
+    const AudioClip& oc = (*audioClipRef(*old, clipIndex));
     if (!oc.warpEnabled || oc.warpBeats <= 0.0) return false;
     constexpr double kMinBeat = 0.05;
     double ps = std::clamp(playStart, 0.0, std::max(0.0, oc.warpBeats - kMinBeat));
     double pe = std::clamp(playEnd, ps + kMinBeat, oc.warpBeats);
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     c.warpPlayStart = ps;
     c.warpPlayEnd = pe;
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate()); // window is baked into the cache
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -540,8 +562,8 @@ int32_t Engine::clipWarpMarkers(int32_t trackId, int32_t clipIndex,
                                 double* outSrc, double* outBeat, int32_t maxCount) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return 0;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const auto& m = t->clips[clipIndex].warpMarkers;
+    if (!audioClipRef(*t, clipIndex)) return 0;
+    const auto& m = (*audioClipRef(*t, clipIndex)).warpMarkers;
     const int32_t n = std::min<int32_t>(maxCount, static_cast<int32_t>(m.size()));
     for (int32_t i = 0; i < n; ++i) { if (outSrc) outSrc[i] = m[i].srcFrame; if (outBeat) outBeat[i] = m[i].beat; }
     return static_cast<int32_t>(m.size());
@@ -821,8 +843,8 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex,
                              float* outMinMax, int32_t maxPoints) const {
     if (!outMinMax || maxPoints <= 0) return 0;
     auto t = findTrackAuthoring(trackId);
-    if (!t || clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const AudioClip& clip = t->clips[clipIndex];
+    if (!t || !audioClipRef(*t, clipIndex)) return 0;
+    const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!clip.sample) return 0;
     const SampleBuffer& sb = *clip.sample;
 
@@ -864,8 +886,8 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex,
                                    float* outMinMax, int32_t maxPoints) const {
     if (!outMinMax || maxPoints <= 0) return 0;
     auto t = findTrackAuthoring(trackId);
-    if (!t || clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const AudioClip& clip = t->clips[clipIndex];
+    if (!t || !audioClipRef(*t, clipIndex)) return 0;
+    const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!clip.sample) return 0;
     const SampleBuffer& sb = *clip.sample;
     const int64_t total = sb.frames;
@@ -887,8 +909,8 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex,
 int32_t Engine::getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex,
                                      float* outMinMax, int32_t maxPoints) const {
     auto t = findTrackAuthoring(trackId);
-    if (!t || clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const AudioClip& clip = t->clips[clipIndex];
+    if (!t || !audioClipRef(*t, clipIndex)) return 0;
+    const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!(clip.warpEnabled && clip.warpBeats > 0.0)) return 0;
     return warpPeaksRange(clip, outMinMax, maxPoints, 0.0, clip.warpBeats);
 }
@@ -928,8 +950,8 @@ bool Engine::clipInfo(int32_t trackId, int32_t clipIndex, NotaClipInfo* out) con
         out->active = c.active ? 1 : 0;
         return true;
     }
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
-    const AudioClip& c = t->clips[clipIndex];
+    if (!audioClipRef(*t, clipIndex)) return false;
+    const AudioClip& c = (*audioClipRef(*t, clipIndex));
     out->start_beat = c.startBeat;
     out->kind = 0;
     out->active = c.active ? 1 : 0;
@@ -1655,8 +1677,8 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
         c.startBeat = newStartBeat;
         c.lengthBeats = newLengthBeats;
     } else {
-        if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
-        AudioClip& c = nt->clips[clipIndex];
+        if (!audioClipRef(*nt, clipIndex)) return false;
+        AudioClip& c = (*audioClipRef(*nt, clipIndex));
         const double spb = transport_.samplesPerBeat();
         const double devSR = transport_.sampleRate();
         const double delta = newStartBeat - c.startBeat;
@@ -1677,6 +1699,7 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
             c.lengthFrames = static_cast<int64_t>(want);
         }
     }
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -1684,13 +1707,13 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
 bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStartBeat, double newLengthBeats) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     if (newStartBeat < 0) newStartBeat = 0;
     if (newLengthBeats < 0.25) newLengthBeats = 0.25;
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
 
     if (c.warpEnabled) {
         // Warped: TRIM the played window — do NOT stretch (stretch is the
@@ -1711,6 +1734,7 @@ bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStart
         c.warpPlayStart = ps;
         c.warpPlayEnd = pe;
         configureClipWarp(c, spb, devSR);   // the played window is baked into the cache
+        syncSessionAudioSlot(*nt, clipIndex);
         republishWithTrack(trackId, nt);
         return true;
     }
@@ -1749,6 +1773,7 @@ bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStart
                           {static_cast<double>(newOffset) + static_cast<double>(c.effectiveLength()), newLengthBeats} };
         configureClipWarp(c, spb, devSR);
     }
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -1761,8 +1786,8 @@ bool Engine::setClipSourceRegion(int32_t trackId, int32_t clipIndex,
                                  double offsetFrames, int64_t lengthFrames) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
-    const AudioClip& oc = old->clips[clipIndex];
+    if (!audioClipRef(*old, clipIndex)) return false;
+    const AudioClip& oc = (*audioClipRef(*old, clipIndex));
     if (!oc.sample || oc.warpEnabled) return false;   // warped: region is marker-driven
     const int64_t total = oc.sample->frames;
     if (total <= 0) return false;
@@ -1775,9 +1800,10 @@ bool Engine::setClipSourceRegion(int32_t trackId, int32_t clipIndex,
     const int64_t avail = total - static_cast<int64_t>(off);
     len = std::clamp<int64_t>(len, std::min<int64_t>(kMinFrames, avail), avail);
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = (*audioClipRef(*nt, clipIndex));
     c.sourceOffsetFrames = off;
     c.lengthFrames = len;
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -2291,6 +2317,8 @@ int32_t copyStr(const std::string& s, char* out, int32_t cap) {
 } // namespace
 
 bool Engine::setClipName(int32_t trackId, int32_t clipIndex, const std::string& name) {
+    // A Session slot (SessionClip index, MIDI or audio): its name is the slot's.
+    if (const int32_t scene = sessionSceneOfClip(clipIndex); scene >= 0) return setSessionClipName(trackId, scene, name);
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;
     auto nt = cloneTrack(*old);
@@ -2305,6 +2333,10 @@ bool Engine::setClipName(int32_t trackId, int32_t clipIndex, const std::string& 
     return true;
 }
 int32_t Engine::clipName(int32_t trackId, int32_t clipIndex, char* out, int32_t cap) const {
+    if (const int32_t scene = sessionSceneOfClip(clipIndex); scene >= 0) {
+        std::string n;
+        return sessionClipName(trackId, scene, n) ? copyStr(n, out, cap) : copyStr(std::string(), out, cap);
+    }
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     if (t->type() == TrackType::Instrument) {

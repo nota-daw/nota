@@ -645,8 +645,8 @@ bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t c
 int32_t Engine::getAudioClipVolumeEnvelope(int32_t trackId, int32_t clipIndex, NotaAutomationPoint* out, int32_t cap) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return 0;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const auto& pts = t->clips[clipIndex].volumeEnvelope.points;
+    if (!audioClipRef(*t, clipIndex)) return 0;
+    const auto& pts = (*audioClipRef(*t, clipIndex)).volumeEnvelope.points;
     if (!out) return static_cast<int32_t>(pts.size());
     const int32_t n = std::min<int32_t>(cap, static_cast<int32_t>(pts.size()));
     for (int32_t i = 0; i < n; ++i) { out[i].beat = pts[i].beat; out[i].value = pts[i].value; out[i].curve = pts[i].curve; }
@@ -656,14 +656,15 @@ int32_t Engine::getAudioClipVolumeEnvelope(int32_t trackId, int32_t clipIndex, N
 bool Engine::setAudioClipVolumeEnvelope(int32_t trackId, int32_t clipIndex, const NotaAutomationPoint* pts, int32_t count) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    auto& lane = nt->clips[clipIndex].volumeEnvelope;
+    auto& lane = (*audioClipRef(*nt, clipIndex)).volumeEnvelope;
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
     std::sort(lane.points.begin(), lane.points.end(),
               [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);   // structural edit → undo checkpoint
     return true;
 }
@@ -671,8 +672,8 @@ bool Engine::setAudioClipVolumeEnvelope(int32_t trackId, int32_t clipIndex, cons
 int32_t Engine::getAudioClipPanEnvelope(int32_t trackId, int32_t clipIndex, NotaAutomationPoint* out, int32_t cap) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return 0;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
-    const auto& pts = t->clips[clipIndex].panEnvelope.points;
+    if (!audioClipRef(*t, clipIndex)) return 0;
+    const auto& pts = (*audioClipRef(*t, clipIndex)).panEnvelope.points;
     if (!out) return static_cast<int32_t>(pts.size());
     const int32_t n = std::min<int32_t>(cap, static_cast<int32_t>(pts.size()));
     for (int32_t i = 0; i < n; ++i) { out[i].beat = pts[i].beat; out[i].value = pts[i].value; out[i].curve = pts[i].curve; }
@@ -682,14 +683,15 @@ int32_t Engine::getAudioClipPanEnvelope(int32_t trackId, int32_t clipIndex, Nota
 bool Engine::setAudioClipPanEnvelope(int32_t trackId, int32_t clipIndex, const NotaAutomationPoint* pts, int32_t count) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Audio) return false;
-    if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
+    if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    auto& lane = nt->clips[clipIndex].panEnvelope;
+    auto& lane = (*audioClipRef(*nt, clipIndex)).panEnvelope;
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
     std::sort(lane.points.begin(), lane.points.end(),
               [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
+    syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
