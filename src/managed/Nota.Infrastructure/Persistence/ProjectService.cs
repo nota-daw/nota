@@ -57,6 +57,7 @@ public sealed class ProjectService
         {
             SessionNames = !contentNames,
             SceneCount = engine.SceneCount,
+            Session = CaptureSession(engine),
             Transport = new TransportDto
             {
                 Bpm = transport.Bpm,
@@ -212,24 +213,26 @@ public sealed class ProjectService
             // Session slots.
             for (int s = 0; s < engine.SceneCount; s++)
             {
+                if (!engine.GetSessionSlotStopButton(ti.Id, s) && engine.SessionSlotState(ti.Id, s) == 0)
+                    (t.SessionNoStop ??= new List<int>()).Add(s);
                 // Persist any slot that holds a clip — skip only truly empty ones. (A slot
                 // that's playing/queued/recording is state 2-4, not 1, but still has content;
                 // gating on == 1 dropped it when saving mid-jam.)
                 if (engine.SessionSlotState(ti.Id, s) == 0) continue;
                 if (ti.IsInstrument)
                 {
-                    t.SessionSlots.Add(new SessionSlotDto
+                    t.SessionSlots.Add(WithClipProps(engine, ti.Id, new SessionSlotDto
                     {
                         Scene = s,
                         LengthBeats = engine.SessionSlotLength(ti.Id, s),
                         Notes = ToDtos(engine.GetSessionNotes(ti.Id, s)),
-                    });
+                    }));
                 }
                 else if (ti.Type == 0 && engine.TryGetSessionAudioSlot(ti.Id, s, out var sa))
                 {
                     string? rel = RegisterSample(doc, engine, sa.SampleId, warnings);
                     if (rel == null) continue;
-                    t.SessionSlots.Add(new SessionSlotDto
+                    t.SessionSlots.Add(WithClipProps(engine, ti.Id, new SessionSlotDto
                     {
                         Scene = s,
                         LengthBeats = sa.LengthBeats,
@@ -240,7 +243,7 @@ public sealed class ProjectService
                             LengthFrames = sa.LengthFrames,
                             Gain = sa.Gain,
                         },
-                    });
+                    }));
                 }
             }
 
@@ -436,6 +439,7 @@ public sealed class ProjectService
         // hold more/fewer scenes than the fresh default after add/remove-scene edits).
         while (engine.SceneCount < doc.SceneCount) engine.AddScene();
         while (engine.SceneCount > doc.SceneCount && engine.SceneCount > 1) engine.RemoveScene(engine.SceneCount - 1);
+        ApplySession(engine, doc.Session);
 
         // Doc index -> new live track id, and deferred sidechain wiring (a source may be
         // a track created later), both resolved after every track exists (Phase B).
@@ -649,7 +653,10 @@ public sealed class ProjectService
                     engine.AddSessionMidiClip(id, sl.Scene, sl.LengthBeats);
                     if (sl.Notes.Length > 0) engine.SetSessionNotes(id, sl.Scene, ToNotes(sl.Notes));
                 }
+                ApplyClipProps(engine, id, sl);
             }
+            if (t.SessionNoStop is { } noStop)
+                foreach (int sc in noStop) engine.SetSessionSlotStopButton(id, sc, false);
 
             // Automation lanes (M9-A4). Devices are already rebuilt above, so
             // DeviceParam lanes resolve to the same chain positions; plugin-param
@@ -940,5 +947,71 @@ public sealed class ProjectService
         var arr = new NotaNote[dtos.Length];
         for (int i = 0; i < dtos.Length; i++) arr[i] = dtos[i].ToNote();
         return arr;
+    }
+
+    // --- Session P0: clip + scene properties ------------------------------------
+
+    private static SessionDto CaptureSession(IAudioEngine engine)
+    {
+        var dto = new SessionDto
+        {
+            LaunchQuant = engine.LaunchQuant,
+            Follow = engine.SessionFollow,
+            RecordLength = engine.SessionRecordLength,
+        };
+        for (int s = 0; s < engine.SceneCount; s++)
+        {
+            if (!engine.TryGetSceneProps(s, out var p)) continue;
+            string name = engine.GetSceneName(s);
+            if (name.Length == 0 && p.Color < 0 && p.Tempo <= 0 && p.SigNum <= 0 && p.Follow == 0) continue;
+            dto.Scenes.Add(new SceneDto
+            {
+                Index = s, Name = name.Length > 0 ? name : null, Color = p.Color, Tempo = p.Tempo,
+                SigNum = p.SigNum, SigDen = p.SigDen, Follow = p.Follow != 0, FollowBeats = p.FollowBeats,
+            });
+        }
+        return dto;
+    }
+
+    private static void ApplySession(IAudioEngine engine, SessionDto? dto)
+    {
+        if (dto is null) return;
+        engine.SetLaunchQuant(Math.Max(0, dto.LaunchQuant));
+        engine.SessionFollow = dto.Follow;
+        engine.SessionRecordLength = Math.Max(0, dto.RecordLength);
+        foreach (var sc in dto.Scenes)
+        {
+            if (sc.Index < 0 || sc.Index >= engine.SceneCount) continue;
+            if (!string.IsNullOrEmpty(sc.Name)) engine.SetSceneName(sc.Index, sc.Name);
+            engine.SetSceneProps(sc.Index, new NotaSceneProps
+            {
+                Color = sc.Color, Tempo = sc.Tempo, SigNum = sc.SigNum, SigDen = sc.SigDen,
+                Follow = sc.Follow ? 1 : 0, FollowBeats = sc.FollowBeats,
+            });
+        }
+    }
+
+    private static SessionSlotDto WithClipProps(IAudioEngine engine, int trackId, SessionSlotDto dto)
+    {
+        string name = engine.GetSessionClipName(trackId, dto.Scene);
+        dto.Name = name.Length > 0 ? name : null;
+        if (!engine.TryGetSessionClipProps(trackId, dto.Scene, out var p)) return dto;
+        dto.Color = p.Color; dto.LaunchMode = p.LaunchMode; dto.Quant = p.QuantBeats;
+        dto.Legato = p.Legato != 0; dto.Loop = p.Loop != 0; dto.VelocityAmount = p.VelocityAmount;
+        dto.FollowA = p.FollowA; dto.FollowB = p.FollowB; dto.ChanceA = p.ChanceA; dto.ChanceB = p.ChanceB;
+        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene;
+        return dto;
+    }
+
+    private static void ApplyClipProps(IAudioEngine engine, int trackId, SessionSlotDto sl)
+    {
+        if (!string.IsNullOrEmpty(sl.Name)) engine.SetSessionClipName(trackId, sl.Scene, sl.Name);
+        engine.SetSessionClipProps(trackId, sl.Scene, new NotaSessionClipProps
+        {
+            Color = sl.Color, LaunchMode = sl.LaunchMode, QuantBeats = sl.Quant,
+            Legato = sl.Legato ? 1 : 0, Loop = sl.Loop ? 1 : 0, VelocityAmount = sl.VelocityAmount,
+            FollowA = sl.FollowA, FollowB = sl.FollowB, ChanceA = sl.ChanceA, ChanceB = sl.ChanceB,
+            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene,
+        });
     }
 }

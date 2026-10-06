@@ -94,6 +94,7 @@ void Engine::applyMidiCcRouting(Track& t) {
 
 void Engine::poll() {
     if (audioRecording_) drainInputQueue(); // keep the capture buffer flowing while recording
+    serviceSessionFollow();                 // scene follow + fixed-length session capture
 
     // Automation write/record (M9-C). Message thread: a transport stop ends any
     // latched gesture, and active gestures are sampled at the live playhead.
@@ -514,13 +515,15 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     MidiEv evs[1024];
     int n = 0;
     const long i0 = static_cast<long>(std::floor(p / L));
+    const float velGain = sp.gain;
     for (long it = i0; it <= i0 + 1; ++it) {
+        if (!s.loop && it > 0) break;   // one-shot: a single pass
         for (const Note& note : s.midi.notes) {
             if (note.startBeat < 0.0 || note.startBeat >= L) continue;
             const double onAbs = it * L + note.startBeat;
             const double offAbs = onAbs + note.lengthBeats;
             if (onAbs >= p && onAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity, static_cast<float>(note.lengthBeats)};
+                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity * velGain, static_cast<float>(note.lengthBeats)};
             if (offAbs >= p && offAbs < p + db && n < 1024)
                 evs[n++] = {static_cast<int32_t>((offAbs - p) * spb), false, note.pitch, 0.0f};
         }
@@ -566,9 +569,10 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
     const double sr = transport_.sampleRate();
     const double ratio = sr > 0 ? sb.sourceSampleRate / sr : 1.0; // source frames per device frame
     const double L = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
-    const float gain = s.audio.gain;
+    const float gain = s.audio.gain * sp.gain;
 
     for (int32_t i = 0; i < frames; ++i) {
+        if (!s.loop && sp.localBeats + i / spb >= L) break;   // one-shot: silence past the end
         double loopBeat = std::fmod(sp.localBeats + i / spb, L);
         if (loopBeat < 0.0) loopBeat += L;
         const double srcPos = loopBeat * spb * ratio; // -> source frames
@@ -982,6 +986,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             bool sessionActive = false;
             if (!frozenActive && !capturing && !monitoring) if (auto& sp = t.sessionPlayer) {
+                // Follow actions + Repeat launch mode queue the next request before it applies.
+                if (playing) sessionPreApply(t, frames / spb);
                 if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
                     if (t.instrument) t.instrument->allNotesOff();
                     for (auto& md : t.midiEffects) if (md) md->reset();   // clock switch → flush arp
@@ -1007,9 +1013,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (monitoring)
                     renderMonitorInput(g, t, scratch_.data(), frames);
                 else if (sessionActive && t.type() == TrackType::Instrument)
-                    renderSessionSlotRaw(t, scratch_.data(), frames, spb);
+                    { renderSessionSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
                 else if (sessionActive && t.type() == TrackType::Audio)
-                    renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb);
+                    { renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
                 else if (t.type() == TrackType::Instrument)
                     renderInstrumentRaw(g, t, scratch_.data(), frames, blockStart, spb, playing);
                 else if (playing && arrangementActive)

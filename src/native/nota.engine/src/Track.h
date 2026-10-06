@@ -114,11 +114,43 @@ struct AudioClip {
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
 // (instrument tracks) or a captured audio take (audio tracks, M5-4); the type is
 // implied by the track type. Immutable in a snapshot.
+// Follow actions (Session P0): what a slot does once it has played followBeats.
+enum class FollowAction : int32_t { None = 0, Stop, Again, Previous, Next, First, Last, Any, Other, Jump };
+// How a slot reacts to its launch button: Trigger starts, Gate plays while held, Toggle
+// starts / stops, Repeat retriggers at the launch quantum while held.
+enum class LaunchMode : int32_t { Trigger = 0, Gate, Toggle, Repeat };
+
 struct SessionSlot {
     bool     hasClip = false;
     MidiClip midi;              // instrument tracks: notes relative to slot start
     AudioClip audio;            // audio tracks: captured sample, looped over lengthBeats (M5-4)
     double   lengthBeats = 4.0; // loop length
+
+    // Clip properties (Session P0). Message thread writes them on a clone; the audio
+    // thread reads only the POD fields of the published snapshot.
+    std::string name;                    // empty = "<track> <scene>" in the UI
+    int32_t  color = -1;                 // track-palette index, -1 = the track's colour
+    LaunchMode launchMode = LaunchMode::Trigger;
+    double   quantBeats = -1.0;          // <0 = the global launch quantum
+    bool     legato = false;             // launch at the outgoing slot's position
+    bool     loop = true;                // false = one-shot: stops after lengthBeats
+    float    velocityAmount = 0.0f;      // 0..1: how far launch velocity scales the clip
+    FollowAction followA = FollowAction::None;
+    FollowAction followB = FollowAction::None;
+    int32_t  chanceA = 100, chanceB = 0; // relative weights, 0..100
+    double   followBeats = 0.0;          // 0 = after one pass (lengthBeats)
+    int32_t  jumpScene = 0;              // FollowAction::Jump target
+    bool     stopButton = true;          // an EMPTY slot stops its track on scene launch
+};
+
+// Scene metadata (Session P0). Graph-level, one per scene row; kept in step with sceneCount.
+struct SceneInfo {
+    std::string name;
+    int32_t color = -1;          // track-palette index, -1 = neutral
+    double  tempo = 0.0;         // >0: launching the scene sets the tempo
+    int32_t sigNum = 0, sigDen = 0; // >0: launching the scene sets the time signature
+    bool    follow = false;      // launch the next scene after followBeats
+    double  followBeats = 32.0;
 };
 
 enum class TrackType { Audio, Instrument, Return, Group };

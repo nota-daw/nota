@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Nota won't open on macOS / Windows
+    url: https://github.com/nota-daw/nota#first-launch
+    about: Nota isn't signed with a paid certificate yet — here's how to open it the first time.
+  - name: Add a plugin to the one-click Downloads list
+    url: https://github.com/nota-daw/nota-plugins-registry
+    about: Plugin requests and additions go to the plugin registry.

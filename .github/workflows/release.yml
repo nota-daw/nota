@@ -216,6 +216,21 @@ jobs:
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "See CHANGELOG.md for details." > RELEASE_NOTES.md
           fi
+          cat >> RELEASE_NOTES.md <<'EOF'
+
+          ---
+
+          ### Install
+
+          | System | File |
+          |---|---|
+          | macOS, Apple Silicon | `Nota-*-arm64.dmg` |
+          | macOS, Intel | `Nota-*-x86_64.dmg` |
+          | Windows | `Nota-Setup-*-x64.exe` (`-arm64` for Windows on ARM) |
+          | Linux | `Nota-*-x86_64.AppImage` (`-aarch64` for ARM) |
+
+          **First launch:** Nota isn't signed with a paid certificate yet. On **macOS**, if it says Apple could not verify Nota, open **System Settings → Privacy & Security** and click **Open Anyway** — [step-by-step guide](https://github.com/nota-daw/nota#opening-nota-on-macos). On **Windows**, click **More info → Run anyway** in SmartScreen.
+          EOF
           echo "----- release notes -----"; cat RELEASE_NOTES.md
 
       - name: Download all build artifacts

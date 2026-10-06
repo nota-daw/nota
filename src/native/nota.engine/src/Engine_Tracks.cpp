@@ -350,6 +350,7 @@ void Engine::reconfigureAllWarpStreams(double spb, double devSR) {
     bool any = false;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1219,6 +1220,7 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
     pushUndo();
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1338,6 +1340,7 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
     pushUndo();
     auto g = std::make_shared<Graph>();
     g->sceneCount   = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack  = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1369,6 +1372,7 @@ bool Engine::deleteClipsInRange(const std::vector<int32_t>& trackIds, double sta
     bool any = false;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1398,6 +1402,7 @@ bool Engine::splitClipsAtRange(const std::vector<int32_t>& trackIds, double star
     bool any = false;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1452,6 +1457,7 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
     bool any = false;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -1606,6 +1612,7 @@ bool Engine::consolidateRange(const std::vector<int32_t>& trackIds, double start
     std::vector<std::pair<int32_t,int32_t>> placed;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2144,6 +2151,7 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
     pushUndo();
     auto g = std::make_shared<Graph>();
     g->sceneCount   = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack  = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2195,6 +2203,7 @@ bool Engine::cutClipBlock(const std::vector<std::pair<int32_t,int32_t>>& sel) {
     pushUndo();
     auto g = std::make_shared<Graph>();
     g->sceneCount   = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack  = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2381,6 +2390,7 @@ int32_t Engine::duplicateTrack(int32_t trackId) {
     // Insert the copy right after the source (new snapshot; checkpoints undo).
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size() + 1);
@@ -2404,6 +2414,7 @@ bool Engine::removeTrack(int32_t trackId) {
     for (auto& d : rt->devices) if (d) d->closeEditor();
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2434,6 +2445,7 @@ bool Engine::moveTrack(int32_t trackId, int32_t toIndex) {
     regular.insert(regular.begin() + to, tr);
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(regular.size() + returns.size());
@@ -2471,6 +2483,7 @@ int32_t Engine::createGroup(const int32_t* ids, int32_t n) {
 
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size() + 1);
@@ -2496,6 +2509,7 @@ bool Engine::ungroup(int32_t groupId) {
     const int32_t parent = grp->groupId();                  // children reparent up one level
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2525,6 +2539,7 @@ bool Engine::setTrackGroup(int32_t trackId, int32_t groupId) {
     }
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());
@@ -2574,6 +2589,7 @@ std::vector<int32_t> Engine::insertTrackClones(const std::vector<std::shared_ptr
 
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size() + clones.size());
@@ -2617,6 +2633,7 @@ bool Engine::removeTracks(const int32_t* ids, int32_t n) {
     }
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());

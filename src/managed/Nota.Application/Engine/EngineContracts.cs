@@ -143,6 +143,45 @@ public struct NotaSessionAudioSlot
     public float Gain;
 }
 
+/// <summary>How a session clip reacts to its launch button (Session P0).</summary>
+public enum SessionLaunchMode { Trigger = 0, Gate = 1, Toggle = 2, Repeat = 3 }
+
+/// <summary>What a session clip does once it has played its follow time (Session P0).</summary>
+public enum SessionFollowAction { None = 0, Stop, Again, Previous, Next, First, Last, Any, Other, Jump }
+
+/// <summary>Session clip (slot) properties. Matches native NotaSessionClipProps (Session P0).
+/// Color is a track-palette index (-1 = the track's colour); QuantBeats &lt; 0 = global;
+/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSessionClipProps
+{
+    public int Color;
+    public int LaunchMode;
+    public double QuantBeats;
+    public int Legato;
+    public int Loop;
+    public float VelocityAmount;
+    public int FollowA;
+    public int FollowB;
+    public int ChanceA;
+    public int ChanceB;
+    public double FollowBeats;
+    public int JumpScene;
+}
+
+/// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
+/// track-palette index (-1 = neutral); Tempo / SigNum+SigDen &gt; 0 apply on launch.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSceneProps
+{
+    public int Color;
+    public double Tempo;
+    public int SigNum;
+    public int SigDen;
+    public int Follow;
+    public double FollowBeats;
+}
+
 /// <summary>Post-fader level meter (linear 0..1). Matches native NotaMeter (M6-2).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaMeter

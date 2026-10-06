@@ -109,13 +109,45 @@ Download the file for your system from the
 Nota isn't signed with a paid Apple or Microsoft certificate yet, so the system asks you to
 confirm the first time:
 
-- **macOS** — open the `.dmg` and drag Nota to Applications. If macOS says it "can't verify"
-  Nota, open **System Settings → Privacy & Security**, scroll down and click
-  **Open Anyway**. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Nota.app`.)
+- **macOS** — see [Opening Nota on macOS](#opening-nota-on-macos) below.
 - **Windows** — if SmartScreen shows "Windows protected your PC", click **More info →
   Run anyway**.
 - **Linux** — make the AppImage executable (`chmod +x Nota-*.AppImage`, or Properties →
   Permissions in your file manager) and run it.
+
+### Opening Nota on macOS
+
+1. Open the downloaded `.dmg` and drag **Nota** into **Applications**.
+2. Open Nota from Applications. The first time, macOS stops it with
+   *"Nota" Not Opened — Apple could not verify "Nota" is free of malware…*
+   (older macOS: *"Nota" can't be opened because Apple cannot check it for malicious
+   software*). Click **Done** — not *Move to Trash*.
+3. Open **System Settings → Privacy & Security** and scroll down to **Security**. You'll see
+   *"Nota" was blocked to protect your Mac*. Click **Open Anyway**, confirm with your
+   password or Touch ID, then click **Open Anyway** once more.
+
+That's it — from now on Nota opens like any other app.
+
+<details>
+<summary>Still won't open, or macOS says Nota "is damaged"?</summary>
+
+That message is the same check with scarier wording — the download isn't actually broken.
+Open **Terminal** (Applications → Utilities) and run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Nota.app
+```
+
+This removes the "downloaded from the internet" mark from Nota only. Then open Nota
+normally.
+
+On **macOS 13–14** there's also a shortcut for step 3: in Finder, **right-click** (or
+Control-click) Nota in Applications → **Open** → **Open**.
+</details>
+
+Why the extra step? Signing an app so macOS trusts it right away needs a paid Apple
+developer certificate, which Nota doesn't have yet. Nota is open source and built in public by
+GitHub Actions from the code in this repository.
 
 Nota checks for updates itself and shows what's new after each update.
 
@@ -123,8 +155,9 @@ Nota checks for updates itself and shows what's new after each update.
 
 Nota is young and moving fast — new releases come out every week or so (see the
 [changelog](CHANGELOG.md)). It's already used to make real music, but expect rough edges.
-Found a bug or missing something? [Open an issue](https://github.com/nota-daw/nota/issues) —
-every report gets read.
+Found a bug or missing something? [Open an issue](https://github.com/nota-daw/nota/issues/new/choose) —
+every report gets read. Want to help with code? Start with a
+[good first issue](https://github.com/nota-daw/nota/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## For plugin developers
 

@@ -27,7 +27,7 @@
             <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
             <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Cmd+I"/>
+            <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Shift+Cmd+I"/>
             <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" Click="OnPreferences" Gesture="Ctrl+,"/>
@@ -41,6 +41,7 @@
             <NativeMenuItem Header="Redo" Click="OnMenuRedo" Gesture="Shift+Cmd+Z"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Duplicate clip" Click="OnMenuDuplicate" Gesture="Cmd+D"/>
+            <NativeMenuItem Header="Insert scene" Click="OnMenuInsertScene" Gesture="Cmd+I"/>
             <NativeMenuItem Header="Split at playhead" Click="OnMenuSplit" Gesture="Cmd+E"/>
             <NativeMenuItem Header="Consolidate" Click="OnMenuConsolidate" Gesture="Cmd+J"/>
             <NativeMenuItemSeparator/>
@@ -215,15 +216,6 @@
               <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
                          MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
               <TextBlock Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-          <!-- Launch quantize — a Session concept, so it only appears there -->
-          <Button x:Name="LaunchQChip" Classes="cell" Click="OnCycleLaunchQ" IsVisible="False"
-                  ToolTip.Tip="Set when Session slots and scenes launch">
-            <StackPanel Spacing="2">
-              <TextBlock x:Name="LaunchQLabel" Classes="Mono" Text="1 Bar" FontSize="14" LineHeight="16"
-                         MinWidth="44" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock Classes="CellLabel" Text="LAUNCH" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>

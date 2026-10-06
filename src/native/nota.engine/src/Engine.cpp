@@ -399,6 +399,7 @@ void Engine::backToArrangement() {
     if (authoring_)
         for (auto& t : authoring_->tracks)
             if (t->sessionPlayer) t->sessionPlayer->requestStop();
+    sceneFollowScene_ = -1;
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
 void Engine::setBpm(double bpm) {
@@ -502,6 +503,7 @@ void Engine::publish(std::shared_ptr<Graph> g) {
 void Engine::republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt) {
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;    // preserve scene count across the swap
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume; // carry master automation (M9 follow-up)
     g->masterTrack = (trackId == kMasterTrackId) ? nt : authoring_->masterTrack;  // master chain edit or carry
     g->tracks.reserve(authoring_->tracks.size());

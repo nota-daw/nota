@@ -251,6 +251,7 @@ public partial class MainWindow : Window
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
             SyncReenableAutomation();                                  // "a control is overriding its lane"
             if (_session?.IsVisible == true) _session.UpdateStates(); // live launch/queue/play
+            SyncSceneTempo();                                          // a launched scene set tempo / signature
             if (_mixer?.IsVisible == true) _mixer.UpdateMeters();      // Mixer tab strips
             if (_modular?.IsVisible == true) _modular.Tick(vm.Engine.IsPlaying); // graph knobs follow automation + edge pulse
             if (DetailBody.Content is MixerView mx && mx.IsEffectivelyVisible) mx.UpdateMeters(); // 1f strips
@@ -318,10 +319,19 @@ public partial class MainWindow : Window
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
-        _session = new SessionView(vm.Engine) { IsVisible = false };
+        _session = new SessionView(vm.Engine)
+        {
+            IsVisible = false,
+            GetMasterVolume = () => (float)vm.Transport.MasterVolume,
+            SetMasterVolume = v => vm.Transport.MasterVolume = v,
+            GetTempo = () => ((double)vm.Transport.Bpm, vm.Transport.TimeSigNumerator, vm.Transport.TimeSigDenominator),
+        };
         _session.SlotEditRequested += OpenSessionClipEditor;
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
+        _session.Status += msg => vm.StatusText = msg;
+        // Selecting a slot selects its track everywhere: devices below, arrangement header.
+        _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
@@ -395,6 +405,7 @@ public partial class MainWindow : Window
         {
             Timeline.Refresh();
             if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh();
+            if (_session?.IsVisible == true) _session.Refresh();   // session tools edit slots + scenes
         };
         _ = App.Services.GetRequiredService<McpService>().ApplyAsync();
 
@@ -515,7 +526,6 @@ public partial class MainWindow : Window
         SessionBtn.IsChecked = session;
         ModularBtn.IsChecked = modular;
         PlayBtn.Classes.Set("session", session);   // play button turns green in Session (1c)
-        LaunchQChip.IsVisible = session;           // launch quantize only applies to Session launches
         if (session) _session.Refresh();
         if (modular)
         {
@@ -557,19 +567,13 @@ public partial class MainWindow : Window
         SnapLabel.Text = label;
     }
 
-    // Session launch-quantize steps (beats, label). 0 = launch immediately (no quantize).
-    private static readonly (double beats, string label)[] LaunchQSteps =
+    // A launched scene may carry its own tempo / signature; the engine applies it on the
+    // scene's start boundary and the transport follows here.
+    private void SyncSceneTempo()
     {
-        (0.0, "None"), (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"),
-        (4.0, "1 Bar"), (8.0, "2 Bars"), (16.0, "4 Bars"),
-    };
-    private int _launchQIndex = 5;   // 1 Bar — matches the engine default (launchQuant_ = 4)
-    private void OnCycleLaunchQ(object? sender, RoutedEventArgs e)
-    {
-        _launchQIndex = (_launchQIndex + 1) % LaunchQSteps.Length;
-        var (beats, label) = LaunchQSteps[_launchQIndex];
-        Engine.SetLaunchQuant(beats);
-        LaunchQLabel.Text = label;
+        if (_vm is null || !Engine.TakeSceneTempoChange(out double bpm, out int num, out int den)) return;
+        if (bpm > 0) _vm.Transport.Bpm = (decimal)Math.Round(bpm, 2);
+        if (num > 0 && den > 0) { _vm.Transport.TimeSigNumerator = num; _vm.Transport.TimeSigDenominator = den; }
     }
 
     // Snap a dragged denominator to the nearest musical power of two (1/2/4/8/16).

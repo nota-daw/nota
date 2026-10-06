@@ -7783,6 +7783,185 @@ engine.StopTransport();
     Check(e.SceneCount == scenes0, $"scene count shrank back ({e.SceneCount})");
 }
 
+// -- Session P0: clip + scene properties, editing, launch modes, follow, capture --
+{
+    using var e = new NotaEngine();
+    e.SetBpm(120); e.SetLaunchQuant(0.0);
+    var pb = new float[256 * 2];
+    // Render until the transport has moved `beats` (the offline rate isn't the device's).
+    void Run(double beats)
+    {
+        double from = e.PositionBeats;
+        for (int guard = 0; guard < 20000 && e.PositionBeats - from < beats; guard++) { e.RenderOffline(pb, 256); e.Poll(); }
+    }
+    void Start() { e.StopTransport(); e.Seek(0); e.RenderOffline(pb, 64); }
+
+    int t = e.AddInstrumentTrack();
+    e.AddSessionMidiClip(t, 0, 4.0);
+    e.SetSessionNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f) });
+
+    // Clip name + properties round-trip.
+    e.SetSessionClipName(t, 0, "Sub Line");
+    Check(e.GetSessionClipName(t, 0) == "Sub Line", "session clip name round-trips");
+    Check(e.TryGetSessionClipProps(t, 0, out var cp) && cp.Color == -1 && cp.Loop == 1 && cp.QuantBeats < 0 && cp.ChanceA == 100,
+        "session clip props default (track colour, loop, global quant)");
+    cp.Color = 5; cp.LaunchMode = (int)SessionLaunchMode.Gate; cp.QuantBeats = 2; cp.Legato = 1;
+    cp.FollowA = (int)SessionFollowAction.Next; cp.FollowBeats = 8;
+    Check(e.SetSessionClipProps(t, 0, cp), "set session clip props");
+    Check(e.TryGetSessionClipProps(t, 0, out var cp2) && cp2.Color == 5 && cp2.LaunchMode == 1 && Math.Abs(cp2.QuantBeats - 2) < 1e-9
+        && cp2.Legato == 1 && cp2.FollowA == (int)SessionFollowAction.Next && Math.Abs(cp2.FollowBeats - 8) < 1e-9,
+        "session clip props round-trip");
+    Check(!e.TryGetSessionClipProps(t, 5, out _), "empty slot has no clip props");
+
+    // Copy keeps notes, name and props; undo removes the copy in one step.
+    Check(e.CopySessionSlot(t, 0, t, 2), "copy a slot onto another");
+    Check(e.GetSessionNotes(t, 2).Length == 1 && e.GetSessionClipName(t, 2) == "Sub Line"
+        && e.TryGetSessionClipProps(t, 2, out var cp3) && cp3.Color == 5, "copied slot carries notes, name and props");
+    e.Undo();
+    Check(e.SessionSlotState(t, 2) == 0, "undo removes the copied slot");
+    int audioT = e.AddAudioTrack();
+    Check(!e.CopySessionSlot(t, 0, audioT, 0), "a MIDI slot does not copy onto an audio track");
+
+    // Scene metadata.
+    e.SetSceneName(1, "Drop");
+    e.SetSceneProps(1, new NotaSceneProps { Color = 2, Tempo = 128, SigNum = 3, SigDen = 4, Follow = 1, FollowBeats = 8 });
+    Check(e.GetSceneName(1) == "Drop" && e.TryGetSceneProps(1, out var sp) && sp.Color == 2 && Math.Abs(sp.Tempo - 128) < 1e-9
+        && sp.SigNum == 3 && sp.Follow == 1, "scene name + props round-trip");
+
+    // Insert / duplicate / move keep slots and the scene's metadata with their row.
+    int scenes0 = e.SceneCount;
+    Check(e.InsertScene(0) == 0 && e.SceneCount == scenes0 + 1, "insert scene at the top");
+    Check(e.SessionSlotState(t, 1) == 1 && e.GetSessionClipName(t, 1) == "Sub Line", "insert shifts slots down");
+    Check(e.GetSceneName(2) == "Drop", "insert shifts scene metadata down");
+    Check(e.DuplicateScene(1) == 2 && e.GetSessionNotes(t, 2).Length == 1, "duplicate scene copies its slots below");
+    Check(e.MoveScene(2, 0) && e.SessionSlotState(t, 0) == 1 && e.SessionSlotState(t, 1) == 0 && e.SessionSlotState(t, 2) == 1 && e.GetSceneName(3) == "Drop",
+        "move scene takes its slots and metadata along");
+    while (e.SceneCount > scenes0) e.RemoveScene(0);
+
+    // Insert keeps a playing clip playing (its player follows the row).
+    e.ClearSessionSlot(t, 0); e.AddSessionMidiClip(t, 0, 4.0);
+    e.SetSessionNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.9f) });
+    var trig = default(NotaSessionClipProps); e.TryGetSessionClipProps(t, 0, out trig);
+    trig.LaunchMode = 0; trig.QuantBeats = -1; trig.FollowA = 0; trig.Legato = 0; e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(0.5);
+    Check(e.SessionPlayingSlot(t) == 0, "slot 0 playing");
+    double posBefore = e.SessionSlotPosition(t);
+    Check(posBefore > 0.3 && posBefore < 0.7, $"slot position runs on the slot's own clock ({posBefore:F2})");
+    e.InsertScene(0);
+    Check(e.SessionPlayingSlot(t) == 1 && e.SessionSlotState(t, 1) == 3, "inserting a scene above keeps the clip playing (remapped)");
+    e.RemoveScene(0);
+    Check(e.SessionPlayingSlot(t) == 0, "removing a scene above remaps the player back");
+
+    // Capture: the playing clip lands in the new row.
+    int cap = e.CaptureScene(e.SceneCount);
+    Check(cap >= 0 && e.SessionSlotState(t, cap) == 1, "capture scene copies the playing clip");
+    e.RemoveScene(cap);
+    e.StopAllSession(); Run(0.1);
+
+    // Toggle: a second launch stops it.
+    trig.LaunchMode = (int)SessionLaunchMode.Toggle; e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(0.25);
+    Check(e.SessionSlotState(t, 0) == 3, "toggle clip starts");
+    e.LaunchSlot(t, 0); Run(0.25);
+    Check(e.SessionSlotState(t, 0) == 1, "toggle clip stops on the second launch");
+
+    // Gate: plays while held.
+    trig.LaunchMode = (int)SessionLaunchMode.Gate; e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(0.25);
+    Check(e.SessionSlotState(t, 0) == 3, "gate clip plays while held");
+    e.ReleaseSlot(t, 0); Run(0.25);
+    Check(e.SessionSlotState(t, 0) == 1, "gate clip stops on release");
+
+    // One-shot: loop off stops after one pass.
+    trig.LaunchMode = 0; trig.Loop = 0; e.SetSessionSlotLength(t, 0, 1.0); e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(0.5);
+    Check(e.SessionSlotState(t, 0) == 3, "one-shot clip plays");
+    Run(1.0);
+    Check(e.SessionSlotState(t, 0) == 1, "one-shot clip stops after one pass");
+    trig.Loop = 1; e.SetSessionClipProps(t, 0, trig);
+
+    // Follow action: Next after 1 beat moves to the next filled slot; global off disables it.
+    e.AddSessionMidiClip(t, 1, 4.0);
+    e.SetSessionNotes(t, 1, new[] { new NotaNote(64, 0.0, 1.0, 0.9f) });
+    trig.FollowA = (int)SessionFollowAction.Next; trig.ChanceA = 100; trig.ChanceB = 0; trig.FollowBeats = 1.0;
+    e.SetSessionClipProps(t, 0, trig);
+    e.SessionFollow = false;
+    Start(); e.LaunchSlot(t, 0); Run(1.5);
+    Check(e.SessionPlayingSlot(t) == 0, "follow actions off globally: clip keeps looping");
+    e.SessionFollow = true;
+    Start(); e.LaunchSlot(t, 0); Run(1.5);
+    Check(e.SessionPlayingSlot(t) == 1, $"follow action Next moved to slot 1 (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+
+    // Empty slot without a stop button: launching its scene leaves the track playing.
+    int t2 = e.AddInstrumentTrack();
+    e.AddSessionMidiClip(t2, 0, 4.0);
+    e.SetSessionNotes(t2, 0, new[] { new NotaNote(48, 0.0, 1.0, 0.9f) });
+    e.SetSessionSlotStopButton(t2, 3, false);
+    Check(!e.GetSessionSlotStopButton(t2, 3) && e.GetSessionSlotStopButton(t2, 4), "stop button flag per empty slot");
+    Start(); e.LaunchSlot(t2, 0); Run(0.25);
+    e.LaunchScene(3); Run(0.25);
+    Check(e.SessionPlayingSlot(t2) == 0, "scene launch skips a slot without a stop button");
+    e.LaunchScene(4); Run(0.25);
+    Check(e.SessionPlayingSlot(t2) == -1, "scene launch stops a track at a slot with a stop button");
+
+    // Per-track back to arrangement stops just that track, right away.
+    e.LaunchScene(0); Run(0.25);
+    e.TrackBackToArrangement(t2); Run(0.05);
+    Check(e.SessionPlayingSlot(t2) == -1 && e.SessionPlayingSlot(t) == 0, "track back-to-arrangement stops only that track");
+    e.StopAllSession(); Run(0.1);
+
+    // Scene tempo + signature apply on launch, and the transport is told once.
+    e.SetSceneProps(2, new NotaSceneProps { Color = -1, Tempo = 140, FollowBeats = 32 });
+    e.StopTransport(); e.RenderOffline(pb, 64);
+    e.LaunchScene(2);
+    Check(e.TakeSceneTempoChange(out double sBpm, out _, out _) && Math.Abs(sBpm - 140) < 1e-9, "launching a scene applies its tempo");
+    Check(!e.TakeSceneTempoChange(out _, out _, out _), "scene tempo change is reported once");
+    e.SetBpm(120);
+    e.StopAllSession(); Run(0.1);
+
+    // Scene follow: Next after 1 beat launches the next scene.
+    e.SetSceneProps(0, new NotaSceneProps { Color = -1, Follow = 1, FollowBeats = 1 });
+    Start(); e.LaunchScene(0); Run(1.5);
+    Check(e.SessionPlayingSlot(t) == 1, $"scene follow launched the next scene (playing {e.SessionPlayingSlot(t)})");
+    e.SetSceneProps(0, new NotaSceneProps { Color = -1, FollowBeats = 32 });
+    e.StopAllSession(); Run(0.1); e.StopTransport();
+
+    // Session Rec: an open-ended take is cut to whole bars; Fixed Length stops by itself.
+    int r = e.AddInstrumentTrack();
+    e.SetTrackArmed(r, true);
+    Start();
+    Check(e.RecordSessionScene(6) == r, "session record picks the armed track");
+    Run(5.2);
+    e.StopSessionRecord();
+    Check(Math.Abs(e.SessionSlotLength(r, 6) - 4.0) < 1e-9, $"open-ended take rounds to whole bars ({e.SessionSlotLength(r, 6)})");
+    e.StopAllSession(); Run(0.1);
+    e.SessionRecordLength = 8.0;
+    Start();
+    e.RecordSessionSlot(r, 7);
+    Check(Math.Abs(e.SessionSlotLength(r, 7) - 8.0) < 1e-9, "fixed-length take is created at that length");
+    Run(8.5);
+    Check(!e.TryGetSessionRecordTarget(out _, out _, out _), "fixed-length take stops recording by itself");
+    Check(e.SessionSlotState(r, 7) == 3, "fixed-length take keeps playing");
+    e.SessionRecordLength = 0;
+    e.StopAllSession(); Run(0.1); e.StopTransport();
+
+    // Persistence: names, props, stop buttons and scenes survive save/load.
+    var w = new System.Collections.Generic.List<string>();
+    var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), w);
+    string bundle = Path.Combine(Path.GetTempPath(), "nota-session-" + System.Guid.NewGuid().ToString("N") + ".nota");
+    ProjectService.Save(doc, bundle, e);
+    using var e2 = new NotaEngine();
+    ProjectService.Apply(ProjectService.Load(bundle), e2, bundle);
+    int t1b = -1, t2b = -1;
+    for (int i = 0, nInst = 0; i < e2.TrackCount; i++)
+        if (e2.TryGetTrackInfo(i, out var ti) && ti.IsInstrument) { if (nInst == 0) t1b = ti.Id; else if (nInst == 1) t2b = ti.Id; nInst++; }
+    Check(t1b > 0 && e2.TryGetSessionClipProps(t1b, 0, out var lp) && lp.FollowA == (int)SessionFollowAction.Next && lp.Loop == 1,
+        "clip props survive save/load");
+    Check(t2b > 0 && !e2.GetSessionSlotStopButton(t2b, 3), "removed stop button survives save/load");
+    Check(e2.TryGetSceneProps(2, out var lsp) && Math.Abs(lsp.Tempo - 140) < 1e-9, "scene props survive save/load");
+}
+
 // -- Session: copy an arrangement AUDIO clip into a slot --
 {
     using var e = new NotaEngine();
@@ -12866,6 +13045,30 @@ Console.WriteLine("-- MCP tools --");
     var mcpSnap = mcpSession.GetSession().Result;
     Check(mcpSessNotes.Length == 2 && mcpSnap.SceneCount > 0 && Array.Exists(mcpSnap.FilledSlots, s => s.TrackId == mcpT && s.Scene == 0 && s.State == "filled"),
         $"MCP session fill + get_session ({mcpSnap.FilledSlots.Length} filled)");
+
+    // Session P0 over MCP: clip properties, scenes, copy/move, stop buttons, follow switch.
+    mcpSession.SetSessionClip(mcpT, 0, name: "Bassline", color: 6, launchMode: "toggle", quantBeats: 2, loop: false,
+        followA: "next", chanceA: 70, followB: "again", chanceB: 30, followBeats: 8).Wait();
+    mcpSession.SetScene(0, name: "Intro", color: 3, tempo: 124, signature: "3/4", followNextAfterBeats: 16).Wait();
+    mcpSession.CopySessionSlot(mcpT, 0, mcpT, 2).Wait();
+    mcpSession.CopySessionSlot(mcpT, 2, mcpT, 3, move: true).Wait();
+    mcpSession.SetSessionSlotStopButton(mcpT, 5, false).Wait();
+    int mcpIns = mcpSession.InsertScene(1).Result;
+    mcpSession.SetSessionFollow(false).Wait();
+    var mcpSesSnap = mcpSession.GetSession().Result;
+    var mcpSesClip = Array.Find(mcpSesSnap.FilledSlots, x => x.TrackId == mcpT && x.Scene == 0);
+    Check(mcpSesClip is { Name: "Bassline", Color: 6, LaunchMode: "toggle", Loop: false } && mcpSesClip.QuantBeats == 2
+          && mcpSesClip.A.Action == "next" && mcpSesClip.A.Chance == 70 && mcpSesClip.B.Action == "again" && mcpSesClip.FollowBeats == 8,
+        "MCP set_session_clip round-trips through get_session");
+    Check(mcpSesSnap.Scenes[0] is { Name: "Intro", Color: 3, Tempo: 124, Signature: "3/4", FollowNextAfterBeats: 16 },
+        "MCP set_scene round-trips through get_session");
+    Check(mcpIns == 1 && !Array.Exists(mcpSesSnap.FilledSlots, x => x.TrackId == mcpT && x.Scene == 3)
+          && Array.Exists(mcpSesSnap.FilledSlots, x => x.TrackId == mcpT && x.Scene == 4 && x.Name == "Bassline"),
+        "MCP copy / move slot + insert_scene shift the grid");
+    Check(Array.Exists(mcpSesSnap.NoStopButton, x => x.TrackId == mcpT && x.Scene == 6) && !mcpSesSnap.FollowActions,
+        "MCP stop button + follow switch show in get_session");
+    Check(mcpSession.MoveScene(4, 0).Result && mcpSession.DeleteScene(1).Result, "MCP move_scene + delete_scene");
+    mcpSession.SetSessionFollow(true).Wait();
 
     // Rack: build an Instrument Rack, add a chain, drive a macro + trigger note.
     int mcpRackT = mcpInstr.AddInstrumentTrack(3).Result;   // 3 = Instrument Rack

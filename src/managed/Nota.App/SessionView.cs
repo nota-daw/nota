@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Session view (mockup 1c): a clip-launch grid of tracks × scenes. A scene rail
-// launches/stops whole rows; each track column is a stack of clip slots over a
-// mini-mixer (pan / send A / vol / M-S-arm / meter) so you can jam without
-// leaving the grid; a master column launches scenes. Slot colour reflects live
-// engine state (empty / filled / queued / playing / recording), polled at the
-// UI clock by MainWindow via UpdateStates. See ARCHITECTURE.md § UI.
+// Session view (nota-design "Nota Session View", 1a grid + inspector): a clip-launch grid of
+// tracks × scenes. Columns take the track's name and colour; a clip shows its name, colour,
+// a note / waveform preview and its length in bars, and its progress runs on the slot's own
+// clock. Selecting is separate from launching: a click on a cell selects it, a click on its
+// triangle launches it. The inspector on the right edits the selected clip, scene or empty
+// slot. Groups fold their children into one launchable column; returns and the master close
+// the row with mixer-only columns. Live state (queued / playing / recording, meters) is
+// polled at the UI clock by MainWindow through UpdateStates. See ARCHITECTURE.md § UI.
+//
+// Partials: SessionView.Grid.cs (cells, headers, scene rail), SessionView.Mixer.cs (I/O,
+// sends, mixer rows), SessionView.Toolbar.cs, SessionView.Inspector.cs.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -21,62 +26,58 @@ using Nota.Presentation;
 
 namespace Nota.App;
 
-public sealed class SessionView : UserControl
+public sealed partial class SessionView : UserControl
 {
-    private const double SceneRailW = 168;
-    private const double ColW = 126;
-    private const double SlotH = 62;
-    private const double HeaderH = 38;
-    private const double StopNubH = 24;
-    private const double Gap = 2;
-    private const double Radius = NotaRadius.TileValue;
-
-    // Ember Graphite palette (static so cells can repaint without resource lookups).
-    private static readonly IBrush Lane = NotaPalette.SurfaceInset;
-    private static readonly IBrush Card = NotaPalette.SurfaceCard;
-    private static readonly IBrush Raised = NotaPalette.SurfaceRaised;
-    private static readonly IBrush Sunken = NotaPalette.BgSunken;
-    private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;
-    private static readonly IBrush Success = NotaPalette.Success;
-    private static readonly IBrush Warning = NotaPalette.Warning;
-    private static readonly IBrush Warning40 = NotaPalette.Wash(NotaPalette.Warning, 0x66); // queued blink dim (HANDOFF §4)
-    private static readonly IBrush Danger = NotaPalette.Danger;
-    private static readonly IBrush Record = NotaPalette.Record;   // red belongs to recording
-    private static readonly IBrush Brass = NotaPalette.Accent;
-    private static readonly IBrush AccentBright = NotaPalette.AccentBright;
-    private static readonly IBrush TextPrimary = NotaPalette.TextPrimary;
-    private static readonly IBrush TextSecondary = NotaPalette.TextSecondary;
-    private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush TextDisabled = NotaPalette.TextDisabled;
-    private static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
-    private static readonly IBrush GreenFill = NotaPalette.Wash(NotaPalette.Success, 0x21);
-    private static readonly IBrush RedFill = NotaPalette.Wash(NotaPalette.Record, 0x28);
-    private static readonly IBrush AmberFill = NotaPalette.Wash(NotaPalette.Warning, 0x1F);
-
-    // Track palette — mirrors ArrangementView.TrackBase (Brush.Track1..8 + Return A/B).
-    private static Color[] TrackBase => NotaPalette.TrackColors;
+    // Geometry (design 1a, Normal density).
+    private const double SceneRailW = 176;
+    private const double TrackColW = 124;
+    private const double ReturnColW = 96;
+    private const double MasterColW = 104;
+    private const double CellH = 58;
+    private const double HeaderH = 44;
+    private const double Gap = 3;
+    private const double GridPad = 10;
+    private const double InspectorW = 300;
 
     private readonly IAudioEngine _engine;
-    // Three horizontally-aligned strips (same column widths + spacing) so a column's
-    // header, slots and mixer line up: headers pin to the top, the slot grid scrolls
-    // vertically in the middle, mixers + stop nubs pin to the bottom.
-    private readonly StackPanel _headerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(12, 12, 12, 0) };
-    private readonly StackPanel _slotsRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(12, Gap, 12, Gap) };
-    private readonly StackPanel _footerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(12, 0, 12, 12) };
-    private readonly List<SlotCell> _cells = new();
-    private readonly List<TrackStrip> _strips = new();
 
-    private readonly HashSet<int> _armed = new();   // tracks armed for slot-click recording
-    private int _blinkFrame;   // drives the 2Hz queued blink at the UI clock
-    private Border? _backToArr; // "Back to Arrangement" — lit while session overrides the timeline
+    // Three horizontally aligned strips (same column widths + spacing) so a column's header,
+    // cells and mixer line up: headers pin to the top, the cells scroll vertically in the
+    // middle, the stop row + mixer pin to the bottom. All three scroll sideways together.
+    private readonly StackPanel _headerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, GridPad, GridPad, 0) };
+    private readonly StackPanel _cellsRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, 0) };
+    private readonly StackPanel _footerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, GridPad) };
+    private readonly Border _inspectorHost = new() { Width = InspectorW };
 
-    /// <summary>Raised to edit a filled slot's notes (trackId, scene).</summary>
+    private readonly List<Column> _cols = new();
+    private readonly List<SceneCell> _sceneCells = new();
+    private int _sceneCount;
+
+    // UI-only state: which group columns are folded, which mixer sections show, and the
+    // selection (a slot on a track or group column, or a scene row).
+    private readonly HashSet<int> _collapsed = new();
+    private bool _showIO, _showSends = true, _showMixer = true;
+    private bool _selectNextOnLaunch;
+    private Selection _sel = new(SelKind.Slot, 0, 0);
+
+    // Clipboard: a reference to a slot; a cut moves it on paste.
+    private (int TrackId, int Scene, bool Cut)? _clip;
+
+    private int _blinkFrame;
+    private bool _blinkOn = true;
+    private bool _sessionActive;
+
+    internal enum SelKind { Slot, Scene }
+    internal readonly record struct Selection(SelKind Kind, int TrackId, int Scene);
+
+    /// <summary>Raised to edit a filled slot's notes / audio (trackId, scene).</summary>
     public event Action<int, int>? SlotEditRequested;
-
-    /// <summary>Raised after a slot is copied into the arrangement (M5-6).</summary>
+    /// <summary>Raised when the selection lands on a track's slot (trackId, scene).</summary>
+    public event Action<int, int>? SlotSelected;
+    /// <summary>Raised after a slot is copied into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
-
+    /// <summary>A one-line status message for the main window's status bar.</summary>
+    public event Action<string>? Status;
     /// <summary>Raised when a browser item is dropped on a slot (M7-5): item, track id,
     /// scene, and whether the slot's track is an instrument track.</summary>
     public event Action<BrowserItem, int, int, bool>? ItemDropped;
@@ -86,689 +87,499 @@ public sealed class SessionView : UserControl
     public SessionView(IAudioEngine engine)
     {
         _engine = engine;
+        Focusable = true;
+        FocusAdorner = null;
 
-        // Middle: only the slot grid scrolls vertically (headers/mixers stay pinned).
         var vScroll = new ScrollViewer
         {
-            Content = _slotsRow,
+            Content = _cellsRow,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         };
         var inner = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        inner.Children.Add(_headerRow);                       // row 0 — pinned headers
-        Grid.SetRow(vScroll, 1); inner.Children.Add(vScroll); // row 1 — scrolling slots
-        Grid.SetRow(_footerRow, 2); inner.Children.Add(_footerRow); // row 2 — pinned mixers
-
-        // Outer: everything scrolls horizontally together so columns stay aligned.
+        inner.Children.Add(_headerRow);
+        Grid.SetRow(vScroll, 1); inner.Children.Add(vScroll);
+        Grid.SetRow(_footerRow, 2); inner.Children.Add(_footerRow);
         var hScroll = new ScrollViewer
         {
             Content = inner,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
         };
+        var gridArea = new Border { Background = NotaPalette.BgSunken, Child = hScroll };
 
-        var stack = new DockPanel();
-        var bar = BuildActionBar();
+        _inspectorHost.Background = NotaPalette.Panel;
+        _inspectorHost.BorderBrush = NotaPalette.BorderDefault;
+        _inspectorHost.BorderThickness = new Thickness(1, 0, 0, 0);
+
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        body.Children.Add(gridArea);
+        Grid.SetColumn(_inspectorHost, 1); body.Children.Add(_inspectorHost);
+
+        var root = new DockPanel();
+        var bar = BuildToolbar();
         DockPanel.SetDock(bar, Dock.Top);
-        stack.Children.Add(bar);
-        stack.Children.Add(hScroll);
-        Content = stack;
+        root.Children.Add(bar);
+        root.Children.Add(body);
+        Content = root;
+
+        // A click anywhere in the view takes keyboard focus, so arrows / Enter / ⌘C… reach it.
+        AddHandler(PointerPressedEvent, (_, _) => Focus(), Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
-    // Session toolbar row (mockup 1c): + Scene (no engine support yet → N/A),
-    // Stop All (live), and a right-aligned follow-actions placeholder (M7+).
-    private Control BuildActionBar()
+    // ---- model ------------------------------------------------------------------
+
+    internal enum ColKind { Track, Group, Return, Master }
+
+    private sealed class Column
     {
-        var addScene = new Border
-        {
-            Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(9, 3),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "+ Scene", FontSize = 11, Foreground = TextSecondary },
-        };
-        ToolTip.SetTip(addScene, "Add a scene");
-        addScene.PointerPressed += (_, _) => { _engine.AddScene(); Refresh(); };
-        AddHoverPress(addScene);
-
-        var stopAll = new Border
-        {
-            Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(9, 3),
-            Child = new TextBlock { Text = "Stop All", FontSize = 11, Foreground = TextSecondary },
-        };
-        stopAll.PointerPressed += (_, _) => { _engine.StopAllSession(); _engine.StopSessionRecord(); UpdateStates(); };
-        AddHoverPress(stopAll);
-
-        // Lit only while session clips override the Arrangement; click returns every track to
-        // the timeline ("Back to Arrangement").
-        var backToArr = new Border
-        {
-            Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(9, 3),
-            IsHitTestVisible = false,
-            Child = new TextBlock { Text = "Back to Arrangement", FontSize = 11, Foreground = NotaPalette.TextDisabled },
-        };
-        ToolTip.SetTip(backToArr, "Stop session clips and return all tracks to the Arrangement");
-        backToArr.PointerPressed += (_, _) => { _engine.BackToArrangement(); UpdateStates(); };
-        backToArr.Cursor = new Cursor(StandardCursorType.Hand);   // press dim via its own accent highlight
-        _backToArr = backToArr;
-
-        var follow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right,
-            Children =
-            {
-                new TextBlock { Text = "Follow actions", FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
-                new NaBadge { Kind = NaBadgeKind.Future },
-            },
-        };
-
-        var grid = new Grid { Height = 34, ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), Margin = new Thickness(12, 8, 12, 0) };
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { addScene, stopAll, backToArr } };
-        grid.Children.Add(left);
-        Grid.SetColumn(follow, 3);
-        follow.VerticalAlignment = VerticalAlignment.Center;
-        grid.Children.Add(follow);
-        return grid;
+        public ColKind Kind;
+        public int TrackId;                 // master: 0
+        public string Name = "";
+        public string KindLabel = "";
+        public int ColorIndex;
+        public bool IsInstrument;
+        public bool IsAudio;
+        public int GroupId = -1;
+        public List<int> Children = new();  // group: every launchable track below it
+        public double Width;
+        public ColumnHeader? Header;
+        public readonly List<Control> Cells = new();
+        public MixerParts? Mixer;
+        public SolidColorBrush Brush => ArrangementView.TrackBrush(ColorIndex);
     }
+
+    private Column? ColumnFor(int trackId) => _cols.FirstOrDefault(c => c.TrackId == trackId && c.Kind is ColKind.Track or ColKind.Group);
+    private IEnumerable<Column> LaunchCols => _cols.Where(c => c.Kind == ColKind.Track);
+    private List<Column> NavCols => _cols.Where(c => c.Kind is ColKind.Track or ColKind.Group).ToList();
 
     public void Refresh()
     {
         _headerRow.Children.Clear();
-        _slotsRow.Children.Clear();
+        _cellsRow.Children.Clear();
         _footerRow.Children.Clear();
-        _cells.Clear();
-        _strips.Clear();
-        int scenes = _engine.SceneCount;
+        _cols.Clear();
+        _sceneCells.Clear();
+        _sceneCount = _engine.SceneCount;
 
-        AddSceneRail(scenes);
+        BuildColumns();
+        AddSceneRail();
+        foreach (var c in _cols) AddColumn(c);
 
-        int n = _engine.TrackCount;
-        int colorCounter = 0;
-        for (int i = 0; i < n; i++)
-        {
-            if (!_engine.TryGetTrackInfo(i, out var ti) || ti.IsReturn || ti.IsGroup) continue;   // groups have no clip slots
-            AddTrackColumn(ti, scenes, colorCounter++ % TrackBase.Length);
-        }
+        // Keep the selection on something that still exists.
+        if (_sel.Scene >= _sceneCount) _sel = _sel with { Scene = Math.Max(0, _sceneCount - 1) };
+        if (_sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is null)
+            _sel = NavCols.FirstOrDefault() is { } first ? _sel with { TrackId = first.TrackId } : new Selection(SelKind.Scene, 0, _sel.Scene);
 
-        AddMasterColumn(scenes);
+        SyncToolbar();
         UpdateStates();
+        RebuildInspector();
     }
 
-    /// <summary>Re-reads live slot state + meters and recolours (no rebuild).</summary>
+    private void BuildColumns()
+    {
+        int n = _engine.TrackCount;
+        var infos = new List<NotaTrackInfo>();
+        for (int i = 0; i < n; i++) if (_engine.TryGetTrackInfo(i, out var ti)) infos.Add(ti);
+        var byId = infos.ToDictionary(t => t.Id);
+
+        bool Hidden(NotaTrackInfo t)
+        {
+            int g = t.GroupId, guard = 0;
+            while (g > 0 && guard++ < 32)
+            {
+                if (_collapsed.Contains(g)) return true;
+                g = byId.TryGetValue(g, out var p) ? p.GroupId : -1;
+            }
+            return false;
+        }
+        bool Under(NotaTrackInfo t, int groupId)
+        {
+            int g = t.GroupId, guard = 0;
+            while (g > 0 && guard++ < 32) { if (g == groupId) return true; g = byId.TryGetValue(g, out var p) ? p.GroupId : -1; }
+            return false;
+        }
+        string Parent(NotaTrackInfo t)
+            => t.GroupId > 0 && byId.TryGetValue(t.GroupId, out var g) ? " · " + TrackNames.Of(_engine, g).ToUpperInvariant() : "";
+
+        foreach (var ti in infos)
+        {
+            if (ti.IsReturn || Hidden(ti)) continue;
+            var col = new Column
+            {
+                TrackId = ti.Id,
+                Name = TrackNames.Of(_engine, ti),
+                ColorIndex = ArrangementView.EffectiveColorIndex(_engine, ti.Id),
+                GroupId = ti.GroupId,
+                Width = TrackColW,
+            };
+            if (ti.IsGroup)
+            {
+                col.Kind = ColKind.Group;
+                col.Children = infos.Where(c => !c.IsGroup && !c.IsReturn && Under(c, ti.Id)).Select(c => c.Id).ToList();
+                col.KindLabel = $"GROUP · {col.Children.Count}{Parent(ti)}";
+            }
+            else
+            {
+                col.Kind = ColKind.Track;
+                col.IsInstrument = ti.IsInstrument;
+                col.IsAudio = ti.Type == 0;
+                col.KindLabel = (ti.IsInstrument ? "MIDI" : "AUDIO") + Parent(ti);
+            }
+            _cols.Add(col);
+        }
+        int r = 0;
+        foreach (var ti in infos.Where(t => t.IsReturn))
+        {
+            _cols.Add(new Column
+            {
+                Kind = ColKind.Return, TrackId = ti.Id, Name = TrackNames.Of(_engine, ti), KindLabel = "RETURN",
+                ColorIndex = ArrangementView.ReturnColorIndex(r++), Width = ReturnColW,
+            });
+        }
+        _cols.Add(new Column { Kind = ColKind.Master, TrackId = 0, Name = "Master", KindLabel = "OUT 1/2", ColorIndex = -1, Width = MasterColW });
+    }
+
+    // ---- live state ---------------------------------------------------------------
+
+    /// <summary>Re-reads live slot state, progress and meters and repaints (no rebuild).</summary>
     public void UpdateStates()
     {
+        ReadRecordTarget();
         _blinkFrame++;
-        bool blinkOn = (_blinkFrame / 8) % 2 == 0;   // ~2Hz at a 30Hz clock
-        double pos = _engine.PositionBeats;
-        bool sessionOverride = false;
-        foreach (var c in _cells)
+        _blinkOn = (_blinkFrame / 8) % 2 == 0;   // ~2 Hz at the 30 Hz UI clock
+        bool active = false;
+        foreach (var c in _cols)
         {
-            int st = _engine.SessionSlotState(c.TrackId, c.Scene);
-            if (st >= 2) sessionOverride = true;   // queued / playing / recording → session has the track
-            c.ApplyState(st, blinkOn, pos);
+            if (c.Kind != ColKind.Track) continue;
+            if (_engine.SessionPlayingSlot(c.TrackId) >= 0) active = true;
         }
-        foreach (var s in _strips)
-            s.UpdateMeter(_engine);
+        for (int s = 0; s < _sceneCount && !active; s++)
+            foreach (var c in LaunchCols)
+                if (_engine.SessionSlotState(c.TrackId, s) >= 2) { active = true; break; }
+        _sessionActive = active;
 
-        // "Back to Arrangement" lights up (and becomes clickable) only while session overrides.
-        if (_backToArr is not null)
+        // Cells repaint only when their state moved or while they animate (progress, blink).
+        foreach (var c in _cols)
         {
-            _backToArr.IsHitTestVisible = sessionOverride;
-            _backToArr.BorderBrush = sessionOverride ? Brass : BorderStrong;
-            ((TextBlock)_backToArr.Child!).Foreground = sessionOverride ? AccentBright : NotaPalette.TextDisabled;
+            foreach (var cell in c.Cells) (cell as ILiveCell)?.Tick();
+            c.Header?.Sync();
+            c.Mixer?.UpdateMeter();
+        }
+        foreach (var sc in _sceneCells) sc.Tick();
+        UpdateToolbar();
+        UpdateInspectorLive();
+    }
+
+    // ---- selection + commands -----------------------------------------------------
+
+    private void Select(Selection sel)
+    {
+        var prev = _sel;
+        _sel = sel;
+        InvalidateAll();
+        RebuildInspector();
+        if (sel.Kind == SelKind.Slot && (prev.Kind != SelKind.Slot || prev.TrackId != sel.TrackId) && ColumnFor(sel.TrackId) is not null)
+            SlotSelected?.Invoke(sel.TrackId, sel.Scene);
+    }
+
+    private void InvalidateAll()
+    {
+        foreach (var c in _cols) { foreach (var cell in c.Cells) cell.InvalidateVisual(); c.Header?.Sync(); }
+        foreach (var sc in _sceneCells) sc.InvalidateVisual();
+    }
+
+    // Rebuild one slot's cell (after an edit to it) instead of the whole grid, plus the group
+    // slots that summarise it.
+    private void RefreshSlot(int trackId, int scene)
+    {
+        if (ColumnFor(trackId) is not { Kind: ColKind.Track } c || scene < 0 || scene >= c.Cells.Count) { Refresh(); return; }
+        ReplaceCell(c.Cells, scene, new SlotCell(this, c, scene));
+        foreach (var g in _cols)
+            if (g.Kind == ColKind.Group && g.Children.Contains(trackId)) ReplaceCell(g.Cells, scene, new GroupCell(this, g, scene));
+        RebuildInspector();
+    }
+
+    private void RefreshScene(int scene)
+    {
+        if (scene < 0 || scene >= _sceneCells.Count) { Refresh(); return; }
+        var cell = new SceneCell(this, scene);
+        var panel = (Panel)_sceneCells[scene].Parent!;
+        panel.Children[panel.Children.IndexOf(_sceneCells[scene])] = cell;
+        _sceneCells[scene] = cell;
+        RebuildInspector();
+    }
+
+    private static void ReplaceCell(List<Control> cells, int index, Control cell)
+    {
+        var panel = (Panel)cells[index].Parent!;
+        panel.Children[panel.Children.IndexOf(cells[index])] = cell;
+        cells[index] = cell;
+    }
+
+    private void Say(string text) => Status?.Invoke(text);
+
+    private bool SlotFilled(int trackId, int scene) => _engine.SessionSlotState(trackId, scene) != 0;
+
+    private void LaunchSceneRow(int scene)
+    {
+        _engine.LaunchScene(scene);
+        Select(new Selection(SelKind.Scene, 0, _selectNextOnLaunch ? Math.Min(scene + 1, _sceneCount - 1) : scene));
+    }
+
+    private void LaunchGroup(Column g, int scene)
+    {
+        foreach (int id in g.Children) _engine.LaunchSlot(id, scene);
+    }
+
+    private void StopColumn(Column c)
+    {
+        if (c.Kind == ColKind.Group) foreach (int id in c.Children) _engine.StopSlot(id);
+        else _engine.StopSlot(c.TrackId);
+    }
+
+    private void InsertMidiClip(int trackId, int scene)
+    {
+        _engine.AddSessionMidiClip(trackId, scene, 4.0);
+        RefreshSlot(trackId, scene);
+    }
+
+    /// <summary>Enter: launch the selected slot or scene.</summary>
+    public void LaunchSelection()
+    {
+        if (_sel.Kind == SelKind.Scene) { LaunchSceneRow(_sel.Scene); return; }
+        if (ColumnFor(_sel.TrackId) is { } c)
+        {
+            if (c.Kind == ColKind.Group) LaunchGroup(c, _sel.Scene);
+            else _engine.LaunchSlot(c.TrackId, _sel.Scene);
         }
     }
 
-    // ---- scene rail -------------------------------------------------------
-
-    private void AddSceneRail(int scenes)
+    /// <summary>⌘C on the selected slot.</summary>
+    public bool CopySelection()
     {
-        _headerRow.Children.Add(new Border
-        {
-            Width = SceneRailW, Height = HeaderH,
-            Child = new TextBlock
-            {
-                Text = "SCENES", FontSize = 10, FontWeight = FontWeight.Bold,
-                Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0),
-            },
-        });
-
-        var mid = new StackPanel { Width = SceneRailW, Spacing = Gap };
-        for (int s = 0; s < scenes; s++) mid.Children.Add(SceneRow(s));
-        _slotsRow.Children.Add(mid);
-
-        // No bottom controls on the scene rail — a spacer keeps the columns aligned.
-        _footerRow.Children.Add(new Border { Width = SceneRailW });
+        if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
+        _clip = (_sel.TrackId, _sel.Scene, false);
+        Say("Copied clip");
+        return true;
     }
 
-    private Control SceneRow(int scene)
+    /// <summary>⌘X: the clip moves to where it is pasted next.</summary>
+    public bool CutSelection()
     {
-        var launch = IconButton(GlyphKind.Play, AccentBright, 22, 22, 9);
-        launch.PointerPressed += (_, _) => { _engine.LaunchScene(scene); UpdateStates(); };
-        ToolTip.SetTip(launch, $"Launch scene {scene + 1}");
+        if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
+        _clip = (_sel.TrackId, _sel.Scene, true);
+        Say("Cut clip — paste to move it");
+        return true;
+    }
 
-        var texts = new StackPanel
+    /// <summary>⌘V onto the selected slot.</summary>
+    public bool PasteSelection()
+    {
+        if (_sel.Kind != SelKind.Slot || _clip is not { } src) return false;
+        if (ColumnFor(_sel.TrackId) is not { Kind: ColKind.Track }) return false;
+        bool move = src.Cut && (src.TrackId, src.Scene) != (_sel.TrackId, _sel.Scene);
+        if (!MoveOrCopySlot(src.TrackId, src.Scene, _sel.TrackId, _sel.Scene, move))
         {
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = $"Scene {scene + 1}", FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary },
-                new MonoText($"{scene + 1:00}", 9, TextTertiary),
-            },
+            Say("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            return true;
+        }
+        if (move) _clip = (_sel.TrackId, _sel.Scene, false);
+        Say(move ? "Moved clip" : "Pasted clip");
+        return true;
+    }
+
+    // Copy a slot onto another (same track kind), and for a move clear the source — one undo
+    // step either way. Repaints just the two cells.
+    private bool MoveOrCopySlot(int fromTrack, int fromScene, int toTrack, int toScene, bool move)
+    {
+        _engine.BeginUndoGroup();
+        bool ok;
+        try
+        {
+            ok = _engine.CopySessionSlot(fromTrack, fromScene, toTrack, toScene);
+            if (ok && move) _engine.ClearSessionSlot(fromTrack, fromScene);
+        }
+        finally { _engine.EndUndoGroup(); }
+        if (!ok) return false;
+        if (move) RefreshSlot(fromTrack, fromScene);
+        RefreshSlot(toTrack, toScene);
+        return true;
+    }
+
+    /// <summary>F2: rename the selected clip or scene.</summary>
+    public bool RenameSelection()
+    {
+        if (_sel.Kind == SelKind.Scene)
+        {
+            int sc = _sel.Scene;
+            PromptText(_sceneCells.Count > sc ? _sceneCells[sc] : this, _engine.GetSceneName(sc), t => { _engine.SetSceneName(sc, t); RefreshScene(sc); });
+            return true;
+        }
+        if (ColumnFor(_sel.TrackId) is not { Kind: ColKind.Track } c || !SlotFilled(c.TrackId, _sel.Scene)) return false;
+        int s = _sel.Scene, id = c.TrackId;
+        PromptText(c.Cells[s], _engine.GetSessionClipName(id, s), t => { _engine.SetSessionClipName(id, s, t); RefreshSlot(id, s); });
+        return true;
+    }
+
+    /// <summary>⌘D: a scene duplicates below itself; a clip copies into the empty slot below.</summary>
+    public bool DuplicateSelection()
+    {
+        if (_sel.Kind == SelKind.Scene)
+        {
+            int s = _engine.DuplicateScene(_sel.Scene);
+            if (s < 0) return false;
+            Refresh();
+            Select(new Selection(SelKind.Scene, 0, s));
+            Say("Duplicated scene");
+            return true;
+        }
+        int below = _sel.Scene + 1;
+        if (!SlotFilled(_sel.TrackId, _sel.Scene)) return false;
+        if (below >= _sceneCount || SlotFilled(_sel.TrackId, below)) { Say("The slot below is taken."); return true; }
+        MoveOrCopySlot(_sel.TrackId, _sel.Scene, _sel.TrackId, below, move: false);
+        Select(_sel with { Scene = below });
+        Say("Duplicated clip");
+        return true;
+    }
+
+    /// <summary>⌫: delete the selected clip or scene.</summary>
+    public bool DeleteSelection()
+    {
+        if (_sel.Kind == SelKind.Scene)
+        {
+            if (!_engine.RemoveScene(_sel.Scene)) return false;
+            Refresh();
+            Say("Deleted scene");
+            return true;
+        }
+        if (!_engine.ClearSessionSlot(_sel.TrackId, _sel.Scene)) return false;
+        RefreshSlot(_sel.TrackId, _sel.Scene);
+        Say("Deleted clip");
+        return true;
+    }
+
+    /// <summary>⌘I: insert an empty scene below the selection.</summary>
+    public bool InsertSceneAtSelection()
+    {
+        int s = _engine.InsertScene(Math.Min(_sel.Scene + 1, _sceneCount));
+        if (s < 0) return false;
+        Refresh();
+        Select(new Selection(SelKind.Scene, 0, s));
+        Say("Inserted scene");
+        return true;
+    }
+
+    private void CaptureScene()
+    {
+        int s = _engine.CaptureScene(Math.Min(_sel.Scene + 1, _sceneCount));
+        if (s < 0) return;
+        if (string.IsNullOrEmpty(_engine.GetSceneName(s))) _engine.SetSceneName(s, "Captured");
+        Refresh();
+        Select(new Selection(SelKind.Scene, 0, s));
+        Say("Captured the playing clips into a new scene");
+    }
+
+    private void ToArrangement(int trackId, int scene)
+    {
+        if (_engine.SessionSlotToArrangement(trackId, scene, _engine.PositionBeats) < 0) return;
+        ArrangementChanged?.Invoke();
+        Say("Copied clip to the arrangement at the playhead");
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (HandleKey(e)) { e.Handled = true; return; }
+        base.OnKeyDown(e);
+    }
+
+    private bool HandleKey(KeyEventArgs e)
+    {
+        if (e.Source is TextBox) return false;
+        bool mod = ArrangementView.IsPrimaryDown(e.KeyModifiers);
+        bool other = (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) != 0;
+        var nav = NavCols;
+        switch (e.Key)
+        {
+            case Key.Up or Key.Down or Key.Left or Key.Right when !mod:
+                Move(e.Key, nav);
+                return true;
+            case Key.Back or Key.Delete when !mod:
+                DeleteSelection();
+                return true;
+            case Key.F2 when !mod:
+                RenameSelection();
+                return true;
+        }
+        if (!mod || other) return false;
+        return e.Key switch
+        {
+            Key.C => CopySelection(),
+            Key.X => CutSelection(),
+            Key.V => PasteSelection(),
+            Key.D => DuplicateSelection(),
+            Key.I => InsertSceneAtSelection(),
+            _ => false,
         };
-
-        var stop = IconButton(GlyphKind.Stop, TextTertiary, 14, 14, 6);
-        stop.PointerPressed += (_, _) => { _engine.StopScene(scene); UpdateStates(); };
-        ToolTip.SetTip(stop, $"Stop scene {scene + 1}");
-
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { launch, texts } };
-        row.Children.Add(content);
-        Grid.SetColumn(stop, 2);
-        stop.VerticalAlignment = VerticalAlignment.Center;
-        row.Children.Add(stop);
-
-        var cell = new Border
-        {
-            Height = SlotH, Background = Card, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-            Padding = new Thickness(8, 0), Child = row,
-        };
-        // Right-click a scene row → delete that scene (keeps at least one).
-        cell.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(cell).Properties.IsRightButtonPressed) return;
-            e.Handled = true;
-            var flyout = new MenuFlyout();
-            var del = new MenuItem { Header = $"Delete scene {scene + 1}", IsEnabled = _engine.SceneCount > 1 };
-            del.Click += (_, _) => { _engine.RemoveScene(scene); Refresh(); };
-            flyout.Items.Add(del);
-            flyout.ShowAt(cell, showAtPointer: true);
-        };
-        return cell;
     }
 
-    // ---- track column -----------------------------------------------------
-
-    private void AddTrackColumn(NotaTrackInfo ti, int scenes, int colorIndex)
+    private void Move(Key key, List<Column> nav)
     {
-        var color = NotaPalette.TrackBrushes[colorIndex];
-        _headerRow.Children.Add(ColumnHeader((ti.IsInstrument ? "Inst " : "Audio ") + ti.Id, color));
-
-        var mid = new StackPanel { Width = ColW, Spacing = Gap };
-        for (int s = 0; s < scenes; s++)
+        int s = _sel.Scene, last = Math.Max(0, _sceneCount - 1);
+        if (_sel.Kind == SelKind.Scene)
         {
-            var slot = new SlotCell(this, ti.Id, s, ti.IsInstrument, color);
-            _cells.Add(slot);
-            mid.Children.Add(slot.Border);
+            if (key == Key.Up) Select(_sel with { Scene = Math.Max(0, s - 1) });
+            else if (key == Key.Down) Select(_sel with { Scene = Math.Min(last, s + 1) });
+            else if (key == Key.Right && nav.Count > 0) Select(new Selection(SelKind.Slot, nav[0].TrackId, s));
+            return;
         }
-        _slotsRow.Children.Add(mid);
-
-        // Per-track stop nub + mini-mixer, pinned to the bottom.
-        var stop = new Border
-        {
-            Height = StopNubH, Background = Lane, BorderBrush = Raised,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-            Child = new Glyph(GlyphKind.Stop, 7) { Foreground = TextTertiary },
-        };
-        ToolTip.SetTip(stop, "Stop this track");
-        stop.PointerPressed += (_, _) => { _engine.StopSlot(ti.Id); UpdateStates(); };
-        AddHoverPress(stop);
-
-        _footerRow.Children.Add(new StackPanel { Width = ColW, Spacing = Gap, Children = { stop, BuildMiniMixer(ti, color) } });
+        int i = Math.Max(0, nav.FindIndex(c => c.TrackId == _sel.TrackId));
+        if (key == Key.Up) s = Math.Max(0, s - 1);
+        if (key == Key.Down) s = Math.Min(last, s + 1);
+        if (key == Key.Left) { if (i == 0) { Select(new Selection(SelKind.Scene, 0, s)); return; } i--; }
+        if (key == Key.Right) i = Math.Min(nav.Count - 1, i + 1);
+        if (nav.Count > 0) Select(new Selection(SelKind.Slot, nav[i].TrackId, s));
     }
 
-    private Control ColumnHeader(string name, IBrush topColor)
+    // ---- shared paint helpers -------------------------------------------------------
+
+    // A clip's colour: its own palette index, else its track's.
+    private SolidColorBrush ClipBrush(Column c, int scene)
+        => _engine.TryGetSessionClipProps(c.TrackId, scene, out var p) && p.Color >= 0 ? ArrangementView.TrackBrush(p.Color) : c.Brush;
+
+    private string ClipName(Column c, int scene)
     {
-        var grid = new Grid { RowDefinitions = new RowDefinitions("2,*") };
-        var spine = new Rectangle { Fill = topColor, Height = 2, Margin = new Thickness(Radius, 0, Radius, 0), VerticalAlignment = VerticalAlignment.Top };
-        var label = new TextBlock
-        {
-            Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
-            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        grid.Children.Add(spine);
-        Grid.SetRow(label, 1);
-        grid.Children.Add(label);
-        return new Border
-        {
-            Width = ColW, Height = HeaderH, Background = Card, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius), Child = grid,
-        };
+        string n = _engine.GetSessionClipName(c.TrackId, scene);
+        return n.Length > 0 ? n : $"{c.Name} {scene + 1}";
     }
 
-    private Control BuildMiniMixer(NotaTrackInfo ti, IBrush color)
+    private string SceneName(int scene)
     {
-        int id = ti.Id;
-        var vol = new MiniFader(ti.Volume, 1.5);
-        vol.ValueChanged += v => _engine.SetTrackVolume(id, (float)v);
-        var pan = new MiniFader((ti.Pan + 1) / 2, 1.0);
-        pan.ValueChanged += v => _engine.SetTrackPan(id, (float)(v * 2 - 1));
-
-        var db = new MonoText("", 8, TextTertiary);
-        void RefreshDb() { double d = AudioMath.LinToDb(Math.Max(1e-4, vol.Value)); db.Text = vol.Value <= 1e-4 ? "−∞" : $"{d:+0.0;−0.0}"; }
-        vol.ValueChanged += _ => RefreshDb();
-        RefreshDb();
-
-        var meter = new MiniMeter { Height = 4 };
-        var strip = new TrackStrip { TrackId = id, Meter = meter };
-        _strips.Add(strip);
-
-        var mute = MixToggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v));
-        var solo = MixToggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v));
-        if (ti.Armed != 0) _armed.Add(id);
-        var arm = ArmToggle(ti.Armed != 0, v =>
-        {
-            _engine.SetTrackArmed(id, v);
-            if (v) _armed.Add(id); else _armed.Remove(id);
-            UpdateStates();   // empty audio slots show/hide their record affordance on arm
-        });
-
-        var btnRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 3 };
-        btnRow.Children.Add(mute);
-        Grid.SetColumn(solo, 1); btnRow.Children.Add(solo);
-        Grid.SetColumn(arm, 2); btnRow.Children.Add(arm);
-        var meterWrap = new Border { Height = 4, Background = Sunken, CornerRadius = NotaRadius.Clip, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Child = meter };
-        Grid.SetColumn(meterWrap, 3); meterWrap.Margin = new Thickness(2, 0, 0, 0);
-        btnRow.Children.Add(meterWrap);
-
-        var body = new StackPanel { Spacing = 6 };
-        body.Children.Add(FaderRow("PAN", pan, null));
-        // One send fader per existing return bus (A, B, …) — nothing when there are no returns.
-        int returns = Math.Min(_engine.ReturnTrackCount, 4);
-        for (int b = 0; b < returns; b++)
-        {
-            int bus = b;
-            var send = new MiniFader(_engine.GetTrackSend(id, bus), 1.0);
-            send.ValueChanged += v => _engine.SetTrackSend(id, bus, (float)v);
-            body.Children.Add(FaderRow(((char)('A' + bus)).ToString(), send, null));
-        }
-        body.Children.Add(FaderRow("VOLUME", vol, db));
-        body.Children.Add(btnRow);
-        return new Border
-        {
-            Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius), Padding = new Thickness(7), Child = body,
-        };
+        string n = _engine.GetSceneName(scene);
+        return n.Length > 0 ? n : $"Scene {scene + 1}";
     }
 
-    private Control FaderRow(string label, MiniFader fader, TextBlock? trailing)
+    /// <summary>"2 bars", "3 beats", "2.2 bars" — a clip length as the grid shows it.</summary>
+    internal static string FormatLength(double beats)
     {
-        fader.VerticalAlignment = VerticalAlignment.Center;
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        grid.Children.Add(new TextBlock { Text = label, FontSize = 8, Foreground = TextTertiary, Width = 32, VerticalAlignment = VerticalAlignment.Center });
-        Grid.SetColumn(fader, 1);
-        grid.Children.Add(fader);
-        if (trailing is not null)
-        {
-            Grid.SetColumn(trailing, 2);
-            trailing.VerticalAlignment = VerticalAlignment.Center;
-            trailing.Margin = new Thickness(4, 0, 0, 0);
-            grid.Children.Add(trailing);
-        }
-        return grid;
+        if (beats <= 0) return "";
+        if (Math.Abs(beats % 4) < 1e-6) { int n = (int)Math.Round(beats / 4); return n == 1 ? "1 bar" : $"{n} bars"; }
+        if (beats < 4) return NotaNum.Str(beats, "0.##") + (Math.Abs(beats - 1) < 1e-6 ? " beat" : " beats");
+        return $"{(int)(beats / 4)}.{NotaNum.Str(beats % 4, "0.##")} bars";
     }
 
-    // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool> set)
+    /// <summary>bars.beats.sixteenths, 1-based, the way positions read in the transport.</summary>
+    internal static string FormatPosition(double beats)
     {
-        bool on = initial;
-        var disc = new Glyph(GlyphKind.Record, 6);
-        var b = new Border { Width = 17, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = disc };
-        void Paint()
-        {
-            b.Background = on ? Record : Raised;
-            b.BorderBrush = on ? Record : BorderStrong;
-            disc.Foreground = on ? NotaPalette.RecordInk : Record;
-        }
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on); Paint(); };
-        Paint();
-        return b;
+        beats = Math.Max(0, beats);
+        int bar = (int)(beats / 4) + 1, beat = (int)(beats % 4) + 1, six = (int)(beats % 1 * 4) + 1;
+        return $"{bar}.{beat}.{six}";
     }
 
-    private Border MixToggle(string label, bool danger, bool initial, Action<bool> set)
+    /// <summary>A duration as bars.beats.sixteenths (0-based), like a follow time "2.0.0".</summary>
+    internal static string FormatDuration(double beats)
     {
-        bool on = initial;
-        var t = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 17, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = t };
-        void Paint()
-        {
-            var accent = danger ? Danger : Brass;
-            b.Background = on ? accent : Raised;
-            b.BorderBrush = on ? accent : BorderStrong;
-            t.Foreground = on ? OnAccent : TextSecondary;
-        }
-        b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
-        Paint();
-        return b;
-    }
-
-    // ---- master column ----------------------------------------------------
-
-    private void AddMasterColumn(int scenes)
-    {
-        var header = ColumnHeader("Master", Brass);
-        ((Border)header).Background = Raised;
-        _headerRow.Children.Add(header);
-
-        var mid = new StackPanel { Width = ColW, Spacing = Gap };
-        for (int s = 0; s < scenes; s++)
-        {
-            int scene = s;
-            var launch = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new Glyph(GlyphKind.Play, 9) { Foreground = AccentBright },
-                    new TextBlock { Text = $"Scene {scene + 1}", FontSize = 10, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
-                },
-            };
-            var row = new Border
-            {
-                Height = SlotH, Background = Raised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(Radius), Padding = new Thickness(8, 0), Child = launch,
-            };
-            row.PointerPressed += (_, _) => { _engine.LaunchScene(scene); UpdateStates(); };
-            AddHoverPress(row);
-            mid.Children.Add(row);
-        }
-        _slotsRow.Children.Add(mid);
-
-        var stopAll = new Border
-        {
-            Height = StopNubH, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(Radius),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new Glyph(GlyphKind.Stop, 7) { Foreground = TextSecondary },
-                    new TextBlock { Text = "Stop All", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
-                },
-            },
-        };
-        stopAll.PointerPressed += (_, _) => { _engine.StopAllSession(); _engine.StopSessionRecord(); UpdateStates(); };
-        AddHoverPress(stopAll);
-        // Pin Stop All to the very bottom so it aligns with the track mixers' base.
-        _footerRow.Children.Add(new StackPanel { Width = ColW, VerticalAlignment = VerticalAlignment.Bottom, Children = { stopAll } });
-    }
-
-    // ---- helpers ----------------------------------------------------------
-
-    private static Border IconButton(GlyphKind glyph, IBrush fg, double w, double h, double glyphSize = 9)
-    {
-        var b = new Border
-        {
-            Width = w, Height = h, Background = Raised, BorderBrush = BorderStrong,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-            Child = new Glyph(glyph, glyphSize) { Foreground = fg },
-        };
-        AddHoverPress(b);
-        return b;
-    }
-
-    // Manual hover/press feedback for the hand-built Border "buttons" (these aren't themed
-    // Buttons, so they'd otherwise be visually inert): brass outline on hover, recess on press.
-    private static void AddHoverPress(Border b)
-    {
-        var restBorder = b.BorderBrush;
-        b.Cursor = new Cursor(StandardCursorType.Hand);
-        b.PointerEntered  += (_, _) => { b.BorderBrush = Brass; };
-        var restBg = b.Background;
-        b.PointerExited   += (_, _) => { b.BorderBrush = restBorder; b.Background = restBg; };
-        // Pressed goes into the recess (almanac § States) — the ground changes, nothing fades.
-        b.PointerPressed  += (_, _) => { b.Background = NotaPalette.BgSunken; };
-        b.PointerReleased += (_, _) => { b.Background = restBg; };
-    }
-
-    private sealed class MonoText : TextBlock
-    {
-        public MonoText(string text, double size, IBrush fg)
-        {
-            Text = text; FontSize = size; Foreground = fg;
-            this.BindResource(FontFamilyProperty, "Font.Mono");
-        }
-    }
-
-    // A live mini-mixer strip: keeps a handle to its meter for per-frame updates.
-    private sealed class TrackStrip
-    {
-        public int TrackId;
-        public MiniMeter Meter = null!;
-        public void UpdateMeter(IAudioEngine eng)
-            => Meter.SetLevel(eng.TryGetTrackMeter(TrackId, out var m) ? m.Peak : 0);
-    }
-
-    // A thin horizontal peak meter (green), width-agnostic.
-    private sealed class MiniMeter : Control
-    {
-        private double _level;
-        public void SetLevel(double v) { v = Math.Clamp(v, 0, 1); if (Math.Abs(v - _level) < 0.005) return; _level = v; InvalidateVisual(); }
-        public override void Render(DrawingContext ctx)
-        {
-            double w = Bounds.Width, h = Bounds.Height;
-            if (w <= 0 || _level <= 0) return;
-            ctx.FillRectangle(Success, new Rect(0, 0, w * _level, h));
-        }
-    }
-
-    // A single clip slot: owns its Border + repaints on state changes.
-    private sealed class SlotCell
-    {
-        public int TrackId { get; }
-        public int Scene { get; }
-        public Border Border { get; }
-
-        private readonly SessionView _owner;
-        private readonly bool _instrument;
-        private readonly IBrush _trackColor;
-        private readonly IBrush _trackBorder;   // track colour @ ~45%
-        private readonly Glyph _icon;
-        private readonly TextBlock _label;
-        private readonly MonoText _badge;
-        private readonly Rectangle _progress;
-        private int _state = -2;
-        private bool _lastBlink;
-        private bool _lastArmed;   // empty audio slots repaint their record affordance on arm changes
-
-        public SlotCell(SessionView owner, int trackId, int scene, bool instrument, ISolidColorBrush trackColor)
-        {
-            _owner = owner;
-            TrackId = trackId;
-            Scene = scene;
-            _instrument = instrument;
-            _trackColor = trackColor;
-            _trackBorder = trackColor is SolidColorBrush slot
-                ? NotaPalette.Wash(slot, 0x73)
-                : new SolidColorBrush(Color.FromArgb(0x73, trackColor.Color.R, trackColor.Color.G, trackColor.Color.B));
-
-            _icon = new Glyph(GlyphKind.Play, 9);
-            _label = new TextBlock { FontSize = 10, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            _badge = new MonoText("", 8, TextTertiary) { VerticalAlignment = VerticalAlignment.Center };
-
-            var topRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), VerticalAlignment = VerticalAlignment.Top };
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { _icon, _label } };
-            topRow.Children.Add(head);
-            Grid.SetColumn(_badge, 2);
-            topRow.Children.Add(_badge);
-
-            _progress = new Rectangle { Height = 2, Fill = Success, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Width = 0 };
-
-            Border = new Border
-            {
-                Width = ColW, Height = SlotH, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius),
-                Padding = new Thickness(7, 6), ClipToBounds = true,
-                Child = new Panel { Children = { topRow, _progress } },
-            };
-            Border.PointerPressed += OnPressed;
-
-            // Accept both browser rows and external audio files (Finder / other apps) — same
-            // path the arrangement uses, so a slot fills from either source.
-            IBrush? savedBorder = null;
-            DragDrop.SetAllowDrop(Border, true);
-            DragDrop.AddDragOverHandler(Border, (_, e) =>
-                e.DragEffects = BrowserView.IsAcceptableDrag(e) ? DragDropEffects.Copy : DragDropEffects.None);
-            DragDrop.AddDragEnterHandler(Border, (_, e) =>
-            {
-                if (!BrowserView.IsAcceptableDrag(e)) return;
-                savedBorder = Border.BorderBrush; Border.BorderBrush = Brass;   // highlight the target
-            });
-            DragDrop.AddDragLeaveHandler(Border, (_, _) =>
-            { if (savedBorder is not null) { Border.BorderBrush = savedBorder; savedBorder = null; } });
-            DragDrop.AddDropHandler(Border, (_, e) =>
-            {
-                if (savedBorder is not null) { Border.BorderBrush = savedBorder; savedBorder = null; }
-                var items = BrowserView.DroppedItems(e);
-                if (items.Count > 0)
-                { _owner.RaiseDrop(items[0], TrackId, Scene, _instrument); e.Handled = true; }
-            });
-        }
-
-        private void OnPressed(object? sender, PointerPressedEventArgs e)
-        {
-            // Right-click a filled slot (any type) → its context menu (delete, + more for MIDI).
-            if (_state >= 1 && e.GetCurrentPoint(Border).Properties.IsRightButtonPressed)
-            { ShowSlotMenu(); return; }
-
-            // Click a recording slot → stop recording (the take materialises and loops back).
-            if (_state == 4)
-            { _owner._engine.StopSessionRecord(); _owner.Refresh(); return; }
-
-            // Armed track: click a slot to record into it (overdub MIDI / capture
-            // audio input, M5-4). Per-track arm from the mini-mixer.
-            if (_owner._armed.Contains(TrackId))
-            { _owner._engine.RecordSessionSlot(TrackId, Scene); _owner.Refresh(); return; }
-
-            bool filled = _state >= 1;
-            if (filled)
-            {
-                // Double-click edits (piano roll for MIDI, audio-slot editor for audio); single
-                // click launches.
-                if (e.ClickCount == 2) _owner.SlotEditRequested?.Invoke(TrackId, Scene);
-                else _owner._engine.LaunchSlot(TrackId, Scene);
-                _owner.UpdateStates();
-            }
-            else if (_instrument)
-            {
-                _owner._engine.AddSessionMidiClip(TrackId, Scene, 4.0);
-                _owner.Refresh();
-            }
-            else if (e.GetCurrentPoint(Border).Properties.IsLeftButtonPressed)
-            {
-                // Empty audio slot: one-click record — arm the track first if it isn't already.
-                if (!_owner._armed.Contains(TrackId))
-                { _owner._engine.SetTrackArmed(TrackId, true); _owner._armed.Add(TrackId); }
-                _owner._engine.RecordSessionSlot(TrackId, Scene);
-                _owner.Refresh();
-            }
-        }
-
-        private void ShowSlotMenu()
-        {
-            var flyout = new MenuFlyout();
-            if (_instrument)
-            {
-                var lengths = new MenuItem { Header = "Loop length" };
-                foreach (double beats in new[] { 1.0, 2.0, 4.0, 8.0, 16.0 })
-                {
-                    double b = beats;
-                    var item = new MenuItem { Header = $"{b:0.#} beats" };
-                    item.Click += (_, _) => { _owner._engine.SetSessionSlotLength(TrackId, Scene, b); _owner.UpdateStates(); };
-                    lengths.Items.Add(item);
-                }
-                flyout.Items.Add(lengths);
-                var toArr = new MenuItem { Header = "Copy to arrangement (at playhead)" };
-                toArr.Click += (_, _) =>
-                {
-                    _owner._engine.SessionSlotToArrangement(TrackId, Scene, _owner._engine.PositionBeats);
-                    _owner.ArrangementChanged?.Invoke();
-                };
-                flyout.Items.Add(toArr);
-                flyout.Items.Add(new Separator());
-            }
-            var del = new MenuItem { Header = "Delete clip" };
-            del.Click += (_, _) => { _owner._engine.ClearSessionSlot(TrackId, Scene); _owner.Refresh(); };
-            flyout.Items.Add(del);
-            flyout.ShowAt(Border, showAtPointer: true);
-        }
-
-        // 0 empty, 1 filled, 2 queued, 3 playing, 4 recording.
-        public void ApplyState(int state, bool blinkOn, double posBeats)
-        {
-            // Loop-length badge (M5-5) + progress bar update every call (live).
-            double len = state >= 1 ? _owner._engine.SessionSlotLength(TrackId, Scene) : 0;
-            _badge.Text = len > 0 ? $"{len:0.#}b" : "";
-
-            if (state == 3 && len > 0)
-            {
-                double frac = (posBeats % len) / len;
-                _progress.Width = Math.Clamp(frac, 0, 1) * (ColW - 2);
-            }
-            else _progress.Width = 0;
-
-            // An empty audio slot's affordance depends on the track's arm state, so it must
-            // also repaint when arming toggles (not just on a slot-state change).
-            bool armed = _owner._armed.Contains(TrackId);
-            bool armAffordance = state == 0 && !_instrument;
-
-            // Queued cells blink at ~2Hz; repaint on state / blink-phase / arm change.
-            if (state == _state && (state != 2 || blinkOn == _lastBlink)
-                && (!armAffordance || armed == _lastArmed)) return;
-            _state = state;
-            _lastBlink = blinkOn;
-            _lastArmed = armed;
-            ToolTip.SetTip(Border, state == 4 ? "Click to stop recording" : null);
-
-            switch (state)
-            {
-                case 4: // recording
-                    Border.Background = RedFill; Border.BorderBrush = Record;
-                    _icon.Kind = GlyphKind.Record; _icon.IsVisible = true; _icon.Foreground = Record;
-                    _label.Text = "rec"; _label.Foreground = Record;
-                    break;
-                case 3: // playing
-                    Border.Background = GreenFill; Border.BorderBrush = Success;
-                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = Success;
-                    _label.Text = "Clip"; _label.Foreground = TextPrimary;
-                    break;
-                case 2: // queued — border blinks 100%↔40% at ~2Hz (HANDOFF §4)
-                    Border.Background = AmberFill;
-                    Border.BorderBrush = blinkOn ? Warning : Warning40;
-                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = Warning;
-                    _label.Text = "Clip"; _label.Foreground = Warning;
-                    break;
-                case 1: // filled
-                    Border.Background = Raised; Border.BorderBrush = _trackBorder;
-                    _icon.Kind = GlyphKind.Play; _icon.IsVisible = true; _icon.Foreground = _trackColor;
-                    _label.Text = "Clip"; _label.Foreground = TextPrimary;
-                    break;
-                default: // empty
-                    Border.Background = Lane; Border.BorderBrush = BorderDef;
-                    if (_instrument)
-                    {
-                        // Instrument: "+" to create a MIDI clip.
-                        _icon.IsVisible = false;
-                        _label.Text = "+"; _label.Foreground = TextDisabled;
-                    }
-                    else if (armed)
-                    {
-                        // Armed audio track: a red record dot — click to capture input here.
-                        _icon.Kind = GlyphKind.Record; _icon.IsVisible = true; _icon.Foreground = Record;
-                        _label.Text = "Rec"; _label.Foreground = Record;
-                    }
-                    else
-                    {
-                        // Idle audio slot: a faint hollow ring hints it's a record / drop target.
-                        _icon.Kind = GlyphKind.RecordRing; _icon.IsVisible = true; _icon.Foreground = TextDisabled;
-                        _label.Text = ""; _label.Foreground = TextDisabled;
-                    }
-                    break;
-            }
-        }
+        beats = Math.Max(0, beats);
+        return $"{(int)(beats / 4)}.{(int)(beats % 4)}.{(int)Math.Round(beats % 1 * 4)}";
     }
 }

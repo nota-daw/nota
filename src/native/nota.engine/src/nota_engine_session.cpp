@@ -6,6 +6,8 @@
 
 #include "nota_engine_internal.h"
 
+#include <algorithm>
+#include <cstring>
 #include <string>
 
 extern "C" {
@@ -136,6 +138,111 @@ int32_t nota_session_add_audio_clip(NotaEngine* e, int32_t track_id, int32_t sce
 int32_t nota_session_add_audio_file(NotaEngine* e, int32_t track_id, int32_t scene, const char* path) {
     if (!e || !path) return 0;
     return ENG(e)->addSessionAudioFile(track_id, scene, std::string(path)) ? 1 : 0;
+}
+
+// ---- Session P0: clip + scene properties, scene/slot editing, follow ------
+
+static int32_t copyOut(const std::string& v, char* out, int32_t cap) {
+    if (out && cap > 0) {
+        const int32_t n = std::min<int32_t>(cap - 1, static_cast<int32_t>(v.size()));
+        std::memcpy(out, v.data(), static_cast<size_t>(n));
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(v.size());
+}
+
+int32_t nota_session_get_clip_props(const NotaEngine* e, int32_t track_id, int32_t scene, NotaSessionClipProps* out) {
+    return (e && out && CENG(e)->sessionClipProps(track_id, scene, out)) ? 1 : 0;
+}
+NotaResult nota_session_set_clip_props(NotaEngine* e, int32_t track_id, int32_t scene, const NotaSessionClipProps* p) {
+    if (!e || !p) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setSessionClipProps(track_id, scene, *p) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_session_get_clip_name(const NotaEngine* e, int32_t track_id, int32_t scene, char* out, int32_t cap) {
+    std::string v;
+    if (!e || !CENG(e)->sessionClipName(track_id, scene, v)) { if (out && cap > 0) out[0] = '\0'; return 0; }
+    return copyOut(v, out, cap);
+}
+NotaResult nota_session_set_clip_name(NotaEngine* e, int32_t track_id, int32_t scene, const char* name) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setSessionClipName(track_id, scene, name ? std::string(name) : std::string()) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_session_get_slot_stop_button(const NotaEngine* e, int32_t track_id, int32_t scene) {
+    return (!e || CENG(e)->sessionSlotStopButton(track_id, scene)) ? 1 : 0;
+}
+NotaResult nota_session_set_slot_stop_button(NotaEngine* e, int32_t track_id, int32_t scene, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setSessionSlotStopButton(track_id, scene, on != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_session_copy_slot(NotaEngine* e, int32_t st, int32_t ss, int32_t dt, int32_t ds) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copySessionSlot(st, ss, dt, ds) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_session_get_scene_props(const NotaEngine* e, int32_t scene, NotaSceneProps* out) {
+    return (e && out && CENG(e)->sceneProps(scene, out)) ? 1 : 0;
+}
+NotaResult nota_session_set_scene_props(NotaEngine* e, int32_t scene, const NotaSceneProps* p) {
+    if (!e || !p) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setSceneProps(scene, *p) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_session_get_scene_name(const NotaEngine* e, int32_t scene, char* out, int32_t cap) {
+    std::string v;
+    if (!e || !CENG(e)->sceneName(scene, v)) { if (out && cap > 0) out[0] = '\0'; return 0; }
+    return copyOut(v, out, cap);
+}
+NotaResult nota_session_set_scene_name(NotaEngine* e, int32_t scene, const char* name) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setSceneName(scene, name ? std::string(name) : std::string()) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_session_insert_scene(NotaEngine* e, int32_t at) { return e ? ENG(e)->insertScene(at) : -1; }
+int32_t nota_session_duplicate_scene(NotaEngine* e, int32_t scene) { return e ? ENG(e)->duplicateScene(scene) : -1; }
+int32_t nota_session_capture_scene(NotaEngine* e, int32_t at) { return e ? ENG(e)->captureScene(at) : -1; }
+NotaResult nota_session_launch_slot_vel(NotaEngine* e, int32_t track_id, int32_t scene, float velocity) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->launchSlotVel(track_id, scene, velocity);
+    return NOTA_OK;
+}
+NotaResult nota_session_release_slot(NotaEngine* e, int32_t track_id, int32_t scene) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->releaseSlot(track_id, scene);
+    return NOTA_OK;
+}
+NotaResult nota_session_track_back_to_arrangement(NotaEngine* e, int32_t track_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->trackBackToArrangement(track_id);
+    return NOTA_OK;
+}
+int32_t nota_session_playing_slot(const NotaEngine* e, int32_t track_id) { return e ? CENG(e)->sessionPlayingSlot(track_id) : -1; }
+double nota_session_slot_position(const NotaEngine* e, int32_t track_id) { return e ? CENG(e)->sessionSlotPosition(track_id) : 0.0; }
+double nota_session_get_launch_quant(const NotaEngine* e) { return e ? CENG(e)->launchQuant() : 0.0; }
+NotaResult nota_session_set_follow(NotaEngine* e, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setSessionFollow(on != 0);
+    return NOTA_OK;
+}
+int32_t nota_session_get_follow(const NotaEngine* e) { return (e && CENG(e)->sessionFollow()) ? 1 : 0; }
+NotaResult nota_session_set_record_length(NotaEngine* e, double beats) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setSessionRecordLength(beats);
+    return NOTA_OK;
+}
+double nota_session_get_record_length(const NotaEngine* e) { return e ? CENG(e)->sessionRecordLength() : 0.0; }
+int32_t nota_session_record_scene(NotaEngine* e, int32_t scene) { return e ? ENG(e)->recordSessionScene(scene) : 0; }
+int32_t nota_session_record_target(const NotaEngine* e, int32_t* track_id, int32_t* scene, double* elapsed) {
+    return (e && CENG(e)->sessionRecordTarget(track_id, scene, elapsed)) ? 1 : 0;
+}
+
+int32_t nota_session_slot_peaks(const NotaEngine* e, int32_t track_id, int32_t scene, float* out_min_max, int32_t max_points) {
+    return e ? CENG(e)->sessionSlotPeaks(track_id, scene, out_min_max, max_points) : 0;
+}
+
+NotaResult nota_session_move_scene(NotaEngine* e, int32_t from, int32_t to) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->moveScene(from, to) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
+int32_t nota_session_take_scene_tempo(NotaEngine* e, double* bpm, int32_t* num, int32_t* den) {
+    return (e && ENG(e)->takeSceneTempoChange(bpm, num, den)) ? 1 : 0;
 }
 
 } // extern "C"

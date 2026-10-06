@@ -1,0 +1,75 @@
+name: Bug report
+description: Something doesn't work, sounds wrong, or crashes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this — every report gets read.
+        Can't get Nota to open at all? See [First launch](https://github.com/nota-daw/nota#first-launch) first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw or heard, and what you expected instead.
+      placeholder: When I drag a VST3 onto a MIDI track, the device card stays empty and nothing plays.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shorter the better. Attaching a small `.nota` project that shows the problem helps a lot.
+      placeholder: |
+        1. New project
+        2. Add a MIDI track
+        3. Drag Surge XT from the browser onto it
+        4. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Nota version
+      description: Nota → About Nota (or the file name you downloaded).
+      placeholder: 0.43.1
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS — Apple Silicon
+        - macOS — Intel
+        - Windows — x64
+        - Windows — ARM
+        - Linux — x86_64
+        - Linux — ARM
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: macOS 15.3 / Windows 11 24H2 / Ubuntu 24.04
+  - type: input
+    id: audio
+    attributes:
+      label: Audio interface and plugins involved (if any)
+      placeholder: Focusrite Scarlett 2i2 · Surge XT 1.3.4 (VST3)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        If Nota crashed or misbehaved, attach today's log file from:
+        - **macOS:** `~/Library/Application Support/Nota/logs/`
+        - **Windows:** `%APPDATA%\Nota\logs\`
+        - **Linux:** `~/.config/nota/logs/`
+      placeholder: Drag the file here, or paste the last lines.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, screen recordings, audio examples.

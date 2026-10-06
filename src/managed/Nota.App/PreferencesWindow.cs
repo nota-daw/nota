@@ -950,12 +950,12 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘N   ⌘O", "New project / open a project"),
             ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
             ("⌥⌘S", "Save a version with a note"),
-            ("⌘I   ⌘⇧E", "Import audio / export audio"),
+            ("⌘⇧I   ⌘⇧E", "Import audio / export audio"),
         }),
         ("TRANSPORT", new[]
         {
             ("Space", "Play / Stop"),
-            ("Return", "Stop (again → back to the start)"),
+            ("Return", "Stop (again → back to the start) · in the Session grid it launches the selection"),
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the selected clips or time range"),
@@ -983,6 +983,20 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
             ("⌘D", "Duplicate the selected tracks"),
             ("Delete", "Delete the selected tracks · a group goes with its tracks"),
+        }),
+        ("SESSION (AFTER A CLICK IN THE GRID)", new[]
+        {
+            ("← → ↑ ↓", "Move the selection between slots and scenes"),
+            ("Return", "Launch the selected clip or scene"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste a clip · a cut clip moves when pasted"),
+            ("⌘D", "Duplicate a clip into the slot below · a scene below itself"),
+            ("⌘I", "Insert a scene below the selection"),
+            ("F2", "Rename the selected clip or scene"),
+            ("Delete", "Delete the selected clip or scene"),
+            ("Drag clip", "Move it to another slot · ⌥ copies"),
+            ("Drag scene", "Reorder scenes"),
+            ("Double-click slot", "Edit the clip · an empty MIDI slot gets a new clip"),
+            ("Double-click header", "Rename the track"),
         }),
         ("PIANO ROLL", new[]
         {

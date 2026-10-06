@@ -26,6 +26,9 @@ public sealed class DragNumber : UserControl
     private double _startY, _startValue;
 
     public event Action<double>? ValueChanged;
+    /// <summary>A drag starts / ends — callers bracket an undo group or automation write.</summary>
+    public event Action? GestureBegin;
+    public event Action? GestureEnd;
 
     public DragNumber(double value, double min, double max, double step, string format = "0", double fontSize = 12)
     {
@@ -67,6 +70,7 @@ public sealed class DragNumber : UserControl
         _startY = e.GetPosition(this).Y;
         _startValue = _value;
         e.Pointer.Capture(this);
+        GestureBegin?.Invoke();
         e.Handled = true;
     }
 
@@ -81,6 +85,7 @@ public sealed class DragNumber : UserControl
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        if (_drag) GestureEnd?.Invoke();
         _drag = false;
         e.Pointer.Capture(null);
     }
