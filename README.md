@@ -25,6 +25,8 @@
 
 ![Nota playing a song in the Arrangement view, with the piano roll open below](assets/screenshots/playback.gif)
 
+<p align="center">▶ <a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><b>Watch the demo with sound</b></a> (1:45, YouTube)</p>
+
 ## Why Nota
 
 - **Free, for good.** Open source, no paid edition, no "upgrade to unlock".
@@ -39,6 +41,10 @@
 - **Your phone is a controller.** Scan a QR code and play pads, keys and an XY pad, or ride
   the mixer — over Wi-Fi or USB, nothing to install.
 - **Works where you do.** The same app on macOS, Windows and Linux, on Intel/AMD and ARM.
+
+## Demo
+
+<a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><img src="assets/screenshots/demo-video.webp" alt="Nota demo video on YouTube — 1:45, with sound"></a>
 
 ## Screenshots
 
