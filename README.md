@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
 </p>
 
-![Nota — arrangement view with device chain](assets/screenshots/screenshot_001.png)
+![Nota playing a song in the Arrangement view, with the piano roll open below](assets/screenshots/playback.gif)
 
 ## Why Nota
 
@@ -39,6 +39,26 @@
 - **Your phone is a controller.** Scan a QR code and play pads, keys and an XY pad, or ride
   the mixer — over Wi-Fi or USB, nothing to install.
 - **Works where you do.** The same app on macOS, Windows and Linux, on Intel/AMD and ARM.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/arrangement.webp" alt="Arrangement view with a song and its device chain"><br><sub><b>Arrangement</b> — the song, with the selected track's devices below</sub></td>
+    <td width="50%"><img src="assets/screenshots/modular.webp" alt="Modular view: LFOs and math nodes patched into effects with cables"><br><sub><b>Modular</b> — patch LFOs and modulators onto any parameter</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/piano-roll.gif" alt="Drawing notes in the piano roll and applying a transform"><br><sub><b>Piano roll</b> — draw, then arpeggiate, strum or ornament in one click</sub></td>
+    <td width="50%"><img src="assets/screenshots/filter.gif" alt="Sweeping the cutoff of Nota Auto Filter over a live spectrum"><br><sub><b>Built-in devices</b> — every one draws what it does to the sound</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/mixer.gif" alt="Mixer with faders and live meters"><br><sub><b>Mixer</b> — faders, sends and live meters</sub></td>
+    <td width="50%"><img src="assets/screenshots/plugin-downloads.webp" alt="Settings → Downloads: a catalogue of open-source plugins to install"><br><sub><b>Downloads</b> — 200+ free open-source plugins, one click to install</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="assets/screenshots/arrangement-light.webp" alt="Arrangement view in the light theme"><br><sub>…and a light theme, for daytime sessions.</sub></td>
+  </tr>
+</table>
 
 ## Features
 
