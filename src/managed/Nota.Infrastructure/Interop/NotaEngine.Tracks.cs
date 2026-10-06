@@ -338,6 +338,27 @@ public sealed partial class NotaEngine
     public int ClipboardBlockCount()
     { ThrowIfDisposed(); return NativeMethods.ClipsBlockCount(_handle); }
 
+    /// <summary>Copies arrangement clips into session slots: each track's clips, in time order,
+    /// fill consecutive slots from <paramref name="startScene"/> (-1 = the first scene row where
+    /// every slot needed is empty; missing rows are appended). One undo step. Returns the first
+    /// scene row filled, or -1 when nothing landed.</summary>
+    public int ArrangementClipsToSession((int trackId, int clipIndex)[] sel, int startScene = -1)
+    { ThrowIfDisposed(); var (t, c) = SplitSel(sel); return NativeMethods.ClipsToSession(_handle, t, c, sel.Length, startScene); }
+
+    /// <summary>Pastes the block clipboard into session slots, remapped so its top track lands on
+    /// <paramref name="destTrackId"/> (-1 = the source tracks); slots fill as in
+    /// <see cref="ArrangementClipsToSession"/>. Returns the first scene row filled, or -1.</summary>
+    public int PasteClipBlockToSession(int destTrackId, int startScene)
+    { ThrowIfDisposed(); return NativeMethods.ClipsBlockPasteToSession(_handle, destTrackId, startScene); }
+
+    /// <summary>Copies session slots (trackId, scene) into the arrangement: each track's slots, in
+    /// scene order, land back to back from <paramref name="atBeat"/>, placed like a paste (shifted
+    /// right as a whole until nothing overlaps) and remapped onto <paramref name="destTrackId"/>
+    /// (-1 = their own tracks). One undo step; <see cref="LastPlacedClips"/> reports the new clips.
+    /// Returns the number of clips placed.</summary>
+    public int SessionSlotsToArrangement((int trackId, int scene)[] slots, double atBeat, int destTrackId = -1)
+    { ThrowIfDisposed(); var (t, s) = SplitSel(slots); return NativeMethods.SessionSlotsToArrangement(_handle, t, s, slots.Length, atBeat, destTrackId); }
+
     /// <summary>The (trackId, clipIndex) of every clip the last block paste/duplicate produced.</summary>
     public (int trackId, int clipIndex)[] LastPlacedClips()
     {

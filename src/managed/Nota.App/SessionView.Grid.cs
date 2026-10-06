@@ -828,11 +828,11 @@ public sealed partial class SessionView
             f.Items.Add(MenuKit.Item("Copy", GlyphKind.Copy, () => CopySelection(), MenuKit.CopyKey));
             f.Items.Add(MenuKit.Item("Cut", GlyphKind.Cut, () => CutSelection(), MenuKit.CutKey));
         }
-        f.Items.Add(MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, _clip is not null));
+        f.Items.Add(MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste));
         if (filled)
         {
             f.Items.Add(MenuKit.Item("Duplicate", GlyphKind.Duplicate, () => DuplicateSelection(), MenuKit.DuplicateKey));
-            f.Items.Add(MenuKit.Item("Copy to arrangement (at playhead)", GlyphKind.Arrow, () => ToArrangement(c.TrackId, scene)));
+            f.Items.Add(MenuKit.Item("Copy to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey));
             f.Items.Add(new Separator());
             f.Items.Add(MenuKit.Item("Delete", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey));
         }
@@ -901,6 +901,8 @@ public sealed partial class SessionView
         f.Items.Add(MenuKit.Item("Insert scene below", GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)));
         f.Items.Add(MenuKit.Item("Duplicate scene", GlyphKind.Duplicate, () => DuplicateSelection(), MenuKit.DuplicateKey));
         f.Items.Add(MenuKit.Item("Capture playing clips below", GlyphKind.Copy, CaptureScene));
+        f.Items.Add(MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, ClipTransfer.FromArrangement(_engine)));
+        f.Items.Add(MenuKit.Item("Copy scene to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey, SelectedSlots().Length > 0));
         f.Items.Add(new Separator());
         f.Items.Add(MenuKit.Item("Delete scene", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey, _sceneCount > 1));
         f.ShowAt(anchor, showAtPointer: true);

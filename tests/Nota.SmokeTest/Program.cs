@@ -8080,6 +8080,56 @@ engine.StopTransport();
     e.StopAllSession(); e.StopTransport();
 }
 
+// -- Arrangement <-> Session: whole selections and the cross-view clipboard --
+{
+    Console.WriteLine("-- arrangement <-> session: selections --");
+    using var e = new NotaEngine();
+    e.SetBpm(120);
+    int ma = e.AddInstrumentTrack(), mb = e.AddInstrumentTrack(), au = e.AddAudioTrack();
+    int a0 = e.AddMidiClip(ma, 0.0, 4.0), a1 = e.AddMidiClip(ma, 8.0, 2.0), b0 = e.AddMidiClip(mb, 4.0, 4.0);
+    e.SetClipNotes(ma, a1, new[] { new NotaNote(62, 0.5, 1.0, 0.8f) });
+    e.SetClipName(ma, a1, "Hook");
+    int ac = e.AddAudioClip(au, wav, 0.0);
+    int scenes = e.SceneCount;
+    var sel = new[] { (ma, a1), (ma, a0), (mb, b0), (au, ac) };
+
+    int row = e.ArrangementClipsToSession(sel);
+    Check(row == 0 && e.SessionSlotState(ma, 0) == 1 && e.SessionSlotState(ma, 1) == 1
+        && e.SessionSlotState(mb, 0) == 1 && e.SessionSlotState(au, 0) == 1 && e.SessionSlotState(mb, 1) == 0,
+        "a selection lands in one scene row, each track's clips down its column");
+    Check(e.GetSessionNotes(ma, 1).Length == 1 && e.GetSessionClipName(ma, 1) == "Hook"
+        && Math.Abs(e.SessionSlotLength(ma, 1) - 2.0) < 1e-9, "clips fill slots in time order with notes, name and length");
+
+    int row2 = e.ArrangementClipsToSession(sel);
+    Check(row2 == 2, $"the next copy takes the first row where it all fits (row={row2})");
+    e.Undo();
+    Check(e.SessionSlotState(ma, 2) == 0 && e.SessionSlotState(au, 2) == 0 && e.SessionSlotState(ma, 0) == 1,
+        "a selection copy is one undo step");
+
+    int far = e.ArrangementClipsToSession(new[] { (ma, a0), (ma, a1) }, scenes - 1);
+    Check(far == scenes - 1 && e.SceneCount == scenes + 1 && e.SessionSlotState(ma, scenes) == 1,
+        "copying past the last scene appends rows");
+
+    Check(e.CutClipBlock(new[] { (mb, b0) }), "cut an arrangement clip");
+    Check(e.PasteClipBlockToSession(ma, 3) == 3 && e.SessionSlotState(ma, 3) == 1,
+        "a cut arrangement clip pastes into a session slot (remapped onto the chosen track)");
+    Check(e.PasteClipBlockToSession(au, 3) == -1 && e.SessionSlotState(au, 3) == 0,
+        "MIDI does not paste onto an audio track");
+
+    int placed = e.SessionSlotsToArrangement(new[] { (ma, 0), (mb, 0), (au, 0) }, 0.0);
+    var pl = e.LastPlacedClips();
+    var starts = pl.Select(p => e.TryGetClipInfo(p.trackId, p.clipIndex, out var ci) ? ci.StartBeat : -1).ToArray();
+    Check(placed == 3 && starts.All(x => Math.Abs(x - starts[0]) < 1e-9) && starts[0] >= 4.0 - 1e-9,
+        $"a scene lands on the timeline together, after the clips it would cover (at {starts.FirstOrDefault()})");
+    var maPlaced = pl.First(p => p.trackId == ma);
+    Check(e.GetClipNotes(ma, maPlaced.clipIndex).Length == e.GetSessionNotes(ma, 0).Length, "slot -> arrangement carries the notes");
+
+    Check(e.SessionSlotsToArrangement(new[] { (ma, 1), (ma, 0) }, 100.0) == 2, "two slots of one track copied");
+    var seq = e.LastPlacedClips().Select(p => e.TryGetClipInfo(p.trackId, p.clipIndex, out var ci) ? ci.StartBeat : -1).ToArray();
+    Check(seq.Length == 2 && Math.Abs(seq[0] - 100) < 1e-9 && Math.Abs(seq[1] - 104) < 1e-9,
+        $"one track's slots land back to back in scene order ({string.Join(", ", seq)})");
+}
+
 // -- Session audio slot gain (slot editor) --
 {
     using var e = new NotaEngine();

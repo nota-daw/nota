@@ -449,6 +449,15 @@ double nota_clips_block_duplicate(NotaEngine* e, const int32_t* track_ids, const
 int32_t nota_clips_block_count(NotaEngine* e) {
     return e ? CENG(e)->clipboardBlockCount() : 0;
 }
+int32_t nota_clips_to_session(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n, int32_t start_scene) {
+    return e ? ENG(e)->arrangementClipsToSession(makeSel(track_ids, clip_indices, n), start_scene) : -1;
+}
+int32_t nota_clips_block_paste_to_session(NotaEngine* e, int32_t dest_track_id, int32_t start_scene) {
+    return e ? ENG(e)->pasteClipBlockToSession(dest_track_id, start_scene) : -1;
+}
+int32_t nota_session_slots_to_arrangement(NotaEngine* e, const int32_t* track_ids, const int32_t* scenes, int32_t n, double at_beat, int32_t dest_track_id) {
+    return e ? ENG(e)->sessionSlotsToArrangement(makeSel(track_ids, scenes, n), at_beat, dest_track_id) : 0;
+}
 // Writes the last block paste/duplicate's placed clips into out_track_ids/out_clip_indices
 // (up to cap pairs) and returns the total count produced.
 int32_t nota_clips_last_placed(NotaEngine* e, int32_t* out_track_ids, int32_t* out_clip_indices, int32_t cap) {

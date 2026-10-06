@@ -25,6 +25,8 @@ internal static class MenuKit
     public static readonly KeyGesture PasteKey = Cmd(Key.V);
     public static readonly KeyGesture PasteBouncedKey = Cmd(Key.V, shift: true);
     public static readonly KeyGesture DuplicateKey = Cmd(Key.D);
+    // Arrangement: Copy to Session · Session: Copy to Arrangement.
+    public static readonly KeyGesture CopyToOtherViewKey = Cmd(Key.C, shift: true);
     public static readonly KeyGesture SplitKey = Cmd(Key.E);
     public static readonly KeyGesture ConsolidateKey = Cmd(Key.J);
     public static readonly KeyGesture LoopKey = Cmd(Key.L);

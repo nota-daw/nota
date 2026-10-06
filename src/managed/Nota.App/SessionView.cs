@@ -60,9 +60,6 @@ public sealed partial class SessionView : UserControl
     private bool _selectNextOnLaunch;
     private Selection _sel = new(SelKind.Slot, 0, 0);
 
-    // Clipboard: a reference to a slot; a cut moves it on paste.
-    private (int TrackId, int Scene, bool Cut)? _clip;
-
     private int _blinkFrame;
     private bool _blinkOn = true;
     private bool _sessionActive;
@@ -74,7 +71,7 @@ public sealed partial class SessionView : UserControl
     public event Action<int, int>? SlotEditRequested;
     /// <summary>Raised when the selection lands on a track's slot (trackId, scene).</summary>
     public event Action<int, int>? SlotSelected;
-    /// <summary>Raised after a slot is copied into the arrangement (M5-6) or a track is renamed.</summary>
+    /// <summary>Raised after slots are copied / moved into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
     /// <summary>A context menu asked for a new track (kind, the track to place it after, or -1 = at the end).</summary>
     public event Action<NewTrackKind, int>? AddTrackRequested;
@@ -370,7 +367,7 @@ public sealed partial class SessionView : UserControl
     public bool CopySelection()
     {
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
-        _clip = (_sel.TrackId, _sel.Scene, false);
+        ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: false);
         Say("Copied clip");
         return true;
     }
@@ -379,15 +376,19 @@ public sealed partial class SessionView : UserControl
     public bool CutSelection()
     {
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
-        _clip = (_sel.TrackId, _sel.Scene, true);
+        ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: true);
         Say("Cut clip — paste to move it");
         return true;
     }
 
-    /// <summary>⌘V onto the selected slot.</summary>
+    /// <summary>True when ⌘V has something to paste: a slot, or clips copied in the arrangement.</summary>
+    private bool CanPaste => ClipTransfer.FromArrangement(_engine) || ClipTransfer.Slot is not null;
+
+    /// <summary>⌘V onto the selected slot (clips copied in the arrangement: also onto a scene row).</summary>
     public bool PasteSelection()
     {
-        if (_sel.Kind != SelKind.Slot || _clip is not { } src) return false;
+        if (ClipTransfer.FromArrangement(_engine)) return PasteFromArrangement();
+        if (_sel.Kind != SelKind.Slot || ClipTransfer.Slot is not { } src) return false;
         if (ColumnFor(_sel.TrackId) is not { Kind: ColKind.Track }) return false;
         bool move = src.Cut && (src.TrackId, src.Scene) != (_sel.TrackId, _sel.Scene);
         if (!MoveOrCopySlot(src.TrackId, src.Scene, _sel.TrackId, _sel.Scene, move))
@@ -395,11 +396,29 @@ public sealed partial class SessionView : UserControl
             Say("Paste a MIDI clip onto a MIDI track, audio onto audio.");
             return true;
         }
-        if (move) _clip = (_sel.TrackId, _sel.Scene, false);
+        if (move) ClipTransfer.SlotMoved((_sel.TrackId, _sel.Scene));
         Say(move ? "Moved clip" : "Pasted clip");
         return true;
     }
 
+    // The arrangement's clip clipboard into slots from the selected scene down: its top track
+    // lands on the selected track column (a scene row or group selected: the clips' own tracks),
+    // each track's clips in time order down consecutive slots.
+    private bool PasteFromArrangement()
+    {
+        int dest = _sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is { Kind: ColKind.Track } c ? c.TrackId : -1;
+        int n = _engine.ClipboardBlockCount();
+        int first = _engine.PasteClipBlockToSession(dest, _sel.Scene);
+        if (first < 0)
+        {
+            Say("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            return true;
+        }
+        Refresh();   // the paste may have added scene rows
+        if (dest > 0) Select(new Selection(SelKind.Slot, dest, first));
+        Say(n == 1 ? "Pasted clip from the arrangement" : $"Pasted {n} clips from the arrangement");
+        return true;
+    }
     // Copy a slot onto another (same track kind), and for a move clear the source — one undo
     // step either way. Repaints just the two cells.
     private bool MoveOrCopySlot(int fromTrack, int fromScene, int toTrack, int toScene, bool move)
@@ -491,11 +510,28 @@ public sealed partial class SessionView : UserControl
         Say("Captured the playing clips into a new scene");
     }
 
-    private void ToArrangement(int trackId, int scene)
+    // The filled slots a selection covers: a track's slot, a group's slots in that scene, or a
+    // whole scene row (every track, folded groups' tracks included).
+    private (int trackId, int scene)[] SelectedSlots()
     {
-        if (_engine.SessionSlotToArrangement(trackId, scene, _engine.PositionBeats) < 0) return;
+        IEnumerable<int> tracks = _sel.Kind == SelKind.Scene
+            ? NavCols.SelectMany(c => c.Kind == ColKind.Group ? c.Children : new List<int> { c.TrackId })
+            : ColumnFor(_sel.TrackId) is { } col ? (col.Kind == ColKind.Group ? col.Children : new List<int> { col.TrackId }) : Enumerable.Empty<int>();
+        return tracks.Distinct().Where(t => SlotFilled(t, _sel.Scene)).Select(t => (t, _sel.Scene)).ToArray();
+    }
+
+    /// <summary>Copy to Arrangement (⌘⇧C): the selected slot, group slot or scene onto the timeline
+    /// at the playhead, each clip on its own track — pasted, so it never covers existing clips.</summary>
+    public bool CopySelectionToArrangement()
+    {
+        var slots = SelectedSlots();
+        if (slots.Length == 0) return false;
+        int placed = _engine.SessionSlotsToArrangement(slots, _engine.PositionBeats);
+        if (placed <= 0) return false;
         ArrangementChanged?.Invoke();
-        Say("Copied clip to the arrangement at the playhead");
+        Say(placed == 1 ? "Copied clip to the arrangement at the playhead"
+                        : $"Copied {placed} clips to the arrangement at the playhead");
+        return true;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -520,6 +556,9 @@ public sealed partial class SessionView : UserControl
                 return true;
             case Key.F2 when !mod:
                 RenameSelection();
+                return true;
+            case Key.C when mod && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt):
+                CopySelectionToArrangement();
                 return true;
         }
         if (!mod || other) return false;

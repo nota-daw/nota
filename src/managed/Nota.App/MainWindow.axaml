@@ -51,6 +51,7 @@
             <NativeMenuItem Header="Copy" Click="OnMenuCopy"/>
             <NativeMenuItem Header="Paste" Click="OnMenuPaste"/>
             <NativeMenuItem Header="Paste Bounced Audio" Click="OnMenuPasteBounced" Gesture="Shift+Cmd+V"/>
+            <NativeMenuItem Header="Copy Clips to Session / Arrangement" Click="OnMenuCopyToOtherView" Gesture="Shift+Cmd+C"/>
             <NativeMenuItem Header="Delete" Click="OnMenuDeleteSel"/>
           </NativeMenu>
         </NativeMenuItem.Menu>

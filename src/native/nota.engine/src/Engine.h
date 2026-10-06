@@ -514,6 +514,21 @@ public:
     int32_t clipboardBlockCount() const { return static_cast<int32_t>(clipboardBlock_.size()); }
     const std::vector<std::pair<int32_t,int32_t>>& lastPlaced() const { return lastPlaced_; }
 
+    // Arrangement -> Session for a set of clips (a multi-selection, or the block clipboard
+    // remapped so its top track lands on destTrackId like a paste). Each track's clips, in
+    // time order, fill consecutive slots from startScene; startScene -1 picks the first scene
+    // row where every slot needed is empty. Scene rows run out -> new ones are appended. A
+    // clip whose track has no slots is skipped. One undo step. Returns the first scene row
+    // filled, or -1 when nothing landed.
+    int32_t arrangementClipsToSession(const std::vector<std::pair<int32_t,int32_t>>& sel, int32_t startScene);
+    int32_t pasteClipBlockToSession(int32_t destTrackId, int32_t startScene);
+    // Session -> Arrangement for a set of slots (trackId, scene): every track's slots, in scene
+    // order, land back to back from atBeat, all tracks starting together. The block is placed
+    // like a paste — shifted right as a whole until it overlaps nothing — and, with
+    // destTrackId >= 0, remapped so its top track lands there. One undo step; lastPlaced()
+    // reports the new clips. Returns the number of clips placed.
+    int32_t sessionSlotsToArrangement(const std::vector<std::pair<int32_t,int32_t>>& slots, double atBeat, int32_t destTrackId);
+
     // Clip / track UI metadata (name + track colour). Names are user-facing; colorIndex
     // is a palette slot (-1 = auto). clipName/trackName write into out (up to cap-1 chars
     // + NUL) and return the full length.
@@ -1118,6 +1133,13 @@ private:
     std::vector<BlockClip> captureBlock(const std::vector<std::pair<int32_t,int32_t>>& sel,
                                         double& blockLen) const;
     void placeBlock(const std::vector<BlockClip>& items, double placedStart, bool overwrite = false);
+    // Remap a block by the track-index delta from its top track to destTrackId, dropping
+    // clips that fall off the track list or onto a track of the other kind.
+    std::vector<BlockClip> remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId) const;
+    int32_t landBlockInSession(const std::vector<BlockClip>& items, int32_t startScene);
+    // A fresh slot looping one arrangement clip (see Engine_Session.cpp).
+    SessionSlot slotFromMidiClip(const MidiClip& m) const;
+    SessionSlot slotFromAudioClip(const AudioClip& a);
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
     std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);

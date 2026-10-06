@@ -180,6 +180,18 @@ public partial class MainWindow
             return;
         }
 
+        // ⌘⇧C / ⌃⇧C = Copy to Session (Arrangement) / Copy to Arrangement (Session) — also the
+        // Edit menu's accelerator, which gets there first on macOS. The focused Session grid
+        // handles the key itself; the piano-roll grid keeps it for its notes.
+        if (e.Key == Key.C && ArrangementView.IsPrimaryDown(e.KeyModifiers)
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
+            && _editorRoll is not { GridFocused: true })
+        {
+            OnMenuCopyToOtherView(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+
         // ⌘/⌃ + C/X/V = copy/cut/paste the selected arrangement clip. Skipped while the
         // piano-roll grid is focused (it copies/pastes notes) and when nothing is
         // actionable, so the event falls through to other handlers.

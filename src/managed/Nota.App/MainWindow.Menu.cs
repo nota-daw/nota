@@ -152,6 +152,18 @@ public partial class MainWindow
         if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = "Pasted notes"; return; }
         if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip"; }
     }
+    // ⌘⇧C: the Arrangement's selected clips go to session slots, the Session view's selected
+    // slot / scene goes onto the timeline at the playhead — whichever view is on screen.
+    private void OnMenuCopyToOtherView(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (_session?.IsVisible == true)
+        {
+            if (!_session.CopySelectionToArrangement()) _vm.StatusText = "Select a clip or a scene to copy to the arrangement.";
+        }
+        else if (Timeline.IsVisible && Timeline.CopySelectionToSession() < 0)
+            _vm.StatusText = "Select clips to copy to the session.";
+    }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {
         if (_vm is null) return;

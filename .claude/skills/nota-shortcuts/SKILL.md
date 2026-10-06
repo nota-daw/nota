@@ -54,7 +54,7 @@ map changes, update the `PLAY NOTES` group (white vs. black keys, and the starti
 5. Visually verify (see [nota-ui-verify] memory): the pane can't be reached by a click in a
    headless run, so temporarily open it via an env-guarded hook in
    `MainWindow.OnDataContextChanged` (`new PreferencesWindow(new SettingsViewModel(settings),
-   _vm).Show(this)`), and select the Shortcuts section (index 7) — e.g. a temporary env read
+   _vm).Show(this)`), and select the Shortcuts section (index 8 — count the sidebar entries, it moves as pages are added) — e.g. a temporary env read
    in front of the constructor's `Select(0)`. Screenshot with `screencapture -x -o -l<winid>`
    (get the id from the `winlist` swift helper), check the rows read correctly, then **revert
    the temp hooks** and rebuild.

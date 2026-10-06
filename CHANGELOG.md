@@ -19,6 +19,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Clips between the Arrangement and Session:** copy MIDI and audio clips across with the
+  clipboard — ⌘C (or ⌘X) on the timeline, then ⌘V on a session slot, and the other way round.
+  **⌘⇧C** (and **Copy to Session** / **Copy to Arrangement** in the right-click menus and the
+  Edit menu) sends the selection straight across: arrangement clips land in the first scene
+  row where they all fit, each track's clips down its column in time order (or from a scene
+  you pick via **Copy to Scene**), adding scenes when needed; a session clip, group slot or
+  a whole scene lands on the timeline at the playhead without covering existing clips. Notes,
+  clip envelopes, names, warp, pitch and gain come along; each copy is one undo step.
 - **Type a slider's value:** double-click the number next to a slider in a device card,
   the clip editor or a rack macro and type the value you want — "−6", "1.5k", "250 ms",
   "L 30", "1/16". Return sets it, Esc cancels.

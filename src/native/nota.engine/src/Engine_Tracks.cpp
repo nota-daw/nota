@@ -2243,42 +2243,44 @@ bool Engine::cutClipBlock(const std::vector<std::pair<int32_t,int32_t>>& sel) {
 
 int32_t Engine::pasteClipBlock(double atBeat, int32_t sourceTrackId) {
     if (clipboardBlock_.empty() || !authoring_) return 0;
-    std::vector<BlockClip> items = clipboardBlock_;
-    // sourceTrackId >= 0 remaps the whole block by the track-index delta from its top track to
-    // the destination (so a single clip lands on that track; a multi-track block shifts
-    // together). Clips that fall off the track list or hit a type-mismatched track are
-    // skipped; a remapped clip's device/plugin automation is dropped (indices are positional).
-    if (sourceTrackId >= 0) {
-        auto idxOf = [&](int32_t tid) -> int {
-            for (size_t i = 0; i < authoring_->tracks.size(); ++i)
-                if (authoring_->tracks[i]->id() == tid) return static_cast<int>(i);
-            return -1;
-        };
-        const int destIdx = idxOf(sourceTrackId);
-        int topIdx = std::numeric_limits<int>::max();
-        for (const auto& b : items) { int ix = idxOf(b.trackId); if (ix >= 0) topIdx = std::min(topIdx, ix); }
-        if (destIdx < 0 || topIdx == std::numeric_limits<int>::max()) return 0;
-        const int delta = destIdx - topIdx;
-        std::vector<BlockClip> remapped;
-        for (const auto& b : items) {
-            const int ix = idxOf(b.trackId);
-            if (ix < 0) continue;
-            const int ti = ix + delta;
-            if (ti < 0 || ti >= static_cast<int>(authoring_->tracks.size())) continue;
-            const auto& tt = authoring_->tracks[ti];
-            const bool typeOk = (b.kind == 1) ? (tt->type() == TrackType::Instrument)
-                                              : (tt->type() == TrackType::Audio);
-            if (!typeOk) continue;
-            BlockClip nb = b;
-            nb.sameTrack = tt->id() == b.trackId;
-            nb.trackId   = tt->id();
-            remapped.push_back(std::move(nb));
-        }
-        items = std::move(remapped);
-        if (items.empty()) return 0;
-    }
+    // sourceTrackId >= 0 remaps the whole block onto that track (see remapBlock).
+    std::vector<BlockClip> items = sourceTrackId >= 0 ? remapBlock(clipboardBlock_, sourceTrackId) : clipboardBlock_;
+    if (items.empty()) return 0;
     placeBlock(items, atBeat);
     return static_cast<int32_t>(lastPlaced_.size());
+}
+
+// Remap a block by the track-index delta from its top track to the destination (so a single
+// clip lands on that track; a multi-track block shifts together). Clips that fall off the
+// track list or hit a type-mismatched track are skipped; a remapped clip's device/plugin
+// automation is dropped (indices are positional).
+std::vector<Engine::BlockClip> Engine::remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId) const {
+    auto idxOf = [&](int32_t tid) -> int {
+        for (size_t i = 0; i < authoring_->tracks.size(); ++i)
+            if (authoring_->tracks[i]->id() == tid) return static_cast<int>(i);
+        return -1;
+    };
+    const int destIdx = idxOf(destTrackId);
+    int topIdx = std::numeric_limits<int>::max();
+    for (const auto& b : items) { int ix = idxOf(b.trackId); if (ix >= 0) topIdx = std::min(topIdx, ix); }
+    if (destIdx < 0 || topIdx == std::numeric_limits<int>::max()) return {};
+    const int delta = destIdx - topIdx;
+    std::vector<BlockClip> remapped;
+    for (const auto& b : items) {
+        const int ix = idxOf(b.trackId);
+        if (ix < 0) continue;
+        const int ti = ix + delta;
+        if (ti < 0 || ti >= static_cast<int>(authoring_->tracks.size())) continue;
+        const auto& tt = authoring_->tracks[ti];
+        const bool typeOk = (b.kind == 1) ? (tt->type() == TrackType::Instrument)
+                                          : (tt->type() == TrackType::Audio);
+        if (!typeOk) continue;
+        BlockClip nb = b;
+        nb.sameTrack = tt->id() == b.trackId;
+        nb.trackId   = tt->id();
+        remapped.push_back(std::move(nb));
+    }
+    return remapped;
 }
 
 double Engine::duplicateClipBlock(const std::vector<std::pair<int32_t,int32_t>>& sel) {

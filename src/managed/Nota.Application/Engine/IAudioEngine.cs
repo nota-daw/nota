@@ -270,6 +270,17 @@ public interface IAudioEngine : IDisposable
     double DuplicateClipBlock((int trackId, int clipIndex)[] sel);
     /// <summary>Number of clips in the block clipboard (0 = empty).</summary>
     int ClipboardBlockCount();
+    /// <summary>Copies arrangement clips into session slots: each track's clips, in time order, fill
+    /// consecutive slots from startScene (-1 = the first scene row where every slot needed is empty;
+    /// missing rows are appended). One undo step. Returns the first scene row filled, or -1.</summary>
+    int ArrangementClipsToSession((int trackId, int clipIndex)[] sel, int startScene = -1);
+    /// <summary>Pastes the block clipboard into session slots, its top track remapped onto destTrackId
+    /// (-1 = the source tracks). Returns the first scene row filled, or -1.</summary>
+    int PasteClipBlockToSession(int destTrackId, int startScene);
+    /// <summary>Copies session slots (trackId, scene) into the arrangement: each track's slots, in scene
+    /// order, land back to back from atBeat, placed like a paste (no overlap) and remapped onto destTrackId
+    /// (-1 = their own tracks). One undo step; LastPlacedClips reports them. Returns clips placed.</summary>
+    int SessionSlotsToArrangement((int trackId, int scene)[] slots, double atBeat, int destTrackId = -1);
     /// <summary>The (trackId, clipIndex) of every clip the last block paste/duplicate produced.</summary>
     (int trackId, int clipIndex)[] LastPlacedClips();
     /// <summary>Sets/gets a clip's user-facing name (empty = default).</summary>

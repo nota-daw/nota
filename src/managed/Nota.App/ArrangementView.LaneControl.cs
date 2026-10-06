@@ -1132,21 +1132,24 @@ public sealed partial class ArrangementView
                 flyout.Items.Add(convert);
             }
 
-            // M5-6: copy a clip (MIDI or audio) into a session slot (choose the scene).
+            // M5-6: copy the clip selection into session slots — the first scene row where it
+            // fits (⌘⇧C), or from a chosen scene down.
             if (_o._engine is { } eng)
             {
-                bool midi = clip.IsMidi;
-                var toSession = new MenuItem { Header = "Copy to session", Icon = MenuKit.Icon(GlyphKind.Grid) };
+                var toSession = new MenuItem { Header = inGroup ? "Copy selection to Session" : "Copy to Session", Icon = MenuKit.Icon(GlyphKind.Grid), InputGesture = MenuKit.CopyToOtherViewKey };
+                toSession.Click += (_, _) => { EnsureSelected(); _o.CopySelectionToSession(); };
+                var toScene = new MenuItem { Header = "Copy to Scene", Icon = MenuKit.Icon(GlyphKind.Grid) };
                 for (int s = 0; s < eng.SceneCount; s++)
                 {
                     int sc = s;
-                    var it = new MenuItem { Header = $"Scene {sc + 1}" };
-                    if (midi) it.Click += (_, _) => { eng.ArrangementClipToSession(trackId, idx, sc); _o.SessionChanged?.Invoke(); };
-                    else      it.Click += (_, _) => { eng.ArrangementAudioClipToSession(trackId, idx, sc); _o.SessionChanged?.Invoke(); };
-                    toSession.Items.Add(it);
+                    string name = eng.GetSceneName(sc);
+                    var it = new MenuItem { Header = name.Length > 0 ? $"{sc + 1} · {name}" : $"Scene {sc + 1}" };
+                    it.Click += (_, _) => { EnsureSelected(); _o.CopySelectionToSession(sc); };
+                    toScene.Items.Add(it);
                 }
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(toSession);
+                flyout.Items.Add(toScene);
             }
             flyout.ShowAt(this, showAtPointer: true);
         }
