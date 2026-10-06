@@ -36,8 +36,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the players' names. **USB works too:** a phone on a cable (USB tethering on Android,
   Internet Sharing on the Mac) gets an instant, radio-free link — Nota notices the cable,
   puts its address in the QR and marks the phone "USB" in the list.
+- **Session View, rebuilt for real work.** Columns carry the track's name and colour; clips
+  have a name, a colour, a note or waveform preview and a length in bars, and their progress
+  pie runs on the clip's own clock. Clicking a cell selects it, its triangle launches it, and
+  an inspector on the right edits the selected clip, scene or empty slot. Clips get launch
+  modes (Trigger, Gate, Toggle, Repeat), their own launch quantize, legato, one-shot (loop
+  off), velocity amount and **follow actions** A/B with chances and a time (Next, Again,
+  Previous, First, Last, Any, Other, Stop, Jump), with a global **Follow** switch. Scenes have
+  names, colours, a tempo and time signature that apply as they launch, and can follow on to
+  the next scene after a number of bars. Edit the grid from the keyboard (arrows, Return, ⌘C /
+  ⌘X / ⌘V, ⌘D, ⌘I, F2, Delete) or by dragging clips between slots (⌥ copies) and scenes up and
+  down the rail; insert, duplicate, capture and move scenes without stopping what plays.
+  **Session Rec** records into the armed track at the selected scene — open-ended takes are cut
+  to whole bars, or set a **Fixed** length of 1–8 bars. Group tracks show as one launchable
+  column that folds its tracks away; returns and the master close the row; the mixer under the
+  grid has I/O, Sends and Mixer sections to show or hide. An empty slot's stop button can be
+  removed so a scene keeps that track playing, and the **ARR** badge hands one track back to the
+  Arrangement. Audio slots are full audio clips now — double-click one for the same clip editor
+  as the Arrangement (start / end, warp with markers, pitch, reverse, gain, envelopes, ADSR); a
+  warped loop stays in time when the tempo changes, and an Arrangement clip dragged into a slot
+  keeps its trim and warp. Right-click a column header, a slot or the empty grid to add an
+  instrument, audio or return track (or rename / delete one). All of it is saved with the
+  project and reachable over MCP.
 
 ### Changed
+- **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch
+  quantize lives in the Session toolbar instead of the transport bar.
 - **A cleaner main window.** The project's name now leads the transport bar. In the
   arrangement, tracks inside a group step their colour stripe in under it, so nesting reads
   at a glance; the Overview strip is slimmer and calmer (a thin line per track, a neutral

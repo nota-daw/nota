@@ -56,6 +56,14 @@ internal static class AudioClipState
         if (ci < 0) return -1;
         if (ac.Name is { Length: > 0 } acn) engine.SetClipName(trackId, ci, acn);
         if (!ac.Active) engine.SetClipActive(trackId, ci, false);   // clip deactivate (v17)
+        ApplyShape(engine, trackId, ci, ac);
+        return ci;
+    }
+
+    /// <summary>Pitch, reverse, warp, envelopes and ADSR onto an existing clip — an
+    /// arrangement clip, or a Session slot's take addressed by <see cref="SessionClip.Index"/>.</summary>
+    public static void ApplyShape(IAudioEngine engine, int trackId, int ci, AudioClipDto ac)
+    {
         if (ac.PitchSemitones != 0) engine.SetClipPitch(trackId, ci, ac.PitchSemitones);
         if (ac.Reversed) engine.SetClipReverse(trackId, ci, true);   // reverse (v19)
         if (ac.WarpEnabled != 0)
@@ -77,6 +85,5 @@ internal static class AudioClipState
             engine.SetClipPanEnvelope(trackId, ci, Array.ConvertAll(penv, p => p.ToPoint()));
         if (ac.Adsr is { } adsr)                          // ADSR (v20)
             engine.SetClipAdsr(trackId, ci, adsr.ToAdsr());
-        return ci;
     }
 }

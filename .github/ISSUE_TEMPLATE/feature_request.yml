@@ -1,0 +1,39 @@
+name: Feature request
+description: An idea for something Nota should do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the music-making situation, not the solution yet — it helps find the best fix.
+      placeholder: I record vocals in several takes and want to pick the best parts of each without cutting clips by hand.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working. Mentioning how another DAW does it is welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Arrangement / Session / editing
+        - Piano roll / MIDI
+        - Audio / recording / warp
+        - Built-in instruments and effects
+        - Plugins (VST3 / AU)
+        - Mixer / routing / automation
+        - Browser / samples / presets
+        - Export
+        - Nota Remote (phone)
+        - Other
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Sketches, screenshots, links.

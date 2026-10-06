@@ -396,6 +396,36 @@ public:
     bool    setSessionNotes(int32_t trackId, int32_t scene, const NotaNoteData* notes, int32_t count);
     int32_t getSessionNotes(int32_t trackId, int32_t scene, NotaNoteData* out, int32_t maxNotes) const;
     int32_t sessionNoteCount(int32_t trackId, int32_t scene) const;
+    // Session P0: clip + scene properties, scene/slot editing, follow, fixed-length capture.
+    bool    sessionClipProps(int32_t trackId, int32_t scene, NotaSessionClipProps* out) const;
+    bool    setSessionClipProps(int32_t trackId, int32_t scene, const NotaSessionClipProps& p);
+    bool    sessionClipName(int32_t trackId, int32_t scene, std::string& out) const;
+    bool    setSessionClipName(int32_t trackId, int32_t scene, const std::string& name);
+    bool    sessionSlotStopButton(int32_t trackId, int32_t scene) const;
+    bool    setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on);
+    bool    copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene);
+    bool    sceneProps(int32_t scene, NotaSceneProps* out) const;
+    bool    setSceneProps(int32_t scene, const NotaSceneProps& p);
+    bool    sceneName(int32_t scene, std::string& out) const;
+    bool    setSceneName(int32_t scene, const std::string& name);
+    int32_t insertScene(int32_t at);
+    int32_t duplicateScene(int32_t scene);
+    int32_t captureScene(int32_t at);
+    bool    moveScene(int32_t from, int32_t to);
+    void    launchSlotVel(int32_t trackId, int32_t scene, float velocity);
+    void    releaseSlot(int32_t trackId, int32_t scene);
+    void    trackBackToArrangement(int32_t trackId);
+    int32_t sessionPlayingSlot(int32_t trackId) const;
+    double  sessionSlotPosition(int32_t trackId) const;
+    double  launchQuant() const { return launchQuant_.load(std::memory_order_relaxed); }
+    void    setSessionFollow(bool on) { sessionFollow_.store(on, std::memory_order_relaxed); }
+    bool    sessionFollow() const { return sessionFollow_.load(std::memory_order_relaxed); }
+    void    setSessionRecordLength(double beats) { sessionRecordLen_ = beats > 0.0 ? beats : 0.0; }
+    double  sessionRecordLength() const { return sessionRecordLen_; }
+    int32_t recordSessionScene(int32_t scene);
+    bool    sessionRecordTarget(int32_t* trackId, int32_t* scene, double* elapsed) const;
+    int32_t sessionSlotPeaks(int32_t trackId, int32_t scene, float* outMinMax, int32_t maxPoints) const;
+    bool    takeSceneTempoChange(double* bpm, int32_t* num, int32_t* den);   // once per applied scene tempo
 
     // --- clip editing (M4-2) ---
     bool    moveClip(int32_t trackId, int32_t clipIndex, double newStartBeat);
@@ -930,6 +960,12 @@ private:
     // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
+    // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch
+    // request applies, and after rendering advance the player + end a one-shot slot.
+    void sessionPreApply(Track& t, double blockBeats);
+    void sessionPostRender(Track& t, double blockBeats);
+    int32_t followTarget(const Track& t, int32_t cur, FollowAction a);
+    uint32_t followRng_ = 0x9E3779B9u;   // audio-thread RNG for follow-action chance / Any / Other
     int  applyMidiEffects(Track& t, MidiEv* evs, int n, MidiEv* scratch,
                           int32_t frames, double beatStart, double spb, bool playing);
     void applyMidiCcRouting(Track& t);
@@ -1141,6 +1177,31 @@ private:
     // Build a fresh graph with a new scene count, cloning tracks so slot vectors resize safely.
     std::shared_ptr<Graph> rebuildScenes(int32_t newCount,
                                          const std::function<void(std::vector<SessionSlot>&)>& mutate);
+    // Session P0 helpers (message thread).
+    int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
+    void    remapPlayers(const std::function<int32_t(int32_t)>& map);  // shift players after a row insert/remove
+    void    launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene);
+    void    serviceSessionFollow();   // poll(): scene follow + fixed-length capture
+    std::atomic<bool> sessionFollow_{true};
+    double  sessionRecordLen_ = 0.0;     // fixed session record length, beats (0 = off)
+    int32_t sceneFollowScene_ = -1;      // last launched scene (for scene follow)
+    double  sceneFollowStart_ = 0.0;     // beat it started at (quantized)
+    // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
+    bool    sceneTempoPending_ = false;
+    double  sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;
+    int32_t sceneSigNum_ = 0, sceneSigDen_ = 0;
+    void    applySceneTempo();
+    bool    sceneTempoApplied_ = false;
+    // A fresh MIDI take into an empty slot grows until stopped (no fixed length), then is
+    // cut to whole quanta.
+    static constexpr double kGrowingTakeBeats = 4096.0;
+    bool    recordSessionGrowing_ = false;
+    double  roundedTakeBeats(double beats) const;
+    double  audioClipBeats(const AudioClip& c) const;
+    void    syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
+    // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
+    // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
+    void    mixAudioClip(const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;

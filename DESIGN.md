@@ -399,7 +399,7 @@ filterable knob grid (and the sidechain source when it has a bus). Rhythm moved 
   signature, grid · the switches (metronome, follow, snap, automation) — then, pinned right,
   MIDI, CPU and master. Buttons are 28, Play 40; Play is raised at rest and solid brass only
   while the transport runs. There is no add-track button — tracks come from the browser.
-  Launch quantize appears only in Session. Transport buttons are not focusable, so
+  Launch quantize lives in the Session toolbar, not here. Transport buttons are not focusable, so
   Space / R / L / Return always reach the window.
 - **Body** — the browser on the left and the canvas float as panels on `Gutter` with 12 px
   gaps; the canvas is always sunken relative to panels. The splitter is a transparent grab

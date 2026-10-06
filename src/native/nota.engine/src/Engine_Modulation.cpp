@@ -308,6 +308,7 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
     bool anyChange = false;
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume;
     g->masterTrack = authoring_->masterTrack;
     g->tracks.reserve(authoring_->tracks.size());

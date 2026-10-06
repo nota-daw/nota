@@ -425,6 +425,8 @@ void Engine::stopAudioRecording() {
             const double deviceFrames = sample->frames * (sr > 0 ? sr / sample->sourceSampleRate : 1.0);
             s.lengthBeats = spb > 0 ? deviceFrames / spb : 4.0;
             if (s.lengthBeats <= 0.0) s.lengthBeats = 4.0;
+            // Fixed-length capture keeps its length; an open-ended take is cut to whole quanta.
+            s.lengthBeats = sessionRecordLen_ > 0.0 ? sessionRecordLen_ : roundedTakeBeats(s.lengthBeats);
         }
         republishWithTrack(trackId, nt);
         return;

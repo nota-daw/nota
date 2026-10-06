@@ -50,10 +50,16 @@ public partial class MainWindow
         }
         else if (e.Key == Key.Return)
         {
-            _vm.Transport.StopCommand.Execute(null);   // stop; second press returns to 1.1
+            // In the Session grid Return launches the selected slot or scene (design 1a);
+            // everywhere else it stops (second press returns to 1.1).
+            if (SessionFocused) _session!.LaunchSelection();
+            else _vm.Transport.StopCommand.Execute(null);
             e.Handled = true;
         }
     }
+
+    // The Session grid has the keyboard: its arrows / Return / ⌘C… act on its selection.
+    private bool SessionFocused => _session is { IsVisible: true, IsKeyboardFocusWithin: true };
 
     // Route a floating detail window's key presses through the same handling. Undo/redo are
     // handled explicitly here because their native-menu accelerators only target the main

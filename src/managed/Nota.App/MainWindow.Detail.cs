@@ -201,7 +201,7 @@ public partial class MainWindow
     internal void SyncClipTab()
     {
         DetailClipBtn.IsEnabled = _session?.IsVisible == true
-            ? _clipEditor is not null
+            ? _clipEditor is not null || SessionAudioEditorOpen
             : SelectedClip(out _, out _, out _);
         DetailPatternBtn.IsEnabled = PatternTarget(out _, out _, out _);
     }
@@ -223,6 +223,9 @@ public partial class MainWindow
         trackId = tid; clipIndex = ci;
         return true;
     }
+
+    // The audio clip editor is open on a Session slot's take.
+    private bool SessionAudioEditorOpen => _audioEditor is not null && SessionClip.SceneOf(_audioEditorClipIndex) >= 0;
 
     private bool IsDrumRackTrack(int trackId) => trackId > 0 && Engine.TrackInstrumentKind(trackId) == 4;
 
@@ -361,8 +364,11 @@ public partial class MainWindow
     private void BuildAudioClipEditor(int trackId, int clipIndex)
     {
         if (_vm is null) return;
+        // A Session slot's take edits through the same clip API (SessionClip index); its
+        // edits repaint the Session grid instead of the timeline.
+        bool slot = SessionClip.SceneOf(clipIndex) >= 0;
         _audioEditor = new AudioClipEditorView(Engine, trackId, clipIndex,
-            TrackBrush(trackId), () => Timeline.Refresh());
+            TrackBrush(trackId), slot ? () => _session?.Refresh() : () => Timeline.Refresh());
         _audioEditorTrackId = trackId;
         _audioEditorClipIndex = clipIndex;
     }
@@ -525,6 +531,7 @@ public partial class MainWindow
         if (_session?.IsVisible == true)
         {
             if (_clipEditor is not null) ShowClipPanel();
+            else if (SessionAudioEditorOpen) ShowAudioClipPanel();
             else RejectClipTab("Double-click a slot to edit it.");
             return;
         }
@@ -569,19 +576,13 @@ public partial class MainWindow
         // Audio slot → the compact audio-slot editor; MIDI slot → the piano roll.
         if (Engine.TryGetSessionAudioSlot(trackId, scene, out var _))
         {
+            // Audio slot: the full audio clip editor (region, warp, pitch, envelopes, ADSR).
             _sessionSlotTrack = -1; _sessionSlotScene = -1;   // audio slot: no pattern to step
-            SyncClipTab();
-            var audioEd = new SessionAudioSlotEditor(Engine, trackId, scene, TrackBrush(trackId));
             _editorRoll = null; _clipEditor = null;
             _editorTrackId = -1; _editorClipIndex = -1;
-            _lastClipEditor = audioEd;
-            SetHost(ClipDetailHost, audioEd);
-            SetDetailChip(trackId);
-            if (DetailFloating) return;
-            DetailClipBtn.IsEnabled = true;
-            DetailClipBtn.IsChecked = true;
-            DetailDevicesBtn.IsChecked = false;
-            ShowDetail(250, honorPersist: true);
+            BuildAudioClipEditor(trackId, SessionClip.Index(scene));
+            SyncClipTab();
+            ShowAudioClipPanel();
             return;
         }
 

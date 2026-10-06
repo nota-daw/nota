@@ -97,9 +97,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
     hand always shows its name.
-- **Session View** — a clip grid (tracks × scenes): launch and stop a clip, launch a whole
-  scene, launch quantization, recording into a clip slot (MIDI or audio), loop clips with
-  a configurable length, and moving material between Session and Arrangement.
+- **Session View** — a clip grid (tracks × scenes) with an inspector: named, coloured clips
+  with note / waveform previews and a progress pie on the clip's own clock; selection apart
+  from launching, keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag
+  between slots; launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato,
+  one-shot, velocity amount and follow actions with a global switch; scenes with names,
+  colours, tempo / signature and scene follow, inserted, duplicated, captured and reordered
+  without stopping playback; Session Rec with fixed length; group columns that fold;
+  returns + master; I/O · Sends · Mixer sections; removable stop buttons; per-track
+  Back to Arrangement; and moving material between Session and Arrangement.
 - **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
@@ -865,9 +871,12 @@ Coverage:
   and split.
 - **Automation**: create a lane, read and write points.
 - **MIDI effects** and engine status.
-- **Session**: the clip launcher (grid snapshot, create a MIDI or audio slot, read and
-  write slot notes, loop length, launch and stop a slot or scene, launch quantization,
-  slot recording, slot ↔ arrangement).
+- **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
+  move and clear slots, read and write slot notes, loop length, clip name / colour / launch
+  mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
+  follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
+  release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
+  scene recording with a fixed length, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings, rack volume and glide; for the Drum Rack, per-pad

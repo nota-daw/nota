@@ -18,7 +18,6 @@ public sealed partial class RemoteHub
 {
     private string? _projectJson;            // shared part of the project message, re-read every few ticks
     private List<TrackRow> _tracks = new();
-    private readonly Dictionary<(int Track, int Scene), double> _slotStart = new();   // session launch beat (progress)
 
     internal sealed record TrackRow(int Id, string Name, string Color, string Kind, string Device, int Group, int Index);
 
@@ -268,8 +267,7 @@ public sealed partial class RemoteHub
                 if (_engine.SessionSlotState(trackId, s) != 3) continue;
                 double len = _engine.SessionSlotLength(trackId, s);
                 if (len <= 0) continue;
-                double start = SlotStart(trackId, s, snap.Pos);
-                double local = ((snap.Pos - start) % len + len) % len;
+                double local = _engine.SessionSlotPosition(trackId);   // the slot's own loop clock
                 foreach (var n in _engine.GetSessionNotes(trackId, s))
                     if (local >= n.StartBeat && local < n.StartBeat + n.LengthBeats) set.Add(n.Pitch);
             }
@@ -295,14 +293,6 @@ public sealed partial class RemoteHub
         for (int i = 0; i < n; i++)
             if (_engine.TryGetTrackInfo(i, out var t2) && t2.Id == trackId) return t2;
         return null;
-    }
-
-    // Where a playing slot started, for its progress line: first seen playing, on the bar.
-    private double SlotStart(int trackId, int scene, double pos)
-    {
-        if (!_slotStart.TryGetValue((trackId, scene), out double s))
-            _slotStart[(trackId, scene)] = s = Math.Floor(pos / 4) * 4;
-        return s;
     }
 
     // ---- mixer ---------------------------------------------------------------------------
@@ -443,14 +433,9 @@ public sealed partial class RemoteHub
                 for (int s = 0; s < scenes; s++)
                 {
                     int st = _engine.SessionSlotState(r.Id, s);
-                    if (st != 3) _slotStart.Remove((r.Id, s));
                     double len = st == 0 ? 0 : _engine.SessionSlotLength(r.Id, s);
-                    double prog = 0;
-                    if (st == 3 && len > 0)
-                    {
-                        double start = SlotStart(r.Id, s, snap.Pos);
-                        prog = (((snap.Pos - start) % len) + len) % len / len;
-                    }
+                    // Progress runs on the slot's own loop clock (the engine's), not the song position.
+                    double prog = st == 3 && len > 0 ? Math.Clamp(_engine.SessionSlotPosition(r.Id) / len, 0, 1) : 0;
                     w.WriteStartArray();
                     w.WriteNumberValue(st);
                     w.WriteNumberValue(Math.Round(len, 2));

@@ -24,6 +24,9 @@ public sealed class ProjectDocument
     public string App { get; set; } = "Nota";
     public TransportDto Transport { get; set; } = new();
     public int SceneCount { get; set; } = 8;
+    /// <summary>Session view settings + scene rows (names, colours, tempo, follow). Null in
+    /// files from before Session P0 = defaults.</summary>
+    public SessionDto? Session { get; set; }
     public List<TrackDto> Tracks { get; set; } = new();
     /// <summary>Master-volume automation points (graph-level, format v7).</summary>
     public List<AutomationPointDto> MasterVolumeAutomation { get; set; } = new();
@@ -97,6 +100,8 @@ public sealed class TrackDto
     public List<MidiClipDto> MidiClips { get; set; } = new();
     public List<AudioClipDto> AudioClips { get; set; } = new();
     public List<SessionSlotDto> SessionSlots { get; set; } = new();
+    /// <summary>Empty slots whose stop button was removed (scene launch leaves the track playing).</summary>
+    public List<int>? SessionNoStop { get; set; }
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
@@ -317,6 +322,30 @@ public sealed class MidiClipDto
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+public sealed class SessionDto
+{
+    public double LaunchQuant { get; set; } = 4.0;
+    public bool Follow { get; set; } = true;
+    public double RecordLength { get; set; }
+    public List<SceneDto> Scenes { get; set; } = new();
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+public sealed class SceneDto
+{
+    public int Index { get; set; }
+    public string? Name { get; set; }
+    public int Color { get; set; } = -1;
+    public double Tempo { get; set; }
+    public int SigNum { get; set; }
+    public int SigDen { get; set; }
+    public bool Follow { get; set; }
+    public double FollowBeats { get; set; } = 32.0;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class SessionSlotDto
 {
     public int Scene { get; set; }
@@ -324,6 +353,20 @@ public sealed class SessionSlotDto
     public NoteDto[] Notes { get; set; } = System.Array.Empty<NoteDto>();
     /// <summary>Set for audio-track slots (a captured take); Notes is empty then.</summary>
     public AudioClipDto? Audio { get; set; }
+    // Clip properties (Session P0); defaults match a fresh clip.
+    public string? Name { get; set; }
+    public int Color { get; set; } = -1;
+    public int LaunchMode { get; set; }
+    public double Quant { get; set; } = -1.0;
+    public bool Legato { get; set; }
+    public bool Loop { get; set; } = true;
+    public float VelocityAmount { get; set; }
+    public int FollowA { get; set; }
+    public int FollowB { get; set; }
+    public int ChanceA { get; set; } = 100;
+    public int ChanceB { get; set; }
+    public double FollowBeats { get; set; }
+    public int JumpScene { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

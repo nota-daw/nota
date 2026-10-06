@@ -114,11 +114,43 @@ struct AudioClip {
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
 // (instrument tracks) or a captured audio take (audio tracks, M5-4); the type is
 // implied by the track type. Immutable in a snapshot.
+// Follow actions (Session P0): what a slot does once it has played followBeats.
+enum class FollowAction : int32_t { None = 0, Stop, Again, Previous, Next, First, Last, Any, Other, Jump };
+// How a slot reacts to its launch button: Trigger starts, Gate plays while held, Toggle
+// starts / stops, Repeat retriggers at the launch quantum while held.
+enum class LaunchMode : int32_t { Trigger = 0, Gate, Toggle, Repeat };
+
 struct SessionSlot {
     bool     hasClip = false;
     MidiClip midi;              // instrument tracks: notes relative to slot start
     AudioClip audio;            // audio tracks: captured sample, looped over lengthBeats (M5-4)
     double   lengthBeats = 4.0; // loop length
+
+    // Clip properties (Session P0). Message thread writes them on a clone; the audio
+    // thread reads only the POD fields of the published snapshot.
+    std::string name;                    // empty = "<track> <scene>" in the UI
+    int32_t  color = -1;                 // track-palette index, -1 = the track's colour
+    LaunchMode launchMode = LaunchMode::Trigger;
+    double   quantBeats = -1.0;          // <0 = the global launch quantum
+    bool     legato = false;             // launch at the outgoing slot's position
+    bool     loop = true;                // false = one-shot: stops after lengthBeats
+    float    velocityAmount = 0.0f;      // 0..1: how far launch velocity scales the clip
+    FollowAction followA = FollowAction::None;
+    FollowAction followB = FollowAction::None;
+    int32_t  chanceA = 100, chanceB = 0; // relative weights, 0..100
+    double   followBeats = 0.0;          // 0 = after one pass (lengthBeats)
+    int32_t  jumpScene = 0;              // FollowAction::Jump target
+    bool     stopButton = true;          // an EMPTY slot stops its track on scene launch
+};
+
+// Scene metadata (Session P0). Graph-level, one per scene row; kept in step with sceneCount.
+struct SceneInfo {
+    std::string name;
+    int32_t color = -1;          // track-palette index, -1 = neutral
+    double  tempo = 0.0;         // >0: launching the scene sets the tempo
+    int32_t sigNum = 0, sigDen = 0; // >0: launching the scene sets the time signature
+    bool    follow = false;      // launch the next scene after followBeats
+    double  followBeats = 32.0;
 };
 
 enum class TrackType { Audio, Instrument, Return, Group };
@@ -284,5 +316,24 @@ private:
     std::atomic<int32_t> midiFromTrackId_{-1};      // -1 off, >0 forward MIDI to this track id
     std::atomic<bool>    frozen_{false};            // M7: play frozenBuf instead of the live chain
 };
+
+// Audio clips are addressed by index: >= 0 is an arrangement clip, <= kSessionClipBase is
+// the audio take in a Session slot (scene = kSessionClipBase - index). The clip editing API
+// (warp, region, pitch, gain, envelopes, peaks) takes either, so a slot edits like a clip.
+inline constexpr int32_t kSessionClipBase = -2;
+inline int32_t sessionSceneOfClip(int32_t clipIndex) { return clipIndex <= kSessionClipBase ? kSessionClipBase - clipIndex : -1; }
+inline int32_t sessionClipIndex(int32_t scene) { return kSessionClipBase - scene; }
+
+inline const AudioClip* audioClipRef(const Track& t, int32_t clipIndex) {
+    if (t.type() != TrackType::Audio) return nullptr;
+    if (clipIndex >= 0) return clipIndex < static_cast<int32_t>(t.clips.size()) ? &t.clips[clipIndex] : nullptr;
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return nullptr;
+    const SessionSlot& s = t.sessionSlots[scene];
+    return s.hasClip && s.audio.sample ? &s.audio : nullptr;
+}
+inline AudioClip* audioClipRef(Track& t, int32_t clipIndex) {
+    return const_cast<AudioClip*>(audioClipRef(static_cast<const Track&>(t), clipIndex));
+}
 
 } // namespace nota
