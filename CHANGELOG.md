@@ -19,6 +19,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Type a slider's value:** double-click the number next to a slider in a device card,
+  the clip editor or a rack macro and type the value you want — "−6", "1.5k", "250 ms",
+  "L 30", "1/16". Return sets it, Esc cancels.
 - **Nota Remote — your phone as a controller:** the **Remote** button in the top bar (or
   **View → Connect Phone…**) shows a QR code; scan it with a phone and in five seconds the
   phone plays Nota — pads, keys with the project's scale and chords, an XY pad with tilt, the

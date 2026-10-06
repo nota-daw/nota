@@ -1056,6 +1056,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
+            ("Double-click a slider's value", "Type a value (units like k, ms, dB, L / R work) · Return sets it, Esc cancels"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
             ("Click · ⇧ · ⌥ a Rhythm step", "Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity"),
             ("Click a Rhythm voice", "Select and play it · drop a file on it to load a sample"),

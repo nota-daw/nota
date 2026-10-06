@@ -110,7 +110,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             val.TextAlignment = TextAlignment.Right;
             val.HorizontalAlignment = HorizontalAlignment.Right;
             Control valCtl = val;
-            if (valueClick is not null)
+            if (valueClick is null)
+                ValueEntry.Attach(val, () => P(p), v => Raw(p, v), () => fmt(P(p)), () => Begin(p), () => End(p), RefreshAll);
+            else
             {
                 var box = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = val };
                 box.PointerPressed += (_, e) =>

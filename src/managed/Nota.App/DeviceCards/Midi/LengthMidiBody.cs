@@ -181,6 +181,8 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             lenTrack.GestureBegin += () => { lenGesture = LenParam(G); Begin(lenGesture); };
             lenTrack.GestureEnd += () => { if (lenGesture >= 0) End(lenGesture); lenGesture = -1; };
             ToolTip.SetTip(lenTrack, "Length — drag up / down, double-click resets");
+            ValueEntry.Attach(bigVal, () => LenNorm(G), n => S(LenParam(G), LenFromNorm(G, n)), () => LenValue(G),
+                () => { lenGesture = LenParam(G); Begin(lenGesture); }, () => { End(lenGesture); lenGesture = -1; }, Refresh);
             readouts.Add(() =>
             {
                 bigVal.Text = LenValue(G); bigSub.Text = LenSub(G, Bpm());
@@ -373,6 +375,8 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             trk.GestureEnd += () => End(p);
             Learn(trk, p, label);
             ToolTip.SetTip(trk, $"{label} — drag up / down, double-click resets");
+            ValueEntry.Attach(v, toNorm, n => S(p, fromNorm(n)), () => bipolar ? Signed(G(p)) : $"±{Math.Round(G(p) * 100):0}\u2009%",
+                () => Begin(p), () => End(p), Refresh);
             readouts.Add(() =>
             {
                 double x = G(p);

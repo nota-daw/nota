@@ -141,6 +141,9 @@ internal sealed class StrataDeviceBody : IDeviceBody
             slider.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
             slider.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
             MidiLearn.Bind(slider, MidiTarget.DeviceParam(track, di, p), name);
+            ValueEntry.Attach(val, () => NormOf(P(p)), n => SetR(p, (float)ValOf(n)), () => fmt(P(p)),
+                () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
+                () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""), Vis);
             readouts.Add(() => { if (!slider.Dragging) Vis(); });
             Vis();
             var lbl = new TextBlock { Text = name.ToUpperInvariant(), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.RowLabelTracking, Foreground = TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center };

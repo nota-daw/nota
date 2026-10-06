@@ -236,6 +236,9 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             freeTrack.GestureBegin += () => Begin(GFreeRate); freeTrack.GestureEnd += () => End(GFreeRate);
             Learn(freeTrack, GFreeRate, "Free rate");
             var freeVal = Mono("", Txt); freeVal.Width = 40; freeVal.TextAlignment = TextAlignment.Right;
+            ValueEntry.Attach(freeVal, () => (FreeMs(G(GFreeRate)) - FreeMsMin) / (FreeMsMax - FreeMsMin),
+                n => S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin))), () => $"{FreeMs(G(GFreeRate)):0}\u2009ms",
+                () => Begin(GFreeRate), () => End(GFreeRate), Refresh);
             var freeRow = new DockPanel { Children = { WithDock(freeVal, Dock.Right), freeTrack } };
             var rateHost = new Panel { Margin = new Thickness(4, 0, 0, 0), Children = { rateGrid, freeRow } };
             var rateStrip = new DockPanel { Height = 16, Margin = new Thickness(0, 4, 0, 0), Children = { WithDock(mode, Dock.Left), rateHost } };
@@ -409,6 +412,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             track.Changed += n => { S(p, fromNorm(n)); Refresh(); };
             track.GestureBegin += () => Begin(p); track.GestureEnd += () => End(p);
             Learn(track, p, label);
+            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Refresh);
             readouts.Add(() =>
             {
                 double v = G(p);

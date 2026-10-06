@@ -322,7 +322,7 @@ internal static class ClipEditorKit
         CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 0), Child = child,
     };
 
-    /// <summary>A shell slider row: caps label · 3px track · fixed-width mono value.</summary>
+    /// <summary>A shell slider row: caps label · 3px track · fixed-width mono value (double-click to type).</summary>
     public static Grid SliderRow(string label, double labelW, Func<double> norm, Action<double> setNorm, Func<string> text,
         out Action sync, Action? reset = null, double valueW = 36, Func<bool>? dim = null)
     {
@@ -347,6 +347,7 @@ internal static class ClipEditorKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
+        ValueEntry.Attach(val, norm, setNorm, text, after: Paint);
         var g = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10 };
         g.Children.Add(lbl);
         Grid.SetColumn(track, 1); g.Children.Add(track);

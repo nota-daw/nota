@@ -277,6 +277,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Learn(trk, p);
                 ToolTip.SetTip(trk, tip);
                 var val = Mono(fmt(), 8, TextPrimary); val.TextAlignment = TextAlignment.Right; val.HorizontalAlignment = HorizontalAlignment.Right;
+                // Range's read-out sits in its flip arrow, which a click toggles — it stays click-only.
+                if (valueCtl is null)
+                    ValueEntry.Attach(val, getN, setN, fmt, () => Begin(p), () => End(p), () => { RefreshAll(); curve.InvalidateVisual(); });
                 var lbl = Caps(label);
                 bandReadouts.Add(() =>
                 {
