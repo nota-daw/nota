@@ -58,6 +58,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   keeps its trim and warp. Right-click a column header, a slot or the empty grid to add an
   instrument, audio or return track (or rename / delete one). All of it is saved with the
   project and reachable over MCP.
+- **Count-in:** right-click the metronome button to set 1, 2 or 4 bars of clicks before
+  playback starts. Play and Record from stop count in first — the clicks sound even with the
+  metronome off, the position readout counts −2.1 … −1.4 up to the start, and Stop cancels it.
+  A take begins when the transport rolls, so the count-in is never recorded; exports and
+  freezes never count in. The setting is remembered across sessions.
 
 ### Changed
 - **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch

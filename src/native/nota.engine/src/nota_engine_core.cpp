@@ -108,6 +108,15 @@ float nota_engine_cpu_load(const NotaEngine* e) {
 NotaResult nota_transport_play(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->transportPlay(); return NOTA_OK;
 }
+NotaResult nota_transport_play_count_in(NotaEngine* e) {
+    if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->transportPlayCountIn(); return NOTA_OK;
+}
+NotaResult nota_transport_set_count_in(NotaEngine* e, int32_t bars) {
+    if (!e || bars < 0) return NOTA_ERR_INVALID_ARG; ENG(e)->setCountInBars(bars); return NOTA_OK;
+}
+double nota_transport_count_in_beats(const NotaEngine* e) {
+    return e ? CENG(e)->countInBeatsRemaining() : 0.0;
+}
 NotaResult nota_transport_stop(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->transportStop(); return NOTA_OK;
 }

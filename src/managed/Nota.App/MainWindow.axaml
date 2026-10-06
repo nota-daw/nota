@@ -225,7 +225,9 @@
              engaged state turns the glyph brass through the base ToggleButton:checked. -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
           <!-- Metronome: body, pendulum rod, weight -->
-          <ToggleButton Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}" ToolTip.Tip="Turn the metronome on or off (M)">
+          <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
+                        ContextRequested="OnMetronomeContext"
+                        ToolTip.Tip="Turn the metronome on or off (M) · right-click for count-in">
             <Viewbox Width="15" Height="15">
               <Canvas Width="24" Height="24">
                 <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"

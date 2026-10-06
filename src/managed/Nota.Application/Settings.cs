@@ -36,6 +36,9 @@ public sealed class Settings
     public bool ShowWelcomeOnStartup { get; set; } = true;
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
+    /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from
+    /// the metronome button's right-click menu.</summary>
+    public int CountInBars { get; set; }
     /// <summary>Run the built-in MCP server so an AI (Claude Desktop / Claude Code) can drive the
     /// live app. Off by default; loopback-only. Toggled in Preferences.</summary>
     public bool McpEnabled { get; set; }

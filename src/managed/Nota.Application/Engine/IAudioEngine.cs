@@ -22,6 +22,13 @@ public interface IAudioEngine : IDisposable
 
     // --- Transport ---------------------------------------------------------
     void Play();
+    /// <summary>Play, preceded by the count-in when one is set and the transport is stopped.
+    /// For user-initiated starts; exports / freezes use <see cref="Play"/>.</summary>
+    void PlayWithCountIn();
+    /// <summary>Count-in length in bars (0 = off). Also applies to Record started from stop.</summary>
+    void SetCountIn(int bars);
+    /// <summary>Beats of count-in still to click (0 = not counting in).</summary>
+    double CountInBeats { get; }
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }

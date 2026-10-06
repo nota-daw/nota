@@ -23,6 +23,7 @@
 #include "Transport.h"
 #include "nota/nota_engine.h"   // NotaNoteData
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <functional>
@@ -261,6 +262,14 @@ public:
     // --- transport (M1) ---
     void transportPlay();
     void transportStop();
+    // Count-in: N bars of clicks before the transport rolls (0 = off). Only a user Play
+    // (transportPlayCountIn) and a Record from stop use it — exports / freezes / session
+    // launches roll immediately. The clicks sound whether or not the metronome is on.
+    void    setCountInBars(int32_t bars) { countInBars_.store(std::clamp(bars, 0, 8), std::memory_order_relaxed); }
+    int32_t countInBars() const { return countInBars_.load(std::memory_order_relaxed); }
+    void    transportPlayCountIn();
+    // Beats of count-in still to click (0 = not counting in). UI poll.
+    double  countInBeatsRemaining() const { return uiCountIn_.load(std::memory_order_relaxed); }
     // Session vs Arrangement (M5): the Arrangement is "active" when the main Play (or an
     // arrangement record) started it. Launching a Session clip starts the clock WITHOUT
     // activating the Arrangement, so non-session tracks stay silent (session-only jam).
@@ -978,6 +987,10 @@ private:
     // sampling by beat (frame = beat·frozenSpb) with linear interpolation.
     void fillFrozen(Track& t, float* dst, int32_t frames, double blockStart, double spb);
     void renderMetronome(float* out, int32_t numFrames, double blockStartSamples);
+    // Click the count-in for numFrames and advance it; true once it has run out.
+    bool renderCountIn(float* out, int32_t numFrames, double spb);
+    void endCountIn();   // audio thread: drop the count-in state and reopen the capture gate
+    void renderClick(float* out, int32_t i, int clickLen, double sr);   // one sample of the click voice
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
 
@@ -1172,6 +1185,12 @@ private:
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
     std::atomic<bool>   arrangementActive_{false};
+    std::atomic<int32_t> countInBars_{0};      // count-in length setting (bars)
+    std::atomic<double>  uiCountIn_{0.0};      // beats of count-in left (UI mirror)
+    // False while a count-in runs: takes started from stop don't capture the clicks-only
+    // pre-roll (the hardware tap and the internal-resampling tap both honour it).
+    std::atomic<bool>    captureGate_{true};
+    bool                 recordCountIn_ = false;   // setRecording → startAudioRecording: count-in pending
     void playClock();   // push a TransportPlay command without touching arrangementActive_
     void finalizeSessionRecord(bool relaunch);   // materialise an in-progress session take
     // Build a fresh graph with a new scene count, cloning tracks so slot vectors resize safely.
@@ -1246,6 +1265,10 @@ private:
     double tonePhase_   = 0.0;
     float  toneLevel_   = 0.0f;   // 0..1 fade so start/stop don't click
     int64_t lastBeatEmitted_ = -1;
+    bool    countInActive_ = false;   // clicking the count-in; the transport starts when it runs out
+    double  countInPos_ = 0.0;        // beats clicked so far
+    double  countInTotal_ = 0.0;      // beats to click
+    int64_t lastCountInBeat_ = -1;
     int    clickRemaining_ = 0;
     double clickPhase_ = 0.0;
     double clickFreq_ = 1000.0;

@@ -575,6 +575,53 @@ Check(Rms(buf, frames) > 1e-3f, "metronome produces clicks");
 engine.SetMetronome(false);
 engine.SetTrackMute(track, false);
 
+// --- count-in: clicks first, then the transport rolls on the exact sample ---
+{
+    engine.SetTrackMute(track, true);
+    engine.StopTransport();
+    engine.Seek(2.0);
+    engine.RenderOffline(buf, 256);               // drain the stop/seek
+    double sr = engine.SampleRate > 0 ? engine.SampleRate : 44100.0, spb = sr * 60.0 / 120.0;   // offline default rate
+    int ciFrames = (int)Math.Round(4 * spb);      // 1 bar of 4/4 at 120 BPM
+    engine.Play();                                // plain Play never counts in (exports, freezes)
+    engine.RenderOffline(buf, 256);
+    Check(engine.IsPlaying && engine.CountInBeats == 0, "count-in: plain Play rolls at once");
+    engine.StopTransport(); engine.Seek(2.0); engine.RenderOffline(buf, 256);
+
+    engine.SetCountIn(1);
+    engine.PlayWithCountIn();
+    Check(engine.CountInBeats > 0, "count-in: armed immediately");
+    const int chunk = 512;
+    var cbuf = new float[chunk * 2];
+    int rendered = 0; float clickRms = 0; bool silentStop = true;
+    while (!engine.IsPlaying && rendered < ciFrames * 2)
+    {
+        engine.RenderOffline(cbuf, chunk);
+        rendered += chunk;
+        clickRms = Math.Max(clickRms, Rms(cbuf, chunk));
+        if (!engine.IsPlaying && Math.Abs(engine.PositionBeats - 2.0) > 1e-9) silentStop = false;
+    }
+    Check(clickRms > 1e-3f, "count-in: clicks sound with the metronome off");
+    Check(silentStop, "count-in: playhead holds while counting in");
+    Check(engine.IsPlaying && engine.CountInBeats == 0, $"count-in: transport rolls after the bar ({rendered} frames)");
+    double rolled = (engine.PositionBeats - 2.0) * spb;
+    Check(Math.Abs(rendered - ciFrames - rolled) <= 1.0,
+          $"count-in: starts sample-accurately (rolled {rolled:F1} of {rendered - ciFrames} frames)");
+
+    engine.StopTransport(); engine.Seek(2.0); engine.RenderOffline(buf, 256);
+    engine.PlayWithCountIn();
+    engine.RenderOffline(cbuf, chunk);
+    engine.StopTransport();                       // Stop cancels a running count-in
+    engine.RenderOffline(cbuf, chunk);
+    Check(!engine.IsPlaying && engine.CountInBeats == 0, "count-in: Stop cancels it");
+    engine.RenderOffline(buf, ciFrames > frames ? frames : ciFrames);
+    Check(!engine.IsPlaying, "count-in: cancelled count-in never starts the transport");
+
+    engine.SetCountIn(0);
+    engine.Seek(0);
+    engine.SetTrackMute(track, false);
+}
+
 // --- loop region mirror (for the arrangement highlight + transport bar) ---
 engine.SetLoop(true, 4.0, 12.0);
 Check(engine.LoopEnabled && Math.Abs(engine.LoopStart - 4.0) < 1e-9 && Math.Abs(engine.LoopEnd - 12.0) < 1e-9,
@@ -11938,6 +11985,33 @@ Console.WriteLine("-- record from another track --");
     var pb = new float[8192 * 2];
     re.RenderOffline(pb, 8192); re.StopTransport();
     Check(Rms(pb, 8192) > 0.001f, $"recorded internal clip plays back audible (RMS {Rms(pb, 8192):F3})");
+}
+
+// ============ record with a count-in: the take starts when the transport rolls ====
+Console.WriteLine("-- record with count-in --");
+{
+    using var re = new NotaEngine();
+    re.SetBpm(120); re.SetTimeSignature(4, 4);
+    int rinst = re.AddBassSynthTrack();
+    int mc = re.AddMidiClip(rinst, 0, 8);
+    re.SetClipNotes(rinst, mc, new[] { new NotaNote(36, 0.0, 8.0, 1.0f) });
+    int rrec = re.AddAudioTrack();
+    re.SetTrackRecordInput(rrec, rinst);
+    re.SetTrackArmed(rrec, true);
+    re.SetCountIn(1);
+    re.Seek(0);
+    re.SetRecording(true);
+    Check(!re.IsPlaying && re.CountInBeats > 0, "record count-in: the take waits for the count-in");
+    const int blk = 2048, blocks = 60;               // 122880 frames; the bar takes 88200 @ 44.1k
+    var cap = new float[blk * 2];
+    for (int b = 0; b < blocks; b++) { re.RenderOffline(cap, blk); re.Poll(); }
+    Check(re.IsPlaying, "record count-in: transport rolled after the bar");
+    re.SetRecording(false);
+    re.Poll();
+    double expect = (blk * blocks - 4 * 22050.0) / 22050.0;   // beats captured after the count-in
+    Check(re.TryGetClipInfo(rrec, 0, out var rci) && Math.Abs(rci.StartBeat) < 1e-6
+          && Math.Abs(rci.LengthBeats - expect) < 0.1,
+          $"record count-in: take excludes the count-in (start {rci.StartBeat:F3}, {rci.LengthBeats:F3} ≈ {expect:F3} beats)");
 }
 
 // ============ record-input source survives a project round-trip ============

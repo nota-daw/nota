@@ -417,6 +417,12 @@ NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
+/* Count-in: `bars` of clicks (0 = off) before a play_count_in / a record started from
+ * stop rolls the transport. Plain nota_transport_play never counts in (exports etc.).
+ * count_in_beats = beats still to click (0 when not counting in). */
+NOTA_API NotaResult nota_transport_play_count_in(NotaEngine* engine);
+NOTA_API NotaResult nota_transport_set_count_in(NotaEngine* engine, int32_t bars);
+NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);

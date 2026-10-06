@@ -33,6 +33,10 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private double _masterVolume = 1.0;
     [ObservableProperty] private string _masterDbText = "0.0\u2009dB";
     [ObservableProperty] private bool _metronomeOn;
+    /// <summary>Bars of count-in before Play / Record from stop (0 = off).</summary>
+    [ObservableProperty] private int _countInBars;
+    /// <summary>The count-in is clicking (the transport hasn't rolled yet).</summary>
+    [ObservableProperty] private bool _isCountingIn;
     [ObservableProperty] private bool _loopOn;
     [ObservableProperty] private string _loopRangeText = "1.1 – 5.1";
     [ObservableProperty] private bool _recordOn;
@@ -71,6 +75,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             : (20.0 * Math.Log10(value)).ToString("0.0", CultureInfo.CurrentCulture) + "\u2009dB";
     }
     partial void OnMetronomeOnChanged(bool value) => _engine.SetMetronome(value);
+    partial void OnCountInBarsChanged(int value) => _engine.SetCountIn(value);
 
     partial void OnLoopOnChanged(bool value)
     {
@@ -135,19 +140,19 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [RelayCommand]
     private void PlayStop()
     {
-        if (_engine.IsPlaying || RecordOn) StopAll();
-        else _engine.Play();
+        if (_engine.IsPlaying || _engine.CountInBeats > 0 || RecordOn) StopAll();
+        else _engine.PlayWithCountIn();
     }
 
     [RelayCommand]
-    private void Play() => _engine.Play();
+    private void Play() => _engine.PlayWithCountIn();
 
     [RelayCommand]
     private void Stop()
     {
         // First press stops (pause at position); a second press while already
         // stopped returns the playhead to the start (1.1) — classic DAW behaviour.
-        if (!_engine.IsPlaying && !RecordOn) { _engine.Seek(0); return; }
+        if (!_engine.IsPlaying && !RecordOn && _engine.CountInBeats <= 0) { _engine.Seek(0); return; }
         StopAll();
     }
 
@@ -170,6 +175,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     public void ToggleTimeDisplay()
     {
         ShowTimeDisplay = !ShowTimeDisplay;
+        if (IsCountingIn) return;         // the readout is showing the count-in; Tick restores it
         PositionUnitText = ShowTimeDisplay ? "time" : "bars";
         UpdatePositionText(_lastBeats);   // reflect immediately, don't wait for the next tick
     }
@@ -179,9 +185,25 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     {
         double beats = _engine.PositionBeats;
         _lastBeats = beats;
-        UpdatePositionText(beats);
-        IsPlaying = _engine.IsPlaying;
+        double countIn = _engine.CountInBeats;
+        bool wasCounting = IsCountingIn;
+        IsCountingIn = countIn > 0;
+        if (IsCountingIn) PositionText = CountInText(countIn);
+        else UpdatePositionText(beats);
+        if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? "count-in" : ShowTimeDisplay ? "time" : "bars";
+        IsPlaying = _engine.IsPlaying || IsCountingIn;   // the Play button lights from the first click
         PlayLabel = IsPlaying ? "■ Stop" : "▶ Play";
+    }
+
+    /// <summary>The count-in as negative bars counting up to the start: −2.1 … −2.4, −1.1 … −1.4.</summary>
+    private string CountInText(double remainingBeats)
+    {
+        int bpb = Math.Max(1, TimeSigNumerator);
+        int left = (int)Math.Ceiling(remainingBeats - 1e-6);   // beats left, the sounding one included
+        if (left < 1) left = 1;
+        int bar = (left + bpb - 1) / bpb;
+        int beat = bpb - (left - 1) % bpb;
+        return $"\u2212{bar}.{beat}";
     }
 
     private void UpdatePositionText(double beats)

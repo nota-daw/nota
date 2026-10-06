@@ -67,6 +67,9 @@ public sealed partial class NotaEngine : IAudioEngine
     // --- Transport ---------------------------------------------------------
 
     public void Play()  { ThrowIfDisposed(); Check(NativeMethods.TransportPlay(_handle)); }
+    public void PlayWithCountIn() { ThrowIfDisposed(); Check(NativeMethods.TransportPlayCountIn(_handle)); }
+    public void SetCountIn(int bars) { ThrowIfDisposed(); Check(NativeMethods.SetCountIn(_handle, Math.Max(0, bars))); }
+    public double CountInBeats { get { ThrowIfDisposed(); return NativeMethods.CountInBeats(_handle); } }
     public void StopTransport() { ThrowIfDisposed(); Check(NativeMethods.TransportStop(_handle)); }
     public void SetBpm(double bpm) { ThrowIfDisposed(); Check(NativeMethods.SetBpm(_handle, bpm)); }
     public double Bpm { get { ThrowIfDisposed(); return NativeMethods.TransportBpm(_handle); } }

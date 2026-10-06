@@ -216,14 +216,31 @@ void Engine::renderOffline(float* out, int32_t frames) {
     processBlock(out, frames);
 }
 
+void Engine::endCountIn() {
+    countInActive_ = false;
+    uiCountIn_.store(0.0, std::memory_order_relaxed);
+    captureGate_.store(true, std::memory_order_relaxed);
+}
+
 void Engine::drainCommands() {
     Command c;
     while (commands_.pop(c)) {
         switch (c.type) {
             case CommandType::SetToneEnabled:   toneEnabled_ = (c.i0 != 0); break;
             case CommandType::SetFrequency:     frequency_ = c.f0; break;
-            case CommandType::TransportPlay:    transport_.play(); break;
-            case CommandType::TransportStop:    transport_.stop(); break;
+            case CommandType::TransportPlay:
+                if (c.i0 > 0 && !transport_.isPlaying()) {   // count-in first (i0 = bars)
+                    countInActive_ = true;
+                    countInPos_ = 0.0;
+                    countInTotal_ = static_cast<double>(c.i0) * std::max(1, transport_.beatsPerBar());
+                    lastCountInBeat_ = -1;
+                    uiCountIn_.store(countInTotal_, std::memory_order_relaxed);
+                } else {
+                    endCountIn();
+                    transport_.play();
+                }
+                break;
+            case CommandType::TransportStop:    endCountIn(); transport_.stop(); break;
             case CommandType::SetBpm:           transport_.setBpm(c.d0); break;
             case CommandType::SetTimeSignature: transport_.setTimeSignature(c.i0, c.i1); break;
             case CommandType::SetLoop:          transport_.setLoop(c.i0 != 0, c.d0, c.d1); break;
@@ -723,7 +740,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     const double sr = transport_.sampleRate();
     const double spb = transport_.samplesPerBeat();
-    const bool playing = transport_.isPlaying();
+    bool playing = transport_.isPlaying();   // flips to true mid-block when a count-in runs out
 
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
@@ -766,13 +783,29 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             const double toEnd = transport_.loopEndSamples() - transport_.playheadSamples();
             if (toEnd > 0.5 && toEnd < seg) seg = std::max(1, static_cast<int32_t>(std::lround(toEnd)));
         }
+        // End the segment where the count-in runs out, so the transport rolls on that sample.
+        if (countInActive_ && spb > 0.0) {
+            const double left = (countInTotal_ - countInPos_) * spb;
+            if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
+        }
         const double segStart = transport_.playheadSamples();
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = false;
+        bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
+        else if (countInActive_) countInDone = renderCountIn(out + done * 2, seg, spb);
         transport_.advanceBy(seg);
         done += seg;
+        if (countInDone) {
+            endCountIn();
+            transport_.play();
+            // Let the metronome click the beat we launch on (not when starting mid-beat).
+            const double b = transport_.playheadSamples() / spb;
+            const int64_t fb = static_cast<int64_t>(std::floor(b));
+            lastBeatEmitted_ = (b - fb < 1e-6) ? fb - 1 : fb;
+            playing = chase = renderWasPlaying_ = true;
+        }
     }
 
     // Declick each loop seam: the playhead jumps and sounding voices are cut at the
@@ -881,7 +914,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
-        const int32_t recSrc = internalRecordSource_.load(std::memory_order_relaxed);
+        const int32_t recSrc = countInActive_ ? 0 : internalRecordSource_.load(std::memory_order_relaxed);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
@@ -1255,6 +1288,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
     }
 }
 
+void Engine::renderClick(float* out, int32_t i, int clickLen, double sr) {
+    if (clickRemaining_ <= 0) return;
+    const float env = static_cast<float>(clickRemaining_) / static_cast<float>(clickLen);
+    const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain;
+    out[i * 2] += s; out[i * 2 + 1] += s;
+    clickPhase_ += kTwoPi * clickFreq_ / sr;
+    if (clickPhase_ >= kTwoPi) clickPhase_ -= kTwoPi;
+    --clickRemaining_;
+}
+
 void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSamples) {
     if (!transport_.metronomeEnabled()) return;
     const double sr = transport_.sampleRate();
@@ -1273,15 +1316,33 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
                 clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
             }
         }
-        if (clickRemaining_ > 0) {
-            const float env = static_cast<float>(clickRemaining_) / static_cast<float>(clickLen);
-            const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain;
-            out[i * 2] += s; out[i * 2 + 1] += s;
-            clickPhase_ += kTwoPi * clickFreq_ / sr;
-            if (clickPhase_ >= kTwoPi) clickPhase_ -= kTwoPi;
-            --clickRemaining_;
-        }
+        renderClick(out, i, clickLen, sr);
     }
+}
+
+// Count-in clicks: same voice as the metronome, accent on each bar's first beat. Sounds
+// regardless of the metronome switch; the transport is stopped meanwhile.
+bool Engine::renderCountIn(float* out, int32_t numFrames, double spb) {
+    const double sr = transport_.sampleRate();
+    const int beatsPerBar = std::max(1, transport_.beatsPerBar());
+    const int clickLen = static_cast<int>(0.03 * sr);
+    const double inc = spb > 0.0 ? 1.0 / spb : 0.0;
+
+    for (int32_t i = 0; i < numFrames; ++i) {
+        if (countInPos_ < countInTotal_) {
+            const int64_t beat = static_cast<int64_t>(countInPos_ + 1e-9);
+            if (beat != lastCountInBeat_) {
+                lastCountInBeat_ = beat;
+                clickRemaining_ = clickLen;
+                clickPhase_ = 0.0;
+                clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
+            }
+        }
+        renderClick(out, i, clickLen, sr);
+        countInPos_ += inc;
+    }
+    uiCountIn_.store(std::max(0.0, countInTotal_ - countInPos_), std::memory_order_relaxed);
+    return inc <= 0.0 || countInPos_ >= countInTotal_ - 0.5 * inc;
 }
 
 void Engine::renderTone(float* out, int32_t numFrames) {

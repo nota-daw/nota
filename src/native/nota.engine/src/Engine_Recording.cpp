@@ -71,7 +71,8 @@ bool Engine::ensureAudioInput() {
     return input_->start([this](const float* s, int32_t n) {
         if (n > inputBlockFrames_.load(std::memory_order_relaxed))
             inputBlockFrames_.store(n, std::memory_order_relaxed);
-        if (hwRecordTap_.load(std::memory_order_relaxed)) {
+        // The gate is shut while a count-in clicks: the take starts when the transport rolls.
+        if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_relaxed)) {
             int64_t dropped = 0;
             for (int32_t i = 0; i < n; ++i)
                 if (!inputQueue_.push(InputFrame{ s[i * 2], s[i * 2 + 1] })) ++dropped;
@@ -217,6 +218,9 @@ void Engine::setRecording(bool on) {
     }
     if (!audioT && !instT) { recording_.store(false, std::memory_order_relaxed); recordStartStatus_ = 1; return; }
 
+    // A take started from stop gets the count-in (if one is set); the capture taps stay
+    // gated until it runs out, so the clicks-only pre-roll isn't recorded.
+    recordCountIn_ = !wasPlaying && !recordSessionAudio_ && countInBars() > 0;
     bool audioOk = true;
     if (audioT) audioOk = startAudioRecording(audioT->id());
 
@@ -246,7 +250,10 @@ void Engine::setRecording(bool on) {
         recordReturnBeat_ = playhead;
         recordStartedTransport_ = !wasPlaying;
     }
-    if (!wasPlaying) transportPlay();   // roll so the take advances (idempotent if already rolling)
+    if (!wasPlaying) {   // roll so the take advances (idempotent if already rolling)
+        if (recordCountIn_) transportPlayCountIn(); else transportPlay();
+    }
+    recordCountIn_ = false;
     recordStartStatus_ = (audioT && !audioOk && !instT) ? 2 : 0;
 }
 
@@ -353,7 +360,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
             recordReturnBeat_ = audioRecordStartBeat_;
             recordStartedTransport_ = !transport_.uiIsPlaying();
         }
-        if (!transport_.uiIsPlaying()) transportPlay();
+        if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();
         return true;
     }
 
@@ -371,7 +378,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
         recordReturnBeat_ = audioRecordStartBeat_;
         recordStartedTransport_ = !transport_.uiIsPlaying();
     }
-    if (!transport_.uiIsPlaying()) transportPlay();
+    if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();   // else setRecording counts in
     return true;
 }
 

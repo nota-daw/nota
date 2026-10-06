@@ -291,6 +291,7 @@ public partial class MainWindow : Window
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
+        vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         // Settings → Appearance can switch the waveform style while the arrangement is open.
         vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
@@ -563,6 +564,30 @@ public partial class MainWindow : Window
         var k = _vm?.Transport.Key;
         KeyLabel.Text = k?.Short ?? "\u2014";
         KeyLabel.BindResource(TextBlock.ForegroundProperty, k is null ? "Brush.TextTertiary" : "Brush.TextPrimary");
+    }
+
+    private static readonly (int Bars, string Label)[] CountInSteps =
+        [(0, "No count-in"), (1, "Count-in: 1 bar"), (2, "Count-in: 2 bars"), (4, "Count-in: 4 bars")];
+
+    // Right-click on the metronome: how many bars of clicks precede Play / Record from stop.
+    // The count-in sounds whether or not the metronome itself is on.
+    private void OnMetronomeContext(object? sender, ContextRequestedEventArgs e)
+    {
+        e.Handled = true;
+        if (_vm is not { } vm) return;
+        var f = new MenuFlyout();
+        foreach (var (bars, label) in CountInSteps)
+        {
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = vm.Transport.CountInBars == bars };
+            mi.Click += (_, _) =>
+            {
+                vm.Transport.CountInBars = bars;
+                vm.Settings.Current.CountInBars = bars;
+                vm.Settings.Save();
+            };
+            f.Items.Add(mi);
+        }
+        f.ShowAt(MetronomeBtn);
     }
 
     private void OnCycleSnap(object? sender, RoutedEventArgs e)
