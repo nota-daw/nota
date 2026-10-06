@@ -158,6 +158,7 @@ public partial class MainWindow
         // the app; the OS window title keeps both for the Dock and window switcher.
         DocTitleText.Text = "Nota";
         ProjectNameText.Text = ProjectDisplayName();
+        RequestTransportFit();
     }
 
     /// <summary>A crash-recovery snapshot to offer on open (set by App at launch). M7-7.</summary>

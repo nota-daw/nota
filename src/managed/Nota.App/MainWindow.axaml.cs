@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         }
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
+        InitTransportFit();
         // Platform-specific window icon: Windows/Linux get the .ico bundle from
         // assets/icons/windows so the taskbar / alt-tab shows the brand mark. macOS
         // uses the .icns produced by scripts/bundle-mac.sh for the dock/Finder.
@@ -717,6 +718,6 @@ public partial class MainWindow : Window
     internal void SyncReenableAutomation()
     {
         bool on = _vm is { } vm && vm.Engine.AutomationOverridden;
-        if (ReenableAutoBtn.IsVisible != on) ReenableAutoBtn.IsVisible = on;
+        if (ReenableAutoBtn.IsVisible != on) { ReenableAutoBtn.IsVisible = on; RequestTransportFit(); }
     }
 }
