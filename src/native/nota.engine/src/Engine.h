@@ -23,11 +23,13 @@
 #include "Transport.h"
 #include "nota/nota_engine.h"   // NotaNoteData
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -37,7 +39,9 @@ namespace nota {
 class RackCore;   // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
 class ClipWarpStream;   // offline warp-cache builder (WarpStream.h); held by unique_ptr in wb_
 
-struct MidiEvent { bool on; int32_t pitch; float velocity; };
+// trackId -1 = ordinary live input (armed / audition tracks); >= 0 = addressed to that
+// one track whatever its arm state (a Nota Remote phone playing its own track).
+struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; };
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
@@ -258,6 +262,14 @@ public:
     // --- transport (M1) ---
     void transportPlay();
     void transportStop();
+    // Count-in: N bars of clicks before the transport rolls (0 = off). Only a user Play
+    // (transportPlayCountIn) and a Record from stop use it — exports / freezes / session
+    // launches roll immediately. The clicks sound whether or not the metronome is on.
+    void    setCountInBars(int32_t bars) { countInBars_.store(std::clamp(bars, 0, 8), std::memory_order_relaxed); }
+    int32_t countInBars() const { return countInBars_.load(std::memory_order_relaxed); }
+    void    transportPlayCountIn();
+    // Beats of count-in still to click (0 = not counting in). UI poll.
+    double  countInBeatsRemaining() const { return uiCountIn_.load(std::memory_order_relaxed); }
     // Session vs Arrangement (M5): the Arrangement is "active" when the main Play (or an
     // arrangement record) started it. Launching a Session clip starts the clock WITHOUT
     // activating the Arrangement, so non-session tracks stay silent (session-only jam).
@@ -393,6 +405,36 @@ public:
     bool    setSessionNotes(int32_t trackId, int32_t scene, const NotaNoteData* notes, int32_t count);
     int32_t getSessionNotes(int32_t trackId, int32_t scene, NotaNoteData* out, int32_t maxNotes) const;
     int32_t sessionNoteCount(int32_t trackId, int32_t scene) const;
+    // Session P0: clip + scene properties, scene/slot editing, follow, fixed-length capture.
+    bool    sessionClipProps(int32_t trackId, int32_t scene, NotaSessionClipProps* out) const;
+    bool    setSessionClipProps(int32_t trackId, int32_t scene, const NotaSessionClipProps& p);
+    bool    sessionClipName(int32_t trackId, int32_t scene, std::string& out) const;
+    bool    setSessionClipName(int32_t trackId, int32_t scene, const std::string& name);
+    bool    sessionSlotStopButton(int32_t trackId, int32_t scene) const;
+    bool    setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on);
+    bool    copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene);
+    bool    sceneProps(int32_t scene, NotaSceneProps* out) const;
+    bool    setSceneProps(int32_t scene, const NotaSceneProps& p);
+    bool    sceneName(int32_t scene, std::string& out) const;
+    bool    setSceneName(int32_t scene, const std::string& name);
+    int32_t insertScene(int32_t at);
+    int32_t duplicateScene(int32_t scene);
+    int32_t captureScene(int32_t at);
+    bool    moveScene(int32_t from, int32_t to);
+    void    launchSlotVel(int32_t trackId, int32_t scene, float velocity);
+    void    releaseSlot(int32_t trackId, int32_t scene);
+    void    trackBackToArrangement(int32_t trackId);
+    int32_t sessionPlayingSlot(int32_t trackId) const;
+    double  sessionSlotPosition(int32_t trackId) const;
+    double  launchQuant() const { return launchQuant_.load(std::memory_order_relaxed); }
+    void    setSessionFollow(bool on) { sessionFollow_.store(on, std::memory_order_relaxed); }
+    bool    sessionFollow() const { return sessionFollow_.load(std::memory_order_relaxed); }
+    void    setSessionRecordLength(double beats) { sessionRecordLen_ = beats > 0.0 ? beats : 0.0; }
+    double  sessionRecordLength() const { return sessionRecordLen_; }
+    int32_t recordSessionScene(int32_t scene);
+    bool    sessionRecordTarget(int32_t* trackId, int32_t* scene, double* elapsed) const;
+    int32_t sessionSlotPeaks(int32_t trackId, int32_t scene, float* outMinMax, int32_t maxPoints) const;
+    bool    takeSceneTempoChange(double* bpm, int32_t* num, int32_t* den);   // once per applied scene tempo
 
     // --- clip editing (M4-2) ---
     bool    moveClip(int32_t trackId, int32_t clipIndex, double newStartBeat);
@@ -845,6 +887,10 @@ public:
     int32_t trackMidiSource(int32_t trackId) const;
     void noteOn(int32_t pitch, float velocity);         // lock-free
     void noteOff(int32_t pitch);                         // lock-free
+    // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
+    // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
+    void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
+    void trackNoteOff(int32_t trackId, int32_t pitch);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
@@ -923,6 +969,12 @@ private:
     // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
+    // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch
+    // request applies, and after rendering advance the player + end a one-shot slot.
+    void sessionPreApply(Track& t, double blockBeats);
+    void sessionPostRender(Track& t, double blockBeats);
+    int32_t followTarget(const Track& t, int32_t cur, FollowAction a);
+    uint32_t followRng_ = 0x9E3779B9u;   // audio-thread RNG for follow-action chance / Any / Other
     int  applyMidiEffects(Track& t, MidiEv* evs, int n, MidiEv* scratch,
                           int32_t frames, double beatStart, double spb, bool playing);
     void applyMidiCcRouting(Track& t);
@@ -935,6 +987,10 @@ private:
     // sampling by beat (frame = beat·frozenSpb) with linear interpolation.
     void fillFrozen(Track& t, float* dst, int32_t frames, double blockStart, double spb);
     void renderMetronome(float* out, int32_t numFrames, double blockStartSamples);
+    // Click the count-in for numFrames and advance it; true once it has run out.
+    bool renderCountIn(float* out, int32_t numFrames, double spb);
+    void endCountIn();   // audio thread: drop the count-in state and reopen the capture gate
+    void renderClick(float* out, int32_t i, int clickLen, double sr);   // one sample of the click voice
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
 
@@ -995,6 +1051,8 @@ private:
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
     CommandQueue                  commands_;
     MidiQueue                     liveMidi_;
+    MidiQueue                     remoteMidi_;      // track-addressed notes (any thread → audio)
+    std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
     ControlEventQueue             midiControl_;   // incoming CC/note-on for MIDI-learn (AR-6)
     Transport                     transport_;
@@ -1127,14 +1185,46 @@ private:
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
     std::atomic<bool>   arrangementActive_{false};
+    std::atomic<int32_t> countInBars_{0};      // count-in length setting (bars)
+    std::atomic<double>  uiCountIn_{0.0};      // beats of count-in left (UI mirror)
+    // False while a count-in runs: takes started from stop don't capture the clicks-only
+    // pre-roll (the hardware tap and the internal-resampling tap both honour it).
+    std::atomic<bool>    captureGate_{true};
+    bool                 recordCountIn_ = false;   // setRecording → startAudioRecording: count-in pending
     void playClock();   // push a TransportPlay command without touching arrangementActive_
     void finalizeSessionRecord(bool relaunch);   // materialise an in-progress session take
     // Build a fresh graph with a new scene count, cloning tracks so slot vectors resize safely.
     std::shared_ptr<Graph> rebuildScenes(int32_t newCount,
                                          const std::function<void(std::vector<SessionSlot>&)>& mutate);
+    // Session P0 helpers (message thread).
+    int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
+    void    remapPlayers(const std::function<int32_t(int32_t)>& map);  // shift players after a row insert/remove
+    void    launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene);
+    void    serviceSessionFollow();   // poll(): scene follow + fixed-length capture
+    std::atomic<bool> sessionFollow_{true};
+    double  sessionRecordLen_ = 0.0;     // fixed session record length, beats (0 = off)
+    int32_t sceneFollowScene_ = -1;      // last launched scene (for scene follow)
+    double  sceneFollowStart_ = 0.0;     // beat it started at (quantized)
+    // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
+    bool    sceneTempoPending_ = false;
+    double  sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;
+    int32_t sceneSigNum_ = 0, sceneSigDen_ = 0;
+    void    applySceneTempo();
+    bool    sceneTempoApplied_ = false;
+    // A fresh MIDI take into an empty slot grows until stopped (no fixed length), then is
+    // cut to whole quanta.
+    static constexpr double kGrowingTakeBeats = 4096.0;
+    bool    recordSessionGrowing_ = false;
+    double  roundedTakeBeats(double beats) const;
+    double  audioClipBeats(const AudioClip& c) const;
+    void    syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
+    // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
+    // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
+    void    mixAudioClip(const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
+    std::atomic<int32_t> recordTrackRt_{-1};   // recordTrackId_ for the audio thread
     int32_t recordClipIndex_ = -1;
     int32_t recordStartStatus_ = 0;   // 0 ok, 1 no armed track, 2 audio input failed
     // When recording auto-starts the transport, stopping the take returns the
@@ -1175,6 +1265,10 @@ private:
     double tonePhase_   = 0.0;
     float  toneLevel_   = 0.0f;   // 0..1 fade so start/stop don't click
     int64_t lastBeatEmitted_ = -1;
+    bool    countInActive_ = false;   // clicking the count-in; the transport starts when it runs out
+    double  countInPos_ = 0.0;        // beats clicked so far
+    double  countInTotal_ = 0.0;      // beats to click
+    int64_t lastCountInBeat_ = -1;
     int    clickRemaining_ = 0;
     double clickPhase_ = 0.0;
     double clickFreq_ = 1000.0;
@@ -1244,6 +1338,10 @@ private:
     static constexpr int kMaxLive = 256;
     MidiEvent liveEvents_[kMaxLive];
     int       liveCount_ = 0;
+    // An event held back to the next block: every live event plays at offset 0 and the
+    // render sorts offs ahead of ons there, so one pitch's on and off must not share a block.
+    MidiEvent liveCarry_{};
+    bool      liveCarried_ = false;
     std::atomic<int32_t> auditionTrackId_{-1};   // live notes also play this track (pad audition)
     // Currently-held live-input pitches (computer keyboard + MIDI), independent of track
     // routing, so the piano roll can highlight the key you're pressing. 128 bits, set/cleared

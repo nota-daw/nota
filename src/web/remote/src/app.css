@@ -1,0 +1,70 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Ember tokens, mirrored from src/managed/Nota.App/Theme/NotaTheme.axaml (Dark / Light).
+   The theme file is definitive: change a value there first, then here. */
+
+@font-face { font-family: 'Geist'; font-weight: 400; font-display: swap; src: url('/fonts/Geist-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'Geist'; font-weight: 500 700; font-display: swap; src: url('/fonts/Geist-SemiBold.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-weight: 400 700; font-display: swap; src: url('/fonts/GeistMono-Medium.woff2') format('woff2'); }
+
+:root, [data-theme='dark'] {
+  --abyss: #0A0908; --app: #0B0A09; --gutter: #0C0B09; --well: #100F0D; --panel: #141310;
+  --card: #171613; --raised: #1C1A16; --hover: #252219; --track-off: #26231E; --selected: #241F17;
+  --hairline: #221F1A; --border: #2C2923; --border-strong: #3A362D; --border-brass: #6B5326;
+  --grid: #1E1C18;
+  --ink0: #F2EDE1; --ink1: #E9E4D8; --ink2: #C7C0B0; --ink3: #A39D8F; --ink4: #8D8779; --ink5: #6E6A5E; --ink6: #55514A;
+  --on-accent: #171613;
+  --accent: #D8A03D; --accent-bright: #F0C060; --accent-dim: #8A6B2E; --accent-edge: #5E4A22; --accent-wash: #241F17;
+  --record: #C25B44; --record-wash: #2A1A16; --record-ink: #E08A72;
+  --danger: #C2554A; --danger-bright: #E08A72; --warning: #D9C34C; --success: #58B368; --success-dim: #7FB069;
+  --steel: #6D8FB5;
+  --white-key: #D9D3C5; --white-key-ink: #55514A;
+  --scrim: rgba(10, 9, 8, 0.6);
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --abyss: #D8D1BE; --app: #DCD6C5; --gutter: #E0DAC9; --well: #E4DFD1; --panel: #EAE5D7;
+  --card: #EFEADE; --raised: #F8F5EC; --hover: #E7E1D0; --track-off: #DBD4C0; --selected: #F2E4C4;
+  --hairline: #D5CFBE; --border: #D5CEBB; --border-strong: #BDB5A0; --border-brass: #C9A254;
+  --grid: #DED8C8;
+  --ink0: #1A150E; --ink1: #241F17; --ink2: #3E382C; --ink3: #5E5849; --ink4: #746D5C; --ink5: #8A8474; --ink6: #9E9786;
+  --on-accent: #FFFBF2;
+  --accent: #A87415; --accent-bright: #744D07; --accent-dim: #9C8034; --accent-edge: #D3B173; --accent-wash: #F2E4C4;
+  --record: #B54A32; --record-wash: #F3DDD4; --record-ink: #A3391B;
+  --danger: #B13E33; --danger-bright: #A3391B; --warning: #837010; --success: #2C7A3E; --success-dim: #609548;
+  --steel: #3E6288;
+  --white-key: #FBF9F3; --white-key-ink: #8A8474;
+  --scrim: rgba(36, 31, 23, 0.35);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden; background: var(--app); color: var(--ink1);
+  font-family: Geist, system-ui, -apple-system, sans-serif; font-size: 13px;
+  -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  overscroll-behavior: none; touch-action: none;
+}
+body { position: fixed; inset: 0; }
+#app { position: fixed; inset: 0; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; touch-action: manipulation; }
+input { font: inherit; color: inherit; user-select: text; -webkit-user-select: text; touch-action: manipulation; }
+.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.caps { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: var(--ink5); text-transform: uppercase; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Shared controls */
+.btn {
+  height: 42px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border-radius: 5px; background: var(--raised); border: 1px solid var(--border); color: var(--ink2);
+  font-size: 12px; font-weight: 600; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+.btn.on { background: var(--accent-wash); border-color: var(--border-brass); color: var(--accent-bright); }
+.seg { display: flex; gap: 2px; background: var(--well); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px; }
+.seg > button { height: 36px; padding: 0 11px; border-radius: 4px; color: var(--ink4); font-size: 12px; font-weight: 600; flex: 1; transition: background-color 120ms ease-out, color 120ms ease-out; }
+.seg > button.on { background: var(--raised); color: var(--ink1); }
+.switch { width: 18px; height: 10px; border-radius: 5px; background: var(--track-off); position: relative; flex: none; display: block; }
+.switch::after { content: ''; position: absolute; top: 1.5px; left: 1.5px; width: 7px; height: 7px; border-radius: 50%; background: var(--ink5); transition: left 120ms ease-out; }
+.switch.on { background: var(--accent); }
+.switch.on::after { left: 9.5px; background: var(--on-accent); }
+.learnable { outline: 1px dashed var(--accent-dim); outline-offset: 2px; }

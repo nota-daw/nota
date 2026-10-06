@@ -27,6 +27,9 @@ public enum NewTrackKind { Instrument, Audio, Return }
 /// <summary>How much of the arrangement names its clips (View ▸ Clip names).</summary>
 public enum ClipLabelMode { Every, RunStart, None }
 
+/// <summary>How audio clips draw their waveform: spaced peak strokes, or a solid column per pixel.</summary>
+public enum WaveformStyle { Bars, Solid }
+
 public sealed partial class ArrangementView : UserControl
 {
     // --- coordinate model / shared state ---
@@ -160,7 +163,7 @@ public sealed partial class ArrangementView : UserControl
     // surface underneath (which is static during playback). See SetPlayhead / Redraw.
     private readonly LaneOverlayControl _overlay;
     private readonly Canvas _headers;
-    private readonly ScrollBar _hScroll;
+    private readonly ThinScrollBar _hScroll;
     // The vertical scroller wrapping [headers | lanes]; its offset/viewport drive row culling
     // in LaneControl.Render so off-screen tracks skip their clip/waveform work.
     private ScrollViewer _scroller = null!;
@@ -200,6 +203,8 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
     /// source, 2 linked frozen. Set by MainWindow; queried while rebuilding headers.</summary>
     public Func<int, int>? FreezeRole;
+    /// <summary>Who plays the track from a phone (Nota Remote), for the header badge; null = nobody.</summary>
+    public Func<int, string?>? PlayerBadge;
     /// <summary>Freeze / Live Freeze entries for a track's context menu (empty when the track
     /// can't be frozen). Built by MainWindow, which owns the freeze state and commands.</summary>
     public Func<int, IReadOnlyList<Control>>? FreezeMenuItems;
@@ -253,12 +258,7 @@ public sealed partial class ArrangementView : UserControl
         // tall as the tracks, so instruments dropped in the empty space beneath them
         // (the natural "make a new track" gesture) would otherwise miss.
         _headers = new Canvas { Width = HeaderW, VerticalAlignment = VerticalAlignment.Top };
-        _hScroll = new ScrollBar
-        {
-            Orientation = Orientation.Horizontal,
-            Minimum = 0,
-            AllowAutoHide = false,
-        };
+        _hScroll = new ThinScrollBar();
         _hScroll.Scroll += (_, _) => { _scrollBeats = _hScroll.Value; Redraw(); };
         // Keep the scroll range in sync with the visible width — outside the
         // render pass (mutating controls during Render() is illegal / crashes).
@@ -281,10 +281,14 @@ public sealed partial class ArrangementView : UserControl
             },
         };
         var topLeft = HeaderPanel(zoomBar);
-        var top = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        top.Children.Add(topLeft);
+        var topGrid = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        topGrid.Children.Add(topLeft);
         Grid.SetColumn(_ruler, 1);
-        top.Children.Add(_ruler);
+        topGrid.Children.Add(_ruler);
+        // The chrome stack (Overview · Sections · Zoom) ends on a full-width line, so the
+        // tracks start under a clear edge rather than straight off the ruler.
+        var top = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Child = topGrid };
+        top.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         // Above the ruler: the Overview strip (whole project + a draggable viewport window),
         // then the Sections lane — song structure sits directly over the bar numbers it names.
@@ -369,11 +373,16 @@ public sealed partial class ArrangementView : UserControl
         DragDrop.AddDragLeaveHandler(_footer, (_, _) => SetFooterDropRow(-1));
         DragDrop.AddDropHandler(_footer, OnFooterDrop);
 
-        // Bottom: horizontal scrollbar under the lanes.
-        var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        bottom.Children.Add(HeaderPanel(null));
+        // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
+        var bottomGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var bottomLeft = HeaderPanel(null);
+        bottomLeft.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
+        bottomGrid.Children.Add(bottomLeft);
         Grid.SetColumn(_hScroll, 1);
-        bottom.Children.Add(_hScroll);
+        bottomGrid.Children.Add(_hScroll);
+        var bottom = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = bottomGrid };
+        bottom.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
+        bottom.BindResource(Border.BorderBrushProperty, "Brush.Hairline");
 
         var root = new DockPanel();
         DockPanel.SetDock(_overviewRow, Dock.Top);
@@ -435,6 +444,13 @@ public sealed partial class ArrangementView : UserControl
         set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
     }
     private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
+    /// <summary>Audio-clip waveform style (Settings → Appearance).</summary>
+    public WaveformStyle Waveform
+    {
+        get => _waveform;
+        set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
+    }
+    private WaveformStyle _waveform = WaveformStyle.Bars;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -710,6 +726,7 @@ public sealed partial class ArrangementView : UserControl
                     Armed = ti.Armed != 0,
                     Frozen = !ti.IsReturn && !ti.IsGroup && eng.IsTrackFrozen(ti.Id),   // M7
                     LiveRole = FreezeRole?.Invoke(ti.Id) ?? 0,                          // live-freeze (v1.1)
+                    Player = PlayerBadge?.Invoke(ti.Id),                                 // Nota Remote
                     // A stored name (set via the header menu) wins; otherwise the derived default.
                     Name = IsProcessingTrack(ti.Id) ? "Processing…" : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
@@ -1586,18 +1603,14 @@ public sealed partial class ArrangementView : UserControl
         // A group keeps its level readable at 26px as a 2px rail under the title.
         var meter = new MeterBar(horizontal: true) { Height = 4, MinWidth = 0 };
         _meters[t.Id] = meter;
-        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(8 + t.Depth * 14, 0, 8, 0) };
+        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(8, 0, 8, 0) };
         DockPanel.SetDock(meter, Dock.Bottom);
         meter.Margin = new Thickness(0, 0, 0, 3);
         body.Children.Add(meter);
         body.Children.Add(row);
 
         var spine = new Border { Width = 3, Background = spineBrush };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
-        Grid.SetColumn(spine, 0);
-        Grid.SetColumn(body, 1);
-        grid.Children.Add(spine);
-        grid.Children.Add(body);
+        var grid = SpineGrid(t.Depth, spine, body);
 
         var card = new Border
         {
@@ -1626,7 +1639,9 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var typeTag = TypeTag(t.IsGroup ? "GROUP" : t.IsInstrument ? "MIDI" : "AUDIO");
+        // A phone playing the track (Nota Remote) takes the type tag's place: during a jam
+        // "who plays what" matters more than MIDI / AUDIO.
+        Control typeTag = t.Player is { } player ? PlayerTag(player) : TypeTag(t.IsGroup ? "GROUP" : t.IsInstrument ? "MIDI" : "AUDIO");
         var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         if (t.IsGroup)
         {
@@ -1733,20 +1748,16 @@ public sealed partial class ArrangementView : UserControl
         volRow.Children.Add(pan);
 
         // Indent nested rows so the group hierarchy reads at a glance.
-        var stack = new StackPanel { Margin = new Thickness(8 + t.Depth * 14, 6, 8, 6), Children = { nameRow, row2, volRow } };
+        var stack = new StackPanel { Margin = new Thickness(8, 6, 8, 6), Children = { nameRow, row2, volRow } };
 
         var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = new Thickness(0, 6, 3, 6) };
         _meters[t.Id] = meter;
         DockPanel.SetDock(meter, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { meter, stack } };
 
-        // 3px track-colour spine on the left edge.
+        // 3px track-colour spine on the left edge, stepped in under its group.
         var spine = new Border { Width = 3, Background = spineBrush };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
-        Grid.SetColumn(spine, 0);
-        Grid.SetColumn(body, 1);
-        grid.Children.Add(spine);
-        grid.Children.Add(body);
+        var grid = SpineGrid(t.Depth, spine, body);
 
         var card = new Border
         {
@@ -1765,6 +1776,30 @@ public sealed partial class ArrangementView : UserControl
         if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);
         return card;
+    }
+
+    // Nesting reads from the spine: a group's rows carry their colour spine one step
+    // (GroupIndent) further in than the group's own, so the hierarchy shows as a staircase
+    // of stripes while the names keep their place just past the stripe.
+    private const double GroupIndent = 10;
+
+    private static Grid SpineGrid(int depth, Border spine, Control body)
+    {
+        double indent = Math.Max(0, depth) * GroupIndent;
+        var grid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(indent, GridUnitType.Pixel),
+                new ColumnDefinition(3, GridUnitType.Pixel),
+                new ColumnDefinition(1, GridUnitType.Star),
+            },
+        };
+        Grid.SetColumn(spine, 1);
+        Grid.SetColumn(body, 2);
+        grid.Children.Add(spine);
+        grid.Children.Add(body);
+        return grid;
     }
 
     // Select / reorder / context-menu gestures shared by a full track card and a slim group bar.
@@ -2170,6 +2205,31 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(6, 0, 0, 0),
         };
         return tb;
+    }
+
+    // Nota Remote: the name of whoever plays this track from a phone, in a pill with a drawn
+    // phone outline (design 5a) — "who plays what" during a jam.
+    private Control PlayerTag(string who)
+    {
+        var phone = new Border
+        {
+            Width = 6, Height = 9, CornerRadius = NotaRadius.Bar, BorderThickness = new Thickness(1),
+            BorderBrush = Brush("Brush.TextStrong"), VerticalAlignment = VerticalAlignment.Center,
+        };
+        var name = new TextBlock
+        {
+            Text = who, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
+            VerticalAlignment = VerticalAlignment.Center, MaxWidth = 70, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var pill = new Border
+        {
+            Height = 16, CornerRadius = NotaRadius.Pill, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
+            Background = Brush("Brush.TrackOff"), BorderBrush = Brush("Brush.BorderStrong"), BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
+        };
+        ToolTip.SetTip(pill, $"Played from a phone: {who}");
+        return pill;
     }
 
     // A small 18×16 stateful chip toggle (M/S/●). Danger variant reds when active.

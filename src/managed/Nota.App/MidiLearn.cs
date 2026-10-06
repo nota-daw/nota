@@ -23,9 +23,10 @@ using Nota.Application;
 namespace Nota.App;
 
 /// <summary>What a mapping listens to: a CC (continuous), a MIDI note (a controller
-/// pad/button), or a gamepad button. Gamepad sources ride the same table and the same
+/// pad/button), a gamepad control, or a Nota Remote phone control (a macro knob, an XY axis,
+/// a tilt axis — id in <see cref="Nota.Remote.PhoneControls"/>). Gamepad sources ride the same table and the same
 /// apply path — a button edge is just a 0/127 momentary source.</summary>
-public enum MidiSourceKind { Cc = 0, Note = 1, Gamepad = 2 }
+public enum MidiSourceKind { Cc = 0, Note = 1, Gamepad = 2, Phone = 3 }
 
 /// <summary>The gamepad's mappable controls, flattened into one id space so a mapping
 /// needs no extra field to say which kind it is. Buttons keep the ids the native queue
@@ -153,6 +154,9 @@ public sealed class MidiMapping
     public MidiSourceKind SourceKind { get; init; }
     public int Channel { get; init; }         // 0..15 (unused, and always 0, for Gamepad)
     public int Number { get; init; }          // CC number, note pitch, or GamepadControls id
+    /// <summary>Phone XY / tilt: the track whose phone drives it (0 = any track — the macros,
+    /// and XY mappings learned before they were per track).</summary>
+    public int ScopeTrackId { get; init; }
     public double RangeMin { get; set; }       // normalized output floor
     public double RangeMax { get; set; } = 1;  // normalized output ceiling
     public bool Invert { get; set; }
@@ -166,6 +170,7 @@ public sealed class MidiMapping
     {
         MidiSourceKind.Cc => $"CC {Number} · ch{Channel + 1}",
         MidiSourceKind.Gamepad => $"Pad · {GamepadControls.Name(Number)}",
+        MidiSourceKind.Phone => $"Phone · {Nota.Remote.PhoneControls.Name(Number)}",
         _ => $"Note {Number} · ch{Channel + 1}",
     };
 }

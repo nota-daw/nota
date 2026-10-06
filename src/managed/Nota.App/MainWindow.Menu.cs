@@ -66,10 +66,18 @@ public partial class MainWindow
     }
 
     private void OnMenuImport(object? sender, EventArgs e) => _ = DoImportAsync();
+    private void OnMenuInsertScene(object? sender, EventArgs e)
+    {
+        if (_vm is null || _session is null) return;
+        if (!_session.IsVisible) { _vm.StatusText = "Scenes live in the Session view."; return; }
+        _session.InsertSceneAtSelection();
+    }
     private void OnMenuExport(object? sender, EventArgs e) => _ = DoExportAsync();
     private void OnMenuDuplicate(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        // The Session grid duplicates its selected clip or scene.
+        if (SessionFocused && _session!.DuplicateSelection()) return;
         // While the piano roll has focus, Cmd+D duplicates the selected notes; otherwise
         // it duplicates the selected arrangement clip.
         if (_editorRoll is { GridFocused: true } roll && roll.DuplicateSelection())
@@ -123,6 +131,7 @@ public partial class MainWindow
     private void OnMenuCopy(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (SessionFocused && _session!.CopySelection()) return;
         if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = "Copied track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = "Copied notes"; return; }
         if (Timeline.CopySelectedClip()) _vm.StatusText = "Copied clip";
@@ -130,6 +139,7 @@ public partial class MainWindow
     private void OnMenuCut(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (SessionFocused && _session!.CutSelection()) return;
         if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = "Cut track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = "Cut notes"; return; }
         if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip"; }
@@ -137,6 +147,7 @@ public partial class MainWindow
     private void OnMenuPaste(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (SessionFocused && _session!.PasteSelection()) return;
         if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = "Pasted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = "Pasted notes"; return; }
         if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip"; }
@@ -144,6 +155,7 @@ public partial class MainWindow
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        if (SessionFocused && _session!.DeleteSelection()) return;
         if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = "Deleted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = "Deleted notes"; return; }
         if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = "Deleted clip(s)"; }

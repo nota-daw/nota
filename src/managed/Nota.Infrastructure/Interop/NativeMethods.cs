@@ -69,6 +69,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_transport_set_loop")]
     internal static partial NotaResult SetLoop(IntPtr engine, int enabled, double startBeat, double endBeat);
 
+    [LibraryImport(Lib, EntryPoint = "nota_transport_play_count_in")]
+    internal static partial NotaResult TransportPlayCountIn(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_set_count_in")]
+    internal static partial NotaResult SetCountIn(IntPtr engine, int bars);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_count_in_beats")]
+    internal static partial double CountInBeats(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_transport_set_metronome")]
     internal static partial NotaResult SetMetronome(IntPtr engine, int enabled);
 
@@ -104,6 +113,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_note_off")]
     internal static partial NotaResult NoteOff(IntPtr engine, int pitch);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_note_on")]
+    internal static partial NotaResult TrackNoteOn(IntPtr engine, int trackId, int pitch, float velocity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_note_off")]
+    internal static partial NotaResult TrackNoteOff(IntPtr engine, int trackId, int pitch);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_audition_track")]
     internal static partial void SetAuditionTrack(IntPtr engine, int trackId);

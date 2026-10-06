@@ -389,6 +389,19 @@ void Engine::setFrequency(float hz) {
 void Engine::playClock() { Command c; c.type = CommandType::TransportPlay; commands_.push(c); }
 // Main Play (and arrangement record) roll the Arrangement; session launches use playClock().
 void Engine::transportPlay() { arrangementActive_.store(true, std::memory_order_relaxed); playClock(); }
+// Play preceded by the count-in (when one is set and the transport is stopped). The audio
+// thread clicks it out and rolls the transport sample-accurately at its end.
+void Engine::transportPlayCountIn() {
+    if (uiCountIn_.load(std::memory_order_relaxed) > 0.0) return;   // already counting in
+    const int32_t bars = countInBars();
+    if (bars <= 0 || transport_.uiIsPlaying()) { transportPlay(); return; }
+    arrangementActive_.store(true, std::memory_order_relaxed);
+    captureGate_.store(false, std::memory_order_relaxed);
+    // Mirror it now so a poll before the audio thread picks the command up already sees
+    // the count-in (Play pressed again = stop, not a second start).
+    uiCountIn_.store(static_cast<double>(bars) * transport_.beatsPerBar(), std::memory_order_relaxed);
+    Command c; c.type = CommandType::TransportPlay; c.i0 = bars; commands_.push(c);
+}
 void Engine::transportStop() {
     arrangementActive_.store(false, std::memory_order_relaxed);
     finalizeSessionRecord(false);   // don't lose an in-progress session take on a global stop
@@ -399,6 +412,7 @@ void Engine::backToArrangement() {
     if (authoring_)
         for (auto& t : authoring_->tracks)
             if (t->sessionPlayer) t->sessionPlayer->requestStop();
+    sceneFollowScene_ = -1;
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
 void Engine::setBpm(double bpm) {
@@ -502,6 +516,7 @@ void Engine::publish(std::shared_ptr<Graph> g) {
 void Engine::republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt) {
     auto g = std::make_shared<Graph>();
     g->sceneCount = authoring_->sceneCount;    // preserve scene count across the swap
+    g->scenes = authoring_->scenes;
     g->masterVolume = authoring_->masterVolume; // carry master automation (M9 follow-up)
     g->masterTrack = (trackId == kMasterTrackId) ? nt : authoring_->masterTrack;  // master chain edit or carry
     g->tracks.reserve(authoring_->tracks.size());

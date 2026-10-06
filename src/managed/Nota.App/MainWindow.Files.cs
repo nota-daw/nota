@@ -154,7 +154,10 @@ public partial class MainWindow
     {
         string title = $"Nota — {ProjectDisplayName()}";
         Title = title;
-        DocTitleText.Text = title;   // frameless title-bar caption mirrors the window title
+        // The project's name leads the transport, so the frameless title-bar caption is just
+        // the app; the OS window title keeps both for the Dock and window switcher.
+        DocTitleText.Text = "Nota";
+        ProjectNameText.Text = ProjectDisplayName();
     }
 
     /// <summary>A crash-recovery snapshot to offer on open (set by App at launch). M7-7.</summary>

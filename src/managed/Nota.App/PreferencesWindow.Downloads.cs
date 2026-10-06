@@ -19,7 +19,7 @@ namespace Nota.App;
 
 public sealed partial class PreferencesWindow
 {
-    private const int DownloadsIndex = 4;
+    private const int DownloadsIndex = 5;
     private static readonly string[] DownloadSources = { "Plug-ins", "Sample Packs", "AI Models" };
     private int _downloadSource;   // 0 = plug-ins, 1 = sample packs, 2 = AI models; kept for the window's life
 

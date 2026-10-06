@@ -67,6 +67,9 @@ public sealed partial class NotaEngine : IAudioEngine
     // --- Transport ---------------------------------------------------------
 
     public void Play()  { ThrowIfDisposed(); Check(NativeMethods.TransportPlay(_handle)); }
+    public void PlayWithCountIn() { ThrowIfDisposed(); Check(NativeMethods.TransportPlayCountIn(_handle)); }
+    public void SetCountIn(int bars) { ThrowIfDisposed(); Check(NativeMethods.SetCountIn(_handle, Math.Max(0, bars))); }
+    public double CountInBeats { get { ThrowIfDisposed(); return NativeMethods.CountInBeats(_handle); } }
     public void StopTransport() { ThrowIfDisposed(); Check(NativeMethods.TransportStop(_handle)); }
     public void SetBpm(double bpm) { ThrowIfDisposed(); Check(NativeMethods.SetBpm(_handle, bpm)); }
     public double Bpm { get { ThrowIfDisposed(); return NativeMethods.TransportBpm(_handle); } }
@@ -110,6 +113,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetTrackArmed(int trackId, bool armed) { ThrowIfDisposed(); Check(NativeMethods.SetTrackArmed(_handle, trackId, armed ? 1 : 0)); }
     public void NoteOn(int pitch, float velocity) { ThrowIfDisposed(); Check(NativeMethods.NoteOn(_handle, pitch, velocity)); }
     public void NoteOff(int pitch) { ThrowIfDisposed(); Check(NativeMethods.NoteOff(_handle, pitch)); }
+    public void TrackNoteOn(int trackId, int pitch, float velocity) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOn(_handle, trackId, pitch, velocity)); }
+    public void TrackNoteOff(int trackId, int pitch) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOff(_handle, trackId, pitch)); }
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }

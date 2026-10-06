@@ -251,6 +251,7 @@ public partial class MainWindow : Window
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
             SyncReenableAutomation();                                  // "a control is overriding its lane"
             if (_session?.IsVisible == true) _session.UpdateStates(); // live launch/queue/play
+            SyncSceneTempo();                                          // a launched scene set tempo / signature
             if (_mixer?.IsVisible == true) _mixer.UpdateMeters();      // Mixer tab strips
             if (_modular?.IsVisible == true) _modular.Tick(vm.Engine.IsPlaying); // graph knobs follow automation + edge pulse
             if (DetailBody.Content is MixerView mx && mx.IsEffectivelyVisible) mx.UpdateMeters(); // 1f strips
@@ -290,6 +291,10 @@ public partial class MainWindow : Window
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
+        vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
+        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        // Settings → Appearance can switch the waveform style while the arrangement is open.
+        vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
         Browser.ProjectKey = () => vm.Transport.Key;
@@ -315,10 +320,25 @@ public partial class MainWindow : Window
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
-        _session = new SessionView(vm.Engine) { IsVisible = false };
+        _session = new SessionView(vm.Engine)
+        {
+            IsVisible = false,
+            GetMasterVolume = () => (float)vm.Transport.MasterVolume,
+            SetMasterVolume = v => vm.Transport.MasterVolume = v,
+            GetTempo = () => ((double)vm.Transport.Bpm, vm.Transport.TimeSigNumerator, vm.Transport.TimeSigDenominator),
+        };
         _session.SlotEditRequested += OpenSessionClipEditor;
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
+        _session.Status += msg => vm.StatusText = msg;
+        // Session context menus add tracks through the same path as the arrangement's.
+        _session.AddTrackRequested += (kind, anchor) =>
+        {
+            if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
+            else AddTrack(kind, anchor);
+        };
+        // Selecting a slot selects its track everywhere: devices below, arrangement header.
+        _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
@@ -338,6 +358,7 @@ public partial class MainWindow : Window
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
+        InitRemote();    // Nota Remote: phones as controllers (ticked on the same clock)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)
 
@@ -391,6 +412,7 @@ public partial class MainWindow : Window
         {
             Timeline.Refresh();
             if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh();
+            if (_session?.IsVisible == true) _session.Refresh();   // session tools edit slots + scenes
         };
         _ = App.Services.GetRequiredService<McpService>().ApplyAsync();
 
@@ -511,7 +533,6 @@ public partial class MainWindow : Window
         SessionBtn.IsChecked = session;
         ModularBtn.IsChecked = modular;
         PlayBtn.Classes.Set("session", session);   // play button turns green in Session (1c)
-        LaunchQChip.IsVisible = session;           // launch quantize only applies to Session launches
         if (session) _session.Refresh();
         if (modular)
         {
@@ -545,6 +566,30 @@ public partial class MainWindow : Window
         KeyLabel.BindResource(TextBlock.ForegroundProperty, k is null ? "Brush.TextTertiary" : "Brush.TextPrimary");
     }
 
+    private static readonly (int Bars, string Label)[] CountInSteps =
+        [(0, "No count-in"), (1, "Count-in: 1 bar"), (2, "Count-in: 2 bars"), (4, "Count-in: 4 bars")];
+
+    // Right-click on the metronome: how many bars of clicks precede Play / Record from stop.
+    // The count-in sounds whether or not the metronome itself is on.
+    private void OnMetronomeContext(object? sender, ContextRequestedEventArgs e)
+    {
+        e.Handled = true;
+        if (_vm is not { } vm) return;
+        var f = new MenuFlyout();
+        foreach (var (bars, label) in CountInSteps)
+        {
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = vm.Transport.CountInBars == bars };
+            mi.Click += (_, _) =>
+            {
+                vm.Transport.CountInBars = bars;
+                vm.Settings.Current.CountInBars = bars;
+                vm.Settings.Save();
+            };
+            f.Items.Add(mi);
+        }
+        f.ShowAt(MetronomeBtn);
+    }
+
     private void OnCycleSnap(object? sender, RoutedEventArgs e)
     {
         _snapIndex = (_snapIndex + 1) % SnapSteps.Length;
@@ -553,19 +598,13 @@ public partial class MainWindow : Window
         SnapLabel.Text = label;
     }
 
-    // Session launch-quantize steps (beats, label). 0 = launch immediately (no quantize).
-    private static readonly (double beats, string label)[] LaunchQSteps =
+    // A launched scene may carry its own tempo / signature; the engine applies it on the
+    // scene's start boundary and the transport follows here.
+    private void SyncSceneTempo()
     {
-        (0.0, "None"), (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"),
-        (4.0, "1 Bar"), (8.0, "2 Bars"), (16.0, "4 Bars"),
-    };
-    private int _launchQIndex = 5;   // 1 Bar — matches the engine default (launchQuant_ = 4)
-    private void OnCycleLaunchQ(object? sender, RoutedEventArgs e)
-    {
-        _launchQIndex = (_launchQIndex + 1) % LaunchQSteps.Length;
-        var (beats, label) = LaunchQSteps[_launchQIndex];
-        Engine.SetLaunchQuant(beats);
-        LaunchQLabel.Text = label;
+        if (_vm is null || !Engine.TakeSceneTempoChange(out double bpm, out int num, out int den)) return;
+        if (bpm > 0) _vm.Transport.Bpm = (decimal)Math.Round(bpm, 2);
+        if (num > 0 && den > 0) { _vm.Transport.TimeSigNumerator = num; _vm.Transport.TimeSigDenominator = den; }
     }
 
     // Snap a dragged denominator to the nearest musical power of two (1/2/4/8/16).

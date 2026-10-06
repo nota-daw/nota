@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
+using Nota.Application;
+
 namespace Nota.Infrastructure;
 
 public sealed partial class NotaEngine
@@ -128,4 +130,82 @@ public sealed partial class NotaEngine
     /// <summary>Drops a whole audio file into a session slot, auto-computing loop length (M7-5).</summary>
     public bool AddSessionAudioFile(int trackId, int scene, string path)
     { ThrowIfDisposed(); return NativeMethods.SessionAddAudioFile(_handle, trackId, scene, path) != 0; }
+
+    // --- Session P0 -------------------------------------------------------------
+
+    public bool TryGetSessionClipProps(int trackId, int scene, out NotaSessionClipProps props)
+    { ThrowIfDisposed(); return NativeMethods.SessionGetClipProps(_handle, trackId, scene, out props) != 0; }
+
+    public bool SetSessionClipProps(int trackId, int scene, NotaSessionClipProps props)
+    { ThrowIfDisposed(); return NativeMethods.SessionSetClipProps(_handle, trackId, scene, in props) == NativeMethods.NotaResult.Ok; }
+
+    public string GetSessionClipName(int trackId, int scene)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.SessionGetClipName(_handle, trackId, scene, b, c)); }
+
+    public void SetSessionClipName(int trackId, int scene, string name)
+    { ThrowIfDisposed(); NativeMethods.SessionSetClipName(_handle, trackId, scene, name ?? ""); }
+
+    public bool GetSessionSlotStopButton(int trackId, int scene)
+    { ThrowIfDisposed(); return NativeMethods.SessionGetSlotStopButton(_handle, trackId, scene) != 0; }
+
+    public void SetSessionSlotStopButton(int trackId, int scene, bool on)
+    { ThrowIfDisposed(); NativeMethods.SessionSetSlotStopButton(_handle, trackId, scene, on ? 1 : 0); }
+
+    public bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene)
+    { ThrowIfDisposed(); return NativeMethods.SessionCopySlot(_handle, srcTrackId, srcScene, dstTrackId, dstScene) == NativeMethods.NotaResult.Ok; }
+
+    public bool TryGetSceneProps(int scene, out NotaSceneProps props)
+    { ThrowIfDisposed(); return NativeMethods.SessionGetSceneProps(_handle, scene, out props) != 0; }
+
+    public void SetSceneProps(int scene, NotaSceneProps props)
+    { ThrowIfDisposed(); NativeMethods.SessionSetSceneProps(_handle, scene, in props); }
+
+    public string GetSceneName(int scene)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.SessionGetSceneName(_handle, scene, b, c)); }
+
+    public void SetSceneName(int scene, string name)
+    { ThrowIfDisposed(); NativeMethods.SessionSetSceneName(_handle, scene, name ?? ""); }
+
+    public int InsertScene(int at) { ThrowIfDisposed(); return NativeMethods.SessionInsertScene(_handle, at); }
+    public int DuplicateScene(int scene) { ThrowIfDisposed(); return NativeMethods.SessionDuplicateScene(_handle, scene); }
+    public int CaptureScene(int at) { ThrowIfDisposed(); return NativeMethods.SessionCaptureScene(_handle, at); }
+
+    public void LaunchSlotVelocity(int trackId, int scene, float velocity)
+    { ThrowIfDisposed(); Check(NativeMethods.SessionLaunchSlotVel(_handle, trackId, scene, velocity)); }
+
+    public void ReleaseSlot(int trackId, int scene)
+    { ThrowIfDisposed(); Check(NativeMethods.SessionReleaseSlot(_handle, trackId, scene)); }
+
+    public void TrackBackToArrangement(int trackId)
+    { ThrowIfDisposed(); Check(NativeMethods.SessionTrackBackToArrangement(_handle, trackId)); }
+
+    public int SessionPlayingSlot(int trackId) { ThrowIfDisposed(); return NativeMethods.SessionPlayingSlot(_handle, trackId); }
+    public double SessionSlotPosition(int trackId) { ThrowIfDisposed(); return NativeMethods.SessionSlotPosition(_handle, trackId); }
+    public double LaunchQuant { get { ThrowIfDisposed(); return NativeMethods.SessionGetLaunchQuant(_handle); } }
+
+    public bool SessionFollow
+    {
+        get { ThrowIfDisposed(); return NativeMethods.SessionGetFollow(_handle) != 0; }
+        set { ThrowIfDisposed(); NativeMethods.SessionSetFollow(_handle, value ? 1 : 0); }
+    }
+
+    public double SessionRecordLength
+    {
+        get { ThrowIfDisposed(); return NativeMethods.SessionGetRecordLength(_handle); }
+        set { ThrowIfDisposed(); NativeMethods.SessionSetRecordLength(_handle, value); }
+    }
+
+    public int RecordSessionScene(int scene) { ThrowIfDisposed(); return NativeMethods.SessionRecordScene(_handle, scene); }
+
+    public bool TryGetSessionRecordTarget(out int trackId, out int scene, out double elapsedBeats)
+    { ThrowIfDisposed(); return NativeMethods.SessionRecordTarget(_handle, out trackId, out scene, out elapsedBeats) != 0; }
+
+    public int GetSessionSlotPeaks(int trackId, int scene, float[] outMinMax, int maxPoints)
+    { ThrowIfDisposed(); return NativeMethods.SessionSlotPeaks(_handle, trackId, scene, outMinMax, Math.Min(maxPoints, outMinMax.Length / 2)); }
+
+    public bool MoveScene(int from, int to)
+    { ThrowIfDisposed(); return NativeMethods.SessionMoveScene(_handle, from, to) == NativeMethods.NotaResult.Ok; }
+
+    public bool TakeSceneTempoChange(out double bpm, out int num, out int den)
+    { ThrowIfDisposed(); return NativeMethods.SessionTakeSceneTempo(_handle, out bpm, out num, out den) != 0; }
 }

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Settings (nota-design/Nota Settings.html): 880×640 with a 188px sidebar grouped as
-// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
+// Devices (Audio / MIDI / Gamepads / Remote), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
 // and General (Library / Appearance / Shortcuts), and a content pane per section under a
 // title + subtitle header. Audio device / sample-rate / buffer are persisted natively (audio.json)
 // and applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan
@@ -64,6 +64,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             new Page("Audio", "Device, sample rate and buffer", "M4 10 V14 M8 7 V17 M12 4 V20 M16 8 V16 M20 11 V13"),
             new Page("MIDI", "Controllers Nota listens to", "M4 5 H20 V19 H4 Z M8 5 V13 M12 5 V13 M16 5 V13"),
             new Page("Gamepads", "Play notes or drive mapped controls", "M7 8 H17 A4 4 0 0 1 21 12 V13 A4 4 0 0 1 14 16 H10 A4 4 0 0 1 3 13 V12 A4 4 0 0 1 7 8 Z M7 11 V13 M6 12 H8 M16 11.5 H16.01 M18 12.5 H18.01"),
+            new Page("Remote", "Phones and tablets on this network", "M8 3 H16 A1.5 1.5 0 0 1 17.5 4.5 V19.5 A1.5 1.5 0 0 1 16 21 H8 A1.5 1.5 0 0 1 6.5 19.5 V4.5 A1.5 1.5 0 0 1 8 3 Z M11 18 H13"),
         }),
         ("PLUG-INS", new[]
         {
@@ -73,7 +74,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("GENERAL", new[]
         {
             new Page("Library", "Content folders and version history", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
-            new Page("Appearance", "Theme and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
+            new Page("Appearance", "Theme, waveforms and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
             new Page("Shortcuts", "Keyboard reference", "M3 7 H21 V17 H3 Z M7 11 H7.01 M11 11 H11.01 M15 11 H15.01 M8 14 H16"),
         }),
     };
@@ -257,9 +258,10 @@ public sealed partial class PreferencesWindow : NotaWindow
         0 => AudioPane(),
         1 => MidiPane(),
         2 => GamepadsPane(),
-        3 => PluginsPane(),
-        5 => LibraryPane(),
-        6 => AppearancePane(),
+        RemoteIndex => RemotePane(),
+        4 => PluginsPane(),
+        6 => LibraryPane(),
+        7 => AppearancePane(),
         _ => ShortcutsPane(),
     };
 
@@ -786,6 +788,30 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // Bars / Solid for the arrangement's audio-clip waveforms. Saving fires Settings.Changed,
+    // which the main window applies to the lanes at once.
+    private static Control WaveformPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Style, ToggleButton Btn)>();
+        foreach (var (style, label) in new[] { (0, "Bars"), (1, "Solid") })
+        {
+            var st = style;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bs, bb) in buttons) bb.IsChecked = bs == st;
+                if (settings.Current.ArrangementWaveform == st) return;
+                settings.Current.ArrangementWaveform = st;
+                settings.Save();
+            };
+            buttons.Add((st, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     // A 10px chip of a variant's ground — both variants at once, whichever one is live.
     // System is split corner to corner, Paper over Graphite.
     private sealed class ThemeSwatch : Control
@@ -904,7 +930,9 @@ public sealed partial class PreferencesWindow : NotaWindow
         return Sections(
             Section("UI", 10,
                 Row("Theme", ThemePicker()),
-                Row("", Caption("Ember Graphite is the warm dark palette; Ember Paper is the same system on a light ground. System follows the OS appearance and switches with it."))),
+                Row("", Caption("Ember Graphite is the warm dark palette; Ember Paper is the same system on a light ground. System follows the OS appearance and switches with it.")),
+                Row("Waveform", WaveformPicker()),
+                Row("", Caption("How audio clips draw on the arrangement: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
             Section("AI CONTROL (MCP)", 12, enable, details));
     }
 
@@ -922,12 +950,12 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘N   ⌘O", "New project / open a project"),
             ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
             ("⌥⌘S", "Save a version with a note"),
-            ("⌘I   ⌘⇧E", "Import audio / export audio"),
+            ("⌘⇧I   ⌘⇧E", "Import audio / export audio"),
         }),
         ("TRANSPORT", new[]
         {
             ("Space", "Play / Stop"),
-            ("Return", "Stop (again → back to the start)"),
+            ("Return", "Stop (again → back to the start) · in the Session grid it launches the selection"),
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the selected clips or time range"),
@@ -955,6 +983,21 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
             ("⌘D", "Duplicate the selected tracks"),
             ("Delete", "Delete the selected tracks · a group goes with its tracks"),
+        }),
+        ("SESSION (AFTER A CLICK IN THE GRID)", new[]
+        {
+            ("← → ↑ ↓", "Move the selection between slots and scenes"),
+            ("Return", "Launch the selected clip or scene"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste a clip · a cut clip moves when pasted"),
+            ("⌘D", "Duplicate a clip into the slot below · a scene below itself"),
+            ("⌘I", "Insert a scene below the selection"),
+            ("F2", "Rename the selected clip or scene"),
+            ("Delete", "Delete the selected clip or scene"),
+            ("Drag clip", "Move it to another slot · ⌥ copies"),
+            ("Drag scene", "Reorder scenes"),
+            ("Double-click slot", "Edit the clip · an empty MIDI slot gets a new clip"),
+            ("Double-click header", "Rename the track"),
+            ("Right-click header or grid", "Add an instrument, audio or return track · rename or delete one"),
         }),
         ("PIANO ROLL", new[]
         {
@@ -996,6 +1039,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("MOUSE", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),
             ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
             ("Right-click track headers", "A multi-selection gets its own menu: group, colour, freeze, copy, duplicate, delete"),

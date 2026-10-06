@@ -36,11 +36,23 @@ public sealed class Settings
     public bool ShowWelcomeOnStartup { get; set; } = true;
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
+    /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from
+    /// the metronome button's right-click menu.</summary>
+    public int CountInBars { get; set; }
     /// <summary>Run the built-in MCP server so an AI (Claude Desktop / Claude Code) can drive the
     /// live app. Off by default; loopback-only. Toggled in Preferences.</summary>
     public bool McpEnabled { get; set; }
     /// <summary>Loopback TCP port for the MCP HTTP server.</summary>
     public int McpPort { get; set; } = 3900;
+    /// <summary>Nota Remote: serve the phone controller on the local network. Off by default;
+    /// phones pair with a code from the QR. See Settings → Remote.</summary>
+    public bool RemoteEnabled { get; set; }
+    /// <summary>TCP port Nota Remote listens on (all interfaces).</summary>
+    public int RemotePort { get; set; } = 7788;
+    /// <summary>What a phone may do: 0 play notes only, 1 also control the project (mixer,
+    /// transport, macros, XY, Session).</summary>
+    public int RemoteAccess { get; set; } = 1;
+
     /// <summary>Use a connected gamepad as a live note source. Off by default; the
     /// pads play through the armed/audition instrument track like the computer
     /// keyboard. See Preferences → Gamepads.</summary>
@@ -88,6 +100,9 @@ public sealed class Settings
     public int ArrangementClipLabels { get; set; } = 1;
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
+    /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
+    /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
+    public int ArrangementWaveform { get; set; }
 }
 
 public interface ISettingsService

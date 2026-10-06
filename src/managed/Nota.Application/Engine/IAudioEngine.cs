@@ -22,6 +22,13 @@ public interface IAudioEngine : IDisposable
 
     // --- Transport ---------------------------------------------------------
     void Play();
+    /// <summary>Play, preceded by the count-in when one is set and the transport is stopped.
+    /// For user-initiated starts; exports / freezes use <see cref="Play"/>.</summary>
+    void PlayWithCountIn();
+    /// <summary>Count-in length in bars (0 = off). Also applies to Record started from stop.</summary>
+    void SetCountIn(int bars);
+    /// <summary>Beats of count-in still to click (0 = not counting in).</summary>
+    double CountInBeats { get; }
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
@@ -104,6 +111,55 @@ public interface IAudioEngine : IDisposable
     bool SessionAudioRecordSelfTest();
     void SetSessionNotes(int trackId, int scene, NotaNote[] notes);
     NotaNote[] GetSessionNotes(int trackId, int scene);
+
+    // --- Session P0: clip + scene properties, scene/slot editing, follow ------
+    /// <summary>Properties of a filled slot; false when the slot is empty.</summary>
+    bool TryGetSessionClipProps(int trackId, int scene, out NotaSessionClipProps props);
+    bool SetSessionClipProps(int trackId, int scene, NotaSessionClipProps props);
+    /// <summary>Clip name (empty = unnamed).</summary>
+    string GetSessionClipName(int trackId, int scene);
+    void SetSessionClipName(int trackId, int scene, string name);
+    /// <summary>An empty slot's stop button: true (default) = launching its scene stops the track.</summary>
+    bool GetSessionSlotStopButton(int trackId, int scene);
+    void SetSessionSlotStopButton(int trackId, int scene, bool on);
+    /// <summary>Copies a slot (clip + properties) onto a slot of a same-kind track.</summary>
+    bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene);
+    bool TryGetSceneProps(int scene, out NotaSceneProps props);
+    void SetSceneProps(int scene, NotaSceneProps props);
+    string GetSceneName(int scene);
+    void SetSceneName(int scene, string name);
+    /// <summary>Inserts an empty row at <paramref name="at"/>; returns it or -1.</summary>
+    int InsertScene(int at);
+    /// <summary>Copies a row below itself; returns the new row or -1.</summary>
+    int DuplicateScene(int scene);
+    /// <summary>Inserts a row at <paramref name="at"/> holding the clips playing now.</summary>
+    int CaptureScene(int at);
+    /// <summary>Moves a scene row (slots + properties) to another index; players follow.</summary>
+    bool MoveScene(int from, int to);
+    /// <summary>True once after a launched scene applied its tempo / signature (0 = unchanged),
+    /// so the transport can show the new values.</summary>
+    bool TakeSceneTempoChange(out double bpm, out int num, out int den);
+    /// <summary>Launch with a velocity 0..1, scaled by the clip's velocity amount.</summary>
+    void LaunchSlotVelocity(int trackId, int scene, float velocity);
+    /// <summary>The launch button was released: stops a Gate / Repeat clip.</summary>
+    void ReleaseSlot(int trackId, int scene);
+    /// <summary>Hands one track back to the Arrangement (stops its session clip now).</summary>
+    void TrackBackToArrangement(int trackId);
+    /// <summary>Playing slot of a track, or -1.</summary>
+    int SessionPlayingSlot(int trackId);
+    /// <summary>Loop-local position of the playing slot, in beats.</summary>
+    double SessionSlotPosition(int trackId);
+    double LaunchQuant { get; }
+    /// <summary>Global follow-action switch.</summary>
+    bool SessionFollow { get; set; }
+    /// <summary>Fixed session record length in beats (0 = off).</summary>
+    double SessionRecordLength { get; set; }
+    /// <summary>Session Rec: records into the first armed track with an empty slot in the row; returns that track id or 0.</summary>
+    int RecordSessionScene(int scene);
+    /// <summary>The in-progress session take, if any.</summary>
+    bool TryGetSessionRecordTarget(out int trackId, out int scene, out double elapsedBeats);
+    /// <summary>Min/max peak pairs over an audio slot's take; returns the bucket count.</summary>
+    int GetSessionSlotPeaks(int trackId, int scene, float[] outMinMax, int maxPoints);
 
     // --- Arrangement geometry (M4) -----------------------------------------
     bool TryGetTrackInfo(int index, out NotaTrackInfo info);
@@ -686,6 +742,10 @@ public interface IAudioEngine : IDisposable
     void SetTrackArmed(int trackId, bool armed);
     void NoteOn(int pitch, float velocity);
     void NoteOff(int pitch);
+    /// <summary>A live note addressed to one track, armed or not (Nota Remote: each phone plays
+    /// its own track). Recorded when that track holds the take. Safe to call from any thread.</summary>
+    void TrackNoteOn(int trackId, int pitch, float velocity);
+    void TrackNoteOff(int trackId, int pitch);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);

@@ -18,6 +18,68 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Nota Remote — your phone as a controller:** the **Remote** button in the top bar (or
+  **View → Connect Phone…**) shows a QR code; scan it with a phone and in five seconds the
+  phone plays Nota — pads, keys with the project's scale and chords, an XY pad with tilt, the
+  mixer, macros and the Session grid, all over the local Wi-Fi with nothing to install. The
+  page Nota serves is a small PWA: "Add to Home Screen" opens it full-screen, and it
+  reconnects by itself after a locked screen or a dropped link. Pairing is a four-digit code
+  that rotates every two minutes; trusted phones reconnect without one until they are
+  forgotten in **Settings → Remote**, which also has the port and what phones may do — play
+  notes only, or play and control the project. A phone is one more controller: its notes
+  record like the computer keyboard's, faders and macros move Nota's controls (one finger,
+  one undo step), and its knobs and XY axes can be mapped through the same MIDI Learn as
+  hardware — every connected phone drives the same mappings, and the XY pad and tilt are
+  mapped per track, so each track's XY plays its own sound. Several phones can play at once,
+  each on its own track, and Nota shows who plays what: the track list and the mixer carry
+  the players' names. **USB works too:** a phone on a cable (USB tethering on Android,
+  Internet Sharing on the Mac) gets an instant, radio-free link — Nota notices the cable,
+  puts its address in the QR and marks the phone "USB" in the list.
+- **Session View, rebuilt for real work.** Columns carry the track's name and colour; clips
+  have a name, a colour, a note or waveform preview and a length in bars, and their progress
+  pie runs on the clip's own clock. Clicking a cell selects it, its triangle launches it, and
+  an inspector on the right edits the selected clip, scene or empty slot. Clips get launch
+  modes (Trigger, Gate, Toggle, Repeat), their own launch quantize, legato, one-shot (loop
+  off), velocity amount and **follow actions** A/B with chances and a time (Next, Again,
+  Previous, First, Last, Any, Other, Stop, Jump), with a global **Follow** switch. Scenes have
+  names, colours, a tempo and time signature that apply as they launch, and can follow on to
+  the next scene after a number of bars. Edit the grid from the keyboard (arrows, Return, ⌘C /
+  ⌘X / ⌘V, ⌘D, ⌘I, F2, Delete) or by dragging clips between slots (⌥ copies) and scenes up and
+  down the rail; insert, duplicate, capture and move scenes without stopping what plays.
+  **Session Rec** records into the armed track at the selected scene — open-ended takes are cut
+  to whole bars, or set a **Fixed** length of 1–8 bars. Group tracks show as one launchable
+  column that folds its tracks away; returns and the master close the row; the mixer under the
+  grid has I/O, Sends and Mixer sections to show or hide. An empty slot's stop button can be
+  removed so a scene keeps that track playing, and the **ARR** badge hands one track back to the
+  Arrangement. Audio slots are full audio clips now — double-click one for the same clip editor
+  as the Arrangement (start / end, warp with markers, pitch, reverse, gain, envelopes, ADSR); a
+  warped loop stays in time when the tempo changes, and an Arrangement clip dragged into a slot
+  keeps its trim and warp. Right-click a column header, a slot or the empty grid to add an
+  instrument, audio or return track (or rename / delete one). All of it is saved with the
+  project and reachable over MCP.
+- **Count-in:** right-click the metronome button to set 1, 2 or 4 bars of clicks before
+  playback starts. Play and Record from stop count in first — the clicks sound even with the
+  metronome off, the position readout counts −2.1 … −1.4 up to the start, and Stop cancels it.
+  A take begins when the transport rolls, so the count-in is never recorded; exports and
+  freezes never count in. The setting is remembered across sessions.
+
+### Changed
+- **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch
+  quantize lives in the Session toolbar instead of the transport bar.
+- **A cleaner main window.** The project's name now leads the transport bar. In the
+  arrangement, tracks inside a group step their colour stripe in under it, so nesting reads
+  at a glance; the Overview strip is slimmer and calmer (a thin line per track, a neutral
+  viewport frame); Overview, Sections and the ruler are set apart by clear rules; and the
+  horizontal scrollbar is a slim pill. Audio clips draw their waveform as spaced bars —
+  **Settings → Appearance → Waveform** brings back the solid look. The Devices panel is now
+  an island like the browser and the arrangement, and the status line sits on the window
+  ground without a bar.
+
+### Fixed
+- A note pressed and released within a few milliseconds (a very quick tap, a fast MIDI roll)
+  could keep ringing: its release was played ahead of its press.
+
 ## [0.43.1] — 2026-10-02
 
 ### Highlights

@@ -329,8 +329,17 @@ public sealed class AudioClipEditorView : UserControl
     // this clip, else hide it.
     public void OnPlayhead(double beats, bool playing)
     {
-        double frac = (playing && _lengthBeats > 0 && beats >= _startBeat && beats <= _startBeat + _lengthBeats)
-            ? (beats - _startBeat) / _lengthBeats : -1;
+        double frac;
+        int scene = SessionClip.SceneOf(ClipIndex);
+        if (scene >= 0)
+        {
+            // A Session slot runs on its own loop clock: follow the slot, not the song position.
+            double pos = _engine.SessionSlotState(TrackId, scene) == 3 ? _engine.SessionSlotPosition(TrackId) : -1;
+            frac = pos >= 0 && _lengthBeats > 0 && pos <= _lengthBeats ? pos / _lengthBeats : -1;
+        }
+        else
+            frac = (playing && _lengthBeats > 0 && beats >= _startBeat && beats <= _startBeat + _lengthBeats)
+                ? (beats - _startBeat) / _lengthBeats : -1;
         _wave.SetPlayhead(frac);
     }
 

@@ -132,6 +132,39 @@ typedef struct NotaSessionAudioSlot {
     float   gain;
 } NotaSessionAudioSlot;
 
+/* Session clip (slot) properties (Session P0). color is a track-palette index, -1 = the
+ * track's colour. launch_mode: 0 Trigger, 1 Gate, 2 Toggle, 3 Repeat. quant_beats < 0 uses
+ * the global launch quantum. follow_a/b: 0 None, 1 Stop, 2 Again, 3 Previous, 4 Next,
+ * 5 First, 6 Last, 7 Any, 8 Other, 9 Jump (to jump_scene); chance_a/b are relative weights
+ * 0..100; follow_beats 0 = after one pass. velocity_amount 0..1 scales the clip by the
+ * launch velocity. */
+typedef struct NotaSessionClipProps {
+    int32_t color;
+    int32_t launch_mode;
+    double  quant_beats;
+    int32_t legato;
+    int32_t loop;
+    float   velocity_amount;
+    int32_t follow_a;
+    int32_t follow_b;
+    int32_t chance_a;
+    int32_t chance_b;
+    double  follow_beats;
+    int32_t jump_scene;
+} NotaSessionClipProps;
+
+/* Scene row properties (Session P0). color: track-palette index, -1 = neutral. tempo > 0
+ * and sig_num/sig_den > 0 are applied when the scene launches. follow = 1 launches the
+ * next scene follow_beats after this one started. */
+typedef struct NotaSceneProps {
+    int32_t color;
+    double  tempo;
+    int32_t sig_num;
+    int32_t sig_den;
+    int32_t follow;
+    double  follow_beats;
+} NotaSceneProps;
+
 /* Post-fader level meter reading over the last processed block (M6-2). Linear
  * amplitude 0..1 (peaks may hit 1.0 after the master clamp). */
 typedef struct NotaMeter {
@@ -384,6 +417,12 @@ NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
+/* Count-in: `bars` of clicks (0 = off) before a play_count_in / a record started from
+ * stop rolls the transport. Plain nota_transport_play never counts in (exports etc.).
+ * count_in_beats = beats still to click (0 when not counting in). */
+NOTA_API NotaResult nota_transport_play_count_in(NotaEngine* engine);
+NOTA_API NotaResult nota_transport_set_count_in(NotaEngine* engine, int32_t bars);
+NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
@@ -641,6 +680,10 @@ NOTA_API NotaResult nota_track_set_armed(NotaEngine* engine, int32_t track_id, i
  * tracks; captured into the record clip while recording. Lock-free. */
 NOTA_API NotaResult nota_engine_note_on(NotaEngine* engine, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
+/* Live notes addressed to one track, armed or not (Nota Remote: each phone plays its
+ * own track). Recorded only when that track holds the take. Safe from any thread. */
+NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
+NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);
@@ -768,7 +811,8 @@ NOTA_API int32_t    nota_session_add_scene(NotaEngine* engine);
 NOTA_API NotaResult nota_session_remove_scene(NotaEngine* engine, int32_t scene);
 /* Overdub-record live MIDI into a slot (M5-4): launches the slot looping and
  * captures armed input against the slot's loop clock. stop_record ends recording
- * (the slot keeps playing). */
+ * (the slot keeps playing). An empty slot records a fresh take: it runs until stopped and
+ * is cut to whole launch quanta (bars when unquantized), or to the fixed record length. */
 NOTA_API NotaResult nota_session_record_slot(NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_stop_record(NotaEngine* engine);
 /* Move MIDI between Session and Arrangement (M5-6). slot->arrangement returns the
@@ -792,6 +836,57 @@ NOTA_API int32_t nota_engine_preview_selftest(NotaEngine* engine);
 NOTA_API NotaResult nota_session_set_notes(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaNoteData* notes, int32_t count);
 NOTA_API int32_t nota_session_get_notes(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaNoteData* out, int32_t max_notes);
 NOTA_API int32_t nota_session_note_count(const NotaEngine* engine, int32_t track_id, int32_t scene);
+
+/* ---- Session P0: clip + scene properties, scene/slot editing, follow -------- */
+/* Clip properties of a filled slot (get returns 1 if the slot holds a clip). */
+NOTA_API int32_t    nota_session_get_clip_props(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaSessionClipProps* out);
+NOTA_API NotaResult nota_session_set_clip_props(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSessionClipProps* props);
+/* Clip name (UTF-8). get returns the byte length (0 = unnamed) and copies at most cap-1 bytes. */
+NOTA_API int32_t    nota_session_get_clip_name(const NotaEngine* engine, int32_t track_id, int32_t scene, char* out, int32_t cap);
+NOTA_API NotaResult nota_session_set_clip_name(NotaEngine* engine, int32_t track_id, int32_t scene, const char* name_utf8);
+/* An EMPTY slot's stop button: 1 (default) = launching its scene stops the track, 0 = leaves it playing. */
+NOTA_API int32_t    nota_session_get_slot_stop_button(const NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API NotaResult nota_session_set_slot_stop_button(NotaEngine* engine, int32_t track_id, int32_t scene, int32_t on);
+/* Copy a slot (clip + properties) onto another slot of a track of the same kind; overwrites. */
+NOTA_API NotaResult nota_session_copy_slot(NotaEngine* engine, int32_t src_track, int32_t src_scene, int32_t dst_track, int32_t dst_scene);
+/* Scene properties and name. */
+NOTA_API int32_t    nota_session_get_scene_props(const NotaEngine* engine, int32_t scene, NotaSceneProps* out);
+NOTA_API NotaResult nota_session_set_scene_props(NotaEngine* engine, int32_t scene, const NotaSceneProps* props);
+NOTA_API int32_t    nota_session_get_scene_name(const NotaEngine* engine, int32_t scene, char* out, int32_t cap);
+NOTA_API NotaResult nota_session_set_scene_name(NotaEngine* engine, int32_t scene, const char* name_utf8);
+/* Insert an empty scene row at `at` (later rows shift down); duplicate a row below itself;
+ * capture the currently playing clips into a new row at `at`. Each returns the new row or -1. */
+NOTA_API int32_t    nota_session_insert_scene(NotaEngine* engine, int32_t at);
+NOTA_API int32_t    nota_session_duplicate_scene(NotaEngine* engine, int32_t scene);
+NOTA_API int32_t    nota_session_capture_scene(NotaEngine* engine, int32_t at);
+/* Move a scene row (its slots on every track and its properties) to another index. */
+NOTA_API NotaResult nota_session_move_scene(NotaEngine* engine, int32_t from, int32_t to);
+/* Launch with a velocity 0..1 (scaled by the clip's velocity_amount); launch_slot uses 1. */
+NOTA_API NotaResult nota_session_launch_slot_vel(NotaEngine* engine, int32_t track_id, int32_t scene, float velocity);
+/* The launch button was released: stops a Gate / Repeat slot. No-op for other modes. */
+NOTA_API NotaResult nota_session_release_slot(NotaEngine* engine, int32_t track_id, int32_t scene);
+/* Hand one track back to the Arrangement: stops its session clip right away. */
+NOTA_API NotaResult nota_session_track_back_to_arrangement(NotaEngine* engine, int32_t track_id);
+/* Playing slot of a track (-1 none) and its loop-local position in beats (progress). */
+NOTA_API int32_t    nota_session_playing_slot(const NotaEngine* engine, int32_t track_id);
+NOTA_API double     nota_session_slot_position(const NotaEngine* engine, int32_t track_id);
+NOTA_API double     nota_session_get_launch_quant(const NotaEngine* engine);
+/* Global follow-action switch (default on): off = clips and scenes never follow. */
+NOTA_API NotaResult nota_session_set_follow(NotaEngine* engine, int32_t on);
+NOTA_API int32_t    nota_session_get_follow(const NotaEngine* engine);
+/* Fixed recording length in beats (0 = off): a session take stops by itself after it. */
+NOTA_API NotaResult nota_session_set_record_length(NotaEngine* engine, double beats);
+NOTA_API double     nota_session_get_record_length(const NotaEngine* engine);
+/* Session Rec: record into the first armed track with an empty slot in `scene`.
+ * Returns that track id, or 0 if no armed track has room. */
+NOTA_API int32_t    nota_session_record_scene(NotaEngine* engine, int32_t scene);
+/* The in-progress session take: 1 if recording (track, scene, beats recorded so far). */
+/* A launched scene applied its tempo / signature (on its start boundary): returns 1 once and
+ * the values (bpm 0 or num/den 0 = unchanged), so the UI's transport can follow. */
+NOTA_API int32_t    nota_session_take_scene_tempo(NotaEngine* engine, double* bpm, int32_t* num, int32_t* den);
+/* Min/max peak pairs over an audio slot's take (whole sample); returns the bucket count. */
+NOTA_API int32_t    nota_session_slot_peaks(const NotaEngine* engine, int32_t track_id, int32_t scene, float* out_min_max, int32_t max_points);
+NOTA_API int32_t    nota_session_record_target(const NotaEngine* engine, int32_t* track_id, int32_t* scene, double* elapsed_beats);
 
 /* ---- Arrangement geometry (M4) ------------------------------------------- */
 /* Fills `out` for the track at `index` (0..track_count-1). Returns 1, or 0 if

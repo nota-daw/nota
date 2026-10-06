@@ -379,33 +379,49 @@ filterable knob grid (and the sidechain source when it has a bus). Rhythm moved 
 ## Shell
 
 ```
-┌ header 36 ─ project name, centred ─────────────────────────────────────┐
-│ transport 60 ─ view switch · console · tempo · signature · grid · …  CPU│
+┌ header 36 ─ "Nota", centred ───────────────────────────────────────────┐
+│ transport 60 ─ project · view switch · console · tempo · …          CPU│
 ├─────────────┬──────────────────────────────────────────────────────────┤
 │ browser     │ canvas (arrangement · session · modular)                 │
 ├─────────────┴──────────────────────────────────────────────────────────┤
-└ status 22 ─────────────────────────────────────────────────────────────┘
+│ detail 32 + cards ─ Devices · Pattern · Clip · track · Freeze · ⧉ ×     │
+└ status 22 ─ plain text on the gutter ──────────────────────────────────┘
 ```
 
-- **Header 36** — frameless; macOS traffic lights in a left inset, the project name
-  (`Heading`) centred; Windows reserves 180 px for the caption buttons.
+- **Header 36** — frameless; macOS traffic lights in a left inset, "Nota" (`Heading`)
+  centred — the project's name lives in the transport; Windows reserves 180 px for the
+  caption buttons.
 - **Transport 60, under the header** — an island like the browser and the canvas
   (`Border.transport`: Well, hairline, radius 6, 12 px from the window edges). Stop / play /
   record, position and loop share the console, one 42 recess on Void inside it
   (`Border.console`); the view switch and the master well sit on Card. It reads left to
-  right: view switch (Arrangement · Session · Modular) · the console · tempo `120.00`,
+  right: the project name (13 semibold, Ink 1) · view switch (Arrangement · Session · Modular) · the console · tempo `120.00`,
   signature, grid · the switches (metronome, follow, snap, automation) — then, pinned right,
   MIDI, CPU and master. Buttons are 28, Play 40; Play is raised at rest and solid brass only
   while the transport runs. There is no add-track button — tracks come from the browser.
-  Launch quantize appears only in Session. Transport buttons are not focusable, so
+  Launch quantize lives in the Session toolbar, not here. Transport buttons are not focusable, so
   Space / R / L / Return always reach the window.
 - **Body** — the browser on the left and the canvas float as panels on `Gutter` with 12 px
   gaps; the canvas is always sunken relative to panels. The splitter is a transparent grab
   strip inside the gap.
+- **Detail panel** — the third island: Panel ground, hairline, radius 6, 12 px from the
+  window edges and from the canvas above. Header 32: the mode segments, the track (8 px
+  colour square, name 12 semibold, Ink 5 routing summary), outlined 22 px Freeze /
+  Live Freeze, a hairline, then pop-out and close as ghost icons.
+- **Status 22** — one line of `Caption` text straight on the gutter, no bar and no rule,
+  aligned 16 px in.
 - **List rows** are 26 and one line: a colour dot or bar, the name, mono metadata right.
 - **Arrangement:** track rows 64 (the header carries every control), group rows 26 (open to
   64 while selected), header column 228, default zoom 28 px per beat. Every y ↔ row
-  conversion goes through `ArrangementView.RowTop` / `RowAtY`.
+  conversion goes through `ArrangementView.RowTop` / `RowAtY`. A group's rows step their
+  3 px colour spine 10 px further in per level (`GroupIndent`), the name just past it.
+  Above the tracks: Overview 34 (one 2 px line per clip row at a 3.4 px pitch, track
+  colour at 60 %; the viewport an Ink 4 frame over a 5 % lift — no brass, no scrim),
+  Sections 22, Zoom + ruler 24. Overview and the ruler end on `BorderDefault`, Sections on
+  a `Hairline`. The horizontal scrollbar is a 12 px well under a hairline with a 5 px pill
+  (`ThinScrollBar`: Border Strong, Ink 5 when hot). Audio clips draw their waveform as
+  spaced bars by default — a 1 px stroke every 3 px, mirrored about the centre;
+  Settings → Appearance → Waveform switches to Solid (a column per pixel).
 - **Clip editor** (MIDI and audio share one frame, `ClipEditorKit`): header 38 whose first
   232 is the clip cell (3 px track-colour bar, name, mono kind badge), modes as shell
   segments after it; inspector 232 on the left, sections split by hairlines and ending in

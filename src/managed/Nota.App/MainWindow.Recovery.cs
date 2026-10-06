@@ -53,6 +53,7 @@ public partial class MainWindow
 
         CloseFloatingDetail();   // tear down the popped-out Devices/Clip window, if any
         ShutdownGamepad();       // stop the IOKit pad thread before the engine dies
+        ShutdownRemote();        // phones leave (their held notes released) before the engine dies
         _recovery.EndSessionClean();
     }
 

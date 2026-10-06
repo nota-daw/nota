@@ -31,6 +31,7 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
         recordTrackId_ = -1;
+        recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
     }
@@ -70,7 +71,8 @@ bool Engine::ensureAudioInput() {
     return input_->start([this](const float* s, int32_t n) {
         if (n > inputBlockFrames_.load(std::memory_order_relaxed))
             inputBlockFrames_.store(n, std::memory_order_relaxed);
-        if (hwRecordTap_.load(std::memory_order_relaxed)) {
+        // The gate is shut while a count-in clicks: the take starts when the transport rolls.
+        if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_relaxed)) {
             int64_t dropped = 0;
             for (int32_t i = 0; i < n; ++i)
                 if (!inputQueue_.push(InputFrame{ s[i * 2], s[i * 2 + 1] })) ++dropped;
@@ -153,6 +155,23 @@ void Engine::noteOff(int32_t pitch) {
         liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }
 
+void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
+    {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{true, pitch, velocity, trackId});
+    }
+    if (pitch >= 0 && pitch < 128)
+        liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
+}
+void Engine::trackNoteOff(int32_t trackId, int32_t pitch) {
+    {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{false, pitch, 0.0f, trackId});
+    }
+    if (pitch >= 0 && pitch < 128)
+        liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
+}
+
 // Currently-pressed live-input pitches (keyboard + MIDI), oldest bit order. Lock-free.
 int32_t Engine::liveHeldNotes(int32_t* out, int32_t maxN) const {
     if (!out || maxN <= 0) return 0;
@@ -199,11 +218,15 @@ void Engine::setRecording(bool on) {
     }
     if (!audioT && !instT) { recording_.store(false, std::memory_order_relaxed); recordStartStatus_ = 1; return; }
 
+    // A take started from stop gets the count-in (if one is set); the capture taps stay
+    // gated until it runs out, so the clicks-only pre-roll isn't recorded.
+    recordCountIn_ = !wasPlaying && !recordSessionAudio_ && countInBars() > 0;
     bool audioOk = true;
     if (audioT) audioOk = startAudioRecording(audioT->id());
 
     if (instT) {
         recordTrackId_ = instT->id();
+        recordTrackRt_.store(recordTrackId_, std::memory_order_relaxed);
         // Overdub into a clip that already spans the playhead, else open one there.
         int32_t idx = -1;
         for (int32_t i = 0; i < static_cast<int32_t>(instT->midiClips.size()); ++i) {
@@ -227,7 +250,10 @@ void Engine::setRecording(bool on) {
         recordReturnBeat_ = playhead;
         recordStartedTransport_ = !wasPlaying;
     }
-    if (!wasPlaying) transportPlay();   // roll so the take advances (idempotent if already rolling)
+    if (!wasPlaying) {   // roll so the take advances (idempotent if already rolling)
+        if (recordCountIn_) transportPlayCountIn(); else transportPlay();
+    }
+    recordCountIn_ = false;
     recordStartStatus_ = (audioT && !audioOk && !instT) ? 2 : 0;
 }
 
@@ -334,7 +360,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
             recordReturnBeat_ = audioRecordStartBeat_;
             recordStartedTransport_ = !transport_.uiIsPlaying();
         }
-        if (!transport_.uiIsPlaying()) transportPlay();
+        if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();
         return true;
     }
 
@@ -352,7 +378,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
         recordReturnBeat_ = audioRecordStartBeat_;
         recordStartedTransport_ = !transport_.uiIsPlaying();
     }
-    if (!transport_.uiIsPlaying()) transportPlay();
+    if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();   // else setRecording counts in
     return true;
 }
 
@@ -406,6 +432,8 @@ void Engine::stopAudioRecording() {
             const double deviceFrames = sample->frames * (sr > 0 ? sr / sample->sourceSampleRate : 1.0);
             s.lengthBeats = spb > 0 ? deviceFrames / spb : 4.0;
             if (s.lengthBeats <= 0.0) s.lengthBeats = 4.0;
+            // Fixed-length capture keeps its length; an open-ended take is cut to whole quanta.
+            s.lengthBeats = sessionRecordLen_ > 0.0 ? sessionRecordLen_ : roundedTakeBeats(s.lengthBeats);
         }
         republishWithTrack(trackId, nt);
         return;

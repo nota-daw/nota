@@ -21,6 +21,9 @@ namespace nota {
 struct Graph {
     std::vector<std::shared_ptr<Track>> tracks;
     int32_t sceneCount = 8;   // Session view rows (M5)
+    // Scene names / colours / tempo / follow (Session P0). May be shorter than sceneCount
+    // (missing rows read as defaults). Carried forward wherever sceneCount is.
+    std::vector<SceneInfo> scenes;
     // Master-volume automation (M9 follow-up): a graph-level lane (not tied to a
     // track), applied to the master gain in applyAutomation. Undo-free via the
     // snapshot, like track lanes. NB: fresh-graph builds must carry it forward

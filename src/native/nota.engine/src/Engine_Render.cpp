@@ -94,6 +94,7 @@ void Engine::applyMidiCcRouting(Track& t) {
 
 void Engine::poll() {
     if (audioRecording_) drainInputQueue(); // keep the capture buffer flowing while recording
+    serviceSessionFollow();                 // scene follow + fixed-length session capture
 
     // Automation write/record (M9-C). Message thread: a transport stop ends any
     // latched gesture, and active gestures are sampled at the live playhead.
@@ -215,14 +216,31 @@ void Engine::renderOffline(float* out, int32_t frames) {
     processBlock(out, frames);
 }
 
+void Engine::endCountIn() {
+    countInActive_ = false;
+    uiCountIn_.store(0.0, std::memory_order_relaxed);
+    captureGate_.store(true, std::memory_order_relaxed);
+}
+
 void Engine::drainCommands() {
     Command c;
     while (commands_.pop(c)) {
         switch (c.type) {
             case CommandType::SetToneEnabled:   toneEnabled_ = (c.i0 != 0); break;
             case CommandType::SetFrequency:     frequency_ = c.f0; break;
-            case CommandType::TransportPlay:    transport_.play(); break;
-            case CommandType::TransportStop:    transport_.stop(); break;
+            case CommandType::TransportPlay:
+                if (c.i0 > 0 && !transport_.isPlaying()) {   // count-in first (i0 = bars)
+                    countInActive_ = true;
+                    countInPos_ = 0.0;
+                    countInTotal_ = static_cast<double>(c.i0) * std::max(1, transport_.beatsPerBar());
+                    lastCountInBeat_ = -1;
+                    uiCountIn_.store(countInTotal_, std::memory_order_relaxed);
+                } else {
+                    endCountIn();
+                    transport_.play();
+                }
+                break;
+            case CommandType::TransportStop:    endCountIn(); transport_.stop(); break;
             case CommandType::SetBpm:           transport_.setBpm(c.d0); break;
             case CommandType::SetTimeSignature: transport_.setTimeSignature(c.i0, c.i1); break;
             case CommandType::SetLoop:          transport_.setLoop(c.i0 != 0, c.d0, c.d1); break;
@@ -250,10 +268,29 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     const double nowBeat = slot ? (slotLen > 0.0 ? std::fmod(slot->localBeats, slotLen) : slot->localBeats)
                                 : blockStartBeat;
 
+    // Track-addressed notes (Nota Remote) are recorded only when they play the take's
+    // track; ordinary live input records onto it whatever it is.
+    const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
+    // Every live event plays at offset 0 and the render sorts offs ahead of ons at one
+    // offset, so a pitch's on and off landing in the same block (a quick tap, a finger
+    // sliding over pads, a phone's notes arriving in one Wi-Fi burst) would play
+    // off-then-on and hang the note. A pitch's second event — and anything past the
+    // block's capacity — waits for the next block, with everything queued behind it.
+    uint32_t seen[4] = {};
     MidiEvent e;
-    while (liveMidi_.pop(e)) {
-        if (liveCount_ < kMaxLive) liveEvents_[liveCount_++] = e;
-        if (rec && playing && e.pitch >= 0 && e.pitch < 128) {
+    for (;;) {
+        if (liveCarried_) { e = liveCarry_; liveCarried_ = false; }
+        else if (!liveMidi_.pop(e) && !remoteMidi_.pop(e)) break;
+        const bool valid = e.pitch >= 0 && e.pitch < 128;
+        const uint32_t bit = valid ? 1u << (e.pitch & 31) : 0u;
+        if (liveCount_ >= kMaxLive || (valid && (seen[e.pitch >> 5] & bit))) {
+            liveCarry_ = e;
+            liveCarried_ = true;
+            break;
+        }
+        if (valid) seen[e.pitch >> 5] |= bit;
+        liveEvents_[liveCount_++] = e;
+        if (rec && playing && e.pitch >= 0 && e.pitch < 128 && (e.trackId < 0 || e.trackId == recTrack)) {
             if (e.on) {
                 pendingActive_[e.pitch] = true;
                 pendingStart_[e.pitch] = nowBeat;
@@ -323,9 +360,12 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
     }
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
-    if (t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed)) {
-        for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+    // A track-addressed event (Nota Remote) plays only its own track.
+    const bool takesLive = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+    for (int i = 0; i < liveCount_ && n < 1024; ++i) {
+        const MidiEvent& le = liveEvents_[i];
+        if (le.trackId < 0 ? takesLive : le.trackId == t.id())
+            evs[n++] = {0, le.on, le.pitch, le.velocity};
     }
     return n;
 }
@@ -492,13 +532,15 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     MidiEv evs[1024];
     int n = 0;
     const long i0 = static_cast<long>(std::floor(p / L));
+    const float velGain = sp.gain;
     for (long it = i0; it <= i0 + 1; ++it) {
+        if (!s.loop && it > 0) break;   // one-shot: a single pass
         for (const Note& note : s.midi.notes) {
             if (note.startBeat < 0.0 || note.startBeat >= L) continue;
             const double onAbs = it * L + note.startBeat;
             const double offAbs = onAbs + note.lengthBeats;
             if (onAbs >= p && onAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity, static_cast<float>(note.lengthBeats)};
+                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity * velGain, static_cast<float>(note.lengthBeats)};
             if (offAbs >= p && offAbs < p + db && n < 1024)
                 evs[n++] = {static_cast<int32_t>((offAbs - p) * spb), false, note.pitch, 0.0f};
         }
@@ -506,7 +548,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     // Live monitoring while overdub-recording into this slot (M5-4).
     if (recordSlotPlayer_.load(std::memory_order_acquire) == &sp)
         for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+            if (liveEvents_[i].trackId < 0 || liveEvents_[i].trackId == t.id())   // a phone plays only its own track
+                evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
 
     std::sort(evs, evs + n, midiEvLess);
 
@@ -529,34 +572,31 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     sp.localBeats = p + db;
 }
 
-// Renders an audio track's playing Session slot (pre-fader), looping the captured
-// take over the slot's length (M5-4). Position tracks the slot's own loop clock.
+// Renders an audio track's playing Session slot (pre-fader): the slot's clip — the same
+// clip model as the arrangement (region, warp, pitch, reverse, envelopes) — looped over the
+// slot's length on the slot's own clock (S-06). A block that crosses the loop end renders
+// in two pieces; a one-shot slot stops at the end.
 void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
     auto& sp = *t.sessionPlayer;
     const int32_t slot = sp.playing.load(std::memory_order_relaxed);
-    if (slot < 0 || slot >= static_cast<int32_t>(t.sessionSlots.size())) return;
+    if (slot < 0 || slot >= static_cast<int32_t>(t.sessionSlots.size()) || spb <= 0.0) return;
     const SessionSlot& s = t.sessionSlots[slot];
     if (!s.hasClip || !s.audio.sample) return;
 
-    const SampleBuffer& sb = *s.audio.sample;
-    const double sr = transport_.sampleRate();
-    const double ratio = sr > 0 ? sb.sourceSampleRate / sr : 1.0; // source frames per device frame
     const double L = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
-    const float gain = s.audio.gain;
-
-    for (int32_t i = 0; i < frames; ++i) {
-        double loopBeat = std::fmod(sp.localBeats + i / spb, L);
-        if (loopBeat < 0.0) loopBeat += L;
-        const double srcPos = loopBeat * spb * ratio; // -> source frames
-        const int64_t i0 = static_cast<int64_t>(srcPos);
-        if (i0 < 0 || i0 >= sb.frames) continue;
-        const double frac = srcPos - i0;
-        float l0, r0, l1, r1;
-        sb.readStereo(i0, l0, r0);
-        sb.readStereo(i0 + 1, l1, r1);
-        dst[i * 2]     = static_cast<float>(l0 + (l1 - l0) * frac) * gain;
-        dst[i * 2 + 1] = static_cast<float>(r0 + (r1 - r0) * frac) * gain;
+    double p = sp.localBeats;
+    int32_t done = 0;
+    while (done < frames) {
+        if (!s.loop && p >= L) break;
+        double local = std::fmod(p, L);
+        if (local < 0.0) local += L;
+        const double toEnd = (L - local) * spb;
+        int32_t seg = static_cast<int32_t>(std::min<double>(frames - done, std::ceil(toEnd - 1e-9)));
+        if (seg <= 0) seg = 1;
+        mixAudioClip(s.audio, dst + done * 2, seg, local * spb, spb, sp.gain);
+        done += seg;
+        p += seg / spb;
     }
     sp.localBeats += frames / spb;
 }
@@ -566,101 +606,105 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
 void Engine::renderAudioClipsRaw(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
                                  double blockStart, double spb) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
+    for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f);
+}
+
+// One clip of renderAudioClipsRaw — shared with Session audio slots, which loop a clip on
+// their own clock (renderSessionAudioSlotRaw).
+void Engine::mixAudioClip(const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain) {
+    if (!clip.active) return;   // deactivated clip (key 0): stays on the timeline but silent
     const double sr = transport_.sampleRate();
-    for (const AudioClip& clip : clips) {
-        if (!clip.active) continue;   // deactivated clip (key 0): stays on the timeline but silent
-        const double startSamples = clip.startBeat * spb;
-        // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
-        // beats, applied per sample. Empty = fast path (no cost). Pan uses a balance
-        // law (unity at centre) so it composes with the track's own pan stage.
-        const bool hasVol = !clip.volumeEnvelope.points.empty();
-        const bool hasPan = !clip.panEnvelope.points.empty();
-        const bool hasAdsr = !clip.adsr.isIdentity();
-        const bool hasEnv = hasVol || hasPan || hasAdsr;
-        double lenBeats = 0.0;   // played length (beats) for the ADSR release — set per path below
-        auto applyEnv = [&](double p, float& l, float& r) {
-            const double b = (p - startSamples) / spb;
-            if (hasAdsr) { const float g = clip.adsr.gainAt(b, lenBeats); l *= g; r *= g; }
-            if (hasVol) { const float g = std::clamp(clip.volumeEnvelope.valueAt(b), 0.0f, 1.0f); l *= g; r *= g; }
-            if (hasPan) {
-                const float pan = std::clamp(clip.panEnvelope.valueAt(b), -1.0f, 1.0f);
-                if (pan > 0.0f) l *= (1.0f - pan); else if (pan < 0.0f) r *= (1.0f + pan);
-            }
-        };
-
-        // Warped clips: copy straight from the offline stretch cache.
-        // The cache holds the played window [warpPlayStart, warpPlayEndEff] pre-rendered
-        // at the device rate, so there is no realtime stretch here — just a memcpy-cheap
-        // read (no per-clip-start priming spike). The clip's on-timeline length is the
-        // cache's frame count (both are warpPlayLen×spb once rebuilt for the tempo).
-        if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
-            const WarpCache& wc = *clip.warpCache;
-            const double clipDeviceLen = static_cast<double>(wc.frames);
-            lenBeats = clipDeviceLen / spb;
-            const double ovStart = std::max(blockStart, startSamples);
-            const double ovEnd   = std::min(blockStart + frames, startSamples + clipDeviceLen);
-            if (ovEnd <= ovStart) continue;
-            const int32_t dstOff  = static_cast<int32_t>(std::llround(ovStart - blockStart));
-            const int32_t segLen  = static_cast<int32_t>(std::llround(ovEnd - ovStart));
-            if (segLen <= 0 || dstOff < 0 || dstOff + segLen > frames) continue;
-            const int64_t cacheBase = std::llround(ovStart - startSamples);   // 0-based into the cache
-            const float* csamp = wc.samples.data();
-            const float g = clip.gain;
-            for (int32_t j = 0; j < segLen; ++j) {
-                // Reverse reads the same cache back-to-front: the window is already the
-                // played length, so mirroring the index is exact (no resample).
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
-                if (ci < 0 || ci >= wc.frames) continue;
-                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
-                if (hasEnv) applyEnv(ovStart + j, l, r);
-                dst[(dstOff + j) * 2]     += l * g;
-                dst[(dstOff + j) * 2 + 1] += r * g;
-            }
-            continue;
+    const double startSamples = clip.startBeat * spb;
+    // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
+    // beats, applied per sample. Empty = fast path (no cost). Pan uses a balance
+    // law (unity at centre) so it composes with the track's own pan stage.
+    const bool hasVol = !clip.volumeEnvelope.points.empty();
+    const bool hasPan = !clip.panEnvelope.points.empty();
+    const bool hasAdsr = !clip.adsr.isIdentity();
+    const bool hasEnv = hasVol || hasPan || hasAdsr;
+    double lenBeats = 0.0;   // played length (beats) for the ADSR release — set per path below
+    auto applyEnv = [&](double p, float& l, float& r) {
+        const double b = (p - startSamples) / spb;
+        if (hasAdsr) { const float g = clip.adsr.gainAt(b, lenBeats); l *= g; r *= g; }
+        if (hasVol) { const float g = std::clamp(clip.volumeEnvelope.valueAt(b), 0.0f, 1.0f); l *= g; r *= g; }
+        if (hasPan) {
+            const float pan = std::clamp(clip.panEnvelope.valueAt(b), -1.0f, 1.0f);
+            if (pan > 0.0f) l *= (1.0f - pan); else if (pan < 0.0f) r *= (1.0f + pan);
         }
-        // Warp enabled but the cache isn't ready yet (a rebuild is pending after an
-        // edit/tempo change): stay silent rather than fall through and play the clip
-        // unwarped (wrong length/pitch) for the brief window until the cache publishes.
-        if (clip.warpEnabled) continue;
+    };
 
-        // Unwarped clips resample at their natural rate with varispeed transpose
-        // folded into the read ratio.
-        if (!clip.sample) continue;
-        const SampleBuffer& sb = *clip.sample;
-        const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
-        const int64_t len = clip.effectiveLength();
-        const double clipDeviceLen = len / ratio;
+    // Warped clips: copy straight from the offline stretch cache.
+    // The cache holds the played window [warpPlayStart, warpPlayEndEff] pre-rendered
+    // at the device rate, so there is no realtime stretch here — just a memcpy-cheap
+    // read (no per-clip-start priming spike). The clip's on-timeline length is the
+    // cache's frame count (both are warpPlayLen×spb once rebuilt for the tempo).
+    if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
+        const WarpCache& wc = *clip.warpCache;
+        const double clipDeviceLen = static_cast<double>(wc.frames);
         lenBeats = clipDeviceLen / spb;
-        for (int32_t i = 0; i < frames; ++i) {
-            const double p = blockStart + i;
-            if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
-            // Reverse walks the source region from its last frame back to its first;
-            // the interpolation is unchanged (srcPos is still a real source position).
-            double srcPos = clip.reversed
-                ? clip.sourceOffsetFrames + (len - 1) - (p - startSamples) * ratio
-                : clip.sourceOffsetFrames + (p - startSamples) * ratio;
-            if (srcPos < clip.sourceOffsetFrames) srcPos = clip.sourceOffsetFrames;
-            const int64_t i0 = static_cast<int64_t>(srcPos);
-            const double frac = srcPos - i0;
-            float l0, r0, l1, r1;
-            sb.readStereo(i0, l0, r0);
-            sb.readStereo(i0 + 1, l1, r1);
-            float l = static_cast<float>(l0 + (l1 - l0) * frac) * clip.gain;
-            float r = static_cast<float>(r0 + (r1 - r0) * frac) * clip.gain;
-            // Short edge fade (~3 ms) so a clip that starts/ends mid-waveform doesn't click.
-            const double edge = std::min(3.0 * sr / 1000.0, clipDeviceLen * 0.5);
-            if (edge > 1.0) {
-                const double into = p - startSamples;
-                double eg = 1.0;
-                if (into < edge) eg = into / edge;
-                else if (into > clipDeviceLen - edge) eg = (clipDeviceLen - into) / edge;
-                eg = std::clamp(eg, 0.0, 1.0);
-                l *= (float)eg; r *= (float)eg;
-            }
-            applyEnv(p, l, r);
-            dst[i * 2]     += l;
-            dst[i * 2 + 1] += r;
+        const double ovStart = std::max(blockStart, startSamples);
+        const double ovEnd   = std::min(blockStart + frames, startSamples + clipDeviceLen);
+        if (ovEnd <= ovStart) return;
+        const int32_t dstOff  = static_cast<int32_t>(std::llround(ovStart - blockStart));
+        const int32_t segLen  = static_cast<int32_t>(std::llround(ovEnd - ovStart));
+        if (segLen <= 0 || dstOff < 0 || dstOff + segLen > frames) return;
+        const int64_t cacheBase = std::llround(ovStart - startSamples);   // 0-based into the cache
+        const float* csamp = wc.samples.data();
+        const float g = clip.gain * extraGain;
+        for (int32_t j = 0; j < segLen; ++j) {
+            // Reverse reads the same cache back-to-front: the window is already the
+            // played length, so mirroring the index is exact (no resample).
+            const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+            if (ci < 0 || ci >= wc.frames) continue;
+            float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+            if (hasEnv) applyEnv(ovStart + j, l, r);
+            dst[(dstOff + j) * 2]     += l * g;
+            dst[(dstOff + j) * 2 + 1] += r * g;
         }
+        return;
+    }
+    // Warp enabled but the cache isn't ready yet (a rebuild is pending after an
+    // edit/tempo change): stay silent rather than fall through and play the clip
+    // unwarped (wrong length/pitch) for the brief window until the cache publishes.
+    if (clip.warpEnabled) return;
+
+    // Unwarped clips resample at their natural rate with varispeed transpose
+    // folded into the read ratio.
+    if (!clip.sample) return;
+    const SampleBuffer& sb = *clip.sample;
+    const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
+    const int64_t len = clip.effectiveLength();
+    const double clipDeviceLen = len / ratio;
+    lenBeats = clipDeviceLen / spb;
+    for (int32_t i = 0; i < frames; ++i) {
+        const double p = blockStart + i;
+        if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
+        // Reverse walks the source region from its last frame back to its first;
+        // the interpolation is unchanged (srcPos is still a real source position).
+        double srcPos = clip.reversed
+            ? clip.sourceOffsetFrames + (len - 1) - (p - startSamples) * ratio
+            : clip.sourceOffsetFrames + (p - startSamples) * ratio;
+        if (srcPos < clip.sourceOffsetFrames) srcPos = clip.sourceOffsetFrames;
+        const int64_t i0 = static_cast<int64_t>(srcPos);
+        const double frac = srcPos - i0;
+        float l0, r0, l1, r1;
+        sb.readStereo(i0, l0, r0);
+        sb.readStereo(i0 + 1, l1, r1);
+        float l = static_cast<float>(l0 + (l1 - l0) * frac) * clip.gain * extraGain;
+        float r = static_cast<float>(r0 + (r1 - r0) * frac) * clip.gain * extraGain;
+        // Short edge fade (~3 ms) so a clip that starts/ends mid-waveform doesn't click.
+        const double edge = std::min(3.0 * sr / 1000.0, clipDeviceLen * 0.5);
+        if (edge > 1.0) {
+            const double into = p - startSamples;
+            double eg = 1.0;
+            if (into < edge) eg = into / edge;
+            else if (into > clipDeviceLen - edge) eg = (clipDeviceLen - into) / edge;
+            eg = std::clamp(eg, 0.0, 1.0);
+            l *= (float)eg; r *= (float)eg;
+        }
+        applyEnv(p, l, r);
+        dst[i * 2]     += l;
+        dst[i * 2 + 1] += r;
     }
 }
 
@@ -696,7 +740,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     const double sr = transport_.sampleRate();
     const double spb = transport_.samplesPerBeat();
-    const bool playing = transport_.isPlaying();
+    bool playing = transport_.isPlaying();   // flips to true mid-block when a count-in runs out
 
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
@@ -739,13 +783,29 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             const double toEnd = transport_.loopEndSamples() - transport_.playheadSamples();
             if (toEnd > 0.5 && toEnd < seg) seg = std::max(1, static_cast<int32_t>(std::lround(toEnd)));
         }
+        // End the segment where the count-in runs out, so the transport rolls on that sample.
+        if (countInActive_ && spb > 0.0) {
+            const double left = (countInTotal_ - countInPos_) * spb;
+            if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
+        }
         const double segStart = transport_.playheadSamples();
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = false;
+        bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
+        else if (countInActive_) countInDone = renderCountIn(out + done * 2, seg, spb);
         transport_.advanceBy(seg);
         done += seg;
+        if (countInDone) {
+            endCountIn();
+            transport_.play();
+            // Let the metronome click the beat we launch on (not when starting mid-beat).
+            const double b = transport_.playheadSamples() / spb;
+            const int64_t fb = static_cast<int64_t>(std::floor(b));
+            lastBeatEmitted_ = (b - fb < 1e-6) ? fb - 1 : fb;
+            playing = chase = renderWasPlaying_ = true;
+        }
     }
 
     // Declick each loop seam: the playhead jumps and sounding voices are cut at the
@@ -854,7 +914,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
-        const int32_t recSrc = internalRecordSource_.load(std::memory_order_relaxed);
+        const int32_t recSrc = countInActive_ ? 0 : internalRecordSource_.load(std::memory_order_relaxed);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
@@ -959,6 +1019,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             bool sessionActive = false;
             if (!frozenActive && !capturing && !monitoring) if (auto& sp = t.sessionPlayer) {
+                // Follow actions + Repeat launch mode queue the next request before it applies.
+                if (playing) sessionPreApply(t, frames / spb);
                 if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
                     if (t.instrument) t.instrument->allNotesOff();
                     for (auto& md : t.midiEffects) if (md) md->reset();   // clock switch → flush arp
@@ -984,9 +1046,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (monitoring)
                     renderMonitorInput(g, t, scratch_.data(), frames);
                 else if (sessionActive && t.type() == TrackType::Instrument)
-                    renderSessionSlotRaw(t, scratch_.data(), frames, spb);
+                    { renderSessionSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
                 else if (sessionActive && t.type() == TrackType::Audio)
-                    renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb);
+                    { renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
                 else if (t.type() == TrackType::Instrument)
                     renderInstrumentRaw(g, t, scratch_.data(), frames, blockStart, spb, playing);
                 else if (playing && arrangementActive)
@@ -1226,6 +1288,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
     }
 }
 
+void Engine::renderClick(float* out, int32_t i, int clickLen, double sr) {
+    if (clickRemaining_ <= 0) return;
+    const float env = static_cast<float>(clickRemaining_) / static_cast<float>(clickLen);
+    const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain;
+    out[i * 2] += s; out[i * 2 + 1] += s;
+    clickPhase_ += kTwoPi * clickFreq_ / sr;
+    if (clickPhase_ >= kTwoPi) clickPhase_ -= kTwoPi;
+    --clickRemaining_;
+}
+
 void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSamples) {
     if (!transport_.metronomeEnabled()) return;
     const double sr = transport_.sampleRate();
@@ -1244,15 +1316,33 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
                 clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
             }
         }
-        if (clickRemaining_ > 0) {
-            const float env = static_cast<float>(clickRemaining_) / static_cast<float>(clickLen);
-            const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain;
-            out[i * 2] += s; out[i * 2 + 1] += s;
-            clickPhase_ += kTwoPi * clickFreq_ / sr;
-            if (clickPhase_ >= kTwoPi) clickPhase_ -= kTwoPi;
-            --clickRemaining_;
-        }
+        renderClick(out, i, clickLen, sr);
     }
+}
+
+// Count-in clicks: same voice as the metronome, accent on each bar's first beat. Sounds
+// regardless of the metronome switch; the transport is stopped meanwhile.
+bool Engine::renderCountIn(float* out, int32_t numFrames, double spb) {
+    const double sr = transport_.sampleRate();
+    const int beatsPerBar = std::max(1, transport_.beatsPerBar());
+    const int clickLen = static_cast<int>(0.03 * sr);
+    const double inc = spb > 0.0 ? 1.0 / spb : 0.0;
+
+    for (int32_t i = 0; i < numFrames; ++i) {
+        if (countInPos_ < countInTotal_) {
+            const int64_t beat = static_cast<int64_t>(countInPos_ + 1e-9);
+            if (beat != lastCountInBeat_) {
+                lastCountInBeat_ = beat;
+                clickRemaining_ = clickLen;
+                clickPhase_ = 0.0;
+                clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
+            }
+        }
+        renderClick(out, i, clickLen, sr);
+        countInPos_ += inc;
+    }
+    uiCountIn_.store(std::max(0.0, countInTotal_ - countInPos_), std::memory_order_relaxed);
+    return inc <= 0.0 || countInPos_ >= countInTotal_ - 0.5 * inc;
 }
 
 void Engine::renderTone(float* out, int32_t numFrames) {

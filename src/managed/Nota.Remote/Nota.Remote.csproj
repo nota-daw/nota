@@ -1,0 +1,54 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Nota Remote: serves the phone controller (a small PWA, built from src/web/remote) over the
+     local network and keeps a WebSocket with every paired phone. Kept free of Avalonia like
+     Nota.Mcp — the UI-thread side (transport view-model, MIDI Learn, refresh) is injected
+     through IRemoteHost, implemented by Nota.App. -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nota.Application\Nota.Application.csproj" />
+  </ItemGroup>
+
+  <!-- The phone app. `npm run build` in src/web/remote writes into wwwroot/, which is committed;
+       the files are embedded so the app ships as one assembly and needs no web root on disk.
+       The build runs when its sources are newer than the output and a Node that Vite supports
+       is on the PATH (^20.19 or >= 22.12); without one (the Linux Docker image, an old Node)
+       the committed wwwroot ships as it is, with a warning. NotaSkipWebBuild=true skips it. -->
+  <PropertyGroup>
+    <RemoteWebDir>$(MSBuildProjectDirectory)/../../web/remote</RemoteWebDir>
+    <RemoteWwwRoot>$(MSBuildProjectDirectory)/wwwroot</RemoteWwwRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <RemoteWebSources Include="$(RemoteWebDir)/src/**/*;$(RemoteWebDir)/public/**/*;$(RemoteWebDir)/index.html;$(RemoteWebDir)/package.json;$(RemoteWebDir)/package-lock.json;$(RemoteWebDir)/vite.config.ts;$(RemoteWebDir)/svelte.config.js;$(RemoteWebDir)/tsconfig.json" />
+  </ItemGroup>
+  <Target Name="BuildRemoteWeb" Inputs="@(RemoteWebSources)" Outputs="$(RemoteWwwRoot)/index.html"
+          Condition="Exists('$(RemoteWebDir)/package.json') and '$(NotaSkipWebBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="node -e &quot;const v=process.versions.node.split('.').map(Number),n=v[0]*100+v[1];process.exit(n&gt;=2212||(n&gt;=2019&amp;&amp;n&lt;2100)?0:1)&quot;"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ExitCode" PropertyName="NodeExit" />
+    </Exec>
+    <Warning Condition="'$(NodeExit)' != '0'" Text="Node.js 20.19+ / 22.12+ not found: the Nota Remote phone page is not rebuilt; the committed wwwroot ships as it is." />
+    <!-- Install when there is no node_modules yet, or the lockfile changed since the last install. -->
+    <Exec Condition="'$(NodeExit)' == '0' and (!Exists('$(RemoteWebDir)/node_modules/.package-lock.json') or $([System.IO.File]::GetLastWriteTime('$(RemoteWebDir)/package-lock.json').Ticks) &gt; $([System.IO.File]::GetLastWriteTime('$(RemoteWebDir)/node_modules/.package-lock.json').Ticks))"
+          WorkingDirectory="$(RemoteWebDir)" Command="npm ci --no-audit --no-fund" />
+    <Exec Condition="'$(NodeExit)' == '0'" WorkingDirectory="$(RemoteWebDir)" Command="npm run build" />
+  </Target>
+  <Target Name="EmbedRemoteWeb" BeforeTargets="BeforeBuild" DependsOnTargets="BuildRemoteWeb">
+    <ItemGroup>
+      <_RemoteWeb Include="$(RemoteWwwRoot)/**/*" />
+      <EmbeddedResource Include="@(_RemoteWeb)" LogicalName="wwwroot/%(_RemoteWeb.RecursiveDir)%(_RemoteWeb.Filename)%(_RemoteWeb.Extension)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
