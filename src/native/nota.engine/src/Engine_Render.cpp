@@ -250,10 +250,29 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     const double nowBeat = slot ? (slotLen > 0.0 ? std::fmod(slot->localBeats, slotLen) : slot->localBeats)
                                 : blockStartBeat;
 
+    // Track-addressed notes (Nota Remote) are recorded only when they play the take's
+    // track; ordinary live input records onto it whatever it is.
+    const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
+    // Every live event plays at offset 0 and the render sorts offs ahead of ons at one
+    // offset, so a pitch's on and off landing in the same block (a quick tap, a finger
+    // sliding over pads, a phone's notes arriving in one Wi-Fi burst) would play
+    // off-then-on and hang the note. A pitch's second event — and anything past the
+    // block's capacity — waits for the next block, with everything queued behind it.
+    uint32_t seen[4] = {};
     MidiEvent e;
-    while (liveMidi_.pop(e)) {
-        if (liveCount_ < kMaxLive) liveEvents_[liveCount_++] = e;
-        if (rec && playing && e.pitch >= 0 && e.pitch < 128) {
+    for (;;) {
+        if (liveCarried_) { e = liveCarry_; liveCarried_ = false; }
+        else if (!liveMidi_.pop(e) && !remoteMidi_.pop(e)) break;
+        const bool valid = e.pitch >= 0 && e.pitch < 128;
+        const uint32_t bit = valid ? 1u << (e.pitch & 31) : 0u;
+        if (liveCount_ >= kMaxLive || (valid && (seen[e.pitch >> 5] & bit))) {
+            liveCarry_ = e;
+            liveCarried_ = true;
+            break;
+        }
+        if (valid) seen[e.pitch >> 5] |= bit;
+        liveEvents_[liveCount_++] = e;
+        if (rec && playing && e.pitch >= 0 && e.pitch < 128 && (e.trackId < 0 || e.trackId == recTrack)) {
             if (e.on) {
                 pendingActive_[e.pitch] = true;
                 pendingStart_[e.pitch] = nowBeat;
@@ -323,9 +342,12 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
     }
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
-    if (t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed)) {
-        for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+    // A track-addressed event (Nota Remote) plays only its own track.
+    const bool takesLive = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+    for (int i = 0; i < liveCount_ && n < 1024; ++i) {
+        const MidiEvent& le = liveEvents_[i];
+        if (le.trackId < 0 ? takesLive : le.trackId == t.id())
+            evs[n++] = {0, le.on, le.pitch, le.velocity};
     }
     return n;
 }
@@ -506,7 +528,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     // Live monitoring while overdub-recording into this slot (M5-4).
     if (recordSlotPlayer_.load(std::memory_order_acquire) == &sp)
         for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+            if (liveEvents_[i].trackId < 0 || liveEvents_[i].trackId == t.id())   // a phone plays only its own track
+                evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
 
     std::sort(evs, evs + n, midiEvLess);
 

@@ -686,6 +686,10 @@ public interface IAudioEngine : IDisposable
     void SetTrackArmed(int trackId, bool armed);
     void NoteOn(int pitch, float velocity);
     void NoteOff(int pitch);
+    /// <summary>A live note addressed to one track, armed or not (Nota Remote: each phone plays
+    /// its own track). Recorded when that track holds the take. Safe to call from any thread.</summary>
+    void TrackNoteOn(int trackId, int pitch, float velocity);
+    void TrackNoteOff(int trackId, int pitch);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);

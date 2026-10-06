@@ -22,6 +22,8 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <!-- QR code for Connect Phone (Nota Remote). MIT. -->
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.2.1" />
   </ItemGroup>
 
   <!-- App icon for the window / taskbar. The macOS .app dock & Finder icon comes
@@ -43,6 +45,7 @@
     <ProjectReference Include="..\Nota.Presentation\Nota.Presentation.csproj" />
     <ProjectReference Include="..\Nota.Infrastructure\Nota.Infrastructure.csproj" />
     <ProjectReference Include="..\Nota.Mcp\Nota.Mcp.csproj" />
+    <ProjectReference Include="..\Nota.Remote\Nota.Remote.csproj" />
   </ItemGroup>
 
   <!-- Copy the native engine + scan worker next to the app binary so P/Invoke can

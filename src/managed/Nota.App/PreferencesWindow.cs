@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Settings (nota-design/Nota Settings.html): 880×640 with a 188px sidebar grouped as
-// Devices (Audio / MIDI / Gamepads), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
+// Devices (Audio / MIDI / Gamepads / Remote), Plug-ins (Plug-ins / Downloads: plug-ins + sample packs)
 // and General (Library / Appearance / Shortcuts), and a content pane per section under a
 // title + subtitle header. Audio device / sample-rate / buffer are persisted natively (audio.json)
 // and applied by restarting the backend (MainWindowViewModel.ApplyAudioSettings); scan
@@ -64,6 +64,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             new Page("Audio", "Device, sample rate and buffer", "M4 10 V14 M8 7 V17 M12 4 V20 M16 8 V16 M20 11 V13"),
             new Page("MIDI", "Controllers Nota listens to", "M4 5 H20 V19 H4 Z M8 5 V13 M12 5 V13 M16 5 V13"),
             new Page("Gamepads", "Play notes or drive mapped controls", "M7 8 H17 A4 4 0 0 1 21 12 V13 A4 4 0 0 1 14 16 H10 A4 4 0 0 1 3 13 V12 A4 4 0 0 1 7 8 Z M7 11 V13 M6 12 H8 M16 11.5 H16.01 M18 12.5 H18.01"),
+            new Page("Remote", "Phones and tablets on this network", "M8 3 H16 A1.5 1.5 0 0 1 17.5 4.5 V19.5 A1.5 1.5 0 0 1 16 21 H8 A1.5 1.5 0 0 1 6.5 19.5 V4.5 A1.5 1.5 0 0 1 8 3 Z M11 18 H13"),
         }),
         ("PLUG-INS", new[]
         {
@@ -257,9 +258,10 @@ public sealed partial class PreferencesWindow : NotaWindow
         0 => AudioPane(),
         1 => MidiPane(),
         2 => GamepadsPane(),
-        3 => PluginsPane(),
-        5 => LibraryPane(),
-        6 => AppearancePane(),
+        RemoteIndex => RemotePane(),
+        4 => PluginsPane(),
+        6 => LibraryPane(),
+        7 => AppearancePane(),
         _ => ShortcutsPane(),
     };
 

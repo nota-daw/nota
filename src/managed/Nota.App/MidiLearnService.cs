@@ -136,6 +136,50 @@ public sealed class MidiLearnService
         return Dispatch(MidiSourceKind.Gamepad, 0, axisId, value127) > 0;
     }
 
+    /// <summary>The mappings a phone control drives for a phone on <paramref name="trackId"/>. Tied
+    /// to the control, not the phone, so every phone on that track drives the same targets. The
+    /// XY pad and tilt are per track; a track without its own falls back to an unscoped mapping.</summary>
+    private List<MidiMapping> PhoneMappings(int controlId, int trackId)
+    {
+        int scope = PhoneScope(controlId, trackId);
+        var own = _mappings.Where(m => m.SourceKind == MidiSourceKind.Phone && m.Number == controlId && m.ScopeTrackId == scope).ToList();
+        if (own.Count == 0 && scope != 0)
+            own = _mappings.Where(m => m.SourceKind == MidiSourceKind.Phone && m.Number == controlId && m.ScopeTrackId == 0).ToList();
+        return own;
+    }
+
+    private static int PhoneScope(int controlId, int trackId)
+        => Nota.Remote.PhoneControls.PerTrack(controlId) ? Math.Max(0, trackId) : 0;
+
+    /// <summary>The mapping a phone control drives on that track, if any.</summary>
+    public MidiMapping? PhoneMappingFor(int controlId, int trackId) => PhoneMappings(controlId, trackId).FirstOrDefault();
+
+    /// <summary>Feed a Nota Remote control (normalized 0..1) from a phone on <paramref name="trackId"/>.
+    /// Binds the pending control, or drives every mapping on it — at full resolution, not
+    /// quantized to 0..127.</summary>
+    public Nota.Remote.PhoneControlResult HandlePhoneControl(int controlId, int trackId, double norm)
+    {
+        if (_pending is { } p)
+        {
+            Bind(p, MidiSourceKind.Phone, 0, controlId, PhoneScope(controlId, trackId));
+            LogMidi($"MIDI learn: phone {Nota.Remote.PhoneControls.Name(controlId)} → bound to '{p.Name}'");
+            return Nota.Remote.PhoneControlResult.Bound;
+        }
+        var list = PhoneMappings(controlId, trackId);
+        foreach (var m in list) ApplyNormalized(m, Math.Clamp(norm, 0, 1));
+        if (list.Count > 0) EventCount++;
+        return list.Count > 0 ? Nota.Remote.PhoneControlResult.Mapped : Nota.Remote.PhoneControlResult.None;
+    }
+
+    /// <summary>The source as the MIDI map lists it; a per-track phone control names its track.</summary>
+    public string SourceLabel(MidiMapping m)
+    {
+        if (m.SourceKind != MidiSourceKind.Phone || m.ScopeTrackId <= 0) return m.SourceLabel;
+        int i = IndexOfTrackId(m.ScopeTrackId);
+        string name = _engine.GetTrackName(m.ScopeTrackId);
+        return $"{m.SourceLabel} · {(name.Length > 0 ? name : $"Track {i + 1}")}";
+    }
+
     public void RemoveMapping(MidiMapping m)
     {
         if (_mappings.Remove(m)) MappingsChanged?.Invoke();
@@ -220,7 +264,7 @@ public sealed class MidiLearnService
         }
     }
 
-    private void Bind(MidiBinding binding, MidiSourceKind kind, int channel, int number)
+    private void Bind(MidiBinding binding, MidiSourceKind kind, int channel, int number, int scopeTrackId = 0)
     {
         // Rebinding a control replaces its old mapping; a source may still drive
         // several targets (fan-out), so we only dedupe on the target.
@@ -232,6 +276,7 @@ public sealed class MidiLearnService
             SourceKind = kind,
             Channel = channel,
             Number = number,
+            ScopeTrackId = scopeTrackId,
         });
         ClearPending();
         MappingsChanged?.Invoke();
@@ -251,13 +296,24 @@ public sealed class MidiLearnService
 
     private void Apply(MidiMapping m, int value127)
     {
+        if (m.Target.IsButton && m.SourceKind == MidiSourceKind.Note)
+        {
+            // A note-on fires; anything else crosses the half-way point (ApplyNormalized).
+            ApplyNormalized(m, value127 > 0 ? 1.0 : 0.0);
+            return;
+        }
+        ApplyNormalized(m, Math.Clamp(value127 / 127.0, 0, 1));
+    }
+
+    private void ApplyNormalized(MidiMapping m, double norm)
+    {
         var t = m.Target;
         if (t.IsButton)
         {
-            // A note-on, or anything else crossing the half-way point. Latch on the edge:
-            // a swept CC or a squeezed trigger sends a run of values past the threshold,
-            // and toggling on each one would make the target flutter.
-            bool on = m.SourceKind == MidiSourceKind.Note ? value127 > 0 : value127 >= 64;
+            // Crossing the half-way point. Latch on the edge: a swept CC or a squeezed
+            // trigger sends a run of values past the threshold, and toggling on each one
+            // would make the target flutter.
+            bool on = norm >= 0.5;
             if (m.Invert) on = !on;
             if (on == m.TriggerLatch) return;
             m.TriggerLatch = on;
@@ -265,7 +321,6 @@ public sealed class MidiLearnService
             return;
         }
 
-        double norm = Math.Clamp(value127 / 127.0, 0, 1);
         if (m.Invert) norm = 1.0 - norm;
         double outv = m.RangeMin + norm * (m.RangeMax - m.RangeMin);   // 0..1 within the mapped window
 
@@ -385,6 +440,8 @@ public sealed class MidiLearnService
         public double RangeMax { get; set; } = 1;
         public bool Invert { get; set; }
         public string DisplayName { get; set; } = "";
+        /// <summary>A per-track phone control's track (−1 = none).</summary>
+        public int ScopeTrackIndex { get; set; } = -1;
     }
 
     public void SaveMappings(string bundleDir)
@@ -406,6 +463,7 @@ public sealed class MidiLearnService
                 RangeMax = m.RangeMax,
                 Invert = m.Invert,
                 DisplayName = m.DisplayName,
+                ScopeTrackIndex = m.ScopeTrackId > 0 ? IndexOfTrackId(m.ScopeTrackId) : -1,
             });
         }
         var json = System.Text.Json.JsonSerializer.Serialize(list, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -426,6 +484,8 @@ public sealed class MidiLearnService
                     var kind = (MidiTargetKind)d.Kind;
                     int trackId = TrackScoped(kind) ? TrackIdAtIndex(d.TrackIndex) : -1;
                     if (TrackScoped(kind) && trackId < 0) continue;   // track since deleted
+                    int scope = d.ScopeTrackIndex >= 0 ? TrackIdAtIndex(d.ScopeTrackIndex) : 0;
+                    if (scope < 0) continue;                          // its phone's track since deleted
                     _mappings.Add(new MidiMapping
                     {
                         Target = new MidiTarget(kind, trackId, d.DeviceIndex, d.ParamIndex),
@@ -436,6 +496,7 @@ public sealed class MidiLearnService
                         RangeMin = d.RangeMin,
                         RangeMax = d.RangeMax,
                         Invert = d.Invert,
+                        ScopeTrackId = scope,
                     });
                 }
             }

@@ -641,6 +641,10 @@ NOTA_API NotaResult nota_track_set_armed(NotaEngine* engine, int32_t track_id, i
  * tracks; captured into the record clip while recording. Lock-free. */
 NOTA_API NotaResult nota_engine_note_on(NotaEngine* engine, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
+/* Live notes addressed to one track, armed or not (Nota Remote: each phone plays its
+ * own track). Recorded only when that track holds the take. Safe from any thread. */
+NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
+NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);

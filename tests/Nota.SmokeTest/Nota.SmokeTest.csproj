@@ -32,6 +32,7 @@
          assembly (Phase 0.7); Presentation is not in Infrastructure's closure. -->
     <ProjectReference Include="..\..\src\managed\Nota.Presentation\Nota.Presentation.csproj" />
     <ProjectReference Include="..\..\src\managed\Nota.Mcp\Nota.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\managed\Nota.Remote\Nota.Remote.csproj" />
   </ItemGroup>
 
   <!-- Engine contract types + ports live in the Application namespace. -->
