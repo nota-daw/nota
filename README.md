@@ -5,6 +5,17 @@
 <h1 align="center">Nota</h1>
 
 <p align="center">
+  <b>A free music studio for macOS, Windows and Linux.</b><br>
+  No subscription, no account, no feature tiers — just open it and make music.
+</p>
+
+<p align="center">
+  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-D9A13F?style=for-the-badge" alt="Download for macOS, Windows and Linux"></a>
+  &nbsp;
+  <a href="https://nota-daw.github.io/nota-site/"><img src="https://img.shields.io/badge/Website-2B2622?style=for-the-badge" alt="Website"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver&color=D9A13F" alt="Latest release"></a>
   <a href="https://github.com/nota-daw/nota/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/nota-daw/nota/release.yml?label=build" alt="Build status"></a>
   <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
@@ -12,205 +23,123 @@
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
 </p>
 
-> **Disclaimer.** Nota is first and foremost an **AI-driven** product — the bulk of it
-> was developed with AI assistance. It started as a tool I built for myself, and was only
-> later opened up as open source. Guided and shaped throughout by me,
-> **Egor Khindikaynen** aka **Ambertape** ([music](https://soundcloud.com/ambertape)).
+![Nota — arrangement view with device chain](assets/screenshots/screenshot_001.png)
 
-Nota is a cross-platform digital audio workstation (DAW). The audio engine and DSP
-are a portable C++20 core; the UI is Avalonia (.NET). Plugin hosting (VST3, plus AU
-on macOS) runs through JUCE, isolated in its own module so the engine core stays
-JUCE-free.
+## Why Nota
 
-![screenshot_001.png](assets/screenshots/screenshot_001.png)
-
-- **UI / app:** .NET 10, Avalonia 12 (C#) — `src/managed`
-- **Engine / DSP:** C++20, built with CMake + Ninja — `src/native/nota.engine`
-- **Audio backends:** CoreAudio (macOS), WASAPI (Windows), PulseAudio/ALSA (Linux, via miniaudio)
-- **MIDI:** CoreMIDI (macOS), RtMidi — WinMM (Windows) / ALSA (Linux)
-
-**Documentation:** [`ARCHITECTURE.md`](ARCHITECTURE.md) — how the engine, the C ABI and the
-app fit together · [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributing, licensing your
-work, and the real-time rules · [`LICENSES/`](LICENSES/) — license terms and the
-dependency register.
-
-The native engine is built separately by CMake, and the app's project copies the
-right artifact (`libnota_engine.dylib` / `nota_engine.dll` / `libnota_engine.so` +
-`nota-scanworker`) next to the managed binary for P/Invoke.
+- **Free, for good.** Open source, no paid edition, no "upgrade to unlock".
+- **Arrange and jam.** A linear **Arrangement** timeline and a clip-launching **Session**
+  grid, with material moving freely between them — plus a **Modular** view for patching
+  modulation by cable.
+- **A full kit out of the box.** ~35 built-in instruments and effects: subtractive,
+  wavetable, FM, granular and physical-modelling synths, a drum machine, EQ, compressors,
+  reverbs, delays, saturation, arpeggiator, chord and scale tools, racks with macros.
+- **Your plugins too.** VST3 on every platform, Audio Units on macOS. Popular free plugins
+  (Surge XT, Dexed, Dragonfly Reverb …) install in one click from Settings.
+- **Your phone is a controller.** Scan a QR code and play pads, keys and an XY pad, or ride
+  the mixer — over Wi-Fi or USB, nothing to install.
+- **Works where you do.** The same app on macOS, Windows and Linux, on Intel/AMD and ARM.
 
 ## Features
 
 A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised list.
 
-- **Three views** — a linear **Arrangement** timeline, a clip-launching **Session** grid
-  (material moves freely between them), and a **Modular** signal-graph editor with **CV
-  modulation** (LFO / envelope follower / MIDI→CV / ADSR / Macro / Math, patched with
-  cables onto any parameter).
-- **Tracks & mixer** — audio / MIDI / return / master / nestable **group** tracks; sends
-  and returns; MIDI routing between tracks; peak/RMS + true-peak metering; per-track device
-  chains.
-- **MIDI editing** — piano roll (draw/move/stretch, quantize, velocity, live edits as one
-  undo step); input from a MIDI keyboard, the computer keyboard, or a **gamepad** (macOS);
-  **MIDI file import** (drag a `.mid` in); **audio→MIDI** (melody / harmony / drums / slice).
-- **Audio** — recording (inputs and internal buses), WAV/AIFF/FLAC/MP3 import, clip
-  editing with fades, gain and a per-clip **ADSR**, and **warp / time-stretch** (Complex /
-  Complex Pro).
-- **~35 built-in devices** — synths (subtractive, wavetable, FM, granular, physical,
-  drum-machine and more), a full effects suite (EQ, dynamics, reverb/delay, saturation,
-  limiting, utility), MIDI effects (arp, scale, chord, …), and Instrument / Drum / Audio
-  Effect **racks** with macros.
-- **Plugin hosting** — VST3 everywhere, AU on macOS: native GUIs, state save/restore, PDC,
-  transport sync; parameters are automatable and MIDI-learnable.
-- **Downloads** — install open-source VST3 plugins (Surge XT, Dexed, Dragonfly Reverb …)
-  in one click from Settings, straight from the
-  [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry).
-- **Browser previews** — hear presets, drum kits and effects before loading them, and
-  audition samples in the Files tab's player.
-- **Automation & MIDI Learn** — draw/record automation on any parameter; map hardware
-  controllers to almost anything.
-- **Export** — master and stems to WAV (pcm16/pcm24/float32), true-peak normalize, dither,
-  bit-identical chunked rendering.
-- **AI control (MCP)** — an optional loopback MCP server lets Claude drive the open project
-  (off by default).
-- **Cross-platform** — macOS, Windows and Linux, for both x64 and arm64.
+- **Three views** — **Arrangement** timeline, **Session** clip grid, and a **Modular**
+  signal-graph editor with **CV modulation** (LFO / envelope follower / MIDI→CV / ADSR /
+  Macro / Math, patched onto any parameter).
+- **Tracks & mixer** — audio, MIDI, group (nestable), return and master tracks; sends;
+  MIDI routing between tracks; peak/RMS and true-peak meters.
+- **MIDI** — piano roll with quantize and velocity; play from a MIDI keyboard, the computer
+  keyboard, a **gamepad** (macOS) or your **phone**; drag in `.mid` files; turn audio into
+  MIDI (melody / harmony / drums / slice).
+- **Audio** — record from inputs and internal buses; import WAV/AIFF/FLAC/MP3; fades, gain
+  and per-clip envelopes; **warp / time-stretch**.
+- **Automation & MIDI Learn** — draw or record automation on any parameter; map hardware
+  knobs to almost anything.
+- **Browser** — preview presets, drum kits, effects and samples before you load them.
+- **Version history** — every save is kept; go back to any earlier version of a song, or
+  branch off from it.
+- **Export** — the master or stems to WAV (16/24-bit or 32-bit float), with true-peak
+  normalize and dither.
+- **AI control (optional)** — a local MCP server lets an AI assistant such as Claude work
+  in the open project. Off by default.
 
-## Nota plugin registry
+## Install
 
-Nota now has its own plugin registry —
-**[nota-daw/nota-plugins-registry](https://github.com/nota-daw/nota-plugins-registry)**.
-It is the list of open-source VST3 plugins that Nota installs from **Settings → Downloads**:
-one JSON manifest per plugin, pinned to a release asset's size and sha256, and published as a
-single `index.json`.
+Download the file for your system from the
+**[latest release](https://github.com/nota-daw/nota/releases/latest)**:
 
-**Writing a plugin?** Add it to the registry so every Nota user can install it in one click.
-The registry's [README](https://github.com/nota-daw/nota-plugins-registry#readme) explains what
-gets in (an OSI license, a VST3 in an archive rather than an installer, stable release tags)
-and how to add a plugin or a new version — then open a pull request there.
+| System | File | Notes |
+|---|---|---|
+| **macOS 13+**, Apple Silicon (M1 and later) | `Nota-<version>-arm64.dmg` | |
+| **macOS 13+**, Intel | `Nota-<version>-x86_64.dmg` | |
+| **Windows 10/11**, most PCs | `Nota-Setup-<version>-x64.exe` | |
+| **Windows 11** on ARM | `Nota-Setup-<version>-arm64.exe` | |
+| **Linux**, most PCs | `Nota-<version>-x86_64.AppImage` | |
+| **Linux** on ARM | `Nota-<version>-aarch64.AppImage` | |
 
-## Prerequisites
+### First launch
 
-Common to every platform:
+Nota isn't signed with a paid Apple or Microsoft certificate yet, so the system asks you to
+confirm the first time:
 
-- **.NET SDK 10**
-- **CMake ≥ 3.24** and **Ninja**
-- A **C++20** compiler
+- **macOS** — open the `.dmg` and drag Nota to Applications. If macOS says it "can't verify"
+  Nota, open **System Settings → Privacy & Security**, scroll down and click
+  **Open Anyway**. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Nota.app`.)
+- **Windows** — if SmartScreen shows "Windows protected your PC", click **More info →
+  Run anyway**.
+- **Linux** — make the AppImage executable (`chmod +x Nota-*.AppImage`, or Properties →
+  Permissions in your file manager) and run it.
 
-Per platform, additionally:
+Nota checks for updates itself and shows what's new after each update.
 
-| OS | Toolchain | Native dev packages |
-|----|-----------|---------------------|
-| **macOS** | Xcode command-line tools | (CoreAudio/CoreMIDI ship with the OS) |
-| **Windows** | Visual Studio 2022 (MSVC + Windows SDK); [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3+ for the installer | (WASAPI/WinMM ship with the OS) |
-| **Linux** | `build-essential` | `libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev` |
+## Status
 
-On Debian/Ubuntu, install the Linux native deps with:
+Nota is young and moving fast — new releases come out every week or so (see the
+[changelog](CHANGELOG.md)). It's already used to make real music, but expect rough edges.
+Found a bug or missing something? [Open an issue](https://github.com/nota-daw/nota/issues) —
+every report gets read.
 
-```bash
-sudo apt install build-essential cmake ninja-build libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev
-```
+## For plugin developers
 
-> miniaudio runtime-links PulseAudio/ALSA (dlopen), so `libpulse`/`libasound` aren't
-> needed at link time — only `libasound2-dev` (for RtMidi). JUCE (plugin hosting)
-> pulls the X11/freetype/fontconfig libs.
+Nota has its own plugin registry —
+**[nota-daw/nota-plugins-registry](https://github.com/nota-daw/nota-plugins-registry)** —
+the list of open-source VST3 plugins that Nota installs from **Settings → Downloads**.
+Add yours with a pull request and every Nota user can install it in one click; the
+registry's [README](https://github.com/nota-daw/nota-plugins-registry#readme) explains
+what gets in and how.
 
-## Build & run (development)
+## Building from source
 
-**Don't forget the submodules.** JUCE (plugin hosting) lives in a git submodule at
-`src/native/nota.engine/vendor/JUCE`, and the native build fails without it. Clone with
-submodules:
+The audio engine and DSP are a portable C++20 core; the UI is .NET 10 / Avalonia 12 (C#);
+plugin hosting runs through JUCE, isolated in its own module so the engine core stays
+JUCE-free.
 
 ```bash
 git clone --recurse-submodules https://github.com/nota-daw/nota.git
-```
-
-or, in a checkout you already have (also after a pull that moves the submodule):
-
-```bash
-git submodule update --init --recursive
-```
-
-Each platform has a build script that compiles the native engine, builds the managed
-app, and runs the smoke test. Then run the app with `dotnet run`.
-
-**macOS**
-```bash
-scripts/build.sh            # native (universal arm64+x86_64) + managed + smoke
+cd nota
+scripts/build.sh            # macOS; scripts/build-linux.sh on Linux, scripts/build-win.ps1 on Windows
 dotnet run --project src/managed/Nota.App
 ```
 
-**Windows** — from a *Developer PowerShell for VS 2022*:
-```powershell
-pwsh scripts/build-win.ps1  # native (x64/WASAPI) + managed + smoke
-dotnet run --project src/managed/Nota.App
-```
+- [`BUILD.md`](BUILD.md) — prerequisites per platform, manual builds, packaging installers
+  and AppImages.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — how the engine, the C ABI and the app fit together.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributing, licensing your work, and the
+  real-time rules.
 
-**Linux**
-```bash
-scripts/build-linux.sh      # native (PulseAudio/ALSA + RtMidi/ALSA) + managed + smoke
-dotnet run --project src/managed/Nota.App
-```
+## About
 
-To build only the native engine directly:
-
-```bash
-cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build -DCMAKE_BUILD_TYPE=Release
-cmake --build src/native/nota.engine/build
-```
-
-> On memory-constrained machines/containers, cap parallelism so the large JUCE
-> translation units don't get OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
-
-## Packaging (distributables)
-
-All scripts write to `dist/`.
-
-**macOS** — `.app` and one `.dmg` per arch (an Apple Silicon host builds both):
-```bash
-scripts/bundle-mac.sh              # -> /Applications/Nota.app (ad-hoc signed)
-scripts/package-dmg.sh arm64       # -> dist/Nota-<version>-arm64.dmg
-scripts/package-dmg.sh x86_64      # -> dist/Nota-<version>-x86_64.dmg
-```
-The installer window's background comes from `assets/macos/dmg-background.png`
-(660×400) and its `@2x` (1320×800); both are required.
-
-**Windows** — Inno Setup installer (x64 / arm64; one x64 host cross-builds both):
-```powershell
-pwsh scripts/package-win.ps1 x64     # -> dist/Nota-Setup-<version>-x64.exe
-pwsh scripts/package-win.ps1 arm64   # -> dist/Nota-Setup-<version>-arm64.exe
-```
-
-**Linux** — portable AppImage (built for the host arch; `appimagetool` auto-downloaded):
-```bash
-scripts/package-linux.sh       # -> dist/Nota-<version>-<arch>.AppImage
-```
-
-### Building a Linux AppImage from macOS/Windows
-
-The native `.so` can't be cross-compiled off Linux, so build it inside a Linux
-container. The AppImage is built for the container's architecture: on Apple Silicon,
-Docker runs an **arm64** container by default, so `--platform linux/amd64` is what
-forces an **x86_64** build (via QEMU emulation — correct but noticeably slower).
-
-Keep each command on one line when copying — line-continuation backslashes get
-dropped by some terminals and break the `apt-get` package list.
-
-**x86_64 (linux-x64)** → `dist/Nota-<version>-x86_64.AppImage`:
-
-```bash
-docker run --rm --platform linux/amd64 -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
-```
-
-**arm64 (linux-arm64)** → `dist/Nota-<version>-aarch64.AppImage` (drop `--platform`; native on Apple Silicon, fast):
-
-```bash
-docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
-```
+Nota is made by **Egor Khindikaynen** aka **Ambertape**
+([music](https://soundcloud.com/ambertape)). It started as a tool I built for my own
+music and was later opened up as open source. Most of the code was written with AI
+assistance, with every design decision, the sound and the workflow guided and shaped
+by me.
 
 ## License
 
-Licensed under **AGPL-3.0-only** — see [`LICENSES/`](LICENSES/)
-for the terms, and [`LICENSES/third-party.md`](LICENSES/third-party.md) for the
-dependency register.
+Licensed under **AGPL-3.0-only** — see [`LICENSES/`](LICENSES/) for the terms, and
+[`LICENSES/third-party.md`](LICENSES/third-party.md) for the dependency register.
 
 Nota links JUCE, which is AGPLv3, so the open build is AGPL rather than GPL — see
 [`LICENSES/README.md`](LICENSES/README.md#why-agpl-and-not-gpl).

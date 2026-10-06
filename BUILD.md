@@ -1,7 +1,8 @@
 # Building Nota (dev)
 
-See [`README.md`](README.md) for the short version and the packaging commands. This file
-covers the details — per-platform prerequisites and manual step-by-step builds.
+Everything for building Nota from source: per-platform prerequisites, the build scripts,
+manual step-by-step builds, and packaging the installers and AppImages. Just want to use
+Nota? Grab a ready build from [Releases](https://github.com/nota-daw/nota/releases/latest).
 
 ## Requirements (macOS)
 
@@ -156,5 +157,51 @@ scripts/package-linux.sh  # portable AppImage in dist/
   RtMidi.
 - JUCE (plugin hosting) is what pulls in the X11, freetype and fontconfig libraries.
 - The AppImage is built for the host architecture. To produce a Linux build from
-  macOS or Windows, run the build inside a Linux container — see the Docker commands in
-  [`README.md`](README.md).
+  macOS or Windows, run the build inside a Linux container — see
+  [Building a Linux AppImage from macOS/Windows](#building-a-linux-appimage-from-macoswindows).
+
+## Packaging (installers and AppImages)
+
+All scripts write to `dist/`.
+
+**macOS** — `.app` and one `.dmg` per arch (an Apple Silicon host builds both):
+```bash
+scripts/bundle-mac.sh              # -> /Applications/Nota.app (ad-hoc signed)
+scripts/package-dmg.sh arm64       # -> dist/Nota-<version>-arm64.dmg
+scripts/package-dmg.sh x86_64      # -> dist/Nota-<version>-x86_64.dmg
+```
+The installer window's background comes from `assets/macos/dmg-background.png`
+(660×400) and its `@2x` (1320×800); both are required.
+
+**Windows** — Inno Setup installer (x64 / arm64; one x64 host cross-builds both):
+```powershell
+pwsh scripts/package-win.ps1 x64     # -> dist/Nota-Setup-<version>-x64.exe
+pwsh scripts/package-win.ps1 arm64   # -> dist/Nota-Setup-<version>-arm64.exe
+```
+
+**Linux** — portable AppImage (built for the host arch; `appimagetool` auto-downloaded):
+```bash
+scripts/package-linux.sh       # -> dist/Nota-<version>-<arch>.AppImage
+```
+
+### Building a Linux AppImage from macOS/Windows
+
+The native `.so` can't be cross-compiled off Linux, so build it inside a Linux
+container. The AppImage is built for the container's architecture: on Apple Silicon,
+Docker runs an **arm64** container by default, so `--platform linux/amd64` is what
+forces an **x86_64** build (via QEMU emulation — correct but noticeably slower).
+
+Keep each command on one line when copying — line-continuation backslashes get
+dropped by some terminals and break the `apt-get` package list.
+
+**x86_64 (linux-x64)** → `dist/Nota-<version>-x86_64.AppImage`:
+
+```bash
+docker run --rm --platform linux/amd64 -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
+```
+
+**arm64 (linux-arm64)** → `dist/Nota-<version>-aarch64.AppImage` (drop `--platform`; native on Apple Silicon, fast):
+
+```bash
+docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
+```
