@@ -65,9 +65,9 @@ public partial class MainWindow
         _chipKey = key;
 
         var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = TrackBrush(trackId), VerticalAlignment = VerticalAlignment.Center };
-        var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var nameText = new TextBlock { Text = name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sumText = new TextBlock { Text = summary, Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
-        DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
+        DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
     }
 
     private bool ChipTrackInfo(int trackId, out NotaTrackInfo info)
@@ -342,7 +342,7 @@ public partial class MainWindow
         DetailDevicesBtn.IsChecked = true;
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
-        ShowDetail(320, honorPersist: false);   // Devices: natural card-fitting height
+        ShowDetail(332, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it)
     }
 
     private void OpenClipEditor(int trackId, int clipIndex)

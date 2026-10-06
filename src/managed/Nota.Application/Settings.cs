@@ -97,6 +97,9 @@ public sealed class Settings
     public int ArrangementClipLabels { get; set; } = 1;
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
+    /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
+    /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
+    public int ArrangementWaveform { get; set; }
 }
 
 public interface ISettingsService

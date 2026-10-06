@@ -74,7 +74,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("GENERAL", new[]
         {
             new Page("Library", "Content folders and version history", "M3 7 A1 1 0 0 1 4 6 H9 L11 8 H20 A1 1 0 0 1 21 9 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 Z"),
-            new Page("Appearance", "Theme and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
+            new Page("Appearance", "Theme, waveforms and AI control", "M12 4 A8 8 0 1 0 12 20 Z M12 4 A8 8 0 0 1 12 20"),
             new Page("Shortcuts", "Keyboard reference", "M3 7 H21 V17 H3 Z M7 11 H7.01 M11 11 H11.01 M15 11 H15.01 M8 14 H16"),
         }),
     };
@@ -788,6 +788,30 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // Bars / Solid for the arrangement's audio-clip waveforms. Saving fires Settings.Changed,
+    // which the main window applies to the lanes at once.
+    private static Control WaveformPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Style, ToggleButton Btn)>();
+        foreach (var (style, label) in new[] { (0, "Bars"), (1, "Solid") })
+        {
+            var st = style;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bs, bb) in buttons) bb.IsChecked = bs == st;
+                if (settings.Current.ArrangementWaveform == st) return;
+                settings.Current.ArrangementWaveform = st;
+                settings.Save();
+            };
+            buttons.Add((st, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     // A 10px chip of a variant's ground — both variants at once, whichever one is live.
     // System is split corner to corner, Paper over Graphite.
     private sealed class ThemeSwatch : Control
@@ -906,7 +930,9 @@ public sealed partial class PreferencesWindow : NotaWindow
         return Sections(
             Section("UI", 10,
                 Row("Theme", ThemePicker()),
-                Row("", Caption("Ember Graphite is the warm dark palette; Ember Paper is the same system on a light ground. System follows the OS appearance and switches with it."))),
+                Row("", Caption("Ember Graphite is the warm dark palette; Ember Paper is the same system on a light ground. System follows the OS appearance and switches with it.")),
+                Row("Waveform", WaveformPicker()),
+                Row("", Caption("How audio clips draw on the arrangement: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
             Section("AI CONTROL (MCP)", 12, enable, details));
     }
 

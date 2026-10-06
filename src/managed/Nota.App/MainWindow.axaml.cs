@@ -290,6 +290,9 @@ public partial class MainWindow : Window
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
+        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        // Settings → Appearance can switch the waveform style while the arrangement is open.
+        vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
         Browser.ProjectKey = () => vm.Transport.Key;

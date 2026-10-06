@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Arrangement · Overview — the strip above the ruler. It maps the whole
-// project onto one narrow band (a mini-clip per clip, in its track colour) and draws the
-// current viewport as a brass window over it, so the visible span is readable at a glance
+// project onto one narrow band (a hairline per clip, one line per track, in its track
+// colour) and draws the current viewport as a quiet frame over it, so the visible span is readable at a glance
 // and reachable with one gesture: drag the window to scroll, drag its edges (or drag
 // vertically) to zoom, click anywhere to jump there.
 
@@ -20,7 +20,7 @@ namespace Nota.App;
 
 public sealed partial class ArrangementView
 {
-    private const double OverviewH = 46;
+    private const double OverviewH = 34;
 
     private readonly OverviewControl _overview;
     private Border _overviewRow = null!;
@@ -42,30 +42,33 @@ public sealed partial class ArrangementView
     }
 
     // The strip row: the same header-column chrome as the ruler row (label + visible-range
-    // readout), then the strip itself over the lane column.
+    // readout on one line), then the strip itself over the lane column.
     private Border BuildOverviewRow()
     {
         var label = new TextBlock
         {
             Text = "OVERVIEW", Classes = { "SectionLabel" },
-            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
         };
         _overviewRange = new TextBlock
         {
-            Text = "", FontSize = 10,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            Text = "", FontSize = 9,
+            VerticalAlignment = VerticalAlignment.Center,
         };
         _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
         var labels = new StackPanel
         {
-            Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(14, 0, 0, 0),
             Children = { label, _overviewRange },
         };
 
         var grid = new Grid { Height = OverviewH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(labels));
+        var header = HeaderPanel(labels);
+        header.BindResource(Border.BackgroundProperty, "Brush.BgSunken");   // the strip is a well, header included
+        grid.Children.Add(header);
         Grid.SetColumn(_overview, 1);
         grid.Children.Add(_overview);
 
@@ -132,12 +135,10 @@ public sealed partial class ArrangementView
 
     private sealed class OverviewControl : Control
     {
-        // Outside the viewport window the project is dimmed, so the window itself reads as
-        // the lit part rather than needing a fill of its own.
-        private static readonly IBrush OvScrim = NotaPalette.Wash(NotaPalette.BgSunken, 0x9C);
-        private static readonly IPen OvFrame = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x99), 1);
-        private static readonly IBrush OvHandle = NotaPalette.Wash(NotaPalette.AccentBright, 0xCC);
-        private static readonly IPen OvBarPen = new Pen(NotaPalette.Wash(NotaPalette.GridBar, 0xC0), 1);
+        // The viewport window is a neutral frame with a faint lift — brass stays reserved for
+        // the playhead and the loop, so the strip reads at a glance without a second accent.
+        private static readonly IPen OvFrame = new Pen(NotaPalette.TextMuted, 1);
+        private static readonly IBrush OvWindow = NotaPalette.Wash(NotaPalette.TextPrimary, 0x0D);
         private static readonly IBrush OvEmptyText = NotaPalette.TextDisabled;
         private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
         private static readonly Cursor EdgeCursor = new(StandardCursorType.SizeWestEast);
@@ -149,13 +150,15 @@ public sealed partial class ArrangementView
         {
             var cache = active ? _ovClip : _ovClipOff;
             if (cache.TryGetValue(colorIndex, out var b)) return b;
-            b = ClipTint(colorIndex, active ? 0.82 : 0.26);
+            b = ClipTint(colorIndex, active ? 0.6 : 0.22);
             cache[colorIndex] = b;
             return b;
         }
 
         private const double EdgeGrab = 5;   // px around a window edge that grabs it
-        private const double PadY = 4;
+        private const double PadY = 5;
+        private const double LineH = 2;       // one hairline per clip
+        private const double LineStride = 3.4; // track-to-track pitch; tightens when the rows don't fit
 
         private const double AxisLock = 4;   // px of travel that commits a drag to one axis
 
@@ -293,16 +296,6 @@ public sealed partial class ArrangementView
             ctx.FillRectangle(ChromeBg, new Rect(0, 0, w, h));
 
             double span = SpanBeats;
-            double bpb = Math.Max(1, _o._beatsPerBar);
-
-            // Bar markers at whatever multiple of a bar keeps them ~40px apart.
-            double step = bpb;
-            while (step / span * w < 40 && step < span) step *= 2;
-            for (double b = step; b < span; b += step)
-            {
-                double x = Math.Round(b / span * w) + 0.5;
-                ctx.DrawLine(OvBarPen, new Point(x, 0), new Point(x, h));
-            }
 
             int n = _o._tracks.Count;
             if (n == 0)
@@ -313,17 +306,23 @@ public sealed partial class ArrangementView
             }
             else
             {
-                // One band per arrangement row, in row order — the strip reads as the
-                // arrangement seen from far away.
-                double rowH = (h - 2 * PadY) / n;
-                double bandH = Math.Max(1.5, rowH - (rowH > 3 ? 1 : 0));
+                // One hairline per row that holds clips, in row order — the strip reads as the
+                // arrangement seen from far away. An open group's row is skipped (its children
+                // follow with their own lines); a collapsed one stands in for them. Rows keep a
+                // fixed pitch and squeeze together only when the strip can't hold them all.
+                int lines = 0;
+                for (int i = 0; i < n; i++)
+                    if (!_o._tracks[i].IsGroup || _o._collapsed.Contains(_o._tracks[i].Id)) lines++;
+                double rowH = Math.Min(LineStride, (h - 2 * PadY - LineH) / Math.Max(1, lines - 1));
+                double bandH = Math.Min(LineH, Math.Max(1, rowH - 0.6));
+                int line = 0;
                 for (int i = 0; i < n; i++)
                 {
                     var t = _o._tracks[i];
-                    double y = PadY + i * rowH;
-                    // A group row carries no clips of its own — draw the descendants it
-                    // summarises, so a collapsed group still shows its content here.
-                    if (t.IsGroup)
+                    bool collapsedGroup = t.IsGroup && _o._collapsed.Contains(t.Id);
+                    if (t.IsGroup && !collapsedGroup) continue;
+                    double y = PadY + line++ * rowH;
+                    if (collapsedGroup)
                     {
                         foreach (var m in t.GroupMini)
                             DrawMini(ctx, m.Start, m.Length, m.ColorIndex, true, y, bandH, span, w);
@@ -336,18 +335,13 @@ public sealed partial class ArrangementView
                 }
             }
 
-            // Everything outside the viewport is dimmed; the window gets a brass frame with
-            // two solid grab edges.
+            // The viewport window: a neutral frame over a faint lift (its edges still grab).
             double x0 = BeatToX(_o._scrollBeats), x1 = BeatToX(_o._scrollBeats + _o.ViewportBeats);
             // Keep the window at least 2px wide, and never past the right end (a 2px window
             // at the very end is pushed left, not clamped to nothing).
             x0 = Math.Clamp(x0, 0, Math.Max(0, w - 2));
             x1 = Math.Clamp(x1, x0 + 2, Math.Max(x0 + 2, w));
-            if (x0 > 0) ctx.FillRectangle(OvScrim, new Rect(0, 0, x0, h));
-            if (x1 < w) ctx.FillRectangle(OvScrim, new Rect(x1, 0, w - x1, h));
-            ctx.DrawRectangle(null, OvFrame, new Rect(x0 + 0.5, 0.5, Math.Max(1, x1 - x0 - 1), h - 1));
-            ctx.FillRectangle(OvHandle, new Rect(x0, 0, 2, h));
-            ctx.FillRectangle(OvHandle, new Rect(x1 - 2, 0, 2, h));
+            ctx.DrawRectangle(OvWindow, OvFrame, new Rect(x0 + 0.5, 2.5, Math.Max(1, x1 - x0 - 1), h - 5), 2, 2);
 
             // Loop region: a thin brass band along the top edge (the ruler owns the full
             // brace). Drawn over the scrim — a loop outside the viewport still has to show.
@@ -369,8 +363,8 @@ public sealed partial class ArrangementView
             double x0 = startBeat / span * w;
             double x1 = (startBeat + lengthBeats) / span * w;
             if (x1 < 0 || x0 > w) return;
-            ctx.FillRectangle(MiniFill(colorIndex, active),
-                new Rect(Math.Max(0, x0), y, Math.Max(1.5, Math.Min(w, x1) - Math.Max(0, x0)), bandH));
+            ctx.DrawRectangle(MiniFill(colorIndex, active), null,
+                new RoundedRect(new Rect(Math.Max(0, x0), y, Math.Max(1.5, Math.Min(w, x1) - Math.Max(0, x0)), bandH), bandH / 2));
         }
     }
 }

@@ -37,6 +37,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Internet Sharing on the Mac) gets an instant, radio-free link — Nota notices the cable,
   puts its address in the QR and marks the phone "USB" in the list.
 
+### Changed
+- **A cleaner main window.** The project's name now leads the transport bar. In the
+  arrangement, tracks inside a group step their colour stripe in under it, so nesting reads
+  at a glance; the Overview strip is slimmer and calmer (a thin line per track, a neutral
+  viewport frame); Overview, Sections and the ruler are set apart by clear rules; and the
+  horizontal scrollbar is a slim pill. Audio clips draw their waveform as spaced bars —
+  **Settings → Appearance → Waveform** brings back the solid look. The Devices panel is now
+  an island like the browser and the arrangement, and the status line sits on the window
+  ground without a bar.
+
 ### Fixed
 - A note pressed and released within a few milliseconds (a very quick tap, a fast MIDI roll)
   could keep ringing: its release was played ahead of its press.

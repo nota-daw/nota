@@ -65,8 +65,10 @@ public sealed partial class ArrangementView
         Grid.SetColumn(_sectionsLane, 1);
         grid.Children.Add(_sectionsLane);
 
+        // A hairline, lighter than the lines above and below: the sections belong with the
+        // ruler under them, while Overview and the tracks are separate areas.
         var row = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
-        row.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        row.BindResource(Border.BorderBrushProperty, "Brush.Hairline");
         return row;
     }
 

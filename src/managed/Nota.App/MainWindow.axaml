@@ -125,14 +125,19 @@
             Margin="12,12,12,0">
       <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
-        <!-- View switch -->
-        <Border Grid.Column="0" Classes="segmented" Margin="0,0,14,0" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="2">
-            <ToggleButton x:Name="ArrangeBtn" Classes="seg" Content="Arrangement" IsChecked="True" Click="OnShowArrangement"/>
-            <ToggleButton x:Name="SessionBtn" Classes="seg" Content="Session" Click="OnShowSession"/>
-            <ToggleButton x:Name="ModularBtn" Classes="seg" Content="Modular" Click="OnShowModular"/>
-          </StackPanel>
-        </Border>
+        <!-- Project name, then the view switch -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" Margin="2,0,14,0" VerticalAlignment="Center">
+          <TextBlock x:Name="ProjectNameText" Text="Untitled" FontSize="13" FontWeight="SemiBold"
+                     MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                     Foreground="{DynamicResource Brush.TextPrimary}"/>
+          <Border Classes="segmented" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <ToggleButton x:Name="ArrangeBtn" Classes="seg" Content="Arrangement" IsChecked="True" Click="OnShowArrangement"/>
+              <ToggleButton x:Name="SessionBtn" Classes="seg" Content="Session" Click="OnShowSession"/>
+              <ToggleButton x:Name="ModularBtn" Classes="seg" Content="Modular" Click="OnShowModular"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
 
         <!-- The console: transport · position · loop in one recess -->
         <Border Grid.Column="1" Classes="console">
@@ -368,10 +373,9 @@
       </Grid>
     </Border>
 
-    <!-- Status bar (22) -->
-    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.ChromeBg}"
-            BorderBrush="{DynamicResource Brush.BorderDefault}" BorderThickness="0,1,0,0"
-            Height="22" Padding="12,0">
+    <!-- Status bar (22): plain text on the gutter under the islands — no bar, no rule. -->
+    <Border DockPanel.Dock="Bottom" Background="Transparent"
+            Height="22" Padding="16,0,16,4">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
@@ -428,12 +432,15 @@
                     HorizontalAlignment="Stretch" ResizeDirection="Rows"
                     Background="Transparent"/>
 
-      <!-- Detail panel: Devices chain / Clip (piano roll) / Mixer for the selected track -->
-      <Border x:Name="DetailPanel" Grid.Row="2" Classes="Panel"
-              IsVisible="False" Background="{DynamicResource Brush.Panel}">
+      <!-- Detail panel: Devices chain / Clip (piano roll) / Mixer for the selected track.
+           An island like the browser and the arrangement: it floats on the gutter with the
+           same even margin and rounded edge, so the window reads as three panels. -->
+      <Border x:Name="DetailPanel" Grid.Row="2" Margin="12,0,12,12" IsVisible="False" ClipToBounds="True"
+              Background="{DynamicResource Brush.Panel}" BorderBrush="{DynamicResource Brush.BorderDefault}"
+              BorderThickness="1" CornerRadius="{StaticResource Radius.Panel}">
         <DockPanel>
-          <!-- Header (1d/1e): mode tabs · track chip (routing/PDC) · Freeze · close -->
-          <Grid DockPanel.Dock="Top" Height="34" Margin="12,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+          <!-- Header: mode tabs · track chip (routing/PDC) · Freeze · | · pop out · close -->
+          <Grid DockPanel.Dock="Top" Height="32" Margin="8,0,10,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="2">
                 <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>
@@ -444,9 +451,9 @@
                               ToolTip.Tip="Select a MIDI clip to edit it" Click="OnDetailClip"/>
               </StackPanel>
             </Border>
-            <ContentControl x:Name="DetailChipHost" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"/>
+            <ContentControl x:Name="DetailChipHost" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center"/>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-              <Button x:Name="FreezeBtn" Classes="ghost" Height="24" Padding="8,0" VerticalAlignment="Center"
+              <Button x:Name="FreezeBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
                       Click="OnFreezeClick"
                       ToolTip.Tip="Freeze the track to audio to free CPU (right-click to flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -455,7 +462,7 @@
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="LiveFreezeBtn" Classes="ghost" Height="24" Padding="8,0" VerticalAlignment="Center"
+              <Button x:Name="LiveFreezeBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
                       IsVisible="False" Click="OnLiveFreezeClick"
                       ToolTip.Tip="Bounce to a linked audio track below and put the source to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -466,7 +473,7 @@
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="EditBtn" Classes="ghost" Height="24" Padding="8,0" VerticalAlignment="Center"
+              <Button x:Name="EditBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
                       IsVisible="False" Click="OnEditClick"
                       ToolTip.Tip="Wake the frozen source to edit it (right-click to unfreeze or flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -474,7 +481,7 @@
                   <TextBlock Text="Edit" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="DoneBtn" Classes="ghost" Height="24" Padding="8,0" VerticalAlignment="Center"
+              <Button x:Name="DoneBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
                       IsVisible="False" Click="OnDoneClick"
                       ToolTip.Tip="Re-freeze the source and put it back to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -482,18 +489,20 @@
                   <TextBlock Text="Done" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="DiscardBtn" Classes="ghost" Height="24" Padding="6,0" VerticalAlignment="Center"
+              <Button x:Name="DiscardBtn" Classes="ghost" Height="22" Padding="6,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnDiscardClick"
                       ToolTip.Tip="Leave edit mode without re-freezing">
                 <app:Glyph x:Name="DiscardGlyph" Kind="Cross" Foreground="{DynamicResource Brush.TextTertiary}"/>
               </Button>
             </StackPanel>
-            <Button x:Name="DetailPopOut" Grid.Column="3" Classes="ghost" Margin="8,0,0,0" Padding="7,0"
+            <Border Grid.Column="3" Width="1" Height="16" Margin="12,0,6,0" VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Hairline}"/>
+            <Button x:Name="DetailPopOut" Grid.Column="4" Classes="ghost" Height="22" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnToggleDetailWindow"
                     ToolTip.Tip="Open devices and clip in a separate window">
               <app:Glyph x:Name="PopOutGlyph" Kind="PopOut"/>
             </Button>
-            <Button Grid.Column="4" Classes="ghost" Margin="4,0,0,0" Padding="7,0"
+            <Button Grid.Column="5" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseDetail" ToolTip.Tip="Close">
               <app:Glyph x:Name="CloseDetailGlyph" Kind="Close"/>
             </Button>

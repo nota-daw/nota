@@ -1591,21 +1591,56 @@ public sealed partial class ArrangementView
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
             var geo = new StreamGeometry();
             using (var g = geo.Open())
-                for (double px = vx0; px < vx1; px += 1)
+                ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
-                    // Material point under this column, anchored to the committed window.
-                    double s0 = _rpS0 + (scroll + px / ppb - _origStart) * rate;
-                    double s1 = _rpS0 + (scroll + (px + 1) / ppb - _origStart) * rate;
+                    // Material span under this column, anchored to the committed window.
+                    double s0 = _rpS0 + (scroll + cx0 / ppb - _origStart) * rate;
+                    double s1 = _rpS0 + (scroll + cx1 / ppb - _origStart) * rate;
                     double f0 = Math.Clamp(s0 / _rpMTotal, 0, 1), f1 = Math.Clamp(s1 / _rpMTotal, 0, 1);
                     int b0 = Math.Clamp((int)(f0 * _rpCount), 0, _rpCount - 1);
                     int b1 = Math.Clamp((int)Math.Ceiling(f1 * _rpCount), b0 + 1, _rpCount);
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, _rpPeaks![b * 2]); max = Math.Max(max, _rpPeaks[b * 2 + 1]); }
-                    if (min > max) continue;
+                    if (min > max) return;
                     min = Math.Clamp(min * gain, -1f, 1f); max = Math.Clamp(max * gain, -1f, 1f);
-                    AddRect(g, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
-                }
+                    AddWaveColumn(g, x, mid, amp, min, max);
+                });
             ctx.DrawGeometry(brush, null, geo);
+        }
+
+        // Bars: one 1px stroke every BarPitch px, laid on a grid anchored to the clip's left
+        // edge (so the strokes travel with the clip instead of shimmering while it scrolls),
+        // each summarising the whole pitch it stands for. Solid: one column per pixel.
+        private const double BarPitch = 3;
+
+        private void ForEachWaveColumn(double clipX, double vx0, double vx1, Action<double, double, double> column)
+        {
+            if (_o.Waveform == WaveformStyle.Solid)
+            {
+                for (double px = vx0; px < vx1; px += 1) column(px, px + 1, px);
+                return;
+            }
+            double k0 = Math.Floor((vx0 - clipX) / BarPitch);
+            for (double cx = clipX + k0 * BarPitch; cx < vx1; cx += BarPitch)
+            {
+                double c0 = Math.Max(cx, clipX), c1 = cx + BarPitch;
+                double x = cx + 1;   // the stroke sits in the middle pixel of its pitch
+                if (x < vx0 || x >= vx1) continue;
+                column(c0, c1, x);
+            }
+        }
+
+        // Solid keeps the true min/max outline; Bars mirror the larger excursion about the
+        // centre line, so each stroke reads as one level.
+        private void AddWaveColumn(StreamGeometryContext g, double x, double mid, double amp, float min, float max)
+        {
+            if (_o.Waveform == WaveformStyle.Solid)
+            {
+                AddRect(g, x, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
+                return;
+            }
+            double a = Math.Max(Math.Abs(min), Math.Abs(max)) * amp;
+            AddRect(g, x, mid - a, 1, Math.Max(1, 2 * a));
         }
 
         private void DrawWaveform(DrawingContext ctx, ClipVM c, Rect r, IBrush brush)
@@ -1620,27 +1655,26 @@ public sealed partial class ArrangementView
             if (c.Peaks is null || c.PeakCount <= 0 || r.Height <= 0 || r.Width <= 0) return;
             double mid = r.Y + r.Height / 2;
             double amp = r.Height / 2 - 1;
-            // Draw one contiguous column per visible pixel, aggregating the peak buckets
-            // that fall in it. This keeps the waveform solid on wide/zoomed clips instead
-            // of leaving gaps between sparse fixed-position bars.
+            // One column per stroke (see ForEachWaveColumn), aggregating every peak bucket that
+            // falls in the span it stands for, so nothing between strokes is skipped.
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
             var geo = new StreamGeometry();
             using (var gc = geo.Open())
-                for (double px = vx0; px < vx1; px += 1)
+                ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
-                    int b0 = Math.Clamp((int)((px - r.X) / r.Width * c.PeakCount), 0, c.PeakCount - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling((px + 1 - r.X) / r.Width * c.PeakCount), b0 + 1, c.PeakCount);
+                    int b0 = Math.Clamp((int)((cx0 - r.X) / r.Width * c.PeakCount), 0, c.PeakCount - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - r.X) / r.Width * c.PeakCount), b0 + 1, c.PeakCount);
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, c.Peaks[b * 2]); max = Math.Max(max, c.Peaks[b * 2 + 1]); }
-                    if (min > max) continue;
+                    if (min > max) return;
                     // Clip gain (and the ADSR shape) scales the drawn waveform, matching the clip editor.
                     float g = c.Gain;
-                    if (shaped) g *= (float)adsr.GainAt((px + 0.5 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
+                    if (shaped) g *= (float)adsr.GainAt((x + 0.5 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
                     min = Math.Clamp(min * g, -1f, 1f); max = Math.Clamp(max * g, -1f, 1f);
-                    AddRect(gc, px, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
-                }
+                    AddWaveColumn(gc, x, mid, amp, min, max);
+                });
             ctx.DrawGeometry(brush, null, geo);
         }
 
