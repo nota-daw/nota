@@ -79,6 +79,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - A note pressed and released within a few milliseconds (a very quick tap, a fast MIDI roll)
   could keep ringing: its release was played ahead of its press.
+- **AirPods and other Bluetooth headphones are no longer silent** as Nota's output on
+  macOS. Nota used to force its sample rate onto the headphones, which broke their
+  Bluetooth stream (a moment of crackle, then silence, in every app). Nota now leaves the
+  rate of Bluetooth devices, and any rate a device doesn't list, alone and converts
+  instead.
 
 ## [0.43.1] — 2026-10-02
 
