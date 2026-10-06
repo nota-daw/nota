@@ -72,7 +72,14 @@ public sealed class RemoteClient
     /// <summary>Messages waiting to go out — the hub skips a phone's state tick while it lags.</summary>
     public int Backlog => _out.Reader.CanCount ? _out.Reader.Count : 0;
 
-    internal async Task SendLoopAsync(CancellationToken ct)
+    /// <summary>Start the single send loop (once, when the socket opens).</summary>
+    internal Task StartSendLoop(CancellationToken ct) => _sendLoop = SendLoopAsync(ct);
+
+    private Task _sendLoop = Task.CompletedTask;
+    /// <summary>How long a close waits for queued messages to go out first.</summary>
+    private static readonly TimeSpan SendDrain = TimeSpan.FromSeconds(1);
+
+    private async Task SendLoopAsync(CancellationToken ct)
     {
         try
         {
@@ -124,6 +131,10 @@ public sealed class RemoteClient
     public async Task CloseAsync(WebSocketCloseStatus status, string reason)
     {
         CompleteSend();
+        // Let what was queued go out first: a "kicked" or "denied" sent just before the close
+        // is what tells the phone not to reconnect on its own. A phone that stopped reading
+        // gets the close after a second anyway.
+        await Task.WhenAny(_sendLoop, Task.Delay(SendDrain));
         try
         {
             if (_ws.State is WebSocketState.Open or WebSocketState.CloseReceived)

@@ -80,7 +80,7 @@ public sealed partial class RemoteHub
         var c = new RemoteClient(ws, address);
         c.LastActivityTicks = DateTime.UtcNow.Ticks;
         _clients[c.ConnectionId] = c;
-        var send = c.SendLoopAsync(ct);
+        var send = c.StartSendLoop(ct);
         try
         {
             await c.ReceiveLoopAsync(OnMessageAsync, ct);
