@@ -154,15 +154,15 @@ public partial class MainWindow : IRemoteHost
     bool IRemoteHost.LearnArmed => _learn?.Armed ?? false;
     string? IRemoteHost.LearnPendingName => _learn?.Pending?.Name;
 
-    PhoneControlResult IRemoteHost.PhoneControl(int controlId, double norm)
+    PhoneControlResult IRemoteHost.PhoneControl(int controlId, int trackId, double norm)
     {
         if (_learn is null) return PhoneControlResult.None;
-        var r = _learn.HandlePhoneControl(controlId, norm);
+        var r = _learn.HandlePhoneControl(controlId, trackId, norm);
         if (r == PhoneControlResult.Bound) { LearnOverlay.Refresh(); Browser.ShowMidiMap(); }
         return r;
     }
 
-    string? IRemoteHost.PhoneMappingName(int controlId) => _learn?.PhoneMappingFor(controlId)?.DisplayName;
+    string? IRemoteHost.PhoneMappingName(int controlId, int trackId) => _learn?.PhoneMappingFor(controlId, trackId)?.DisplayName;
 
     void IRemoteHost.DevicesChanged() => _remote?.RaiseChanged();
 

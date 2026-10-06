@@ -30,11 +30,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes only, or play and control the project. A phone is one more controller: its notes
   record like the computer keyboard's, faders and macros move Nota's controls (one finger,
   one undo step), and its knobs and XY axes can be mapped through the same MIDI Learn as
-  hardware — every connected phone drives the same mappings. Several phones can play at once,
+  hardware — every connected phone drives the same mappings, and the XY pad and tilt are
+  mapped per track, so each track's XY plays its own sound. Several phones can play at once,
   each on its own track, and Nota shows who plays what: the track list and the mixer carry
   the players' names. **USB works too:** a phone on a cable (USB tethering on Android,
   Internet Sharing on the Mac) gets an instant, radio-free link — Nota notices the cable,
   puts its address in the QR and marks the phone "USB" in the list.
+
+### Fixed
+- A note pressed and released within a few milliseconds (a very quick tap, a fast MIDI roll)
+  could keep ringing: its release was played ahead of its press.
 
 ## [0.43.1] — 2026-10-02
 

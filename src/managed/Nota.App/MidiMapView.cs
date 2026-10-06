@@ -69,7 +69,7 @@ public sealed class MidiMapView : UserControl
         Grid.SetColumn(del, 1);
         top.Children.Add(del);
 
-        var src = new TextBlock { Text = m.SourceLabel, FontSize = 10, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center };
+        var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 10, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center };
         src.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         // Source on the left; the invert toggle rides the right of the same line so the
         // range row below has room for just MIN / MAX.

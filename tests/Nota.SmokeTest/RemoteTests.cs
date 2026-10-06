@@ -96,6 +96,16 @@ internal static class RemoteTests
         e.TrackNoteOff(b, 64);
         Loudest(e, 40);
 
+        // A finger sliding across pads over Wi-Fi: on/off pairs arrive in one burst, inside one
+        // audio block. Live events all sit at offset 0 there and offs sort ahead of ons, so
+        // without care each note's off ran before its on and the notes rang forever.
+        e.SetTrackMute(b, false);
+        foreach (int p in new[] { 60, 62, 64, 65, 67 }) { e.TrackNoteOn(a, p, 0.9f); e.TrackNoteOff(a, p); }
+        e.TrackNoteOn(a, 69, 0.9f); e.TrackNoteOff(a, 69); e.TrackNoteOn(a, 69, 0.9f); e.TrackNoteOff(a, 69);
+        Loudest(e, 60);
+        float burst = Loudest(e, 4);
+        yield return (burst < 1e-3f, $"a burst of quick on/off pairs in one block leaves no note hanging (rms={burst:F5})");
+
         // Ordinary live input keeps its rule: nothing armed, nothing plays.
         e.NoteOn(67, 0.9f);
         float live = Loudest(e);
@@ -181,8 +191,8 @@ internal static class RemoteTests
         public void Refresh() => Refreshes++;
         public bool LearnArmed => false;
         public string? LearnPendingName => null;
-        public PhoneControlResult PhoneControl(int controlId, double norm) => PhoneControlResult.None;
-        public string? PhoneMappingName(int controlId) => null;
+        public PhoneControlResult PhoneControl(int controlId, int trackId, double norm) => PhoneControlResult.None;
+        public string? PhoneMappingName(int controlId, int trackId) => null;
         public void DevicesChanged() { }
         public void Activity() { }
     }

@@ -4,7 +4,7 @@
      transport. Portrait stacks it in two rows; landscape and tablet keep one. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
-  import type { Form } from '../lib/device.svelte';
+  import { device, toggleFullscreen, type Form } from '../lib/device.svelte';
 
   let { form }: { form: Form } = $props();
 
@@ -43,6 +43,11 @@
     if (app.link === 'weak') app.showToast(`Latency is ${app.rtt} ms. Move closer to the router or put the phone on 5 GHz Wi-Fi.`);
     else if (app.link === 'ok') app.showToast(`Connected to ${app.host} over ${app.via === 'usb' ? 'USB' : 'Wi-Fi'} · ${app.rtt} ms`);
     else if (app.link === 'lost') app.showToast('Touches are not sent until the link is back.');
+  }
+
+  async function fullscreen() {
+    if (!(await toggleFullscreen()))
+      app.showToast('This browser can’t hide its bars. Share → Add to Home Screen opens Nota Remote full-screen.');
   }
 
   function play() {
@@ -86,6 +91,15 @@
       <span class="mono bpm">{app.tp.bpm.toFixed(0)}</span>
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" /></svg>
     </button>
+    {#if !device.standalone}
+      <button class="tbtn fs" aria-label={device.fullscreen ? 'Exit full screen' : 'Full screen'} aria-pressed={device.fullscreen} onclick={fullscreen}>
+        {#if device.fullscreen}
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 2 V6 H2 M10 2 V6 H14 M6 14 V10 H2 M10 14 V10 H14" /></svg>
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6 V2 H6 M10 2 H14 V6 M2 10 V14 H6 M14 10 V14 H10" /></svg>
+        {/if}
+      </button>
+    {/if}
   </div>
 
   <div class="status">
@@ -118,6 +132,7 @@
   .tablet .transport { order: 2; flex: 0 0 460px; }
   .tbtn { width: 44px; height: 40px; border-radius: 5px; background: var(--raised); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex: none; transition: background-color 120ms ease-out, border-color 120ms ease-out; }
   .tbtn.play { width: 54px; }
+  .fs svg path { stroke: var(--ink3); }
   .sq { width: 11px; height: 11px; border-radius: 1px; background: var(--ink2); }
   .tri { width: 0; height: 0; border-left: 12px solid var(--ink2); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px; }
   .play.on { background: var(--accent); border-color: var(--accent); }

@@ -101,9 +101,11 @@
     if (prev !== undefined) stop(prev);
   }
 
-  // A key changed under held notes (octave, mode): release them.
+  // A key changed under held notes (octave, mode): release them. By value — `key` is a new
+  // object on every project message, which cut held notes whenever anything in Nota changed.
+  const keyId = $derived(key.root * 2 + (key.minor ? 1 : 0));
   $effect(() => {
-    void base; void mode; void key;
+    void base; void mode; void keyId;
     return () => {
       for (const notes of sounding.values()) for (const n of notes) app.noteOff(n);
       sounding.clear();

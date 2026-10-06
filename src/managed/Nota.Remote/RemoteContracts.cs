@@ -5,7 +5,8 @@ namespace Nota.Remote;
 
 /// <summary>The phone's mappable controls, in one id space so a MIDI Learn mapping needs only a
 /// number. Stable: the ids are stored in the project's MIDI map. A mapping belongs to the control,
-/// not to a phone, so every connected phone drives the same targets.</summary>
+/// not to a phone, so every connected phone drives the same targets. The XY pad and tilt are
+/// mapped per track — each track's XY plays its own sound — the macro knobs project-wide.</summary>
 public static class PhoneControls
 {
     public const int Macro1 = 1;          // Macro 1..8 = 1..8
@@ -13,6 +14,9 @@ public static class PhoneControls
     public const int TiltX = 30, TiltY = 31;
 
     public static bool IsMacro(int id) => id is >= 1 and <= 8;
+
+    /// <summary>A control whose mappings belong to the track the phone plays.</summary>
+    public static bool PerTrack(int id) => id is XyX or XyY or TiltX or TiltY;
 
     public static string Name(int id) => id switch
     {
@@ -77,10 +81,11 @@ public interface IRemoteHost
     bool LearnArmed { get; }
     /// <summary>The control Nota is waiting to bind ("Reverb · Decay"), or null.</summary>
     string? LearnPendingName { get; }
-    /// <summary>A phone control moved to <paramref name="norm"/> (0..1).</summary>
-    PhoneControlResult PhoneControl(int controlId, double norm);
-    /// <summary>The name of what a phone control is mapped to, or null when it isn't.</summary>
-    string? PhoneMappingName(int controlId);
+    /// <summary>A phone control moved to <paramref name="norm"/> (0..1) on a phone playing
+    /// <paramref name="trackId"/> (it scopes the per-track controls, see <see cref="PhoneControls.PerTrack"/>).</summary>
+    PhoneControlResult PhoneControl(int controlId, int trackId, double norm);
+    /// <summary>The name of what a phone control is mapped to on that track, or null when it isn't.</summary>
+    string? PhoneMappingName(int controlId, int trackId);
 
     /// <summary>A phone connected, left, renamed itself or switched track.</summary>
     void DevicesChanged();

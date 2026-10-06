@@ -88,8 +88,9 @@ export class App {
   private screenChosen = !!store.get('screen', '');
   /** The notes this phone told Nota it holds. Sent with every ping: a pointer-up a browser
    * swallowed (fast multi-touch, a pad replaced by a bank switch) must not ring forever —
-   * Nota releases anything the phone stops claiming. */
-  private held = new Set<number>();
+   * Nota releases anything the phone stops claiming. Counted: two chords sharing a note
+   * keep it sounding until both let go. */
+  private held = new Map<number, number>();
 
   constructor() {
     // A QR link carries the pairing code in the fragment (never sent over the network).
@@ -179,7 +180,7 @@ export class App {
         this.connect();
         return;
       }
-      this.raw({ t: 'ping', c: performance.now(), rtt: this.rtt, h: [...this.held] });
+      this.raw({ t: 'ping', c: performance.now(), rtt: this.rtt, h: [...this.held.keys()] });
     };
     tick();
     this.pingTimer = window.setInterval(tick, 1000);
@@ -344,18 +345,22 @@ export class App {
 
   noteOn(p: number, v: number) {
     if (p < 0 || p > 127) return;
-    if (this.send({ t: 'on', p, v: Math.round(v * 1000) / 1000 })) this.held.add(p);
+    if (this.send({ t: 'on', p, v: Math.round(v * 1000) / 1000 })) this.held.set(p, (this.held.get(p) ?? 0) + 1);
     if (this.prefs.haptics && navigator.vibrate) { try { navigator.vibrate(8); } catch { /* */ } }
   }
 
   noteOff(p: number) {
     if (p < 0 || p > 127) return;
+    const n = this.held.get(p) ?? 0;
+    if (n > 1) { this.held.set(p, n - 1); return; }   // another finger still holds it
     if (this.send({ t: 'off', p })) this.held.delete(p);
   }
 
   /** Let go of everything (the page hid, the phone left): no note outlives the fingers. */
   releaseHeld() {
-    for (const p of [...this.held]) this.noteOff(p);
+    for (const p of [...this.held.keys()]) {
+      if (this.send({ t: 'off', p })) this.held.delete(p);
+    }
   }
 
   /** The transport position now, interpolated between Nota's messages while playing. */

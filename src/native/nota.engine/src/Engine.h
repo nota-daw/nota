@@ -1254,6 +1254,10 @@ private:
     static constexpr int kMaxLive = 256;
     MidiEvent liveEvents_[kMaxLive];
     int       liveCount_ = 0;
+    // An event held back to the next block: every live event plays at offset 0 and the
+    // render sorts offs ahead of ons there, so one pitch's on and off must not share a block.
+    MidiEvent liveCarry_{};
+    bool      liveCarried_ = false;
     std::atomic<int32_t> auditionTrackId_{-1};   // live notes also play this track (pad audition)
     // Currently-held live-input pitches (computer keyboard + MIDI), independent of track
     // routing, so the piano roll can highlight the key you're pressing. 128 bits, set/cleared

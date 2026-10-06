@@ -108,7 +108,7 @@ public sealed partial class RemoteHub
             {
                 int knob = cmd.I;
                 if (knob is < 0 or > 7) break;
-                var r = host.PhoneControl(PhoneControls.Macro1 + knob, cmd.V);
+                var r = host.PhoneControl(PhoneControls.Macro1 + knob, c.TrackId, cmd.V);
                 if (r == PhoneControlResult.Bound) Learned(host, c, PhoneControls.Macro1 + knob);
                 if (r != PhoneControlResult.None) break;
                 var devs = MacroDevicesFor(c.TrackId);
@@ -156,14 +156,14 @@ public sealed partial class RemoteHub
         void Axis(bool isX, double v)
         {
             int ctl = tilt ? (isX ? PhoneControls.TiltX : PhoneControls.TiltY) : (isX ? PhoneControls.XyX : PhoneControls.XyY);
-            var r = host.PhoneControl(ctl, v);
+            var r = host.PhoneControl(ctl, c.TrackId, v);
             if (r == PhoneControlResult.Bound) { Learned(host, c, ctl); return; }
             if (r == PhoneControlResult.Mapped) return;
             if (tilt)
             {
                 // Unmapped tilt stands in for the finger on the pad.
                 int xy = isX ? PhoneControls.XyX : PhoneControls.XyY;
-                var r2 = host.PhoneControl(xy, v);
+                var r2 = host.PhoneControl(xy, c.TrackId, v);
                 if (r2 == PhoneControlResult.Bound) { Learned(host, c, xy); return; }
                 if (r2 == PhoneControlResult.Mapped) return;
             }
@@ -178,7 +178,7 @@ public sealed partial class RemoteHub
 
     private void Learned(IRemoteHost host, RemoteClient c, int controlId)
     {
-        string target = host.PhoneMappingName(controlId) ?? "";
+        string target = host.PhoneMappingName(controlId, c.TrackId) ?? "";
         c.Send(Json(w =>
         {
             w.WriteString("t", "learned");

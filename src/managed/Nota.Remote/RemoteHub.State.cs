@@ -366,8 +366,8 @@ public sealed partial class RemoteHub
                     w.WriteNumber("v", Math.Round(v, 4));
                     w.WriteString("txt", RemoteParams.Text(_engine, p, v));
                 }
-                WriteMap(w, "map", host.PhoneMappingName(ctl));
-                WriteMap(w, "tilt", host.PhoneMappingName(tiltCtl));
+                WriteMap(w, "map", host.PhoneMappingName(ctl, c.TrackId));
+                WriteMap(w, "tilt", host.PhoneMappingName(tiltCtl, c.TrackId));
                 w.WriteEndObject();
             }
             Axis("x", def?.X, PhoneControls.XyX, PhoneControls.TiltX);
@@ -416,7 +416,7 @@ public sealed partial class RemoteHub
                         w.WriteString("txt", RemoteParams.Text(_engine, ps[i], v));
                         w.WriteBoolean("a", RemoteParams.Automated(_engine, ps[i]));
                     }
-                    WriteMap(w, "map", host.PhoneMappingName(PhoneControls.Macro1 + i));
+                    WriteMap(w, "map", host.PhoneMappingName(PhoneControls.Macro1 + i, c.TrackId));
                     w.WriteEndObject();
                 }
             }

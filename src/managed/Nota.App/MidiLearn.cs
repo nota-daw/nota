@@ -154,6 +154,9 @@ public sealed class MidiMapping
     public MidiSourceKind SourceKind { get; init; }
     public int Channel { get; init; }         // 0..15 (unused, and always 0, for Gamepad)
     public int Number { get; init; }          // CC number, note pitch, or GamepadControls id
+    /// <summary>Phone XY / tilt: the track whose phone drives it (0 = any track — the macros,
+    /// and XY mappings learned before they were per track).</summary>
+    public int ScopeTrackId { get; init; }
     public double RangeMin { get; set; }       // normalized output floor
     public double RangeMax { get; set; } = 1;  // normalized output ceiling
     public bool Invert { get; set; }

@@ -6,11 +6,17 @@ export type Form = 'phone' | 'phoneLand' | 'tablet';
 class Device {
   w = $state(window.innerWidth);
   h = $state(window.innerHeight);
+  /** Opened from the Home Screen: already full-screen, no browser bars to hide. */
+  readonly standalone = matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+  fullscreen = $state(!!fullscreenElement());
 
   constructor() {
     const upd = () => { this.w = window.innerWidth; this.h = window.innerHeight; };
     window.addEventListener('resize', upd);
     window.addEventListener('orientationchange', () => setTimeout(upd, 120));
+    const fs = () => (this.fullscreen = !!fullscreenElement());
+    document.addEventListener('fullscreenchange', fs);
+    document.addEventListener('webkitfullscreenchange', fs);
   }
 
   get form(): Form {
@@ -20,6 +26,31 @@ class Device {
 }
 
 export const device = new Device();
+
+// ---- full screen --------------------------------------------------------------------
+// A page opened in the browser can hide the browser's bars where the Fullscreen API exists
+// (Android, iPad). Safari on iPhone has no page full screen: there "Add to Home Screen" is the way.
+
+function fullscreenElement(): Element | null {
+  const d = document as any;
+  return d.fullscreenElement ?? d.webkitFullscreenElement ?? null;
+}
+
+export function canFullscreen(): boolean {
+  const d = document as any;
+  return !!(d.fullscreenEnabled || d.webkitFullscreenEnabled);
+}
+
+/** Enter or leave full screen. False when the browser can't (iPhone Safari). */
+export async function toggleFullscreen(): Promise<boolean> {
+  const d = document as any, el = document.documentElement as any;
+  if (!canFullscreen()) return false;
+  try {
+    if (fullscreenElement()) await (d.exitFullscreen ?? d.webkitExitFullscreen).call(d);
+    else await (el.requestFullscreen ?? el.webkitRequestFullscreen).call(el, { navigationUI: 'hide' });
+    return true;
+  } catch { return false; }
+}
 
 // ---- keep awake ---------------------------------------------------------------------
 // The Wake Lock API needs a secure page; over plain LAN HTTP the classic fallback is a tiny

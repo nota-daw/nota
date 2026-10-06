@@ -38,6 +38,9 @@
     const el = e.currentTarget as HTMLElement;
     const r = el.getBoundingClientRect();
     const vel = app.prefs.fullVel ? 1 : Math.max(0.2, Math.min(1, 1 - (e.clientY - r.top) / r.height + 0.15));
+    // A second finger on a held pad retriggers it; the note stays counted once, so the
+    // last finger to lift releases it.
+    if ([...pointers.values()].includes(note)) app.noteOff(note);
     pointers.set(e.pointerId, note);
     down[note] = true;
     app.noteOn(note, vel);
