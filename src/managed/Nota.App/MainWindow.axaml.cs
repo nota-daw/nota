@@ -208,8 +208,9 @@ public partial class MainWindow : Window
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
-        // Tempo reads with two decimals (almanac § Numbers); a drag moves in half-BPM steps.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14);
+        // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
+        // (half a BPM per pixel), the hundredths come from double-click-to-type.
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
