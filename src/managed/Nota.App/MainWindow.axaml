@@ -90,6 +90,7 @@
       <NativeMenuItem Header="Help">
         <NativeMenuItem.Menu>
           <NativeMenu>
+            <NativeMenuItem Header="Documentation" Click="OnDocumentation"/>
             <NativeMenuItem Header="What's New" Click="OnWhatsNew"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="About Nota" Click="OnAbout"/>

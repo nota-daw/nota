@@ -256,6 +256,19 @@ public sealed partial class DeviceChainView
                 var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1, Icon = MenuKit.Icon(GlyphKind.StepRight) }; rightMi.Click += (_, _) => Move(di + 1);
                 flyout.Items.Add(left); flyout.Items.Add(rightMi);
             }
+            // This device's page in the user manual (a plug-in gets the plug-ins page).
+            var docs = new MenuItem { Header = "Documentation" };
+            docs.Click += (_, _) =>
+            {
+                int kind = s.Kind switch
+                {
+                    ChainKind.Instrument => _engine.TrackInstrumentKind(_trackId),
+                    ChainKind.Midi => _engine.MidiEffectKind(_trackId, di),
+                    _ => _engine.TrackDeviceBuiltinKind(_trackId, di),
+                };
+                NotaDocs.Open(headerBar, NotaDocs.DevicePage(s.Kind, kind));
+            };
+            flyout.Items.Add(docs);
             flyout.Items.Add(new Separator());
         }
 
