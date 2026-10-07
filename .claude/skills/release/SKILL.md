@@ -124,10 +124,22 @@ not a word-for-word translation.
 
 Commit the posts together with the release. Show both to the user in the report.
 
+## 3d. Docs check
+
+Run the `nota-docs` skill in `audit` mode over the `[Unreleased]` entries you just promoted.
+Docs changes are committed in `../nota-docs`, not in the release commit. Missing docs don't
+block the release — list them in the report.
+
+## 3e. Feature list
+
+Run the `nota-features` skill in `audit` mode: fold every changelog entry since the version in
+`FEATURES.md`'s header into the list and set the header to `X.Y.Z`. `FEATURES.md` goes into
+the release commit.
+
 ## 4. Commit, tag, push
 
 ```bash
-git add VERSION CHANGELOG.md src/native/nota.engine/VERSION docs/news/
+git add VERSION CHANGELOG.md FEATURES.md src/native/nota.engine/VERSION docs/news/
 git commit -m "(chore) Release vX.Y.Z"
 git tag -a "vX.Y.Z" -m "Nota vX.Y.Z"
 git push origin main

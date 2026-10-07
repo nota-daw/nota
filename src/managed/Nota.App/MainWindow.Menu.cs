@@ -27,6 +27,9 @@ public partial class MainWindow
 
     private void OnWhatsNew(object? sender, EventArgs e) => ShowWhatsNew();
 
+    // Help ▸ Documentation: the user manual in the browser.
+    private void OnDocumentation(object? sender, EventArgs e) => NotaDocs.Open(this);
+
     private void OnPreferences(object? sender, EventArgs e) => ShowPreferences();
     public void ShowPreferences()
     {

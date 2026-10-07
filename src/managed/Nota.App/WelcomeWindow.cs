@@ -172,11 +172,11 @@ public sealed class WelcomeWindow : NotaWindow
         Grid.SetRow(recentPanel, 2);
         root.Children.Add(recentPanel);
 
-        // --- Footer: show-on-startup + Settings / What's New --------------
+        // --- Footer: show-on-startup + Documentation / Settings / What's New --------------
         var footer = new Grid
         {
             Margin = new Thickness(0, 20, 0, 0),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"),
         };
 
         var startupTrack = new SwitchTrack { IsOn = showOnStartup };
@@ -212,15 +212,22 @@ public sealed class WelcomeWindow : NotaWindow
         Grid.SetColumn(startup, 0);
         footer.Children.Add(startup);
 
+        // The user manual, for a first launch that wants a guided start.
+        var docsBtn = FooterLink("Documentation");
+        docsBtn.Click += (_, _) => NotaDocs.Open(this, "start-here/first-track");
+        Grid.SetColumn(docsBtn, 2);
+        footer.Children.Add(docsBtn);
+
         var settingsBtn = FooterLink("Settings");
+        settingsBtn.Margin = new Thickness(8, 0, 0, 0);
         settingsBtn.Click += (_, _) => onSettings();
-        Grid.SetColumn(settingsBtn, 2);
+        Grid.SetColumn(settingsBtn, 3);
         footer.Children.Add(settingsBtn);
 
         var whatsNewBtn = FooterLink("What's New");
         whatsNewBtn.Margin = new Thickness(8, 0, 0, 0);
         whatsNewBtn.Click += (_, _) => onWhatsNew();
-        Grid.SetColumn(whatsNewBtn, 3);
+        Grid.SetColumn(whatsNewBtn, 4);
         footer.Children.Add(whatsNewBtn);
 
         Grid.SetRow(footer, 3);

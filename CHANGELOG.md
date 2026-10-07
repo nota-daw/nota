@@ -18,6 +18,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **A user manual, in English and Russian** — at https://nota-daw.github.io/nota-docs/, from the
+  first track to every knob of every built-in device. **Help ▸ Documentation** opens it (in Russian
+  when your system is), the start window links to the first-track tutorial, and every device's
+  header menu has a **Documentation** item that opens that device's page.
+
 ### Fixed
 - **The Mixer shows your track names:** a track renamed to "Drums" used to read "Inst 2" in
   its mixer strip. Strips now carry the same name as the Arrangement — or the instrument's

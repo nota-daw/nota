@@ -21,6 +21,7 @@
   <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
   <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-D9A13F" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
+  <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-D9A13F" alt="Documentation"></a>
   <a href="https://t.me/notadaw"><img src="https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white" alt="Telegram"></a>
   <a href="https://discord.gg/apf4Q2JKWk"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
@@ -154,6 +155,9 @@ GitHub Actions from the code in this repository.
 Nota checks for updates itself and shows what's new after each update.
 
 ## Status
+
+New to Nota? The [user manual](https://nota-daw.github.io/nota-docs/) (English and Russian)
+walks through every view and device.
 
 Nota is young and moving fast — new releases come out every week or so (see the
 [changelog](CHANGELOG.md)). It's already used to make real music, but expect rough edges.

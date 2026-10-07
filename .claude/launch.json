@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nota-docs",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/26.10.0_1/bin/node",
+      "runtimeArgs": ["../nota-docs/node_modules/astro/bin/astro.mjs", "dev", "--root", "../nota-docs", "--port", "4321"],
+      "port": 4321
+    }
+  ]
+}
