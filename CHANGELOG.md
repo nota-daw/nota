@@ -18,6 +18,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.50.1] — 2026-10-07
+
+### Highlights
+- **Session View, rebuilt:** named, coloured clips with previews, an inspector, launch modes,
+  follow actions, scenes with their own tempo, Session recording and a full audio clip editor.
+- **Nota Remote:** scan a QR code and your phone plays Nota — pads, keys, XY pad with tilt,
+  mixer, macros and the Session grid, over Wi-Fi or a USB cable, with nothing to install.
+- **Arrangement ⇄ Session:** copy clips both ways with the clipboard or ⌘⇧C; drag audio clips
+  straight into a Sampler, Grain or Drum Rack pad.
+- **Nota Shutter gets a Pattern tab** — a tempo-synced, drawable rhythmic gate with 15 presets.
+- **Faster editing:** duplicate a time range (⌘⇧D), insert silence (⌘⇧I), a count-in before
+  playback and recording, and type exact values into any slider.
+- A cleaner main window, and Bluetooth headphones like AirPods no longer go silent on macOS.
+
 ### Added
 - **Duplicate time (⌘⇧D) and insert silence (⌘⇧I):** select a time range in the Arrangement
   and ⌘⇧D inserts a copy of it right after itself, while ⌘⇧I opens an empty gap of the same
@@ -97,8 +111,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   freezes never count in. The setting is remembered across sessions.
 
 ### Changed
-- **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch
-  quantize lives in the Session toolbar instead of the transport bar.
+- **Import audio** no longer has a shortcut (File ▸ Import audio) — ⌘I now inserts a scene
+  in the Session view. Launch quantize lives in the Session toolbar instead of the transport
+  bar.
 - **A cleaner main window.** The project's name now leads the transport bar. In the
   arrangement, tracks inside a group step their colour stripe in under it, so nesting reads
   at a glance; the Overview strip is slimmer and calmer (a thin line per track, a neutral
