@@ -19,6 +19,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Audio clips into instruments:** drag an audio clip from the Arrangement onto the row of a
+  track with a Sampler, Nota Grain, Drum Rack or Instrument Rack and its audio loads there (a
+  Drum Rack takes it on the next free pad). Pull a clip out of the Arrangement and it becomes a
+  sample you can drop anywhere a sample goes — a Drum Rack pad, a Grain, a Rhythm voice, a
+  Session slot. Rest over an instrument track while dragging and its devices open, so a
+  specific pad is one move away. The clip stays where it was; the sample is the part of the
+  clip you hear.
 - **Nota Shutter · Pattern:** a fourth tab turns the gate into a rhythmic, tempo-synced
   gate. Draw the steps (Draw, Line, Erase, Flip) on an 8, 16 or 32-step grid, flip through
   pattern shapes or roll a new one with the dice and Complexity, and shape the gain with Smooth

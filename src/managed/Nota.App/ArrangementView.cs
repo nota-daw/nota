@@ -327,7 +327,7 @@ public sealed partial class ArrangementView : UserControl
         // below the tracks) so instruments/samples can be dropped anywhere.
         DragDrop.SetAllowDrop(scroller, true);
         DragDrop.AddDragOverHandler(scroller, OnLaneDragOver);
-        DragDrop.AddDragLeaveHandler(scroller, (_, _) => SetDropTrack(-1));
+        DragDrop.AddDragLeaveHandler(scroller, (_, _) => { SetDropTrack(-1); DwellOverTrack(-1); });
         DragDrop.AddDropHandler(scroller, OnLaneDrop);
         // Right-click the empty area below the tracks → paste a copied track there (the
         // header cards / lanes are top-anchored, so clicks below them land on the scroller).
@@ -1101,6 +1101,7 @@ public sealed partial class ArrangementView : UserControl
     // --- browser drag & drop (M7-5) ---
     private void OnLaneDragOver(object? sender, DragEventArgs e)
     {
+        if (BrowserView.IsClipDrag) { OnClipDragOverLanes(e); return; }
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
@@ -1163,6 +1164,7 @@ public sealed partial class ArrangementView : UserControl
 
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
+        if (BrowserView.IsClipDrag) { OnClipDropOnLanes(e); return; }
         SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;

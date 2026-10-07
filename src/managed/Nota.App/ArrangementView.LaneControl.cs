@@ -103,6 +103,15 @@ public sealed partial class ArrangementView
         private double _grabOrigStart;   // grabbed clip's original start (delta reference)
         private int _grabRow;            // grabbed clip's row (vertical delta reference)
         private int _moveRowDelta;       // rows to shift the group (instrument→instrument only)
+
+        // Audio clip → instrument (see ArrangementView.ClipDrag): the grabbed clip, the
+        // sample-taking instrument row it's held over (-1 none: a plain move), and the press
+        // a drag out of the arrangement starts its sample drag from.
+        private ClipVM? _grabClip;
+        private int _grabTrackId;
+        private int _loadRow = -1;
+        private PointerPressedEventArgs? _pressArgs;
+        private bool _dragOutTried;
         private List<double> _snapTargets = new();   // neighbour clip edges + markers (magnetic snap, 2.4)
 
         // Rubber-band on empty lane space. Plain drag = clip marquee (select whole clips);
@@ -279,6 +288,8 @@ public sealed partial class ArrangementView
             _pendingClipIndex = hh.clip.ClipIndex;
             _pendingGrabBeat = beat;
             _pendingWasSelected = _o.IsSelected(hh.track.Id, hh.clip.ClipIndex);
+            _pressArgs = e;
+            _dragOutTried = false;
             e.Pointer.Capture(this);
             InvalidateVisual();
         }
@@ -383,6 +394,7 @@ public sealed partial class ArrangementView
                     // Grabbing an already-selected clip moves the whole group; otherwise the
                     // clip becomes the sole selection first (req 2.1/2.2).
                     if (!_pendingWasSelected) _o.Select(_pendingTrackId, _pendingClipIndex);
+                    _grabClip = _pendingClip; _grabTrackId = _pendingTrackId;
                     BeginGroupMove(_pendingTrackId, _pendingClip!.StartBeat, _pendingGrabBeat);
                 }
                 else
@@ -398,6 +410,13 @@ public sealed partial class ArrangementView
             }
 
             if (_drag == Drag.None) { if (!UpdateAdsrHover(pos)) UpdateEdgeHover(pos); return; }
+            // An audio clip pulled out of the arrangement becomes a sample drag.
+            if (_drag == Drag.Move && _groupMove is not null && !_dragOutTried && _grabClip is { IsMidi: false }
+                && e.GetPosition(_o) is var op && (op.X < 0 || op.Y < 0 || op.X > _o.Bounds.Width || op.Y > _o.Bounds.Height))
+            {
+                _ = DragOutAsync();
+                return;
+            }
             EnsureAutoScroll();
             UpdateActiveDrag(pos, e.KeyModifiers);
         }
@@ -418,6 +437,15 @@ public sealed partial class ArrangementView
                 // Vertical: how many rows to shift (instrument→instrument only).
                 int targetRow = Math.Max(0, _o.RowAtYClamped(pos.Y));
                 _moveRowDelta = ClampRowDelta(targetRow - _grabRow);
+                // Over a sample-taking instrument row an audio clip loads there on release
+                // instead of moving, so the group rests at home meanwhile.
+                int hoverRow = _o.RowAtY(pos.Y);
+                SetLoadRow(_grabClip is { IsMidi: false } && hoverRow != _grabRow && _o.TakesSample(hoverRow) ? hoverRow : -1);
+                if (_loadRow >= 0)
+                {
+                    foreach (var m in _groupMove) m.vm.StartBeat = m.origStart;
+                    _moveRowDelta = 0;
+                }
                 InvalidateVisual();
                 return;
             }
@@ -528,6 +556,19 @@ public sealed partial class ArrangementView
                 return;
             }
 
+            if (_drag == Drag.Move && _groupMove is not null && _loadRow >= 0)
+            {
+                int trackId = _o._tracks[_loadRow].Id;
+                var grabbed = _grabClip;
+                SetLoadRow(-1);
+                _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
+                e.Pointer.Capture(null);
+                InvalidateVisual();
+                if (eng is not null && grabbed is not null && ClipSample(eng, grabbed) is { } item)
+                    _o.LoadClipIntoTrack(item, trackId);
+                return;
+            }
+
             if (_drag == Drag.Move && _groupMove is not null)
             {
                 int rowDelta = _moveRowDelta;
@@ -606,10 +647,46 @@ public sealed partial class ArrangementView
             _autoDrag = null; _autoDragTrack = null; _bendLeft = _bendRight = null; _bendTrack = null;
             _rangeTrack = null;
             _adsrDrag = AdsrHandle.None; _adsrClip = null;
+            SetLoadRow(-1);
             _autoScroll?.Stop();
             SetResizeCursor(false);
             _o.Refresh();   // reload authoritative clip/automation positions, discarding the preview
             return true;
+        }
+
+        private void SetLoadRow(int row)
+        {
+            if (row == _loadRow) return;
+            _loadRow = row;
+            _o.SetDropTrack(row);
+            _o.DwellOverTrack(row >= 0 ? _o._tracks[row].Id : -1);
+            if (row >= 0) _o.StatusMessage?.Invoke($"Release to load the clip into {_o._tracks[row].Name}");
+        }
+
+        // The grabbed clip's audio as a sample file (null + a status line when it can't be).
+        private BrowserItem? ClipSample(IAudioEngine eng, ClipVM clip)
+        {
+            string name = clip.Name.Length > 0 ? clip.Name : _o._tracks.Find(t => t.Id == _grabTrackId)?.Name ?? "";
+            try { return ClipAudioExport.AsSample(eng, _grabTrackId, clip.ClipIndex, name); }
+            catch (Exception ex) { _o.StatusMessage?.Invoke($"Couldn't take the clip's audio: {ex.Message}"); return null; }
+        }
+
+        // Hands the move over to a sample drag: the clip snaps back home and its audio rides
+        // the browser payload, so any sample drop target takes it.
+        private async System.Threading.Tasks.Task DragOutAsync()
+        {
+            _dragOutTried = true;
+            if (_pressArgs is not { } press || _grabClip is not { } clip || _o._engine is not { } eng) return;
+            if (ClipSample(eng, clip) is not { } item) return;
+            CancelGesture();
+            press.Pointer.Capture(null);
+            try { await BrowserView.DragItemAsync(press, item, fromClip: true); }
+            finally
+            {
+                _pressArgs = null;
+                _o.SetDropTrack(-1);
+                _o.DwellOverTrack(-1);
+            }
         }
 
         // NB: we deliberately do NOT cancel on OnPointerCaptureLost. On macOS that event fires

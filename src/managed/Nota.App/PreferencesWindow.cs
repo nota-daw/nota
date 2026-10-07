@@ -1055,6 +1055,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag a device header", "Reorder devices (or right-click the header → Move left / right)"),
             ("Right-click a device header", "A / B compare, move, copy, delete, presets, save preset"),
             ("Delete (device selected)", "Remove the selected device — the header no longer carries a close button"),
+            ("Drag an audio clip onto an instrument track", "Load its audio into the Sampler, Grain, Drum Rack (next free pad) or Instrument Rack · rest there to open its devices"),
+            ("Drag an audio clip out of the Arrangement", "Take it as a sample: drop on a pad, a Grain, a Rhythm voice, a Session slot — the clip stays put"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),

@@ -16,6 +16,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -46,6 +47,24 @@ public sealed class BrowserView : UserControl
 
     /// <summary>True while a browser row is being dragged (used by drop targets).</summary>
     public static bool IsBrowserDrag => CurrentDrag is not null;
+
+    /// <summary>True while the drag is an arrangement audio clip pulled out as a sample (it
+    /// rides the browser payload, so every sample drop target takes it as-is).</summary>
+    public static bool IsClipDrag { get; private set; }
+
+    /// <summary>Drags <paramref name="item"/> as the browser payload from a press elsewhere in
+    /// the app. Completes when it's dropped (or cancelled).</summary>
+    internal static async Task DragItemAsync(PointerPressedEventArgs press, BrowserItem item, bool fromClip = false)
+    {
+        // Single native pasteboard item (one format → one drag image → one
+        // pasteboard item: macOS is satisfied). The payload rides CurrentDrag.
+        var data = new DataTransfer();
+        data.Add(DataTransferItem.Create(DataFormat.Text, DragSentinel));
+        CurrentDrag = item;
+        IsClipDrag = fromClip;
+        try { await DragDrop.DoDragDropAsync(press, data, DragDropEffects.Copy); }
+        finally { CurrentDrag = null; IsClipDrag = false; }
+    }
 
     // --- external file drops (from Finder / other programs) -----------------
     // Audio extensions Nota can import as a clip / sample; MIDI files (MidiFileReader)
@@ -1172,14 +1191,7 @@ public sealed class BrowserView : UserControl
         var args = _pressArgs;
         _pressedItem = null; _pressArgs = null; // start the drag once
         DismissPreview();
-
-        // Single native pasteboard item (one format → one drag image → one
-        // pasteboard item: macOS is satisfied). The payload rides CurrentDrag.
-        var data = new DataTransfer();
-        data.Add(DataTransferItem.Create(DataFormat.Text, DragSentinel));
-        CurrentDrag = item;
-        try { await DragDrop.DoDragDropAsync(args, data, DragDropEffects.Copy); }
-        finally { CurrentDrag = null; }
+        await DragItemAsync(args, item);
     }
 
     private static bool InButton(StyledElement? el)
