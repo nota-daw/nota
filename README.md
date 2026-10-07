@@ -21,11 +21,8 @@
   <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
   <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-D9A13F" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
-<<<<<<< Updated upstream
-=======
   <a href="https://t.me/notadaw"><img src="https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white" alt="Telegram"></a>
   <a href="https://discord.gg/apf4Q2JKWk"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
->>>>>>> Stashed changes
 </p>
 
 ![Nota playing a song in the Arrangement view, with the piano roll open below](assets/screenshots/playback.gif)
