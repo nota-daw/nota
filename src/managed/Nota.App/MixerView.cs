@@ -98,10 +98,12 @@ public sealed class MixerView : UserControl
         bool isReturn = ti.IsReturn;
         var col = new StackPanel();
 
-        col.Children.Add(Header(NameFor(ti), color, Card));
+        col.Children.Add(Header(TrackNames.Of(_engine, ti), color, Card));
 
-        string io1 = isReturn ? "Return in" : ti.IsInstrument ? "MIDI in" : "In 1";
-        string io2 = isReturn ? "→ Master" : ti.IsInstrument ? "Monitor Auto" : "Monitor In";
+        string io1 = isReturn ? "Return in" : ti.IsGroup ? "Group in" : ti.IsInstrument ? "MIDI in" : "In 1";
+        string io2 = isReturn ? "→ Master"
+                   : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : "Master")
+                   : ti.IsInstrument ? "Monitor Auto" : "Monitor In";
         // Instrument tracks get a live "MIDI To" selector in place of the static I/O text.
         var ioRow = ti.IsInstrument ? MidiIoRow(id) : IoRow(io1, io2);
         ioRow.IsVisible = _ioVisible;
@@ -208,10 +210,6 @@ public sealed class MixerView : UserControl
             Children = { row, new NaBadge { Kind = NaBadgeKind.Future } },
         };
     }
-
-    private string NameFor(NotaTrackInfo ti)
-        => ti.IsReturn ? $"Return {_engine.TrackReturnIndex(ti.Id) + 1}"
-                       : (ti.IsInstrument ? "Inst " : "Audio ") + ti.Id;
 
     private Control Header(string name, IBrush topColor, IBrush bg)
     {

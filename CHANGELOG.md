@@ -18,6 +18,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **The Mixer shows your track names:** a track renamed to "Drums" used to read "Inst 2" in
+  its mixer strip. Strips now carry the same name as the Arrangement — or the instrument's
+  name, "Group" or "Return N" — and a group strip's I/O reads "Group in → Master".
+
 ## [0.50.1] — 2026-10-07
 
 ### Highlights
