@@ -5186,7 +5186,10 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gd >= 0, "add built-in Nota Shutter");
         Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
         Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
-        Check(ge.DeviceParamCount(gt, gd) == 16, $"Nota Shutter exposes 16 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamCount(gt, gd) == 60, $"Nota Shutter exposes 60 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamName(gt, gd, 16) == "Pattern Target" && ge.DeviceParamName(gt, gd, 27) == "Pattern Out"
+              && ge.DeviceParamName(gt, gd, 28) == "Step 1" && ge.DeviceParamName(gt, gd, 59) == "Step 32", "Shutter appends the Pattern params and Step 1..32");
+        Check(ge.DeviceParamDefault(gt, gd, 16) < 0.01f, "Pattern is off by default (the gate sounds as before)");
         string[] appended = { "Shape", "Retrigger", "Det Filter", "Peak Hold", "External Key" };
         bool namesOk = true;
         for (int k = 0; k < appended.Length; k++) namesOk &= ge.DeviceParamName(gt, gd, 11 + k) == appended[k];
@@ -5319,6 +5322,62 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gsc[TExtKey] < 0.5f && unkeyed > toneOpen * 0.95f, $"External Key off keys off the track itself ({unkeyed:F4})");
         ge.DeviceSetParam(tt, td, SExtKey, 1f);
         ge.SetDeviceSidechainSource(tt, td, -1);
+
+        // Pattern (rhythmic gate) on the held tone, the burst track still shut. Steps on / off in
+        // turn at full depth keep about half the energy (RMS ≈ 1/√2); all-off steps at depth 0.5
+        // halve the level; Map leaves the audio alone and moves Pattern Out instead.
+        {
+            const int PTarget = 16, PDepth = 18, PSmooth = 20, POut = 27, PStep1 = 28, PatAt = 24 + 3 * 128;
+            ge.DeviceSetParam(tt, td, SLook, 0f);
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, k % 2 == 0 ? 1f : 0f);
+            ge.DeviceSetParam(tt, td, PTarget, 0.5f);
+            float alt = RunTone();
+            Check(fin && alt > toneOpen * 0.55f && alt < toneOpen * 0.85f, $"Pattern Volume: alternate steps keep ≈ 1/√2 ({alt / toneOpen:0.00})");
+            var psc = new float[PatAt + 8];
+            Check(ge.DeviceScope(tt, td, psc, psc.Length) == psc.Length, $"Shutter scope carries the pattern block ({psc.Length} values)");
+            Check(psc[PatAt + 4] == 1 && psc[PatAt + 5] == 16 && psc[PatAt + 1] >= 0 && psc[PatAt + 1] < 16 && psc[PatAt] >= 0 && psc[PatAt] < 1,
+                  $"pattern telemetry: target Volume, 16 steps, step {psc[PatAt + 1]:0}, phase {psc[PatAt]:0.00}");
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, 0f);
+            ge.DeviceSetParam(tt, td, PDepth, 0.5f);
+            float half = RunTone();
+            Check(half > toneOpen * 0.42f && half < toneOpen * 0.58f, $"Pattern Depth 50 % on empty steps halves the level ({half / toneOpen:0.00})");
+            ge.DeviceSetParam(tt, td, PDepth, 1f);
+            ge.DeviceSetParam(tt, td, PSmooth, 1f);
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, k % 2 == 0 ? 1f : 0f);
+            Check(RunTone() > 0.01f && fin, "Pattern Smooth renders finite and audible");
+            ge.DeviceSetParam(tt, td, PSmooth, 0f);
+            string ptxt = ge.DeviceText(tt, td, 0);
+            Check(ptxt.Contains("PATTERN volume") && ptxt.Contains("[#.#."), $"device text shows the pattern ('{ptxt}')");
+
+            // Map: the audio passes, Pattern Out follows the steps (a CV source).
+            ge.DeviceSetParam(tt, td, PTarget, 1f);
+            float lo = 1, hi = 0; double acc = 0; long nfr = 0;
+            ge.Seek(0); ge.Play();
+            for (int k = 0; k < 40; k++)
+            {
+                ge.RenderOffline(tb, 1024);
+                foreach (var v in tb) acc += v * v; nfr += tb.Length;
+                float o = ge.DeviceGetParam(tt, td, POut); lo = Math.Min(lo, o); hi = Math.Max(hi, o);
+            }
+            ge.StopTransport();
+            float mapRms = (float)Math.Sqrt(acc / nfr);
+            Check(lo < 0.05f && hi > 0.95f, $"Map drives Pattern Out through the steps ({lo:0.00}..{hi:0.00})");
+            Check(mapRms > toneOpen * 0.9f, $"Map leaves the audio alone ({mapRms / toneOpen:0.00})");
+
+            // Steps automate like any param and clone with the track.
+            int stLane = ge.AddAutomationLane(tt, AutomationTarget.DeviceParam, td, PStep1 + 3);
+            Check(stLane >= 0, "add a Shutter Step 4 automation lane");
+            ge.SetAutomationPoints(tt, stLane, new[] { new AutomationPoint(0.0, 0.75f), new AutomationPoint(8.0, 0.75f) });
+            ge.Seek(1.0); ge.Play(); ge.RenderOffline(tb, 1024); ge.StopTransport();
+            Check(Math.Abs(ge.DeviceGetParam(tt, td, PStep1 + 3) - 0.75f) < 0.01f, $"automation drives Shutter Step 4 ({ge.DeviceGetParam(tt, td, PStep1 + 3):F2})");
+            ge.RemoveAutomationLane(tt, stLane);
+            int ttD = ge.DuplicateTrack(tt); int tdD = ge.TrackDeviceCount(ttD) - 1;
+            Check(ttD > 0 && ge.DeviceGetParam(ttD, tdD, PTarget) > 0.99f && Math.Abs(ge.DeviceGetParam(ttD, tdD, PStep1 + 2) - 1f) < 1e-3
+                  && ge.DeviceGetParam(ttD, tdD, PStep1 + 1) < 1e-3, "duplicate track clones the Shutter pattern");
+            ge.RemoveTrack(ttD);
+            ge.DeviceSetParam(tt, td, PTarget, 0f);
+            ge.DeviceSetParam(tt, td, SLook, 0.5f);
+        }
         ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
 
         // Clone: duplicating the track carries the params, the appended ones too.
@@ -5345,7 +5404,9 @@ Console.WriteLine("-- Nota Shutter --");
             for (int k = 0; k < ge.DeviceParamCount(gt, gd); k++) names.Add(ge.DeviceParamName(gt, gd, k));
             var cat = new FactoryPresetCatalog();
             var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 19).ToList();
-            Check(mine.Count >= 25, $"Nota Shutter ships ≥ 25 factory presets ({mine.Count})");
+            Check(mine.Count >= 40, $"Nota Shutter ships ≥ 40 factory presets ({mine.Count})");
+            Check(mine.Count(p => p.Id.StartsWith("shutter/") && cat.Document(p.Id)!.NamedParams!.ContainsKey("Pattern Target")) == 15,
+                  "Nota Shutter ships 15 pattern presets");
             var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
             Check(bad.Count == 0, $"every Shutter preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
             int pf = 0;
@@ -5363,6 +5424,11 @@ Console.WriteLine("-- Nota Shutter --");
             cat.ApplyInPlace(ge, "shutter/Init", gt, gd);
             Check(Math.Abs(ge.DeviceGetParam(gt, gd, SShape) - 0.5f) < 1e-4 && ge.DeviceGetParam(gt, gd, SPeakHold) < 0.5f && ge.DeviceGetParam(gt, gd, SFloor) < 0.001f,
                   "Init preset resets the leftovers to the defaults");
+            cat.ApplyInPlace(ge, "shutter/Slow Pad Gate", gt, gd);
+            Check(Math.Abs(ge.DeviceGetParam(gt, gd, 16) - 0.5f) < 1e-4 && ge.DeviceGetParam(gt, gd, 22) < 0.01f && ge.DeviceGetParam(gt, gd, 17) > 0.99f
+                  && Math.Abs(ge.DeviceGetParam(gt, gd, 30) - 0.75f) < 1e-4, "Slow Pad Gate preset: Volume pattern, 8 steps, 4 bars");
+            cat.ApplyInPlace(ge, "shutter/Init", gt, gd);
+            Check(ge.DeviceGetParam(gt, gd, 16) < 0.01f, "Init turns the pattern off again");
         }
     }
     finally

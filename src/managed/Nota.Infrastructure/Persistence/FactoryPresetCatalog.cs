@@ -1227,6 +1227,26 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("shutter", 19, "Bass Under Kick",     ("Threshold", 0.571f), ("Flip", 1f), ("Attack", 0.425f), ("Hold", 0.622f), ("Release", 0.63f), ("Floor", 0.857f), ("Det HP", 0.088f), ("Det LP", 0.088f));
         Fx("shutter", 19, "Voice-Over Duck",     ("Threshold", 0.429f), ("Return", 0.25f), ("Flip", 1f), ("Attack", 0.75f), ("Hold", 0.94f), ("Release", 0.879f), ("Floor", 0.829f), ("Det HP", 0.438f), ("Det LP", 0.651f));
         Fx("shutter", 19, "Key Tuning (Listen)", ("Threshold", 0.457f), ("Listen", 1f), ("Det HP", 0.349f), ("Det LP", 0.349f));
+        Section("Pattern");
+        // Rhythmic gate (the Pattern tab). Steps are written in eighths ('0'..'8' → 0..1, 8 levels);
+        // their count sets Pattern Steps. Pattern Target .5 = Volume, 1 = Map (Pattern Out, a CV
+        // source); Pattern Rate idx/4 = Sync 1/4 · 1/2 · 1 Bar · 2 Bars · 4 Bars (Free 4 · 2 · 1 ·
+        // 0.5 · 0.25 Hz); Swing 0..1 → 0..75 %; Lookahead 0 keeps the pure patterns latency-free.
+        Pat("Trance 16ths",     "8080880880808808", ("Pattern Smooth", 0.1f));
+        Pat("Offbeat Pump",     "0080008000800080", ("Pattern Depth", 0.85f), ("Pattern Smooth", 0.35f));
+        Pat("Four-Floor Pump",  "1468146814681468", ("Pattern Depth", 0.9f), ("Pattern Smooth", 0.5f));
+        Pat("Stutter Bar",      "8888000080808800");
+        Pat("Halftime Chop",    "8880000088800040", ("Pattern Rate", 0.75f), ("Pattern Smooth", 0.08f));
+        Pat("Ramp Up",          "1234567812345678", ("Pattern Smooth", 0.5f));
+        Pat("Chop Shop",        "8060830580628040", ("Pattern Smooth", 0.05f));
+        Pat("Swung Gate",       "8080808080808080", ("Pattern Swing", 0.667f), ("Pattern Smooth", 0.1f));
+        Pat("Dotted Eighths",   "8008008008008008", ("Pattern Smooth", 0.15f));
+        Pat("Slow Pad Gate",    "80608040",         ("Pattern Rate", 1f), ("Pattern Depth", 0.75f), ("Pattern Smooth", 0.6f));
+        Pat("Free Tremolo",     "84848484",         ("Pattern Sync", 0f), ("Pattern Rate", 0.5f), ("Pattern Depth", 0.6f), ("Pattern Smooth", 1f));
+        Pat("32nd Roll",        "80008000800080008080808080808080");
+        Pat("Gate Rider",       "8080808880808088", ("Pattern Gated", 1f), ("Pattern Depth", 0.7f), ("Pattern Smooth", 0.2f), ("Lookahead", 0.5f));
+        Pat("MIDI Retrig Chop", "88088080",         ("Pattern Retrig", 1f), ("Pattern Rate", 0.25f), ("Pattern Smooth", 0.05f));
+        Pat("Map Sequencer",    "1357864213578642", ("Pattern Target", 1f), ("Pattern Smooth", 0.3f));
 
         // ---- Nota Chamber (kind 20) — hybrid reverb, all params normalized 0..1 (unnamed params
         //      reset to their defaults). IR = index/16 (0 Concert Hall · .0625 Stone Vault · .125
@@ -2506,6 +2526,20 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)
         => Add(group, name, "builtin-effect", kind, isInstrument: false, isMidi: false, ps);
+
+    // Nota Shutter pattern preset: `steps` in eighths ('0'..'8'), 8 / 16 / 32 of them; Volume target,
+    // 1 Bar, Sync, full depth and no lookahead unless `ps` says otherwise.
+    private void Pat(string name, string steps, params (string Name, float Value)[] ps)
+    {
+        var all = new List<(string Name, float Value)>
+        {
+            ("Pattern Target", 0.5f), ("Pattern Rate", 0.5f), ("Pattern Sync", 1f), ("Pattern Depth", 1f), ("Lookahead", 0f),
+            ("Pattern Steps", steps.Length switch { 8 => 0f, 32 => 1f, _ => 0.5f }),
+        };
+        for (int k = 0; k < steps.Length; k++) all.Add(($"Step {k + 1}", (steps[k] - '0') / 8f));
+        foreach (var p in ps) { all.RemoveAll(a => a.Name == p.Name); all.Add(p); }
+        Fx("shutter", 19, name, all.ToArray());
+    }
 
     // Nota Level in units → normalized pairs (see the Level block above).
     private void Lv(string name, float targetLufs, int scale, bool fast = false, float window = 6, float maxG = 12, bool safe = true,

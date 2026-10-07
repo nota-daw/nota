@@ -539,7 +539,12 @@ and user presets, automation, persistence and cloning.
   (ducker), Retrigger (trigger mode), a 12 dB/oct detector band-pass (switchable) with Listen,
   Peak hold, internal or external key; Signal / Envelope / Sidechain graphs (drag the
   threshold, the envelope nodes and the key filter), a STATE column, a state box, meters
-  with peak GR and openings per bar; 30 factory presets; MCP `read_shutter`.
+  with peak GR and openings per bar; a Pattern tab — a tempo-synced rhythmic gate: an 8 / 16 / 32
+  step grid at 4 / 8 / 16 levels drawn with Draw / Line / Erase / Flip, pattern shapes, a
+  Complexity-weighted dice, Smooth and Swing on the gain curve, Rate (1/4 … 4 bars in Sync,
+  4 … 0.25 Hz in Free), Depth, Copy / Paste / Clear, MIDI-note retrigger, Gated (pattern × gate)
+  and a Volume or Map target (Map drives the Pattern Out CV source instead of the audio), every
+  step automatable; 45 factory presets (15 pattern); MCP `read_shutter`.
 - **Nota Chamber** (20) — hybrid reverb: a zero-latency convolution engine (16 synthesised
   IRs — halls, rooms, plates, spring, spaces, FX — or your own WAV/FLAC/MP3, mono / stereo /
   4-ch true stereo, dropped on the IR view) with Start/Decay trims, Attack, Size, Reverse,

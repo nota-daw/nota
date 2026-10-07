@@ -19,6 +19,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Shutter · Pattern:** a fourth tab turns the gate into a rhythmic, tempo-synced
+  gate. Draw the steps (Draw, Line, Erase, Flip) on an 8, 16 or 32-step grid, flip through
+  pattern shapes or roll a new one with the dice and Complexity, and shape the gain with Smooth
+  and Swing. Rate runs from a quarter note to 4 bars in Sync (or 4 to 0.25 Hz in Free), Depth
+  sets how far an empty step drops, a MIDI note can restart the pattern, and Gated plays it only
+  while the threshold gate is open. Target Map leaves the audio alone and sends the pattern out
+  as a CV source for the Modular view. Every step and pattern setting can be automated, and 15
+  new pattern presets come with it.
 - **Clips between the Arrangement and Session:** copy MIDI and audio clips across with the
   clipboard — ⌘C (or ⌘X) on the timeline, then ⌘V on a session slot, and the other way round.
   **⌘⇧C** (and **Copy to Session** / **Copy to Arrangement** in the right-click menus and the

@@ -13,6 +13,9 @@
 //    or down.
 //  · ShKeyView — the Sidechain tab: the detector band-pass (teal, 12 dB/oct) with its HP /
 //    LP nodes to drag, under the reduction over the window (brass).
+//  · ShPatternView — the Pattern tab: the step grid (a column per step, quantised to the
+//    levels) with the gain it makes on top — smooth and swing bend the curve — the current
+//    step lit and the playhead. Draw / Line / Erase / Flip edit the steps with the mouse.
 // Shared drag contract (ShDragView): left button only, a gesture per drag, double-click
 // resets the handle, right-click bubbles to the MIDI-learn menu.
 
@@ -448,5 +451,161 @@ internal sealed class ShKeyView : ShDragView
             Text(ctx, Hz(_hpHz), hx, h - 11, NotaPalette.TealBright);
             Text(ctx, Hz(_lpHz), lx, h - 11, NotaPalette.TealBright);
         }
+    }
+}
+
+internal sealed class ShPatternView : Control
+{
+    public const int ToolDraw = 0, ToolLine = 1, ToolErase = 2, ToolFlip = 3;
+    private float[] _steps = new float[16];
+    private int _levels = 8, _cur = -1;
+    private double _phase = -1, _smooth, _swing, _depth = 1;
+    private bool _map, _active = true;
+    private string _label = "gain";
+
+    // Drag state.
+    private bool _drag;
+    private float[] _base = Array.Empty<float>();
+    private int _c0;
+    private float _v0, _flipTo;
+
+    public int Tool { get; set; }
+    public event Action? GestureBegin;
+    public event Action? GestureEnd;
+    /// <summary>The edited steps (a copy, already quantised) after every move of a drag.</summary>
+    public event Action<float[]>? StepsChanged;
+    public bool Dragging => _drag;
+
+    public ShPatternView() { ClipToBounds = true; MinHeight = 40; Cursor = new Cursor(StandardCursorType.Cross); }
+
+    /// <summary>Steps 0..1, levels, the step / phase playing now (−1 = none), smooth 0..1 (½ step at 1),
+    /// swing in steps, depth, Map (teal), active (pattern on), the curve's label.</summary>
+    public void Set(float[] steps, int n, int levels, int cur, double phase, double smooth, double swing, double depth, bool map, bool active, string label)
+    {
+        if (_drag) { _cur = cur; _phase = phase; InvalidateVisual(); return; }   // the hand owns the steps
+        if (_steps.Length != n) _steps = new float[n];
+        Array.Copy(steps, _steps, Math.Min(n, steps.Length));
+        _levels = Math.Max(1, levels); _cur = cur; _phase = phase; _smooth = smooth; _swing = swing; _depth = depth;
+        _map = map; _active = active; _label = label;
+        InvalidateVisual();
+    }
+
+    private float Q(double v) => (float)(Math.Round(Math.Clamp(v, 0, 1) * _levels) / _levels);
+    private (int c, float v) At(Point p)
+    {
+        int n = _steps.Length;
+        double w = Math.Max(1, Bounds.Width), h = Math.Max(1, Bounds.Height);
+        return (Math.Clamp((int)(p.X / w * n), 0, n - 1), Q(1 - p.Y / h));
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _base = (float[])_steps.Clone();
+        (_c0, _v0) = At(e.GetPosition(this));
+        _flipTo = _base[_c0] > 0 ? 0f : 1f;
+        _drag = true;
+        GestureBegin?.Invoke();
+        e.Pointer.Capture(this); e.Handled = true;
+        Apply(e.GetPosition(this));
+    }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_drag) Apply(e.GetPosition(this));
+    }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!_drag) return;
+        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
+    }
+
+    private void Apply(Point p)
+    {
+        var (c, v) = At(p);
+        var s = Tool == ToolLine ? (float[])_base.Clone() : _steps;
+        switch (Tool)
+        {
+            case ToolErase: s[c] = 0; break;
+            case ToolFlip: s[c] = _flipTo; break;
+            case ToolLine:
+            {
+                int a = Math.Min(_c0, c), b = Math.Max(_c0, c);
+                for (int i = a; i <= b; i++) { double k = b == a ? 0 : (double)(i - _c0) / (c - _c0); s[i] = Q(_v0 + (v - _v0) * k); }
+                break;
+            }
+            default: s[c] = v; break;
+        }
+        _steps = s;
+        StepsChanged?.Invoke((float[])s.Clone());
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext ctx)
+    {
+        double w = Bounds.Width, h = Bounds.Height;
+        if (w <= 0 || h <= 0) return;
+        var frame = new Rect(0, 0, w, h);
+        NotaGraph.Window(ctx, frame);
+        int n = _steps.Length;
+        double cw = w / n;
+        var ink = _map ? NotaPalette.Teal : NotaPalette.Accent;
+        var inkBright = _map ? NotaPalette.TealBright : NotaPalette.AccentBright;
+        double dim = _active ? 1 : 0.45;
+
+        // Level lines, then the step columns: the playing one lit, a stronger line every 4.
+        for (int i = 1; i < _levels; i++)
+        {
+            double y = Math.Round(h * i / _levels) + 0.5;
+            ctx.DrawLine(NotaGraph.GridPen, new Point(0, y), new Point(w, y));
+        }
+        if (_cur >= 0 && _cur < n && _active)
+            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.AccentBright, 0x18), new Rect(_cur * cw, 0, cw, h));
+        var strong = new Pen(NotaPalette.BorderStrong, 1);
+        for (int i = 1; i < n; i++)
+        {
+            double x = Math.Round(i * cw) + 0.5;
+            ctx.DrawLine(i % 4 == 0 ? strong : NotaGraph.GridPen, new Point(x, 0), new Point(x, h));
+        }
+        var fill = NotaPalette.Wash(ink, (byte)(0x34 * dim));
+        for (int i = 0; i < n; i++)
+        {
+            double v = Q(_steps[i]);
+            if (v <= 0) continue;
+            double x0 = i * cw + 1, x1 = (i + 1) * cw - 1, y = h - v * h;
+            ctx.FillRectangle(fill, new Rect(x0, y, Math.Max(1, x1 - x0), h - y));
+            ctx.FillRectangle(_active ? ink : NotaPalette.BorderStrong, new Rect(x0, y, Math.Max(1, x1 - x0), 2));
+        }
+
+        // The gain curve: swing pushes the off-steps, smooth ramps into each step.
+        double Gain(double v) => 1 - _depth * (1 - Q(v));
+        double Y(double v) => 4 + (1 - Gain(v)) * (h - 8);
+        double r = _smooth * cw * 0.5;
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            c.BeginFigure(new Point(0, Y(_steps[0])), false);
+            for (int i = 0; i < n; i++)
+            {
+                double x = i * cw + (i % 2 == 1 ? _swing * cw : 0);
+                double yp = Y(_steps[(i + n - 1) % n]);
+                if (i > 0) c.LineTo(new Point(x, yp));
+                c.LineTo(new Point(x + r, Y(_steps[i])));
+            }
+            c.LineTo(new Point(w, Y(_steps[n - 1])));
+        }
+        ctx.DrawGeometry(null, new Pen(_active ? inkBright : NotaPalette.BorderStrong, 1.6, lineJoin: PenLineJoin.Round), g);
+
+        if (_phase >= 0 && _active)
+        {
+            double px = Math.Round(_phase * w) + 0.5;
+            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xB0), 1), new Point(px, 0), new Point(px, h));
+        }
+        var ft = NotaGraph.AxisText(_label, _active ? inkBright : NotaPalette.TextTertiary);
+        var chip = new Rect(w - ft.Width - 12, 5, ft.Width + 8, ft.Height + 2);
+        ctx.FillRectangle(NotaPalette.BgSunken, chip, 3);
+        ctx.DrawText(ft, new Point(chip.X + 4, chip.Y + 1));
     }
 }
