@@ -950,7 +950,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘N   ⌘O", "New project / open a project"),
             ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
             ("⌥⌘S", "Save a version with a note"),
-            ("⌘⇧I   ⌘⇧E", "Import audio / export audio"),
+            ("⌘⇧E", "Export audio"),
         }),
         ("TRANSPORT", new[]
         {
@@ -973,6 +973,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
             ("⌘D", "Duplicate the selected clip(s) / range"),
+            ("⌘⇧D", "Duplicate time · insert a copy of the time range after it, pushing everything later right"),
+            ("⌘⇧I", "Insert silence · push everything from the range start right by its length"),
             ("⌘E", "Split at the playhead · at the range edges"),
             ("⌘J", "Consolidate the selection into one clip per track"),
             ("0", "Deactivate / activate the selected clip(s)"),

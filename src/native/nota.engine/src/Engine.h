@@ -466,6 +466,12 @@ public:
     // copies that slice to [end, end+(end-start)) and returns the range length (>0), or -1.
     bool    deleteClipsInRange(const std::vector<int32_t>& trackIds, double start, double end);
     double  duplicateRange(const std::vector<int32_t>& trackIds, double start, double end);
+    // insertTime opens a `len`-beat gap at `at` across the whole arrangement (every track and
+    // the master): clips crossing `at` are cut, everything at or after it — clips and
+    // automation — moves right. Insert Silence leaves the gap empty (automation holds its value
+    // at `at`); duplicate=true (Duplicate Time) fills it with a copy of [at-len, at). One undo
+    // step. False when nothing moved.
+    bool    insertTime(double at, double len, bool duplicate);
     // splitClipsAtRange cuts every listed track's clips at both `start` and `end` (keeping
     // all content) so the covered slice becomes its own clip(s). One undo step; no ripple.
     bool    splitClipsAtRange(const std::vector<int32_t>& trackIds, double start, double end);

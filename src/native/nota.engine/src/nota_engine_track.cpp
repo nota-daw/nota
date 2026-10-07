@@ -480,6 +480,10 @@ double nota_clips_duplicate_range(NotaEngine* e, const int32_t* track_ids, int32
     std::vector<int32_t> ids; if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);
     return ENG(e)->duplicateRange(ids, start, end);
 }
+NotaResult nota_arrangement_insert_time(NotaEngine* e, double at, double len, int32_t duplicate) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->insertTime(at, len, duplicate != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clips_split_range(NotaEngine* e, const int32_t* track_ids, int32_t n, double start, double end) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     std::vector<int32_t> ids; if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);

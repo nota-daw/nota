@@ -213,6 +213,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clips_duplicate_range")]
     internal static partial double ClipsDuplicateRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
 
+    [LibraryImport(Lib, EntryPoint = "nota_arrangement_insert_time")]
+    internal static partial NotaResult ArrangementInsertTime(IntPtr engine, double at, double len, int duplicate);
+
     [LibraryImport(Lib, EntryPoint = "nota_clips_split_range")]
     internal static partial NotaResult ClipsSplitRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
 

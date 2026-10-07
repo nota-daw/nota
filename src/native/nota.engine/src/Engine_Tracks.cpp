@@ -1509,6 +1509,128 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
     return len;
 }
 
+// --- insert time (Insert Silence ⌘⇧I / Duplicate Time ⌘⇧D) ----------------------
+namespace {
+// The lane's curve over [a,b] re-based so `a` is 0: the value at each edge plus every point
+// strictly inside (a partial first segment keeps its curvature).
+std::vector<AutomationPoint> laneSlice(const AutomationLane& lane, double a, double b) {
+    constexpr double eps = 1e-9;
+    std::vector<AutomationPoint> out;
+    float c0 = 0.0f;
+    for (const auto& q : lane.points) { if (q.beat > a + eps) break; c0 = q.curve; }
+    out.push_back({0.0, lane.valueAt(a), c0});
+    for (const auto& q : lane.points)
+        if (q.beat > a + eps && q.beat < b - eps) out.push_back({q.beat - a, q.value, q.curve});
+    out.push_back({b - a, lane.valueAt(b), 0.0f});
+    return out;
+}
+
+// Opens a `len`-beat gap at `at`: points at or after `at` move right. With `fill` (a
+// laneSlice `len` long) the gap plays that curve; without, it holds the lane's value at `at`.
+// False when the lane didn't change.
+bool laneInsertGap(AutomationLane& lane, double at, double len, const std::vector<AutomationPoint>* fill) {
+    if (lane.points.empty()) return false;
+    constexpr double eps = 1e-9;
+    const float v = lane.valueAt(at);
+    auto& p = lane.points;
+    const auto mid = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat >= at - eps; });
+    const bool before = mid != p.begin(), after = mid != p.end();
+    if (!fill && !after) return false;
+    std::vector<AutomationPoint> out;
+    out.reserve(p.size() + (fill ? fill->size() + 1 : 2));
+    out.insert(out.end(), p.begin(), mid);
+    if (fill) {
+        out.push_back({at, v, 0.0f});   // a step from the left side into the copy
+        for (auto q : *fill) { q.beat += at; out.push_back(q); }
+    } else if (before) {
+        out.push_back({at, v, 0.0f});
+        out.push_back({at + len, v, 0.0f});
+    }
+    for (auto it = mid; it != p.end(); ++it) { auto q = *it; q.beat += len; out.push_back(q); }
+    p.swap(out);
+    return true;
+}
+} // namespace
+
+bool Engine::insertTime(double at, double len, bool duplicate) {
+    at = std::max(0.0, at);
+    if (len <= 1e-9) return false;
+    const double src = at - len;   // Duplicate Time copies [src, at) into the gap
+    if (duplicate && src < -1e-9) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    constexpr double eps = 1e-6;
+
+    auto shiftLane = [&](AutomationLane& lane) {
+        if (!duplicate) return laneInsertGap(lane, at, len, nullptr);
+        if (lane.points.empty() || lane.points.back().beat < src - eps) return laneInsertGap(lane, at, len, nullptr);
+        const auto fill = laneSlice(lane, src, at);
+        return laneInsertGap(lane, at, len, &fill);
+    };
+    // A clone of `t` with the gap opened (and filled), or null when nothing in it moved.
+    auto shiftTrack = [&](const Track& t) -> std::shared_ptr<Track> {
+        auto nt = cloneTrack(t);
+        bool changed = false;
+        if (nt->type() == TrackType::Instrument) {
+            std::vector<MidiClip> out;
+            out.reserve(nt->midiClips.size() + 2);
+            std::vector<MidiClip> copies;
+            for (const auto& c : nt->midiClips) {
+                const double cs = c.startBeat, ce = cs + c.lengthBeats;
+                if (duplicate && ce > src + eps && cs < at - eps)
+                { auto s = midiSlice(c, src, at); s.startBeat += len; copies.push_back(std::move(s)); }
+                if (ce <= at + eps) { out.push_back(c); continue; }
+                if (cs < at - eps) {   // crosses the insert point: cut it there
+                    out.push_back(midiSlice(c, cs, at));
+                    auto r = midiSlice(c, at, ce); r.startBeat += len; out.push_back(std::move(r));
+                } else { auto m = c; m.startBeat += len; out.push_back(std::move(m)); }
+                changed = true;
+            }
+            changed |= !copies.empty();
+            for (auto& c : copies) out.push_back(std::move(c));
+            nt->midiClips.swap(out);
+        } else if (nt->type() == TrackType::Audio) {
+            std::vector<AudioClip> out;
+            out.reserve(nt->clips.size() + 2);
+            std::vector<AudioClip> copies;
+            for (const auto& c : nt->clips) {
+                const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
+                if (duplicate && ce > src + eps && cs < at - eps)
+                { auto s = audioSlice(c, src, at, spb, devSR); s.startBeat += len; copies.push_back(std::move(s)); }
+                if (ce <= at + eps) { out.push_back(c); continue; }
+                if (cs < at - eps) {
+                    out.push_back(audioSlice(c, cs, at, spb, devSR));
+                    auto r = audioSlice(c, at, ce, spb, devSR); r.startBeat += len; out.push_back(std::move(r));
+                } else { auto m = c; m.startBeat += len; out.push_back(std::move(m)); }
+                changed = true;
+            }
+            changed |= !copies.empty();
+            for (auto& c : copies) out.push_back(std::move(c));
+            nt->clips.swap(out);
+        }
+        for (auto& lane : nt->automation) changed |= shiftLane(lane);
+        return changed ? nt : nullptr;
+    };
+
+    bool any = false;
+    auto g = std::make_shared<Graph>();
+    g->sceneCount = authoring_->sceneCount;
+    g->scenes = authoring_->scenes;
+    g->masterVolume = authoring_->masterVolume;
+    g->masterTrack = authoring_->masterTrack;
+    any |= shiftLane(g->masterVolume);
+    if (g->masterTrack)
+        if (auto nm = shiftTrack(*g->masterTrack)) { g->masterTrack = nm; any = true; }
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (auto nt = shiftTrack(*t)) { g->tracks.push_back(nt); any = true; }
+        else g->tracks.push_back(t);
+    }
+    if (!any) return false;
+    pushUndo();
+    publishRaw(std::move(g));
+    return true;
+}
+
 // --- consolidate (⌘J): one clip per track over a range ------------------------
 namespace {
 // One source clip's audible slice [a,b) of a consolidate range (timeline beats), with the

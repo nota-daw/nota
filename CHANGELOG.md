@@ -19,6 +19,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Duplicate time (⌘⇧D) and insert silence (⌘⇧I):** select a time range in the Arrangement
+  and ⌘⇧D inserts a copy of it right after itself, while ⌘⇧I opens an empty gap of the same
+  length at its start. Both act on the whole song: every track's clips and automation after
+  that point move right, and clips that cross it are cut. Press ⌘⇧D again to repeat the copy.
+  Both are also in the Edit menu and the right-click menu of the range. Import audio no longer
+  has a shortcut; use File ▸ Import audio.
 - **Audio clips into instruments:** drag an audio clip from the Arrangement onto the row of a
   track with a Sampler, Nota Grain, Drum Rack or Instrument Rack and its audio loads there (a
   Drum Rack takes it on the next free pad). Pull a clip out of the Arrangement and it becomes a

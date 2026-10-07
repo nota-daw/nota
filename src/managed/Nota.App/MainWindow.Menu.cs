@@ -95,6 +95,23 @@ public partial class MainWindow
         else _vm.StatusText = "Select a clip first.";
     }
 
+    // ⌘⇧D Duplicate Time / ⌘⇧I Insert Silence: whole-arrangement time ops on the time selection.
+    private void OnMenuDuplicateTime(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = "Select a time range first."; return; }
+        if (Timeline.DuplicateTimeInsert()) { _session?.Refresh(); _vm.StatusText = "Duplicated time"; }
+        else _vm.StatusText = "Nothing to duplicate in the selected range.";
+    }
+
+    private void OnMenuInsertSilence(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = "Select a time range first."; return; }
+        if (Timeline.InsertSilenceAtTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Inserted silence"; }
+        else _vm.StatusText = "Nothing after the selection to move.";
+    }
+
     private void OnMenuSplit(object? sender, EventArgs e)
     {
         if (_vm is null) return;

@@ -1418,6 +1418,30 @@ public sealed partial class ArrangementView : UserControl
         return true;
     }
 
+    /// <summary>⌘⇧D Duplicate Time: insert a copy of the time selection right after it, pushing
+    /// everything later right on every track (clips and automation), then move the selection
+    /// onto the copy so repeated presses chain.</summary>
+    public bool DuplicateTimeInsert()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        double len = _timeSelEnd - _timeSelStart;
+        if (!_engine.InsertTime(_timeSelEnd, len, duplicate: true)) return false;
+        _timeSelStart = _timeSelEnd;
+        _timeSelEnd = _timeSelStart + len;
+        Refresh();
+        return true;
+    }
+
+    /// <summary>⌘⇧I Insert Silence: open an empty gap the length of the time selection at its
+    /// start, pushing everything after it right on every track. The selection stays on the gap.</summary>
+    public bool InsertSilenceAtTimeSelection()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        if (!_engine.InsertTime(_timeSelStart, _timeSelEnd - _timeSelStart, duplicate: false)) return false;
+        Refresh();
+        return true;
+    }
+
     /// <summary>Shift+click rectangular clip selection: every clip between the primary-selection
     /// anchor and the clicked clip, across rows and beats (req 1.1.3).</summary>
     internal void ShiftSelectTo(int trackId, int clipIndex)

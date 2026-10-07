@@ -977,6 +977,11 @@ NOTA_API NotaResult nota_clip_delete(NotaEngine* engine, int32_t track_id, int32
  * [end, end+(end-start)) and returns the range length (>0), or -1 on no-op. */
 NOTA_API NotaResult nota_clips_delete_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
 NOTA_API double     nota_clips_duplicate_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
+/* insert_time opens a `len`-beat gap at `at` across the whole arrangement (all tracks and the
+ * master): clips crossing `at` are cut, clips and automation at or after it move right.
+ * duplicate=0 is Insert Silence; duplicate=1 is Duplicate Time — the gap gets a copy of
+ * [at-len, at). One undo step; an error when nothing moved. */
+NOTA_API NotaResult nota_arrangement_insert_time(NotaEngine* engine, double at, double len, int32_t duplicate);
 /* split_range cuts each listed track's clips at both boundaries, keeping all content, so the
  * covered slice becomes its own clip(s). One undo step, no ripple. */
 NOTA_API NotaResult nota_clips_split_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);

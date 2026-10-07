@@ -1087,8 +1087,14 @@ public sealed partial class ArrangementView
             {
                 var consolidate = new MenuItem { Header = "Consolidate selection", Icon = MenuKit.Icon(GlyphKind.Consolidate), InputGesture = MenuKit.ConsolidateKey };
                 consolidate.Click += (_, _) => _o.ConsolidateSelection();
+                var dupTime = new MenuItem { Header = "Duplicate time", Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateTimeKey };
+                dupTime.Click += (_, _) => _o.DuplicateTimeInsert();
+                var silence = new MenuItem { Header = "Insert silence", Icon = MenuKit.Icon(GlyphKind.Plus), InputGesture = MenuKit.InsertSilenceKey };
+                silence.Click += (_, _) => _o.InsertSilenceAtTimeSelection();
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(consolidate);
+                flyout.Items.Add(dupTime);
+                flyout.Items.Add(silence);
             }
             flyout.ShowAt(this, showAtPointer: true);
         }

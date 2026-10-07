@@ -27,7 +27,7 @@
             <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
             <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Shift+Cmd+I"/>
+            <NativeMenuItem Header="Import audio…" Click="OnMenuImport"/>
             <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" Click="OnPreferences" Gesture="Ctrl+,"/>
@@ -44,6 +44,8 @@
             <NativeMenuItem Header="Insert scene" Click="OnMenuInsertScene" Gesture="Cmd+I"/>
             <NativeMenuItem Header="Split at playhead" Click="OnMenuSplit" Gesture="Cmd+E"/>
             <NativeMenuItem Header="Consolidate" Click="OnMenuConsolidate" Gesture="Cmd+J"/>
+            <NativeMenuItem Header="Duplicate time" Click="OnMenuDuplicateTime" Gesture="Shift+Cmd+D"/>
+            <NativeMenuItem Header="Insert silence" Click="OnMenuInsertSilence" Gesture="Shift+Cmd+I"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Lock Envelopes" Click="OnToggleLockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>

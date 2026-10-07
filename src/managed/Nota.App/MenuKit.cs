@@ -29,6 +29,9 @@ internal static class MenuKit
     public static readonly KeyGesture CopyToOtherViewKey = Cmd(Key.C, shift: true);
     public static readonly KeyGesture SplitKey = Cmd(Key.E);
     public static readonly KeyGesture ConsolidateKey = Cmd(Key.J);
+    // Arrangement time selection: Duplicate Time · Insert Silence.
+    public static readonly KeyGesture DuplicateTimeKey = Cmd(Key.D, shift: true);
+    public static readonly KeyGesture InsertSilenceKey = Cmd(Key.I, shift: true);
     public static readonly KeyGesture LoopKey = Cmd(Key.L);
     public static readonly KeyGesture GroupKey = Cmd(Key.G);
     public static readonly KeyGesture UngroupKey = Cmd(Key.G, shift: true);

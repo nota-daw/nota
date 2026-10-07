@@ -236,6 +236,12 @@ public interface IAudioEngine : IDisposable
     /// <summary>Duplicates the [start,end) slice of the given tracks to [end, end+len), splitting
     /// at the edges. Returns the range length (&gt;0), or 0 when nothing was duplicated.</summary>
     double DuplicateRange(int[] trackIds, double start, double end);
+    /// <summary>Opens a <paramref name="len"/>-beat gap at <paramref name="at"/> across the whole
+    /// arrangement (every track and the master): clips crossing it are cut, clips and automation
+    /// at or after it move right. <paramref name="duplicate"/> false = Insert Silence; true =
+    /// Duplicate Time, which fills the gap with a copy of [at-len, at). One undo step.
+    /// False = nothing moved.</summary>
+    bool InsertTime(double at, double len, bool duplicate);
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);

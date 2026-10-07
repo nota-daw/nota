@@ -192,6 +192,19 @@ public partial class MainWindow
             return;
         }
 
+        // ⌘⇧D / ⌃⇧D = Duplicate Time, ⌘⇧I / ⌃⇧I = Insert Silence over the arrangement time
+        // selection. On macOS the Edit menu's accelerators get there first.
+        if ((e.Key == Key.D || e.Key == Key.I) && !OperatingSystem.IsMacOS()
+            && ArrangementView.IsPrimaryDown(e.KeyModifiers)
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
+            && Timeline.HasTimeSelection)
+        {
+            if (e.Key == Key.D) OnMenuDuplicateTime(this, EventArgs.Empty);
+            else OnMenuInsertSilence(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+
         // ⌘/⌃ + C/X/V = copy/cut/paste the selected arrangement clip. Skipped while the
         // piano-roll grid is focused (it copies/pastes notes) and when nothing is
         // actionable, so the event falls through to other handlers.

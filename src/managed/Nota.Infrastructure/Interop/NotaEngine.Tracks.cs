@@ -266,6 +266,12 @@ public sealed partial class NotaEngine
     public double DuplicateRange(int[] trackIds, double start, double end)
     { ThrowIfDisposed(); double r = NativeMethods.ClipsDuplicateRange(_handle, trackIds, trackIds.Length, start, end); return r > 0 ? r : 0; }
 
+    /// <summary>Insert Silence / Duplicate Time: opens a len-beat gap at `at` across every track
+    /// and the master (clips and automation after it move right); duplicate fills it with a copy
+    /// of [at-len, at). One undo step. False when nothing moved.</summary>
+    public bool InsertTime(double at, double len, bool duplicate)
+    { ThrowIfDisposed(); return NativeMethods.ArrangementInsertTime(_handle, at, len, duplicate ? 1 : 0) == NativeMethods.NotaResult.Ok; }
+
     /// <summary>Splits the given tracks' clips at both [start] and [end], keeping all content, so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False on no-op.</summary>
     public bool SplitClipsInRange(int[] trackIds, double start, double end)

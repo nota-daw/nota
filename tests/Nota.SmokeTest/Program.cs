@@ -12027,6 +12027,75 @@ Console.WriteLine("-- consolidate --");
     }
 }
 
+// ============ insert time (⌘⇧I Insert Silence / ⌘⇧D Duplicate Time) ========
+Console.WriteLine("-- insert time --");
+{
+    const double eps = 1e-6;
+    static Nota.Application.NotaNote N(int p, double s, double l) => new(p, s, l, 0.8f);
+    static Nota.Application.AutomationPoint P(double b, float v) => new(b, v);
+
+    // Insert Silence: a clip crossing the point is cut, later clips and automation (all
+    // tracks, master included) move right; the gap holds the lane's value. One undo step.
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int a = e.AddInstrumentTrack();
+        int b = e.AddInstrumentTrack();
+        int ca = e.AddMidiClip(a, 0.0, 8.0);
+        e.SetClipNotes(a, ca, new[] { N(60, 1, 1), N(62, 5, 1) });
+        e.AddMidiClip(b, 8.0, 4.0);
+        int lane = e.AddAutomationLane(b, AutomationTarget.Volume, -1, -1);
+        e.SetAutomationPoints(b, lane, new[] { P(0, 0.2f), P(8, 1.0f) });
+        e.SetMasterVolumeAutomation(new[] { P(0, 0.5f), P(8, 1.0f) });
+        Check(e.InsertTime(4.0, 2.0, duplicate: false), "insert silence returns true");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, a), out var ta) && ta.ClipCount == 2, "silence: crossing clip cut in two");
+        var clipsA = Enumerable.Range(0, 2).Select(i => { e.TryGetClipInfo(a, i, out var ci); return (ci, i); }).OrderBy(x => x.ci.StartBeat).ToArray();
+        Check(Math.Abs(clipsA[0].ci.LengthBeats - 4.0) < eps && Math.Abs(clipsA[1].ci.StartBeat - 6.0) < eps,
+              "silence: left half stays at [0,4), right half moved to 6");
+        var right = e.GetClipNotes(a, clipsA[1].i);
+        Check(right.Length == 1 && right[0].Pitch == 62 && Math.Abs(right[0].StartBeat - 1.0) < eps, "silence: right half keeps its note");
+        Check(e.TryGetClipInfo(b, 0, out var cb) && Math.Abs(cb.StartBeat - 10.0) < eps, "silence: other track's clip moved 8 -> 10");
+        var pts = e.GetAutomationPoints(b, lane);
+        Check(pts.Length == 4 && Math.Abs(pts[1].Beat - 4) < eps && Math.Abs(pts[2].Beat - 6) < eps && Math.Abs(pts[1].Value - pts[2].Value) < 1e-5
+              && Math.Abs(pts[3].Beat - 10) < eps, "silence: automation holds over the gap and shifts after it");
+        var mv = e.GetMasterVolumeAutomation();
+        Check(mv.Length > 0 && Math.Abs(mv[^1].Beat - 10) < eps, "silence: master volume automation shifted");
+        Check(e.Undo() && e.TryGetTrackInfo(FindTrackIndex(e, a), out var tu) && tu.ClipCount == 1
+              && e.TryGetClipInfo(b, 0, out var cbu) && Math.Abs(cbu.StartBeat - 8.0) < eps, "silence: one undo restores everything");
+        Check(!e.InsertTime(20.0, 2.0, duplicate: false), "silence past the end is a no-op");
+    }
+
+    // Duplicate Time: the range [2,4) is copied into a new gap at 4; content after 4 moves
+    // right by 2, and the automation curve is copied into the gap.
+    {
+        using var e = new NotaEngine();
+        int a = e.AddInstrumentTrack();
+        int ca = e.AddMidiClip(a, 0.0, 6.0);
+        e.SetClipNotes(a, ca, new[] { N(60, 2.5, 0.5), N(64, 4.5, 0.5) });
+        int lane = e.AddAutomationLane(a, AutomationTarget.Volume, -1, -1);
+        e.SetAutomationPoints(a, lane, new[] { P(2, 0.0f), P(4, 1.0f) });
+        Check(e.InsertTime(4.0, 2.0, duplicate: true), "duplicate time returns true");
+        var dupNotes = Enumerable.Range(0, e.TryGetTrackInfo(FindTrackIndex(e, a), out var ti) ? ti.ClipCount : 0)
+            .SelectMany(i => { e.TryGetClipInfo(a, i, out var ci); return e.GetClipNotes(a, i).Select(n => (n.Pitch, at: ci.StartBeat + n.StartBeat)); })
+            .OrderBy(n => n.at).ToArray();
+        Check(dupNotes.Length == 3 && dupNotes[0].Pitch == 60 && Math.Abs(dupNotes[1].at - 4.5) < eps && dupNotes[1].Pitch == 60
+              && dupNotes[2].Pitch == 64 && Math.Abs(dupNotes[2].at - 6.5) < eps, "duplicate: copy at 4.5, later note pushed to 6.5");
+        var pts = e.GetAutomationPoints(a, lane);
+        float At(double beat)
+        {
+            if (beat <= pts[0].Beat) return pts[0].Value;
+            for (int i = 1; i < pts.Length; i++)
+                if (beat <= pts[i].Beat)
+                    return pts[i].Beat - pts[i - 1].Beat <= 0 ? pts[i].Value
+                         : (float)(pts[i - 1].Value + (pts[i].Value - pts[i - 1].Value) * (beat - pts[i - 1].Beat) / (pts[i].Beat - pts[i - 1].Beat));
+            return pts[^1].Value;
+        }
+        Check(Math.Abs(At(3.0) - 0.5f) < 1e-4 && Math.Abs(At(5.0) - 0.5f) < 1e-4 && Math.Abs(At(7.0) - 1.0f) < 1e-4,
+              "duplicate: automation ramp copied into the gap, the rest holds");
+        Check(!e.InsertTime(1.0, 2.0, duplicate: true), "duplicate with a range before 0 is rejected");
+    }
+}
+
 // ============ track/clip names + colour + track clipboard ==================
 Console.WriteLine("-- names, colour, track clipboard --");
 {
