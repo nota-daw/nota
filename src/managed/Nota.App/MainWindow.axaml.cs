@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         }
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
+        InitTransportFit();
         // Platform-specific window icon: Windows/Linux get the .ico bundle from
         // assets/icons/windows so the taskbar / alt-tab shows the brand mark. macOS
         // uses the .icns produced by scripts/bundle-mac.sh for the dock/Finder.
@@ -179,6 +180,8 @@ public partial class MainWindow : Window
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
+        Timeline.SampleToInstrument += (item, t) => DropBrowserItem(item, t);   // audio clip → Grain / Drum Rack / Sampler…
+        Timeline.DevicesPeekRequested += t => { if (_deviceChain?.TrackId != t) ShowDevices(t); };
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
         Timeline.SeparateStemsRequested += OnSeparateStems;   // audio clip → stem tracks (AI model)
@@ -207,8 +210,9 @@ public partial class MainWindow : Window
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
-        // Tempo reads with two decimals (almanac § Numbers); a drag moves in half-BPM steps.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14);
+        // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
+        // (half a BPM per pixel), the hundredths come from double-click-to-type.
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
@@ -717,6 +721,6 @@ public partial class MainWindow : Window
     internal void SyncReenableAutomation()
     {
         bool on = _vm is { } vm && vm.Engine.AutomationOverridden;
-        if (ReenableAutoBtn.IsVisible != on) ReenableAutoBtn.IsVisible = on;
+        if (ReenableAutoBtn.IsVisible != on) { ReenableAutoBtn.IsVisible = on; RequestTransportFit(); }
     }
 }

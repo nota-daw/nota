@@ -430,7 +430,8 @@ public sealed partial class ArrangementView
                     // ("SC HP", "SC Gain" …), the Auto Filter its sources ("Env", "LFO", "Mod"), Nota
                     // Vintage its tone and wow ("Tone Low", "Wow Rate" …), Nota Valve its mic ("Mic Distance" …),
                     // Nota Utility its mono, phase and true-peak params ("Mono Freq", "Invert L", "TP Ceiling" …),
-                    // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter"), Nota Auto Shift its
+                    // Nota Shutter its detector ("Det HP", "Det LP", "Det Filter") and its pattern ("Pattern Rate",
+                    // "Step 5" …), Nota Auto Shift its
                     // scale notes, detector and MIDI target ("Note C#", "Det Low", "MIDI Glide" …) and Nota
                     // Beat Repeat its repeat filter ("Filter Freq", "Filter Type", "Filter Narrow" …), and
                     // Nota EQ-8 and Nota Dynamic EQ-8 their eight bands ("3 Freq", "3 Slope" … under "Band 3"),
@@ -444,6 +445,9 @@ public sealed partial class ArrangementView
                     var groups = new System.Collections.Generic.Dictionary<string, MenuItem>();
                     for (int p = 0; p < builtinPc; p++)
                     {
+                        // Nota Shutter: Pattern Out is the pattern's read-only output (a CV source) and
+                        // Complexity only steers the dice — neither is a sound parameter to automate.
+                        if (bkind == 19 && names[p] is "Pattern Out" or "Pattern Complexity") continue;
                         int dd = d, pp = p;
                         string head = grouped ? Head(names[p]) : "";
                         bool sub = head.Length > 0 && names.Count(n => Head(n) == head) >= 2;

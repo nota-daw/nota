@@ -236,6 +236,12 @@ public interface IAudioEngine : IDisposable
     /// <summary>Duplicates the [start,end) slice of the given tracks to [end, end+len), splitting
     /// at the edges. Returns the range length (&gt;0), or 0 when nothing was duplicated.</summary>
     double DuplicateRange(int[] trackIds, double start, double end);
+    /// <summary>Opens a <paramref name="len"/>-beat gap at <paramref name="at"/> across the whole
+    /// arrangement (every track and the master): clips crossing it are cut, clips and automation
+    /// at or after it move right. <paramref name="duplicate"/> false = Insert Silence; true =
+    /// Duplicate Time, which fills the gap with a copy of [at-len, at). One undo step.
+    /// False = nothing moved.</summary>
+    bool InsertTime(double at, double len, bool duplicate);
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);
@@ -270,6 +276,17 @@ public interface IAudioEngine : IDisposable
     double DuplicateClipBlock((int trackId, int clipIndex)[] sel);
     /// <summary>Number of clips in the block clipboard (0 = empty).</summary>
     int ClipboardBlockCount();
+    /// <summary>Copies arrangement clips into session slots: each track's clips, in time order, fill
+    /// consecutive slots from startScene (-1 = the first scene row where every slot needed is empty;
+    /// missing rows are appended). One undo step. Returns the first scene row filled, or -1.</summary>
+    int ArrangementClipsToSession((int trackId, int clipIndex)[] sel, int startScene = -1);
+    /// <summary>Pastes the block clipboard into session slots, its top track remapped onto destTrackId
+    /// (-1 = the source tracks). Returns the first scene row filled, or -1.</summary>
+    int PasteClipBlockToSession(int destTrackId, int startScene);
+    /// <summary>Copies session slots (trackId, scene) into the arrangement: each track's slots, in scene
+    /// order, land back to back from atBeat, placed like a paste (no overlap) and remapped onto destTrackId
+    /// (-1 = their own tracks). One undo step; LastPlacedClips reports them. Returns clips placed.</summary>
+    int SessionSlotsToArrangement((int trackId, int scene)[] slots, double atBeat, int destTrackId = -1);
     /// <summary>The (trackId, clipIndex) of every clip the last block paste/duplicate produced.</summary>
     (int trackId, int clipIndex)[] LastPlacedClips();
     /// <summary>Sets/gets a clip's user-facing name (empty = default).</summary>

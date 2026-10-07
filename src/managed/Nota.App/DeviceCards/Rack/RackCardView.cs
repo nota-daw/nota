@@ -142,6 +142,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
         slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
         name.DoubleTapped += (_, _) => PromptRenameMacro(a, i, name);
+        ValueEntry.Attach(val, () => E.PluginParamGet(T, adi, i), v => E.PluginParamSet(T, adi, i, (float)v),
+            () => NotaNum.F($"{E.PluginParamGet(T, adi, i) * 100:0}"),
+            after: () => { double v = E.PluginParamGet(T, adi, i); Vis(v); val.Text = NotaNum.F($"{v * 100:0}"); _ctx.InvokeRackParamRefreshers(); });
         _irTick.Add(() => { double v = E.PluginParamGet(T, adi, i); if (!drag) Vis(v); val.Text = $"{v * 100:0}"; });
         var head = new DockPanel { LastChildFill = true, Children = { WithRight(val), name } };
         var cell = new StackPanel { Spacing = 2, Children = { head, slot } };

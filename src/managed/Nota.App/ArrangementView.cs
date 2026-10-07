@@ -327,7 +327,7 @@ public sealed partial class ArrangementView : UserControl
         // below the tracks) so instruments/samples can be dropped anywhere.
         DragDrop.SetAllowDrop(scroller, true);
         DragDrop.AddDragOverHandler(scroller, OnLaneDragOver);
-        DragDrop.AddDragLeaveHandler(scroller, (_, _) => SetDropTrack(-1));
+        DragDrop.AddDragLeaveHandler(scroller, (_, _) => { SetDropTrack(-1); DwellOverTrack(-1); });
         DragDrop.AddDropHandler(scroller, OnLaneDrop);
         // Right-click the empty area below the tracks → paste a copied track there (the
         // header cards / lanes are top-anchored, so clicks below them land on the scroller).
@@ -954,7 +954,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return false;
         var sel = SelectionBlock();
-        return sel.Length > 0 && _engine.CopyClipBlock(sel);
+        if (sel.Length == 0 || !_engine.CopyClipBlock(sel)) return false;
+        ClipTransfer.TookFromArrangement();
+        return true;
     }
 
     /// <summary>Cuts the whole clip selection: copies the block to the clipboard, then removes
@@ -964,37 +966,81 @@ public sealed partial class ArrangementView : UserControl
         if (_engine is null) return false;
         var sel = SelectionBlock();
         if (sel.Length == 0 || !_engine.CutClipBlock(sel)) return false;
+        ClipTransfer.TookFromArrangement();
         Select(-1, -1);
         Refresh();
         return true;
     }
 
     /// <summary>Pastes the block clipboard at <paramref name="atBeat"/>, remapped so its top
-    /// track lands on <paramref name="trackId"/> (single clip → that track). Selects the paste.</summary>
+    /// track lands on <paramref name="trackId"/> (single clip → that track). Selects the paste.
+    /// A slot copied in the Session view lands the same way.</summary>
     public bool PasteClipboardAt(int trackId, double atBeat)
     {
         if (_engine is null || trackId <= 0) return false;
+        if (ClipTransfer.FromSession) return PasteSessionSlot(atBeat, trackId);
         if (_engine.PasteClipBlock(atBeat, trackId) <= 0) return false;
         Refresh();
         ReselectPlaced();
         return true;
     }
 
-    /// <summary>Keyboard paste: the block lands on its source tracks at the playhead.</summary>
+    /// <summary>Keyboard paste: the block lands on its source tracks at the playhead (a slot
+    /// copied in the Session view: on its own track).</summary>
     public bool PasteClipboard()
     {
-        if (_engine is null || _engine.ClipboardBlockCount() == 0) return false;
+        if (_engine is null) return false;
+        if (ClipTransfer.FromSession) return PasteSessionSlot(Math.Max(0.0, _playheadBeats), -1);
+        if (_engine.ClipboardBlockCount() == 0) return false;
         if (_engine.PasteClipBlock(Math.Max(0.0, _playheadBeats), -1) <= 0) return false;
         Refresh();
         ReselectPlaced();
         return true;
     }
 
-    /// <summary>True when the block clipboard holds at least one clip (drives menu enablement).</summary>
-    public bool HasClipClipboard => _engine?.ClipboardBlockCount() > 0;
+    // The session clipboard's slot onto the timeline (destTrackId -1 = its own track); a cut
+    // slot moves, emptying its slot in the same undo step.
+    private bool PasteSessionSlot(double atBeat, int destTrackId)
+    {
+        if (_engine is null || ClipTransfer.Slot is not { } src) return false;
+        _engine.BeginUndoGroup();
+        int placed;
+        try
+        {
+            placed = _engine.SessionSlotsToArrangement(new[] { (src.TrackId, src.Scene) }, atBeat, destTrackId);
+            if (placed > 0 && src.Cut) _engine.ClearSessionSlot(src.TrackId, src.Scene);
+        }
+        finally { _engine.EndUndoGroup(); }
+        if (placed <= 0)
+        {
+            StatusMessage?.Invoke("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            return true;
+        }
+        if (src.Cut) { ClipTransfer.SlotMoved(null); SessionChanged?.Invoke(); }
+        Refresh();
+        ReselectPlaced();
+        return true;
+    }
 
-    /// <summary>Clipboard clip kind: -1 empty, else 0 (block clipboard has content).</summary>
-    public int ClipboardClipKind() => HasClipClipboard ? 0 : -1;
+    /// <summary>True when ⌘V has something to paste onto the timeline (drives menu enablement).</summary>
+    public bool HasClipClipboard => _engine is not null && (ClipTransfer.FromSession || _engine.ClipboardBlockCount() > 0);
+
+    /// <summary>Copy to Session (⌘⇧C): the clip selection into session slots — each track's clips,
+    /// in time order, down consecutive slots of one scene row; <paramref name="startScene"/> -1 =
+    /// the first row where they all fit (new rows are added when needed). Returns the first row
+    /// filled, or -1 when nothing was copied.</summary>
+    public int CopySelectionToSession(int startScene = -1)
+    {
+        if (_engine is null) return -1;
+        var sel = SelectionBlock();
+        if (sel.Length == 0) return -1;
+        int scene = _engine.ArrangementClipsToSession(sel, startScene);
+        if (scene < 0) return -1;
+        SessionChanged?.Invoke();
+        StatusMessage?.Invoke(sel.Length == 1 ? $"Copied clip to session scene {scene + 1}"
+                                              : $"Copied {sel.Length} clips to the session from scene {scene + 1}");
+        return scene;
+    }
 
     internal double Snap(double beat)
         => _snapEnabled && _snapBeats > 0 ? Math.Round(beat / _snapBeats) * _snapBeats : beat;
@@ -1055,6 +1101,7 @@ public sealed partial class ArrangementView : UserControl
     // --- browser drag & drop (M7-5) ---
     private void OnLaneDragOver(object? sender, DragEventArgs e)
     {
+        if (BrowserView.IsClipDrag) { OnClipDragOverLanes(e); return; }
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
@@ -1117,6 +1164,7 @@ public sealed partial class ArrangementView : UserControl
 
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
+        if (BrowserView.IsClipDrag) { OnClipDropOnLanes(e); return; }
         SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;
@@ -1366,6 +1414,30 @@ public sealed partial class ArrangementView : UserControl
         if (len <= 0) return false;
         _timeSelStart = _timeSelEnd;
         _timeSelEnd = _timeSelStart + len;
+        Refresh();
+        return true;
+    }
+
+    /// <summary>⌘⇧D Duplicate Time: insert a copy of the time selection right after it, pushing
+    /// everything later right on every track (clips and automation), then move the selection
+    /// onto the copy so repeated presses chain.</summary>
+    public bool DuplicateTimeInsert()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        double len = _timeSelEnd - _timeSelStart;
+        if (!_engine.InsertTime(_timeSelEnd, len, duplicate: true)) return false;
+        _timeSelStart = _timeSelEnd;
+        _timeSelEnd = _timeSelStart + len;
+        Refresh();
+        return true;
+    }
+
+    /// <summary>⌘⇧I Insert Silence: open an empty gap the length of the time selection at its
+    /// start, pushing everything after it right on every track. The selection stays on the gap.</summary>
+    public bool InsertSilenceAtTimeSelection()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        if (!_engine.InsertTime(_timeSelStart, _timeSelEnd - _timeSelStart, duplicate: false)) return false;
         Refresh();
         return true;
     }

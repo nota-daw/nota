@@ -19,6 +19,14 @@
 // appended ones default to the old sound). Persistence / automation / clone flow generically.
 // Telemetry (scopeRead): kTele live values, then three kHist-column histories over the
 // window (input peak dB, gate gain 0..1, detector dB), oldest first.
+// Pattern (appended): a tempo-synced step pattern of gain — a rhythmic gate. Off / Volume /
+// Map: Volume multiplies the output by 1 − depth·(1 − step) (in place of the threshold gate,
+// or on top of it with Gated), Map leaves the audio alone and writes the pattern into the
+// read-only "Pattern Out" param, a CV source for the Modular editor. 8 / 16 / 32 steps live in
+// "Step 1".."Step 32" (quantised to 4 / 8 / 16 levels), the pattern spans 1/4 … 4 bars (Sync,
+// locked to the song while it plays) or 4 … 0.25 Hz (Free); Smooth ramps into each step,
+// Swing delays the off-steps, Retrig restarts it on every MIDI note of this track (or the key
+// track). The pattern block (kPat values) follows the histories in scopeRead.
 // deviceText: 0 = status line, 1 = live reading, 2 = parameter guide.
 // deviceAction: 0 = reset the meters (peak GR, triggers, history), 1 = window (iarg 0 250 ms,
 // 1 1 s, 2 4 s).
@@ -26,6 +34,7 @@
 #pragma once
 
 #include "Device.h"
+#include "MidiDevice.h"
 #include "TransportInfo.h"
 
 #include <algorithm>
@@ -60,7 +69,22 @@ public:
         DetFilter,      // >=0.5 the detector band-pass is in (off = full-band key)
         PeakHold,       // >=0.5 the detector holds peaks (~40 ms fall instead of 3 ms)
         ExternalKey,    // >=0.5 key off the sidechain source when one is routed
-        kNumParams
+        // ---- appended (Pattern tab) ----
+        PatTarget,      // 0 Off / 0.5 Volume / 1 Map
+        PatRate,        // 5 steps: Sync 1/4 · 1/2 · 1 Bar · 2 Bars · 4 Bars, Free 4 · 2 · 1 · 0.5 · 0.25 Hz
+        PatDepth,       // how far a 0 step pulls the gain down (0..1)
+        PatSync,        // >=0.5 tempo-synced (Sync), else Free (Hz)
+        PatSmooth,      // ramp into each step, 0..1 → 0..½ step
+        PatSwing,       // off-step delay, 0..1 → 0..75 % (of half a step)
+        PatSteps,       // 0 / 0.5 / 1 → 8 / 16 / 32 steps
+        PatLevels,      // 0 / 0.5 / 1 → 4 / 8 / 16 levels
+        PatRetrig,      // >=0.5 a MIDI note-on restarts the pattern
+        PatGated,       // >=0.5 the pattern only plays while the threshold gate is open (gate × pattern)
+        PatComplexity,  // the dice's density (editor; not a sound param)
+        PatOut,         // read-only: the pattern's value now 0..1 (written by process; Map's CV source)
+        Step1,          // Step 1 .. Step 32, 0..1
+        kNumSteps = 32,
+        kNumParams = Step1 + kNumSteps
     };
 
     // Telemetry slots (scopeRead). 0..4 keep the original layout.
@@ -92,7 +116,11 @@ public:
     };
     static constexpr int kHist = 128;
     static constexpr int kHistAt = kTele;                  // input peak dB · gate gain · detector dB
-    static constexpr int kScope = kTele + 3 * kHist;
+    // Pattern block after the histories.
+    enum { P_Phase = 0, P_Step, P_Gain, P_Value, P_Target, P_Steps, P_Beats, kPat = 8 };
+    static constexpr int kPatAt = kTele + 3 * kHist;
+    static constexpr int kScope = kPatAt + kPat;
+    static constexpr int kPushPattern[16] = { 8, 0, 8, 8, 0, 8, 8, 0, 8, 0, 8, 8, 0, 8, 0, 8 };
 
     Shutter() {
         p_[Threshold].store(0.457f);  // −38 dB
@@ -111,6 +139,19 @@ public:
         p_[DetFilter].store(1.0f);    // the original always filtered the key
         p_[PeakHold].store(0.0f);
         p_[ExternalKey].store(1.0f);  // a routed key is used (the original behaviour)
+        p_[PatTarget].store(0.0f);    // Off — the gate sounds as before
+        p_[PatRate].store(0.5f);      // 1 Bar
+        p_[PatDepth].store(1.0f);
+        p_[PatSync].store(1.0f);
+        p_[PatSmooth].store(0.0f);
+        p_[PatSwing].store(0.0f);
+        p_[PatSteps].store(0.5f);     // 16
+        p_[PatLevels].store(0.5f);    // 8
+        p_[PatRetrig].store(0.0f);
+        p_[PatGated].store(0.0f);
+        p_[PatComplexity].store(0.5f);
+        p_[PatOut].store(1.0f);
+        for (int k = 0; k < kNumSteps; ++k) p_[Step1 + k].store(kPushPattern[k % 16] / 8.0f);   // "Push"
         for (auto& h : hist_) h.fill(0.0f);
         setSampleRate(44100.0, 0);
     }
@@ -139,6 +180,16 @@ public:
     float gainReductionDb() const override { return grDb_.load(std::memory_order_relaxed); }
 
     int32_t latencySamples() const override { return laSamples(); }
+
+    // Tempo: the pattern locks to the song while it plays.
+    void setTransport(double beatStart, double samplesPerBeat, bool playing) override {
+        tBeat_ = beatStart; tSpb_ = samplesPerBeat; tPlaying_ = playing; tFed_ = true;
+    }
+
+    // Pattern retrigger: this track's notes (or the key track's) when Retrig is on.
+    bool wantsMidiKey() const override { return get(PatRetrig) >= 0.5f && patTarget() > 0; }
+    bool wantsOwnMidiKey() const override { return wantsMidiKey(); }
+    void setMidiKey(const MidiEv* evs, int32_t n) override { midiEvs_ = evs; midiN_ = n; }
 
     void deviceAction(int32_t id, int32_t iarg, float) override {
         if (id == A_ResetMeters) resetMetersReq_.store(true, std::memory_order_relaxed);
@@ -187,9 +238,51 @@ public:
         const int colLen = std::max(1, (int)std::lround(winSec * sr_ / kHist));
         const float ratioC = coef((float)(winSec * 1000.0));
 
+        // ---- Pattern ----
+        const int patT = patTarget();
+        const int nSteps = patSteps();
+        const int nLevels = patLevels();
+        const bool pSync = get(PatSync) >= 0.5f;
+        const int rateI = patRateIdx();
+        const double spb = (tFed_ && tSpb_ > 1.0) ? tSpb_ : sr_ * 60.0 / bpm_;
+        const double barBeats = (double)tsNum_ * 4.0 / (double)tsDen_;
+        static constexpr double kSyncBeats[5] = { 1.0, 2.0, 0.0, 0.0, 0.0 };   // 1/4, 1/2 · then bars
+        static constexpr double kBars[5] = { 0.0, 0.0, 1.0, 2.0, 4.0 };
+        static constexpr double kFreeHz[5] = { 4.0, 2.0, 1.0, 0.5, 0.25 };
+        const double patBeats = rateI < 2 ? kSyncBeats[rateI] : kBars[rateI] * barBeats;
+        const double phInc = pSync ? 1.0 / std::max(1.0, patBeats * spb) : kFreeHz[rateI] / sr_;
+        const bool retrigOn = get(PatRetrig) >= 0.5f;
+        // Locked to the song: the phase of the output sample (look-ahead delays the audio).
+        const bool lock = pSync && !retrigOn && tFed_ && tPlaying_ && patBeats > 0.0;
+        const double lockBeat0 = tBeat_ - (double)la / spb;
+        const float depth = get(PatDepth);
+        const float smooth = get(PatSmooth) * 0.5f;          // ramp, in steps
+        const float swing = get(PatSwing) * 0.75f * 0.5f;     // off-step delay, in steps
+        const bool gated = get(PatGated) >= 0.5f;
+        float stepV[kNumSteps];
+        for (int k = 0; k < nSteps; ++k) stepV[k] = std::round(std::clamp(get(Step1 + k), 0.0f, 1.0f) * nLevels) / nLevels;
+        const float patSmC = coef(1.0f);                      // ~1 ms de-click on the pattern gain
+        int mi = 0;
+        float patVal = patVal_;
+
         float grMax = 0.0f;
 
         for (int32_t i = 0; i < frames; ++i) {
+            // Pattern phase: song-locked, or free-running (restarted by a MIDI note-on).
+            if (patT > 0) {
+                if (retrigOn && midiEvs_)
+                    for (; mi < midiN_ && midiEvs_[mi].off <= i; ++mi)
+                        if (midiEvs_[mi].on) patPhase_ = 0.0;
+                if (lock) {
+                    const double b = lockBeat0 + (double)i / spb;
+                    patPhase_ = b / patBeats - std::floor(b / patBeats);
+                }
+                const float v = patternAt(stepV, nSteps, (float)(patPhase_ * nSteps), smooth, swing);
+                patVal = v + patSmC * (patVal - v);
+                if (!lock) { patPhase_ += phInc; if (patPhase_ >= 1.0) patPhase_ -= std::floor(patPhase_); }
+            }
+            const float patGain = 1.0f - depth * (1.0f - patVal);
+
             const float l = buf[i * 2], r = buf[i * 2 + 1];
 
             // Detector source: external key if routed and enabled, else this track.
@@ -229,6 +322,7 @@ public:
             else env_ = tgt > env_ ? std::min(tgt, env_ + rAtk) : std::max(tgt, env_ - rRel);
             const float f = shape == 2 ? 1.0f - (1.0f - env_) * (1.0f - env_) * (1.0f - env_) : env_;
             g_ = flip ? 1.0f - (1.0f - floorLin) * f : floorLin + (1.0f - floorLin) * f;
+            if (patT == 1) g_ = gated ? g_ * patGain : patGain;   // Volume: the pattern is the gate (or rides it)
 
             // Look-ahead: apply the (anticipating) gain to the delayed audio.
             laBuf_[(size_t)laW_ * 2] = l; laBuf_[(size_t)laW_ * 2 + 1] = r;
@@ -287,6 +381,15 @@ public:
         bpmA_.store((float)bpm_, std::memory_order_relaxed);
         winA_.store((float)winSec, std::memory_order_relaxed);
         scBuf_ = nullptr;
+        midiEvs_ = nullptr; midiN_ = 0; tFed_ = false;
+
+        patVal_ = patVal;
+        const float patOut = patT > 0 ? 1.0f - depth * (1.0f - patVal) : 1.0f;
+        p_[PatOut].store(patOut, std::memory_order_relaxed);
+        patPhaseA_.store((float)patPhase_, std::memory_order_relaxed);
+        patGainA_.store(patT == 1 ? patOut : 1.0f, std::memory_order_relaxed);
+        patValA_.store(patOut, std::memory_order_relaxed);
+        patBeatsA_.store(pSync ? (float)patBeats : 0.0f, std::memory_order_relaxed);
         if (frames > 0) {
             const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
@@ -329,6 +432,16 @@ public:
         const int hw = histW_.load(std::memory_order_acquire);
         for (int s = 0; s < 3; ++s)
             for (int k = 0; k < kHist && n < maxSamples; ++k) out[n++] = hist_[(size_t)s][(size_t)((hw + k) % kHist)];
+        float pt[kPat] = {};
+        const float ph = patPhaseA_.load(std::memory_order_relaxed);
+        pt[P_Phase] = ph;
+        pt[P_Step] = (float)std::min(patSteps() - 1, (int)(ph * patSteps()));
+        pt[P_Gain] = patGainA_.load(std::memory_order_relaxed);
+        pt[P_Value] = patValA_.load(std::memory_order_relaxed);
+        pt[P_Target] = (float)patTarget();
+        pt[P_Steps] = (float)patSteps();
+        pt[P_Beats] = patBeatsA_.load(std::memory_order_relaxed);
+        for (int k = 0; k < kPat && n < maxSamples; ++k) out[n++] = pt[k];
         return n;
     }
 
@@ -337,10 +450,20 @@ public:
 
     int32_t     paramCount() const override { return kNumParams; }
     const char* paramName(int32_t i) const override {
-        static const char* nm[kNumParams] = { "Threshold", "Return", "Attack", "Hold", "Release", "Floor",
-                                              "Lookahead", "Flip", "Det HP", "Det LP", "Listen",
-                                              "Shape", "Retrigger", "Det Filter", "Peak Hold", "External Key" };
-        return (i >= 0 && i < kNumParams) ? nm[i] : "";
+        static const char* nm[Step1] = { "Threshold", "Return", "Attack", "Hold", "Release", "Floor",
+                                         "Lookahead", "Flip", "Det HP", "Det LP", "Listen",
+                                         "Shape", "Retrigger", "Det Filter", "Peak Hold", "External Key",
+                                         "Pattern Target", "Pattern Rate", "Pattern Depth", "Pattern Sync", "Pattern Smooth",
+                                         "Pattern Swing", "Pattern Steps", "Pattern Levels", "Pattern Retrig", "Pattern Gated",
+                                         "Pattern Complexity", "Pattern Out" };
+        static const auto steps = [] {
+            std::array<std::string, kNumSteps> a;
+            for (int k = 0; k < kNumSteps; ++k) a[(size_t)k] = "Step " + std::to_string(k + 1);
+            return a;
+        }();
+        if (i >= 0 && i < Step1) return nm[i];
+        if (i >= Step1 && i < kNumParams) return steps[(size_t)(i - Step1)].c_str();
+        return "";
     }
     float paramMin(int32_t /*i*/) const override { return 0.0f; }
     float paramMax(int32_t /*i*/) const override { return 1.0f; }
@@ -370,19 +493,44 @@ public:
             else s += " - key full-band";
             if (get(PeakHold) >= 0.5f) s += " - peak hold";
             if (get(Listen) >= 0.5f) s += " - LISTEN (key monitor)";
+            if (patTarget() > 0) {
+                static const char* syncN[5] = { "1/4", "1/2", "1 bar", "2 bars", "4 bars" };
+                static const char* freeN[5] = { "4 Hz", "2 Hz", "1 Hz", "0.5 Hz", "0.25 Hz" };
+                std::snprintf(b, sizeof b, " - PATTERN %s %s, %d steps x %d levels, depth %.0f %%, smooth %.0f %%, swing %.0f %%%s%s",
+                              patTarget() == 1 ? (get(PatGated) >= 0.5f ? "volume (gated)" : "volume") : "map (Pattern Out)",
+                              get(PatSync) >= 0.5f ? syncN[patRateIdx()] : freeN[patRateIdx()], patSteps(), patLevels(),
+                              get(PatDepth) * 100.0f, get(PatSmooth) * 100.0f, get(PatSwing) * 75.0f,
+                              get(PatRetrig) >= 0.5f ? ", MIDI retrig" : "", "");
+                s += b;
+                s += " [";
+                for (int k = 0; k < patSteps(); ++k) {
+                    const float v = std::round(get(Step1 + k) * patLevels()) / patLevels();
+                    s += v <= 0.0f ? '.' : v >= 1.0f ? '#' : v >= 0.5f ? '+' : '-';
+                }
+                s += "]";
+            }
             return s;
         }
         if (id == 1) {
             float sc[kTele];
             scopeRead(sc, kTele);
             const int st = std::clamp((int)std::lround(sc[S_State]), 0, 4);
+            float pt[kScope];
+            const int pn = scopeRead(pt, kScope);
+            std::string pat;
+            if (patTarget() > 0 && pn >= kScope) {
+                char pb[160];
+                std::snprintf(pb, sizeof pb, " - pattern step %d/%d, phase %.2f, value %.0f %%",
+                              (int)pt[kPatAt + P_Step] + 1, patSteps(), pt[kPatAt + P_Phase], pt[kPatAt + P_Value] * 100.0f);
+                pat = pb;
+            }
             std::snprintf(b, sizeof b,
                           "%s - gain %.0f %% - GR %.1f dB (peak %.1f dB) - in %.1f dB - out %.1f dB - detector %.1f dB vs threshold %.1f dB - "
                           "open %.0f %% of %.2g s - %.0f openings in the last bar (%.0f since reset) - %s key %.1f dB - latency %.0f smp",
                           states[st], sc[S_GateGain] * 100.0f, sc[S_GrDb], sc[S_PeakGrDb], sc[S_InDb], sc[S_OutDb], sc[S_DetDb], thr,
                           sc[S_OpenRatio] * 100.0f, sc[S_WindowSec], sc[S_TrigPerBar], sc[S_Triggers],
                           sc[S_ExtKey] > 0.5f ? "external" : "internal", sc[S_KeyDb], sc[S_Latency]);
-            return b;
+            return b + pat;
         }
         if (id == 2) {
             return "All params 0..1. Threshold: -70 + 70*v dBFS (0.457 = -38 dB). Return: 24*v dB below the threshold, where the gate "
@@ -393,7 +541,12 @@ public:
                    "Shape: 0 Linear (straight ramps), 0.5 Log (one-pole, the classic), 1 Snap (stays open, then shuts hard). "
                    "Retrigger: trigger mode, each hit fires one attack-hold-release. Det Filter: the key band-pass is in. "
                    "Peak Hold: the detector holds peaks (steadier on low notes). External Key: use the routed sidechain source. "
-                   "Toggles: >= 0.5 = on.";
+                   "Toggles: >= 0.5 = on. Pattern Target: 0 Off, 0.5 Volume (a rhythmic gate replacing the threshold gate, or "
+                   "riding it when Pattern Gated is on), 1 Map (audio untouched; Pattern Out carries the value as a CV source). "
+                   "Pattern Rate: 5 steps — Sync 1/4, 1/2, 1 bar, 2 bars, 4 bars (the whole pattern); Free 4, 2, 1, 0.5, 0.25 Hz. "
+                   "Pattern Depth: gain = 1 - depth*(1 - step). Pattern Smooth: ramp into a step, up to half a step. Pattern Swing: "
+                   "0..75 % (delays every second step by up to 3/8 step). Pattern Steps: 0/0.5/1 = 8/16/32. Pattern Levels: "
+                   "0/0.5/1 = 4/8/16 (steps snap to them). Pattern Retrig: a MIDI note-on restarts it. Step 1..32: 0..1 each.";
         }
         return {};
     }
@@ -426,6 +579,23 @@ private:
     }
 
     float get(int i) const { return p_[i].load(std::memory_order_relaxed); }
+    int patTarget() const { return std::clamp((int)std::lround(get(PatTarget) * 2.0f), 0, 2); }
+    int patRateIdx() const { return std::clamp((int)std::lround(get(PatRate) * 4.0f), 0, 4); }
+    int patSteps() const { static constexpr int n[3] = { 8, 16, 32 }; return n[std::clamp((int)std::lround(get(PatSteps) * 2.0f), 0, 2)]; }
+    int patLevels() const { static constexpr int n[3] = { 4, 8, 16 }; return n[std::clamp((int)std::lround(get(PatLevels) * 2.0f), 0, 2)]; }
+
+    // The pattern's value at `pos` steps into it: odd steps start `swing` late, and each step
+    // ramps over `smooth` from the one before (wrapping, so step 1 ramps from the last).
+    static float patternAt(const float* v, int n, float pos, float smooth, float swing) {
+        int i = std::clamp((int)pos, 0, n - 1);
+        float e = pos - (float)i;                         // time since step i's grid line
+        if ((i & 1) && e < swing) { i -= 1; e += 1.0f; }  // still the even step before (swung)
+        else if (i & 1) e -= swing;
+        const float cur = v[i];
+        if (smooth <= 1e-4f || e >= smooth) return cur;
+        const float prev = v[(i + n - 1) % n];
+        return prev + (cur - prev) * (e / smooth);
+    }
     int shapeIdx() const { return std::clamp((int)std::lround(get(Shape) * 2.0f), 0, 2); }
     int lookIdx() const { return std::clamp((int)std::lround(get(Lookahead) * 2.0f), 0, 2); }
     static double expMap(float v, double lo, double hi) { return lo * std::pow(hi / lo, std::clamp((double)v, 0.0, 1.0)); }
@@ -460,6 +630,7 @@ private:
         hp_ = {}; lp_ = {};
         openRatio_ = 0.0f; colIn_ = 0.0f; colGate_ = 1.0f; colDet_ = 0.0f; colN_ = 0;
         for (int k = 0; k < kHist; ++k) hist_[0][(size_t)k] = -120.0f, hist_[1][(size_t)k] = 1.0f, hist_[2][(size_t)k] = -120.0f;
+        patPhase_ = 0.0; patVal_ = 1.0f;
     }
 
     double sr_ = 44100.0;
@@ -482,6 +653,12 @@ private:
     const float* scBuf_ = nullptr; int32_t scFrames_ = 0;
     std::atomic<bool> resetMetersReq_{false};
     std::atomic<int> windowIdx_{1};
+
+    // Pattern runtime.
+    double tBeat_ = 0.0, tSpb_ = 0.0; bool tPlaying_ = false, tFed_ = false;
+    const MidiEv* midiEvs_ = nullptr; int32_t midiN_ = 0;
+    double patPhase_ = 0.0; float patVal_ = 1.0f;
+    std::atomic<float> patPhaseA_{0.0f}, patGainA_{1.0f}, patValA_{1.0f}, patBeatsA_{4.0f};
 
     std::atomic<float> inDb_{-120.0f}, outDb_{-120.0f}, keyDb_{-120.0f}, gateGain_{1.0f}, grDb_{0.0f}, peakGrA_{0.0f},
         detDb_{-120.0f}, openF_{0.0f}, stateA_{0.0f}, envA_{0.0f}, ratioA_{0.0f}, trigBarA_{0.0f}, trigTotA_{0.0f},

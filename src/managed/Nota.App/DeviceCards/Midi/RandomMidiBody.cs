@@ -372,6 +372,8 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var v = Mono("", Sub); v.HorizontalAlignment = HorizontalAlignment.Right;
             var trk = Slider(p, max);
             ToolTip.SetTip(trk, $"{tip} — drag up / down, double-click resets");
+            ValueEntry.Attach(v, () => G(p) / max, n => S(p, max > 1 ? Math.Round(n * max) : Math.Round(n * max, 3)), () => fmt(G(p)),
+                () => Begin(p), () => End(p), Refresh);
             readouts.Add(() =>
             {
                 double x = G(p);

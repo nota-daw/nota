@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Nota release — actualize CHANGELOG.md (promote [Unreleased] to a dated version and add a short human-readable summary of it), bump VERSION and the engine's src/native/nota.engine/VERSION, create the vX.Y.Z tag, then commit and push. Run this when the user asks to release, ship, cut a version, or tag a release. The GitHub Actions release workflow then builds every platform and drafts the release from the changelog section.
+description: Cut a Nota release — actualize CHANGELOG.md (promote [Unreleased] to a dated version and add a short human-readable summary of it), bump VERSION and the engine's src/native/nota.engine/VERSION, write RU + EN news-channel posts about the new features, create the vX.Y.Z tag, then commit and push. Run this when the user asks to release, ship, cut a version, or tag a release. The GitHub Actions release workflow then builds every platform and drafts the release from the changelog section.
 user-invocable: true
 ---
 
@@ -103,11 +103,32 @@ window next to the app version). It moves only when the engine itself changed:
 
 Tell the user the old → new engine version (or that it's unchanged).
 
+## 3c. Write the news posts (RU + EN)
+
+Write two posts for the project's news channel, `docs/news/X.Y.Z.ru.md` (Russian) and
+`docs/news/X.Y.Z.en.md` (English) — same content, each written natively in its language,
+not a word-for-word translation.
+
+- Open with a one-line title (`🎛 **Nota X.Y.Z вышла**` / `🎛 **Nota X.Y.Z is out**`) and
+  one or two sentences on what defines the release.
+- Then the new features as numbered, bold-titled sections **in order of importance** —
+  biggest user-facing win first, small conveniences last. A short paragraph each: what it
+  is and why a musician cares, not every detail of the changelog.
+- Group small items (shortcuts, tweaks) into one section; finish with an **Also** list for
+  visual changes and notable fixes, then any behaviour change users must know (moved or
+  removed shortcuts).
+- End with the download link: `https://github.com/<owner>/<repo>/releases/tag/vX.Y.Z`.
+- Check every claim against the code and the newest changelog entry — `[Unreleased]` can
+  contain entries contradicted by later ones (e.g. a shortcut reassigned twice). Fix the
+  changelog too if you find one.
+
+Commit the posts together with the release. Show both to the user in the report.
+
 ## 4. Commit, tag, push
 
 ```bash
-git add VERSION CHANGELOG.md src/native/nota.engine/VERSION
-git commit -m "Release vX.Y.Z"
+git add VERSION CHANGELOG.md src/native/nota.engine/VERSION docs/news/
+git commit -m "(chore) Release vX.Y.Z"
 git tag -a "vX.Y.Z" -m "Nota vX.Y.Z"
 git push origin main
 git push origin "vX.Y.Z"

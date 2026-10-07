@@ -54,7 +54,7 @@ public sealed partial class SessionView
 
         var hint = new TextBlock
         {
-            Text = "Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene",
+            Text = "Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there",
             FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
         hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -319,7 +319,7 @@ public sealed partial class SessionView
         s.Children.Add(Actions(
             ("Duplicate", "⌘D", () => DuplicateSelection()),
             ("Rename", "F2", () => RenameSelection()),
-            ("To Arrangement", "", () => ToArrangement(id, scene)),
+            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement()),
             ("Edit", "", () => SlotEditRequested?.Invoke(id, scene)),
             ("Delete", "⌫", () => DeleteSelection())));
     }
@@ -400,6 +400,7 @@ public sealed partial class SessionView
             ("Insert below", "⌘I", () => InsertSceneAtSelection()),
             ("Duplicate", "⌘D", () => DuplicateSelection()),
             ("Rename", "F2", () => RenameSelection()),
+            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement()),
             ("Delete", "⌫", () => DeleteSelection())));
     }
 
@@ -422,7 +423,7 @@ public sealed partial class SessionView
         if (c.IsInstrument) actions.Add(("Insert MIDI clip", "", () => InsertMidiClip(c.TrackId, scene)));
         actions.Add(rec ? ("Stop recording", "", () => { _engine.StopSessionRecord(); Refresh(); })
                         : ("Record here", "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
-        if (_clip is not null) actions.Add(("Paste", "⌘V", () => PasteSelection()));
+        if (CanPaste) actions.Add(("Paste", "⌘V", () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
     }
 
@@ -434,7 +435,8 @@ public sealed partial class SessionView
             Text = "Launches every track's slot in this scene. The stop button stops them all.",
             FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
-        s.Children.Add(Actions(("Launch group slot", "↵", () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g))));
+        s.Children.Add(Actions(("Launch group slot", "↵", () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g)),
+            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement())));
     }
 
     /// <summary>The selected clip's notes / waveform with a live playhead.</summary>

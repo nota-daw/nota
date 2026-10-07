@@ -192,7 +192,7 @@ internal static class DeviceCardKit
     // parameter and does its own follow-up); `text` formats the value for display.
     // `trackWidth` fixes the track, otherwise it stretches. An empty label drops the
     // label column. `modulation` draws a modulation depth in teal. `sync` repaints from
-    // `norm` and skips while the hand is on the slider.
+    // `norm` and skips while the hand is on the slider. Double-clicking the value types one in.
     internal static Grid SliderRow(string label, Func<double> norm, Action<double> setNorm, Func<string> text, out Action sync,
         Action? begin = null, Action? end = null, Action? reset = null, bool bipolar = false, Func<bool>? dim = null,
         double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42, bool modulation = false)
@@ -228,6 +228,7 @@ internal static class DeviceCardKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
+        ValueEntry.Attach(val, norm, setNorm, text, begin, end, Paint);
         if (begin is not null) track.GestureBegin += begin;
         if (end is not null) track.GestureEnd += end;
         track.SizeChanged += (_, _) => track.InvalidateVisual();

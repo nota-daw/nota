@@ -6,6 +6,8 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudio/CoreAudio.h>
 
+#include <vector>
+
 namespace nota {
 
 struct CoreAudioBackend::Impl {
@@ -73,6 +75,36 @@ double deviceNominalSampleRate(AudioDeviceID dev) {
     return sr;
 }
 
+// Bluetooth outputs (AirPods etc.) get their rate from the link codec. Forcing a
+// nominal rate on them (e.g. 44.1 kHz on AirPods that run AAC at 48 kHz) leaves
+// the A2DP stream losing sync — a second of crackle, then silence — for every
+// app until Bluetooth restarts. Never touch their rate; AUHAL resamples instead.
+bool isBluetoothDevice(AudioDeviceID dev) {
+    AudioObjectPropertyAddress addr{ kAudioDevicePropertyTransportType,
+                                     kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain };
+    UInt32 transport = 0;
+    UInt32 size = sizeof(transport);
+    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, &transport) != noErr) return false;
+    return transport == kAudioDeviceTransportTypeBluetooth
+        || transport == kAudioDeviceTransportTypeBluetoothLE;
+}
+
+bool deviceSupportsSampleRate(AudioDeviceID dev, double sr) {
+    AudioObjectPropertyAddress addr{ kAudioDevicePropertyAvailableNominalSampleRates,
+                                     kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain };
+    UInt32 size = 0;
+    if (AudioObjectGetPropertyDataSize(dev, &addr, 0, nullptr, &size) != noErr || size == 0)
+        return false;
+    std::vector<AudioValueRange> ranges(size / sizeof(AudioValueRange));
+    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, ranges.data()) != noErr)
+        return false;
+    for (const auto& r : ranges)
+        if (sr >= r.mMinimum - 0.5 && sr <= r.mMaximum + 0.5) return true;
+    return false;
+}
+
 } // namespace
 
 bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
@@ -109,7 +141,12 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
     }
 
     // Apply requested nominal sample rate + buffer size on the device (best effort).
-    if (cfg.sampleRate > 0.0 && dev != kAudioObjectUnknown) {
+    // The rate is only changed when the device lists it and isn't Bluetooth;
+    // otherwise the client format below still runs at the requested rate and
+    // AUHAL converts to whatever the device is running at.
+    if (cfg.sampleRate > 0.0 && dev != kAudioObjectUnknown
+        && deviceNominalSampleRate(dev) != cfg.sampleRate
+        && !isBluetoothDevice(dev) && deviceSupportsSampleRate(dev, cfg.sampleRate)) {
         Float64 sr = cfg.sampleRate;
         AudioObjectPropertyAddress a{ kAudioDevicePropertyNominalSampleRate,
                                       kAudioObjectPropertyScopeGlobal,

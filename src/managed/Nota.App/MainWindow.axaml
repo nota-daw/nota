@@ -27,7 +27,7 @@
             <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
             <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Import audio…" Click="OnMenuImport" Gesture="Shift+Cmd+I"/>
+            <NativeMenuItem Header="Import audio…" Click="OnMenuImport"/>
             <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" Click="OnPreferences" Gesture="Ctrl+,"/>
@@ -44,6 +44,8 @@
             <NativeMenuItem Header="Insert scene" Click="OnMenuInsertScene" Gesture="Cmd+I"/>
             <NativeMenuItem Header="Split at playhead" Click="OnMenuSplit" Gesture="Cmd+E"/>
             <NativeMenuItem Header="Consolidate" Click="OnMenuConsolidate" Gesture="Cmd+J"/>
+            <NativeMenuItem Header="Duplicate time" Click="OnMenuDuplicateTime" Gesture="Shift+Cmd+D"/>
+            <NativeMenuItem Header="Insert silence" Click="OnMenuInsertSilence" Gesture="Shift+Cmd+I"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Lock Envelopes" Click="OnToggleLockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
@@ -51,6 +53,7 @@
             <NativeMenuItem Header="Copy" Click="OnMenuCopy"/>
             <NativeMenuItem Header="Paste" Click="OnMenuPaste"/>
             <NativeMenuItem Header="Paste Bounced Audio" Click="OnMenuPasteBounced" Gesture="Shift+Cmd+V"/>
+            <NativeMenuItem Header="Copy Clips to Session / Arrangement" Click="OnMenuCopyToOtherView" Gesture="Shift+Cmd+C"/>
             <NativeMenuItem Header="Delete" Click="OnMenuDeleteSel"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
@@ -121,10 +124,12 @@
          42px recess on Void inside it, so playback reads as one object rather than a row of
          buttons. Reads left to right as: which view · what plays · the numbers you set ·
          the switches you flip · then, pinned right, what the machine is doing. Launch
-         quantize shows only in Session, where it applies. The view switch leads the row. -->
+         quantize shows only in Session, where it applies. The view switch leads the row.
+         When the window is too narrow the row sheds its least-needed parts first —
+         see MainWindow.TransportFit.cs for the order. -->
     <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}"
             Margin="12,12,12,0">
-      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+      <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
         <!-- Project name, then the view switch -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" Margin="2,0,14,0" VerticalAlignment="Center">
@@ -171,10 +176,10 @@
               <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}"/>
             </StackPanel>
 
-            <Border Width="1" Height="24" Background="{DynamicResource Brush.Hairline}"/>
+            <Border x:Name="LoopSep" Width="1" Height="24" Background="{DynamicResource Brush.Hairline}"/>
 
             <!-- Loop: the range is the button -->
-            <ToggleButton Classes="cell" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
+            <ToggleButton x:Name="LoopCell" Classes="cell" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
               <StackPanel Spacing="2">
                 <TextBlock Classes="CellLabel" Text="LOOP" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
                 <TextBlock Classes="Mono" FontSize="11" LineHeight="12" MinWidth="58"
@@ -193,7 +198,7 @@
             <TextBlock Classes="CellLabel" Text="BPM" HorizontalAlignment="Center"/>
           </StackPanel>
           <!-- Time signature (drag ↕ each field) -->
-          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Set the time signature — drag each field">
+          <StackPanel x:Name="TimeSigCell" Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Set the time signature — drag each field">
             <StackPanel Orientation="Horizontal" Spacing="1" Height="18">
               <Panel x:Name="TimeSigNumHost" Width="16"/>
               <TextBlock Classes="Mono" Text="/" FontSize="14" VerticalAlignment="Center"
@@ -312,7 +317,7 @@
         <!-- MIDI learn + an input-activity dot, so a silent controller is diagnosable;
              Remote (Nota Remote) beside it: off / the number of phones, a dot that flashes on
              each touch from a phone. Click opens Connect Phone. -->
-        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0">
+        <StackPanel x:Name="RemotePanel" Grid.Column="6" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0">
           <ToggleButton x:Name="MidiLearnBtn" Classes="chip"
                         Click="OnToggleMidiLearn"
                         ToolTip.Tip="Map a controller — click a control, then move a knob on the controller">
@@ -328,7 +333,7 @@
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
               <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="2" BorderThickness="1.5"
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
-              <TextBlock Text="Remote" VerticalAlignment="Center"
+              <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
               <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="10" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
@@ -338,11 +343,11 @@
           </Button>
         </StackPanel>
 
-        <Border Grid.Column="7" Width="1" Height="26" Margin="14,0"
+        <Border x:Name="CpuSep" Grid.Column="7" Width="1" Height="26" Margin="14,0"
                 Background="{DynamicResource Brush.Hairline}"/>
 
         <!-- CPU: live DSP load -->
-        <StackPanel Grid.Column="8" Spacing="3" VerticalAlignment="Center">
+        <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center">
           <Border Width="52" Height="4" Background="{DynamicResource Brush.SurfaceAbyss}"
                   CornerRadius="2" ClipToBounds="True">
             <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="2"
@@ -352,7 +357,7 @@
         </StackPanel>
 
         <!-- Master: fader over its meter, with the gain in dB -->
-        <Border Grid.Column="9" Classes="tp-well" Margin="14,0,0,0">
+        <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="14,0,0,0">
           <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
             <TextBlock Classes="CellLabel" Text="MST" VerticalAlignment="Center"/>
             <StackPanel Spacing="3" VerticalAlignment="Center">

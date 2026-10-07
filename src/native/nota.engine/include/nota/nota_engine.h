@@ -977,6 +977,11 @@ NOTA_API NotaResult nota_clip_delete(NotaEngine* engine, int32_t track_id, int32
  * [end, end+(end-start)) and returns the range length (>0), or -1 on no-op. */
 NOTA_API NotaResult nota_clips_delete_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
 NOTA_API double     nota_clips_duplicate_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
+/* insert_time opens a `len`-beat gap at `at` across the whole arrangement (all tracks and the
+ * master): clips crossing `at` are cut, clips and automation at or after it move right.
+ * duplicate=0 is Insert Silence; duplicate=1 is Duplicate Time — the gap gets a copy of
+ * [at-len, at). One undo step; an error when nothing moved. */
+NOTA_API NotaResult nota_arrangement_insert_time(NotaEngine* engine, double at, double len, int32_t duplicate);
 /* split_range cuts each listed track's clips at both boundaries, keeping all content, so the
  * covered slice becomes its own clip(s). One undo step, no ripple. */
 NOTA_API NotaResult nota_clips_split_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
@@ -1015,6 +1020,19 @@ NOTA_API int32_t    nota_clips_block_paste(NotaEngine* engine, double at_beat, i
 NOTA_API double     nota_clips_block_duplicate(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices, int32_t count);
 NOTA_API int32_t    nota_clips_block_count(NotaEngine* engine);
 NOTA_API int32_t    nota_clips_last_placed(NotaEngine* engine, int32_t* out_track_ids, int32_t* out_clip_indices, int32_t cap);
+/* Arrangement clips -> session slots. Each track's clips, in time order, fill consecutive
+ * slots from start_scene; start_scene -1 = the first scene row where every slot needed is
+ * empty. Missing scene rows are appended; clips on tracks without slots are skipped. One undo
+ * step. to_session takes a selection; block_paste_to_session takes the block clipboard,
+ * remapped so its top track lands on dest_track_id (-1 = the source tracks). Both return the
+ * first scene row filled, or -1 when nothing landed. */
+NOTA_API int32_t    nota_clips_to_session(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices, int32_t count, int32_t start_scene);
+NOTA_API int32_t    nota_clips_block_paste_to_session(NotaEngine* engine, int32_t dest_track_id, int32_t start_scene);
+/* Session slots (track_ids[i], scenes[i]) -> arrangement clips: each track's slots, in scene
+ * order, land back to back from at_beat, all tracks together, placed like a paste (the whole
+ * block shifts right until it overlaps nothing) and remapped onto dest_track_id (-1 = their
+ * own tracks). One undo step; nota_clips_last_placed reports the new clips. -> clips placed. */
+NOTA_API int32_t    nota_session_slots_to_arrangement(NotaEngine* engine, const int32_t* track_ids, const int32_t* scenes, int32_t count, double at_beat, int32_t dest_track_id);
 /* Clip / track UI metadata: names (UTF-8) + track colour (palette slot, -1 = auto).
  * get_* write up to cap-1 chars + NUL into out and return the full length. */
 NOTA_API NotaResult nota_clip_set_name(NotaEngine* engine, int32_t track_id, int32_t clip_index, const char* name_utf8);

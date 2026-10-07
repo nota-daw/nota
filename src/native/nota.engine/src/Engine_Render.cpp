@@ -1081,7 +1081,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
                         if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                    }
+                    } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());   // no key track: this track's notes
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);  // tempo-synced devices
                     d->setTransportInfo(ti);                                          // hosted-plugin sync
                     d->process(scratch_.data(), frames);
@@ -1167,7 +1167,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
                         if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                    }
+                    } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());   // no key track: this track's notes
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti);
                     d->process(scratch_.data(), frames);
@@ -1234,7 +1234,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                             : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
                         d->setSidechain(sc, frames);
                         if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                    }
+                    } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());   // no key track: this track's notes
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti);                                          // hosted-plugin sync
                     d->process(scratch_.data(), frames);

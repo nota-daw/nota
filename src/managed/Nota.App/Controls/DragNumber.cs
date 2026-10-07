@@ -19,7 +19,7 @@ public sealed class DragNumber : UserControl
 {
     private readonly TextBlock _display = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _editor;
-    private readonly double _min, _max, _step;
+    private readonly double _min, _max, _step, _dragSnap;
     private readonly string _format;
     private double _value;
     private bool _drag, _editing;
@@ -30,9 +30,10 @@ public sealed class DragNumber : UserControl
     public event Action? GestureBegin;
     public event Action? GestureEnd;
 
-    public DragNumber(double value, double min, double max, double step, string format = "0", double fontSize = 12)
+    /// <param name="dragSnap">When &gt; 0, a drag lands only on multiples of this (typing stays exact).</param>
+    public DragNumber(double value, double min, double max, double step, string format = "0", double fontSize = 12, double dragSnap = 0)
     {
-        _min = min; _max = max; _step = step; _format = format;
+        _min = min; _max = max; _step = step; _format = format; _dragSnap = dragSnap;
         _value = Math.Clamp(value, min, max);
 
         _display.FontSize = fontSize;
@@ -78,7 +79,15 @@ public sealed class DragNumber : UserControl
     {
         if (!_drag) return;
         double dy = _startY - e.GetPosition(this).Y;   // up = increase
-        double v = Math.Clamp(_startValue + dy * _step, _min, _max);
+        double v = _startValue + dy * _step;
+        if (_dragSnap > 0)
+        {
+            // Hold a typed-in fraction until the drag has travelled half a snap, so a
+            // click's jitter doesn't round it away.
+            if (Math.Abs(dy * _step) < _dragSnap / 2) return;
+            v = Math.Round(v / _dragSnap) * _dragSnap;
+        }
+        v = Math.Clamp(v, _min, _max);
         if (Math.Abs(v - _value) < 1e-9) return;
         _value = v; Refresh(); ValueChanged?.Invoke(_value);
     }

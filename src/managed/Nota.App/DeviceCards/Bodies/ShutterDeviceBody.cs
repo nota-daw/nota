@@ -4,10 +4,11 @@
 // Detail · Devices — built-in Nota Shutter body (noise gate / ducker, device kind 19), a build
 // of the "Nota Shutter" mockup (700 × 260) on the Utility / Valve / Vintage frame: an always-
 // visible STATE column (input or key level with the threshold · reduction), a centre panel
-// with Signal / Envelope / Sidechain tabs — the input and the gated output over the window
-// with the threshold and the close level on it, one opening drawn from attack / hold /
-// release / shape / floor, the detector's band-pass under the reduction — a right panel with
-// Detector / Meters tabs, and a status strip. The pictures come from the engine (Shutter.h
+// with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over the
+// window with the threshold and the close level on it, one opening drawn from attack / hold /
+// release / shape / floor, the detector's band-pass under the reduction, the rhythmic gate's
+// step grid — a right panel with Detector / Meters tabs (Rhythm / Detector on the Pattern
+// tab), and a status strip. The pictures come from the engine (Shutter.h
 // scopeRead), so they show what the gate does. Every control is a device param, so
 // automation / MIDI learn / presets / A-B / persistence come for free; the window length,
 // Live (freeze) and Reset are view / meter actions, not params.
@@ -35,13 +36,36 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     private const int S_InDb = 0, S_GateGain = 1, S_GrDb = 2, S_DetDb = 3, S_Open = 4, S_State = 5, S_OutDb = 6, S_OpenRatio = 7,
         S_TrigPerBar = 8, S_Triggers = 9, S_SampleRate = 10, S_Cpu = 11, S_Latency = 12, S_ExtKey = 13, S_KeyDb = 14,
         S_PeakGrDb = 18, S_WindowSec = 20, S_HistN = 21, kTele = 24, kHist = 128;
-    private const int kScope = kTele + 3 * kHist;
+    // Pattern (appended params + the block after the histories).
+    private const int PatTarget = 16, PatRate = 17, PatDepth = 18, PatSync = 19, PatSmooth = 20, PatSwing = 21, PatSteps = 22,
+        PatLevels = 23, PatRetrig = 24, PatGated = 25, PatComplexity = 26, Step1 = 28, kMaxSteps = 32;
+    private const int S_Bpm = 19;
+    private const int kPatAt = kTele + 3 * kHist, P_Phase = 0, P_Step = 1, P_Value = 3, kPat = 8;
+    private const int kScope = kPatAt + kPat;
     private const int H_In = kTele, H_Gate = kTele + kHist, H_Det = kTele + 2 * kHist;
     private const int A_ResetMeters = 0, A_Window = 1;
 
     private static readonly string[] Shapes = { "Linear", "Log", "Snap" };
     private static readonly string[] StateNames = { "closed", "attack", "open", "hold", "release" };
     private static readonly string[] WindowNames = { "250\u2009ms", "1\u2009s", "4\u2009s" };
+    private static readonly string[] RateSync = { "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars" };
+    private static readonly string[] RateFree = { "4\u2009Hz", "2\u2009Hz", "1\u2009Hz", "0.5\u2009Hz", "0.25\u2009Hz" };
+    private static readonly int[] StepCounts = { 8, 16, 32 }, LevelCounts = { 4, 8, 16 };
+
+    // The pattern browser's shapes (steps in eighths), resampled to the grid; the arrows walk them.
+    private static readonly (string Name, int[] Steps)[] Patterns =
+    {
+        ("Push",      new[] { 8, 0, 8, 8, 0, 8, 8, 0, 8, 0, 8, 8, 0, 8, 0, 8 }),
+        ("Offbeat",   new[] { 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8, 0 }),
+        ("Trance 16", new[] { 8, 0, 8, 0, 8, 8, 0, 8, 8, 0, 8, 0, 8, 8, 0, 8 }),
+        ("Stutter",   new[] { 8, 8, 8, 8, 0, 0, 0, 0, 8, 0, 8, 0, 8, 8, 0, 0 }),
+        ("Halftime",  new[] { 8, 8, 8, 0, 0, 0, 0, 0, 8, 8, 8, 0, 0, 0, 4, 0 }),
+        ("Ramp Up",   new[] { 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8 }),
+        ("Chop",      new[] { 8, 0, 6, 0, 8, 3, 0, 5, 8, 0, 6, 2, 8, 0, 4, 0 }),
+    };
+    // Copy / Paste between every Shutter in the session.
+    private static float[]? _clipboard;
+    private static readonly Random Rng = new();
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -123,10 +147,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
         // `steps` > 1 snaps a discrete param (Lookahead).
-        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null)
+        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null, double size = 34)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = 34, Height = 34 };
+            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
             knob.ValueChanged += v =>
             {
                 if (steps > 1) v = Math.Round(v * (steps - 1)) / (steps - 1);
@@ -455,6 +479,223 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         }
 
         // ======================================================================
+        // CENTRE — Pattern (rhythmic gate)
+        // ======================================================================
+        int NSteps() => StepCounts[Sel(PatSteps, 3)];
+        int NLevels() => LevelCounts[Sel(PatLevels, 3)];
+        int RateIdx() => Sel(PatRate, 5);
+        string RateName() => On(PatSync) ? RateSync[RateIdx()] : RateFree[RateIdx()];
+        float Qz(double v) { int l = NLevels(); return (float)(Math.Round(Math.Clamp(v, 0, 1) * l) / l); }
+        float[] StepsNow() { int n = NSteps(); var a = new float[n]; for (int k = 0; k < n; k++) a[k] = P(Step1 + k); return a; }
+        static float[] Resample(float[] a, int n) { var r = new float[n]; for (int i = 0; i < n; i++) r[i] = a[(int)((long)i * a.Length / n)]; return r; }
+        float[] Template(int i) => Resample(Array.ConvertAll(Patterns[i].Steps, v => v / 8f), NSteps());
+        // The browser's name: the shape the steps match, else Custom.
+        int PatternIdx()
+        {
+            var cur = StepsNow();
+            for (int i = 0; i < Patterns.Length; i++)
+            {
+                var t = Template(i);
+                bool same = true;
+                for (int k = 0; k < cur.Length && same; k++) same = Math.Abs(Qz(t[k]) - Qz(cur[k])) < 1e-3;
+                if (same) return i;
+            }
+            return -1;
+        }
+        string PatternName() { int i = PatternIdx(); return i < 0 ? "Custom" : Patterns[i].Name; }
+        // A one-shot write of the whole grid (each changed step is its own automation gesture).
+        void WriteSteps(float[] a)
+        {
+            for (int k = 0; k < a.Length && k < kMaxSteps; k++)
+                if (Math.Abs(P(Step1 + k) - a[k]) > 1e-5) SetP(Step1 + k, a[k]);
+            RefreshAll();
+        }
+
+        var patBuf = new float[kMaxSteps];
+        ShPatternView? patView = null;
+        int patTool = 0;
+
+        // A slider drawn as a filled bar with its value inside (Complexity / Smooth / Swing).
+        Control FillBar(int p, Func<string> text, string tip)
+        {
+            var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, Background = NotaPalette.Wash(NotaPalette.Accent, 0x40) };
+            var tb = new TextBlock { FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var grid = new Grid { Children = { fill, tb } };
+            var host = new Border
+            {
+                Height = 18, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                ClipToBounds = true, Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = grid,
+            };
+            bool drag = false;
+            void Paint()
+            {
+                double v = P(p);
+                fill.Width = Math.Max(0, grid.Bounds.Width * v);
+                tb.Text = text();
+                host.BorderBrush = v > 0.004 ? NotaPalette.BorderBrass : BorderDef;
+                tb.Foreground = v > 0.004 ? AccentBright : TextSecondary;
+            }
+            void SetX(double x) { Raw(p, x / Math.Max(1, grid.Bounds.Width)); Paint(); RefreshAll(); }
+            host.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
+                if (e.ClickCount == 2) { Reset(p); Paint(); RefreshAll(); e.Handled = true; return; }
+                drag = true; Begin(p); e.Pointer.Capture(host); SetX(e.GetPosition(grid).X); e.Handled = true;
+            };
+            host.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(grid).X); };
+            host.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); End(p); };
+            grid.SizeChanged += (_, _) => Paint();
+            readouts.Add(() => { if (!drag) Paint(); });
+            Learn(host, p);
+            ToolTip.SetTip(host, tip);
+            return host;
+        }
+
+        // A plain push button (fills its cell).
+        Border Button(string text, Action click, string tip, Func<bool>? enabled = null)
+        {
+            var tb = new TextBlock { Text = text, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border
+            {
+                Height = 18, Padding = new Thickness(8, 0), Background = Raised, CornerRadius = NotaRadius.Badge,
+                Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
+            };
+            b.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed || enabled?.Invoke() == false) return;
+                click(); RefreshAll(); e.Handled = true;
+            };
+            readouts.Add(() => tb.Foreground = enabled?.Invoke() == false ? TextDisabled : TextPrimary);
+            ToolTip.SetTip(b, tip);
+            return b;
+        }
+
+        void Randomize()
+        {
+            double c = P(PatComplexity);
+            int n = NSteps();
+            var a = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                bool on = i == 0 || Rng.NextDouble() < 0.35 + c * 0.45;
+                a[i] = !on ? 0 : Qz(c < 0.3 ? 1 : Math.Clamp(1 - Rng.NextDouble() * c * 0.9, 0.125, 1));
+            }
+            WriteSteps(a);
+        }
+        void StepPattern(int dir)
+        {
+            int cur = PatternIdx();
+            int i = ((cur < 0 ? 0 : cur + dir) % Patterns.Length + Patterns.Length) % Patterns.Length;
+            WriteSteps(Array.ConvertAll(Template(i), v => Qz(v)));
+        }
+
+        Control PatternTab()
+        {
+            patView = new ShPatternView { Tool = patTool };
+            var touched = new HashSet<int>();
+            patView.StepsChanged += a =>
+            {
+                for (int k = 0; k < a.Length; k++)
+                {
+                    if (Math.Abs(P(Step1 + k) - a[k]) < 1e-5) continue;
+                    if (touched.Add(k)) Begin(Step1 + k);
+                    Raw(Step1 + k, a[k]);
+                }
+                RefreshAll();
+            };
+            patView.GestureEnd += () => { foreach (int k in touched) End(Step1 + k); touched.Clear(); };
+            ToolTip.SetTip(patView, "The step pattern — each column is one step's level, the line is the gain it makes (smooth and swing bend it). Draw sets steps, Line draws a ramp, Erase clears, Flip toggles on / off.");
+
+            var tools = Segments(new[] { "Draw", "Line", "Erase", "Flip" }, () => patTool, i => { patTool = i; if (patView is not null) patView.Tool = i; }, out var toolSync, padX: 6);
+            readouts.Add(toolSync);
+            ToolTip.SetTip(tools, "Mouse tool for the grid");
+
+            Border Arrow(GlyphKind kind, int dir)
+            {
+                var b = new Border { Width = 18, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = new Glyph(kind, 7) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; StepPattern(dir); e.Handled = true; };
+                return b;
+            }
+            var pname = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            readouts.Add(() => pname.Text = PatternName());
+            var browser = new Border
+            {
+                Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Child = new DockPanel { Children = { Docked(Arrow(GlyphKind.ChevronLeft, -1), Dock.Left), Docked(Arrow(GlyphKind.ChevronRight, 1), Dock.Right), pname } },
+            };
+            ToolTip.SetTip(browser, "Pattern shapes — the arrows step through them (fitted to the grid)");
+            var rnd = Button("Rnd", Randomize, "Roll a new pattern — Complexity sets how busy and how varied it is");
+            var cx = FillBar(PatComplexity, () => "Complexity " + Pct(P(PatComplexity)), "Complexity — how busy and varied Rnd makes the pattern");
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,110"), ColumnSpacing = 5, Height = 20 };
+            head.Children.Add(tools); head.Children.Add(Col(browser, 1)); head.Children.Add(Col(rnd, 2)); head.Children.Add(Col(cx, 3));
+
+            var smooth = FillBar(PatSmooth, () => "Smooth " + Pct(P(PatSmooth)), "Smooth — ramps into each step instead of jumping (up to half a step)");
+            var swing = FillBar(PatSwing, () => NotaNum.F($"Swing {P(PatSwing) * 75:0} %"), "Swing — every second step comes late");
+            var nSt = Mono("", 9, AccentBright); var nLv = Mono("", 9, AccentBright);
+            readouts.Add(() => { nSt.Text = NSteps().ToString(); nLv.Text = NLevels().ToString(); });
+            Border Cycle(TextBlock t, Action a, string tip)
+            {
+                var b = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+                b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; a(); RefreshAll(); e.Handled = true; };
+                ToolTip.SetTip(b, tip);
+                return b;
+            }
+            var gridSize = new Border
+            {
+                Height = 18, Padding = new Thickness(6, 0), Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Child = Row(4, Caps("GRID"),
+                    Cycle(nSt, () =>
+                    {
+                        var cur = StepsNow();
+                        int si = (Sel(PatSteps, 3) + 1) % 3;
+                        var next = Resample(cur, StepCounts[si]);
+                        SetP(PatSteps, si / 2f);
+                        WriteSteps(next);
+                    }, "Steps — 8, 16 or 32 (the pattern is stretched to fit)"),
+                    Mono("×", 8, TextTertiary),
+                    Cycle(nLv, () =>
+                    {
+                        var cur = StepsNow();
+                        SetP(PatLevels, (Sel(PatLevels, 3) + 1) % 3 / 2f);
+                        WriteSteps(Array.ConvertAll(cur, v => Qz(v)));
+                    }, "Levels — 4, 8 or 16 heights a step snaps to")),
+            };
+            var target = Seg(PatTarget, new[] { "Off", "Volume", "Map" },
+                "Target — Off; Volume: the pattern gates the audio; Map: the audio is left alone and the pattern drives Pattern Out, a CV source in the Modular view");
+            var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,Auto,Auto"), ColumnSpacing = 5, Height = 20 };
+            foot.Children.Add(smooth); foot.Children.Add(Col(swing, 1)); foot.Children.Add(Col(gridSize, 2)); foot.Children.Add(Col(target, 3));
+
+            return new DockPanel
+            {
+                LastChildFill = true, Margin = new Thickness(8, 5, 8, 5),
+                Children = { Docked(head, Dock.Top), Docked(foot, Dock.Bottom), new Border { Margin = new Thickness(0, 5), Child = patView } },
+            };
+        }
+
+        Control RhythmTab()
+        {
+            var rate = K(PatRate, "RATE", _ => RateName(), steps: 5, size: 40, tip: "Rate — how long the whole pattern takes: 1/4 … 4 bars in Sync, 4 … 0.25\u2009Hz in Free");
+            var depth = K(PatDepth, "DEPTH", v => Pct((float)v), Teal, size: 40, tip: "Depth — how far an empty step turns the signal down");
+            var knobs = new UniformGrid { Columns = 2, Children = { rate, depth } };
+            var clock = Segments(new[] { "Sync", "Free" }, () => On(PatSync) ? 0 : 1, i => { SetP(PatSync, i == 0 ? 1f : 0f); RefreshAll(); }, out var clockSync, fill: true);
+            readouts.Add(clockSync);
+            Learn(clock, PatSync);
+            ToolTip.SetTip(clock, "Clock — Sync locks the pattern to the song's bars, Free runs it in Hz");
+            var clockRow = LabelRow("CLOCK", clock);
+            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
+            btns.Children.Add(Button("Copy", () => _clipboard = StepsNow(), "Copy the steps"));
+            btns.Children.Add(Col(Button("Paste", () => { if (_clipboard is { } c) WriteSteps(Array.ConvertAll(Resample(c, NSteps()), v => Qz(v))); }, "Paste copied steps (fitted to the grid)", () => _clipboard is not null), 1));
+            btns.Children.Add(Col(Button("Clear", () => WriteSteps(new float[NSteps()]), "Clear every step"), 2));
+            return Spread(
+                knobs,
+                clockRow,
+                btns,
+                new StackPanel { Spacing = 5, Children = {
+                    Toggle(PatRetrig, "Retrig on MIDI note", "Retrig — every MIDI note on this track (or the key track) restarts the pattern"),
+                    Toggle(PatGated, "Only while gate open", "Gated — the pattern plays only while the threshold gate is open (gate × pattern)") } });
+        }
+
+        // ======================================================================
         // RIGHT — Detector / Meters
         // ======================================================================
         static Control LabelRow(string label, Control c, double labW = 40)
@@ -561,8 +802,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         int centreTab = 0;
         var centreHost = new ContentControl();
         var rightHost = new ContentControl();
-        var centreBodies = new Control?[3];
+        var rhythmHost = new ContentControl();
+        var centreBodies = new Control?[4];
         var rightBodies = new Control?[2];
+        var rhythmBodies = new Control?[2];
         var extras = Mono("", 7, TextTertiary);
         var extrasHost = new Border { Background = Brushes.Transparent, Child = extras, VerticalAlignment = VerticalAlignment.Stretch };
         extrasHost.PointerPressed += (_, e) =>
@@ -577,17 +820,26 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             {
                 1 => NotaNum.F($"one opening · {MsN(AtkMs() + HoldMs() + RelMs())}\u2009ms"),
                 2 => NotaNum.F($"key: {KeyName()} · {(On(DetFilter) ? "filter " + HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "full band")}"),
+                3 => NotaNum.F($"step {(int)Sc(kPatAt + P_Step) + 1}/{NSteps()} · {(On(PatSync) ? $"{Sc(S_Bpm):0} BPM" : RateFree[RateIdx()])}"),
                 _ => NotaNum.F($"window {WindowText()} · look {LookMs()}\u2009ms"),
             };
             extrasHost.Cursor = centreTab == 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         });
         ToolTip.SetTip(extrasHost, "Signal tab: click to change the window — " + string.Join(" · ", WindowNames));
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => SidechainTab(), _ => SignalTab() };
+        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => SidechainTab(), 3 => PatternTab(), _ => SignalTab() };
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? MetersTab() : DetectorTab();
+        Control RhythmBody(int t) => rhythmBodies[t] ??= t == 1 ? DetectorTab() : RhythmTab();
 
-        var centre = TabFrame(new[] { "Signal", "Envelope", "Sidechain" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extrasHost);
+        // The right panel follows the centre: Rhythm / Detector beside the pattern, else Detector / Meters.
         var rightFrame = TabFrame(new[] { "Detector", "Meters" }, rightHost, RightBody, true, _ => RefreshAll(), null);
+        Control? rhythmFrame = null;
         var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var centre = TabFrame(new[] { "Signal", "Envelope", "Sidechain", "Pattern" }, centreHost, CentreBody, false, t =>
+        {
+            centreTab = t;
+            right.Child = t == 3 ? rhythmFrame ??= TabFrame(new[] { "Rhythm", "Detector" }, rhythmHost, RhythmBody, true, _ => RefreshAll(), null) : rightFrame;
+            Refresh();
+        }, extrasHost);
         DockPanel.SetDock(right, Dock.Right);
         var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
 
@@ -600,6 +852,16 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             string floor = P(Floor) <= 0.001f ? "−∞" : NotaNum.F($"{FloorDb():0.0}\u2009dB");
             var parts = new List<string> { Duck() ? "Duck" : "Gate" };
+            if (centreTab == 3)
+            {
+                int tg = Sel(PatTarget, 3);
+                return string.Join(" · ", new[]
+                {
+                    tg == 0 ? "Pattern off" : "Pattern", PatternName(), RateName(), NotaNum.F($"{NSteps()} × {NLevels()}"),
+                    "smooth " + Pct(P(PatSmooth)), "swing " + NotaNum.F($"{P(PatSwing) * 75:0}\u2009%"), "depth " + Pct(P(PatDepth)),
+                }) + (tg == 0 ? "" : tg == 2 ? " → Map (Pattern Out)" : On(PatGated) ? " → Volume · gated" : " → Volume")
+                  + (On(PatRetrig) ? " · MIDI retrig" : "");
+            }
             switch (centreTab)
             {
                 case 1:
@@ -656,6 +918,16 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             if (centreTab == 1 && envView is not null)
                 envView.Set(AtkMs(), HoldMs(), RelMs(), FloorLin(), Sel(Shape, 3), Duck(), On(Retrigger),
                     P(Floor) <= 0.001f ? "−∞\u2009dB" : NotaNum.F($"{FloorDb():0.0}\u2009dB"), MsN(AtkMs()), MsN(HoldMs()), MsF(RelMs()));
+            if (centreTab == 3 && patView is not null)
+            {
+                int ns = NSteps();
+                for (int k = 0; k < ns; k++) patBuf[k] = P(Step1 + k);
+                int tg = Sel(PatTarget, 3);
+                bool on = tg > 0 && scN >= kScope;
+                patView.Set(patBuf, ns, NLevels(), on ? (int)Sc(kPatAt + P_Step) : -1, on ? Sc(kPatAt + P_Phase) : -1,
+                    P(PatSmooth), P(PatSwing) * 0.375, P(PatDepth), tg == 2, tg > 0,
+                    tg == 2 ? "Map → Pattern Out" : tg == 1 ? "gain" : "off");
+            }
             if (centreTab == 2 && keyView is not null)
                 keyView.Set(Exp(P(DetHP), 20, 2000), Exp(P(DetLP), 200, 20000), On(DetFilter), h, H_Gate, n, Duck() ? "duck" : "reduction");
             RefreshAll();

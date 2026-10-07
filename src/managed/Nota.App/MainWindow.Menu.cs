@@ -95,6 +95,23 @@ public partial class MainWindow
         else _vm.StatusText = "Select a clip first.";
     }
 
+    // ⌘⇧D Duplicate Time / ⌘⇧I Insert Silence: whole-arrangement time ops on the time selection.
+    private void OnMenuDuplicateTime(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = "Select a time range first."; return; }
+        if (Timeline.DuplicateTimeInsert()) { _session?.Refresh(); _vm.StatusText = "Duplicated time"; }
+        else _vm.StatusText = "Nothing to duplicate in the selected range.";
+    }
+
+    private void OnMenuInsertSilence(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = "Select a time range first."; return; }
+        if (Timeline.InsertSilenceAtTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Inserted silence"; }
+        else _vm.StatusText = "Nothing after the selection to move.";
+    }
+
     private void OnMenuSplit(object? sender, EventArgs e)
     {
         if (_vm is null) return;
@@ -151,6 +168,18 @@ public partial class MainWindow
         if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = "Pasted track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = "Pasted notes"; return; }
         if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip"; }
+    }
+    // ⌘⇧C: the Arrangement's selected clips go to session slots, the Session view's selected
+    // slot / scene goes onto the timeline at the playhead — whichever view is on screen.
+    private void OnMenuCopyToOtherView(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (_session?.IsVisible == true)
+        {
+            if (!_session.CopySelectionToArrangement()) _vm.StatusText = "Select a clip or a scene to copy to the arrangement.";
+        }
+        else if (Timeline.IsVisible && Timeline.CopySelectionToSession() < 0)
+            _vm.StatusText = "Select clips to copy to the session.";
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {

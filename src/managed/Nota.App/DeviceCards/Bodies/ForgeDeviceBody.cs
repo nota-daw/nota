@@ -132,6 +132,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             var val = Mono("", 8, TextPrimary);
             val.TextAlignment = TextAlignment.Right;
             val.HorizontalAlignment = HorizontalAlignment.Right;
+            ValueEntry.Attach(val, () => P(param()), v => Raw(param(), v), () => fmt(P(param())), () => Begin(param()), () => End(param()), Refresh);
             static ColumnDefinition Fixed(double w) => new(w > 0 ? new GridLength(w) : GridLength.Auto);
             var g = new Grid { ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
             g.ColumnDefinitions.Add(Fixed(labelW));

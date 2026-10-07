@@ -537,6 +537,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             track.GestureBegin += () => Begin(p);
             track.GestureEnd += () => { End(p); Edited(); };
             Learn(track, p, label);
+            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Edited);
             readouts.Add(() =>
             {
                 double v = G(p);

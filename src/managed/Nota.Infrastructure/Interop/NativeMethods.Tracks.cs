@@ -192,6 +192,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clips_block_paste")]
     internal static partial int ClipsBlockPaste(IntPtr engine, double atBeat, int destTrackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clips_to_session")]
+    internal static partial int ClipsToSession(IntPtr engine, [In] int[] trackIds, [In] int[] clipIndices, int count, int startScene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clips_block_paste_to_session")]
+    internal static partial int ClipsBlockPasteToSession(IntPtr engine, int destTrackId, int startScene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_slots_to_arrangement")]
+    internal static partial int SessionSlotsToArrangement(IntPtr engine, [In] int[] trackIds, [In] int[] scenes, int count, double atBeat, int destTrackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_clips_block_duplicate")]
     internal static partial double ClipsBlockDuplicate(IntPtr engine, [In] int[] trackIds, [In] int[] clipIndices, int count);
 
@@ -203,6 +212,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_clips_duplicate_range")]
     internal static partial double ClipsDuplicateRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
+
+    [LibraryImport(Lib, EntryPoint = "nota_arrangement_insert_time")]
+    internal static partial NotaResult ArrangementInsertTime(IntPtr engine, double at, double len, int duplicate);
 
     [LibraryImport(Lib, EntryPoint = "nota_clips_split_range")]
     internal static partial NotaResult ClipsSplitRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);

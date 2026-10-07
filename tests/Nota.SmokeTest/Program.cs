@@ -5186,7 +5186,10 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gd >= 0, "add built-in Nota Shutter");
         Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
         Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
-        Check(ge.DeviceParamCount(gt, gd) == 16, $"Nota Shutter exposes 16 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamCount(gt, gd) == 60, $"Nota Shutter exposes 60 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamName(gt, gd, 16) == "Pattern Target" && ge.DeviceParamName(gt, gd, 27) == "Pattern Out"
+              && ge.DeviceParamName(gt, gd, 28) == "Step 1" && ge.DeviceParamName(gt, gd, 59) == "Step 32", "Shutter appends the Pattern params and Step 1..32");
+        Check(ge.DeviceParamDefault(gt, gd, 16) < 0.01f, "Pattern is off by default (the gate sounds as before)");
         string[] appended = { "Shape", "Retrigger", "Det Filter", "Peak Hold", "External Key" };
         bool namesOk = true;
         for (int k = 0; k < appended.Length; k++) namesOk &= ge.DeviceParamName(gt, gd, 11 + k) == appended[k];
@@ -5319,6 +5322,62 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gsc[TExtKey] < 0.5f && unkeyed > toneOpen * 0.95f, $"External Key off keys off the track itself ({unkeyed:F4})");
         ge.DeviceSetParam(tt, td, SExtKey, 1f);
         ge.SetDeviceSidechainSource(tt, td, -1);
+
+        // Pattern (rhythmic gate) on the held tone, the burst track still shut. Steps on / off in
+        // turn at full depth keep about half the energy (RMS ≈ 1/√2); all-off steps at depth 0.5
+        // halve the level; Map leaves the audio alone and moves Pattern Out instead.
+        {
+            const int PTarget = 16, PDepth = 18, PSmooth = 20, POut = 27, PStep1 = 28, PatAt = 24 + 3 * 128;
+            ge.DeviceSetParam(tt, td, SLook, 0f);
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, k % 2 == 0 ? 1f : 0f);
+            ge.DeviceSetParam(tt, td, PTarget, 0.5f);
+            float alt = RunTone();
+            Check(fin && alt > toneOpen * 0.55f && alt < toneOpen * 0.85f, $"Pattern Volume: alternate steps keep ≈ 1/√2 ({alt / toneOpen:0.00})");
+            var psc = new float[PatAt + 8];
+            Check(ge.DeviceScope(tt, td, psc, psc.Length) == psc.Length, $"Shutter scope carries the pattern block ({psc.Length} values)");
+            Check(psc[PatAt + 4] == 1 && psc[PatAt + 5] == 16 && psc[PatAt + 1] >= 0 && psc[PatAt + 1] < 16 && psc[PatAt] >= 0 && psc[PatAt] < 1,
+                  $"pattern telemetry: target Volume, 16 steps, step {psc[PatAt + 1]:0}, phase {psc[PatAt]:0.00}");
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, 0f);
+            ge.DeviceSetParam(tt, td, PDepth, 0.5f);
+            float half = RunTone();
+            Check(half > toneOpen * 0.42f && half < toneOpen * 0.58f, $"Pattern Depth 50 % on empty steps halves the level ({half / toneOpen:0.00})");
+            ge.DeviceSetParam(tt, td, PDepth, 1f);
+            ge.DeviceSetParam(tt, td, PSmooth, 1f);
+            for (int k = 0; k < 32; k++) ge.DeviceSetParam(tt, td, PStep1 + k, k % 2 == 0 ? 1f : 0f);
+            Check(RunTone() > 0.01f && fin, "Pattern Smooth renders finite and audible");
+            ge.DeviceSetParam(tt, td, PSmooth, 0f);
+            string ptxt = ge.DeviceText(tt, td, 0);
+            Check(ptxt.Contains("PATTERN volume") && ptxt.Contains("[#.#."), $"device text shows the pattern ('{ptxt}')");
+
+            // Map: the audio passes, Pattern Out follows the steps (a CV source).
+            ge.DeviceSetParam(tt, td, PTarget, 1f);
+            float lo = 1, hi = 0; double acc = 0; long nfr = 0;
+            ge.Seek(0); ge.Play();
+            for (int k = 0; k < 40; k++)
+            {
+                ge.RenderOffline(tb, 1024);
+                foreach (var v in tb) acc += v * v; nfr += tb.Length;
+                float o = ge.DeviceGetParam(tt, td, POut); lo = Math.Min(lo, o); hi = Math.Max(hi, o);
+            }
+            ge.StopTransport();
+            float mapRms = (float)Math.Sqrt(acc / nfr);
+            Check(lo < 0.05f && hi > 0.95f, $"Map drives Pattern Out through the steps ({lo:0.00}..{hi:0.00})");
+            Check(mapRms > toneOpen * 0.9f, $"Map leaves the audio alone ({mapRms / toneOpen:0.00})");
+
+            // Steps automate like any param and clone with the track.
+            int stLane = ge.AddAutomationLane(tt, AutomationTarget.DeviceParam, td, PStep1 + 3);
+            Check(stLane >= 0, "add a Shutter Step 4 automation lane");
+            ge.SetAutomationPoints(tt, stLane, new[] { new AutomationPoint(0.0, 0.75f), new AutomationPoint(8.0, 0.75f) });
+            ge.Seek(1.0); ge.Play(); ge.RenderOffline(tb, 1024); ge.StopTransport();
+            Check(Math.Abs(ge.DeviceGetParam(tt, td, PStep1 + 3) - 0.75f) < 0.01f, $"automation drives Shutter Step 4 ({ge.DeviceGetParam(tt, td, PStep1 + 3):F2})");
+            ge.RemoveAutomationLane(tt, stLane);
+            int ttD = ge.DuplicateTrack(tt); int tdD = ge.TrackDeviceCount(ttD) - 1;
+            Check(ttD > 0 && ge.DeviceGetParam(ttD, tdD, PTarget) > 0.99f && Math.Abs(ge.DeviceGetParam(ttD, tdD, PStep1 + 2) - 1f) < 1e-3
+                  && ge.DeviceGetParam(ttD, tdD, PStep1 + 1) < 1e-3, "duplicate track clones the Shutter pattern");
+            ge.RemoveTrack(ttD);
+            ge.DeviceSetParam(tt, td, PTarget, 0f);
+            ge.DeviceSetParam(tt, td, SLook, 0.5f);
+        }
         ge.DeviceSetParam(gt, gd, SThreshold, 0.457f);
 
         // Clone: duplicating the track carries the params, the appended ones too.
@@ -5345,7 +5404,9 @@ Console.WriteLine("-- Nota Shutter --");
             for (int k = 0; k < ge.DeviceParamCount(gt, gd); k++) names.Add(ge.DeviceParamName(gt, gd, k));
             var cat = new FactoryPresetCatalog();
             var mine = cat.All().Where(p => !p.IsInstrument && !p.IsMidiEffect && p.BuiltinKind == 19).ToList();
-            Check(mine.Count >= 25, $"Nota Shutter ships ≥ 25 factory presets ({mine.Count})");
+            Check(mine.Count >= 40, $"Nota Shutter ships ≥ 40 factory presets ({mine.Count})");
+            Check(mine.Count(p => p.Id.StartsWith("shutter/") && cat.Document(p.Id)!.NamedParams!.ContainsKey("Pattern Target")) == 15,
+                  "Nota Shutter ships 15 pattern presets");
             var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !names.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
             Check(bad.Count == 0, $"every Shutter preset param name exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
             int pf = 0;
@@ -5363,6 +5424,11 @@ Console.WriteLine("-- Nota Shutter --");
             cat.ApplyInPlace(ge, "shutter/Init", gt, gd);
             Check(Math.Abs(ge.DeviceGetParam(gt, gd, SShape) - 0.5f) < 1e-4 && ge.DeviceGetParam(gt, gd, SPeakHold) < 0.5f && ge.DeviceGetParam(gt, gd, SFloor) < 0.001f,
                   "Init preset resets the leftovers to the defaults");
+            cat.ApplyInPlace(ge, "shutter/Slow Pad Gate", gt, gd);
+            Check(Math.Abs(ge.DeviceGetParam(gt, gd, 16) - 0.5f) < 1e-4 && ge.DeviceGetParam(gt, gd, 22) < 0.01f && ge.DeviceGetParam(gt, gd, 17) > 0.99f
+                  && Math.Abs(ge.DeviceGetParam(gt, gd, 30) - 0.75f) < 1e-4, "Slow Pad Gate preset: Volume pattern, 8 steps, 4 bars");
+            cat.ApplyInPlace(ge, "shutter/Init", gt, gd);
+            Check(ge.DeviceGetParam(gt, gd, 16) < 0.01f, "Init turns the pattern off again");
         }
     }
     finally
@@ -8078,6 +8144,56 @@ engine.StopTransport();
     e.Seek(0); e.RenderOffline(buf, frames);
     Check(Rms(buf, frames) > 0.001f, $"copied audio session slot plays (rms={Rms(buf, frames):F4})");
     e.StopAllSession(); e.StopTransport();
+}
+
+// -- Arrangement <-> Session: whole selections and the cross-view clipboard --
+{
+    Console.WriteLine("-- arrangement <-> session: selections --");
+    using var e = new NotaEngine();
+    e.SetBpm(120);
+    int ma = e.AddInstrumentTrack(), mb = e.AddInstrumentTrack(), au = e.AddAudioTrack();
+    int a0 = e.AddMidiClip(ma, 0.0, 4.0), a1 = e.AddMidiClip(ma, 8.0, 2.0), b0 = e.AddMidiClip(mb, 4.0, 4.0);
+    e.SetClipNotes(ma, a1, new[] { new NotaNote(62, 0.5, 1.0, 0.8f) });
+    e.SetClipName(ma, a1, "Hook");
+    int ac = e.AddAudioClip(au, wav, 0.0);
+    int scenes = e.SceneCount;
+    var sel = new[] { (ma, a1), (ma, a0), (mb, b0), (au, ac) };
+
+    int row = e.ArrangementClipsToSession(sel);
+    Check(row == 0 && e.SessionSlotState(ma, 0) == 1 && e.SessionSlotState(ma, 1) == 1
+        && e.SessionSlotState(mb, 0) == 1 && e.SessionSlotState(au, 0) == 1 && e.SessionSlotState(mb, 1) == 0,
+        "a selection lands in one scene row, each track's clips down its column");
+    Check(e.GetSessionNotes(ma, 1).Length == 1 && e.GetSessionClipName(ma, 1) == "Hook"
+        && Math.Abs(e.SessionSlotLength(ma, 1) - 2.0) < 1e-9, "clips fill slots in time order with notes, name and length");
+
+    int row2 = e.ArrangementClipsToSession(sel);
+    Check(row2 == 2, $"the next copy takes the first row where it all fits (row={row2})");
+    e.Undo();
+    Check(e.SessionSlotState(ma, 2) == 0 && e.SessionSlotState(au, 2) == 0 && e.SessionSlotState(ma, 0) == 1,
+        "a selection copy is one undo step");
+
+    int far = e.ArrangementClipsToSession(new[] { (ma, a0), (ma, a1) }, scenes - 1);
+    Check(far == scenes - 1 && e.SceneCount == scenes + 1 && e.SessionSlotState(ma, scenes) == 1,
+        "copying past the last scene appends rows");
+
+    Check(e.CutClipBlock(new[] { (mb, b0) }), "cut an arrangement clip");
+    Check(e.PasteClipBlockToSession(ma, 3) == 3 && e.SessionSlotState(ma, 3) == 1,
+        "a cut arrangement clip pastes into a session slot (remapped onto the chosen track)");
+    Check(e.PasteClipBlockToSession(au, 3) == -1 && e.SessionSlotState(au, 3) == 0,
+        "MIDI does not paste onto an audio track");
+
+    int placed = e.SessionSlotsToArrangement(new[] { (ma, 0), (mb, 0), (au, 0) }, 0.0);
+    var pl = e.LastPlacedClips();
+    var starts = pl.Select(p => e.TryGetClipInfo(p.trackId, p.clipIndex, out var ci) ? ci.StartBeat : -1).ToArray();
+    Check(placed == 3 && starts.All(x => Math.Abs(x - starts[0]) < 1e-9) && starts[0] >= 4.0 - 1e-9,
+        $"a scene lands on the timeline together, after the clips it would cover (at {starts.FirstOrDefault()})");
+    var maPlaced = pl.First(p => p.trackId == ma);
+    Check(e.GetClipNotes(ma, maPlaced.clipIndex).Length == e.GetSessionNotes(ma, 0).Length, "slot -> arrangement carries the notes");
+
+    Check(e.SessionSlotsToArrangement(new[] { (ma, 1), (ma, 0) }, 100.0) == 2, "two slots of one track copied");
+    var seq = e.LastPlacedClips().Select(p => e.TryGetClipInfo(p.trackId, p.clipIndex, out var ci) ? ci.StartBeat : -1).ToArray();
+    Check(seq.Length == 2 && Math.Abs(seq[0] - 100) < 1e-9 && Math.Abs(seq[1] - 104) < 1e-9,
+        $"one track's slots land back to back in scene order ({string.Join(", ", seq)})");
 }
 
 // -- Session audio slot gain (slot editor) --
@@ -11908,6 +12024,75 @@ Console.WriteLine("-- consolidate --");
         e.AddMidiClip(t, 0.0, 2.0);
         Check(!e.ConsolidateRange(new[] { t }, 4.0, 8.0), "consolidate over empty space is a no-op");
         Check(e.TryGetTrackInfo(FindTrackIndex(e, t), out var ti) && ti.ClipCount == 1, "no-op consolidate leaves the clip alone");
+    }
+}
+
+// ============ insert time (⌘⇧I Insert Silence / ⌘⇧D Duplicate Time) ========
+Console.WriteLine("-- insert time --");
+{
+    const double eps = 1e-6;
+    static Nota.Application.NotaNote N(int p, double s, double l) => new(p, s, l, 0.8f);
+    static Nota.Application.AutomationPoint P(double b, float v) => new(b, v);
+
+    // Insert Silence: a clip crossing the point is cut, later clips and automation (all
+    // tracks, master included) move right; the gap holds the lane's value. One undo step.
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int a = e.AddInstrumentTrack();
+        int b = e.AddInstrumentTrack();
+        int ca = e.AddMidiClip(a, 0.0, 8.0);
+        e.SetClipNotes(a, ca, new[] { N(60, 1, 1), N(62, 5, 1) });
+        e.AddMidiClip(b, 8.0, 4.0);
+        int lane = e.AddAutomationLane(b, AutomationTarget.Volume, -1, -1);
+        e.SetAutomationPoints(b, lane, new[] { P(0, 0.2f), P(8, 1.0f) });
+        e.SetMasterVolumeAutomation(new[] { P(0, 0.5f), P(8, 1.0f) });
+        Check(e.InsertTime(4.0, 2.0, duplicate: false), "insert silence returns true");
+        Check(e.TryGetTrackInfo(FindTrackIndex(e, a), out var ta) && ta.ClipCount == 2, "silence: crossing clip cut in two");
+        var clipsA = Enumerable.Range(0, 2).Select(i => { e.TryGetClipInfo(a, i, out var ci); return (ci, i); }).OrderBy(x => x.ci.StartBeat).ToArray();
+        Check(Math.Abs(clipsA[0].ci.LengthBeats - 4.0) < eps && Math.Abs(clipsA[1].ci.StartBeat - 6.0) < eps,
+              "silence: left half stays at [0,4), right half moved to 6");
+        var right = e.GetClipNotes(a, clipsA[1].i);
+        Check(right.Length == 1 && right[0].Pitch == 62 && Math.Abs(right[0].StartBeat - 1.0) < eps, "silence: right half keeps its note");
+        Check(e.TryGetClipInfo(b, 0, out var cb) && Math.Abs(cb.StartBeat - 10.0) < eps, "silence: other track's clip moved 8 -> 10");
+        var pts = e.GetAutomationPoints(b, lane);
+        Check(pts.Length == 4 && Math.Abs(pts[1].Beat - 4) < eps && Math.Abs(pts[2].Beat - 6) < eps && Math.Abs(pts[1].Value - pts[2].Value) < 1e-5
+              && Math.Abs(pts[3].Beat - 10) < eps, "silence: automation holds over the gap and shifts after it");
+        var mv = e.GetMasterVolumeAutomation();
+        Check(mv.Length > 0 && Math.Abs(mv[^1].Beat - 10) < eps, "silence: master volume automation shifted");
+        Check(e.Undo() && e.TryGetTrackInfo(FindTrackIndex(e, a), out var tu) && tu.ClipCount == 1
+              && e.TryGetClipInfo(b, 0, out var cbu) && Math.Abs(cbu.StartBeat - 8.0) < eps, "silence: one undo restores everything");
+        Check(!e.InsertTime(20.0, 2.0, duplicate: false), "silence past the end is a no-op");
+    }
+
+    // Duplicate Time: the range [2,4) is copied into a new gap at 4; content after 4 moves
+    // right by 2, and the automation curve is copied into the gap.
+    {
+        using var e = new NotaEngine();
+        int a = e.AddInstrumentTrack();
+        int ca = e.AddMidiClip(a, 0.0, 6.0);
+        e.SetClipNotes(a, ca, new[] { N(60, 2.5, 0.5), N(64, 4.5, 0.5) });
+        int lane = e.AddAutomationLane(a, AutomationTarget.Volume, -1, -1);
+        e.SetAutomationPoints(a, lane, new[] { P(2, 0.0f), P(4, 1.0f) });
+        Check(e.InsertTime(4.0, 2.0, duplicate: true), "duplicate time returns true");
+        var dupNotes = Enumerable.Range(0, e.TryGetTrackInfo(FindTrackIndex(e, a), out var ti) ? ti.ClipCount : 0)
+            .SelectMany(i => { e.TryGetClipInfo(a, i, out var ci); return e.GetClipNotes(a, i).Select(n => (n.Pitch, at: ci.StartBeat + n.StartBeat)); })
+            .OrderBy(n => n.at).ToArray();
+        Check(dupNotes.Length == 3 && dupNotes[0].Pitch == 60 && Math.Abs(dupNotes[1].at - 4.5) < eps && dupNotes[1].Pitch == 60
+              && dupNotes[2].Pitch == 64 && Math.Abs(dupNotes[2].at - 6.5) < eps, "duplicate: copy at 4.5, later note pushed to 6.5");
+        var pts = e.GetAutomationPoints(a, lane);
+        float At(double beat)
+        {
+            if (beat <= pts[0].Beat) return pts[0].Value;
+            for (int i = 1; i < pts.Length; i++)
+                if (beat <= pts[i].Beat)
+                    return pts[i].Beat - pts[i - 1].Beat <= 0 ? pts[i].Value
+                         : (float)(pts[i - 1].Value + (pts[i].Value - pts[i - 1].Value) * (beat - pts[i - 1].Beat) / (pts[i].Beat - pts[i - 1].Beat));
+            return pts[^1].Value;
+        }
+        Check(Math.Abs(At(3.0) - 0.5f) < 1e-4 && Math.Abs(At(5.0) - 0.5f) < 1e-4 && Math.Abs(At(7.0) - 1.0f) < 1e-4,
+              "duplicate: automation ramp copied into the gap, the rest holds");
+        Check(!e.InsertTime(1.0, 2.0, duplicate: true), "duplicate with a range before 0 is rejected");
     }
 }
 

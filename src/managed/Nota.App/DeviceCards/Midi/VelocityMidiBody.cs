@@ -258,6 +258,8 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             dTrack.GestureEnd += () => { if (dGesture >= 0) End(dGesture); dGesture = -1; };
             ToolTip.SetTip(dTrack, "Drag up / down, Shift for fine, double-click resets");
             Learn(dTrack, PDrive, "Drive");
+            ValueEntry.Attach(dValue, DriveNorm, DriveSet, () => VelocityModel.DriveText(G),
+                () => { dGesture = DriveParam(); Begin(dGesture); }, () => { End(dGesture); dGesture = -1; }, Refresh);
             var dHint = new TextBlock { FontSize = 7, Foreground = Cap, TextTrimming = TextTrimming.CharacterEllipsis };
             readouts.Add(() =>
             {

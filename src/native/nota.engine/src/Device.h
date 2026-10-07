@@ -147,6 +147,9 @@ public:
     // events for the block (offsets within the block) right before process(). Audio thread.
     virtual bool wantsMidiKey() const { return false; }
     virtual void setMidiKey(const MidiEv* /*evs*/, int32_t /*n*/) {}
+    // With no sidechain source routed, a device that returns true here gets its own track's
+    // notes through setMidiKey instead (Nota Shutter's pattern retrigger).
+    virtual bool wantsOwnMidiKey() const { return false; }
 
     // Sidechain shaping (Phase D). Stored on the base so they
     // persist/query generically; each dynamics device reads them in process():

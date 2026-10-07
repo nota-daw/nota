@@ -18,7 +18,53 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.50.1] — 2026-10-07
+
+### Highlights
+- **Session View, rebuilt:** named, coloured clips with previews, an inspector, launch modes,
+  follow actions, scenes with their own tempo, Session recording and a full audio clip editor.
+- **Nota Remote:** scan a QR code and your phone plays Nota — pads, keys, XY pad with tilt,
+  mixer, macros and the Session grid, over Wi-Fi or a USB cable, with nothing to install.
+- **Arrangement ⇄ Session:** copy clips both ways with the clipboard or ⌘⇧C; drag audio clips
+  straight into a Sampler, Grain or Drum Rack pad.
+- **Nota Shutter gets a Pattern tab** — a tempo-synced, drawable rhythmic gate with 15 presets.
+- **Faster editing:** duplicate a time range (⌘⇧D), insert silence (⌘⇧I), a count-in before
+  playback and recording, and type exact values into any slider.
+- A cleaner main window, and Bluetooth headphones like AirPods no longer go silent on macOS.
+
 ### Added
+- **Duplicate time (⌘⇧D) and insert silence (⌘⇧I):** select a time range in the Arrangement
+  and ⌘⇧D inserts a copy of it right after itself, while ⌘⇧I opens an empty gap of the same
+  length at its start. Both act on the whole song: every track's clips and automation after
+  that point move right, and clips that cross it are cut. Press ⌘⇧D again to repeat the copy.
+  Both are also in the Edit menu and the right-click menu of the range. Import audio no longer
+  has a shortcut; use File ▸ Import audio.
+- **Audio clips into instruments:** drag an audio clip from the Arrangement onto the row of a
+  track with a Sampler, Nota Grain, Drum Rack or Instrument Rack and its audio loads there (a
+  Drum Rack takes it on the next free pad). Pull a clip out of the Arrangement and it becomes a
+  sample you can drop anywhere a sample goes — a Drum Rack pad, a Grain, a Rhythm voice, a
+  Session slot. Rest over an instrument track while dragging and its devices open, so a
+  specific pad is one move away. The clip stays where it was; the sample is the part of the
+  clip you hear.
+- **Nota Shutter · Pattern:** a fourth tab turns the gate into a rhythmic, tempo-synced
+  gate. Draw the steps (Draw, Line, Erase, Flip) on an 8, 16 or 32-step grid, flip through
+  pattern shapes or roll a new one with the dice and Complexity, and shape the gain with Smooth
+  and Swing. Rate runs from a quarter note to 4 bars in Sync (or 4 to 0.25 Hz in Free), Depth
+  sets how far an empty step drops, a MIDI note can restart the pattern, and Gated plays it only
+  while the threshold gate is open. Target Map leaves the audio alone and sends the pattern out
+  as a CV source for the Modular view. Every step and pattern setting can be automated, and 15
+  new pattern presets come with it.
+- **Clips between the Arrangement and Session:** copy MIDI and audio clips across with the
+  clipboard — ⌘C (or ⌘X) on the timeline, then ⌘V on a session slot, and the other way round.
+  **⌘⇧C** (and **Copy to Session** / **Copy to Arrangement** in the right-click menus and the
+  Edit menu) sends the selection straight across: arrangement clips land in the first scene
+  row where they all fit, each track's clips down its column in time order (or from a scene
+  you pick via **Copy to Scene**), adding scenes when needed; a session clip, group slot or
+  a whole scene lands on the timeline at the playhead without covering existing clips. Notes,
+  clip envelopes, names, warp, pitch and gain come along; each copy is one undo step.
+- **Type a slider's value:** double-click the number next to a slider in a device card,
+  the clip editor or a rack macro and type the value you want — "−6", "1.5k", "250 ms",
+  "L 30", "1/16". Return sets it, Esc cancels.
 - **Nota Remote — your phone as a controller:** the **Remote** button in the top bar (or
   **View → Connect Phone…**) shows a QR code; scan it with a phone and in five seconds the
   phone plays Nota — pads, keys with the project's scale and chords, an XY pad with tilt, the
@@ -65,8 +111,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   freezes never count in. The setting is remembered across sessions.
 
 ### Changed
-- **Import audio** moved to ⌘⇧I — ⌘I now inserts a scene in the Session view. Launch
-  quantize lives in the Session toolbar instead of the transport bar.
+- **Import audio** no longer has a shortcut (File ▸ Import audio) — ⌘I now inserts a scene
+  in the Session view. Launch quantize lives in the Session toolbar instead of the transport
+  bar.
 - **A cleaner main window.** The project's name now leads the transport bar. In the
   arrangement, tracks inside a group step their colour stripe in under it, so nesting reads
   at a glance; the Overview strip is slimmer and calmer (a thin line per track, a neutral
@@ -79,6 +126,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - A note pressed and released within a few milliseconds (a very quick tap, a fast MIDI roll)
   could keep ringing: its release was played ahead of its press.
+- **AirPods and other Bluetooth headphones are no longer silent** as Nota's output on
+  macOS. Nota used to force its sample rate onto the headphones, which broke their
+  Bluetooth stream (a moment of crackle, then silence, in every app). Nota now leaves the
+  rate of Bluetooth devices, and any rate a device doesn't list, alone and converts
+  instead.
 
 ## [0.43.1] — 2026-10-02
 

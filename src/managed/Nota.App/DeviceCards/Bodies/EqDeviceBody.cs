@@ -273,6 +273,8 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Learn(trk, p);
                 ToolTip.SetTip(trk, tip);
                 var val = Mono(fmt(), 8, TextPrimary); val.TextAlignment = TextAlignment.Right; val.HorizontalAlignment = HorizontalAlignment.Right;
+                ValueEntry.Attach(val, () => (P(p) - mn[p]) / (mx[p] - mn[p]), v => Raw(p, (float)(mn[p] + v * (mx[p] - mn[p]))), fmt,
+                    () => Begin(p), () => End(p), RefreshAll);
                 bandReadouts.Add(() =>
                 {
                     if (!trk.Dragging) trk.Norm = (P(p) - mn[p]) / (mx[p] - mn[p]);

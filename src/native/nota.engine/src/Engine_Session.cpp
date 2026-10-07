@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <map>
 #include <cmath>
 
 namespace nota {
@@ -377,11 +378,11 @@ int32_t Engine::sessionSlotToArrangement(int32_t trackId, int32_t scene, double 
         republishWithTrack(trackId, nt);
         return idx;
     }
-    MidiClip c;
+    MidiClip c    = s.midi;       // notes + clip envelopes, already relative to clip start
     c.name        = s.name;
     c.startBeat   = startBeat < 0.0 ? 0.0 : startBeat;
     c.lengthBeats = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
-    c.notes       = s.midi.notes; // slot notes are already relative to clip start
+    c.active      = true;
     nt->midiClips.push_back(c);
     const int32_t idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
     republishWithTrack(trackId, nt);
@@ -396,13 +397,7 @@ bool Engine::arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_
     auto nt = cloneTrack(*old);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
-    const MidiClip src = nt->midiClips[clipIndex]; // copy before mutating the track
-    SessionSlot& s = nt->sessionSlots[scene];
-    s.hasClip     = true;
-    s.lengthBeats = src.lengthBeats > 0 ? src.lengthBeats : 4.0;
-    s.midi        = src;
-    s.midi.startBeat = 0.0; // slot content is relative to slot start
-    s.name        = src.name;
+    nt->sessionSlots[scene] = slotFromMidiClip(old->midiClips[clipIndex]);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -416,19 +411,39 @@ bool Engine::arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, i
     auto nt = cloneTrack(*old);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
-    // The whole clip comes along — its region, warp, pitch, reverse, gain and envelopes —
-    // and the slot loops exactly what the clip plays.
-    SessionSlot& s = nt->sessionSlots[scene];
-    s.hasClip = true;
-    s.midi = MidiClip{};
-    s.audio = nt->clips[clipIndex];
-    s.audio.startBeat = 0.0;
-    s.audio.active = true;
-    s.name = s.audio.name;
-    s.lengthBeats = 4.0;
-    syncSessionAudioSlot(*nt, sessionClipIndex(scene));
+    nt->sessionSlots[scene] = slotFromAudioClip(old->clips[clipIndex]);
     republishWithTrack(trackId, nt);
     return true;
+}
+
+// A fresh slot looping one arrangement MIDI clip: its notes and clip envelopes, its name,
+// and its length as the loop.
+SessionSlot Engine::slotFromMidiClip(const MidiClip& m) const {
+    SessionSlot s;
+    s.hasClip = true;
+    s.midi = m;
+    s.midi.startBeat = 0.0;       // slot content is relative to slot start
+    s.midi.active = true;         // a slot has no deactivate; it would just stay silent
+    s.lengthBeats = m.lengthBeats > 0 ? m.lengthBeats : 4.0;
+    s.midi.lengthBeats = s.lengthBeats;
+    s.name = m.name;
+    return s;
+}
+
+// A fresh slot looping one arrangement audio clip. The whole clip comes along — its region,
+// warp, pitch, reverse, gain and envelopes — and the slot loops exactly what the clip plays.
+SessionSlot Engine::slotFromAudioClip(const AudioClip& a) {
+    SessionSlot s;
+    s.hasClip = true;
+    s.audio = a;
+    s.audio.startBeat = 0.0;
+    s.audio.active = true;
+    if (s.audio.warpEnabled && !s.audio.warpCache)   // a clipboard copy dropped its cache
+        configureClipWarp(s.audio, transport_.samplesPerBeat(), transport_.sampleRate());
+    s.name = a.name;
+    const double beats = audioClipBeats(s.audio);
+    s.lengthBeats = beats > 0.0 ? beats : 4.0;
+    return s;
 }
 
 bool Engine::addSessionMidiClip(int32_t trackId, int32_t scene, double lengthBeats) {
@@ -666,6 +681,113 @@ bool Engine::copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrac
     nt->sessionSlots[dstScene] = copy;
     republishWithTrack(dstTrack, nt);
     return true;
+}
+
+// --- Arrangement clips -> session slots (a selection or the clip clipboard) -------------
+
+int32_t Engine::arrangementClipsToSession(const std::vector<std::pair<int32_t,int32_t>>& sel, int32_t startScene) {
+    double len = 0.0;
+    return landBlockInSession(captureBlock(sel, len), startScene);
+}
+
+int32_t Engine::pasteClipBlockToSession(int32_t destTrackId, int32_t startScene) {
+    if (clipboardBlock_.empty() || !authoring_) return -1;
+    return landBlockInSession(destTrackId >= 0 ? remapBlock(clipboardBlock_, destTrackId) : clipboardBlock_, startScene);
+}
+
+int32_t Engine::sessionSlotsToArrangement(const std::vector<std::pair<int32_t,int32_t>>& slots, double atBeat, int32_t destTrackId) {
+    lastPlaced_.clear();
+    if (!authoring_) return 0;
+    std::map<int32_t, std::vector<int32_t>> byTrack;   // track -> scenes, in order
+    for (const auto& [tid, scene] : slots) byTrack[tid].push_back(scene);
+    std::vector<BlockClip> items;
+    for (auto& [tid, scenes] : byTrack) {
+        auto t = findTrackAuthoring(tid);
+        if (!t || !sessionLaunchable(*t)) continue;
+        std::sort(scenes.begin(), scenes.end());
+        scenes.erase(std::unique(scenes.begin(), scenes.end()), scenes.end());
+        double at = 0.0;
+        for (int32_t scene : scenes) {
+            const SessionSlot* sl = slotAt(*t, scene);
+            if (!sl || !sl->hasClip) continue;
+            BlockClip b;
+            b.trackId = tid;
+            b.relStart = at;
+            if (t->type() == TrackType::Instrument) {
+                b.kind = 1;
+                b.midi = sl->midi;          // notes + clip envelopes, relative to the slot start
+                b.midi.name = sl->name;
+                b.midi.active = true;
+                b.midi.lengthBeats = sl->lengthBeats > 0 ? sl->lengthBeats : 4.0;
+                b.len = b.midi.lengthBeats;
+            } else {
+                if (!sl->audio.sample) continue;
+                b.kind = 0;                 // an audio take lands as one pass of its loop
+                b.audio = sl->audio;
+                b.audio.name = sl->name;
+                b.audio.active = true;
+                b.audio.warpCache = nullptr; // placeBlock rebuilds it
+                b.len = audioClipBeats(b.audio);
+            }
+            at += b.len;
+            items.push_back(std::move(b));
+        }
+    }
+    if (destTrackId >= 0) items = remapBlock(items, destTrackId);
+    if (items.empty()) return 0;
+    placeBlock(items, atBeat);
+    return static_cast<int32_t>(lastPlaced_.size());
+}
+
+// Each track's clips, in time order, fill consecutive slots from one shared scene row, so
+// clips that played together in the arrangement share a scene and a sequence reads down
+// the column. One undo step, scene rows appended included.
+int32_t Engine::landBlockInSession(const std::vector<BlockClip>& items, int32_t startScene) {
+    if (!authoring_) return -1;
+    std::map<int32_t, std::vector<const BlockClip*>> byTrack;
+    for (const auto& b : items) {
+        auto t = findTrackAuthoring(b.trackId);
+        if (!t || !sessionLaunchable(*t)) continue;
+        if ((b.kind == 1) != (t->type() == TrackType::Instrument)) continue;
+        if (b.kind == 0 && !b.audio.sample) continue;
+        byTrack[b.trackId].push_back(&b);
+    }
+    if (byTrack.empty()) return -1;
+    int32_t rows = 0;
+    for (auto& [tid, v] : byTrack) {
+        std::stable_sort(v.begin(), v.end(), [](const BlockClip* x, const BlockClip* y) { return x->relStart < y->relStart; });
+        rows = std::max(rows, static_cast<int32_t>(v.size()));
+    }
+
+    int32_t first = startScene;
+    if (first < 0) {
+        // The first row from which every track's run of slots is empty (rows past the end are).
+        auto runFree = [&](int32_t row) {
+            for (const auto& [tid, v] : byTrack) {
+                auto t = findTrackAuthoring(tid);
+                for (int32_t i = 0; i < static_cast<int32_t>(v.size()); ++i)
+                    if (const SessionSlot* sl = slotAt(*t, row + i); sl && sl->hasClip) return false;
+            }
+            return true;
+        };
+        first = 0;
+        while (first < authoring_->sceneCount && !runFree(first)) ++first;
+    }
+
+    beginUndoGroup();
+    while (authoring_->sceneCount < first + rows) insertScene(authoring_->sceneCount);
+    for (const auto& [tid, v] : byTrack) {
+        auto old = findTrackAuthoring(tid);
+        if (!old) continue;
+        auto nt = cloneTrack(*old);
+        if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
+            nt->sessionSlots.resize(authoring_->sceneCount);
+        for (int32_t i = 0; i < static_cast<int32_t>(v.size()); ++i)
+            nt->sessionSlots[first + i] = v[i]->kind == 1 ? slotFromMidiClip(v[i]->midi) : slotFromAudioClip(v[i]->audio);
+        republishWithTrack(tid, nt);
+    }
+    endUndoGroup();
+    return first;
 }
 
 namespace {

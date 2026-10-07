@@ -288,7 +288,8 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public sealed record ShutterReading(string Summary, string Live, string Mode, string State, double Gain, double ReductionDb,
         double PeakReductionDb, double InputDb, double OutputDb, double DetectorDb, double KeyDb, bool ExternalKey, int KeySourceTrackId,
         double ThresholdDb, double CloseDb, double FloorDb, double OpenShare, double WindowSeconds, int OpeningsLastBar, int OpeningsSinceReset,
-        int LatencySamples, ShutterPoint[] History, double SampleRate);
+        int LatencySamples, ShutterPoint[] History, double SampleRate, string Pattern, int PatternStep, int PatternSteps,
+        double PatternPhase, double PatternValue);
 
     [McpServerTool(Name = "read_shutter"), Description(
         "Read what a Nota Shutter (built-in effect kind 19 — noise gate / ducker) is doing right now: Gate or Duck, its state "
@@ -298,11 +299,14 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         + "floor (−120 = −∞), the share of the window it was open (ducking, for Duck), the openings in the last bar and since the "
         + "reset, the look-ahead latency, and the window's history in 16 steps (ms before now, input peak dB, lowest gain). Levels "
         + "move only while audio plays through the track. Use get_device_text id 2 for what each parameter value means, "
-        + "set_device_sidechain to route a key (External Key must be on, its default), device_action 0 to reset the meters.")]
+        + "set_device_sidechain to route a key (External Key must be on, its default), device_action 0 to reset the meters. "
+        + "Pattern (the rhythmic gate): Off / Volume / Map, the step playing now (1-based) of how many, the phase through the "
+        + "pattern 0..1 and its value now (the gain it applies in Volume, Pattern Out in Map). Its steps are the params "
+        + "Step 1..Step 32; Pattern Target 0 / 0.5 / 1 = Off / Volume / Map.")]
     public Task<ShutterReading> ReadShutter(int trackId, int deviceIndex) => Read(() =>
     {
-        const int tele = 24, hist = 128;
-        var sc = new float[tele + 3 * hist];
+        const int tele = 24, hist = 128, pat = tele + 3 * hist;
+        var sc = new float[pat + 8];
         int n = E.DeviceScope(trackId, deviceIndex, sc, sc.Length);
         float V(int i) => n > i ? sc[i] : 0f;
         static double R1(double v) => Math.Round(v, 1);
@@ -310,7 +314,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         bool duck = E.DeviceGetParam(trackId, deviceIndex, 7) >= 0.5f;
         double win = V(20) > 0 ? V(20) : 1;
         var pts = new List<ShutterPoint>();
-        if (n >= sc.Length)
+        if (n >= pat)
             for (int k = 0; k < 16; k++)
             {
                 int a = k * hist / 16, b = (k + 1) * hist / 16;
@@ -321,7 +325,9 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         return new ShutterReading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1),
             duck ? "Duck" : "Gate", states[Math.Clamp((int)Math.Round(V(5)), 0, 4)], Math.Round(V(1), 3), R1(V(2)), R1(V(18)),
             R1(V(0)), R1(V(6)), R1(V(3)), R1(V(14)), V(13) > 0.5f, E.DeviceSidechainSource(trackId, deviceIndex),
-            R1(V(15)), R1(V(16)), R1(V(17)), Math.Round(V(7), 2), win, (int)V(8), (int)V(9), (int)V(12), pts.ToArray(), V(10));
+            R1(V(15)), R1(V(16)), R1(V(17)), Math.Round(V(7), 2), win, (int)V(8), (int)V(9), (int)V(12), pts.ToArray(), V(10),
+            new[] { "Off", "Volume", "Map" }[Math.Clamp((int)Math.Round(V(pat + 4)), 0, 2)], (int)V(pat + 1) + 1, (int)V(pat + 5),
+            Math.Round(V(pat), 3), Math.Round(V(pat + 3), 3));
     });
 
     public sealed record PitchPoint(double Ms, double DetectedMidi, double OutputMidi, double MidiTarget);
