@@ -109,6 +109,7 @@ internal sealed class DeviceWindow : NotaWindow
             AddHandler(KeyDownEvent, (_, e) => mw.HandleTransportKeyTunnel(e), RoutingStrategies.Tunnel);
             KeyDown += (_, e) => { if (!e.Handled) mw.HandleFloatingKeyDown(e); };
             KeyUp += (_, e) => { if (!e.Handled) mw.HandleKeyUp(e); };
+            MainWindow.ReleaseTextFocusOnOutsidePress(this);
         }
         Show(owner);
     }

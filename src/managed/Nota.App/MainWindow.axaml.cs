@@ -410,6 +410,9 @@ public partial class MainWindow : Window
         // exempted inside the handler so typing still works). See OnGlobalTransportKey.
         AddHandler(KeyDownEvent, OnGlobalTransportKey, RoutingStrategies.Tunnel);
 
+        // Clicking away from a text field (browser search, rename boxes…) hands the keyboard back.
+        ReleaseTextFocusOnOutsidePress(this);
+
         Closed += (_, _) => vm.Dispose();
 
         // MCP server: MCP tool edits redraw the arrangement + device panel; start the server if

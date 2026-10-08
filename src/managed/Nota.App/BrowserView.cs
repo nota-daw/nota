@@ -308,6 +308,13 @@ public sealed class BrowserView : UserControl
         _search.TextChanged += (_, _) => { ApplyFilter(_active); };
         _search.GotFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.Accent");
         _search.LostFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        // Esc leaves the search (the query stays) so the keyboard goes back to the app.
+        _search.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            TopLevel.GetTopLevel(_search)?.FocusManager?.Focus(null);
+            e.Handled = true;
+        };
         _matchCount = new TextBlock
         {
             FontSize = 9,

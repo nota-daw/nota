@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -12,6 +14,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
@@ -66,6 +69,25 @@ public partial class MainWindow
             else _commands.Run("transport.stop");
             e.Handled = true;
         }
+    }
+
+    // A text field keeps the keyboard until focus moves elsewhere — but the arrangement, piano
+    // roll, session grid etc. are custom-drawn and don't take focus on click, so after typing
+    // into e.g. the browser search every key kept going to the field. Any press outside the
+    // focused text field (or its NumericUpDown, spinners included) now drops its focus; a press
+    // on another focusable control still focuses that control as usual. Tunnel +
+    // handledEventsToo so canvases that consume the press can't keep it from running.
+    internal static void ReleaseTextFocusOnOutsidePress(TopLevel top)
+    {
+        top.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (top.FocusManager?.GetFocusedElement() is not Visual focused) return;
+            Visual? field = focused.FindAncestorOfType<TextBox>(includeSelf: true);
+            if (field is null) return;
+            field = field.FindAncestorOfType<NumericUpDown>() ?? field;
+            if (e.Source is Visual src && src.GetSelfAndVisualAncestors().Contains(field)) return;
+            top.FocusManager.Focus(null);
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     // The Session grid has the keyboard: its arrows / Return / ⌘C… act on its selection.

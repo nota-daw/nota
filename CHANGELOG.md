@@ -49,6 +49,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Record and the rest as Win+S, Win+Z…, and Ctrl+S, Ctrl+Z and most of the others did
   nothing. They now read and work as Ctrl+S, Ctrl+Z, Ctrl+Shift+Z and so on, and Settings ▸ Shortcuts, the Session inspector
   and the other on-screen hints spell keys as Ctrl / Alt / Shift instead of ⌘ ⌥ ⇧.
+- **The browser search lets go of the keyboard:** once you had typed into it, clicking the
+  Arrangement, the piano roll or the Session grid left the cursor in the field, so Space,
+  note keys and shortcuts kept typing into the search. Clicking anywhere outside a text
+  field now hands the keyboard back to the app, and Esc in the search leaves it too (the
+  query stays).
 
 ## [0.50.1] — 2026-10-07
 
