@@ -54,7 +54,7 @@ public sealed partial class SessionView
 
         var hint = new TextBlock
         {
-            Text = "Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there",
+            Text = MenuKit.Keys("Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there"),
             FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
         hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -171,7 +171,7 @@ public sealed partial class SessionView
         foreach (var (label, key, click) in actions)
         {
             var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.Medium } } };
-            if (key.Length > 0) content.Children.Add(Mono(key, 9, NotaPalette.TextDisabled));
+            if (key.Length > 0) content.Children.Add(Mono(MenuKit.Keys(key), 9, NotaPalette.TextDisabled));
             var b = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Margin = new Thickness(0, 0, 6, 6), Content = content };
             b.Click += (_, _) => click();
             wrap.Children.Add(b);

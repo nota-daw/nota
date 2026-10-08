@@ -941,7 +941,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     // NB: this list mirrors the real key handlers — keep the two in sync (see the
     // `nota-shortcuts` skill). Bindings live in MainWindow.Input.cs (transport, global
     // editing, computer-keyboard notes), PianoRollView.cs (note editing) and PreviewPlayer.cs
-    // (the Files tab's sample player). ⌘ = Meta on macOS / Ctrl on Windows. A Key made only of
+    // (the Files tab's sample player). Written with the macOS glyphs; MenuKit.Keys spells them
+    // Ctrl / Alt / Shift on Windows and Linux. A Key made only of
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
@@ -1081,8 +1082,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             foreach (var (title, rows) in ShortcutGroups)
             {
                 var shown = rows.Where(r => q.Length == 0
-                                            || r.Action.Contains(q, StringComparison.OrdinalIgnoreCase)
-                                            || r.Key.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                                            || MenuKit.Keys(r.Action).Contains(q, StringComparison.OrdinalIgnoreCase)
+                                            || MenuKit.Keys(r.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (shown.Count == 0) continue;
                 var head = new StackPanel
                 {
@@ -1118,17 +1119,17 @@ public sealed partial class PreferencesWindow : NotaWindow
             foreach (var t in tokens)
                 wrap.Children.Add(t is "/" or "·"
                     ? new TextBlock { Text = t, FontSize = 11, Foreground = TextTertiary, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }
-                    : KeyCap(t));
+                    : KeyCap(MenuKit.Keys(t)));
             keys = wrap;
         }
         else
         {
-            keys = new TextBlock { Text = key, FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            keys = new TextBlock { Text = MenuKit.Keys(key), FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         }
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*"), ColumnSpacing = 12, MinHeight = 20, Margin = new Thickness(12, 7) };   // 34 with the margin
         grid.Children.Add(keys);
-        var a = new TextBlock { Text = action, FontSize = 12, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        var a = new TextBlock { Text = MenuKit.Keys(action), FontSize = 12, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         Grid.SetColumn(a, 1);
         grid.Children.Add(a);
         return grid;

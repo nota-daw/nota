@@ -119,7 +119,7 @@ public sealed class ModularView : UserControl
         // hint + minimap overlays (screen-space, not transformed)
         var hint = new TextBlock
         {
-            Text = "Space + drag — pan · ⌘ + wheel — zoom · F — fit",
+            Text = MenuKit.Keys("Space + drag — pan · ⌘ + wheel — zoom · F — fit"),
             FontSize = 9, Foreground = Text4,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),

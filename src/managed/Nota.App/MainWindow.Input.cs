@@ -138,16 +138,16 @@ public partial class MainWindow
             }
         }
         bool plainMod = mod && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
-        if (plainMod && e.Key == Key.R && _heldKeys.Add(e.Key))
+        if (plainMod && e.Key == Key.R)
         {
-            _vm.Transport.RecordOn = !_vm.Transport.RecordOn;
-            e.Handled = true;
+            if (_heldKeys.Add(e.Key)) _vm.Transport.RecordOn = !_vm.Transport.RecordOn;
+            e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
-        if (plainMod && e.Key == Key.M && _heldKeys.Add(e.Key))
+        if (plainMod && e.Key == Key.M)
         {
-            _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn;
-            e.Handled = true;
+            if (_heldKeys.Add(e.Key)) _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn;
+            e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
 
@@ -269,6 +269,13 @@ public partial class MainWindow
             else if (e.Key == Key.X) ShiftTypingOctave(+1);
             else if (e.Key == Key.C) ShiftTypingVelocity(-10);
             else ShiftTypingVelocity(+10);
+            e.Handled = true;
+            return;
+        }
+
+        // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux.
+        if (mod && TryMenuShortcut(e))
+        {
             e.Handled = true;
             return;
         }

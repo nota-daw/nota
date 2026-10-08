@@ -28,6 +28,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **The Mixer shows your track names:** a track renamed to "Drums" used to read "Inst 2" in
   its mixer strip. Strips now carry the same name as the Arrangement — or the instrument's
   name, "Group" or "Return N" — and a group strip's I/O reads "Group in → Master".
+- **Menu shortcuts use Ctrl on Windows and Linux:** the menu bar showed File ▸ Save, Undo,
+  Record and the rest as Win+S, Win+Z…, and Ctrl+S, Ctrl+Z and most of the others did
+  nothing. They now read and work as Ctrl+S, Ctrl+Z, Ctrl+Shift+Z and so on, and Settings ▸ Shortcuts, the Session inspector
+  and the other on-screen hints spell keys as Ctrl / Alt / Shift instead of ⌘ ⌥ ⇧.
 
 ## [0.50.1] — 2026-10-07
 

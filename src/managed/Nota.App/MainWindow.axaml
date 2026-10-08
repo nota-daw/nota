@@ -279,8 +279,7 @@
             </Viewbox>
           </ToggleButton>
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
-          <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation"
-                        ToolTip.Tip="Show parameter-automation lanes (⌘⇧A)">
+          <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation">
             <Viewbox Width="15" Height="15">
               <Canvas Width="24" Height="24">
                 <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.8"
