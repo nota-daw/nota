@@ -353,6 +353,15 @@ public sealed partial class SessionView : UserControl
     }
 
     /// <summary>Enter: launch the selected slot or scene.</summary>
+    /// <summary>The selected slot's track (-1 for a scene) and scene — the palette's context.</summary>
+    internal (int TrackId, int Scene) SelectedSlot => (_sel.Kind == SelKind.Slot ? _sel.TrackId : -1, _sel.Scene);
+
+    /// <summary>Launches the selected scene row (or the selected slot's row).</summary>
+    internal void LaunchSelectedScene() { LaunchSceneRow(_sel.Scene); UpdateStates(); }
+
+    /// <summary>Stops every playing clip, as the toolbar's Stop All does.</summary>
+    internal void StopAll() { _engine.StopAllSession(); UpdateStates(); }
+
     public void LaunchSelection()
     {
         if (_sel.Kind == SelKind.Scene) { LaunchSceneRow(_sel.Scene); return; }

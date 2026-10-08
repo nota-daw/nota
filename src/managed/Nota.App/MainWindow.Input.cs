@@ -39,13 +39,23 @@ public partial class MainWindow
     // spaces/newlines still type. Everything else stays in the bubble-phase OnKeyDown.
     private void OnGlobalTransportKey(object? sender, KeyEventArgs e)
     {
-        if (_vm is null || _vm.SuspendEnginePolling) return;
+        if (_vm is null) return;
+        // ⌘⇧P / Ctrl+Shift+P: the command palette, from any window and any focus — a text
+        // field included, as the chord types nothing (CP-1). Again closes it.
+        if (e.Key == Key.P && ArrangementView.IsPrimaryDown(e.KeyModifiers)
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
+        {
+            TogglePalette(e.Source is Avalonia.Visual v ? TopLevel.GetTopLevel(v) as Window : null);
+            e.Handled = true;
+            return;
+        }
+        if (_vm.SuspendEnginePolling || PaletteOpen) return;   // the palette has the keyboard
         if (e.Source is TextBox || e.Source is NumericUpDown) return;
         if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control | KeyModifiers.Alt)) != 0) return;
 
         if (e.Key == Key.Space)
         {
-            _vm.Transport.PlayStopCommand.Execute(null);
+            _commands.Run("transport.playStop");
             e.Handled = true;
         }
         else if (e.Key == Key.Return)
@@ -53,7 +63,7 @@ public partial class MainWindow
             // In the Session grid Return launches the selected slot or scene (design 1a);
             // everywhere else it stops (second press returns to 1.1).
             if (SessionFocused) _session!.LaunchSelection();
-            else _vm.Transport.StopCommand.Execute(null);
+            else _commands.Run("transport.stop");
             e.Handled = true;
         }
     }
@@ -71,8 +81,8 @@ public partial class MainWindow
         bool meta = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
         if (meta && e.Key == Key.Z && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
-            if ((e.KeyModifiers & KeyModifiers.Shift) != 0) OnMenuRedo(this, EventArgs.Empty);
-            else OnMenuUndo(this, EventArgs.Empty);
+            if ((e.KeyModifiers & KeyModifiers.Shift) != 0) _commands.Run("edit.redo");
+            else _commands.Run("edit.undo");
             e.Handled = true;
             return;
         }
@@ -126,8 +136,7 @@ public partial class MainWindow
         {
             if ((e.KeyModifiers & KeyModifiers.Shift) != 0)
             {
-                AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
-                OnToggleAutomation(AutomationToggle, new RoutedEventArgs());
+                _commands.Run("view.automation");
                 e.Handled = true;
                 return;
             }
@@ -140,13 +149,13 @@ public partial class MainWindow
         bool plainMod = mod && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
         if (plainMod && e.Key == Key.R)
         {
-            if (_heldKeys.Add(e.Key)) _vm.Transport.RecordOn = !_vm.Transport.RecordOn;
+            if (_heldKeys.Add(e.Key)) _commands.Run("transport.record");
             e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
         if (plainMod && e.Key == Key.M)
         {
-            if (_heldKeys.Add(e.Key)) _vm.Transport.MetronomeOn = !_vm.Transport.MetronomeOn;
+            if (_heldKeys.Add(e.Key)) _commands.Run("transport.metronome");
             e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
@@ -154,7 +163,7 @@ public partial class MainWindow
         // ⌘⇧M / ⌃⇧M = open the Mixer window (or focus it if already open).
         if (mod && e.Key == Key.M && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
-            ToggleMixerWindow();
+            _commands.Run("view.mixer");
             e.Handled = true;
             return;
         }
@@ -162,9 +171,7 @@ public partial class MainWindow
         // ⌘/⌃ + G = group the selected tracks; ⌘/⌃ + ⇧ + G = ungroup.
         if (mod && e.Key == Key.G && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
-            bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
-            if (shift) { if (Timeline.UngroupSelection()) _vm.StatusText = "Ungrouped"; }
-            else if (Timeline.GroupSelection()) _vm.StatusText = "Grouped tracks";
+            _commands.Run((e.KeyModifiers & KeyModifiers.Shift) != 0 ? "track.ungroup" : "track.group");
             e.Handled = true;
             return;
         }
@@ -175,7 +182,7 @@ public partial class MainWindow
             && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
             && _editorRoll is not { GridFocused: true })
         {
-            _ = PasteBouncedAsync();
+            _commands.Run("edit.pasteBounced");
             e.Handled = true;
             return;
         }
@@ -187,7 +194,7 @@ public partial class MainWindow
             && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
             && _editorRoll is not { GridFocused: true })
         {
-            OnMenuCopyToOtherView(this, EventArgs.Empty);
+            _commands.Run("edit.copyToOtherView");
             e.Handled = true;
             return;
         }
@@ -199,8 +206,7 @@ public partial class MainWindow
             && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0
             && Timeline.HasTimeSelection)
         {
-            if (e.Key == Key.D) OnMenuDuplicateTime(this, EventArgs.Empty);
-            else OnMenuInsertSilence(this, EventArgs.Empty);
+            _commands.Run(e.Key == Key.D ? "edit.duplicateTime" : "edit.insertSilence");
             e.Handled = true;
             return;
         }

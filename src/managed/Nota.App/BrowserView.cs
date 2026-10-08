@@ -455,6 +455,8 @@ public sealed class BrowserView : UserControl
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
+    /// <summary>Opens the History tab (the project's versions).</summary>
+    public void ShowHistory() { SelectTab(HistoryTab); SetCollapsed(false, persist: true); }
 
     /// <summary>Fold the browser down to its icon rail, or unfold it.</summary>
     public void SetCollapsed(bool collapsed, bool persist)

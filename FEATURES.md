@@ -802,6 +802,24 @@ and user presets, automation, persistence and cloning.
 
 ## Windows and interface
 
+- **Command palette (⌘⇧P / Ctrl+Shift+P)** — one search field for everything, from any
+  window and any focus (a text field included): every menu and view command (with its
+  shortcut), every track including returns and the master, built-in devices, scanned
+  VST3 / AU plug-ins (vendor and format shown), factory and user presets, drum kits, and —
+  when opened from Modular — Modular nodes (LFO, Envelope Follower, MIDI → CV, ADSR, Macro,
+  Math, Scope). The chosen item goes **where the palette was opened**: in Devices next to the
+  selected card, in Modular onto the shown track (a node unconnected, at the pointer or the
+  middle of the view), elsewhere the selected track; the field shows the target
+  ("→ Bass · after Nota Vintage") and why an item can't go anywhere. ⌘Enter puts an
+  instrument on a new track, ⌥Enter replaces the selected device, ⇧Enter keeps the palette
+  open for the next one; every apply is one undo step, with an Undo toast. Search is fuzzy
+  ("afl" → Auto Filter), forgives one typo per word, reads a query typed in the wrong
+  keyboard layout ("кумуки" → reverb) and understands meaning in English and Russian —
+  "warm pad", "reverb for vocals", "компрессор на барабаны" — through a semantic descriptor
+  every device, plug-in and preset carries (role, character, part, source, task, genre); a
+  semantic hit says why it was found ("warm · pad"). Prefixes `>` `@` `+` `#` `~` (or Tab)
+  filter by type; an empty query shows Recent and suggestions for the context. Ranking
+  learns from what you use in the palette and the browser.
 - **Two palette variants** — **Ember Graphite** (warm graphite neutrals with a brass
   accent; the default, and what a DAW wants for long sessions in a dark room) and
   **Ember Paper** (the same hues and roles on a warm light ground, with brass darkened to
@@ -830,8 +848,8 @@ and user presets, automation, persistence and cloning.
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
 - **Popup rack editors** (full UI / Params).
-- **A shortcut list** in Preferences → Shortcuts, grouped by section (Transport,
-  Arrangement & Editing, Piano roll, Play notes, Mouse).
+- **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
+  Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
 
 ---
 

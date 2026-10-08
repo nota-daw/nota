@@ -65,8 +65,12 @@ lighter path — see the end of this section.**
 `include/nota/nota_engine.h` (the `_nota_*` export list is a wildcard — no change).
 
 **Managed:** `NativeMethods.Tracks.cs` (`[LibraryImport]`), `NotaEngine.Tracks.cs`
-(wrapper), `IAudioEngine.cs` (interface); `BrowserViewModel.cs` (instrument list,
-`BuiltinKind=N`); `MainWindow.Browser.cs` + `MainWindow.Dnd.cs` (`N => Engine.Add…`);
+(wrapper), `IAudioEngine.cs` (interface); `Nota.Application/Palette/BuiltinDeviceCatalog.cs`
+(the one device list the browser and the command palette read: name, `Kind = N`, sub text **and
+a semantic descriptor** — role, aliases, character, sound/source, genre, a one-line
+description; the palette smoke test `--palette` fails without a role and aliases);
+`DeviceInsertService.CreateInstrumentTrack` in Nota.Presentation (`N => Engine.Add…` — the
+one place drag & drop, the browser and the palette create the track);
 `ProjectService.cs` (`{ Kind: N }`) + `PresetService.cs` (`N =>`); rack/drum
 "add chain / add pad" menus in `DeviceCards/Rack/RackCardView.cs`
 (`AddChainButton`, `ShowAddPadMenu`).
@@ -89,14 +93,16 @@ No track, no C ABI, no `Engine.h` method: effects are added generically by
   are **generic** through the base `Device` (by `builtinKind()` + params) — no
   `getState`/`setState`, no per-kind managed persist code.
 - **Managed:** `DeviceCardFactory` `[kind] = new NameDeviceBody()`; a
-  `BrowserViewModel.cs` FX entry (`Kind = BuiltinEffect, BuiltinKind = N`). The
-  browser add/drop path (`MainWindow.Browser.cs`/`.Dnd.cs`) is already generic.
+  `BuiltinDeviceCatalog.cs` entry (`AudioEffect`, kind N, with its semantic descriptor —
+  role, aliases, character, source, task). The add/drop path (`DeviceInsertService`) is
+  already generic. Factory presets get their descriptor from their folder and name
+  (`PresetDescriptors`); a new folder whose name isn't vocabulary goes into its folder map.
 
 ### MIDI effects (`grep -rn Arpeggiator` / `grep -rn MidiScale`)
 
 Mirror an existing `MidiDevice` (e.g. `Arpeggiator.h`) with `midiKind()`; register
-in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + the MIDI
-browser list. Params/persist/clone are generic like audio effects. Cards sit
+in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + a `MidiEffect`
+entry with its descriptor in `BuiltinDeviceCatalog.cs`. Params/persist/clone are generic like audio effects. Cards sit
 **before** the instrument in the chain.
 
 ## 3. Editor card architecture

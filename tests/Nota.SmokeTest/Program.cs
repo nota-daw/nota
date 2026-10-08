@@ -100,6 +100,15 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
+if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
+if (args.Length >= 1 && args[0] == "--palette")
+{
+    Console.WriteLine("-- command palette --");
+    foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
 if (args.Length >= 1 && args[0] == "--store")
 {
@@ -14190,6 +14199,10 @@ foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
 // --- nota remote: track-addressed notes, pairing, a phone session over a real socket ---
 Console.WriteLine("-- nota remote --");
 foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
+
+// --- command palette: descriptors, golden queries, context table, undo, speed ---
+Console.WriteLine("-- command palette --");
+foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

@@ -442,7 +442,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             double w = strategy.BodyOnly ? strategy.WidthFor(proxy, T) : 700;
             return new DeviceWindowPage(BuildChainInstrumentBespoke(ik, sc, tickReg, w), w, CardBodyH, WindowPresets(presets, () => win.Refill()),
                 two ? new DeviceWindowSize(InstrumentView.IsMini(proxy, T), m => InstrumentView.SetMini(proxy, T, m)) : null);
-        }, status: () => InstrumentStatus(a, sc, proxy, strategy));
+        }, status: () => InstrumentStatus(a, sc, proxy, strategy)) { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 
@@ -576,7 +576,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             DragDrop.AddDragOverHandler(wrap, (_, e) => { if (!BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.None; return; } e.DragEffects = DragDropEffects.Copy; e.Handled = true; });
             DragDrop.AddDropHandler(wrap, (_, e) => { foreach (var it in BrowserView.DroppedItems(e)) if (it.Kind == Nota.Presentation.BrowserItemKind.Sample) { acc.LoadSample(it.Path); win.Refill(); break; } e.Handled = true; });
             return new DeviceWindowPage(wrap, 700, CardBodyH, WindowPresets(presets, () => win.Refill()));
-        }, status: () => InstrumentStatus(a, sc, ChainInstrumentProxy(sc), _irFactory.Resolve(1, true)));
+        }, status: () => InstrumentStatus(a, sc, ChainInstrumentProxy(sc), _irFactory.Resolve(1, true))) { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
     private void OpenChainInstrumentParams(IRackAccess a, int sc, Control anchor)
@@ -596,7 +596,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         {
             double w = strategy.AutoWidth ? double.NaN : strategy.Width;
             return new DeviceWindowPage(BuildChainDeviceBespoke(a, sc, d, kind, tickReg), w, CardBodyH, WindowPresets(presets, () => win.Refill()));
-        }, ChainDeviceBypass(a, sc, d), () => DeviceStatus(a, sc, d));
+        }, ChainDeviceBypass(a, sc, d), () => DeviceStatus(a, sc, d)) { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 
@@ -1226,7 +1226,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         var win = new DeviceWindow(name, E.GetTrackName(T), "PARAMS",
             _ => new DeviceWindowPage(ParamGridContent(count, row), 476, double.NaN), bypass,
-            () => $"{status()} · {count} parameter{(count == 1 ? "" : "s")}");
+            () => $"{status()} · {count} parameter{(count == 1 ? "" : "s")}") { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 

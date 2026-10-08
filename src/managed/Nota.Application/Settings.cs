@@ -61,6 +61,13 @@ public sealed class Settings
     /// up/down live-shifts this)</summary>
     public int GamepadOctave { get; set; }
 
+    // --- command palette (⌘⇧P) ----------------------------------------------
+    /// <summary>How often and when each palette / browser item was last applied, by palette
+    /// id — frecency for the ranking (CP-15).</summary>
+    public Dictionary<string, Nota.Application.Palette.PaletteUse> PaletteUsage { get; set; } = new();
+    /// <summary>The last items applied from the palette, most recent first (its Recent section).</summary>
+    public List<string> PaletteRecent { get; set; } = new();
+
     // --- browser view options (the ⋮ button next to the browser search) ------
     /// <summary>Show each row's type as a quiet tag on the right edge of the browser list.</summary>
     public bool BrowserShowTypeTags { get; set; } = true;

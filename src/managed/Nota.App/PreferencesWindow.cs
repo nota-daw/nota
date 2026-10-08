@@ -174,6 +174,14 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);
 
+    /// <summary>Switches to the page with this title ("Audio", "Shortcuts" …) — the palette's
+    /// Settings: … commands.</summary>
+    public void ShowPage(string title)
+    {
+        int i = 0;
+        foreach (var p in Pages) { if (p.Title == title) { Select(i); return; } i++; }
+    }
+
     private Control BuildNavItem(Page page, int idx)
     {
         var edge = new Border
@@ -952,6 +960,19 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
             ("⌥⌘S", "Save a version with a note"),
             ("⌘⇧E", "Export audio"),
+            ("⌘,", "Settings"),
+        }),
+        ("COMMAND PALETTE", new[]
+        {
+            ("⌘⇧P", "Open / close the command palette — from any window, even while typing"),
+            ("↑ ↓   PgUp PgDn", "Move through the results"),
+            ("Return", "Apply where the palette was opened (the target shows in the field)"),
+            ("⌘Return", "An instrument or instrument preset on a new track · a track: open it in Devices"),
+            ("⌥Return", "Replace the selected device instead of inserting after it"),
+            ("⇧Return", "Apply and keep the palette open for the next device"),
+            ("Tab   ⇧Tab", "Filter: all · actions · tracks · devices · presets"),
+            ("> @ + # ~", "Type first to filter: actions, tracks, devices, presets, Modular nodes"),
+            ("Esc", "Close and go back where you were"),
         }),
         ("TRANSPORT", new[]
         {
@@ -1104,7 +1125,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
     }
 
-    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc" };
+    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab" };
 
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);

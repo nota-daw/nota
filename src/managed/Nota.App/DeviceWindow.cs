@@ -50,6 +50,9 @@ internal sealed class DeviceWindow : NotaWindow
     private static readonly double LeftInset = !NativeFrame && OperatingSystem.IsMacOS() ? 76 : 12;
     private static readonly double RightInset = !NativeFrame && OperatingSystem.IsWindows() ? 8 + 138 : 8;
 
+    /// <summary>The track whose chain this device sits in — the command palette's target (CP-3).</summary>
+    public int ContextTrackId { get; set; } = -1;
+
     private readonly string _name, _context, _badge;
     private readonly Func<Action<Action>, DeviceWindowPage> _build;
     private readonly DeviceWindowBypass? _bypass;

@@ -21,79 +21,81 @@
       <NativeMenuItem Header="File">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="New" Click="OnMenuNew" Gesture="Cmd+N"/>
-            <NativeMenuItem Header="Open…" Click="OnMenuOpen" Gesture="Cmd+O"/>
-            <NativeMenuItem Header="Save" Click="OnMenuSave" Gesture="Cmd+S"/>
-            <NativeMenuItem Header="Save As…" Click="OnMenuSaveAs" Gesture="Shift+Cmd+S"/>
-            <NativeMenuItem Header="Save Version with Note…" Click="OnMenuSaveVersion" Gesture="Alt+Cmd+S"/>
+            <NativeMenuItem Header="New" app:Commands.Id="file.new"/>
+            <NativeMenuItem Header="Open…" app:Commands.Id="file.open"/>
+            <NativeMenuItem Header="Save" app:Commands.Id="file.save"/>
+            <NativeMenuItem Header="Save As…" app:Commands.Id="file.saveAs"/>
+            <NativeMenuItem Header="Save Version with Note…" app:Commands.Id="file.saveVersion"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Import audio…" Click="OnMenuImport"/>
-            <NativeMenuItem Header="Export audio…" Click="OnMenuExport" Gesture="Shift+Cmd+E"/>
+            <NativeMenuItem Header="Import audio…" app:Commands.Id="file.import"/>
+            <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Settings…" Click="OnPreferences" Gesture="Ctrl+,"/>
+            <NativeMenuItem Header="Settings…" app:Commands.Id="prefs.open"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
       <NativeMenuItem Header="Edit">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Undo" Click="OnMenuUndo" Gesture="Cmd+Z"/>
-            <NativeMenuItem Header="Redo" Click="OnMenuRedo" Gesture="Shift+Cmd+Z"/>
+            <NativeMenuItem Header="Undo" app:Commands.Id="edit.undo"/>
+            <NativeMenuItem Header="Redo" app:Commands.Id="edit.redo"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Duplicate clip" Click="OnMenuDuplicate" Gesture="Cmd+D"/>
-            <NativeMenuItem Header="Insert scene" Click="OnMenuInsertScene" Gesture="Cmd+I"/>
-            <NativeMenuItem Header="Split at playhead" Click="OnMenuSplit" Gesture="Cmd+E"/>
-            <NativeMenuItem Header="Consolidate" Click="OnMenuConsolidate" Gesture="Cmd+J"/>
-            <NativeMenuItem Header="Duplicate time" Click="OnMenuDuplicateTime" Gesture="Shift+Cmd+D"/>
-            <NativeMenuItem Header="Insert silence" Click="OnMenuInsertSilence" Gesture="Shift+Cmd+I"/>
+            <NativeMenuItem Header="Duplicate clip" app:Commands.Id="edit.duplicate"/>
+            <NativeMenuItem Header="Insert scene" app:Commands.Id="session.insertScene"/>
+            <NativeMenuItem Header="Split at playhead" app:Commands.Id="edit.split"/>
+            <NativeMenuItem Header="Consolidate" app:Commands.Id="edit.consolidate"/>
+            <NativeMenuItem Header="Duplicate time" app:Commands.Id="edit.duplicateTime"/>
+            <NativeMenuItem Header="Insert silence" app:Commands.Id="edit.insertSilence"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Lock Envelopes" Click="OnToggleLockEnvelopes" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="Lock Envelopes" app:Commands.Id="edit.lockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Cut" Click="OnMenuCut"/>
-            <NativeMenuItem Header="Copy" Click="OnMenuCopy"/>
-            <NativeMenuItem Header="Paste" Click="OnMenuPaste"/>
-            <NativeMenuItem Header="Paste Bounced Audio" Click="OnMenuPasteBounced" Gesture="Shift+Cmd+V"/>
-            <NativeMenuItem Header="Copy Clips to Session / Arrangement" Click="OnMenuCopyToOtherView" Gesture="Shift+Cmd+C"/>
-            <NativeMenuItem Header="Delete" Click="OnMenuDeleteSel"/>
+            <NativeMenuItem Header="Cut" app:Commands.Id="edit.cut"/>
+            <NativeMenuItem Header="Copy" app:Commands.Id="edit.copy"/>
+            <NativeMenuItem Header="Paste" app:Commands.Id="edit.paste"/>
+            <NativeMenuItem Header="Paste Bounced Audio" app:Commands.Id="edit.pasteBounced"/>
+            <NativeMenuItem Header="Copy Clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
+            <NativeMenuItem Header="Delete" app:Commands.Id="edit.delete"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
       <NativeMenuItem Header="View">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Mixer" Click="OnMenuMixer" Gesture="Shift+Cmd+M"/>
-            <NativeMenuItem Header="Connect Phone…" Click="OnMenuConnectPhone"/>
+            <NativeMenuItem Header="Command Palette…" app:Commands.Id="view.palette"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Toggle browser" Click="OnMenuToggleBrowser"/>
-            <NativeMenuItem Header="Toggle detail panel" Click="OnMenuToggleClip"/>
-            <NativeMenuItem Header="Toggle overview" Click="OnMenuToggleOverview"/>
-            <NativeMenuItem Header="Toggle sections" Click="OnMenuToggleSections"/>
+            <NativeMenuItem Header="Mixer" app:Commands.Id="view.mixer"/>
+            <NativeMenuItem Header="Connect Phone…" app:Commands.Id="view.connectPhone"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Toggle browser" app:Commands.Id="view.toggleBrowser"/>
+            <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
+            <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
+            <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
-            <NativeMenuItem Header="Follow playhead" Click="OnMenuToggleFollow" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="Follow playhead" app:Commands.Id="view.follow" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Clip names" Click="OnMenuCycleClipNames"/>
+            <NativeMenuItem Header="Clip names" app:Commands.Id="view.clipNames"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
       <NativeMenuItem Header="Transport">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Play / Stop" Click="OnMenuPlayStop"/>
-            <NativeMenuItem Header="Record" Click="OnMenuRecord" Gesture="Cmd+R"/>
-            <NativeMenuItem Header="Loop" Click="OnMenuLoop" Gesture="Cmd+L"/>
-            <NativeMenuItem Header="Metronome" Click="OnMenuMetronome" Gesture="Cmd+M"/>
+            <NativeMenuItem Header="Play / Stop" app:Commands.Id="transport.playStop"/>
+            <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
+            <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
+            <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
       <NativeMenuItem Header="Help">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Documentation" Click="OnDocumentation"/>
-            <NativeMenuItem Header="What's New" Click="OnWhatsNew"/>
+            <NativeMenuItem Header="Documentation" app:Commands.Id="help.docs"/>
+            <NativeMenuItem Header="What's New" app:Commands.Id="help.whatsNew"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="About Nota" Click="OnAbout"/>
+            <NativeMenuItem Header="About Nota" app:Commands.Id="help.about"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -513,5 +515,7 @@
   </DockPanel>
     <!-- MIDI-learn glass: highlights mappable controls + captures the learn click. -->
     <app:MidiLearnOverlay x:Name="LearnOverlay" IsHitTestVisible="False"/>
+    <!-- Command palette + its toast (MainWindow.Palette.cs); empty until ⌘⇧P. -->
+    <Panel x:Name="PaletteLayer"/>
   </Panel>
 </Window>

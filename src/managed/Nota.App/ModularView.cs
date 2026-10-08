@@ -191,6 +191,8 @@ public sealed class ModularView : UserControl
         _viewport.PointerMoved += OnViewportMoved;
         _viewport.PointerReleased += OnViewportReleased;
         _viewport.PointerWheelChanged += OnWheel;
+        _viewport.PointerMoved += (_, e) => _pointerInViewport = e.GetPosition(_viewport);
+        _viewport.PointerExited += (_, _) => _pointerInViewport = null;
         Focusable = true;
         KeyDown += OnKeyDown;
         KeyUp += OnKeyUp;
@@ -866,6 +868,22 @@ public sealed class ModularView : UserControl
     }
 
     // ---- modulators (Phase 3: LFO node + CV links) ---------------------
+
+    /// <summary>Adds a modulator node to the shown track without connections, at the pointer
+    /// when it is over the canvas, else in the middle of the view (the command palette). Returns
+    /// its id, or -1.</summary>
+    internal int AddModulatorAt(int kind)
+    {
+        if (_trackId <= 0) return -1;
+        int id = _engine.ModulatorAdd(_trackId, kind);
+        if (id < 0) return -1;
+        var scr = _pointerInViewport ?? Center();
+        _savedPos[$"{_trackId}/mod{id}"] = new Point((scr.X - _pan.X) / _scale - 60, (scr.Y - _pan.Y) / _scale - 28);
+        Rebuild(); Changed?.Invoke();
+        return id;
+    }
+
+    private Point? _pointerInViewport;
 
     private void AddModulator(int kind)
     {
@@ -2063,13 +2081,7 @@ public sealed class ModularView : UserControl
             mi.Click += (_, _) => AddModulator(kind);
             addMenu.Items.Add(mi);
         }
-        AddItem("LFO", 0);
-        AddItem("Envelope Follower", 1);
-        AddItem("MIDI → CV", 2);
-        AddItem("ADSR", 3);
-        AddItem("Macro", 4);
-        AddItem("Math", 5);
-        AddItem("Scope", 6);
+        foreach (var node in Nota.Application.Palette.ModularCatalog.All) AddItem(node.Name, node.Kind);   // the palette lists the same nodes
         var addBtn = Chip("+ Add"); addBtn.Content = Glyph.Labeled("+ Add", GlyphKind.ChevronDown);
         addBtn.Flyout = addMenu;
         left.Children.Add(seg);

@@ -301,6 +301,7 @@ public partial class MainWindow : Window
         // Settings → Appearance can switch the waveform style while the arrangement is open.
         vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
+        InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
         Browser.ProjectKey = () => vm.Transport.Key;
         // The library index analyses on worker threads; rows pick up their tempo / key tags on the UI thread.
@@ -638,7 +639,7 @@ public partial class MainWindow : Window
         if (FollowBtn.IsChecked != on) FollowBtn.IsChecked = on;
         // The View-menu twin lives in the native menu, which has no generated field —
         // look it up once by the header declared in MainWindow.axaml.
-        _followMenuItem ??= FindMenuItem(NativeMenu.GetMenu(this), "Follow playhead");
+        _followMenuItem ??= MenuItemFor("view.follow");
         if (_followMenuItem is not null) _followMenuItem.IsChecked = on;
         if (on) Timeline.RecenterOnPlayhead();   // jump to the cursor now
         if (_vm is not null) _vm.StatusText = on ? "Following the playhead" : "Follow playhead off";

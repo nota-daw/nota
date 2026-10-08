@@ -273,7 +273,10 @@ extern "C" NOTA_API const char* nota_pluginhost_plugin_desc(int32_t index) {
     static std::string line; // owned by the engine, valid until next call
     line = (d.name + " | " + d.pluginFormatName + " | "
             + (d.isInstrument ? "inst" : "fx") + " | "
-            + (d.manufacturerName.isEmpty() ? juce::String("?") : d.manufacturerName))
+            + (d.manufacturerName.isEmpty() ? juce::String("?") : d.manufacturerName)
+            // The scan's category — VST3 sub-categories ("Fx|Reverb", '|' turned into '/' so the
+            // line still splits on '|') or the AU type; the command palette classifies by it.
+            + " | " + d.category.replaceCharacter('|', '/'))
                .toStdString();
     return line.c_str();
 }

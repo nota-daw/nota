@@ -19,10 +19,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Command palette — ⌘⇧P (Ctrl+Shift+P on Windows and Linux).** One search field for every
+  command, track, device, plug-in and preset, from any window. What you pick goes where you
+  opened it: in Devices right after the selected card (⌥Enter replaces it), in Modular onto
+  the shown track, elsewhere onto the selected track — and the field tells you where before
+  you press Enter. ⌘Enter puts an instrument on a new track; ⇧Enter keeps the palette open
+  to add several devices in a row. It understands what you mean as well as names, in English
+  and Russian: "warm pad", "reverb for vocals", "компрессор на барабаны", a typo, or a word
+  typed in the wrong keyboard layout. Every apply is one undo step.
 - **A user manual, in English and Russian** — at https://nota-daw.github.io/nota-docs/, from the
   first track to every knob of every built-in device. **Help ▸ Documentation** opens it (in Russian
   when your system is), the start window links to the first-track tutorial, and every device's
   header menu has a **Documentation** item that opens that device's page.
+
+### Changed
+- **The menu, the keyboard shortcuts and the command palette run the same commands**, so a
+  shortcut and its menu item can no longer drift apart. Settings ▸ Shortcuts now also lists
+  ⌘, (Settings) and the palette keys.
+- **Dropping a device and choosing it in the palette put it in the same place:** an instrument
+  dropped on the Modular canvas now replaces the shown track's instrument, a drop on the
+  Devices panel is one undo step, and a MIDI effect dropped on an audio track says why it
+  can't go there.
 
 ### Fixed
 - **The Mixer shows your track names:** a track renamed to "Drums" used to read "Inst 2" in

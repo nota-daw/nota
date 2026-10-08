@@ -11,7 +11,8 @@ public interface IPluginCatalog
     int Scan(string workerPath);
     /// <summary>Number of plugins currently in the catalog.</summary>
     int Count { get; }
-    /// <summary>Human-readable entry ("Name | Format | inst|fx | Manufacturer"), or null.</summary>
+    /// <summary>Human-readable entry ("Name | Format | inst|fx | Manufacturer | Category"; the category
+    /// is the VST3 sub-categories joined by "/" or the AU type, "" when unknown), or null.</summary>
     string? Description(int index);
     /// <summary>Stable identifier for a catalog entry, or null.</summary>
     string? Id(int index);
