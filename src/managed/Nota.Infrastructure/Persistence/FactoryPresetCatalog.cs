@@ -1046,6 +1046,27 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Inst("keys", 16, "Toy Box",          ("model", 0.667f), ("hard", 1f), ("bright", 1f), ("decay", 0.3f), ("body", 0.2f), ("keybright", 0.9f), ("cab", 0.667f), ("dist", 0.4f), ("sym", 0.5f));
         Inst("keys", 16, "Ambient Tine",     ("hard", 0.2f), ("velhard", 0.5f), ("decay", 1f), ("damper", 0.2f), ("choruson", 1f), ("chorusmix", 0.65f), ("phaseron", 1f), ("phaserrate", 0.2f), ("phaserdepth", 0.4f), ("tremon", 1f), ("tremrate", 0.4f), ("tremdepth", 0.35f));
 
+        // ---- Nota Mosaic (kind 17) — multisample. Each preset loads a factory multisample
+        //      (MosaicSources: rendered once into the data folder, mapped by its file names);
+        //      Init keeps the loaded program and resets the sound. Pack presets (installed sample
+        //      packs, "Create multisample") live under Nota Mosaic → Packs, not here. Release /
+        //      decay 2 ms·3000^v (.69 ≈ 0.5 s, .83 ≈ 1.5 s, .91 ≈ 3 s); attack 0.5 ms·8000^v
+        //      (.71 ≈ 0.3 s); cutoff 20 Hz·1000^v (.67 ≈ 2 kHz); Vel Curve .5 linear (< .5 soft).
+        Inst("mosaic", 17, "Init");
+        Section("Keys");
+        Mos("Felt Piano",        "felt-piano",    ("release", 0.75f), ("velamount", 0.8f));
+        Mos("Felt Piano Soft",   "felt-piano",    ("release", 0.72f), ("velamount", 0.75f), ("velcurve", 0.35f), ("filtertype", 1f / 3f), ("cutoff", 0.62f), ("keytrack", 0.5f), ("relvol", 0.6f));
+        Mos("Felt Piano Bright", "felt-piano",    ("release", 0.72f), ("velamount", 0.85f), ("velcurve", 0.65f), ("relvol", 0.7f));
+        Mos("Music Box",         "music-box",     ("release", 0.78f), ("velamount", 0.6f));
+        Section("Mallets & Plucks");
+        Mos("Glass Mallets",     "glass-mallets", ("release", 0.76f), ("velamount", 0.75f));
+        Mos("Nylon Guitar",      "nylon",         ("release", 0.66f), ("velamount", 0.8f));
+        Mos("Brass Pluck",       "brass-pluck",   ("release", 0.55f), ("velamount", 0.8f));
+        Mos("Brass Lead",        "brass-pluck",   ("voicemode", 0.5f), ("glide", 0.54f), ("release", 0.5f), ("velamount", 0.6f));
+        Section("Pads");
+        Mos("Warm Pad",          "warm-pad",      ("attack", 0.71f), ("release", 0.85f), ("velamount", 0.4f));
+        Mos("Warm Pad Filtered", "warm-pad",      ("attack", 0.8f), ("release", 0.9f), ("velamount", 0.4f), ("filtertype", 1f / 3f), ("cutoff", 0.55f), ("envcutoff", 1f), ("envamount", 0.7f));
+
         // ---- Nota EQ-8 (kind 0) — raw units. Eq8(…) spells out every band it uses with B(band, type,
         //      Hz, dB, Q, slope, channel); a band it does not name is switched off. Type: 0 Low cut,
         //      1 Low shelf, 2 Bell, 3 Notch, 4 High shelf, 5 High cut. Slope (cuts): 0 = 12, 1 = 24,
@@ -2575,6 +2596,13 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     {
         Inst("grain", 10, name, ps);
         _byId["grain/" + name].GrainSource = source;
+    }
+
+    // A Nota Mosaic preset that loads one of the factory multisamples (MosaicSources id).
+    private void Mos(string name, string source, params (string Id, float Value)[] ps)
+    {
+        Inst("mosaic", MosaicModel.Kind, name, ps);
+        _byId["mosaic/" + name].MosaicSource = source;
     }
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)

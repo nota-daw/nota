@@ -133,6 +133,22 @@ typedef struct NotaSamplerInfo {
     int32_t loop;          /* 0/1 */
 } NotaSamplerInfo;
 
+/* Nota Mosaic loading state. state: 0 empty · 1 loading · 2 ready. disk_* count the files'
+ * bytes on disk (progress), ram_bytes what the decoded samples take; missing = files that
+ * didn't decode (not found / unsupported). serial changes whenever another program is set
+ * (an edit, undo, a preset) — an editor re-reads the program text then. */
+typedef struct NotaMosaicStatus {
+    int32_t state;
+    int32_t files_done;
+    int32_t files_total;
+    int32_t missing;
+    int32_t zones;
+    int32_t serial;
+    int64_t disk_done;
+    int64_t disk_total;
+    int64_t ram_bytes;
+} NotaMosaicStatus;
+
 /* Captured audio session take for project save (M7-6b). */
 typedef struct NotaSessionAudioSlot {
     int64_t sample_id;
@@ -256,6 +272,8 @@ NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, cons
 /* The Sampler's or Nota Grain's sample, played at its own pitch on root_note (NULL / "" =
  * the Sampler's procedural keys tone at C4; Grain keeps its built-in pad). */
 NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8, int32_t root_note);
+/* Nota Mosaic's program text; returns once its samples are loaded (1) or on failure (0). */
+NOTA_API int32_t nota_audition_set_mosaic_program(NotaAudition* rig, const char* text_utf8);
 /* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
  * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
  * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */
@@ -605,6 +623,26 @@ NOTA_API int32_t nota_engine_add_pentad_track(NotaEngine* engine);
 NOTA_API int32_t nota_engine_add_consort_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Keys (modelled electric piano, kind 16). id (>0). */
 NOTA_API int32_t nota_engine_add_keys_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Mosaic (multisample instrument, kind 17),
+ * empty until a program is set. id (>0). */
+NOTA_API int32_t nota_engine_add_mosaic_track(NotaEngine* engine);
+/* Nota Mosaic's program — UTF-8 text (grammar in Mosaic.h). Set parses it and starts loading
+ * its samples in the background (1 on success, 0 when the track isn't a Mosaic); checkpoint 1
+ * makes it one undo step (the instrument is republished — sounding notes stop), 0 edits the
+ * live instrument in place (no undo). Get copies up to cap bytes (no terminator) and returns
+ * the full length. */
+NOTA_API int32_t nota_track_mosaic_set_program(NotaEngine* engine, int32_t track_id, const char* text_utf8, int32_t checkpoint);
+NOTA_API int32_t nota_track_mosaic_program(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+NOTA_API int32_t nota_track_mosaic_status(const NotaEngine* engine, int32_t track_id, NotaMosaicStatus* out);
+/* The sample id (nota_sample_info / nota_sample_read) behind a zone of the program, 0 = not loaded. */
+NOTA_API int64_t nota_track_mosaic_zone_sample_id(const NotaEngine* engine, int32_t track_id, int32_t zone);
+/* A named root that program sample references resolve against ("samples:Downloaded/x.wav"
+ * → <samples root>/Downloaded/x.wav). Process-wide. */
+NOTA_API void    nota_path_root_set(const char* name_utf8, const char* path_utf8);
+/* Decodes up to max_seconds of a file's head as mono (channel average) into out (cap
+ * frames; out may be null to ask). Returns the frames decoded (≤ cap when out is given),
+ * 0 on failure; *sample_rate gets the file's rate. */
+NOTA_API int64_t nota_file_decode_mono(const char* path_utf8, double max_seconds, float* out, int64_t cap, double* sample_rate);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);

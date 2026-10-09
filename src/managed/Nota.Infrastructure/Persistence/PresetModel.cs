@@ -38,6 +38,16 @@ public sealed class PresetDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GrainSource { get; set; }
 
+    /// <summary>Nota Mosaic factory presets: the factory multisample (MosaicSources id) the
+    /// preset renders on first use and loads. Null = none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MosaicSource { get; set; }
+
+    /// <summary>Nota Mosaic: the program text (zones + sample references) the preset loads.
+    /// Null = keep the loaded program (a sound-only preset).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MosaicProgram { get; set; }
+
     // Plugin: stable identity + base64-encoded state blob.
     public string PluginId { get; set; } = "";
     public string StateBase64 { get; set; } = "";

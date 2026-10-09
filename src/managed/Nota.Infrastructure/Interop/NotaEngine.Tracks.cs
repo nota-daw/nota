@@ -805,6 +805,50 @@ public sealed partial class NotaEngine
         return id;
     }
 
+    /// <summary>Adds an instrument track with the built-in Nota Mosaic (empty until a program is set). Returns its id.</summary>
+    public int AddMosaicTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddMosaicTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Mosaic track.");
+        return id;
+    }
+
+    public bool MosaicSetProgram(int trackId, string text, bool undoable = true)
+    { ThrowIfDisposed(); return NativeMethods.MosaicSetProgram(_handle, trackId, text ?? "", undoable ? 1 : 0) != 0; }
+
+    public unsafe string MosaicProgram(int trackId)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.MosaicProgram(_handle, trackId, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n];
+        fixed (byte* p = buf) n = Math.Min(n, NativeMethods.MosaicProgram(_handle, trackId, p, buf.Length));
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
+
+    public bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status)
+    { ThrowIfDisposed(); return NativeMethods.MosaicStatus(_handle, trackId, out status) != 0; }
+
+    public long MosaicZoneSampleId(int trackId, int zone)
+    { ThrowIfDisposed(); return NativeMethods.MosaicZoneSampleId(_handle, trackId, zone); }
+
+    /// <summary>Sets a named root Nota Mosaic's sample references resolve against
+    /// ("samples:Downloaded/x.wav" → &lt;root&gt;/Downloaded/x.wav). Process-wide.</summary>
+    public static void SetPathRoot(string name, string path) => NativeMethods.PathRootSet(name, path ?? "");
+
+    /// <summary>Decodes up to <paramref name="maxSeconds"/> of a file's head as mono; null on failure.</summary>
+    public static unsafe float[]? DecodeMono(string path, double maxSeconds, out double sampleRate)
+    {
+        long n = NativeMethods.FileDecodeMono(path, maxSeconds, null, 0, out sampleRate);
+        if (n <= 0 || n > int.MaxValue) return null;
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.FileDecodeMono(path, maxSeconds, p, buf.LongLength, out sampleRate);
+        if (n <= 0) return null;
+        if (n < buf.LongLength) Array.Resize(ref buf, (int)n);
+        return buf;
+    }
+
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }

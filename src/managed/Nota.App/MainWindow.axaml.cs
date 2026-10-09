@@ -311,10 +311,12 @@ public partial class MainWindow : Window
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
         Browser.RevealRequested += OnBrowserReveal;
+        Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
         Browser.EditTagsRequested += OnBrowserEditTags;
 
-        _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits);
+        _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
+        InitMosaic();
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
         _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;

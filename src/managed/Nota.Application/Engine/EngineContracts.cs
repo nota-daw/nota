@@ -145,6 +145,23 @@ public struct NotaSamplerInfo
     public int Loop;            // 0/1
 }
 
+/// <summary>Nota Mosaic's loading state. Matches native NotaMosaicStatus. State: 0 empty ·
+/// 1 loading · 2 ready; Disk* are the files' bytes on disk (progress), RamBytes the decoded
+/// samples' size; Missing = files that didn't decode.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaMosaicStatus
+{
+    public int State;
+    public int FilesDone;
+    public int FilesTotal;
+    public int Missing;
+    public int Zones;
+    public int Serial;          // changes whenever another program is set
+    public long DiskDone;
+    public long DiskTotal;
+    public long RamBytes;
+}
+
 /// <summary>Captured session audio take. Matches native NotaSessionAudioSlot (M7-6b).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionAudioSlot

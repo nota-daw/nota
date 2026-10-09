@@ -91,7 +91,7 @@ public sealed class McpService(
     IPluginCatalog pluginCatalog, IFactoryPresets factoryPresets, IPresetStore presetStore, IPresetLibrary presetLibrary,
     IAudioExporter exporter, IMidiDeviceService midiDevices, MidiLearnService midiLearn, IDrumKits drumKits,
     ProjectVersionsBridge projectVersions, IProjectHistory projectHistory, IModelStore models, IClipAi clipAi,
-    ISampleIndex sampleIndex, Nota.Presentation.TransportViewModel transport)
+    ISampleIndex sampleIndex, Nota.Presentation.TransportViewModel transport, IMosaicPacks mosaicPacks)
 {
     private readonly NotaMcpServer _server = new();
 
@@ -115,6 +115,7 @@ public sealed class McpService(
         s.AddSingleton(models);
         s.AddSingleton(clipAi);
         s.AddSingleton(sampleIndex);
+        s.AddSingleton(mosaicPacks);
         s.AddSingleton<IProjectKeyAccess>(new ProjectKeyAccess(transport));
     }
 

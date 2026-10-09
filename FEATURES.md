@@ -444,6 +444,27 @@ and user presets, automation, persistence and cloning.
   preamp (drive, bass, treble), mono or stereo-pan tremolo (free or tempo-synced), phaser,
   chorus, Suitcase / Combo / DI cabinet, volume and pan. Two sizes: L (Sound / FX tabs) and S
   (model, pickup, four knobs). 40 factory presets; MCP `read_keys` / `set_keys`.
+- **Nota Mosaic** — multisample instrument: zones (a sample on a key × velocity rectangle with
+  its root, fine tune, gain, pan, start / end and loop) in groups with a shared gain / tune and
+  a round-robin (Sequential / Random / No repeat), key and velocity crossfades, exclusive groups
+  (choke by `off_by`), release samples on key-up or pedal-up that get quieter the longer the
+  key was held. Poly 16 / 32 / 64 / 128 (steals released, then the quietest, then the oldest
+  voices with an adjustable fade; up to 1–4 strikes per key), Mono with glide, Choke; sustain
+  pedal (CC64); MPE (bend with a set range, pressure → level, slide → cutoff); amp ADSR,
+  LP / HP / BP filter with keytrack and env → cutoff, a velocity curve. Card tabs Zones (drag
+  tiles and edges on the map, the keyboard plays, Attack / Release view), Sample, Groups,
+  Pitch, Env, Filter, and a Voices rail; S size shows a mini map. Samples load into RAM in the
+  background (notes silent until ready) and stay referenced, not copied — a project or preset
+  on a computer without the pack offers to install it or to locate the folder. **SFZ import**
+  (`#include` / `#define`, Windows paths, CC articulations picked from the tab strip, an import
+  report of what was ignored); **Create multisample** maps a folder by file names
+  (`trombone_gb4.wav`, `_f_`, `_rr2`, `_rel`), checks the octave convention by pitch detection
+  and lists gaps, duplicates and guessed notes (browser folder menu, or files dropped on the
+  card). Installed sample packs become presets under Nota Mosaic → Packs. 11 factory presets
+  on built-in multisamples (felt piano with release samples, mallets, nylon guitar, brass, pad,
+  music box) rendered on first use; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
+  `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
+  `load_mosaic_preset`, `scan_sample_packs`.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
@@ -956,6 +977,8 @@ Coverage:
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.
+- **Nota Mosaic**: read and shape it, edit zones and groups, import SFZ, map a folder of
+  samples by name, list and load its factory and pack presets (see Nota Mosaic above).
 - **Sample library**: `search_samples` (kind, BPM range, key, words in the path),
   `get_sample_info`, `find_similar_samples`, `get_project_key` / `set_project_key`.
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,

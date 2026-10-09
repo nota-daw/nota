@@ -13,6 +13,9 @@
 #include <utility>
 
 #include "AudioFile.h"
+#include "Mosaic.h"
+#include <chrono>
+#include <thread>
 #include "Device.h"
 #include "DeviceFactory.h"
 #include "GrainSynth.h"
@@ -121,6 +124,18 @@ bool AuditionRig::midiParam(int32_t index, const std::string& name, float value)
     MidiDevice& m = *midi_[static_cast<size_t>(index)];
     for (int32_t p = 0, n = m.paramCount(); p < n; ++p)
         if (name == m.paramName(p)) { m.setParam(p, value); return true; }
+    return false;
+}
+
+bool AuditionRig::setMosaicProgram(const std::string& text, int32_t timeoutMs) {
+    auto* m = dynamic_cast<Mosaic*>(inst_.get());
+    if (!m) return false;
+    m->setProgram(text);
+    for (int32_t waited = 0; waited < timeoutMs; waited += 2) {
+        auto s = m->status();
+        if (s.state != 1) return s.state == 2;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
     return false;
 }
 

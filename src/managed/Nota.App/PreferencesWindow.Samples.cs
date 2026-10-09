@@ -318,7 +318,9 @@ public sealed partial class PreferencesWindow
                 if (_samples.Installed.FirstOrDefault(i => i.Id == p.Id) is { } installed)
                     App.Services.GetRequiredService<ISampleIndex>().Prioritize(installed.Path);
                 main?.Browser.RebuildSamples();
-                return Task.FromResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key.");
+                // Its instruments become Nota Mosaic presets (Packs → the pack) in the background.
+                _ = App.Services.GetService<IMosaicPacks>()?.ScanAsync();
+                return Task.FromResult($"{p.Name} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key; its instruments appear under Nota Mosaic → Packs.");
             });
     }
 

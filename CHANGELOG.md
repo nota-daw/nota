@@ -19,6 +19,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Mosaic — a multisample instrument.** Many samples across the keyboard: zones by key and
+  velocity, layers with round-robin, release samples that sound when you let go of a key (quieter
+  after a long hold), the sustain pedal, up to 128 voices and MPE. The Zones tab draws the map —
+  drag a zone to move it, an edge to resize it, play the keyboard under it. Load an **SFZ**
+  instrument, or build one from a folder: **Create multisample** (right-click a folder in the
+  Files tab, or drop files on the card) reads the notes, velocity layers and round-robin steps
+  from the file names, checks the octave by ear and shows what needs a look before it saves the
+  presets. Every installed sample pack shows up as Mosaic presets under **Packs**, and 11 factory
+  presets play built-in multisamples (felt piano, mallets, nylon guitar and more). Samples are
+  referenced, not copied into the project; if a pack is missing on another computer, the card
+  offers to install it.
 - **Tap tempo.** A **TAP** cell beside the BPM in the transport bar: tap the beat on it and the
   project tempo follows from the second tap, averaged over the last eight. Four dots count the
   beats as you tap. Change pace mid-series and it picks up the new tempo at once; pause for

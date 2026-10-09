@@ -42,6 +42,7 @@
 #include "Pentad.h"
 #include "Consort.h"
 #include "Keys.h"
+#include "Mosaic.h"
 #include "GrainSynth.h"
 #include "Arpeggiator.h"
 #include "MidiChord.h"
@@ -258,6 +259,57 @@ int32_t Engine::addKeysTrack() {
     g->tracks.push_back(track);
     publish(g);
     return id;
+}
+
+int32_t Engine::addMosaicTrack() {
+    auto g = std::make_shared<Graph>(*authoring_);
+    const int32_t id = nextTrackId_++;
+    auto track = std::make_shared<Track>(id, TrackType::Instrument);
+    auto inst = std::make_shared<Mosaic>();   // empty — a program is set later
+    inst->setSampleRate(transport_.sampleRate());
+    track->instrument = inst;
+    g->tracks.push_back(track);
+    publish(g);
+    return id;
+}
+
+// Nota Mosaic's program lives in the instrument, which is shared across snapshots; setting
+// it is lock-free for the audio thread (Mosaic publishes it itself once loaded).
+static Mosaic* mosaicOf(const std::shared_ptr<Track>& t) {
+    return t && t->instrument ? dynamic_cast<Mosaic*>(t->instrument.get()) : nullptr;
+}
+bool Engine::mosaicSetProgram(int32_t trackId, const std::string& text, bool checkpoint) {
+    auto old = findTrackAuthoring(trackId);
+    auto* m = mosaicOf(old);
+    if (!m) return false;
+    if (!checkpoint) { m->setProgram(text); return true; }   // live edit: in place, voices keep going
+    // An undoable edit publishes a fresh Mosaic (params + the samples it already holds, so a
+    // zone edit is ready at once) — undo brings the old instrument, with its program, back.
+    auto fresh = std::static_pointer_cast<Mosaic>(m->clone());
+    fresh->setProgram(text);
+    auto nt = cloneTrack(*old);
+    nt->instrument = fresh;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+std::string Engine::mosaicProgram(int32_t trackId) const {
+    auto* m = mosaicOf(findTrackAuthoring(trackId));
+    return m ? m->programText() : std::string{};
+}
+bool Engine::mosaicStatus(int32_t trackId, NotaMosaicStatus* out) const {
+    auto* m = mosaicOf(findTrackAuthoring(trackId));
+    if (!m || !out) return false;
+    const auto s = m->status();
+    out->state = s.state; out->files_done = s.filesDone; out->files_total = s.filesTotal;
+    out->missing = s.missing; out->zones = s.zones; out->serial = s.serial;
+    out->disk_done = s.diskDone; out->disk_total = s.diskTotal; out->ram_bytes = s.ram;
+    return true;
+}
+int64_t Engine::mosaicZoneSampleId(int32_t trackId, int32_t zone) const {
+    auto* m = mosaicOf(findTrackAuthoring(trackId));
+    if (!m) return 0;
+    auto b = m->zoneSample(zone);
+    return b ? b->id : 0;
 }
 
 // UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns). The
@@ -650,6 +702,7 @@ std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
         case 14: return std::make_shared<Pentad>();
         case 15: return std::make_shared<Consort>();
         case 16: return std::make_shared<Keys>();
+        case 17: return std::make_shared<Mosaic>();       // empty: a program is set later
         default: return nullptr;                          // Racks (3/4) / unknown: no simple swap
     }
 }

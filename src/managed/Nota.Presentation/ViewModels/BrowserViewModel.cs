@@ -108,6 +108,7 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     private readonly IPluginCatalog _catalog;
     private readonly IPresetLibrary _presets;
+    private readonly IMosaicPacks? _mosaic;
     private readonly IFactoryPresets _factory;
     private readonly IDrumKits? _kits;
     private readonly ISettingsService? _settings;
@@ -161,8 +162,9 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     public BrowserViewModel(IPluginCatalog catalog, IPresetLibrary presets, IFactoryPresets factory,
                             ISettingsService? settings = null, IBrowserLibrary? library = null,
-                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null)
+                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null, IMosaicPacks? mosaic = null)
     {
+        _mosaic = mosaic;
         _index = sampleIndex;
         _catalog = catalog;
         _presets = presets;
@@ -312,12 +314,30 @@ public sealed partial class BrowserViewModel : ObservableObject
                     });
             }
 
+        // Nota Mosaic's pack presets (installed sample packs, "Create multisample"): Packs → a pack.
+        if (_mosaic is not null && _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == MosaicModel.Kind) is { } mosaicDev)
+        {
+            var list = _mosaic.Presets();
+            if (list.Count > 0)
+            {
+                var packs = new BrowserItem { Name = "Packs", Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs", Depth = 1 };
+                foreach (var g in list.GroupBy(p => p.Folder))
+                {
+                    var folder = new BrowserItem { Name = g.Key, Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs/{g.Key}", Depth = 2 };
+                    foreach (var p in g)
+                        folder.Children.Add(new BrowserItem { Name = p.Name, Kind = BrowserItemKind.Preset, Sub = p.Source == "sfz" ? "sfz" : "multi", Path = p.Path, Depth = 3 });
+                    packs.Children.Add(folder);
+                }
+                mosaicDev.Children.Add(packs);
+            }
+        }
+
         // Preset groups start collapsed; the user expands a device to reveal its folders.
         foreach (var tree in new[] { _instrTree, _fxTree, _midiTree })
             foreach (var d in tree)
             {
                 d.IsExpanded = false;
-                foreach (var c in d.Children) c.IsExpanded = false;
+                foreach (var c in d.Children) { c.IsExpanded = false; foreach (var cc in c.Children) cc.IsExpanded = false; }
             }
 
         int count = _catalog.Count;
@@ -486,20 +506,21 @@ public sealed partial class BrowserViewModel : ObservableObject
                 if (q.Length == 0 || Matches(c, q)) dst.Add(c);
                 continue;
             }
+            // Folders nest (Nota Mosaic → Packs → a pack): the same rule one level down.
             if (q.Length == 0)
             {
                 dst.Add(c);
-                if (c.IsExpanded) foreach (var p in c.Children) dst.Add(p);
+                if (c.IsExpanded) AddPresetRows(c.Children, "", dst);
             }
             else if (Matches(c, q))
             {
                 dst.Add(c);
-                foreach (var p in c.Children) dst.Add(p);
+                AddPresetRows(c.Children, "", dst);
             }
-            else if (c.Children.Any(p => Matches(p, q)))
+            else if (AnyMatch(c.Children, q))
             {
                 dst.Add(c);
-                foreach (var p in c.Children) if (Matches(p, q)) dst.Add(p);
+                AddPresetRows(c.Children, q, dst);
             }
         }
     }

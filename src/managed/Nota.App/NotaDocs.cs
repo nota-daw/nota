@@ -23,7 +23,7 @@ internal static class NotaDocs
         "racks/drum-rack", "instruments/aurora", "instruments/volt", "instruments/bass",
         "instruments/pendulum", "instruments/operator", "instruments/grain", "instruments/flux",
         "instruments/rhythm", "instruments/monolith", "instruments/pentad", "instruments/consort",
-        "instruments/keys",
+        "instruments/keys", "instruments/mosaic",
     };
     private static readonly string[] AudioEffects =
     {

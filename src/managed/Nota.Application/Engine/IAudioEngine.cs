@@ -376,6 +376,19 @@ public interface IAudioEngine : IDisposable
     int AddConsortTrack();
     /// <summary>Adds an instrument track with the built-in Nota Keys modelled electric piano (kind 16).</summary>
     int AddKeysTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Mosaic multisample instrument (kind 17),
+    /// empty until a program is set.</summary>
+    int AddMosaicTrack();
+    /// <summary>Sets a Nota Mosaic's program (MosaicProgram text) and starts loading its samples in
+    /// the background. <paramref name="undoable"/>: one undo step (sounding notes stop); false edits
+    /// the live instrument in place (a drag in progress). False when the track isn't a Mosaic.</summary>
+    bool MosaicSetProgram(int trackId, string text, bool undoable = true);
+    /// <summary>The Mosaic's program text ("" when none / not a Mosaic).</summary>
+    string MosaicProgram(int trackId);
+    /// <summary>The Mosaic's loading state; false when the track isn't a Mosaic.</summary>
+    bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status);
+    /// <summary>The sample id behind a zone (for TryGetSampleInfo / ReadSample), 0 = not loaded.</summary>
+    long MosaicZoneSampleId(int trackId, int zone);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>

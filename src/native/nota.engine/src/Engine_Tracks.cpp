@@ -13,6 +13,7 @@
 #include "Reverb.h"
 #include "RackCore.h"
 #include "Sampler.h"
+#include "Mosaic.h"
 #include "GrainSynth.h"
 #include "RhythmMachine.h"
 #include "Synth.h"
@@ -43,6 +44,9 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
             if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
         if (auto* gr = dynamic_cast<GrainSynth*>(t->instrument.get()))
             if (gr->sample() && gr->sample()->id == sampleId) return gr->sample();
+        // Nota Mosaic's zones (the editor's waveform; never bundled — they are referenced).
+        if (auto* mo = dynamic_cast<Mosaic*>(t->instrument.get()))
+            for (auto& b : mo->samples()) if (b->id == sampleId) return b;
         // Nota Rhythm per-voice one-shots.
         if (auto* rh = dynamic_cast<RhythmMachine*>(t->instrument.get()))
             for (int v = 0; v < RhythmMachine::kVoices; ++v)

@@ -14,6 +14,8 @@ using System.Collections.Generic;
 using System.IO;
 using Nota.Application;
 
+using Nota.Application.Mosaic;
+
 namespace Nota.Infrastructure;
 
 public sealed partial class PresetAudition : IPresetAudition
@@ -102,6 +104,14 @@ public sealed partial class PresetAudition : IPresetAudition
                             var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
                             if (src is null || path is null || !rig.SetSamplerSample(path, src.Root)) return false;
                         }
+                        // Nota Mosaic: its multisample (a factory source, the preset's program, else the felt piano).
+                        if (kind == MosaicModel.Kind)
+                        {
+                            var prog = !string.IsNullOrEmpty(doc.MosaicSource) ? Mosaic.MosaicSourceLibrary.Program(doc.MosaicSource)
+                                : !string.IsNullOrEmpty(doc.MosaicProgram) ? MosaicProgram.Parse(doc.MosaicProgram)
+                                : Mosaic.MosaicSourceLibrary.Program("felt-piano");
+                            if (prog is null || !rig.SetMosaicProgram(prog.Serialize())) return false;
+                        }
                         return true;
                     },
                     phrase.Notes, Bpm, phrase.Beats, phrase.Tail, phrase.Rolling);
@@ -171,7 +181,7 @@ public sealed partial class PresetAudition : IPresetAudition
     {
         [0] = "Nota Synth", [1] = "Nota Sampler", [2] = "Nota Physical", [5] = "Nota Aurora", [6] = "Nota Volt",
         [7] = "Nota Bass", [8] = "Nota Pendulum", [9] = "Nota Operator", [10] = "Nota Grain", [11] = "Nota Flux",
-        [12] = "Nota Rhythm", [13] = "Nota Monolith", [14] = "Nota Pentad", [15] = "Nota Consort", [16] = "Nota Keys",
+        [12] = "Nota Rhythm", [13] = "Nota Monolith", [14] = "Nota Pentad", [15] = "Nota Consort", [16] = "Nota Keys", [17] = "Nota Mosaic",
     };
     private static readonly Dictionary<int, string> MidiNames = new()
     {

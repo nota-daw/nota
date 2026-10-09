@@ -88,6 +88,8 @@ public static class PresetDescriptors
         ["reed"] = new() { Sound = ["keys"], Character = ["gritty", "vintage"] },
         ["clav"] = new() { Sound = ["keys"], Character = ["punchy"], Genre = ["funk"] },
         ["character"] = new() { Character = ["lofi", "vintage"] },
+        ["mallets & plucks"] = new() { Sound = ["pluck", "bell"] },
+        ["packs"] = new() { Sound = ["keys"] },
     };
 
     /// <summary>A factory or user preset's descriptor (CP-13.2/13.3): the device's role,

@@ -230,6 +230,9 @@ public sealed class BrowserView : UserControl
     public PreviewPlayer Preview => _previewFooter;
     /// <summary>Reveal a sample / folder / project in the system file manager.</summary>
     public event Action<BrowserItem>? RevealRequested;
+
+    /// <summary>Map a sample folder into Nota Mosaic presets (the auto-multisample preview).</summary>
+    public event Action<BrowserItem>? CreateMultisampleRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
     public event Action<BrowserItem>? DeleteProjectRequested;
     /// <summary>Open the tag editor. Item null = manage all tags; non-null = create a tag
@@ -1562,8 +1565,12 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Folder when _active == FilesTab:   // real sample folders (preset folders are synthetic)
             {
+                var multi = new MenuItem { Header = "Create multisample…" };
+                multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
+                ToolTip.SetTip(multi, "Map the folder's samples by their names into Nota Mosaic presets");
                 var reveal = new MenuItem { Header = "Reveal in Finder" };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
+                flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
                 return flyout;
             }
