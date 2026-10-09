@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.42.1** (plus changes in development on `main`). This document describes what is
+**0.51.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -83,6 +83,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
+  **Duplicate time** (⌘⇧D) copies a selected time range right after itself and **Insert
+  silence** (⌘⇧I) opens a gap of its length, across the whole song — clips and automation
+  after it move right, clips crossing it are cut (Edit menu and the range's right-click menu).
   An **Overview** strip above the ruler shows the whole project in miniature with the
   visible span as a window over it — drag it to scroll, drag its edges (or drag vertically)
   to zoom, double-click to fit the project.
@@ -107,7 +110,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   colours, tempo / signature and scene follow, inserted, duplicated, captured and reordered
   without stopping playback; Session Rec with fixed length; group columns that fold;
   returns + master; I/O · Sends · Mixer sections; removable stop buttons; per-track
-  Back to Arrangement; and moving material between Session and Arrangement.
+  Back to Arrangement; and moving material between Session and Arrangement — the clipboard
+  works both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
+  Scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch and
+  gain, as one undo step.
 - **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
@@ -221,6 +227,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     to move it, double-click to add or delete a point, right-click for **Clear Bend /
     Pressure / Slide** and **Clear All Expression**. The bend lane scales itself (±2, 12, 24,
     48 or 96 semitones); each gesture is one undo step and plays back straight away.
+- **Nota Remote — a phone as a controller**: **Remote** in the top bar (View → Connect
+  Phone…) shows a QR code; the phone opens a PWA with pads, keys in the project's scale with
+  chords, an XY pad with tilt, the mixer, macros and the Session grid — over Wi-Fi or a USB
+  cable, nothing to install. Pairing by a rotating four-digit code, trusted phones and
+  permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
+  the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
+  several phones play at once, each on its own track, with players' names on the tracks.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -261,6 +274,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off).
+- **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
+  Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
+  Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
+  is the part of the clip you hear; the clip stays put.
 - **Recording from an internal bus** (a group, return or master output into a new audio
   track) — dropped frames are padded with silence, so there is no cumulative drift.
 - **Import** of audio files by drag and drop: WAV / AIFF / FLAC / MP3.
@@ -455,8 +472,8 @@ and user presets, automation, persistence and cloning.
   tiles and edges on the map, the keyboard plays, Attack / Release view), Sample, Groups,
   Pitch, Env, Filter, and a Voices rail; S size shows a mini map. Samples load into RAM in the
   background (notes silent until ready) and stay referenced, not copied — a project or preset
-  on a computer without the pack offers to install it or to locate the folder. **SFZ import**
-  (`#include` / `#define`, Windows paths, CC articulations picked from the tab strip, an import
+  on a computer without the pack offers to install it or to locate the folder. **SFZ import** for
+  installed packs' SFZ programs and over MCP (`#include` / `#define`, Windows paths, CC articulations picked from the tab strip, an import
   report of what was ignored); **Create multisample** maps a folder by file names
   (`trombone_gb4.wav`, `_f_`, `_rr2`, `_rel`), checks the octave convention by pitch detection
   and lists gaps, duplicates and guessed notes (browser folder menu, or files dropped on the
@@ -905,6 +922,11 @@ and user presets, automation, persistence and cloning.
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
 - **Popup rack editors** (full UI / Params).
+- **Typed values** — double-click the number next to a slider in a device card, the clip
+  editor or a rack macro and type it: "−6", "1.5k", "250 ms", "L 30", "1/16".
+- **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
+  opens it in the system language, the start window links to the first-track tutorial, and
+  each device header menu's **Documentation** item opens that device's page.
 - **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
   Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
 

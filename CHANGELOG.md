@@ -18,17 +18,33 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.51.1] — 2026-10-09
+
+### Highlights
+- **MPE arrives:** play an MPE controller and every note bends, swells and changes tone on its
+  own in the built-in synths; the expression is recorded with each note and can be drawn and
+  edited in the piano roll — even on plain MIDI parts.
+- **Two new instruments:** Nota Mosaic plays multisamples (build one from a folder of samples, or
+  play any installed sample pack, SFZ included), and Nota Keys models electric pianos — tine,
+  suitcase, reed and clav, with its own effects chain.
+- **Command palette (⌘⇧P / Ctrl+Shift+P):** find any command, track, device, plug-in or preset
+  by name or by description ("warm pad", "reverb for vocals"), in English or Russian.
+- **Tap tempo** in the transport bar, and the sustain pedal now reaches instruments.
+- **A full user manual** in English and Russian, linked from the Help menu and every device.
+- **Fixes:** Ctrl shortcuts work on Windows and Linux, the Mixer shows track names, and the
+  browser search no longer keeps the keyboard.
+
 ### Added
 - **Nota Mosaic — a multisample instrument.** Many samples across the keyboard: zones by key and
   velocity, layers with round-robin, release samples that sound when you let go of a key (quieter
   after a long hold), the sustain pedal, up to 128 voices and MPE. The Zones tab draws the map —
-  drag a zone to move it, an edge to resize it, play the keyboard under it. Load an **SFZ**
-  instrument, or build one from a folder: **Create multisample** (right-click a folder in the
-  Files tab, or drop files on the card) reads the notes, velocity layers and round-robin steps
-  from the file names, checks the octave by ear and shows what needs a look before it saves the
-  presets. Every installed sample pack shows up as Mosaic presets under **Packs**, and 11 factory
-  presets play built-in multisamples (felt piano, mallets, nylon guitar and more). Samples are
-  referenced, not copied into the project; if a pack is missing on another computer, the card
+  drag a zone to move it, an edge to resize it, play the keyboard under it. Build an instrument
+  from a folder: **Create multisample** (right-click a folder in the Files tab, or drop files on
+  the card) reads the notes, velocity layers and round-robin steps from the file names, checks
+  the octave by ear and shows what needs a look before it saves the presets. Every installed
+  sample pack shows up as Mosaic presets under **Packs** (its **SFZ** instruments included), and
+  11 factory presets play built-in multisamples (felt piano, mallets, nylon guitar and more).
+  Samples are referenced, not copied into the project; if a pack is missing on another computer, the card
   offers to install it.
 - **Tap tempo.** A **TAP** cell beside the BPM in the transport bar: tap the beat on it and the
   project tempo follows from the second tap, averaged over the last eight. Four dots count the
@@ -51,7 +67,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   first track to every knob of every built-in device. **Help ▸ Documentation** opens it (in Russian
   when your system is), the start window links to the first-track tutorial, and every device's
   header menu has a **Documentation** item that opens that device's page.
-
 - **MPE — per-note expression for the built-in synths.** Play an MPE controller (Seaboard,
   LinnStrument, Osmose, Sensel…) and every note bends, swells and changes timbre on its own:
   Nota Synth, Volt, Aurora, Operator, Pentad and Physical respond to per-note pitch bend,
