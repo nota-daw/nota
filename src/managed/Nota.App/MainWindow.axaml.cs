@@ -599,6 +599,45 @@ public partial class MainWindow : Window
         f.ShowAt(MetronomeBtn);
     }
 
+    private readonly TapTempo _tap = new();
+    private readonly System.Diagnostics.Stopwatch _tapClock = System.Diagnostics.Stopwatch.StartNew();
+    private DispatcherTimer? _tapIdle;
+
+    private void OnTapTempo(object? sender, RoutedEventArgs e) => TapTempoBeat();
+
+    // One beat of tap tempo, from the TAP cell or the palette. The tempo follows from the
+    // second tap on; the dots fill 1–4 and wrap, and clear once the series times out.
+    private void TapTempoBeat()
+    {
+        if (_vm is null) return;
+        double? bpm = _tap.Tap(_tapClock.Elapsed.TotalMilliseconds);
+        if (bpm is { } b)
+        {
+            _vm.Transport.Bpm = (decimal)b;
+            _vm.StatusText = $"Tempo: {NotaNum.Bpm(b)} BPM (tapped)";
+        }
+        ShowTapDots(_tap.Count);
+        _tapIdle ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _tapIdle.Tick -= OnTapIdle;
+        _tapIdle.Tick += OnTapIdle;
+        _tapIdle.Stop();
+        _tapIdle.Start();
+    }
+
+    private void OnTapIdle(object? sender, EventArgs e)
+    {
+        _tapIdle?.Stop();
+        _tap.Reset();
+        ShowTapDots(0);
+    }
+
+    private void ShowTapDots(int taps)
+    {
+        int lit = taps == 0 ? 0 : (taps - 1) % TapDots.Children.Count + 1;
+        for (int i = 0; i < TapDots.Children.Count; i++)
+            ((Ellipse)TapDots.Children[i]).BindResource(Shape.FillProperty, i < lit ? "Brush.Accent" : "Brush.BorderStrong");
+    }
+
     private void OnCycleSnap(object? sender, RoutedEventArgs e)
     {
         _snapIndex = (_snapIndex + 1) % SnapSteps.Length;

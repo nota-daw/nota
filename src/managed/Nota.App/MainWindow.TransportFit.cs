@@ -27,6 +27,7 @@ public partial class MainWindow
         new Control[] { CpuMeter, CpuSep },     // informative only
         new Control[] { ProjectNameText },      // moves to the title-bar caption
         new Control[] { RemoteLabel },          // Remote keeps its glyph, count and dot
+        new Control[] { TapChip },              // palette ▸ Tap Tempo; the BPM field stays
         new Control[] { KeyChip },              // set once per project
         new Control[] { RemoteBtn },            // View ▸ Connect Phone…
         new Control[] { FollowBtn },            // View ▸ Follow playhead

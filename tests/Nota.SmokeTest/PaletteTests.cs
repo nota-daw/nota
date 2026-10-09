@@ -98,7 +98,7 @@ internal static class PaletteTests
         ("dark reverb", "Nota Chamber"), ("acid bass", "Preset:*acid"), ("pluck", "Preset:*pluck"),
         // actions & tracks (CP-6a)
         ("quant", "Quantize Notes"), (">quant", "Quantize Notes"), ("export", "Export Audio…"), ("render", "Export Audio…"),
-        ("settings audio", "Settings: Audio"), ("hotkeys", "Settings: Shortcuts"), ("metronome", "Metronome"),
+        ("settings audio", "Settings: Audio"), ("hotkeys", "Settings: Shortcuts"), ("metronome", "Metronome"), ("tap tempo", "Tap Tempo"),
         ("@vox", "Lead Vox"), ("bass", "Bass"), ("phaser", "Nota Phaser"),
     };
 

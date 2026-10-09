@@ -66,6 +66,8 @@ JUCE module; the engine core is JUCE-free.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
 - **Tempo (BPM)** and **time signature** (edited by dragging; the denominator snaps to a
   power of two), grid and quantization.
+- **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
+  tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection).
 - **Metronome** and **count-in** before recording.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing

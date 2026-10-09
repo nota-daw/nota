@@ -200,6 +200,21 @@
             <Panel x:Name="BpmHost" Width="52" Height="18"/>
             <TextBlock Classes="CellLabel" Text="BPM" HorizontalAlignment="Center"/>
           </StackPanel>
+          <!-- Tap tempo: fires on press (a release lags the beat). The dots count the beats
+               of the current series, brass as each one lands; they clear when it times out. -->
+          <Button x:Name="TapChip" Classes="cell" ClickMode="Press" Click="OnTapTempo"
+                  ToolTip.Tip="Tap the beat to set the tempo">
+            <StackPanel Spacing="2">
+              <StackPanel x:Name="TapDots" Orientation="Horizontal" Spacing="3" Height="16"
+                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
+              </StackPanel>
+              <TextBlock Classes="CellLabel" Text="TAP" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Button>
           <!-- Time signature (drag ↕ each field) -->
           <StackPanel x:Name="TimeSigCell" Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Set the time signature — drag each field">
             <StackPanel Orientation="Horizontal" Spacing="1" Height="18">

@@ -70,6 +70,7 @@ public static class CommandCatalog
         C("transport.record", "Record", "Transport", "⌘R", "arm capture"),
         C("transport.loop", "Toggle Loop", "Transport", "⌘L", "cycle repeat"),
         C("transport.metronome", "Metronome", "Transport", "⌘M", "click"),
+        C("transport.tapTempo", "Tap Tempo", "Transport", "", "bpm beat tap"),
 
         // ---- Track ------------------------------------------------------------------------
         C("track.newInstrument", "New MIDI Track", "Track", "", "add instrument track"),

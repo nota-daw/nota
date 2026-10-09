@@ -199,6 +199,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Tap tempo alone: `--tap`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--tap")
+{
+    Console.WriteLine("-- tap tempo --");
+    foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Nota Keys alone (fast iteration): `--keys`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--keys")
 {
@@ -14219,6 +14227,9 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- tap tempo --");
+foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

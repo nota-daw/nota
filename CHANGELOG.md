@@ -19,6 +19,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Tap tempo.** A **TAP** cell beside the BPM in the transport bar: tap the beat on it and the
+  project tempo follows from the second tap, averaged over the last eight. Four dots count the
+  beats as you tap. Change pace mid-series and it picks up the new tempo at once; pause for
+  three seconds to start over. Also in the command palette as **Tap Tempo**.
 - **Edit MPE in the piano roll.** The lane under the notes now switches between **VEL**,
   **BEND**, **PRES** and **SLIDE**. Pick a note and draw its bend, pressure or slide right over
   its span — hold ⌥ for a straight line — drag a point to reshape it, double-click to add or

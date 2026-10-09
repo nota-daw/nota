@@ -89,6 +89,7 @@ public partial class MainWindow
         B("transport.record", () => OnMenuRecord(this, e));
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));
+        B("transport.tapTempo", TapTempoBeat);
 
         // ---- Track
         B("track.newInstrument", () => AddTrack(NewTrackKind.Instrument));
