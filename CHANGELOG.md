@@ -40,7 +40,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Operator's FM depth. Settings ▸ MIDI ▸ MPE switches it and sets the bend range (±48 by
   default; a controller that announces its own range wins). An ordinary keyboard on channel 1
   plays as before — and its pitch wheel and aftertouch now reach Nota's synths and hosted
-  plug-ins too. Expression is played live; it isn't recorded into clips yet.
+  plug-ins too. Recording keeps each note's bend, pressure and slide with it: the take plays
+  back exactly as performed, the expression moves, copies and quantizes with its note and is
+  saved with the project, and the piano roll draws it over the note — bend as the pitch line
+  you played, pressure as a shade. (The pitch wheel, channel pressure and sustain pedal
+  aren't recorded.)
 - **Nota Remote: Expressive keys.** On a track that takes MPE, the Keys screen's Keyboard and
   Scale modes get an **Expressive** switch: a finger keeps its note, sliding sideways bends it,
   the height on the key changes its timbre, and a phone that senses touch force sends pressure.

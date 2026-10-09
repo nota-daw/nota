@@ -2855,9 +2855,7 @@ bool Engine::setClipNotes(int32_t trackId, int32_t clipIndex, const NotaNoteData
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) {
-        Note n; n.pitch = notes[i].pitch; n.startBeat = notes[i].start_beat;
-        n.lengthBeats = notes[i].length_beats; n.velocity = notes[i].velocity;
-        clip.notes.push_back(n);
+        clip.notes.push_back(noteFromData(notes[i]));
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -2871,9 +2869,7 @@ bool Engine::setClipNotesLive(int32_t trackId, int32_t clipIndex, const NotaNote
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) {
-        Note n; n.pitch = notes[i].pitch; n.startBeat = notes[i].start_beat;
-        n.lengthBeats = notes[i].length_beats; n.velocity = notes[i].velocity;
-        clip.notes.push_back(n);
+        clip.notes.push_back(noteFromData(notes[i]));
     }
     republishWithTrackRaw(trackId, nt);   // no undo checkpoint — the UI seeds one per gesture
     return true;
@@ -2884,13 +2880,65 @@ int32_t Engine::getClipNotes(int32_t trackId, int32_t clipIndex, NotaNoteData* o
     if (!t || clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->midiClips.size())) return 0;
     const MidiClip& clip = t->midiClips[clipIndex];
     const int32_t n = std::min<int32_t>(maxNotes, static_cast<int32_t>(clip.notes.size()));
-    for (int32_t i = 0; i < n; ++i) {
-        out[i].pitch = clip.notes[i].pitch;
-        out[i].start_beat = clip.notes[i].startBeat;
-        out[i].length_beats = clip.notes[i].lengthBeats;
-        out[i].velocity = clip.notes[i].velocity;
+    for (int32_t i = 0; i < n; ++i) noteToData(clip.notes[i], out[i]);
+    return n;
+}
+
+// ---- recorded MPE store ----------------------------------------------------------
+
+int32_t Engine::storeNoteExpr(std::shared_ptr<const NoteExpr> e) {
+    if (!e || e->empty()) return 0;
+    std::lock_guard<std::mutex> lk(exprMx_);
+    const int32_t id = nextExprId_++;
+    exprStore_.emplace(id, std::move(e));
+    return id;
+}
+
+int32_t Engine::createNoteExpr(const NotaExprPoint* points, int32_t count) {
+    if (!points || count <= 0) return 0;
+    auto e = std::make_shared<NoteExpr>();
+    for (int32_t i = 0; i < count; ++i) {
+        const auto& p = points[i];
+        if (p.dim < 0 || p.dim >= kExprDims || !std::isfinite(p.beat) || !std::isfinite(p.value)) continue;
+        const float v = p.dim == ExprBend ? std::clamp(p.value, -96.0f, 96.0f) : std::clamp(p.value, 0.0f, 1.0f);
+        e->dim[p.dim].push_back({ std::max(0.0f, p.beat), v });
+    }
+    for (auto& d : e->dim)
+        std::stable_sort(d.begin(), d.end(), [](const ExprPoint& a, const ExprPoint& b) { return a.beat < b.beat; });
+    return storeNoteExpr(std::move(e));
+}
+
+int32_t Engine::noteExprPoints(int32_t id, NotaExprPoint* out, int32_t maxPoints) const {
+    std::shared_ptr<const NoteExpr> e;
+    {
+        std::lock_guard<std::mutex> lk(exprMx_);
+        auto it = exprStore_.find(id);
+        if (it == exprStore_.end()) return 0;
+        e = it->second;
+    }
+    int32_t n = 0;
+    for (int32_t d = 0; d < kExprDims; ++d)
+        for (const auto& p : e->dim[d]) {
+            if (out && n < maxPoints) out[n] = NotaExprPoint{ d, p.beat, p.value };
+            ++n;
+        }
+    return out ? std::min(n, maxPoints) : n;
+}
+
+Note Engine::noteFromData(const NotaNoteData& d) const {
+    Note n; n.pitch = d.pitch; n.startBeat = d.start_beat;
+    n.lengthBeats = d.length_beats; n.velocity = d.velocity;
+    if (d.expr_id > 0) {
+        std::lock_guard<std::mutex> lk(exprMx_);
+        auto it = exprStore_.find(d.expr_id);
+        if (it != exprStore_.end()) { n.exprId = d.expr_id; n.expr = it->second; }
     }
     return n;
+}
+
+void Engine::noteToData(const Note& n, NotaNoteData& d) {
+    d.pitch = n.pitch; d.start_beat = n.startBeat; d.length_beats = n.lengthBeats;
+    d.velocity = n.velocity; d.expr_id = n.expr ? n.exprId : 0;
 }
 
 int32_t Engine::clipNoteCount(int32_t trackId, int32_t clipIndex) const {

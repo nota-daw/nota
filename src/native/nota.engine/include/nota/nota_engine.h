@@ -46,7 +46,17 @@ typedef struct NotaNoteData {
     double  start_beat;    /* relative to clip start */
     double  length_beats;
     float   velocity;      /* 0..1 */
+    int32_t expr_id;       /* recorded MPE (nota_note_expr_*), 0 = none. Keep it when you move,
+                            * copy or resize the note — the expression travels with it. */
 } NotaNoteData;
+
+/* One breakpoint of a note's recorded expression (MPE). dim: 0 bend (semitones), 1 pressure
+ * 0..1, 2 slide 0..1; beat is the offset from the note's start. */
+typedef struct NotaExprPoint {
+    int32_t dim;
+    float   beat;
+    float   value;
+} NotaExprPoint;
 
 /* A parameter-automation breakpoint (M9). `value` is in the target's native
  * units (volume ~0..2, pan -1..1, device param in its min..max). Sorted by beat.
@@ -675,6 +685,12 @@ NOTA_API int32_t nota_engine_live_held_notes(const NotaEngine* engine, int32_t* 
 NOTA_API int32_t nota_clip_get_notes(const NotaEngine* engine, int32_t track_id, int32_t clip_index,
                                      NotaNoteData* out, int32_t max_notes);
 NOTA_API int32_t nota_clip_note_count(const NotaEngine* engine, int32_t track_id, int32_t clip_index);
+/* Recorded MPE lives in an engine-wide store of immutable curves; a note refers to one by
+ * NotaNoteData.expr_id. create stores `count` points (any order; per dim sorted by beat)
+ * and returns the new id (0 when there are no points). points copies a curve out
+ * (out = NULL → just the count). Ids stay valid for the life of the engine. */
+NOTA_API int32_t nota_note_expr_create(NotaEngine* engine, const NotaExprPoint* points, int32_t count);
+NOTA_API int32_t nota_note_expr_points(const NotaEngine* engine, int32_t expr_id, NotaExprPoint* out, int32_t max_points);
 
 /* ---- Live MIDI input, arming & recording (M2) ---------------------------- */
 NOTA_API NotaResult nota_track_set_armed(NotaEngine* engine, int32_t track_id, int32_t armed);

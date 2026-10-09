@@ -520,6 +520,12 @@ internal static partial class NativeMethods
     internal static partial int ClipGetNotes(IntPtr engine, int trackId, int clipIndex,
                                              [Out] NotaNote[] outNotes, int maxNotes);
 
+    [LibraryImport(Lib, EntryPoint = "nota_note_expr_create")]
+    internal static partial int NoteExprCreate(IntPtr engine, [In] NotaExprPoint[] points, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_note_expr_points")]
+    internal static partial int NoteExprPoints(IntPtr engine, int exprId, [Out] NotaExprPoint[]? outPoints, int maxPoints);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_note_count")]
     internal static partial int ClipNoteCount(IntPtr engine, int trackId, int clipIndex);
 

@@ -522,9 +522,7 @@ bool Engine::setSessionNotes(int32_t trackId, int32_t scene, const NotaNoteData*
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) {
-        Note n; n.pitch = notes[i].pitch; n.startBeat = notes[i].start_beat;
-        n.lengthBeats = notes[i].length_beats; n.velocity = notes[i].velocity;
-        clip.notes.push_back(n);
+        clip.notes.push_back(noteFromData(notes[i]));
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -535,12 +533,7 @@ int32_t Engine::getSessionNotes(int32_t trackId, int32_t scene, NotaNoteData* ou
     if (!t || scene < 0 || scene >= static_cast<int32_t>(t->sessionSlots.size())) return 0;
     const MidiClip& clip = t->sessionSlots[scene].midi;
     const int32_t n = std::min<int32_t>(maxNotes, static_cast<int32_t>(clip.notes.size()));
-    for (int32_t i = 0; i < n; ++i) {
-        out[i].pitch = clip.notes[i].pitch;
-        out[i].start_beat = clip.notes[i].startBeat;
-        out[i].length_beats = clip.notes[i].lengthBeats;
-        out[i].velocity = clip.notes[i].velocity;
-    }
+    for (int32_t i = 0; i < n; ++i) noteToData(clip.notes[i], out[i]);
     return n;
 }
 

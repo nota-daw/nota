@@ -696,6 +696,23 @@ public sealed partial class NotaEngine
         return written == count ? buf : buf[..written];
     }
 
+    public int CreateNoteExpression(NotaExprPoint[] points)
+    {
+        ThrowIfDisposed();
+        return points.Length == 0 ? 0 : NativeMethods.NoteExprCreate(_handle, points, points.Length);
+    }
+
+    public NotaExprPoint[] GetNoteExpression(int exprId)
+    {
+        ThrowIfDisposed();
+        if (exprId <= 0) return Array.Empty<NotaExprPoint>();
+        int count = NativeMethods.NoteExprPoints(_handle, exprId, null, 0);
+        if (count <= 0) return Array.Empty<NotaExprPoint>();
+        var buf = new NotaExprPoint[count];
+        int written = NativeMethods.NoteExprPoints(_handle, exprId, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
     // --- Audio persistence (M7-6b) -----------------------------------------
 
     /// <summary>Full geometry of an audio clip. False if the clip at that index isn't audio.</summary>

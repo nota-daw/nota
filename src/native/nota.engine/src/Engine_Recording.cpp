@@ -213,6 +213,7 @@ void Engine::setRecording(bool on) {
     // when no track is armed for a take — if the UI then pops the button back up
     // it calls us again with false, which clears it.
     setAutomationRecord(on);
+    if (on) { collectRecordedExpr(); pendingExpr_.clear(); }   // a new take starts with no stale curves
     if (!on) {
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling

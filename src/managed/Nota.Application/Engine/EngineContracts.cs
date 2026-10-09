@@ -20,6 +20,19 @@ public struct NotaNote(int pitch, double startBeat, double lengthBeats, float ve
     public double StartBeat = startBeat;
     public double LengthBeats = lengthBeats;
     public float Velocity = velocity;
+    /// <summary>The note's recorded MPE in the engine's expression store (0 = none). Copy the
+    /// note (don't rebuild it from its fields) and the expression travels with it.</summary>
+    public int ExprId;
+}
+
+/// <summary>One breakpoint of a note's recorded expression (MPE). Matches native NotaExprPoint:
+/// Beat is the offset from the note's start; Value is semitones for Bend, 0..1 otherwise.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaExprPoint(NoteExpressionDim dim, float beat, float value)
+{
+    public NoteExpressionDim Dim = dim;
+    public float Beat = beat;
+    public float Value = value;
 }
 
 /// <summary>Track summary for the Arrangement View. Matches native NotaTrackInfo.</summary>

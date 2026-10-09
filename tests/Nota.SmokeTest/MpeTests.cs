@@ -159,6 +159,8 @@ internal static class MpeTests
             yield return (At(x, 220) > At(x, 440), "track-addressed expression stays on its track");
         }
 
+        foreach (var r in Recording()) yield return r;
+
         // The MPE preference round-trips through the staged MIDI config.
         {
             using var e = new NotaEngine();
@@ -167,6 +169,110 @@ internal static class MpeTests
             var (on1, r1) = e.GetMpe();
             e.SetMpe(on0, r0);
             yield return (!on1 && r1 == 24, $"the MPE setting stages (default {(on0 ? "on" : "off")} ±{r0})");
+        }
+    }
+
+    // ---- recorded MPE: into the take, back out of the clip, through edits and save/load ----
+
+    private static float[] PlayFrom(NotaEngine e, int skipBlocks = 2, int blocks = 12)
+    {
+        e.StopTransport(); e.Seek(0); e.Play();
+        Render(e, skipBlocks);
+        return Render(e, blocks);
+    }
+
+    private static IEnumerable<(bool, string)> Recording()
+    {
+        // The store: a curve goes in, the same curve comes out, sorted per dimension.
+        using (var e = new NotaEngine())
+        {
+            int id = e.CreateNoteExpression(new[]
+            {
+                new NotaExprPoint(NoteExpressionDim.Bend, 0.5f, 2f), new NotaExprPoint(NoteExpressionDim.Bend, 0f, 0f),
+                new NotaExprPoint(NoteExpressionDim.Pressure, 0f, 0.7f),
+            });
+            var back = e.GetNoteExpression(id);
+            yield return (id > 0 && back.Length == 3 && back[0].Dim == NoteExpressionDim.Bend && back[0].Beat == 0f && back[1].Value == 2f
+                          && back[2].Dim == NoteExpressionDim.Pressure && e.GetNoteExpression(0).Length == 0,
+                "the expression store returns a curve as given, sorted per dimension");
+        }
+
+        // Record: a note bent smoothly up an octave and pressed, on the armed track.
+        using var r = new NotaEngine();
+        r.SetBpm(120);
+        int t = r.AddInstrumentTrack();
+        r.SetTrackBuiltinInstrument(t, 0);
+        r.SetTrackArmed(t, true);
+        r.SetRecording(true);
+        Render(r, 4);
+        r.TrackNoteOn(t, 57, 0.8f);
+        r.TrackNoteExpression(t, 57, NoteExpressionDim.Bend, 0f);
+        r.TrackNoteExpression(t, 57, NoteExpressionDim.Slide, 0.5f);   // resting: not kept
+        for (int k = 1; k <= 40; k++)
+        {
+            r.TrackNoteExpression(t, 57, NoteExpressionDim.Bend, Math.Min(12f, k * 0.6f));
+            r.TrackNoteExpression(t, 57, NoteExpressionDim.Pressure, 0.8f);
+            Render(r, 1);
+        }
+        Render(r, 20);   // hold the octave
+        r.TrackNoteOff(t, 57);
+        Render(r, 4);
+        r.SetRecording(false);
+        r.Poll();
+        NotaNote? rec = null; int recClip = -1;
+        if (r.TryGetTrackInfo(0, out var ti))
+            for (int c = 0; c < ti.ClipCount && rec is null; c++)
+                foreach (var n in r.GetClipNotes(t, c)) if (n.Pitch == 57) { rec = n; recClip = c; }
+        var curve = rec is { } rn ? r.GetNoteExpression(rn.ExprId) : Array.Empty<NotaExprPoint>();
+        var bend = curve.Where(p => p.Dim == NoteExpressionDim.Bend).ToArray();
+        yield return (rec is { ExprId: > 0 } && bend.Length >= 2 && Math.Abs(bend[^1].Value - 12f) < 0.1f && bend[0].Value < 1f,
+            $"a recorded note keeps its bend (points {bend.Length}, {(bend.Length > 0 ? bend[0].Value : -1):F1} → {(bend.Length > 0 ? bend[^1].Value : -1):F1} st)");
+        yield return (bend.Length < 12, $"the recorded curve is thinned to its shape (a 40-step ramp → {bend.Length} points)");
+        yield return (curve.Any(p => p.Dim == NoteExpressionDim.Pressure && Math.Abs(p.Value - 0.8f) < 0.01f) && !curve.Any(p => p.Dim == NoteExpressionDim.Slide),
+            "pressure is kept; a dimension that stayed at rest is not");
+        if (rec is null) yield break;
+
+        // Play the take back: the note ends an octave up (its last stretch is held at +12).
+        var outp = PlayFrom(r, skipBlocks: 2 + 4 + 40, blocks: 12);
+        double a220 = At(outp, 220), a440 = At(outp, 440);
+        yield return (a440 > a220 * 4, $"playback replays the recorded bend (220/440 Hz {a220:E1}/{a440:E1})");
+
+        // A piano-roll edit (move the note, push the whole set back) keeps the curve.
+        var notes = r.GetClipNotes(t, recClip);
+        for (int i = 0; i < notes.Length; i++) notes[i].StartBeat += 0.0;   // same position, round-tripped
+        r.SetClipNotes(t, recClip, notes);
+        var again = r.GetClipNotes(t, recClip).First(n => n.Pitch == 57);
+        yield return (again.ExprId == rec.Value.ExprId, "pushing the notes back from the editor keeps their expression");
+
+        // A note given an expression plays it from the clip: +12 st from its start.
+        using (var e = new NotaEngine())
+        {
+            e.SetBpm(120);
+            int u = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(u, 0);
+            int c = e.AddMidiClip(u, 0, 4);
+            var n = new NotaNote(57, 0, 4, 0.8f) { ExprId = e.CreateNoteExpression(new[] { new NotaExprPoint(NoteExpressionDim.Bend, 0f, 12f) }) };
+            var m = new NotaNote(64, 0, 4, 0.8f);
+            e.SetClipNotes(u, c, new[] { n, m });
+            var x = PlayFrom(e);
+            double b220 = At(x, 220), b440 = At(x, 440), e330 = At(x, 329.63);
+            yield return (b440 > b220 * 4 && e330 > b220 * 4, $"a clip note plays its curve; its neighbour stays put (220/440/330 Hz {b220:E1}/{b440:E1}/{e330:E1})");
+
+            // Save and load: the curve is in the project file and comes back on the note.
+            e.StopTransport();
+            var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), new List<string>());
+            string bundle = Path.Combine(Path.GetTempPath(), "nota-mpe-" + Guid.NewGuid().ToString("N") + ".nota");
+            ProjectService.Save(doc, bundle, e);
+            using var e2 = new NotaEngine();
+            ProjectService.Apply(ProjectService.Load(bundle), e2, bundle);
+            NotaNote? loaded = null;
+            for (int i = 0; i < e2.TrackCount; i++)
+                if (e2.TryGetTrackInfo(i, out var lti) && lti.IsInstrument && lti.ClipCount > 0)
+                    foreach (var ln in e2.GetClipNotes(lti.Id, 0)) if (ln.Pitch == 57) loaded = ln;
+            var lc = loaded is { } l ? e2.GetNoteExpression(l.ExprId) : Array.Empty<NotaExprPoint>();
+            yield return (lc.Length == 1 && lc[0].Dim == NoteExpressionDim.Bend && lc[0].Value == 12f,
+                "recorded MPE survives save and load");
+            try { Directory.Delete(bundle, true); } catch { /* temp */ }
         }
     }
 }

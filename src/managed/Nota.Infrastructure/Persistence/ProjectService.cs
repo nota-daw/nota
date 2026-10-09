@@ -191,7 +191,7 @@ public sealed class ProjectService
                         Active = ci.IsActive,
                         StartBeat = ci.StartBeat,
                         LengthBeats = ci.LengthBeats,
-                        Notes = ToDtos(engine.GetClipNotes(ti.Id, c)),
+                        Notes = ToDtos(engine, engine.GetClipNotes(ti.Id, c)),
                         VelocityEnvelope = vel.Length > 0 ? System.Array.ConvertAll(vel, p => new AutomationPointDto(p)) : null,
                         VolumeEnvelope = vol.Length > 0 ? System.Array.ConvertAll(vol, p => new AutomationPointDto(p)) : null,
                     });
@@ -225,7 +225,7 @@ public sealed class ProjectService
                     {
                         Scene = s,
                         LengthBeats = engine.SessionSlotLength(ti.Id, s),
-                        Notes = ToDtos(engine.GetSessionNotes(ti.Id, s)),
+                        Notes = ToDtos(engine, engine.GetSessionNotes(ti.Id, s)),
                     }));
                 }
                 else if (ti.Type == 0 && engine.TryGetSessionAudioSlot(ti.Id, s, out var sa))
@@ -616,7 +616,7 @@ public sealed class ProjectService
                 if (ci < 0) continue;
                 if (c.Name is { Length: > 0 } mcn) engine.SetClipName(id, ci, mcn);
                 if (!c.Active) engine.SetClipActive(id, ci, false);   // clip deactivate (v17)
-                if (c.Notes.Length > 0) engine.SetClipNotes(id, ci, ToNotes(c.Notes));
+                if (c.Notes.Length > 0) engine.SetClipNotes(id, ci, ToNotes(engine, c.Notes));
                 if (c.VelocityEnvelope is { Length: > 0 } ve)   // MIDI clip envelopes (v10)
                     engine.SetMidiClipEnvelope(id, ci, MidiClipEnvelope.Velocity, System.Array.ConvertAll(ve, p => p.ToPoint()));
                 if (c.VolumeEnvelope is { Length: > 0 } vo)
@@ -657,7 +657,7 @@ public sealed class ProjectService
                 else
                 {
                     engine.AddSessionMidiClip(id, sl.Scene, sl.LengthBeats);
-                    if (sl.Notes.Length > 0) engine.SetSessionNotes(id, sl.Scene, ToNotes(sl.Notes));
+                    if (sl.Notes.Length > 0) engine.SetSessionNotes(id, sl.Scene, ToNotes(engine, sl.Notes));
                 }
                 ApplyClipProps(engine, id, sl);
             }
@@ -941,17 +941,34 @@ public sealed class ProjectService
         return false;
     }
 
-    private static NoteDto[] ToDtos(NotaNote[] notes)
+    // A note's recorded MPE goes inline with it (notes sharing one curve, like a duplicate,
+    // each carry a copy).
+    private static NoteDto[] ToDtos(IAudioEngine engine, NotaNote[] notes)
     {
         var arr = new NoteDto[notes.Length];
-        for (int i = 0; i < notes.Length; i++) arr[i] = new NoteDto(notes[i]);
+        var cache = new Dictionary<int, NoteMpeDto?>();
+        for (int i = 0; i < notes.Length; i++)
+        {
+            arr[i] = new NoteDto(notes[i]);
+            int id = notes[i].ExprId;
+            if (id <= 0) continue;
+            if (!cache.TryGetValue(id, out var mpe)) cache[id] = mpe = NoteMpeDto.From(engine.GetNoteExpression(id));
+            arr[i].Mpe = mpe;
+        }
         return arr;
     }
 
-    private static NotaNote[] ToNotes(NoteDto[] dtos)
+    private static NotaNote[] ToNotes(IAudioEngine engine, NoteDto[] dtos)
     {
         var arr = new NotaNote[dtos.Length];
-        for (int i = 0; i < dtos.Length; i++) arr[i] = dtos[i].ToNote();
+        var ids = new Dictionary<NoteMpeDto, int>(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < dtos.Length; i++)
+        {
+            arr[i] = dtos[i].ToNote();
+            if (dtos[i].Mpe is not { } mpe) continue;
+            if (!ids.TryGetValue(mpe, out int id)) ids[mpe] = id = engine.CreateNoteExpression(mpe.ToPoints());
+            arr[i].ExprId = id;
+        }
         return arr;
     }
 

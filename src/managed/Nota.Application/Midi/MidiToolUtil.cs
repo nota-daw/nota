@@ -40,7 +40,9 @@ public static class MidiToolUtil
             double start = Math.Max(0, n.StartBeat);
             if (start >= lengthBeats - 1e-9) continue;
             double len = Math.Min(Math.Max(MinLength, n.LengthBeats), lengthBeats - start);
-            outp.Add(Note(n.Pitch, start, len, n.Velocity));
+            var m = Note(n.Pitch, start, len, n.Velocity);
+            m.ExprId = n.ExprId;   // a moved / trimmed note keeps its recorded MPE
+            outp.Add(m);
         }
         return Sorted(outp);
     }

@@ -756,6 +756,11 @@ public interface IAudioEngine : IDisposable
     /// <summary>Live note update with no undo checkpoint (piano-roll drag pushing every frame).</summary>
     void SetClipNotesLive(int trackId, int clipIndex, NotaNote[] notes);
     NotaNote[] GetClipNotes(int trackId, int clipIndex);
+    /// <summary>Stores a note expression curve (recorded MPE) and returns its id for
+    /// <see cref="NotaNote.ExprId"/> (0 when there are no points). Ids live as long as the engine.</summary>
+    int CreateNoteExpression(NotaExprPoint[] points);
+    /// <summary>The curve behind an expression id (empty for 0 / unknown), per dim sorted by beat.</summary>
+    NotaExprPoint[] GetNoteExpression(int exprId);
 
     // --- Live MIDI, arming & recording -------------------------------------
     void SetTrackArmed(int trackId, bool armed);

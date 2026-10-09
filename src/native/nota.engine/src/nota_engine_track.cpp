@@ -626,6 +626,12 @@ int32_t nota_clip_get_notes(const NotaEngine* e, int32_t track_id, int32_t clip_
 int32_t nota_clip_note_count(const NotaEngine* e, int32_t track_id, int32_t clip_index) {
     return e ? CENG(e)->clipNoteCount(track_id, clip_index) : 0;
 }
+int32_t nota_note_expr_create(NotaEngine* e, const NotaExprPoint* points, int32_t count) {
+    return (e && points && count > 0) ? ENG(e)->createNoteExpr(points, count) : 0;
+}
+int32_t nota_note_expr_points(const NotaEngine* e, int32_t expr_id, NotaExprPoint* out, int32_t max_points) {
+    return e ? CENG(e)->noteExprPoints(expr_id, out, max_points) : 0;
+}
 
 NotaResult nota_track_set_armed(NotaEngine* e, int32_t track_id, int32_t armed) {
     if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->setTrackArmed(track_id, armed != 0); return NOTA_OK;

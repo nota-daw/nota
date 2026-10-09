@@ -30,7 +30,9 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <map>
 #include <mutex>
+#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -50,6 +52,12 @@ using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
 struct RecordedNote { int32_t pitch; double startBeat; double lengthBeats; float velocity; };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
+// A recorded note's expression sample (audio -> message): the note is identified by its pitch
+// and start (as its RecordedNote will carry them), `beat` is the offset from that start.
+struct RecordedExpr { int32_t pitch; double startBeat; int32_t dim; float beat; float value; };
+using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
+// A clip note's expression at a sample offset of the block (the render pass replays these).
+struct ExprEv { int32_t off; int32_t pitch; int32_t dim; float value; };
 
 // Captured input frame (input thread -> message), lock-free up-queue (M4-3).
 struct InputFrame { float l; float r; };
@@ -900,6 +908,14 @@ public:
     bool    setClipNotesLive(int32_t trackId, int32_t clipIndex, const NotaNoteData* notes, int32_t count);
     int32_t getClipNotes(int32_t trackId, int32_t clipIndex, NotaNoteData* out, int32_t maxNotes) const;
     int32_t clipNoteCount(int32_t trackId, int32_t clipIndex) const;
+    // Recorded MPE store (MidiClip.h NoteExpr): immutable curves under stable ids, shared by
+    // every note that refers to them. Message thread (guarded, so any thread may read).
+    int32_t createNoteExpr(const NotaExprPoint* points, int32_t count);
+    int32_t storeNoteExpr(std::shared_ptr<const NoteExpr> e);
+    int32_t noteExprPoints(int32_t id, NotaExprPoint* out, int32_t maxPoints) const;
+    // NotaNoteData <-> Note, resolving / reporting the expression id.
+    Note noteFromData(const NotaNoteData& d) const;
+    static void noteToData(const Note& n, NotaNoteData& d);
 
     // --- live MIDI, arming, recording (M2) ---
     void setTrackArmed(int32_t trackId, bool armed);
@@ -995,10 +1011,12 @@ private:
     // auditioned) to evs; returns the new count. Shared by a track's own render and by MIDI
     // routing (a destination gathers its sources' notes the same way).
     int  gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
-                               double blockStart, double spb, bool playing);
+                               double blockStart, double spb, bool playing,
+                               ExprEv* xev = nullptr, int* xn = nullptr);
     // A track's own post-MIDI-FX events (gather + drum swing + its MIDI FX chain), run once.
     int  computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames,
-                               double blockStart, double spb, bool playing, bool arrangementActive);
+                               double blockStart, double spb, bool playing, bool arrangementActive,
+                               ExprEv* xev = nullptr, int* xn = nullptr);
     // Pre-pass: fill blockMidi_/blockMidiN_ for every non-session instrument track.
     void computeBlockMidi(Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
     // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
@@ -1099,6 +1117,14 @@ private:
     MidiQueue                     remoteMidi_;      // track-addressed notes (any thread → audio)
     std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
+    RecordedExprQueue             recordedExpr_;
+    mutable std::mutex            exprMx_;          // the expression store
+    std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
+    int32_t                       nextExprId_ = 1;
+    // Expression of notes still being recorded, keyed by (pitch, start) — message thread.
+    std::map<std::pair<int32_t, double>, NoteExpr> pendingExpr_;
+    void   collectRecordedExpr();
+    void   attachRecordedExpr(Note& n, int32_t pitch, double startBeat);
     ControlEventQueue             midiControl_;   // incoming CC/note-on for MIDI-learn (AR-6)
     Transport                     transport_;
 
@@ -1337,6 +1363,18 @@ private:
     double recRoutedStart_[128] = {};
     float  recRoutedVel_[128] = {};
     void   captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb);
+    void   captureLiveExpr(double nowBeat, double slotLen);   // recorded MPE (drainLiveMidi)
+
+    // Clip-note expression replayed per block (computeBlockMidi fills, the render pass merges),
+    // per track position like blockMidi_.
+    static constexpr int kMaxBlockExpr = 1024;
+    std::vector<std::vector<ExprEv>> blockExpr_;
+    std::vector<int>                 blockExprN_;
+    // Appends a clip note's recorded expression for the block: the note sounds over
+    // [onS, offS) in samples relative to the block start; one value per dim at the note's
+    // start (or the block's) and then every kExprStep samples while its curve moves.
+    static void noteExprEvents(const Note& note, double onS, double offS, int32_t frames, double spb,
+                               ExprEv* out, int& n, int cap);
 
     // Live input monitoring: the input thread also feeds this ring while any audio track
     // monitors the hardware input; the audio thread pops one segment's worth per mixGraph

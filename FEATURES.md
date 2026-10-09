@@ -209,7 +209,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   index, Physical: how long the body rings, Keys: drives the tine into the pickup / shifts its
   symmetry). Instrument Racks pass it to their chains; hosted plug-ins get the wheel, channel
   pressure, polyphonic aftertouch and the sustain pedal (CC64), which also holds Nota Keys'
-  notes. Expression is played live — it is not recorded into clips.
+  notes. **Recording** keeps each note's bend, pressure and slide with the note: it plays back
+  from the clip, moves, copies and quantizes with the note, is saved with the project, and the
+  piano roll draws it over the note (bend as the pitch it played, pressure as a shade). The
+  pitch wheel, channel pressure and sustain pedal aren't recorded.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
