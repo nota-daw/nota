@@ -83,6 +83,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).
@@ -300,6 +301,7 @@ public partial class MainWindow : Window
         // Settings → Appearance can switch the waveform style while the arrangement is open.
         vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
+        InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
         Browser.ProjectKey = () => vm.Transport.Key;
         // The library index analyses on worker threads; rows pick up their tempo / key tags on the UI thread.
@@ -309,10 +311,12 @@ public partial class MainWindow : Window
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
         Browser.RevealRequested += OnBrowserReveal;
+        Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
         Browser.EditTagsRequested += OnBrowserEditTags;
 
-        _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits);
+        _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
+        InitMosaic();
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
         _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
@@ -407,6 +411,9 @@ public partial class MainWindow : Window
         // them in the tunnel phase so the transport always gets first dibs (text inputs are
         // exempted inside the handler so typing still works). See OnGlobalTransportKey.
         AddHandler(KeyDownEvent, OnGlobalTransportKey, RoutingStrategies.Tunnel);
+
+        // Clicking away from a text field (browser search, rename boxes…) hands the keyboard back.
+        ReleaseTextFocusOnOutsidePress(this);
 
         Closed += (_, _) => vm.Dispose();
 
@@ -594,6 +601,45 @@ public partial class MainWindow : Window
         f.ShowAt(MetronomeBtn);
     }
 
+    private readonly TapTempo _tap = new();
+    private readonly System.Diagnostics.Stopwatch _tapClock = System.Diagnostics.Stopwatch.StartNew();
+    private DispatcherTimer? _tapIdle;
+
+    private void OnTapTempo(object? sender, RoutedEventArgs e) => TapTempoBeat();
+
+    // One beat of tap tempo, from the TAP cell or the palette. The tempo follows from the
+    // second tap on; the dots fill 1–4 and wrap, and clear once the series times out.
+    private void TapTempoBeat()
+    {
+        if (_vm is null) return;
+        double? bpm = _tap.Tap(_tapClock.Elapsed.TotalMilliseconds);
+        if (bpm is { } b)
+        {
+            _vm.Transport.Bpm = (decimal)b;
+            _vm.StatusText = $"Tempo: {NotaNum.Bpm(b)} BPM (tapped)";
+        }
+        ShowTapDots(_tap.Count);
+        _tapIdle ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _tapIdle.Tick -= OnTapIdle;
+        _tapIdle.Tick += OnTapIdle;
+        _tapIdle.Stop();
+        _tapIdle.Start();
+    }
+
+    private void OnTapIdle(object? sender, EventArgs e)
+    {
+        _tapIdle?.Stop();
+        _tap.Reset();
+        ShowTapDots(0);
+    }
+
+    private void ShowTapDots(int taps)
+    {
+        int lit = taps == 0 ? 0 : (taps - 1) % TapDots.Children.Count + 1;
+        for (int i = 0; i < TapDots.Children.Count; i++)
+            ((Ellipse)TapDots.Children[i]).BindResource(Shape.FillProperty, i < lit ? "Brush.Accent" : "Brush.BorderStrong");
+    }
+
     private void OnCycleSnap(object? sender, RoutedEventArgs e)
     {
         _snapIndex = (_snapIndex + 1) % SnapSteps.Length;
@@ -637,7 +683,7 @@ public partial class MainWindow : Window
         if (FollowBtn.IsChecked != on) FollowBtn.IsChecked = on;
         // The View-menu twin lives in the native menu, which has no generated field —
         // look it up once by the header declared in MainWindow.axaml.
-        _followMenuItem ??= FindMenuItem(NativeMenu.GetMenu(this), "Follow playhead");
+        _followMenuItem ??= MenuItemFor("view.follow");
         if (_followMenuItem is not null) _followMenuItem.IsChecked = on;
         if (on) Timeline.RecenterOnPlayhead();   // jump to the cursor now
         if (_vm is not null) _vm.StatusText = on ? "Following the playhead" : "Follow playhead off";

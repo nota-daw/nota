@@ -58,67 +58,6 @@ public partial class MainWindow
     // Effects target the selected track, else the last instrument track added.
     private int EffectTarget() => Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
 
-    // Applies a preset browser row: factory presets (Path "factory:<id>") resolve through
-    // the shipped catalog; user presets load from disk. Instrument presets create a new
-    // track (targetTrackId is ignored for them); effect presets target the track.
-    private string ApplyPresetItem(BrowserItem item, int targetTrackId)
-    {
-        if (IsKitRow(item)) return ApplyDrumKit(item, targetTrackId);
-        bool factory = item.Path.StartsWith("factory:", StringComparison.Ordinal);
-        string factoryId = factory ? item.Path["factory:".Length..] : "";
-        // Apply doesn't say where the preset landed, so diff the chain around it: a new track
-        // (instrument preset) or one more device / MIDI effect on the target (appended last).
-        var tracksBefore = TrackIds();
-        int fxBefore = targetTrackId > 0 ? Engine.TrackDeviceCount(targetTrackId) : 0;
-        int midiBefore = targetTrackId > 0 ? Engine.TrackMidiEffectCount(targetTrackId) : 0;
-        string warn = factory
-            ? _factory.Apply(Engine, factoryId, targetTrackId)
-            : _presets.ApplyFromFile(Engine, item.Path, targetTrackId);
-        if (warn.Length > 0 || _deviceChain is null) return warn;
-
-        int newTrack = TrackIds().FirstOrDefault(id => !tracksBefore.Contains(id));
-        if (newTrack > 0)
-            _deviceChain.RememberPreset(newTrack, DeviceChainView.ChainKind.Instrument, -1, item.Name, factoryId);
-        else if (targetTrackId > 0 && Engine.TrackDeviceCount(targetTrackId) is var fx && fx > fxBefore)
-            _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Effect, fx - 1, item.Name, factoryId);
-        else if (targetTrackId > 0 && Engine.TrackMidiEffectCount(targetTrackId) is var midi && midi > midiBefore)
-            _deviceChain.RememberPreset(targetTrackId, DeviceChainView.ChainKind.Midi, midi - 1, item.Name, factoryId);
-        return warn;
-    }
-
-    /// <summary>A factory drum-kit row: "kit:&lt;id&gt;" under the Drum Rack, "rhythmkit:&lt;id&gt;"
-    /// under Nota Rhythm — the same kits, told apart by the instrument a new track gets.</summary>
-    private static bool IsKitRow(BrowserItem item)
-        => item.Kind == BrowserItemKind.Preset
-           && (item.Path.StartsWith("kit:", StringComparison.Ordinal) || item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal));
-
-    private const string RhythmKitPrefix = "rhythmkit:";
-
-    // Loads a factory kit. Dropped on an existing Drum Rack or Nota Rhythm it replaces that
-    // instrument's pads / voices; anywhere else it spawns its own track — a Drum Rack, or a
-    // Rhythm for a row under Rhythm — the way an instrument preset does. The kit's samples
-    // are synthesized on first use, which is why this can be slow once.
-    private string ApplyDrumKit(BrowserItem item, int targetTrackId)
-    {
-        bool rhythm = item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal);
-        string id = item.Path[(rhythm ? RhythmKitPrefix.Length : "kit:".Length)..];
-        if (targetTrackId > 0 && Engine.TrackInstrumentKind(targetTrackId) is 4 or RhythmModel.Kind)
-        {
-            _kits.LoadInto(Engine, targetTrackId, id, out string replaceWarn);
-            ShowDevices(targetTrackId);
-            return replaceWarn;
-        }
-        int track = rhythm ? _kits.CreateRhythmTrack(Engine, id, out string warn) : _kits.CreateTrack(Engine, id, out warn);
-        if (track > 0)
-        {
-            Engine.AddMidiClip(track, 0.0, 4.0);
-            _lastInstrumentTrackId = track;
-            Timeline.Refresh();
-            ShowDevices(track);
-        }
-        return warn;
-    }
-
     private HashSet<int> TrackIds()
     {
         var ids = new HashSet<int>();
@@ -127,81 +66,31 @@ public partial class MainWindow
         return ids;
     }
 
+    // Double-click / Return on a browser row: instruments start a track, effects go to the
+    // selected track (else the last instrument track), presets apply — through the same
+    // insert service as drag & drop and the command palette.
     private void OnBrowserItemActivated(BrowserItem item)
     {
         if (_vm is null) return;
         try
         {
+            RecordUse(PaletteIdOf(item), fromPalette: false);
             switch (item.Kind)
             {
                 case BrowserItemKind.BuiltinInstrument:
-                {
-                    int t = item.BuiltinKind switch
-                    {
-                        4 => Engine.AddDrumRackTrack(),
-                        3 => Engine.AddInstrumentRackTrack(),
-                        2 => Engine.AddPhysicalSynthTrack(),
-                        5 => Engine.AddWavetableSynthTrack(),
-                        6 => Engine.AddVoltSynthTrack(),
-                        7 => Engine.AddBassSynthTrack(),
-                        8 => Engine.AddPendulumSynthTrack(),
-                        9 => Engine.AddOperatorSynthTrack(),
-                        10 => Engine.AddGrainSynthTrack(),
-                        11 => Engine.AddFluxSynthTrack(),
-                        12 => Engine.AddRhythmTrack(),
-                        13 => Engine.AddMonolithTrack(),
-                        14 => Engine.AddPentadTrack(),
-                        15 => Engine.AddConsortTrack(),
-                        1 => Engine.AddSamplerInstrumentTrack(),
-                        _ => Engine.AddInstrumentTrack(),
-                    };
-                    if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
-                    Engine.AddMidiClip(t, 0.0, 4.0);
-                    if (item.BuiltinKind == 1) ShowDevices(t);   // reveal the Sampler card (drop a sample onto it)
-                    _lastInstrumentTrackId = t;
-                    Timeline.Refresh();
-                    if (item.BuiltinKind is 3 or 4) ShowDevices(t);   // reveal the rack card
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
-                    break;
-                }
                 case BrowserItemKind.PluginInstrument:
                 {
-                    int t = Engine.AddPluginInstrumentTrack(item.CatalogIndex);
-                    Engine.AddMidiClip(t, 0.0, 4.0);
-                    _lastInstrumentTrackId = t;
-                    Timeline.Refresh();
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
+                    var r = Insertion.Insert(item, new InsertTarget(-1, NewTrack: true));
+                    ApplyInsertResult(r, revealDevices: item.BuiltinKind is 1 or 3 or 4 && item.Kind == BrowserItemKind.BuiltinInstrument);
                     break;
                 }
                 case BrowserItemKind.BuiltinEffect:
-                {
-                    int tgt = EffectTarget();
-                    if (tgt <= 0) { _vm.StatusText = "Select a track first."; break; }
-                    Engine.AddBuiltinDevice(tgt, item.BuiltinKind);
-                    Timeline.Refresh();
-                    ShowDevices(tgt); // reveal the updated device chain
-                    _vm.StatusText = $"Added {item.Name} to track {tgt}";
-                    break;
-                }
                 case BrowserItemKind.BuiltinMidiEffect:
-                {
-                    int tgt = EffectTarget();
-                    if (tgt <= 0) { _vm.StatusText = "Select a track first."; break; }
-                    Engine.AddMidiEffect(tgt, item.BuiltinKind);
-                    Timeline.Refresh();
-                    ShowDevices(tgt); // MIDI effect cards sit before the instrument
-                    _vm.StatusText = $"Added {item.Name} to track {tgt}";
-                    break;
-                }
                 case BrowserItemKind.PluginEffect:
                 {
                     int tgt = EffectTarget();
                     if (tgt <= 0) { _vm.StatusText = "Select a track first."; break; }
-                    if (Engine.AddTrackEffectPlugin(tgt, item.CatalogIndex) < 0)
-                    { _vm.StatusText = "Failed to load effect."; break; }
-                    Timeline.Refresh();
-                    ShowDevices(tgt); // reveal the updated device chain
-                    _vm.StatusText = $"Added {item.Name} to track {tgt}";
+                    ApplyInsertResult(Insertion.RouteToTrack(item, tgt));
                     break;
                 }
                 case BrowserItemKind.Sample:
@@ -215,15 +104,8 @@ public partial class MainWindow
                     OpenProject(item.Path);
                     return; // OpenProject rebuilds everything itself
                 case BrowserItemKind.Preset:
-                {
-                    bool kit = IsKitRow(item);
-                    string warn = ApplyPresetItem(item, Timeline.SelectedTrackId);
-                    Timeline.Refresh();
-                    if (!kit && Timeline.SelectedTrackId > 0) ShowDevices(Timeline.SelectedTrackId);
-                    _vm.StatusText = warn.Length > 0 ? warn
-                        : kit ? $"Loaded {item.Name} kit" : $"Applied preset {item.Name}";
+                    ApplyInsertResult(Insertion.ApplyPreset(item, new InsertTarget(Timeline.SelectedTrackId)));
                     break;
-                }
             }
             _session?.Refresh();
         }

@@ -145,14 +145,34 @@ int32_t Engine::trackMidiSource(int32_t trackId) const {
     return t ? t->midiFromTrackId() : -1;
 }
 void Engine::noteOn(int32_t pitch, float velocity) {
-    MidiEvent e{true, pitch, velocity}; liveMidi_.push(e);
+    {
+        std::lock_guard<std::mutex> lk(liveMidiMx_);
+        liveMidi_.push(MidiEvent{true, pitch, velocity});
+    }
     if (pitch >= 0 && pitch < 128)
         liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
 }
 void Engine::noteOff(int32_t pitch) {
-    MidiEvent e{false, pitch, 0.0f}; liveMidi_.push(e);
+    {
+        std::lock_guard<std::mutex> lk(liveMidiMx_);
+        liveMidi_.push(MidiEvent{false, pitch, 0.0f});
+    }
     if (pitch >= 0 && pitch < 128)
         liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
+}
+
+void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
+    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
+        || !std::isfinite(value)) return;
+    std::lock_guard<std::mutex> lk(liveMidiMx_);
+    liveMidi_.push(MidiEvent{false, pitch, value, -1, dim});
+}
+
+void Engine::trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value) {
+    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
+        || !std::isfinite(value)) return;
+    std::lock_guard<std::mutex> lk(remoteMidiMx_);
+    remoteMidi_.push(MidiEvent{false, pitch, value, trackId, dim});
 }
 
 void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
@@ -193,6 +213,7 @@ void Engine::setRecording(bool on) {
     // when no track is armed for a take — if the UI then pops the button back up
     // it calls us again with false, which clears it.
     setAutomationRecord(on);
+    if (on) { collectRecordedExpr(); pendingExpr_.clear(); }   // a new take starts with no stale curves
     if (!on) {
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling

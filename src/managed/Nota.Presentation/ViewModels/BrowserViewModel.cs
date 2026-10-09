@@ -53,6 +53,8 @@ public sealed class BrowserItem : INotifyPropertyChanged
     public int BuiltinKind { get; init; } = -1;   // effects: 0=EQ,1=Compressor,2=Reverb,3=Delay,4=Utility · instruments: 0=Synth,2=Physical,5=Aurora
     public string Sub { get; init; } = "";        // type / manufacturer / folder
     public string Format { get; init; } = "";     // plug-ins: "VST3" / "AU" (Sub carries the vendor)
+    public string Vendor { get; init; } = "";     // plug-ins: the manufacturer
+    public string Category { get; init; } = "";   // plug-ins: VST3 sub-categories ("Fx|Reverb") or the AU type
     public string Path { get; init; } = "";       // file/bundle path for samples/projects/presets
     /// <summary>Long-form description for the row's tooltip, where <see cref="Sub"/> (the
     /// narrow tag column) has no room for it. Falls back to Sub when empty.</summary>
@@ -106,6 +108,7 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     private readonly IPluginCatalog _catalog;
     private readonly IPresetLibrary _presets;
+    private readonly IMosaicPacks? _mosaic;
     private readonly IFactoryPresets _factory;
     private readonly IDrumKits? _kits;
     private readonly ISettingsService? _settings;
@@ -159,8 +162,9 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     public BrowserViewModel(IPluginCatalog catalog, IPresetLibrary presets, IFactoryPresets factory,
                             ISettingsService? settings = null, IBrowserLibrary? library = null,
-                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null)
+                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null, IMosaicPacks? mosaic = null)
     {
+        _mosaic = mosaic;
         _index = sampleIndex;
         _catalog = catalog;
         _presets = presets;
@@ -239,68 +243,23 @@ public sealed partial class BrowserViewModel : ObservableObject
         _fxTree.Clear();
         _midiTree.Clear();
         
-        var midis = new List<BrowserItem>
+        // The built-in devices come from one registry (BuiltinDeviceCatalog) — the command
+        // palette reads the same list, with each device's semantic descriptor.
+        var builtins = BuiltinDeviceCatalog.All.Select(d => new BrowserItem
         {
-            new() { Name = "Nota Arp", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 0, Sub = "step arpeggiator" },
-            new() { Name = "Nota Chord", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 1, Sub = "stacked intervals" },
-            new() { Name = "Nota Scale", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 2, Sub = "pitch quantize" },
-            new() { Name = "Nota Length", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 3, Sub = "force note length" },
-            new() { Name = "Nota Velocity", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 4, Sub = "velocity shaping" },
-            new() { Name = "Nota Random", Kind = BrowserItemKind.BuiltinMidiEffect, BuiltinKind = 5, Sub = "random transpose" }
-        };
-        _midiTree.AddRange(midis.OrderBy(x => x.Name).ToList());
-        
-        var instruments = new List<BrowserItem>
-        {
-            new() { Name = "Nota Synth", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 0, Sub = "subtractive synth" },
-            new() { Name = "Nota Physical", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 2, Sub = "physical synth" },
-            new() { Name = "Nota Aurora", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 5, Sub = "wavetable synth" },
-            new() { Name = "Nota Volt", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 6, Sub = "analog synth" },
-            new() { Name = "Nota Bass", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 7, Sub = "bass synth" },
-            new() { Name = "Nota Pendulum", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 8, Sub = "arp synth" },
-            new() { Name = "Nota Operator", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 9, Sub = "FM synth" },
-            new() { Name = "Nota Grain", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 10, Sub = "granular synth" },
-            new() { Name = "Nota Flux", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 11, Sub = "vector-morph synth" },
-            new() { Name = "Nota Rhythm", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 12, Sub = "drum machine" },
-            new() { Name = "Nota Monolith", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 13, Sub = "mono synth" },
-            new() { Name = "Nota Pentad", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 14, Sub = "poly synth" },
-            new() { Name = "Nota Consort", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 15, Sub = "paraphonic synth" },
-            new() { Name = "Nota Sampler", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 1, Sub = "built-in" },
-            new() { Name = "Nota Instrument Rack", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 3, Sub = "built-in" },
-            new() { Name = "Nota Drum Rack", Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = 4, Sub = "built-in" }
-        };
-        _instrTree.AddRange(instruments.OrderBy(x => x.Name).ToList());
-
-        var fxs = new List<BrowserItem>
-        {
-            new() { Name = "Nota EQ-3", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 16, Sub = "3-band EQ" },
-            new() { Name = "Nota EQ-8", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 0, Sub = "8-band EQ" },
-            new() { Name = "Nota Compressor", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 1, Sub = "built-in" },
-            new() { Name = "Nota Prism", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 21, Sub = "multiband dynamics" },
-            new() { Name = "Nota Lens", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 22, Sub = "analyzer / scope" },
-            new() { Name = "Nota Reverb", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 2, Sub = "built-in" },
-            new() { Name = "Nota Chamber", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 20, Sub = "hybrid reverb" },
-            new() { Name = "Nota Delay", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 3, Sub = "built-in" },
-            new() { Name = "Nota Utility", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 4, Sub = "built-in" },
-            new() { Name = "Nota Level", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 18, Sub = "gain" },
-            new() { Name = "Nota Shutter", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 19, Sub = "gate" },
-            new() { Name = "Nota Valve", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 6, Sub = "amplifier" },
-            new() { Name = "Nota Auto Filter", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 7, Sub = "envelope / LFO" },
-            new() { Name = "Nota Vintage", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 8, Sub = "vintage saturator" },
-            new() { Name = "Nota Forge", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 17, Sub = "saturator" },
-            new() { Name = "Nota Orbit", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 9, Sub = "auto-pan" },
-            new() { Name = "Nota Flanger", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 23, Sub = "flanger" },
-            new() { Name = "Nota Phaser", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 24, Sub = "phaser" },
-            new() { Name = "Nota Chorus", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 25, Sub = "chorus" },
-            new() { Name = "Nota Auto Shift", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 10, Sub = "pitch correction" },
-            new() { Name = "Nota Beat Repeat", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 11, Sub = "glitch & repeats" },
-            new() { Name = "Nota Crush", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 12, Sub = "bit crusher" },
-            new() { Name = "Nota Dynamic EQ-8", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 13, Sub = "dynamic EQ" },
-            new() { Name = "Nota Ceiling", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 14, Sub = "limiter" },
-            new() { Name = "Nota Strata", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 15, Sub = "looper" },
-            new() { Name = "Nota Audio Effect Rack", Kind = BrowserItemKind.BuiltinEffect, BuiltinKind = 5, Sub = "built-in" }
-        };
-        _fxTree.AddRange(fxs.OrderBy(x => x.Name).ToList());
+            Name = d.Name,
+            Kind = d.Type switch
+            {
+                BuiltinDeviceType.Instrument => BrowserItemKind.BuiltinInstrument,
+                BuiltinDeviceType.AudioEffect => BrowserItemKind.BuiltinEffect,
+                _ => BrowserItemKind.BuiltinMidiEffect,
+            },
+            BuiltinKind = d.Kind,
+            Sub = d.Sub,
+        }).OrderBy(x => x.Name).ToList();
+        _instrTree.AddRange(builtins.Where(b => b.Kind == BrowserItemKind.BuiltinInstrument));
+        _fxTree.AddRange(builtins.Where(b => b.Kind == BrowserItemKind.BuiltinEffect));
+        _midiTree.AddRange(builtins.Where(b => b.Kind == BrowserItemKind.BuiltinMidiEffect));
 
         // Attach factory presets under their parent built-in device: unfiled ones (Init) loose
         // at the top, the rest in a folder per category, folders in catalog order.
@@ -355,12 +314,30 @@ public sealed partial class BrowserViewModel : ObservableObject
                     });
             }
 
+        // Nota Mosaic's pack presets (installed sample packs, "Create multisample"): Packs → a pack.
+        if (_mosaic is not null && _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == MosaicModel.Kind) is { } mosaicDev)
+        {
+            var list = _mosaic.Presets();
+            if (list.Count > 0)
+            {
+                var packs = new BrowserItem { Name = "Packs", Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs", Depth = 1 };
+                foreach (var g in list.GroupBy(p => p.Folder))
+                {
+                    var folder = new BrowserItem { Name = g.Key, Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs/{g.Key}", Depth = 2 };
+                    foreach (var p in g)
+                        folder.Children.Add(new BrowserItem { Name = p.Name, Kind = BrowserItemKind.Preset, Sub = p.Source == "sfz" ? "sfz" : "multi", Path = p.Path, Depth = 3 });
+                    packs.Children.Add(folder);
+                }
+                mosaicDev.Children.Add(packs);
+            }
+        }
+
         // Preset groups start collapsed; the user expands a device to reveal its folders.
         foreach (var tree in new[] { _instrTree, _fxTree, _midiTree })
             foreach (var d in tree)
             {
                 d.IsExpanded = false;
-                foreach (var c in d.Children) c.IsExpanded = false;
+                foreach (var c in d.Children) { c.IsExpanded = false; foreach (var cc in c.Children) cc.IsExpanded = false; }
             }
 
         int count = _catalog.Count;
@@ -372,6 +349,8 @@ public sealed partial class BrowserViewModel : ObservableObject
             string name = parts.Length > 0 ? parts[0].Trim() : desc;
             string fmt = parts.Length > 1 ? parts[1].Trim() : "";
             string vendor = parts.Length > 3 ? parts[3].Trim() : "";
+            if (vendor == "?") vendor = "";
+            string category = parts.Length > 4 ? parts[4].Trim() : "";   // VST3 sub-categories / AU type
             bool isInstrument = desc.Contains("| inst |");
             var item = new BrowserItem
             {
@@ -382,6 +361,8 @@ public sealed partial class BrowserViewModel : ObservableObject
                 Sub = fmt.Length > 0 && vendor.Length > 0 ? $"{fmt} · {vendor}"
                     : vendor.Length > 0 ? vendor : fmt,
                 Format = fmt,
+                Vendor = vendor,
+                Category = category,
                 Kind = isInstrument ? BrowserItemKind.PluginInstrument : BrowserItemKind.PluginEffect,
                 CatalogIndex = i,
             };
@@ -392,7 +373,26 @@ public sealed partial class BrowserViewModel : ObservableObject
         RebuildSamples();
         RebuildProjects();
         RebuildPresets();
+        DevicesRebuilt?.Invoke();
     }
+
+    // --- the command palette's view of the library -------------------------------------
+
+    /// <summary>Instruments / audio effects / MIDI effects: built-in devices (with their factory
+    /// presets and kits as children, in category folders) and scanned plug-ins.</summary>
+    public IReadOnlyList<BrowserItem> InstrumentTree => _instrTree;
+    public IReadOnlyList<BrowserItem> EffectTree => _fxTree;
+    public IReadOnlyList<BrowserItem> MidiTree => _midiTree;
+    /// <summary>The user's saved presets: category folder → device folder → preset.</summary>
+    public IReadOnlyList<BrowserItem> UserPresetTree => _presetTree;
+
+    /// <summary>After <see cref="Rebuild"/> (plug-in rescan, folder change) — the palette re-indexes devices.</summary>
+    public event Action? DevicesRebuilt;
+    /// <summary>After the user presets were re-listed (saved / deleted / folder change).</summary>
+    public event Action? PresetsRebuilt;
+
+    /// <summary>The titles of the user's tags on a device row.</summary>
+    public IReadOnlyList<string> TagTitlesFor(BrowserItem it) => TagsFor(it).Select(t => t.Title).ToList();
 
     /// <summary>Expand/collapse a tree node (device or Files folder), then refresh its
     /// tab's visible list.</summary>
@@ -506,20 +506,21 @@ public sealed partial class BrowserViewModel : ObservableObject
                 if (q.Length == 0 || Matches(c, q)) dst.Add(c);
                 continue;
             }
+            // Folders nest (Nota Mosaic → Packs → a pack): the same rule one level down.
             if (q.Length == 0)
             {
                 dst.Add(c);
-                if (c.IsExpanded) foreach (var p in c.Children) dst.Add(p);
+                if (c.IsExpanded) AddPresetRows(c.Children, "", dst);
             }
             else if (Matches(c, q))
             {
                 dst.Add(c);
-                foreach (var p in c.Children) dst.Add(p);
+                AddPresetRows(c.Children, "", dst);
             }
-            else if (c.Children.Any(p => Matches(p, q)))
+            else if (AnyMatch(c.Children, q))
             {
                 dst.Add(c);
-                foreach (var p in c.Children) if (Matches(p, q)) dst.Add(p);
+                AddPresetRows(c.Children, q, dst);
             }
         }
     }
@@ -874,6 +875,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         }
         SortSampleTree(_presetTree);   // folders-first alphabetical, recursive
         RebuildPresetVisible();
+        PresetsRebuilt?.Invoke();
     }
 
     private static string CategoryOf(string type)

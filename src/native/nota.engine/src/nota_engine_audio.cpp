@@ -9,6 +9,10 @@
 
 #include "AudioConfig.h"
 #include "MidiConfig.h"
+#include "MpeInput.h"
+
+#include <algorithm>
+#include <cmath>
 
 #include <string>
 #include <vector>
@@ -122,6 +126,63 @@ NotaResult nota_midi_set_input_enabled(NotaEngine* e, const char* uid, int32_t e
 int32_t nota_midi_input_enabled(const NotaEngine* e, const char* uid) {
     return (e && uid && CENG(e)->midiInputEnabled(std::string(uid))) ? 1 : 0;
 }
+NotaResult nota_midi_set_mpe(NotaEngine* e, int32_t enabled, int32_t bend_range) {
+    if (!e || bend_range < 1 || bend_range > 96) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setMpe(enabled != 0, bend_range); return NOTA_OK;
+}
+int32_t nota_midi_mpe_enabled(const NotaEngine* e) { return (e && CENG(e)->midiConfig().mpe) ? 1 : 0; }
+int32_t nota_midi_mpe_bend_range(const NotaEngine* e) { return e ? CENG(e)->midiConfig().mpeBendRange : 48; }
+int32_t nota_mpe_selftest(void) {
+    struct Ev { int kind; int32_t pitch; int32_t dim; float v; };   // kind 0 on, 1 off, 2 expr
+    struct Rec final : nota::MpeInput::Sink {
+        std::vector<Ev> ev;
+        void mpeNoteOn(int32_t p, float v) override { ev.push_back({0, p, -1, v}); }
+        void mpeNoteOff(int32_t p) override { ev.push_back({1, p, -1, 0.0f}); }
+        void mpeExpression(int32_t p, int32_t d, float v) override { ev.push_back({2, p, d, v}); }
+        bool has(int kind, int32_t p, int32_t d, float v) const {
+            for (const auto& e : ev) if (e.kind == kind && e.pitch == p && e.dim == d && std::fabs(e.v - v) < 0.02f) return true;
+            return false;
+        }
+    } r;
+    nota::MpeInput m;
+    m.configure(true, 48);
+    auto bend = [&](int ch, float x) { const int raw = std::clamp((int)std::lround(8192 + x * 8191), 0, 16383); m.message(0xE0, ch, raw & 0x7F, raw >> 7, r); };
+
+    // 1: a member channel's state before its note-on lands on the note right after it.
+    bend(1, 0.25f); m.message(0xD0, 1, 64, 0, r); m.message(0xB0, 1, 74, 100, r);
+    r.ev.clear(); m.message(0x90, 1, 60, 100, r);
+    if (r.ev.empty() || r.ev[0].kind != 0 || !r.has(2, 60, 0, 12.0f) || !r.has(2, 60, 1, 64 / 127.0f) || !r.has(2, 60, 2, 100 / 127.0f)) return 1;
+    // 2: member bend is per-note, in semitones (±48 by default).
+    r.ev.clear(); bend(1, -0.5f);
+    if (r.ev.size() != 1 || !r.has(2, 60, 0, -24.0f)) return 2;
+    // 3: another member channel's note is untouched by channel 2's bend.
+    m.message(0x90, 2, 64, 100, r); r.ev.clear(); bend(1, 0.0f);
+    for (const auto& e : r.ev) if (e.pitch == 64) return 3;
+    // 4: the master channel addresses the whole instrument, wheel normalized.
+    r.ev.clear(); bend(0, 1.0f); m.message(0xD0, 0, 127, 0, r);
+    if (!r.has(2, -1, 0, 1.0f) || !r.has(2, -1, 1, 1.0f)) return 4;
+    // 5: RPN 0 on a member channel re-ranges every member of the zone.
+    m.message(0xB0, 3, 101, 0, r); m.message(0xB0, 3, 100, 0, r); m.message(0xB0, 3, 6, 24, r);
+    if (m.bendRange(1) != 24 || m.bendRange(15) != 24 || m.bendRange(0) != 48) return 5;
+    r.ev.clear(); bend(1, 0.5f);
+    if (!r.has(2, 60, 0, 12.0f)) return 5;
+    // 6: after note-off the channel no longer bends that pitch.
+    m.message(0x80, 1, 60, 0, r); r.ev.clear(); bend(1, 0.1f);
+    for (const auto& e : r.ev) if (e.pitch == 60) return 6;
+    // 7: MCM on channel 1 shrinks the lower zone; channel 5 becomes an ordinary channel.
+    m.message(0xB0, 0, 101, 0, r); m.message(0xB0, 0, 100, 6, r); m.message(0xB0, 0, 6, 3, r);
+    if (m.lowerMembers() != 3) return 7;
+    m.message(0x90, 5, 70, 100, r); r.ev.clear(); bend(5, 1.0f);
+    if (!r.has(2, -1, 0, 1.0f)) return 7;
+    // 8: MPE off: every channel is an ordinary keyboard; poly pressure stays per-note.
+    nota::MpeInput off; off.configure(false, 48);
+    r.ev.clear(); off.message(0x90, 1, 60, 100, r);
+    { const int raw = 16383; off.message(0xE0, 1, raw & 0x7F, raw >> 7, r); }
+    off.message(0xA0, 1, 60, 127, r);
+    if (r.ev.size() != 3 || !r.has(2, -1, 0, 1.0f) || !r.has(2, 60, 1, 1.0f)) return 8;
+    return 0;
+}
+
 NotaResult nota_midi_apply(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->applyMidiConfig() ? NOTA_OK : NOTA_ERR_UNKNOWN;

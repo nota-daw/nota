@@ -46,6 +46,8 @@ public sealed partial class NotaEngine
         public int AddMidiEffect(int kind) => NativeMethods.AuditionAddMidiEffect(Handle, kind);
         public bool MidiParam(int index, string name, float value) => NativeMethods.AuditionMidiParam(Handle, index, name, value) != 0;
         public bool SetSamplerSample(string? path, int rootNote = 60) => NativeMethods.AuditionSetSamplerSample(Handle, path, rootNote) != 0;
+        /// <summary>Nota Mosaic's program; returns once its samples are loaded.</summary>
+        public bool SetMosaicProgram(string text) => NativeMethods.AuditionSetMosaicProgram(Handle, text) != 0;
         public bool AddSourceFrom(IAuditionRig part, float gain)
             => part is AuditionRig p && NativeMethods.AuditionAddSourceFrom(Handle, p.Handle, gain) != 0;
         public bool UseCachedSource(string key) => NativeMethods.AuditionUseCachedSource(Handle, key) != 0;

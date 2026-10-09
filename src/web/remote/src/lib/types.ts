@@ -10,6 +10,8 @@ export interface Track {
   kind: TrackKind;
   dev: string;
   grp: number;
+  /** The instrument takes per-note expression (MPE): the Keys screen offers Expressive. */
+  mpe?: boolean;
   /** Drum tracks: [note, name] per pad. */
   pads?: [number, string][];
 }

@@ -44,7 +44,7 @@ public static class RemoteParams
             0 => "Nota Synth", 1 => "Sampler", 2 => "Nota Physical", 3 => "Instrument Rack", 4 => "Drum Rack",
             5 => "Nota Aurora", 6 => "Nota Volt", 7 => "Nota Bass", 8 => "Nota Pendulum", 9 => "Nota Operator",
             10 => "Nota Grain", 11 => "Nota Flux", 12 => "Nota Rhythm", 13 => "Nota Monolith", 14 => "Nota Pentad",
-            15 => "Nota Consort", _ => "",
+            15 => "Nota Consort", 16 => "Nota Keys", 17 => "Nota Mosaic", _ => "",
         };
         if (name.Length > 0) return name;
         string id = e.TrackInstrumentPluginId(trackId);

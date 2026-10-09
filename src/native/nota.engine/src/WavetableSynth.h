@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 
 #include <algorithm>
 #include <atomic>
@@ -116,6 +117,17 @@ public:
         static const int at[kRevAll] = {556, 441};
         for (int a = 0; a < kRevAll; ++a) { revA_[a].buf.assign((size_t)(at[a] * sampleRate_ / 44100.0) + 1, 0.0f); revA_[a].idx = 0; }
         toneL_ = toneR_ = 0.0f;
+        exprCoef_ = exprSmoothCoef(sampleRate_);
+    }
+
+    // MPE: bend → pitch (a keyboard's wheel uses the patch's Bend Range), pressure → level +
+    // both cutoffs, slide → both oscillators' wavetable position (±half the table).
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        float add[kExprDims]; gexpr_.offsets(wheelRange(), add);
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && v.stage != Stage::Release && v.stage != Stage::Off) v.ex.set(dim, value, add);
     }
     void setTransport(double, double samplesPerBeat, bool) override { if (samplesPerBeat > 0.0) spb_ = samplesPerBeat; }
     int32_t activeVoiceCount() const override { return activeVoices_.load(std::memory_order_relaxed); }
@@ -217,6 +229,7 @@ public:
         const bool legato = mono && v->active && v->stage != Stage::Off;
         v->active = true; v->pitch = pitch;
         v->freq = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
+        { float add[kExprDims]; gexpr_.offsets(wheelRange(), add); v->ex.reset(add); v->exBendAt = 0.0f; v->exBendMul = 1.0; }
         v->velocity = std::clamp(velocity, 0.0f, 1.0f);
         v->ktOct = (pitch - 60) / 12.0;
         rng_ = rng_ * 1664525u + 1013904223u; v->rand = ((rng_ >> 8) / 16777216.0) * 2.0 - 1.0;
@@ -233,7 +246,7 @@ public:
         for (auto& v : voices_)
             if (v.active && v.pitch == pitch && v.stage != Stage::Release) { v.stage = Stage::Release; v.stage2 = Stage::Release; }
     }
-    void allNotesOff() override { for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         // ---- macros first: seven of the twelve destinations ride the per-voice bus
@@ -295,7 +308,8 @@ public:
         const float gain = get(Gain), modWheel = get(ModWheel);
 
         // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
-        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0) / 12.0);
+        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * wheelRange() / 12.0);
+        float exAdd[kExprDims]; gexpr_.offsets(wheelRange(), exAdd);
         // Output pan, equal power.
         const float outPan = (get(OutPan) - 0.5f) * 2.0f;
         const float opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi);
@@ -341,10 +355,13 @@ public:
                     const double src[kSources] = { v.env, v.env2, lfo1, lfo2, v.velocity, std::clamp(v.ktOct / 4.0, -1.0, 1.0), modWheel, v.rand };
                     for (int k = 0; k < amN; ++k) dst[amD[k]] += src[amS[k]] * amA[k];
                 }
+                v.ex.tick(exAdd, exprCoef_);
+                if (v.ex.bend() != v.exBendAt) { v.exBendAt = v.ex.bend(); v.exBendMul = std::exp2(v.exBendAt / 12.0); }
+                const float exPos = v.ex.slide() * 0.5f;
                 const double pMul = std::exp2(dst[0] * 2.0);
-                const float pos1 = std::clamp(basePos1 + (float)dst[2], 0.0f, 1.0f);
-                const float pos2 = std::clamp(basePos2 + (float)dst[2], 0.0f, 1.0f);
-                const double base = v.freq * invSr * pMul * bendMul;
+                const float pos1 = std::clamp(basePos1 + (float)dst[2] + exPos, 0.0f, 1.0f);
+                const float pos2 = std::clamp(basePos2 + (float)dst[2] + exPos, 0.0f, 1.0f);
+                const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
 
                 // --- oscillators (unison stack on Osc1/Osc2, mono sub) ---
                 // A spread unison stack is stereo: the mid goes through the filters, the
@@ -363,7 +380,7 @@ public:
                 // --- filters (control-rate coeff update) ---
                 if (v.modCount-- <= 0) {
                     v.modCount = 15;
-                    const double cutMod = dst[3] * 4.0, resoMod = dst[4];
+                    const double cutMod = dst[3] * 4.0 + v.ex.pressure() * 2.0, resoMod = dst[4];
                     double c1 = f1Env * 4.0 * v.env2 + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
                     double c2 = f2Env * 4.0 * v.env2 + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
                     setSvf(v.f[0], std::clamp(f1base * std::exp2(c1), 20.0, sampleRate_ * 0.49), resoToK(reso1 + resoMod));
@@ -374,7 +391,7 @@ public:
                 else { double a = svf(v.f[0], v.ic1L[0], v.ic2L[0], in1, t1type); if (slope1) a = svf(v.f[0], v.ic1R[0], v.ic2R[0], a, t1type); double b = svf(v.f[1], v.ic1L[1], v.ic2L[1], in2, t2type); if (slope2) b = svf(v.f[1], v.ic1R[1], v.ic2R[1], b, t2type); wet = a + b; }
                 double s = wet + dryS;
 
-                float amp = v.env * v.velocity * (1.0f + (float)dst[5]);
+                float amp = v.env * v.velocity * (1.0f + (float)dst[5]) * (1.0f + 0.5f * v.ex.pressure());
                 float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
                 const float pan = (float)std::clamp(dst[6], -1.0, 1.0);
                 mixL += sigL * (pan <= 0 ? 1.0f : 1.0f - pan);
@@ -409,8 +426,11 @@ private:
         SvfCoef f[2];
         double ic1L[2] = {}, ic2L[2] = {}, ic1R[2] = {}, ic2R[2] = {};   // [0]=stage1, [1]=2nd slope stage per filter
         int32_t modCount = 0;
+        VoiceExpr ex;                    // MPE bend / pressure / slide
+        float exBendAt = 0.0f; double exBendMul = 1.0;
     };
 
+    float wheelRange() const { return static_cast<float>(std::round(1.0 + get(BendRange) * 11.0)); }   // semitones
     void set(int i, float v) { pn_[i].store(v, std::memory_order_relaxed); }
     float get(int i) const { return pn_[i].load(std::memory_order_relaxed); }
     double bip(int i) const { return (get(i) - 0.5) * 2.0; }
@@ -571,6 +591,8 @@ private:
 
     Voice voices_[kVoices];
     double sampleRate_ = 44100.0, spb_ = 0.0;
+    float  exprCoef_ = exprSmoothCoef(44100.0);
+    GlobalExpr gexpr_;              // pitch wheel / channel pressure (pitch −1)
     double lfoPhase1_ = 0, lfoPhase2_ = 0, chorusPh_ = 0;
     float lfoSh1_ = 0, lfoSh2_ = 0;
     uint32_t rng_ = 0x51ed270bu;

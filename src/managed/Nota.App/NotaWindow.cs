@@ -43,6 +43,7 @@ public abstract class NotaWindow : Window
         var bodyLayer = new Panel();
         bodyLayer.Children.Add(_bodyHost);
         bodyLayer.Children.Add(_learnGlass);
+        bodyLayer.Children.Add(OverlayLayer);
 
         var dock = new DockPanel();
 
@@ -98,6 +99,9 @@ public abstract class NotaWindow : Window
         dock.Children.Add(bodyLayer);   // fills the remaining space
         base.Content = dock;
     }
+
+    /// <summary>A layer over the body for overlays that open in this window (the command palette).</summary>
+    internal Panel OverlayLayer { get; } = new();
 
     private Border? _chromeBar;
     private TextBlock? _chromeTitle;

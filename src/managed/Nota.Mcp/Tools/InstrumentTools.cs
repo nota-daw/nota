@@ -20,6 +20,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         (4, "Drum Rack"), (5, "Nota Aurora"), (6, "Nota Volt"), (7, "Nota Bass"),
         (8, "Nota Pendulum"), (9, "Nota Operator"), (10, "Nota Grain"), (11, "Nota Flux"),
         (12, "Nota Rhythm"), (13, "Nota Monolith"), (14, "Nota Pentad"), (15, "Nota Consort"),
+        (16, "Nota Keys"), (17, "Nota Mosaic"),
     };
 
     public sealed record InstrumentKind(int Kind, string Name);
@@ -29,7 +30,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     public InstrumentKind[] ListInstrumentKinds() => Array.ConvertAll(Kinds, k => new InstrumentKind(k.Kind, k.Name));
 
     [McpServerTool(Name = "add_instrument_track"), Description("Add an instrument track with the given built-in kind (see list_instrument_kinds). Returns the track id.")]
-    public Task<int> AddInstrumentTrack([Description("Instrument kind id (0..15)")] int kind) => Mutate(() => kind switch
+    public Task<int> AddInstrumentTrack([Description("Instrument kind id (0..17)")] int kind) => Mutate(() => kind switch
     {
         1 => E.AddSamplerInstrumentTrack(),
         2 => E.AddPhysicalSynthTrack(),
@@ -46,6 +47,8 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         13 => E.AddMonolithTrack(),
         14 => E.AddPentadTrack(),
         15 => E.AddConsortTrack(),
+        16 => E.AddKeysTrack(),
+        17 => E.AddMosaicTrack(),
         _ => E.AddInstrumentTrack(),   // 0 = Nota Synth
     });
 
@@ -218,6 +221,122 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         for (int i = 0; i < pc; i++) vals[E.PluginParamId(trackId, -1, i)] = E.PluginParamGet(trackId, -1, i);
         return id => vals.TryGetValue(id, out var v) ? v : 0f;
     }
+
+    public sealed record KeysReading(string Summary, string Guide, string Model, int ActiveVoices, int VoiceLimit,
+        int HeldNotes, int PedalHeld, bool PedalDown, string LastNote, double OutputPeakDb, double BarkDb, double[] HarmonicsDb);
+
+    [McpServerTool(Name = "read_keys"), Description(
+        "Read a Nota Keys track (built-in instrument kind 16 — a modelled electric piano: Tine, Suitcase, Reed or Clav; a hammer "
+        + "strikes a tine / reed / string whose motion passes a PICKUP transfer curve, then preamp → tremolo → phaser → chorus → "
+        + "cabinet). Returns a one-line summary, a guide to every 0..1 parameter (ids for set_instrument_param_by_id, or use "
+        + "set_keys), the voices sounding / the voice limit, how many are held by keys and by the sustain pedal, whether the pedal "
+        + "is down (the Pedal param or a keyboard's CC64), the last note struck, the output peak (dBFS, -120 = silence), the bark "
+        + "(2nd harmonic against the fundamental, dB) and the curve's harmonics H1..H8 in dB relative to H1 for a full-velocity "
+        + "note — what the PICKUP graph shows.")]
+    public Task<KeysReading?> ReadKeys(int trackId) => Read<KeysReading?>(() =>
+    {
+        if (E.TrackInstrumentKind(trackId) != KeysModel.Kind) return null;
+        var g = PendulumGetter(trackId);
+        var sc = new float[KeysModel.ScopeLength];
+        int n = E.InstrumentScope(trackId, sc);
+        int model = KeysModel.Index(g("model"), 4);
+        double sym = KeysModel.Bipolar(g("sym")), dist = g("dist");
+        var mags = KeysModel.Harmonics(sym, dist, model);
+        var hdb = new double[mags.Length];
+        for (int i = 0; i < mags.Length; i++) hdb[i] = Math.Round(20 * Math.Log10(mags[i] / Math.Max(1e-9, mags[0]) + 1e-9), 1);
+        double peak = n > KeysModel.ScPeakR ? Math.Max(sc[KeysModel.ScPeakL], sc[KeysModel.ScPeakR]) : 0;
+        int last = n > KeysModel.ScLastNote ? (int)Math.Round(sc[KeysModel.ScLastNote]) : -1;
+        return new KeysReading(KeysModel.Summary(g), KeysModel.Guide, KeysModel.ModelNames[model],
+            n > 0 ? (int)sc[KeysModel.ScActive] : 0, KeysModel.VoiceCounts[KeysModel.Index(g("voices"), 4)],
+            n > KeysModel.ScHeld ? (int)sc[KeysModel.ScHeld] : 0, n > KeysModel.ScSustained ? (int)sc[KeysModel.ScSustained] : 0,
+            n > KeysModel.ScPedal && sc[KeysModel.ScPedal] > 0.5f, last >= 0 ? PendulumModel.NoteName(last) : "",
+            peak > 1e-6 ? Math.Round(20 * Math.Log10(peak), 1) : -120,
+            Math.Round(KeysModel.BarkDb(sym, dist, model), 1), hdb);
+    });
+
+    [McpServerTool(Name = "set_keys"), Description(
+        "Shape a Nota Keys track (kind 16) in musical terms; every argument is optional and only the given ones change. "
+        + "model Tine | Suitcase | Reed | Clav (also resets the pickup and cabinet that model is voiced with unless you pass them); "
+        + "hardnessPercent / velocityHardnessPercent 0..100; decayPercent 25..400 (100 = the model's natural ring); "
+        + "brightPercent / bodyPercent 0..100 (50 = natural); symmetryPercent -100..100 (0 = centred; off-centre adds even "
+        + "harmonics, the bark); distancePercent 0..100 (0 = pickup close: growl, 100 = far: clean); pickup Upper | Both | Lower "
+        + "(Clav); damperPercent 0..100 (how fast a released key stops); pedal down/up; voices 8 | 16 | 32 | 64; "
+        + "tuneCents -50..50; agePercent 0..100; drivePercent 0..100 (turns the preamp on); tremolo off | mono | stereo; "
+        + "tremoloRate \"4.5\" (Hz, free) or a division 1/1, 1/2, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 (tempo); tremoloDepthPercent; "
+        + "phaser on/off with phaserRateHz 0.05..5; chorusMixPercent (0 = chorus off); cabinet Off | Suitcase | Combo | DI; "
+        + "volumeDb -40..6. Returns the new summary, or an error line naming what it could not use.")]
+    public Task<string> SetKeys(int trackId, string? model = null, double? hardnessPercent = null, double? velocityHardnessPercent = null,
+        double? decayPercent = null, double? brightPercent = null, double? bodyPercent = null, double? symmetryPercent = null,
+        double? distancePercent = null, string? pickup = null, double? damperPercent = null, bool? pedal = null, int? voices = null,
+        double? tuneCents = null, double? agePercent = null, double? drivePercent = null, string? tremolo = null, string? tremoloRate = null,
+        double? tremoloDepthPercent = null, bool? phaser = null, double? phaserRateHz = null, double? chorusMixPercent = null,
+        string? cabinet = null, double? volumeDb = null) => Mutate(() =>
+    {
+        if (E.TrackInstrumentKind(trackId) != KeysModel.Kind) return $"error: track {trackId} is not a Nota Keys";
+        int pc = E.PluginParamCount(trackId, -1);
+        var ids = new Dictionary<string, int>();
+        for (int i = 0; i < pc; i++) ids[E.PluginParamId(trackId, -1, i)] = i;
+        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) E.PluginParamSet(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
+        static int Find(string[] names, string? v) => v is null ? -1 : Array.FindIndex(names, n => string.Equals(n, v.Trim(), StringComparison.OrdinalIgnoreCase));
+        static double Pct(double p) => Math.Clamp(p, 0, 100) / 100.0;
+        var errors = new List<string>();
+
+        if (model is not null)
+        {
+            int m = Find(KeysModel.ModelNames, model);
+            if (m < 0) errors.Add($"model '{model}'");
+            else
+            {
+                Set("model", m / 3.0);
+                var (ds, dd, dc) = KeysModel.ModelDefaults(m);
+                if (symmetryPercent is null) Set("sym", (ds + 1) / 2);
+                if (distancePercent is null) Set("dist", dd);
+                if (cabinet is null) Set("cab", dc / 3.0);
+            }
+        }
+        if (hardnessPercent is { } h) Set("hard", Pct(h));
+        if (velocityHardnessPercent is { } vh) Set("velhard", Pct(vh));
+        if (decayPercent is { } dp) Set("decay", Math.Log(Math.Clamp(dp, 25, 400) / 25.0) / Math.Log(16.0));
+        if (brightPercent is { } br) Set("bright", Pct(br));
+        if (bodyPercent is { } bo) Set("body", Pct(bo));
+        if (symmetryPercent is { } sy) Set("sym", (Math.Clamp(sy, -100, 100) / 100.0 + 1) / 2);
+        if (distancePercent is { } di) Set("dist", Pct(di));
+        if (pickup is not null) { int p = Find(KeysModel.PickupPositions, pickup); if (p < 0) errors.Add($"pickup '{pickup}'"); else Set("pupos", p / 2.0); }
+        if (damperPercent is { } da) Set("damper", Pct(da));
+        if (pedal is { } pd) Set("pedal", pd ? 1 : 0);
+        if (voices is { } vc) { int v = Array.IndexOf(KeysModel.VoiceCounts, vc); if (v < 0) errors.Add($"voices {vc}"); else Set("voices", v / 3.0); }
+        if (tuneCents is { } tc) Set("tune", 0.5 + Math.Clamp(tc, -50, 50) / 100.0);
+        if (agePercent is { } ag) Set("age", Pct(ag));
+        if (drivePercent is { } dr) { Set("drive", Pct(dr)); Set("preon", 1); }
+        if (tremolo is not null)
+        {
+            var t = tremolo.Trim().ToLowerInvariant();
+            if (t == "off") Set("tremon", 0);
+            else if (t is "mono" or "stereo") { Set("tremon", 1); Set("tremmode", t == "stereo" ? 1 : 0); }
+            else errors.Add($"tremolo '{tremolo}'");
+        }
+        if (tremoloRate is not null)
+        {
+            int d = Find(KeysModel.TremDivisions, tremoloRate);
+            if (d >= 0) { Set("tremsync", 1); Set("tremrate", d / 7.0); }
+            else if (double.TryParse(tremoloRate.Replace("Hz", "", StringComparison.OrdinalIgnoreCase).Trim(), System.Globalization.NumberStyles.Float,
+                         System.Globalization.CultureInfo.InvariantCulture, out var hz) && hz > 0)
+            { Set("tremsync", 0); Set("tremrate", Math.Log(Math.Clamp(hz, 0.5, 15) / 0.5) / Math.Log(30.0)); }
+            else errors.Add($"tremoloRate '{tremoloRate}'");
+        }
+        if (tremoloDepthPercent is { } td) Set("tremdepth", Pct(td));
+        if (phaser is { } ph) Set("phaseron", ph ? 1 : 0);
+        if (phaserRateHz is { } pr) { Set("phaserrate", Math.Log(Math.Clamp(pr, 0.05, 5) / 0.05) / Math.Log(100.0)); if (phaser is null) Set("phaseron", 1); }
+        if (chorusMixPercent is { } cm) { Set("chorusmix", Pct(cm)); Set("choruson", cm > 0 ? 1 : 0); }
+        if (cabinet is not null) { int c = Find(KeysModel.CabNames, cabinet); if (c < 0) errors.Add($"cabinet '{cabinet}'"); else Set("cab", c / 3.0); }
+        if (volumeDb is { } vd)
+        {
+            double db = Math.Clamp(vd, -40, 6);
+            Set("volume", db >= 0 ? 0.8 + db / 30.0 : 0.8 * Math.Pow(10, db / 60.0));
+        }
+        string summary = KeysModel.Summary(PendulumGetter(trackId));
+        return errors.Count == 0 ? summary : $"error: could not use {string.Join(", ", errors)} · {summary}";
+    });
 
     [McpServerTool(Name = "set_instrument_param_by_id"), Description(
         "Set a track instrument parameter by its stable id (e.g. \"cutoff\", \"pmoscb\") to a normalized value (0..1). "

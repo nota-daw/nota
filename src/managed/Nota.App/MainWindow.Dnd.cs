@@ -22,6 +22,10 @@ public partial class MainWindow
 {
     // --- browser drag & drop (M7-5) ----------------------------------------
 
+    // Every route a browser item takes onto a track goes through one service (CP-25), so a
+    // drop and the command palette put a device in the same place. The service does the
+    // engine work as one undo step; ApplyInsertResult does what the views need afterwards.
+
     private void OnArrangementDrop(BrowserItem item, int trackId, double beat)
     {
         if (_vm is null) return;
@@ -31,53 +35,13 @@ public partial class MainWindow
             {
                 case BrowserItemKind.Sample:
                     // Decodes in the background; the track shows a filling placeholder meanwhile.
-                    _ = ImportAudioInBackgroundAsync(item.Path, TrackIsAudio(trackId) ? trackId : -1, beat);
+                    _ = ImportAudioInBackgroundAsync(item.Path, Insertion.TrackIsAudio(trackId) ? trackId : -1, beat);
                     break;
                 case BrowserItemKind.MidiFile:
                     ImportMidiFileToArrangement(item, trackId, beat);
                     break;
-                case BrowserItemKind.BuiltinInstrument:
-                {
-                    // Dropped on an existing (non-rack) instrument track → swap its instrument;
-                    // otherwise add a new track. Racks/Sampler fall through to their own adds.
-                    if (TryReplaceInstrument(item, trackId)) break;
-                    int t = item.BuiltinKind switch
-                    {
-                        4 => Engine.AddDrumRackTrack(),
-                        3 => Engine.AddInstrumentRackTrack(),
-                        2 => Engine.AddPhysicalSynthTrack(),
-                        5 => Engine.AddWavetableSynthTrack(),
-                        6 => Engine.AddVoltSynthTrack(),
-                        7 => Engine.AddBassSynthTrack(),
-                        8 => Engine.AddPendulumSynthTrack(),
-                        9 => Engine.AddOperatorSynthTrack(),
-                        10 => Engine.AddGrainSynthTrack(),
-                        11 => Engine.AddFluxSynthTrack(),
-                        12 => Engine.AddRhythmTrack(),
-                        13 => Engine.AddMonolithTrack(),
-                        14 => Engine.AddPentadTrack(),
-                        15 => Engine.AddConsortTrack(),
-                        1 => Engine.AddSamplerInstrumentTrack(),
-                        _ => Engine.AddInstrumentTrack(),
-                    };
-                    if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
-                    Engine.AddMidiClip(t, beat, 4.0);
-                    _lastInstrumentTrackId = t;
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
-                    break;
-                }
-                case BrowserItemKind.PluginInstrument:
-                {
-                    // Dropped on an existing (non-rack) instrument track → swap its instrument.
-                    if (TryReplaceInstrument(item, trackId)) break;
-                    int t = Engine.AddPluginInstrumentTrack(item.CatalogIndex);
-                    Engine.AddMidiClip(t, beat, 4.0);
-                    _lastInstrumentTrackId = t;
-                    _vm.StatusText = $"Added {item.Name} (track {t})";
-                    break;
-                }
-                default: // effects + presets target the dropped-on track
-                    RouteToTrack(item, trackId);
+                default:   // instruments replace / start a track; effects + presets target the track
+                    ApplyInsertResult(Insertion.DropOnArrangement(item, trackId, beat), revealDevices: item.Kind is not (BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument));
                     break;
             }
             Timeline.Refresh();
@@ -103,8 +67,9 @@ public partial class MainWindow
                     break;
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
+                case BrowserItemKind.BuiltinMidiEffect:
                 case BrowserItemKind.Preset:
-                    RouteToTrack(item, trackId); // a session column is a track
+                    ApplyInsertResult(Insertion.RouteToTrack(item, trackId)); // a session column is a track
                     break;
                 default: // instruments
                     _vm.StatusText = "Drop instruments onto the arrangement.";
@@ -123,42 +88,16 @@ public partial class MainWindow
     private void OnDevicePanelDrop(BrowserItem item, DeviceDropTarget target)
     {
         int t = _deviceChain?.TrackId ?? -1;
-        if (_vm is null || _deviceChain is null || t <= 0 || target.Mode == DeviceDropMode.Default)
-        { DropBrowserItem(item, t); return; }
-        Engine.BeginUndoGroup();   // add + move (+ remove) undo as one step
-        try
+        if (_vm is null) return;
+        var placement = target.Mode switch
         {
-            switch (item.Kind)
-            {
-                case BrowserItemKind.BuiltinInstrument:
-                case BrowserItemKind.PluginInstrument:
-                    if (!TryReplaceInstrument(item, t)) { DropBrowserItem(item, t); return; }
-                    break;
-                case BrowserItemKind.BuiltinEffect:
-                case BrowserItemKind.PluginEffect:
-                case BrowserItemKind.BuiltinMidiEffect:
-                {
-                    int idx = item.Kind switch
-                    {
-                        BrowserItemKind.BuiltinEffect => Engine.AddBuiltinDevice(t, item.BuiltinKind),
-                        BrowserItemKind.PluginEffect => Engine.AddTrackEffectPlugin(t, item.CatalogIndex),
-                        _ => Engine.AddMidiEffect(t, item.BuiltinKind),
-                    };
-                    if (idx < 0) { _vm.StatusText = $"Couldn't load {item.Name}."; return; }
-                    _deviceChain.PlaceDroppedDevice(idx, target);
-                    _vm.StatusText = target.Mode == DeviceDropMode.Replace
-                        ? $"Replaced with {item.Name}" : $"Added {item.Name} to track {t}";
-                    break;
-                }
-                default:
-                    DropBrowserItem(item, t);
-                    return;
-            }
-            Timeline.Refresh();
-        }
-        catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
-        finally { Engine.EndUndoGroup(); }
+            DeviceDropMode.Insert => InsertPlacement.Insert,
+            DeviceDropMode.Replace => InsertPlacement.Replace,
+            _ => InsertPlacement.Default,
+        };
+        ApplyInsertResult(Insertion.Insert(item, new InsertTarget(t, placement, target.Index, target.Midi)));
     }
+
     private void OnModularDrop(BrowserItem item) => DropBrowserItem(item, _modular?.TrackId ?? -1);
 
     // Adds an instrument/effect/MIDI-FX/sample/preset from the browser to a track;
@@ -167,140 +106,39 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         if (t <= 0) { _vm.StatusText = "Select a track first."; return; }
-        try
-        {
-            int kind = Engine.TrackInstrumentKind(t);
-            switch (item.Kind)
-            {
-                case BrowserItemKind.BuiltinInstrument when kind == 3:      // Instrument Rack → new chain
-                    Engine.RackAddChain(t, item.BuiltinKind);
-                    _vm.StatusText = $"Added {item.Name} chain";
-                    break;
-                case BrowserItemKind.BuiltinInstrument when kind == 4:      // Drum Rack → next free pad
-                {
-                    int note = NextFreeDrumPad(t);
-                    if (note < 0) { _vm.StatusText = "All 16 pads are used."; break; }
-                    int c = Engine.RackAddChain(t, item.BuiltinKind);
-                    if (c >= 0) Engine.RackSetChainTriggerNote(t, c, note);
-                    _vm.StatusText = $"Added {item.Name} pad";
-                    break;
-                }
-                case BrowserItemKind.PluginInstrument when kind == 3:      // Instrument Rack → plugin chain
-                    if (Engine.RackAddPluginInstrumentChain(t, item.CatalogIndex) < 0) _vm.StatusText = $"Couldn't load {item.Name}.";
-                    else _vm.StatusText = $"Added {item.Name} chain";
-                    break;
-                case BrowserItemKind.PluginInstrument when kind == 4:      // Drum Rack → plugin pad
-                {
-                    int note = NextFreeDrumPad(t);
-                    if (note < 0) { _vm.StatusText = "All 16 pads are used."; break; }
-                    int c = Engine.RackAddPluginInstrumentChain(t, item.CatalogIndex);
-                    if (c < 0) { _vm.StatusText = $"Couldn't load {item.Name}."; break; }
-                    Engine.RackSetChainTriggerNote(t, c, note);
-                    _vm.StatusText = $"Added {item.Name} pad";
-                    break;
-                }
-                case BrowserItemKind.BuiltinInstrument:
-                case BrowserItemKind.PluginInstrument:
-                    _vm.StatusText = "Drop instruments onto the arrangement.";
-                    break;
-                case BrowserItemKind.Sample when kind == 4:                 // sample → drum pad (Sampler)
-                {
-                    int note = NextFreeDrumPad(t);
-                    if (note < 0) { _vm.StatusText = "All 16 pads are used."; break; }
-                    int c = Engine.RackAddSamplerChain(t, item.Path, note, false);   // root = pad note → natural pitch
-                    if (c < 0) { _vm.StatusText = $"Couldn't load {item.Name}."; break; }
-                    Engine.RackSetChainTriggerNote(t, c, note);
-                    _vm.StatusText = $"Added {item.Name} pad";
-                    break;
-                }
-                case BrowserItemKind.Sample when kind == 3:                 // sample → instrument-rack Sampler chain
-                    if (Engine.RackAddSamplerChain(t, item.Path, 60, false) < 0) _vm.StatusText = $"Couldn't load {item.Name}.";
-                    else _vm.StatusText = $"Added {item.Name} chain";
-                    break;
-                case BrowserItemKind.Sample when kind == 1:                 // sample → load into the Sampler
-                    if (!Engine.SetTrackSamplerSample(t, item.Path, 60)) _vm.StatusText = $"Couldn't load {item.Name}.";
-                    else { ShowDevices(t); _vm.StatusText = $"Loaded {item.Name}"; }
-                    break;
-                case BrowserItemKind.Sample when kind == 10:                // sample → load into Nota Grain
-                {
-                    // The root from a note in the file name ("Pad_F#3.wav"), else C4.
-                    int root = SamplerModel.DetectRoot(item.Path) is var d and >= 0 ? d : 60;
-                    if (!Engine.SetTrackGrainSample(t, item.Path, root)) _vm.StatusText = $"Couldn't load {item.Name}.";
-                    else { ShowDevices(t); _vm.StatusText = $"Loaded {item.Name} · root {SamplerModel.NoteName(root)}"; }
-                    break;
-                }
-                case BrowserItemKind.Sample:
-                    _vm.StatusText = "Drop samples onto the arrangement.";
-                    break;
-                case BrowserItemKind.MidiFile:
-                    _vm.StatusText = "Drop MIDI files onto the arrangement or a session slot.";
-                    break;
-                default:                                                    // effects + presets
-                    RouteToTrack(item, t);
-                    break;
-            }
-            _deviceChain?.Refresh();
-            if (_modular?.IsVisible == true) _modular.Refresh();
-            Timeline.Refresh();
-        }
-        catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
+        ApplyInsertResult(Insertion.Insert(item, new InsertTarget(t)));
     }
 
-    // First of the 16 drum pad notes (36..51) with no chain assigned, or -1.
-    private int NextFreeDrumPad(int trackId)
-    {
-        int n = Engine.RackChainCount(trackId);
-        var used = new HashSet<int>();
-        for (int c = 0; c < n; c++) used.Add(Engine.RackChainTriggerNote(trackId, c));
-        for (int note = 36; note < 52; note++) if (!used.Contains(note)) return note;
-        return -1;
-    }
+    private DeviceInsertService? _insertion;
+    private DeviceInsertService Insertion => _insertion ??= new DeviceInsertService(Engine, _factory, _presets, _kits);
 
-    // Adds an effect / applies a preset to a specific track (shared by both drop paths).
-    private void RouteToTrack(BrowserItem item, int trackId)
+    /// <summary>What the views do after the insert service changed a track: card state, the
+    /// last-instrument fallback, refreshes, revealing the chain, the status line.</summary>
+    private void ApplyInsertResult(InsertResult r, bool revealDevices = true)
     {
         if (_vm is null) return;
-        // Presets first: an instrument preset spawns its own track, so it doesn't need a
-        // drop target; an effect preset reports "Select a track first." via Apply itself.
-        if (item.Kind == BrowserItemKind.Preset)
-        {
-            bool kit = IsKitRow(item);
-            string warn = ApplyPresetItem(item, trackId);
-            if (!kit && trackId > 0) ShowDevices(trackId);
-            _vm.StatusText = warn.Length > 0 ? warn
-                : kit ? $"Loaded {item.Name} kit" : $"Applied preset {item.Name}";
-            return;
-        }
-        if (trackId <= 0) { _vm.StatusText = "Drop onto a track."; return; }
-        switch (item.Kind)
-        {
-            case BrowserItemKind.BuiltinEffect:
-                Engine.AddBuiltinDevice(trackId, item.BuiltinKind);
-                ShowDevices(trackId);
-                _vm.StatusText = $"Added {item.Name} to track {trackId}";
-                break;
-            case BrowserItemKind.BuiltinMidiEffect:
-                Engine.AddMidiEffect(trackId, item.BuiltinKind);
-                ShowDevices(trackId);
-                _vm.StatusText = $"Added {item.Name} to track {trackId}";
-                break;
-            case BrowserItemKind.PluginEffect:
-                if (Engine.AddTrackEffectPlugin(trackId, item.CatalogIndex) < 0) { _vm.StatusText = "Failed to load effect."; break; }
-                ShowDevices(trackId);
-                _vm.StatusText = $"Added {item.Name} to track {trackId}";
-                break;
-        }
+        _vm.StatusText = r.Status;
+        if (!r.Ok) return;
+        int t = r.TrackId;
+        if (t > 0 && (r.InstrumentReplaced || r.CreatedTrack) && Insertion.TryTrackInfo(t, out var ti) && ti.IsInstrument)
+            _lastInstrumentTrackId = t;
+        if (r.InstrumentReplaced) RefreshDeviceChainIfShowing(t);
+        if (r.Placed is { } p) _deviceChain?.AdoptPlacement(t, p.Midi, p.Added, p.Final, p.Replaced);
+        if (r.PresetLanded is { } pl)
+            _deviceChain?.RememberPreset(pl.TrackId, pl.Chain switch
+            {
+                PresetChain.Instrument => DeviceChainView.ChainKind.Instrument,
+                PresetChain.Midi => DeviceChainView.ChainKind.Midi,
+                _ => DeviceChainView.ChainKind.Effect,
+            }, pl.Index, pl.Name, pl.FactoryId);
+        Timeline.Refresh();
+        _session?.Refresh();
+        if (_modular?.IsVisible == true) _modular.Refresh();
+        if (revealDevices && r.ShowDevices && t > 0) ShowDevices(t);
+        else _deviceChain?.Refresh();
     }
 
-    private bool TrackIsAudio(int trackId)
-    {
-        if (trackId <= 0) return false;
-        int n = Engine.TrackCount;
-        for (int i = 0; i < n; i++)
-            if (Engine.TryGetTrackInfo(i, out var ti) && ti.Id == trackId)
-                return !ti.IsInstrument && !ti.IsReturn;
-        return false;
-    }
+    private bool TrackIsAudio(int trackId) => Insertion.TrackIsAudio(trackId);
 
     // Refresh the device panel after an in-place instrument swap, but only when it's already
     // open on that track (never force it open). The old instrument's preset label is dropped
@@ -309,39 +147,5 @@ public partial class MainWindow
     {
         _deviceChain?.ForgetInstrumentState(trackId);
         if (_deviceChain?.IsVisible == true && _deviceChain.TrackId == trackId) _deviceChain.Show(trackId);
-    }
-
-    // Swaps a plain instrument track's instrument for a dropped browser instrument (built-in
-    // or plugin). False — nothing changed — when the track can't take it in place.
-    private bool TryReplaceInstrument(BrowserItem item, int trackId)
-    {
-        if (_vm is null || !CanReplaceInstrument(trackId)) return false;
-        if (item.Kind == BrowserItemKind.BuiltinInstrument)
-        {
-            if (!Engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind)) return false;
-            if (item.BuiltinKind == RhythmModel.Kind) _kits.LoadInto(Engine, trackId, _kits.DefaultRhythmKit, out _);
-        }
-        else if (item.Kind == BrowserItemKind.PluginInstrument) Engine.SetTrackInstrumentPlugin(trackId, item.CatalogIndex);
-        else return false;
-        _lastInstrumentTrackId = trackId;
-        RefreshDeviceChainIfShowing(trackId);
-        _vm.StatusText = $"Changed instrument to {item.Name} (track {trackId})";
-        return true;
-    }
-
-    // True when an instrument dropped on this track should replace its instrument in place rather
-    // than spawn a new track: a plain instrument track (not audio/return/group) that isn't a rack.
-    private bool CanReplaceInstrument(int trackId)
-    {
-        if (trackId <= 0) return false;
-        int n = Engine.TrackCount;
-        for (int i = 0; i < n; i++)
-            if (Engine.TryGetTrackInfo(i, out var ti) && ti.Id == trackId)
-            {
-                if (!ti.IsInstrument || ti.IsReturn || ti.IsGroup) return false;
-                int kind = Engine.TrackInstrumentKind(trackId);
-                return kind != 3 && kind != 4;   // never swap an Instrument/Drum Rack in place
-            }
-        return false;
     }
 }

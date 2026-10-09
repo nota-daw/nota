@@ -2,7 +2,10 @@
 <!-- Keys: a keyboard (one octave upright, 1.5 sideways, two on a tablet), a scale grid where
      every cell is a note of the key (rows a fourth apart, tonic cells raised — no wrong notes),
      and Chords (one triad per degree). The key is the project's KEY unless overridden here.
-     Fingers can slide across keys and cells: every pointer is tracked over the whole surface. -->
+     Fingers can slide across keys and cells: every pointer is tracked over the whole surface.
+     Expressive (an instrument that takes MPE): a finger keeps the note it struck instead — sliding
+     sideways bends it (a key's width ≈ its pitch step), the height on the key is its slide (CC74),
+     and a touch screen that reports force sends pressure. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
@@ -18,6 +21,8 @@
   const lit = $derived(new Set(app.lit));
   const color = $derived(app.track?.color ?? 'var(--accent)');
   const mode = $derived(app.prefs.keysMode);
+  const canExpress = $derived(!!app.track?.mpe && mode !== 'Chords');
+  const expressive = $derived(canExpress && app.prefs.expressive);
 
   // ---- keyboard ----
   const whiteCount = $derived(form === 'phone' ? 8 : form === 'phoneLand' ? 11 : 15);
@@ -78,6 +83,42 @@
     sounding.delete(t);
   }
   const active = new Set<number>();
+
+  // ---- expressive: the finger's note, where it landed, and how far one step is ----
+  interface Touch { note: number; x0: number; unit: number; semis: number; top: number; h: number; force: boolean; p0: number }
+  const touches = new Map<number, Touch>();
+  const DEAD = 0.2;   // semitones of wobble that stay in tune
+  function bendOf(f: Touch, x: number): number {
+    const s = ((x - f.x0) / f.unit) * f.semis;
+    const m = Math.max(0, Math.abs(s) - DEAD) * (f.semis / (f.semis - DEAD));   // a full step still lands on it
+    return Math.max(-24, Math.min(24, Math.sign(s) * m));
+  }
+  const slideOf = (f: Touch, y: number) => Math.max(0, Math.min(1, 1 - (y - f.top) / f.h));
+  function express(id: number, e: PointerEvent, first: boolean) {
+    const f = touches.get(id);
+    if (!f) return;
+    if (!first) app.noteExpr(f.note, 0, bendOf(f, e.clientX));
+    app.noteExpr(f.note, 2, slideOf(f, e.clientY));
+    // Most touch screens report a fixed pressure (0 / 0.5 / 1); only one that varies is force.
+    const p = e.pressure;
+    if (!f.force && (first ? !(p === 0 || p === 0.5 || p === 1) : p !== f.p0)) f.force = true;
+    if (f.force) app.noteExpr(f.note, 1, p);
+  }
+  function startTouch(e: PointerEvent, t: string) {
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-t]') as HTMLElement | null;
+    if (!el || t[0] !== 'n') return;
+    const r = el.getBoundingClientRect();
+    // Keyboard: a white key's width is 12/7 semitones (black keys share it). Scale grid: a
+    // cell is a scale step, about two semitones.
+    const white = el.classList.contains('black') ? (el.parentElement?.querySelector('.white') as HTMLElement | null) : el;
+    const unit = mode === 'Keyboard' ? (white?.getBoundingClientRect().width ?? r.width) : r.width;
+    touches.set(e.pointerId, {
+      note: Number(t.slice(1)), x0: e.clientX, unit: Math.max(8, unit), semis: mode === 'Keyboard' ? 12 / 7 : 2,
+      top: r.top, h: Math.max(8, r.height), force: false, p0: e.pressure,
+    });
+    express(e.pointerId, e, true);
+  }
+
   function down(e: PointerEvent) {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     active.add(e.pointerId);
@@ -85,9 +126,11 @@
     if (!t) return;
     fingers.set(e.pointerId, t);
     start(t);
+    if (expressive) startTouch(e, t);
   }
   function move(e: PointerEvent) {
     if (!active.has(e.pointerId)) return;
+    if (touches.has(e.pointerId)) { express(e.pointerId, e, false); return; }   // the finger keeps its note
     const prev = fingers.get(e.pointerId);
     const t = targetAt(e.clientX, e.clientY);
     if (t === prev) return;
@@ -96,6 +139,7 @@
   }
   function up(e: PointerEvent) {
     active.delete(e.pointerId);
+    touches.delete(e.pointerId);
     const prev = fingers.get(e.pointerId);
     fingers.delete(e.pointerId);
     if (prev !== undefined) stop(prev);
@@ -105,8 +149,9 @@
   // object on every project message, which cut held notes whenever anything in Nota changed.
   const keyId = $derived(key.root * 2 + (key.minor ? 1 : 0));
   $effect(() => {
-    void base; void mode; void keyId;
+    void base; void mode; void keyId; void expressive;
     return () => {
+      touches.clear();
       for (const notes of sounding.values()) for (const n of notes) app.noteOff(n);
       sounding.clear();
       fingers.clear();
@@ -128,6 +173,10 @@
       <span class="kn">{keyName(key)}</span>
       <span class="mono src">{keySrc}</span>
     </button>
+    {#if canExpress}
+      <button class="btn expr" class:on={expressive} aria-pressed={expressive}
+        onclick={() => (app.prefs.expressive = !app.prefs.expressive)}>Expressive</button>
+    {/if}
     <div class="oct">
       <button class="btn sq" aria-label="Octave down" onclick={() => (app.prefs.octave = Math.max(0, app.prefs.octave - 1))}>
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6 H10" /></svg>
@@ -174,7 +223,9 @@
       </div>
     {/if}
   </div>
-  {#if form === 'phone' && mode === 'Keyboard'}
+  {#if expressive}
+    <span class="hint">Slide sideways to bend, up and down for timbre.</span>
+  {:else if form === 'phone' && mode === 'Keyboard'}
     <span class="hint">Turn the phone sideways for 1.5 octaves.</span>
   {/if}
 </div>
@@ -184,6 +235,7 @@
   .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .modes button { flex: none; }
   .keybtn { gap: 7px; padding: 0 10px; }
+  .expr { padding: 0 10px; font-size: 12px; font-weight: 600; }
   .k { font-size: 9px; letter-spacing: .1em; }
   .kn { font-size: 12px; font-weight: 600; color: var(--ink1); }
   .src { font-size: 9px; color: var(--accent-dim); }

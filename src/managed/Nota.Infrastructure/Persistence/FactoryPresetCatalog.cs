@@ -993,6 +993,80 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("fdecay", 0.5f), ("fsustain", 0.15f), ("adecay", 0.55f), ("asustain", 0.3f)),
             Cab(1, 1, 16, 0.4f)));
 
+        // ---- Nota Keys (kind 16) — modelled electric piano. Model Tine/Suitcase/Reed/Clav =
+        //      0/.333/.667/1; sym .5 = centred (bipolar); dist 0 = close (bark) .. 1 = far (clean);
+        //      pupos (Clav) Upper/Both/Lower = 0/.5/1; cab Off/Suitcase/Combo/DI = 0/.333/.667/1;
+        //      tremmode Mono/Stereo = 0/1; tremrate free v = ln(Hz/0.5)/ln 30 (4.5 Hz = .646),
+        //      tempo (tremsync 1) = division/7 over 1/1,1/2,1/4,1/8,1/8T,1/16,1/16T,1/32;
+        //      phaserrate v = ln(Hz/0.05)/ln 100. Unnamed params keep the Init ("Mk I Stage").
+        Section("Basics");
+        Inst("keys", 16, "Mk I Stage",       ("model", 0f));
+        Inst("keys", 16, "Suitcase Init",    ("model", 0.333f), ("sym", 0.64f), ("dist", 0.46f), ("cab", 0.333f), ("tremon", 1f), ("tremmode", 1f));
+        Inst("keys", 16, "200A Classic",     ("model", 0.667f), ("sym", 0.5f), ("dist", 0.28f), ("cab", 0.667f), ("bass", 0.55f), ("treble", 0.5f));
+        Inst("keys", 16, "D6 Funk",          ("model", 1f), ("sym", 0.5f), ("dist", 0.5f), ("pupos", 0.5f), ("damper", 0.85f), ("drive", 0.3f));
+        Section("Tine");
+        Inst("keys", 16, "Ballad Tine",      ("hard", 0.35f), ("velhard", 0.7f), ("bright", 0.4f), ("decay", 0.65f), ("dist", 0.55f), ("sym", 0.56f), ("choruson", 1f), ("chorusmix", 0.25f), ("age", 0.1f));
+        Inst("keys", 16, "Bark Lead",        ("hard", 0.75f), ("velhard", 0.8f), ("dist", 0.12f), ("sym", 0.72f), ("drive", 0.55f), ("bright", 0.6f), ("treble", 0.56f));
+        Inst("keys", 16, "Glass Tine",       ("hard", 0.8f), ("bright", 0.85f), ("keybright", 0.7f), ("body", 0.35f), ("dist", 0.7f), ("sym", 0.52f), ("choruson", 1f), ("chorusmix", 0.4f), ("treble", 0.58f));
+        Inst("keys", 16, "Mellow Mk II",     ("hard", 0.3f), ("bright", 0.3f), ("body", 0.7f), ("dist", 0.6f), ("sym", 0.55f), ("drive", 0.2f), ("treble", 0.4f), ("decay", 0.6f));
+        Inst("keys", 16, "Neo-Soul Tine",    ("hard", 0.45f), ("velhard", 0.75f), ("dist", 0.35f), ("sym", 0.64f), ("phaseron", 1f), ("phaserrate", 0.3f), ("phaserdepth", 0.5f), ("age", 0.25f), ("bass", 0.66f));
+        Inst("keys", 16, "Phase Ninety",     ("phaseron", 1f), ("phaserrate", 0.4515f), ("phaserdepth", 0.7f), ("dist", 0.38f));
+        Inst("keys", 16, "Chorus Tine",      ("choruson", 1f), ("chorusmix", 0.55f), ("bright", 0.55f), ("dist", 0.45f));
+        Inst("keys", 16, "Dry & Close",      ("hard", 0.55f), ("dist", 0.2f), ("sym", 0.66f), ("preon", 0f), ("noise", 0.35f), ("relnoise", 0.4f));
+        Inst("keys", 16, "Worn Tines",       ("age", 0.7f), ("stretch", 0.5f), ("decay", 0.4f), ("noise", 0.4f), ("relnoise", 0.45f), ("dist", 0.32f), ("sym", 0.7f), ("tune", 0.47f));
+        Inst("keys", 16, "Tine Bells",       ("hard", 0.9f), ("bright", 1f), ("keybright", 0.8f), ("body", 0.25f), ("decay", 0.75f), ("dist", 0.8f), ("sym", 0.5f), ("choruson", 1f), ("chorusmix", 0.35f));
+        Section("Suitcase");
+        Inst("keys", 16, "Suitcase Stereo",  ("model", 0.333f), ("sym", 0.64f), ("dist", 0.46f), ("cab", 0.333f), ("tremon", 1f), ("tremrate", 0.646f), ("choruson", 1f), ("chorusmix", 0.35f));
+        Inst("keys", 16, "Slow Pan",         ("model", 0.333f), ("cab", 0.333f), ("tremon", 1f), ("tremrate", 0.408f), ("tremdepth", 0.7f), ("sym", 0.62f), ("dist", 0.5f));
+        Inst("keys", 16, "Fast Pan",         ("model", 0.333f), ("cab", 0.333f), ("tremon", 1f), ("tremrate", 0.776f), ("tremdepth", 0.55f), ("sym", 0.64f), ("dist", 0.46f));
+        Inst("keys", 16, "Synced Eighths",   ("model", 0.333f), ("cab", 0.333f), ("tremon", 1f), ("tremsync", 1f), ("tremrate", 0.4286f), ("tremdepth", 0.65f), ("sym", 0.64f), ("dist", 0.46f));
+        Inst("keys", 16, "Late Night Case",  ("model", 0.333f), ("cab", 0.333f), ("hard", 0.3f), ("bright", 0.35f), ("body", 0.7f), ("dist", 0.58f), ("tremon", 1f), ("tremrate", 0.527f), ("tremdepth", 0.35f), ("drive", 0.25f), ("treble", 0.4f));
+        Inst("keys", 16, "Growl Case",       ("model", 0.333f), ("cab", 0.333f), ("hard", 0.7f), ("velhard", 0.85f), ("dist", 0.15f), ("sym", 0.74f), ("drive", 0.6f), ("tremon", 1f), ("tremdepth", 0.4f));
+        Inst("keys", 16, "Mono Trem Case",   ("model", 0.333f), ("cab", 0.333f), ("tremon", 1f), ("tremmode", 0f), ("tremrate", 0.62f), ("tremdepth", 0.55f), ("sym", 0.64f), ("dist", 0.46f));
+        Inst("keys", 16, "Dream Case",       ("model", 0.333f), ("cab", 0.333f), ("tremon", 1f), ("tremrate", 0.45f), ("tremdepth", 0.5f), ("choruson", 1f), ("chorusmix", 0.6f), ("phaseron", 1f), ("phaserrate", 0.25f), ("phaserdepth", 0.5f), ("decay", 0.7f), ("damper", 0.5f));
+        Section("Reed");
+        Inst("keys", 16, "Reed Bark",        ("model", 0.667f), ("cab", 0.667f), ("dist", 0.12f), ("sym", 0.55f), ("hard", 0.7f), ("velhard", 0.85f), ("drive", 0.5f));
+        Inst("keys", 16, "School Reed",      ("model", 0.667f), ("cab", 0.667f), ("dist", 0.35f), ("sym", 0.5f), ("hard", 0.45f), ("age", 0.35f), ("noise", 0.35f));
+        Inst("keys", 16, "Reed Tremolo",     ("model", 0.667f), ("cab", 0.667f), ("dist", 0.28f), ("sym", 0.5f), ("tremon", 1f), ("tremmode", 0f), ("tremrate", 0.62f), ("tremdepth", 0.5f));
+        Inst("keys", 16, "Soft Reed",        ("model", 0.667f), ("cab", 0.667f), ("hard", 0.25f), ("bright", 0.35f), ("dist", 0.5f), ("sym", 0.5f), ("drive", 0.2f), ("treble", 0.42f));
+        Inst("keys", 16, "Reed Phaser",      ("model", 0.667f), ("cab", 0.667f), ("dist", 0.25f), ("sym", 0.5f), ("phaseron", 1f), ("phaserrate", 0.35f), ("phaserdepth", 0.65f));
+        Inst("keys", 16, "Bright Reed",      ("model", 0.667f), ("bright", 0.75f), ("keybright", 0.7f), ("dist", 0.3f), ("sym", 0.5f), ("treble", 0.6f));
+        Inst("keys", 16, "Overdriven Reed",  ("model", 0.667f), ("cab", 0.667f), ("dist", 0.1f), ("sym", 0.6f), ("drive", 0.85f), ("bass", 0.58f), ("treble", 0.55f));
+        Inst("keys", 16, "Reed Chorus",      ("model", 0.667f), ("cab", 0.667f), ("dist", 0.32f), ("sym", 0.5f), ("choruson", 1f), ("chorusmix", 0.5f));
+        Section("Clav");
+        Inst("keys", 16, "D6 Bright",        ("model", 1f), ("pupos", 0f), ("bright", 0.7f), ("sym", 0.5f), ("dist", 0.45f), ("damper", 0.9f));
+        Inst("keys", 16, "Clav Lower",       ("model", 1f), ("pupos", 1f), ("body", 0.65f), ("bright", 0.4f), ("sym", 0.5f), ("dist", 0.5f));
+        Inst("keys", 16, "Funk Drive",       ("model", 1f), ("pupos", 0.5f), ("hard", 0.8f), ("velhard", 0.8f), ("drive", 0.55f), ("sym", 0.5f), ("dist", 0.5f), ("phaseron", 1f), ("phaserrate", 0.5f), ("phaserdepth", 0.5f));
+        Inst("keys", 16, "Muted Clav",       ("model", 1f), ("damper", 1f), ("decay", 0.25f), ("bright", 0.35f), ("hard", 0.4f), ("sym", 0.5f), ("dist", 0.5f));
+        Inst("keys", 16, "Clav Phaser",      ("model", 1f), ("pupos", 0f), ("phaseron", 1f), ("phaserrate", 0.4f), ("phaserdepth", 0.7f), ("sym", 0.5f), ("dist", 0.5f));
+        Inst("keys", 16, "Clav Combo",       ("model", 1f), ("cab", 0.667f), ("drive", 0.5f), ("sym", 0.5f), ("dist", 0.35f));
+        Section("Character");
+        Inst("keys", 16, "Lo-Fi Keys",       ("age", 0.8f), ("tune", 0.46f), ("drive", 0.5f), ("cab", 0.667f), ("treble", 0.3f), ("bass", 0.58f), ("noise", 0.45f), ("tremon", 1f), ("tremmode", 0f), ("tremrate", 0.35f), ("tremdepth", 0.2f));
+        Inst("keys", 16, "Detuned Tape",     ("age", 1f), ("stretch", 0.8f), ("choruson", 1f), ("chorusmix", 0.7f), ("tremon", 1f), ("tremmode", 0f), ("tremrate", 0.2f), ("tremdepth", 0.15f), ("cab", 0.333f));
+        Inst("keys", 16, "Toy Box",          ("model", 0.667f), ("hard", 1f), ("bright", 1f), ("decay", 0.3f), ("body", 0.2f), ("keybright", 0.9f), ("cab", 0.667f), ("dist", 0.4f), ("sym", 0.5f));
+        Inst("keys", 16, "Ambient Tine",     ("hard", 0.2f), ("velhard", 0.5f), ("decay", 1f), ("damper", 0.2f), ("choruson", 1f), ("chorusmix", 0.65f), ("phaseron", 1f), ("phaserrate", 0.2f), ("phaserdepth", 0.4f), ("tremon", 1f), ("tremrate", 0.4f), ("tremdepth", 0.35f));
+
+        // ---- Nota Mosaic (kind 17) — multisample. Each preset loads a factory multisample
+        //      (MosaicSources: rendered once into the data folder, mapped by its file names);
+        //      Init keeps the loaded program and resets the sound. Pack presets (installed sample
+        //      packs, "Create multisample") live under Nota Mosaic → Packs, not here. Release /
+        //      decay 2 ms·3000^v (.69 ≈ 0.5 s, .83 ≈ 1.5 s, .91 ≈ 3 s); attack 0.5 ms·8000^v
+        //      (.71 ≈ 0.3 s); cutoff 20 Hz·1000^v (.67 ≈ 2 kHz); Vel Curve .5 linear (< .5 soft).
+        Inst("mosaic", 17, "Init");
+        Section("Keys");
+        Mos("Felt Piano",        "felt-piano",    ("release", 0.75f), ("velamount", 0.8f));
+        Mos("Felt Piano Soft",   "felt-piano",    ("release", 0.72f), ("velamount", 0.75f), ("velcurve", 0.35f), ("filtertype", 1f / 3f), ("cutoff", 0.62f), ("keytrack", 0.5f), ("relvol", 0.6f));
+        Mos("Felt Piano Bright", "felt-piano",    ("release", 0.72f), ("velamount", 0.85f), ("velcurve", 0.65f), ("relvol", 0.7f));
+        Mos("Music Box",         "music-box",     ("release", 0.78f), ("velamount", 0.6f));
+        Section("Mallets & Plucks");
+        Mos("Glass Mallets",     "glass-mallets", ("release", 0.76f), ("velamount", 0.75f));
+        Mos("Nylon Guitar",      "nylon",         ("release", 0.66f), ("velamount", 0.8f));
+        Mos("Brass Pluck",       "brass-pluck",   ("release", 0.55f), ("velamount", 0.8f));
+        Mos("Brass Lead",        "brass-pluck",   ("voicemode", 0.5f), ("glide", 0.54f), ("release", 0.5f), ("velamount", 0.6f));
+        Section("Pads");
+        Mos("Warm Pad",          "warm-pad",      ("attack", 0.71f), ("release", 0.85f), ("velamount", 0.4f));
+        Mos("Warm Pad Filtered", "warm-pad",      ("attack", 0.8f), ("release", 0.9f), ("velamount", 0.4f), ("filtertype", 1f / 3f), ("cutoff", 0.55f), ("envcutoff", 1f), ("envamount", 0.7f));
+
         // ---- Nota EQ-8 (kind 0) — raw units. Eq8(…) spells out every band it uses with B(band, type,
         //      Hz, dB, Q, slope, channel); a band it does not name is switched off. Type: 0 Low cut,
         //      1 Low shelf, 2 Bell, 3 Notch, 4 High shelf, 5 High cut. Slope (cuts): 0 = 12, 1 = 24,
@@ -2522,6 +2596,13 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     {
         Inst("grain", 10, name, ps);
         _byId["grain/" + name].GrainSource = source;
+    }
+
+    // A Nota Mosaic preset that loads one of the factory multisamples (MosaicSources id).
+    private void Mos(string name, string source, params (string Id, float Value)[] ps)
+    {
+        Inst("mosaic", MosaicModel.Kind, name, ps);
+        _byId["mosaic/" + name].MosaicSource = source;
     }
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)

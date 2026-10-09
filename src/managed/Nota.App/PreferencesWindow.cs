@@ -174,6 +174,14 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);
 
+    /// <summary>Switches to the page with this title ("Audio", "Shortcuts" …) — the palette's
+    /// Settings: … commands.</summary>
+    public void ShowPage(string title)
+    {
+        int i = 0;
+        foreach (var p in Pages) { if (p.Title == title) { Select(i); return; } i++; }
+    }
+
     private Control BuildNavItem(Page page, int idx)
     {
         var edge = new Border
@@ -474,7 +482,41 @@ public sealed partial class PreferencesWindow : NotaWindow
             items.Add(Table(rows));
         }
         items.Add(Caption("Switch a controller off to stop Nota listening to it. New devices are on by default."));
-        return Sections(Section("MIDI INPUTS", 8, items.ToArray()));
+        return Sections(Section("MIDI INPUTS", 8, items.ToArray()), MpeSection(engine));
+    }
+
+    private static readonly int[] MpeBendRanges = [12, 24, 48, 96];
+
+    // MPE: each note on its own channel (2–16) with its own bend / pressure / slide. Channel 1
+    // stays an ordinary keyboard, so turning this on costs a plain controller nothing.
+    private Control MpeSection(IAudioEngine engine)
+    {
+        var (on, range) = engine.GetMpe();
+        var rangeCombo = Combo(150);
+        foreach (var r in MpeBendRanges) rangeCombo.Items.Add($"±{r} semitones");
+        int idx = Array.IndexOf(MpeBendRanges, range);
+        rangeCombo.SelectedIndex = idx >= 0 ? idx : Array.IndexOf(MpeBendRanges, 48);
+        rangeCombo.IsEnabled = on;
+        rangeCombo.SelectionChanged += (_, _) =>
+        {
+            int k = rangeCombo.SelectedIndex;
+            if (k < 0) return;
+            engine.SetMpe(engine.GetMpe().Enabled, MpeBendRanges[k]);
+            _main!.ApplyMidiSettings();
+        };
+        var sw = SwitchRow("Per-note expression from MPE controllers", on, v =>
+        {
+            rangeCombo.IsEnabled = v;
+            engine.SetMpe(v, engine.GetMpe().BendRange);
+            _main!.ApplyMidiSettings();
+        });
+        return Section("MPE", 8,
+            Row("Expression", sw),
+            Row("Bend range", rangeCombo),
+            Row("", Caption("Channels 2–16 each carry one note with its own pitch bend, pressure and slide (CC74). " +
+                            "A controller that announces its range overrides this one. Channel 1 plays as an ordinary keyboard, " +
+                            "its pitch wheel and aftertouch moving the whole instrument. Nota Synth, Volt, Aurora, Operator, " +
+                            "Pentad and Physical play per-note expression.")));
     }
 
     // ---- Gamepads -----------------------------------------------------------
@@ -941,7 +983,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     // NB: this list mirrors the real key handlers — keep the two in sync (see the
     // `nota-shortcuts` skill). Bindings live in MainWindow.Input.cs (transport, global
     // editing, computer-keyboard notes), PianoRollView.cs (note editing) and PreviewPlayer.cs
-    // (the Files tab's sample player). ⌘ = Meta on macOS / Ctrl on Windows. A Key made only of
+    // (the Files tab's sample player). Written with the macOS glyphs; MenuKit.Keys spells them
+    // Ctrl / Alt / Shift on Windows and Linux. A Key made only of
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
@@ -951,6 +994,19 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘S   ⌘⇧S", "Save (records a version) / save as"),
             ("⌥⌘S", "Save a version with a note"),
             ("⌘⇧E", "Export audio"),
+            ("⌘,", "Settings"),
+        }),
+        ("COMMAND PALETTE", new[]
+        {
+            ("⌘⇧P", "Open / close the command palette — from any window, even while typing"),
+            ("↑ ↓   PgUp PgDn", "Move through the results"),
+            ("Return", "Apply where the palette was opened (the target shows in the field)"),
+            ("⌘Return", "An instrument or instrument preset on a new track · a track: open it in Devices"),
+            ("⌥Return", "Replace the selected device instead of inserting after it"),
+            ("⇧Return", "Apply and keep the palette open for the next device"),
+            ("Tab   ⇧Tab", "Filter: all · actions · tracks · devices · presets"),
+            ("> @ + # ~", "Type first to filter: actions, tracks, devices, presets, Modular nodes"),
+            ("Esc", "Close and go back where you were"),
         }),
         ("TRANSPORT", new[]
         {
@@ -1014,6 +1070,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Delete", "Delete the selected notes"),
             ("Drag note edge", "Change the note's start or end"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
+            ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
+            ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
         }),
         ("PLAY NOTES (COMPUTER KEYBOARD)", new[]
         {
@@ -1081,8 +1139,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             foreach (var (title, rows) in ShortcutGroups)
             {
                 var shown = rows.Where(r => q.Length == 0
-                                            || r.Action.Contains(q, StringComparison.OrdinalIgnoreCase)
-                                            || r.Key.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                                            || MenuKit.Keys(r.Action).Contains(q, StringComparison.OrdinalIgnoreCase)
+                                            || MenuKit.Keys(r.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (shown.Count == 0) continue;
                 var head = new StackPanel
                 {
@@ -1103,7 +1161,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
     }
 
-    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc" };
+    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab" };
 
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);
@@ -1118,17 +1176,17 @@ public sealed partial class PreferencesWindow : NotaWindow
             foreach (var t in tokens)
                 wrap.Children.Add(t is "/" or "·"
                     ? new TextBlock { Text = t, FontSize = 11, Foreground = TextTertiary, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }
-                    : KeyCap(t));
+                    : KeyCap(MenuKit.Keys(t)));
             keys = wrap;
         }
         else
         {
-            keys = new TextBlock { Text = key, FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            keys = new TextBlock { Text = MenuKit.Keys(key), FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         }
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*"), ColumnSpacing = 12, MinHeight = 20, Margin = new Thickness(12, 7) };   // 34 with the margin
         grid.Children.Add(keys);
-        var a = new TextBlock { Text = action, FontSize = 12, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        var a = new TextBlock { Text = MenuKit.Keys(action), FontSize = 12, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         Grid.SetColumn(a, 1);
         grid.Children.Add(a);
         return grid;

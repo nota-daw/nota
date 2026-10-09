@@ -100,6 +100,15 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
+if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
+if (args.Length >= 1 && args[0] == "--palette")
+{
+    Console.WriteLine("-- command palette --");
+    foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
 if (args.Length >= 1 && args[0] == "--store")
 {
@@ -190,6 +199,65 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Tap tempo alone: `--tap`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--tap")
+{
+    Console.WriteLine("-- tap tempo --");
+    foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
+if (args.Length >= 2 && args[0] == "--mosaic-dump")
+{
+    if (args[1].EndsWith(".sfz", StringComparison.OrdinalIgnoreCase))
+    {
+        var r = Nota.Application.Mosaic.SfzImporter.Import(args[1]);
+        var rp = r.Report;
+        Console.WriteLine($"{rp.File}: {rp.Summary()} · {rp.Regions} regions, {rp.Groups} groups, {rp.Includes} #include, {rp.PathsFixed} paths fixed, {rp.Missing} missing, {rp.Inactive} inactive, {rp.Generators} generators, {rp.Seconds:0.00} s");
+        Console.WriteLine($"  CC: {string.Join(", ", rp.CcState.Select(kv => $"cc{kv.Key}={kv.Value}" + (rp.CcLabels.TryGetValue(kv.Key, out var l) ? $" ({l})" : "")))}");
+        Console.WriteLine($"  ignored: {string.Join(", ", rp.Ignored.Select(kv => $"{kv.Key} {kv.Value}"))}");
+        Console.WriteLine($"  {r.Program.Summary()} · {r.Program.Files.Count} files");
+    }
+    else
+    {
+        var prop = Nota.Application.Mosaic.MultisampleMapper.MapFolder(args[1], null, path =>
+        {
+            var mono = NotaEngine.DecodeMono(path, 1.0, out double sr);
+            if (mono is null || mono.Length < 8192) return null;
+            double hz = AudioPitch.YinHz(mono, mono.Length / 4, 2048, sr);
+            return hz > 0 ? 69 + 12 * Math.Log2(hz / 440.0) : null;
+        });
+        Console.WriteLine($"{prop.Instruments.Count} instruments · octave {prop.OctaveShift:+0;-0;0} ({prop.OctaveWhy}) · {prop.Unmapped} unmapped");
+        foreach (var i in prop.Instruments)
+            Console.WriteLine($"  {i.Stem,-24} {i.Files.Count,3} files · {i.Roots} roots · layers [{string.Join(" ", i.Layers)}] · rr {i.MaxRr} · conf {i.Confidence} · gaps {i.Gaps.Count}");
+    }
+    return 0;
+}
+// Nota Mosaic alone (fast iteration): `--mosaic`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--mosaic")
+{
+    Console.WriteLine("-- nota mosaic --");
+    foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MOSAIC PASSED" : $"MOSAIC FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Nota Keys alone (fast iteration): `--keys`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--keys")
+{
+    Console.WriteLine("-- nota keys --");
+    foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// MPE alone (fast iteration): `--mpe`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--mpe")
+{
+    Console.WriteLine("-- mpe: per-note expression --");
+    foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MPE PASSED" : $"MPE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Nota Remote alone (fast iteration): `--remote`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--remote")
 {
@@ -14190,6 +14258,19 @@ foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
 // --- nota remote: track-addressed notes, pairing, a phone session over a real socket ---
 Console.WriteLine("-- nota remote --");
 foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
+Console.WriteLine("-- mpe: per-note expression --");
+foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota keys --");
+foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota mosaic --");
+foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- tap tempo --");
+foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+// --- command palette: descriptors, golden queries, context table, undo, speed ---
+Console.WriteLine("-- command palette --");
+foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

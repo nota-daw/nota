@@ -44,6 +44,7 @@ public sealed partial class DeviceChainView : UserControl
     private readonly IFactoryPresets _factory;
     private readonly IPluginCatalog? _catalog;   // maps a copied plugin's id → catalog index for paste
     private readonly IDrumKits? _kits;           // the Drum Rack card's preset list
+    private readonly IMosaicPacks? _mosaic;      // Nota Mosaic's pack presets, beside its factory ones
     private readonly DeviceCardFactory _cardFactory = new();
     private readonly InstrumentCardFactory _instrumentFactory = new();
     private readonly MidiDeviceCardFactory _midiFactory = new();
@@ -80,12 +81,13 @@ public sealed partial class DeviceChainView : UserControl
         Margin = new Thickness(2),
     };
 
-    public DeviceChainView(IAudioEngine engine, IFactoryPresets factory, IPluginCatalog? catalog = null, IDrumKits? kits = null)
+    public DeviceChainView(IAudioEngine engine, IFactoryPresets factory, IPluginCatalog? catalog = null, IDrumKits? kits = null, IMosaicPacks? mosaic = null)
     {
         _engine = engine;
         _factory = factory;
         _catalog = catalog;
         _kits = kits;
+        _mosaic = mosaic;
         Focusable = true;   // so Ctrl+C/X/V + Delete on a selected device reach OnKeyDown
         var scroller = new ScrollViewer
         {

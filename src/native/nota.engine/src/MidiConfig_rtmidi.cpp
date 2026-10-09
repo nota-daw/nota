@@ -12,6 +12,7 @@
 
 #include "rtmidi/RtMidi.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -56,6 +57,9 @@ MidiConfig loadMidiConfig() {
     std::string json = cfgfile::readFile(path);
     if (json.empty()) return cfg;
     cfgfile::jsonGetStringArray(json, "disabledInputUids", cfg.disabledInputUids);
+    double v = 0.0;
+    if (cfgfile::jsonGetNumber(json, "mpe", v)) cfg.mpe = v != 0.0;
+    if (cfgfile::jsonGetNumber(json, "mpeBendRange", v)) cfg.mpeBendRange = std::clamp(static_cast<int32_t>(v), 1, 96);
     return cfg;
 }
 
@@ -67,7 +71,9 @@ void saveMidiConfig(const MidiConfig& cfg) {
         if (i) json += ",";
         json += "\n    \"" + cfgfile::jsonEscape(cfg.disabledInputUids[i]) + "\"";
     }
-    json += cfg.disabledInputUids.empty() ? "]\n}\n" : "\n  ]\n}\n";
+    json += cfg.disabledInputUids.empty() ? "]," : "\n  ],";
+    json += "\n  \"mpe\": " + std::string(cfg.mpe ? "1" : "0");
+    json += ",\n  \"mpeBendRange\": " + std::to_string(cfg.mpeBendRange) + "\n}\n";
     std::string path = (std::filesystem::path(dir) / "midi.json").string();
     cfgfile::writeFileAtomic(path, json);
 }

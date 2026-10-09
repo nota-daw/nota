@@ -29,6 +29,7 @@ internal sealed class DetailWindow : NotaWindow
     public DetailWindow(MainWindow owner)
     {
         _owner = owner;
+        MainWindow.ReleaseTextFocusOnOutsidePress(this);
 
         // Route transport keys (Space/Return) in the tunnel phase so a focused control here
         // can't steal them, exactly like the main window does.

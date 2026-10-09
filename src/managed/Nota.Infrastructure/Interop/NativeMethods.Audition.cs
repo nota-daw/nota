@@ -45,6 +45,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audition_set_sampler_sample", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AuditionSetSamplerSample(IntPtr rig, string? path, int rootNote);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audition_set_mosaic_program", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AuditionSetMosaicProgram(IntPtr rig, string text);
+
     [LibraryImport(Lib, EntryPoint = "nota_audition_add_source_from")]
     internal static partial int AuditionAddSourceFrom(IntPtr rig, IntPtr part, float gain);
 

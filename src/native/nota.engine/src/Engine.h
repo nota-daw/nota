@@ -18,6 +18,7 @@
 #include "Graph.h"
 #include "MidiConfig.h"
 #include "MidiInput.h"
+#include "MpeInput.h"
 #include "GamepadInput.h"
 #include "SampleBuffer.h"
 #include "Transport.h"
@@ -29,7 +30,9 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <map>
 #include <mutex>
+#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -41,12 +44,20 @@ class ClipWarpStream;   // offline warp-cache builder (WarpStream.h); held by un
 
 // trackId -1 = ordinary live input (armed / audition tracks); >= 0 = addressed to that
 // one track whatever its arm state (a Nota Remote phone playing its own track).
-struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; };
+// expr ≥ 0 makes it a per-note expression (an ExprDim, NoteExpression.h) carrying its value
+// in `velocity`; pitch −1 then addresses the whole instrument.
+struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; int32_t expr = -1; };
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
 struct RecordedNote { int32_t pitch; double startBeat; double lengthBeats; float velocity; };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
+// A recorded note's expression sample (audio -> message): the note is identified by its pitch
+// and start (as its RecordedNote will carry them), `beat` is the offset from that start.
+struct RecordedExpr { int32_t pitch; double startBeat; int32_t dim; float beat; float value; };
+using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
+// A clip note's expression at a sample offset of the block (the render pass replays these).
+struct ExprEv { int32_t off; int32_t pitch; int32_t dim; float value; };
 
 // Captured input frame (input thread -> message), lock-free up-queue (M4-3).
 struct InputFrame { float l; float r; };
@@ -93,6 +104,9 @@ public:
     const MidiConfig& midiConfig() const { return midiConfig_; }
     void setMidiInputEnabled(const std::string& uid, bool enabled);
     bool midiInputEnabled(const std::string& uid) const;
+    // MPE input (MpeInput.h): channels per MPE zones, and the member channels' default bend
+    // range in semitones. Staged like the inputs; applyMidiConfig persists + reconnects.
+    void setMpe(bool enabled, int32_t bendRange) { midiConfig_.mpe = enabled; midiConfig_.mpeBendRange = std::clamp(bendRange, 1, 96); }
     bool applyMidiConfig();
 
     // MIDI-learn: drain up to `max` incoming CC/note-on events captured since the
@@ -563,6 +577,7 @@ public:
     // Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
     // -2=track has no instrument (audio/return). Message thread only.
     int32_t trackInstrumentKind(int32_t trackId) const;
+    bool    trackInstrumentSupportsMpe(int32_t trackId) const;   // per-note expression (MPE)
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.
     int32_t trackDeviceBuiltinKind(int32_t trackId, int32_t deviceIndex) const;
@@ -628,6 +643,13 @@ public:
     int32_t addMonolithTrack();                         // built-in Nota Monolith (mono Model-D synth, kind 13)
     int32_t addPentadTrack();                           // built-in Nota Pentad (5-voice Prophet-5 poly, kind 14)
     int32_t addConsortTrack();                          // built-in Nota Consort (paraphonic semi-modular, kind 15)
+    int32_t addKeysTrack();                             // built-in Nota Keys (modelled electric piano, kind 16)
+    int32_t addMosaicTrack();                           // built-in Nota Mosaic (multisample instrument, kind 17)
+    // Nota Mosaic's program (see Mosaic.h): set parses + starts loading, get returns the text.
+    bool        mosaicSetProgram(int32_t trackId, const std::string& text, bool checkpoint);
+    std::string mosaicProgram(int32_t trackId) const;
+    bool        mosaicStatus(int32_t trackId, NotaMosaicStatus* out) const;
+    int64_t     mosaicZoneSampleId(int32_t trackId, int32_t zone) const;
     void    instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg); // UI editing channel
     bool    setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path);  // Phase 2
     bool    rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;     // sample id per voice
@@ -892,6 +914,14 @@ public:
     bool    setClipNotesLive(int32_t trackId, int32_t clipIndex, const NotaNoteData* notes, int32_t count);
     int32_t getClipNotes(int32_t trackId, int32_t clipIndex, NotaNoteData* out, int32_t maxNotes) const;
     int32_t clipNoteCount(int32_t trackId, int32_t clipIndex) const;
+    // Recorded MPE store (MidiClip.h NoteExpr): immutable curves under stable ids, shared by
+    // every note that refers to them. Message thread (guarded, so any thread may read).
+    int32_t createNoteExpr(const NotaExprPoint* points, int32_t count);
+    int32_t storeNoteExpr(std::shared_ptr<const NoteExpr> e);
+    int32_t noteExprPoints(int32_t id, NotaExprPoint* out, int32_t maxPoints) const;
+    // NotaNoteData <-> Note, resolving / reporting the expression id.
+    Note noteFromData(const NotaNoteData& d) const;
+    static void noteToData(const Note& n, NotaNoteData& d);
 
     // --- live MIDI, arming, recording (M2) ---
     void setTrackArmed(int32_t trackId, bool armed);
@@ -906,12 +936,18 @@ public:
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
-    void noteOn(int32_t pitch, float velocity);         // lock-free
-    void noteOff(int32_t pitch);                         // lock-free
+    // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
+    // serialize on liveMidiMx_; the audio thread only pops (AR-6).
+    void noteOn(int32_t pitch, float velocity);
+    void noteOff(int32_t pitch);
+    // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
+    // the whole instrument. Reaches the same tracks as live notes do.
+    void noteExpression(int32_t pitch, int32_t dim, float value);
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
     void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
     void trackNoteOff(int32_t trackId, int32_t pitch);
+    void trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
@@ -981,10 +1017,12 @@ private:
     // auditioned) to evs; returns the new count. Shared by a track's own render and by MIDI
     // routing (a destination gathers its sources' notes the same way).
     int  gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
-                               double blockStart, double spb, bool playing);
+                               double blockStart, double spb, bool playing,
+                               ExprEv* xev = nullptr, int* xn = nullptr);
     // A track's own post-MIDI-FX events (gather + drum swing + its MIDI FX chain), run once.
     int  computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames,
-                               double blockStart, double spb, bool playing, bool arrangementActive);
+                               double blockStart, double spb, bool playing, bool arrangementActive,
+                               ExprEv* xev = nullptr, int* xn = nullptr);
     // Pre-pass: fill blockMidi_/blockMidiN_ for every non-session instrument track.
     void computeBlockMidi(Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
     // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
@@ -1063,6 +1101,15 @@ private:
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
     void openMidiInput();            // (re)connect MIDI sources per midiConfig_
+    // MIDI-thread MPE decoding, one per input source (each touched only by its own thread).
+    struct MpeSink final : MpeInput::Sink {
+        Engine* e = nullptr;
+        void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
+        void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
+        void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
+    };
+    MpeSink                       mpeSink_;
+    std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;
@@ -1072,9 +1119,18 @@ private:
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
     CommandQueue                  commands_;
     MidiQueue                     liveMidi_;
+    std::mutex                    liveMidiMx_;      // producer side only (UI, MIDI threads)
     MidiQueue                     remoteMidi_;      // track-addressed notes (any thread → audio)
     std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
+    RecordedExprQueue             recordedExpr_;
+    mutable std::mutex            exprMx_;          // the expression store
+    std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
+    int32_t                       nextExprId_ = 1;
+    // Expression of notes still being recorded, keyed by (pitch, start) — message thread.
+    std::map<std::pair<int32_t, double>, NoteExpr> pendingExpr_;
+    void   collectRecordedExpr();
+    void   attachRecordedExpr(Note& n, int32_t pitch, double startBeat);
     ControlEventQueue             midiControl_;   // incoming CC/note-on for MIDI-learn (AR-6)
     Transport                     transport_;
 
@@ -1313,6 +1369,18 @@ private:
     double recRoutedStart_[128] = {};
     float  recRoutedVel_[128] = {};
     void   captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb);
+    void   captureLiveExpr(double nowBeat, double slotLen);   // recorded MPE (drainLiveMidi)
+
+    // Clip-note expression replayed per block (computeBlockMidi fills, the render pass merges),
+    // per track position like blockMidi_.
+    static constexpr int kMaxBlockExpr = 1024;
+    std::vector<std::vector<ExprEv>> blockExpr_;
+    std::vector<int>                 blockExprN_;
+    // Appends a clip note's recorded expression for the block: the note sounds over
+    // [onS, offS) in samples relative to the block start; one value per dim at the note's
+    // start (or the block's) and then every kExprStep samples while its curve moves.
+    static void noteExprEvents(const Note& note, double onS, double offS, int32_t frames, double spb,
+                               ExprEv* out, int& n, int cap);
 
     // Live input monitoring: the input thread also feeds this ring while any audio track
     // monitors the hardware input; the audio thread pops one segment's worth per mixGraph
@@ -1370,6 +1438,16 @@ private:
     // render sorts offs ahead of ons there, so one pitch's on and off must not share a block.
     MidiEvent liveCarry_{};
     bool      liveCarried_ = false;
+    // The block's live expression, coalesced: the latest value per (track, pitch, dim), so a
+    // controller streaming bend/pressure never backs the note queue up. Applied after the
+    // block's offset-0 note events (Instrument::noteExpression).
+    static constexpr int kMaxLiveExpr = 256;
+    MidiEvent liveExpr_[kMaxLiveExpr];
+    int       liveExprCount_ = 0;
+    // Whether a live event reaches track t (armed / audition, or addressed to it).
+    bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
+    // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.
+    void applyLiveExpression(Graph* g, const Track& t, Instrument& inst) const;
     std::atomic<int32_t> auditionTrackId_{-1};   // live notes also play this track (pad audition)
     // Currently-held live-input pitches (computer keyboard + MIDI), independent of track
     // routing, so the piano roll can highlight the key you're pressing. 128 bits, set/cleared

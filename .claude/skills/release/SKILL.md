@@ -36,8 +36,10 @@ or an explicit `X.Y.Z`. Nota has historically bumped **minor** per release.
 ## 1. Decide the new version
 
 - Read the current version from `VERSION` (e.g. `0.37.0`).
-- Apply the argument: `patch` → `x.y.(z+1)`, `minor` → `x.(y+1).0` (default), `major` →
-  `(x+1).0.0`, or use the explicit `X.Y.Z` if one was given.
+- Apply the argument: `patch` → `x.y.(z+1)`, `minor` → `x.(y+1).1` (default), `major` →
+  `(x+1).1.1`, or use the explicit `X.Y.Z` if one was given. **A component that resets starts
+  at 1, never 0** (the user's rule: 0.50.1 → 0.51.1, not 0.51.0). Same for the engine's
+  minor / major bumps in step 3b.
 - Sanity-check it's strictly greater than the current version, and that neither the git tag
   `vX.Y.Z` nor a `## [X.Y.Z]` changelog section already exists. If either exists, stop.
 - Get today's date: `date +%F` (do NOT hard-code it).

@@ -378,7 +378,47 @@ public sealed class NoteDto
     public double Length { get; set; }
     public float Velocity { get; set; } = 1.0f;
 
+    /// <summary>Recorded MPE, when the note has any (omitted otherwise).</summary>
+    public NoteMpeDto? Mpe { get; set; }
+
     public NoteDto() { }
     public NoteDto(NotaNote n) { Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity; }
     public NotaNote ToNote() => new(Pitch, Start, Length, Velocity);
+}
+
+/// <summary>A note's recorded expression: per dimension a flat [beat, value, beat, value…] list,
+/// beats from the note's start (Bend in semitones, Pressure / Slide 0..1).</summary>
+public sealed class NoteMpeDto
+{
+    public float[]? Bend { get; set; }
+    public float[]? Pressure { get; set; }
+    public float[]? Slide { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    public static NoteMpeDto? From(NotaExprPoint[] points)
+    {
+        if (points.Length == 0) return null;
+        float[]? Of(NoteExpressionDim d)
+        {
+            var list = new List<float>();
+            foreach (var p in points) if (p.Dim == d) { list.Add(p.Beat); list.Add(p.Value); }
+            return list.Count > 0 ? list.ToArray() : null;
+        }
+        return new NoteMpeDto { Bend = Of(NoteExpressionDim.Bend), Pressure = Of(NoteExpressionDim.Pressure), Slide = Of(NoteExpressionDim.Slide) };
+    }
+
+    public NotaExprPoint[] ToPoints()
+    {
+        var list = new List<NotaExprPoint>();
+        void Add(NoteExpressionDim d, float[]? flat)
+        {
+            if (flat is null) return;
+            for (int i = 0; i + 1 < flat.Length; i += 2) list.Add(new NotaExprPoint(d, flat[i], flat[i + 1]));
+        }
+        Add(NoteExpressionDim.Bend, Bend);
+        Add(NoteExpressionDim.Pressure, Pressure);
+        Add(NoteExpressionDim.Slide, Slide);
+        return list.ToArray();
+    }
 }

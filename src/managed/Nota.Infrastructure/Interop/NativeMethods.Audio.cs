@@ -93,6 +93,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midi_input_enabled", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int MidiInputEnabled(IntPtr engine, string uid);
 
+    [LibraryImport(Lib, EntryPoint = "nota_midi_set_mpe")]
+    internal static partial NotaResult MidiSetMpe(IntPtr engine, int enabled, int bendRange);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_mpe_enabled")]
+    internal static partial int MidiMpeEnabled(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_mpe_bend_range")]
+    internal static partial int MidiMpeBendRange(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_mpe_selftest")]
+    internal static partial int MpeSelfTest();
+
     [LibraryImport(Lib, EntryPoint = "nota_midi_apply")]
     internal static partial NotaResult MidiApply(IntPtr engine);
 

@@ -46,7 +46,17 @@ typedef struct NotaNoteData {
     double  start_beat;    /* relative to clip start */
     double  length_beats;
     float   velocity;      /* 0..1 */
+    int32_t expr_id;       /* recorded MPE (nota_note_expr_*), 0 = none. Keep it when you move,
+                            * copy or resize the note — the expression travels with it. */
 } NotaNoteData;
+
+/* One breakpoint of a note's recorded expression (MPE). dim: 0 bend (semitones), 1 pressure
+ * 0..1, 2 slide 0..1; beat is the offset from the note's start. */
+typedef struct NotaExprPoint {
+    int32_t dim;
+    float   beat;
+    float   value;
+} NotaExprPoint;
 
 /* A parameter-automation breakpoint (M9). `value` is in the target's native
  * units (volume ~0..2, pan -1..1, device param in its min..max). Sorted by beat.
@@ -122,6 +132,22 @@ typedef struct NotaSamplerInfo {
     int32_t root_note;
     int32_t loop;          /* 0/1 */
 } NotaSamplerInfo;
+
+/* Nota Mosaic loading state. state: 0 empty · 1 loading · 2 ready. disk_* count the files'
+ * bytes on disk (progress), ram_bytes what the decoded samples take; missing = files that
+ * didn't decode (not found / unsupported). serial changes whenever another program is set
+ * (an edit, undo, a preset) — an editor re-reads the program text then. */
+typedef struct NotaMosaicStatus {
+    int32_t state;
+    int32_t files_done;
+    int32_t files_total;
+    int32_t missing;
+    int32_t zones;
+    int32_t serial;
+    int64_t disk_done;
+    int64_t disk_total;
+    int64_t ram_bytes;
+} NotaMosaicStatus;
 
 /* Captured audio session take for project save (M7-6b). */
 typedef struct NotaSessionAudioSlot {
@@ -246,6 +272,8 @@ NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, cons
 /* The Sampler's or Nota Grain's sample, played at its own pitch on root_note (NULL / "" =
  * the Sampler's procedural keys tone at C4; Grain keeps its built-in pad). */
 NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8, int32_t root_note);
+/* Nota Mosaic's program text; returns once its samples are loaded (1) or on failure (0). */
+NOTA_API int32_t nota_audition_set_mosaic_program(NotaAudition* rig, const char* text_utf8);
 /* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
  * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
  * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */
@@ -593,6 +621,28 @@ NOTA_API int32_t nota_engine_add_monolith_track(NotaEngine* engine);
 NOTA_API int32_t nota_engine_add_pentad_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Consort (paraphonic semi-modular synth, kind 15). id (>0). */
 NOTA_API int32_t nota_engine_add_consort_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Keys (modelled electric piano, kind 16). id (>0). */
+NOTA_API int32_t nota_engine_add_keys_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Mosaic (multisample instrument, kind 17),
+ * empty until a program is set. id (>0). */
+NOTA_API int32_t nota_engine_add_mosaic_track(NotaEngine* engine);
+/* Nota Mosaic's program — UTF-8 text (grammar in Mosaic.h). Set parses it and starts loading
+ * its samples in the background (1 on success, 0 when the track isn't a Mosaic); checkpoint 1
+ * makes it one undo step (the instrument is republished — sounding notes stop), 0 edits the
+ * live instrument in place (no undo). Get copies up to cap bytes (no terminator) and returns
+ * the full length. */
+NOTA_API int32_t nota_track_mosaic_set_program(NotaEngine* engine, int32_t track_id, const char* text_utf8, int32_t checkpoint);
+NOTA_API int32_t nota_track_mosaic_program(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+NOTA_API int32_t nota_track_mosaic_status(const NotaEngine* engine, int32_t track_id, NotaMosaicStatus* out);
+/* The sample id (nota_sample_info / nota_sample_read) behind a zone of the program, 0 = not loaded. */
+NOTA_API int64_t nota_track_mosaic_zone_sample_id(const NotaEngine* engine, int32_t track_id, int32_t zone);
+/* A named root that program sample references resolve against ("samples:Downloaded/x.wav"
+ * → <samples root>/Downloaded/x.wav). Process-wide. */
+NOTA_API void    nota_path_root_set(const char* name_utf8, const char* path_utf8);
+/* Decodes up to max_seconds of a file's head as mono (channel average) into out (cap
+ * frames; out may be null to ask). Returns the frames decoded (≤ cap when out is given),
+ * 0 on failure; *sample_rate gets the file's rate. */
+NOTA_API int64_t nota_file_decode_mono(const char* path_utf8, double max_seconds, float* out, int64_t cap, double* sample_rate);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);
@@ -673,6 +723,12 @@ NOTA_API int32_t nota_engine_live_held_notes(const NotaEngine* engine, int32_t* 
 NOTA_API int32_t nota_clip_get_notes(const NotaEngine* engine, int32_t track_id, int32_t clip_index,
                                      NotaNoteData* out, int32_t max_notes);
 NOTA_API int32_t nota_clip_note_count(const NotaEngine* engine, int32_t track_id, int32_t clip_index);
+/* Recorded MPE lives in an engine-wide store of immutable curves; a note refers to one by
+ * NotaNoteData.expr_id. create stores `count` points (any order; per dim sorted by beat)
+ * and returns the new id (0 when there are no points). points copies a curve out
+ * (out = NULL → just the count). Ids stay valid for the life of the engine. */
+NOTA_API int32_t nota_note_expr_create(NotaEngine* engine, const NotaExprPoint* points, int32_t count);
+NOTA_API int32_t nota_note_expr_points(const NotaEngine* engine, int32_t expr_id, NotaExprPoint* out, int32_t max_points);
 
 /* ---- Live MIDI input, arming & recording (M2) ---------------------------- */
 NOTA_API NotaResult nota_track_set_armed(NotaEngine* engine, int32_t track_id, int32_t armed);
@@ -684,6 +740,14 @@ NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
  * own track). Recorded only when that track holds the take. Safe from any thread. */
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
+/* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
+ * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0/1 —
+ * instrument-wide only (pitch -1). pitch -1 addresses the whole instrument; its bend is
+ * the wheel normalized -1..+1 (the synth applies its own range).
+ * A note-on resets the note's expression; send it after the note-on. The engine_ form
+ * reaches the tracks live notes reach; the track_ form one track (Nota Remote). */
+NOTA_API NotaResult nota_engine_note_expression(NotaEngine* engine, int32_t pitch, int32_t dim, float value);
+NOTA_API NotaResult nota_track_note_expression(NotaEngine* engine, int32_t track_id, int32_t pitch, int32_t dim, float value);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);
@@ -730,6 +794,8 @@ NOTA_API void    nota_engine_reset(NotaEngine* engine);
 /* Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
  * -2=no instrument (audio/return track). */
 NOTA_API int32_t nota_track_instrument_kind(const NotaEngine* engine, int32_t track_id);
+/* 1 if the track's instrument responds to per-note expression (MPE), else 0. */
+NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, int32_t track_id);
 /* Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a
  * hosted plugin. */
 NOTA_API int32_t nota_track_device_builtin_kind(const NotaEngine* engine, int32_t track_id,
@@ -1590,6 +1656,15 @@ NOTA_API const char* nota_midi_input_device_name(int32_t index);
 NOTA_API NotaResult  nota_midi_set_input_enabled(NotaEngine* engine, const char* uid, int32_t enabled);
 /* 1 if the input with `uid` is currently enabled in the staged config. */
 NOTA_API int32_t     nota_midi_input_enabled(const NotaEngine* engine, const char* uid);
+/* MPE input: channels per MPE zones (each note its own channel with its own bend /
+ * pressure / CC74), and the member channels' bend range in semitones (1..96, 48 = the MPE
+ * default; a controller's RPN 0 overrides it). Staged; applied by nota_midi_apply. */
+NOTA_API NotaResult  nota_midi_set_mpe(NotaEngine* engine, int32_t enabled, int32_t bend_range);
+NOTA_API int32_t     nota_midi_mpe_enabled(const NotaEngine* engine);
+NOTA_API int32_t     nota_midi_mpe_bend_range(const NotaEngine* engine);
+/* Deterministic self-test of the MPE decoder (zones, member/master channels, RPN bend range,
+ * MCM, initial state after note-on): 0 = pass, else the number of the first failed check. */
+NOTA_API int32_t     nota_mpe_selftest(void);
 /* Persist the staged selection and reconnect the MIDI port. NOTA_OK on success. */
 NOTA_API NotaResult  nota_midi_apply(NotaEngine* engine);
 

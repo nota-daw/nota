@@ -421,6 +421,8 @@ public partial class MainWindow
             },
             // Light up the key being played (computer keyboard S–K / MIDI), regardless of routing.
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
+            ExpressionOf = id => Engine.GetNoteExpression(id),
+            CreateExpression = pts => Engine.CreateNoteExpression(pts),
         };
         double length = Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
         double start = ci.StartBeat;
@@ -600,6 +602,8 @@ public partial class MainWindow
                 _patternView?.Reload();
             },
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
+            ExpressionOf = id => Engine.GetNoteExpression(id),
+            CreateExpression = pts => Engine.CreateNoteExpression(pts),
         };
         double slotLen = Engine.SessionSlotLength(trackId, scene);
         roll.SetTrackColor(TrackBrush(trackId));

@@ -7,6 +7,8 @@
 // list a gesture here when one of those actually performs the same command.
 
 using System;
+using System.Collections.Generic;
+using System.Text;
 using Avalonia.Controls;
 using Avalonia.Input;
 
@@ -38,6 +40,41 @@ internal static class MenuKit
     public static readonly KeyGesture ActivateKey = new(Key.D0);
     // Delete and Backspace both delete; show the key the platform calls "delete".
     public static readonly KeyGesture DeleteKey = new(OperatingSystem.IsMacOS() ? Key.Back : Key.Delete);
+
+    /// <summary>Shortcut text written with the macOS glyphs ("⌘⇧Z", "⇧-click", "hold ⌘") as this
+    /// platform spells it: unchanged on macOS, "Ctrl+Shift+Z" / "Shift-click" / "hold Ctrl"
+    /// elsewhere.</summary>
+    public static string Keys(string text) => OperatingSystem.IsMacOS() ? text : SpellKeys(text);
+
+    internal static string SpellKeys(string text)
+    {
+        static bool IsMod(char c) => c is '⌘' or '⌃' or '⌥' or '⇧';
+        var sb = new StringBuilder(text.Length + 16);
+        for (int i = 0; i < text.Length;)
+        {
+            if (!IsMod(text[i]))
+            {
+                if (text[i] == '⌫') sb.Append("Del"); else sb.Append(text[i]);
+                i++;
+                continue;
+            }
+            bool ctrl = false, alt = false, shift = false;
+            for (; i < text.Length && IsMod(text[i]); i++)
+            {
+                ctrl |= text[i] is '⌘' or '⌃';
+                alt |= text[i] == '⌥';
+                shift |= text[i] == '⇧';
+            }
+            var names = new List<string>(3);
+            if (ctrl) names.Add("Ctrl");
+            if (alt) names.Add("Alt");
+            if (shift) names.Add("Shift");
+            sb.Append(string.Join("+", names));
+            // "⌘S" → "Ctrl+S", but "⌘ + wheel" / "⇧-click" keep their own joiner.
+            if (i < text.Length && !char.IsWhiteSpace(text[i]) && text[i] != '-') sb.Append('+');
+        }
+        return sb.ToString();
+    }
 
     /// <summary>A menu icon. Its ink inherits the item's foreground, so it follows hover and
     /// disabled like the label does.</summary>

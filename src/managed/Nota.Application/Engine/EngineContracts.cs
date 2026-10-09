@@ -20,6 +20,19 @@ public struct NotaNote(int pitch, double startBeat, double lengthBeats, float ve
     public double StartBeat = startBeat;
     public double LengthBeats = lengthBeats;
     public float Velocity = velocity;
+    /// <summary>The note's recorded MPE in the engine's expression store (0 = none). Copy the
+    /// note (don't rebuild it from its fields) and the expression travels with it.</summary>
+    public int ExprId;
+}
+
+/// <summary>One breakpoint of a note's recorded expression (MPE). Matches native NotaExprPoint:
+/// Beat is the offset from the note's start; Value is semitones for Bend, 0..1 otherwise.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaExprPoint(NoteExpressionDim dim, float beat, float value)
+{
+    public NoteExpressionDim Dim = dim;
+    public float Beat = beat;
+    public float Value = value;
 }
 
 /// <summary>Track summary for the Arrangement View. Matches native NotaTrackInfo.</summary>
@@ -132,6 +145,23 @@ public struct NotaSamplerInfo
     public int Loop;            // 0/1
 }
 
+/// <summary>Nota Mosaic's loading state. Matches native NotaMosaicStatus. State: 0 empty ·
+/// 1 loading · 2 ready; Disk* are the files' bytes on disk (progress), RamBytes the decoded
+/// samples' size; Missing = files that didn't decode.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaMosaicStatus
+{
+    public int State;
+    public int FilesDone;
+    public int FilesTotal;
+    public int Missing;
+    public int Zones;
+    public int Serial;          // changes whenever another program is set
+    public long DiskDone;
+    public long DiskTotal;
+    public long RamBytes;
+}
+
 /// <summary>Captured session audio take. Matches native NotaSessionAudioSlot (M7-6b).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionAudioSlot
@@ -213,6 +243,11 @@ public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam
 /// <summary>MIDI clip envelope target (M9 follow-up). Velocity scales note velocities;
 /// Volume scales the instrument output during the clip.</summary>
 public enum MidiClipEnvelope { Velocity = 0, Volume = 1 }
+
+/// <summary>A per-note expression dimension (MPE). Matches native ExprDim: Bend in semitones
+/// (the whole-instrument wheel −1..+1), Pressure 0..1, Slide (CC74 timbre) 0..1 with 0.5 neutral.</summary>
+/// <remarks>Sustain (the CC64 pedal, 0/1) is instrument-wide only — send it with pitch −1.</remarks>
+public enum NoteExpressionDim { Bend = 0, Pressure = 1, Slide = 2, Sustain = 3 }
 
 /// <summary>An automation breakpoint, blittable and laid out to match native
 /// NotaAutomationPoint (M9). Value is in the target's native units; Curve (M9-D)

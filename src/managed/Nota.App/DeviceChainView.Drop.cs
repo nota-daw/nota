@@ -161,27 +161,34 @@ public sealed partial class DeviceChainView
         _dropReplaceRing.IsVisible = true;
     }
 
-    /// <summary>Puts an effect just added (appended at <paramref name="newIdx"/>) where a
-    /// panel drop aimed it: into the target gap, or in place of the target card (which is
-    /// removed). Keeps card extras and index-addressed state elsewhere in step. Call inside
-    /// an engine undo group so the add and the placement undo together.</summary>
-    internal void PlaceDroppedDevice(int newIdx, DeviceDropTarget target)
+    /// <summary>Keeps card state (preset labels, A/B, automation targets) glued to its device
+    /// after <see cref="DeviceInsertService"/> appended an effect at <paramref name="added"/>,
+    /// moved it to <paramref name="final"/> and maybe removed the card it replaced — then
+    /// selects the new card. The engine half happened in the service, in its undo group.</summary>
+    internal void AdoptPlacement(int trackId, bool midi, int added, int final, bool replaced)
     {
-        if (newIdx < 0 || target.Mode == DeviceDropMode.Default) return;
-        var k = target.Midi ? ChainKind.Midi : ChainKind.Effect;
-        TrackExtras().Remove(ExtraKey(k, newIdx));   // a fresh slot: drop any stale entry
-        int to = Math.Clamp(target.Index, 0, newIdx);
-        if (to != newIdx)
-        {
-            if (target.Midi) _engine.MoveMidiEffect(_trackId, newIdx, to); else _engine.MoveDevice(_trackId, newIdx, to);
-            ExtrasMoved(k, newIdx, to);
-        }
-        if (target.Mode == DeviceDropMode.Replace && to < newIdx)   // the replaced card now sits right after
-        {
-            if (target.Midi) _engine.RemoveMidiEffect(_trackId, to + 1); else _engine.RemoveDevice(_trackId, to + 1);
-            ExtrasRemoved(k, to + 1);
-        }
-        _selChainKind = k; _selDeviceIndex = to;
+        var k = midi ? ChainKind.Midi : ChainKind.Effect;
+        TrackExtras(trackId).Remove(ExtraKey(k, added));   // a fresh slot: drop any stale entry
+        if (trackId != _trackId) return;                  // only the shown chain has moved cards to follow
+        if (final != added) ExtrasMoved(k, added, final);
+        if (replaced) ExtrasRemoved(k, final + 1);
+        _selChainKind = k; _selDeviceIndex = final;
         Rebuild(); Changed?.Invoke();
+    }
+
+    /// <summary>Where the command palette would insert (CP-2): the selected card's section and
+    /// index (the instrument when it is selected), else nothing.</summary>
+    internal Nota.Application.Palette.InsertPoint CurrentInsertPoint()
+    {
+        if (_trackId <= 0) return Nota.Application.Palette.InsertPoint.None;
+        if (HasDeviceSelection)
+        {
+            bool midi = _selChainKind == ChainKind.Midi;
+            int n = midi ? _engine.TrackMidiEffectCount(_trackId) : _engine.TrackDeviceCount(_trackId);
+            if (_selDeviceIndex < n)
+                return new(midi ? Nota.Application.Palette.ChainSection.Midi : Nota.Application.Palette.ChainSection.Audio, _selDeviceIndex,
+                    midi ? _engine.MidiEffectName(_trackId, _selDeviceIndex) : _engine.DeviceName(_trackId, _selDeviceIndex));
+        }
+        return Nota.Application.Palette.InsertPoint.None;
     }
 }

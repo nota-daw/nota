@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 
 #include <algorithm>
 #include <atomic>
@@ -93,6 +94,17 @@ public:
     void setSampleRate(double sr) override {
         sampleRate_ = sr > 0 ? sr : 44100.0;
         std::memset(ring_, 0, sizeof(ring_)); specF0_.store(0.0f, std::memory_order_relaxed);
+        exprCoef_ = exprSmoothCoef(sampleRate_);
+    }
+
+    // MPE: bend → pitch (a keyboard's wheel uses the patch's Bend Range), pressure → level +
+    // modulation index (up to ×2), slide → modulation index (×½ … ×2) — the FM timbre.
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        float add[kExprDims]; gexpr_.offsets(wheelRange(), add);
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && v.stage[0] != Stage::Release && v.stage[0] != Stage::Off) v.ex.set(dim, value, add);
     }
 
     // ---- parameters -------------------------------------------------------
@@ -165,6 +177,7 @@ public:
         const bool legato = mono && glideOn && v->active && v->stage[0] != Stage::Off;
         v->active = true; v->pitch = pitch; v->vel = std::clamp(velocity, 0.0f, 1.0f);
         v->freq = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
+        { float add[kExprDims]; gexpr_.offsets(wheelRange(), add); v->ex.reset(add); v->exBendAt = 0.0f; v->exBendMul = 1.0; }
         v->curFreq = legato ? v->curFreq
                    : (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freq;
         lastFreq_ = v->freq;
@@ -178,7 +191,7 @@ public:
             if (v.active && v.pitch == pitch && v.stage[0] != Stage::Release)
                 for (int o = 0; o < 4; ++o) v.stage[o] = Stage::Release;
     }
-    void allNotesOff() override { for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         const int   algo = std::clamp((int)std::lround(get(Algo) * (kNumAlgos - 1.0f)), 0, kNumAlgos - 1);
@@ -190,7 +203,8 @@ public:
         const double keyLevel = get(KeyLevel);
         const double velToLevel = get(VelToLevel);
         // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
-        const double bendSemis = (get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0);
+        const double bendSemis = (get(Bend) - 0.5) * 2.0 * wheelRange();
+        float exAdd[kExprDims]; gexpr_.offsets(wheelRange(), exAdd);
         const double bendMul = std::exp2(bendSemis / 12.0);
         const double keyTrk = get(FilKeyTrk);
         double ratio[4], fineMul[4], level[4], atk[4], dec[4], sus[4], rel[4]; int wave[4];
@@ -232,11 +246,16 @@ public:
                 const double fg = fgV[vi], fa1 = fa1V[vi];
                 // Advance glide toward the target pitch.
                 v.curFreq += (v.freq - v.curFreq) * gCoef;
-                const double pitchHz = v.curFreq * bendMul;
+                v.ex.tick(exAdd, exprCoef_);
+                if (v.ex.bend() != v.exBendAt) {
+                    v.exBendAt = v.ex.bend(); v.exBendMul = std::exp2(v.exBendAt / 12.0);
+                }
+                const double pitchHz = v.curFreq * bendMul * v.exBendMul;
                 // Velocity → FM depth and keyboard → modulator level (timbre controls).
                 const double velFac = 1.0 - velToFm * (1.0 - (double)v.vel);
                 const double keyFac = keyLevel > 0.0 ? std::exp2(-keyLevel * (v.pitch - 60) / 24.0) : 1.0;
-                const double modScale = kFmIndex * fmMul * velFac * keyFac;
+                const double exFm = std::exp2((double)v.ex.slide()) * (1.0 + v.ex.pressure());
+                const double modScale = kFmIndex * fmMul * velFac * keyFac * exFm;
                 double opOut[4]; double modIn[4] = {0, 0, 0, 0}; double carrier = 0.0; int nc = 0;
                 bool anyOn = false;
                 for (int o = 0; o < 4; ++o) {
@@ -262,7 +281,7 @@ public:
                 const double v2 = v.s2 + fg * v1;
                 v.s1 = 2.0 * v1 - v.s1; v.s2 = 2.0 * v2 - v.s2;
                 double fout = ftype == 1 ? (y - fk * v1 - v2) : ftype == 2 ? v1 : v2;   // HP / BP / LP
-                mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)));
+                mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)) * (1.0 + 0.5 * v.ex.pressure()));
             }
             // Spectrum-analysis tap (pre-master timbre signal).
             ring_[ringW_ & (kRing - 1)] = mono;
@@ -338,8 +357,11 @@ private:
         Stage   stage[4] = {Stage::Off, Stage::Off, Stage::Off, Stage::Off};
         double  fbLast = 0.0;
         double  s1 = 0.0, s2 = 0.0;   // filter state
+        VoiceExpr ex;                 // MPE bend / pressure / slide
+        float   exBendAt = 0.0f; double exBendMul = 1.0;
     };
     Voice voices_[kVoices];
+    float wheelRange() const { return static_cast<float>(std::round(1.0 + get(BendRange) * 11.0)); }   // semitones
 
     void  set(Param p, float v) { pn_[p].store(v, std::memory_order_relaxed); }
     float get(Param p) const { return pn_[p].load(std::memory_order_relaxed); }
@@ -373,6 +395,8 @@ private:
     }
 
     double sampleRate_ = 44100.0;
+    float  exprCoef_ = exprSmoothCoef(44100.0);
+    GlobalExpr gexpr_;              // pitch wheel / channel pressure (pitch −1)
     double lastFreq_ = 0.0;   // last note-on target, for glide
     std::atomic<float> pn_[kNumParams];
 

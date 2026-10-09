@@ -33,7 +33,7 @@ public static class PresetService
                 doc.StateBase64 = Convert.ToBase64String(engine.GetPluginState(trackId, -1));
                 return string.IsNullOrEmpty(doc.PluginId) ? null : doc;
             }
-            // Built-in instrument: capture the normalized plugin-params by id. Skip kinds whose
+            // Built-in instrument: capture the normalized plugin-params by id (+ a Mosaic's program). Skip kinds whose
             // state isn't fully recallable from params alone — Grain (10) needs the sample and
             // the Instrument/Drum racks (3/4) their chains. The Sampler (1) saves its sound —
             // envelope, filter, pitch, loop, voices — and applying it keeps whatever sample is
@@ -54,6 +54,8 @@ public static class PresetService
                     if (InstrumentView.IsViewParam(id)) continue;   // the card size is editor state, not sound
                     doc.NamedParams[id] = engine.PluginParamGet(trackId, -1, i);
                 }
+                // Nota Mosaic: the zone map travels with the sound (its samples stay referenced).
+                if (ik == MosaicModel.Kind && engine.MosaicProgram(trackId) is { Length: > 0 } prog) doc.MosaicProgram = prog;
                 return doc;
             }
         }
@@ -223,6 +225,8 @@ public static class PresetService
                     13 => engine.AddMonolithTrack(),
                     14 => engine.AddPentadTrack(),
                     15 => engine.AddConsortTrack(),
+                    16 => engine.AddKeysTrack(),
+                    17 => engine.AddMosaicTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
                 if (t <= 0) return "Failed to add instrument.";
@@ -234,7 +238,8 @@ public static class PresetService
                             && doc.NamedParams.TryGetValue(pid, out var v))
                             engine.PluginParamSet(t, -1, i, v);
                 }
-                return LoadGrainSource(doc, engine, t);
+                string mw = LoadMosaicProgram(doc, engine, t);
+                return mw.Length > 0 ? mw : LoadGrainSource(doc, engine, t);
             }
             case "plugin-effect":
             {
@@ -270,6 +275,23 @@ public static class PresetService
         return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : $"Couldn't load the sample \"{src.Name}\".";
     }
 
+    // A Nota Mosaic preset loads its program: a factory multisample (rendered on first use) or
+    // the program text it carries. Loading itself runs in the background in the engine.
+    private static string LoadMosaicProgram(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        if (doc.BuiltinKind != MosaicModel.Kind) return "";
+        if (!string.IsNullOrEmpty(doc.MosaicSource))
+        {
+            var prog = global::Nota.Infrastructure.Mosaic.MosaicSourceLibrary.Program(doc.MosaicSource);
+            if (prog is null) return $"Couldn't prepare the multisample \"{doc.MosaicSource}\".";
+            prog.Name = doc.DisplayName.Length > 0 ? doc.DisplayName : prog.Name;
+            engine.MosaicSetProgram(trackId, prog.Serialize());
+            return "";
+        }
+        if (!string.IsNullOrEmpty(doc.MosaicProgram)) engine.MosaicSetProgram(trackId, doc.MosaicProgram);
+        return "";
+    }
+
     /// <summary>Applies a preset to an EXISTING instrument/device in place (no new track/
     /// device is created) — for the in-header preset picker. Built-in instruments reset all
     /// params to default first so the patch is clean; effects set the preset's named params.</summary>
@@ -296,7 +318,8 @@ public static class PresetService
                     float v = named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i);
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
-                return kind == 10 ? LoadGrainSource(doc, engine, trackId) : "";
+                return kind == 10 ? LoadGrainSource(doc, engine, trackId)
+                     : kind == MosaicModel.Kind ? LoadMosaicProgram(doc, engine, trackId) : "";
             }
             case "builtin-effect":
             {

@@ -133,16 +133,6 @@ public partial class MainWindow
         else _vm.StatusText = "Select a range or clips to consolidate.";
     }
 
-    private void OnToggleLockEnvelopes(object? sender, EventArgs e)
-    {
-        if (_vm is null) return;
-        bool locked = !_vm.Engine.AutomationLock;
-        _vm.Engine.SetAutomationLock(locked);
-        if (sender is NativeMenuItem mi) mi.IsChecked = locked;
-        _vm.StatusText = locked ? "Envelopes locked — clip moves keep automation in place"
-                                : "Envelopes follow clips";
-    }
-
     // The piano roll currently on screen, or null. Edit-menu clipboard commands target it
     // (the Cmd+C/X/V keys are handled by the grid itself; these back the menu items).
     private PianoRollView? ActiveRoll()

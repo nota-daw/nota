@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.42.1** (plus changes in development on `main`). This document describes what is
+**0.51.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -66,6 +66,8 @@ JUCE module; the engine core is JUCE-free.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
 - **Tempo (BPM)** and **time signature** (edited by dragging; the denominator snaps to a
   power of two), grid and quantization.
+- **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
+  tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection).
 - **Metronome** and **count-in** before recording.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
@@ -81,6 +83,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
+  **Duplicate time** (⌘⇧D) copies a selected time range right after itself and **Insert
+  silence** (⌘⇧I) opens a gap of its length, across the whole song — clips and automation
+  after it move right, clips crossing it are cut (Edit menu and the range's right-click menu).
   An **Overview** strip above the ruler shows the whole project in miniature with the
   visible span as a window over it — drag it to scroll, drag its edges (or drag vertically)
   to zoom, double-click to fit the project.
@@ -105,7 +110,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   colours, tempo / signature and scene follow, inserted, duplicated, captured and reordered
   without stopping playback; Session Rec with fixed length; group columns that fold;
   returns + master; I/O · Sends · Mixer sections; removable stop buttons; per-track
-  Back to Arrangement; and moving material between Session and Arrangement.
+  Back to Arrangement; and moving material between Session and Arrangement — the clipboard
+  works both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
+  Scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch and
+  gain, as one undo step.
 - **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
@@ -198,6 +206,38 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
+- **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
+  bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
+  default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
+  is an ordinary keyboard whose pitch wheel, channel aftertouch and CC74 move the whole
+  instrument. **Nota Synth, Volt, Aurora, Operator, Pentad, Physical and Keys** play it: bend moves
+  the note's pitch; pressure raises its level and opens its filter (Operator: deepens the FM,
+  Pentad: poly aftertouch through *Aftertouch Cutoff*, Physical: bows the struck body so a held
+  note sustains); slide sweeps the filter (Aurora: the wavetable position, Operator: the FM
+  index, Physical: how long the body rings, Keys: drives the tine into the pickup / shifts its
+  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get the wheel, channel
+  pressure, polyphonic aftertouch and the sustain pedal (CC64), which also holds Nota Keys'
+  notes. **Recording** keeps each note's bend, pressure and slide with the note: it plays back
+  from the clip, moves, copies and quantizes with the note, is saved with the project, and the
+  piano roll draws it over the note (bend as the pitch it played, pressure as a shade). The
+  pitch wheel, channel pressure and sustain pedal aren't recorded.
+  - **MPE lanes in the piano roll** — the lane under the notes switches between **VEL**,
+    **BEND**, **PRES** and **SLIDE**. In an MPE lane every note's curve sits over its own
+    span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
+    to move it, double-click to add or delete a point, right-click for **Clear Bend /
+    Pressure / Slide** and **Clear All Expression**. The bend lane scales itself (±2, 12, 24,
+    48 or 96 semitones); each gesture is one undo step and plays back straight away.
+- **Nota Remote — a phone as a controller**: **Remote** in the top bar (View → Connect
+  Phone…) shows a QR code; the phone opens a PWA with pads, keys in the project's scale with
+  chords, an XY pad with tilt, the mixer, macros and the Session grid — over Wi-Fi or a USB
+  cable, nothing to install. Pairing by a rotating four-digit code, trusted phones and
+  permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
+  the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
+  several phones play at once, each on its own track, with players' names on the tracks.
+- **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
+  Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
+  it (a key's width is its pitch step), the height on the key is its slide, and a screen that
+  reports touch force sends pressure.
 - **Gamepad input (macOS)** — a connected controller (Xbox / DualShock / DualSense /
   Switch Pro / 8BitDo) acts as a small keyboard: the face buttons and bumpers/triggers play
   notes, the D-pad shifts octave and velocity. Notes travel the same path as typed ones
@@ -234,6 +274,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off).
+- **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
+  Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
+  Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
+  is the part of the clip you hear; the clip stays put.
 - **Recording from an internal bus** (a group, return or master output into a new audio
   track) — dropped frames are padded with silence, so there is no cumulative drift.
 - **Import** of audio files by drag and drop: WAV / AIFF / FLAC / MP3.
@@ -408,6 +452,36 @@ and user presets, automation, persistence and cloning.
   a six-shape LFO, a stereo bucket-brigade delay, a 16-step sequencer / arpeggiator with
   ratchets and ties, and a 12-cable patch bay over 42 points (matrix, jack strip or full-card
   overlay). Cables are parameters: saved, preset-able and automatable. 28 factory presets.
+- **Nota Keys** — modelled electric piano: Tine, Suitcase, Reed and Clav models (a hammer
+  pulse into tine + tone bar, reed or string modes). The PICKUP graph is the transfer curve the
+  sound passes — drag for symmetry (X) and distance (Y), with H1–H8 bars and the bark readout;
+  Clav shows its string and Upper / Both / Lower pickups. Hammer (hardness, vel → hardness,
+  noise), resonator (decay, body, bright, key → bright), damper with release noise and a sustain
+  pedal (button, automation or CC64), tune / age / stretch, 8 / 16 / 32 / 64 voices. FX tab:
+  preamp (drive, bass, treble), mono or stereo-pan tremolo (free or tempo-synced), phaser,
+  chorus, Suitcase / Combo / DI cabinet, volume and pan. Two sizes: L (Sound / FX tabs) and S
+  (model, pickup, four knobs). 40 factory presets; MCP `read_keys` / `set_keys`.
+- **Nota Mosaic** — multisample instrument: zones (a sample on a key × velocity rectangle with
+  its root, fine tune, gain, pan, start / end and loop) in groups with a shared gain / tune and
+  a round-robin (Sequential / Random / No repeat), key and velocity crossfades, exclusive groups
+  (choke by `off_by`), release samples on key-up or pedal-up that get quieter the longer the
+  key was held. Poly 16 / 32 / 64 / 128 (steals released, then the quietest, then the oldest
+  voices with an adjustable fade; up to 1–4 strikes per key), Mono with glide, Choke; sustain
+  pedal (CC64); MPE (bend with a set range, pressure → level, slide → cutoff); amp ADSR,
+  LP / HP / BP filter with keytrack and env → cutoff, a velocity curve. Card tabs Zones (drag
+  tiles and edges on the map, the keyboard plays, Attack / Release view), Sample, Groups,
+  Pitch, Env, Filter, and a Voices rail; S size shows a mini map. Samples load into RAM in the
+  background (notes silent until ready) and stay referenced, not copied — a project or preset
+  on a computer without the pack offers to install it or to locate the folder. **SFZ import** for
+  installed packs' SFZ programs and over MCP (`#include` / `#define`, Windows paths, CC articulations picked from the tab strip, an import
+  report of what was ignored); **Create multisample** maps a folder by file names
+  (`trombone_gb4.wav`, `_f_`, `_rr2`, `_rel`), checks the octave convention by pitch detection
+  and lists gaps, duplicates and guessed notes (browser folder menu, or files dropped on the
+  card). Installed sample packs become presets under Nota Mosaic → Packs. 11 factory presets
+  on built-in multisamples (felt piano with release samples, mallets, nylon guitar, brass, pad,
+  music box) rendered on first use; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
+  `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
+  `load_mosaic_preset`, `scan_sample_packs`.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
@@ -802,6 +876,24 @@ and user presets, automation, persistence and cloning.
 
 ## Windows and interface
 
+- **Command palette (⌘⇧P / Ctrl+Shift+P)** — one search field for everything, from any
+  window and any focus (a text field included): every menu and view command (with its
+  shortcut), every track including returns and the master, built-in devices, scanned
+  VST3 / AU plug-ins (vendor and format shown), factory and user presets, drum kits, and —
+  when opened from Modular — Modular nodes (LFO, Envelope Follower, MIDI → CV, ADSR, Macro,
+  Math, Scope). The chosen item goes **where the palette was opened**: in Devices next to the
+  selected card, in Modular onto the shown track (a node unconnected, at the pointer or the
+  middle of the view), elsewhere the selected track; the field shows the target
+  ("→ Bass · after Nota Vintage") and why an item can't go anywhere. ⌘Enter puts an
+  instrument on a new track, ⌥Enter replaces the selected device, ⇧Enter keeps the palette
+  open for the next one; every apply is one undo step, with an Undo toast. Search is fuzzy
+  ("afl" → Auto Filter), forgives one typo per word, reads a query typed in the wrong
+  keyboard layout ("кумуки" → reverb) and understands meaning in English and Russian —
+  "warm pad", "reverb for vocals", "компрессор на барабаны" — through a semantic descriptor
+  every device, plug-in and preset carries (role, character, part, source, task, genre); a
+  semantic hit says why it was found ("warm · pad"). Prefixes `>` `@` `+` `#` `~` (or Tab)
+  filter by type; an empty query shows Recent and suggestions for the context. Ranking
+  learns from what you use in the palette and the browser.
 - **Two palette variants** — **Ember Graphite** (warm graphite neutrals with a brass
   accent; the default, and what a DAW wants for long sessions in a dark room) and
   **Ember Paper** (the same hues and roles on a warm light ground, with brass darkened to
@@ -830,8 +922,13 @@ and user presets, automation, persistence and cloning.
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
 - **Popup rack editors** (full UI / Params).
-- **A shortcut list** in Preferences → Shortcuts, grouped by section (Transport,
-  Arrangement & Editing, Piano roll, Play notes, Mouse).
+- **Typed values** — double-click the number next to a slider in a device card, the clip
+  editor or a rack macro and type it: "−6", "1.5k", "250 ms", "L 30", "1/16".
+- **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
+  opens it in the system language, the start window links to the first-track tutorial, and
+  each device header menu's **Documentation** item opens that device's page.
+- **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
+  Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
 
 ---
 
@@ -839,7 +936,8 @@ and user presets, automation, persistence and cloning.
 
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
   (Windows).
-- **MIDI**: which MIDI inputs are enabled (the house checkboxes).
+- **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
+  default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
@@ -869,7 +967,8 @@ Coverage:
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
-- **Instruments**: add by kind, read and write parameters (by index or by stable id).
+- **Instruments**: add by kind, read and write parameters (by index or by stable id); read /
+  shape Nota Keys in musical terms (`read_keys`, `set_keys`).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
@@ -900,6 +999,8 @@ Coverage:
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.
+- **Nota Mosaic**: read and shape it, edit zones and groups, import SFZ, map a folder of
+  samples by name, list and load its factory and pack presets (see Nota Mosaic above).
 - **Sample library**: `search_samples` (kind, BPM range, key, words in the path),
   `get_sample_info`, `find_similar_samples`, `get_project_key` / `set_project_key`.
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,

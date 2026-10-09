@@ -51,6 +51,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
         services.AddSingleton<IPresetAudition, PresetAudition>();
         services.AddSingleton<IDrumKits, DrumKitService>();
+        services.AddSingleton<IMosaicPacks, Nota.Infrastructure.Mosaic.MosaicPackLibrary>();
         services.AddSingleton<IBrowserLibrary, BrowserLibraryService>();
         services.AddSingleton<IAudioDeviceService, AudioDeviceService>();
         services.AddSingleton<IMidiDeviceService, MidiDeviceService>();
@@ -90,6 +91,16 @@ public partial class App : Avalonia.Application
         // Palette variant (Preferences → Appearance), applied before the first window
         // paints so nothing flashes graphite on the way to paper.
         NotaThemeService.Set(Services.GetRequiredService<ISettingsService>().Current.Theme);
+
+        // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
+        // packs get their Mosaic presets in the background (once per pack version).
+        Nota.Infrastructure.Mosaic.MosaicRoots.Install(Services.GetRequiredService<ISettingsService>());
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            await System.Threading.Tasks.Task.Delay(4000);
+            try { await Services.GetRequiredService<IMosaicPacks>().ScanAsync(); }
+            catch (Exception e) { log.Error("Couldn't make Mosaic presets for the sample packs", e); }
+        });
 
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }

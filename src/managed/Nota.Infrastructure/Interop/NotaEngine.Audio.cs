@@ -112,6 +112,15 @@ public sealed partial class NotaEngine
     public void SetMidiInputEnabled(string uid, bool enabled)
     { ThrowIfDisposed(); Check(NativeMethods.MidiSetInputEnabled(_handle, uid ?? "", enabled ? 1 : 0)); }
 
+    /// <summary>MPE input: channels per MPE zones, and the member channels' bend range in
+    /// semitones (staged; <see cref="ApplyMidi"/> persists and reconnects).</summary>
+    public (bool Enabled, int BendRange) GetMpe()
+    { ThrowIfDisposed(); return (NativeMethods.MidiMpeEnabled(_handle) != 0, NativeMethods.MidiMpeBendRange(_handle)); }
+    /// <summary>The MPE decoder's self-test: 0 = pass, else the first failed check.</summary>
+    public static int MpeSelfTest() => NativeMethods.MpeSelfTest();
+    public void SetMpe(bool enabled, int bendRange)
+    { ThrowIfDisposed(); Check(NativeMethods.MidiSetMpe(_handle, enabled ? 1 : 0, Math.Clamp(bendRange, 1, 96))); }
+
     /// <summary>Persists the staged MIDI selection and reconnects the MIDI port.</summary>
     public void ApplyMidi()
     { ThrowIfDisposed(); Check(NativeMethods.MidiApply(_handle)); }

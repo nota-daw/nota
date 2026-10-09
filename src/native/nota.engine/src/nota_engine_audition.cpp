@@ -37,6 +37,9 @@ int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, const char* n
 int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path, int32_t root_note) {
     return rig && RIG(rig)->setSamplerSample(path ? std::string(path) : std::string(), root_note) ? 1 : 0;
 }
+int32_t nota_audition_set_mosaic_program(NotaAudition* rig, const char* text) {
+    return rig && text && RIG(rig)->setMosaicProgram(std::string(text)) ? 1 : 0;
+}
 int32_t nota_audition_add_source_from(NotaAudition* rig, const NotaAudition* part, float gain) {
     return rig && part && RIG(rig)->addSourceFrom(*CRIG(part), gain) ? 1 : 0;
 }

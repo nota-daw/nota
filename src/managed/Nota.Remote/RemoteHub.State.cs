@@ -19,7 +19,7 @@ public sealed partial class RemoteHub
     private string? _projectJson;            // shared part of the project message, re-read every few ticks
     private List<TrackRow> _tracks = new();
 
-    internal sealed record TrackRow(int Id, string Name, string Color, string Kind, string Device, int Group, int Index);
+    internal sealed record TrackRow(int Id, string Name, string Color, string Kind, string Device, int Group, int Index, bool Mpe = false);
 
     private sealed class Snapshot(RemoteHub hub, IRemoteHost host)
     {
@@ -99,7 +99,8 @@ public sealed partial class RemoteHub
                 "return" => "Return",
                 _ => RemoteParams.InstrumentName(_engine, ti.Id),
             };
-            rows.Add(new TrackRow(ti.Id, _engine.GetTrackName(ti.Id), host.TrackColor(ti.Id), kind, dev, ti.GroupId, i));
+            bool mpe = kind == "inst" && _engine.TrackInstrumentSupportsMpe(ti.Id);
+            rows.Add(new TrackRow(ti.Id, _engine.GetTrackName(ti.Id), host.TrackColor(ti.Id), kind, dev, ti.GroupId, i, mpe));
         }
         _tracks = rows;
 
@@ -118,6 +119,7 @@ public sealed partial class RemoteHub
                 w.WriteString("kind", r.Kind);
                 w.WriteString("dev", r.Device);
                 w.WriteNumber("grp", r.Group);
+                if (r.Mpe) w.WriteBoolean("mpe", true);   // takes per-note expression
                 if (r.Kind == "drum") WritePads(w, r.Id);
                 w.WriteEndObject();
             }

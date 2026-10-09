@@ -374,6 +374,21 @@ public interface IAudioEngine : IDisposable
     int AddPentadTrack();
     /// <summary>Adds an instrument track with the built-in Nota Consort paraphonic semi-modular synth (kind 15).</summary>
     int AddConsortTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Keys modelled electric piano (kind 16).</summary>
+    int AddKeysTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Mosaic multisample instrument (kind 17),
+    /// empty until a program is set.</summary>
+    int AddMosaicTrack();
+    /// <summary>Sets a Nota Mosaic's program (MosaicProgram text) and starts loading its samples in
+    /// the background. <paramref name="undoable"/>: one undo step (sounding notes stop); false edits
+    /// the live instrument in place (a drag in progress). False when the track isn't a Mosaic.</summary>
+    bool MosaicSetProgram(int trackId, string text, bool undoable = true);
+    /// <summary>The Mosaic's program text ("" when none / not a Mosaic).</summary>
+    string MosaicProgram(int trackId);
+    /// <summary>The Mosaic's loading state; false when the track isn't a Mosaic.</summary>
+    bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status);
+    /// <summary>The sample id behind a zone (for TryGetSampleInfo / ReadSample), 0 = not loaded.</summary>
+    long MosaicZoneSampleId(int trackId, int zone);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>
@@ -754,6 +769,11 @@ public interface IAudioEngine : IDisposable
     /// <summary>Live note update with no undo checkpoint (piano-roll drag pushing every frame).</summary>
     void SetClipNotesLive(int trackId, int clipIndex, NotaNote[] notes);
     NotaNote[] GetClipNotes(int trackId, int clipIndex);
+    /// <summary>Stores a note expression curve (recorded MPE) and returns its id for
+    /// <see cref="NotaNote.ExprId"/> (0 when there are no points). Ids live as long as the engine.</summary>
+    int CreateNoteExpression(NotaExprPoint[] points);
+    /// <summary>The curve behind an expression id (empty for 0 / unknown), per dim sorted by beat.</summary>
+    NotaExprPoint[] GetNoteExpression(int exprId);
 
     // --- Live MIDI, arming & recording -------------------------------------
     void SetTrackArmed(int trackId, bool armed);
@@ -763,6 +783,10 @@ public interface IAudioEngine : IDisposable
     /// its own track). Recorded when that track holds the take. Safe to call from any thread.</summary>
     void TrackNoteOn(int trackId, int pitch, float velocity);
     void TrackNoteOff(int trackId, int pitch);
+    /// <summary>Per-note expression (MPE) for a live note: send it after the note-on (a note-on
+    /// resets it). Pitch −1 addresses the whole instrument, where Bend is the wheel −1..+1.</summary>
+    void NoteExpression(int pitch, NoteExpressionDim dim, float value);
+    void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
@@ -793,6 +817,8 @@ public interface IAudioEngine : IDisposable
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
     int TrackInstrumentKind(int trackId);
+    /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
+    bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);
     string TrackInstrumentPluginId(int trackId);
     string TrackDevicePluginId(int trackId, int deviceIndex);
@@ -829,6 +855,8 @@ public interface IAudioEngine : IDisposable
     // --- MIDI device settings (M7-2) ---------------------------------------
     bool IsMidiInputEnabled(string uid);
     void SetMidiInputEnabled(string uid, bool enabled);
+    (bool Enabled, int BendRange) GetMpe();
+    void SetMpe(bool enabled, int bendRange);
     void ApplyMidi();
 
     // --- MIDI learn: drain incoming CC/note-on events (4 int32 per event) ---

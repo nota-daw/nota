@@ -696,6 +696,23 @@ public sealed partial class NotaEngine
         return written == count ? buf : buf[..written];
     }
 
+    public int CreateNoteExpression(NotaExprPoint[] points)
+    {
+        ThrowIfDisposed();
+        return points.Length == 0 ? 0 : NativeMethods.NoteExprCreate(_handle, points, points.Length);
+    }
+
+    public NotaExprPoint[] GetNoteExpression(int exprId)
+    {
+        ThrowIfDisposed();
+        if (exprId <= 0) return Array.Empty<NotaExprPoint>();
+        int count = NativeMethods.NoteExprPoints(_handle, exprId, null, 0);
+        if (count <= 0) return Array.Empty<NotaExprPoint>();
+        var buf = new NotaExprPoint[count];
+        int written = NativeMethods.NoteExprPoints(_handle, exprId, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
     // --- Audio persistence (M7-6b) -----------------------------------------
 
     /// <summary>Full geometry of an audio clip. False if the clip at that index isn't audio.</summary>
@@ -777,6 +794,59 @@ public sealed partial class NotaEngine
         var id = NativeMethods.AddConsortTrack(_handle);
         if (id <= 0) throw new NotaEngineException("Failed to add Consort track.");
         return id;
+    }
+
+    /// <summary>Adds an instrument track with the built-in Nota Keys electric piano. Returns its id.</summary>
+    public int AddKeysTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddKeysTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Keys track.");
+        return id;
+    }
+
+    /// <summary>Adds an instrument track with the built-in Nota Mosaic (empty until a program is set). Returns its id.</summary>
+    public int AddMosaicTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddMosaicTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Mosaic track.");
+        return id;
+    }
+
+    public bool MosaicSetProgram(int trackId, string text, bool undoable = true)
+    { ThrowIfDisposed(); return NativeMethods.MosaicSetProgram(_handle, trackId, text ?? "", undoable ? 1 : 0) != 0; }
+
+    public unsafe string MosaicProgram(int trackId)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.MosaicProgram(_handle, trackId, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n];
+        fixed (byte* p = buf) n = Math.Min(n, NativeMethods.MosaicProgram(_handle, trackId, p, buf.Length));
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
+
+    public bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status)
+    { ThrowIfDisposed(); return NativeMethods.MosaicStatus(_handle, trackId, out status) != 0; }
+
+    public long MosaicZoneSampleId(int trackId, int zone)
+    { ThrowIfDisposed(); return NativeMethods.MosaicZoneSampleId(_handle, trackId, zone); }
+
+    /// <summary>Sets a named root Nota Mosaic's sample references resolve against
+    /// ("samples:Downloaded/x.wav" → &lt;root&gt;/Downloaded/x.wav). Process-wide.</summary>
+    public static void SetPathRoot(string name, string path) => NativeMethods.PathRootSet(name, path ?? "");
+
+    /// <summary>Decodes up to <paramref name="maxSeconds"/> of a file's head as mono; null on failure.</summary>
+    public static unsafe float[]? DecodeMono(string path, double maxSeconds, out double sampleRate)
+    {
+        long n = NativeMethods.FileDecodeMono(path, maxSeconds, null, 0, out sampleRate);
+        if (n <= 0 || n > int.MaxValue) return null;
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.FileDecodeMono(path, maxSeconds, p, buf.LongLength, out sampleRate);
+        if (n <= 0) return null;
+        if (n < buf.LongLength) Array.Resize(ref buf, (int)n);
+        return buf;
     }
 
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>

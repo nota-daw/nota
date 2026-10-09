@@ -101,4 +101,23 @@ NotaResult nota_sample_analyze_file(const char* path, double max_seconds, NotaSa
     return NOTA_OK;
 }
 
+int64_t nota_file_decode_mono(const char* path, double max_seconds, float* out, int64_t cap, double* sample_rate) {
+    if (!path) return 0;
+    auto job = nota::AudioImportJob::open(std::string(path), max_seconds);
+    if (!job || !job->buffer()) return 0;
+    while (!job->done())
+        if (job->step(1 << 17) < 0) return 0;
+    const auto& b = *job->buffer();
+    if (b.frames <= 0 || b.channels <= 0) return 0;
+    if (sample_rate) *sample_rate = b.sourceSampleRate;
+    if (!out || cap <= 0) return b.frames;
+    const int64_t n = std::min<int64_t>(b.frames, cap);
+    for (int64_t f = 0; f < n; ++f) {
+        float s = 0.0f;
+        for (int32_t c = 0; c < b.channels; ++c) s += b.samples[static_cast<size_t>(f * b.channels + c)];
+        out[f] = s / static_cast<float>(b.channels);
+    }
+    return n;
+}
+
 } // extern "C"

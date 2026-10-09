@@ -332,6 +332,9 @@ int32_t nota_pdc_selftest(void) {
 int32_t nota_track_instrument_kind(const NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackInstrumentKind(track_id) : -2;
 }
+int32_t nota_track_instrument_supports_mpe(const NotaEngine* e, int32_t track_id) {
+    return (e && CENG(e)->trackInstrumentSupportsMpe(track_id)) ? 1 : 0;
+}
 int32_t nota_track_device_builtin_kind(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->trackDeviceBuiltinKind(track_id, device_index) : -1;
 }

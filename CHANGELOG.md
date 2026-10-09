@@ -18,16 +18,107 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.51.1] — 2026-10-09
+
+### Highlights
+- **MPE arrives:** play an MPE controller and every note bends, swells and changes tone on its
+  own in the built-in synths; the expression is recorded with each note and can be drawn and
+  edited in the piano roll — even on plain MIDI parts.
+- **Two new instruments:** Nota Mosaic plays multisamples (build one from a folder of samples, or
+  play any installed sample pack, SFZ included), and Nota Keys models electric pianos — tine,
+  suitcase, reed and clav, with its own effects chain.
+- **Command palette (⌘⇧P / Ctrl+Shift+P):** find any command, track, device, plug-in or preset
+  by name or by description ("warm pad", "reverb for vocals"), in English or Russian.
+- **Tap tempo** in the transport bar, and the sustain pedal now reaches instruments.
+- **A full user manual** in English and Russian, linked from the Help menu and every device.
+- **Fixes:** Ctrl shortcuts work on Windows and Linux, the Mixer shows track names, and the
+  browser search no longer keeps the keyboard.
+
 ### Added
+- **Nota Mosaic — a multisample instrument.** Many samples across the keyboard: zones by key and
+  velocity, layers with round-robin, release samples that sound when you let go of a key (quieter
+  after a long hold), the sustain pedal, up to 128 voices and MPE. The Zones tab draws the map —
+  drag a zone to move it, an edge to resize it, play the keyboard under it. Build an instrument
+  from a folder: **Create multisample** (right-click a folder in the Files tab, or drop files on
+  the card) reads the notes, velocity layers and round-robin steps from the file names, checks
+  the octave by ear and shows what needs a look before it saves the presets. Every installed
+  sample pack shows up as Mosaic presets under **Packs** (its **SFZ** instruments included), and
+  11 factory presets play built-in multisamples (felt piano, mallets, nylon guitar and more).
+  Samples are referenced, not copied into the project; if a pack is missing on another computer, the card
+  offers to install it.
+- **Tap tempo.** A **TAP** cell beside the BPM in the transport bar: tap the beat on it and the
+  project tempo follows from the second tap, averaged over the last eight. Four dots count the
+  beats as you tap. Change pace mid-series and it picks up the new tempo at once; pause for
+  three seconds to start over. Also in the command palette as **Tap Tempo**.
+- **Edit MPE in the piano roll.** The lane under the notes now switches between **VEL**,
+  **BEND**, **PRES** and **SLIDE**. Pick a note and draw its bend, pressure or slide right over
+  its span — hold ⌥ for a straight line — drag a point to reshape it, double-click to add or
+  remove a point, or right-click to clear a curve. It works on recorded takes and on notes you
+  drew yourself, so you can give a plain MIDI part a bend or a swell without an MPE controller.
+- **Command palette — ⌘⇧P (Ctrl+Shift+P on Windows and Linux).** One search field for every
+  command, track, device, plug-in and preset, from any window. What you pick goes where you
+  opened it: in Devices right after the selected card (⌥Enter replaces it), in Modular onto
+  the shown track, elsewhere onto the selected track — and the field tells you where before
+  you press Enter. ⌘Enter puts an instrument on a new track; ⇧Enter keeps the palette open
+  to add several devices in a row. It understands what you mean as well as names, in English
+  and Russian: "warm pad", "reverb for vocals", "компрессор на барабаны", a typo, or a word
+  typed in the wrong keyboard layout. Every apply is one undo step.
 - **A user manual, in English and Russian** — at https://nota-daw.github.io/nota-docs/, from the
   first track to every knob of every built-in device. **Help ▸ Documentation** opens it (in Russian
   when your system is), the start window links to the first-track tutorial, and every device's
   header menu has a **Documentation** item that opens that device's page.
+- **MPE — per-note expression for the built-in synths.** Play an MPE controller (Seaboard,
+  LinnStrument, Osmose, Sensel…) and every note bends, swells and changes timbre on its own:
+  Nota Synth, Volt, Aurora, Operator, Pentad and Physical respond to per-note pitch bend,
+  pressure and slide (CC74). Pressure opens the filter and lifts the level — on Physical it
+  bows the bar so a held note sustains; slide sweeps the filter, Aurora's wavetable position or
+  Operator's FM depth. Settings ▸ MIDI ▸ MPE switches it and sets the bend range (±48 by
+  default; a controller that announces its own range wins). An ordinary keyboard on channel 1
+  plays as before — and its pitch wheel and aftertouch now reach Nota's synths and hosted
+  plug-ins too. Recording keeps each note's bend, pressure and slide with it: the take plays
+  back exactly as performed, the expression moves, copies and quantizes with its note and is
+  saved with the project, and the piano roll draws it over the note — bend as the pitch line
+  you played, pressure as a shade. (The pitch wheel, channel pressure and sustain pedal
+  aren't recorded.)
+- **Nota Remote: Expressive keys.** On a track that takes MPE, the Keys screen's Keyboard and
+  Scale modes get an **Expressive** switch: a finger keeps its note, sliding sideways bends it,
+  the height on the key changes its timbre, and a phone that senses touch force sends pressure.
+- **Nota Keys — a modelled electric piano.** Four instruments in one: Tine, Suitcase, Reed and
+  Clav. A hammer strikes a tine (with its tone bar), a reed or a string, and the PICKUP graph is
+  the very curve the sound passes — drag the point to set symmetry and distance: close and
+  off-centre growls (the bark), far and centred stays round; play harder and it barks more. The
+  Clav shows its string and two pickups (Upper / Both / Lower). Hammer hardness, velocity →
+  hardness and thump, decay, body, brightness and key tracking, damper and release noise, a
+  sustain pedal (click it, automate it, or press a keyboard's CC64), age, stretch tuning and 8–64
+  voices. The FX tab chains a preamp, a mono or stereo-pan tremolo (free or synced to the
+  tempo), a phaser, a chorus and a Suitcase / Combo / DI cabinet. Two sizes: L with Sound and FX
+  tabs, S with the model, the pickup and four knobs. MPE: bend, pressure drives the tine harder
+  into the pickup, slide shifts its symmetry. 40 factory presets; MCP `read_keys` / `set_keys`.
+- **The sustain pedal (CC64) reaches instruments.** A keyboard's pedal now holds Nota Keys' notes
+  and reaches hosted plug-ins as CC64.
+
+### Changed
+- **The menu, the keyboard shortcuts and the command palette run the same commands**, so a
+  shortcut and its menu item can no longer drift apart. Settings ▸ Shortcuts now also lists
+  ⌘, (Settings) and the palette keys.
+- **Dropping a device and choosing it in the palette put it in the same place:** an instrument
+  dropped on the Modular canvas now replaces the shown track's instrument, a drop on the
+  Devices panel is one undo step, and a MIDI effect dropped on an audio track says why it
+  can't go there.
 
 ### Fixed
 - **The Mixer shows your track names:** a track renamed to "Drums" used to read "Inst 2" in
   its mixer strip. Strips now carry the same name as the Arrangement — or the instrument's
   name, "Group" or "Return N" — and a group strip's I/O reads "Group in → Master".
+- **Menu shortcuts use Ctrl on Windows and Linux:** the menu bar showed File ▸ Save, Undo,
+  Record and the rest as Win+S, Win+Z…, and Ctrl+S, Ctrl+Z and most of the others did
+  nothing. They now read and work as Ctrl+S, Ctrl+Z, Ctrl+Shift+Z and so on, and Settings ▸ Shortcuts, the Session inspector
+  and the other on-screen hints spell keys as Ctrl / Alt / Shift instead of ⌘ ⌥ ⇧.
+- **The browser search lets go of the keyboard:** once you had typed into it, clicking the
+  Arrangement, the piano roll or the Session grid left the cursor in the field, so Space,
+  note keys and shortcuts kept typing into the search. Clicking anywhere outside a text
+  field now hands the keyboard back to the app, and Esc in the search leaves it too (the
+  query stays).
 
 ## [0.50.1] — 2026-10-07
 

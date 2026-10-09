@@ -273,7 +273,10 @@ extern "C" NOTA_API const char* nota_pluginhost_plugin_desc(int32_t index) {
     static std::string line; // owned by the engine, valid until next call
     line = (d.name + " | " + d.pluginFormatName + " | "
             + (d.isInstrument ? "inst" : "fx") + " | "
-            + (d.manufacturerName.isEmpty() ? juce::String("?") : d.manufacturerName))
+            + (d.manufacturerName.isEmpty() ? juce::String("?") : d.manufacturerName)
+            // The scan's category — VST3 sub-categories ("Fx|Reverb", '|' turned into '/' so the
+            // line still splits on '|') or the AU type; the command palette classifies by it.
+            + " | " + d.category.replaceCharacter('|', '/'))
                .toStdString();
     return line.c_str();
 }
@@ -624,6 +627,20 @@ public:
     }
     void allNotesOff() override {
         pending_.addEvent(juce::MidiMessage::allNotesOff(1), 0);
+    }
+    // Expression reaches a plugin as plain channel-1 MIDI: the instrument-wide wheel /
+    // channel pressure / CC74, and a note's pressure as polyphonic aftertouch. (Per-note
+    // bend and slide would need the plugin's own MPE channel layout — not sent.)
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        auto u7 = [](float v) { return juce::jlimit(0, 127, (int)std::lround(v * 127.0f)); };
+        if (pitch < 0) {
+            if (dim == 0) pending_.addEvent(juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), 0);
+            else if (dim == 1) pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), 0);
+            else if (dim == 2) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 74, u7(value)), 0);
+            else if (dim == 3) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 64, value >= 0.5f ? 127 : 0), 0);
+        } else if (dim == 1) {
+            pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), 0);
+        }
     }
 
     void render(float* out, int32_t frames) override {

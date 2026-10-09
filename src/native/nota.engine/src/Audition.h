@@ -58,6 +58,9 @@ public:
     // The Sampler's or Nota Grain's sample, rooted at rootNote: a file, or (empty path, the
     // Sampler only) a procedural keys tone rooted at C4.
     bool    setSamplerSample(const std::string& path, int32_t rootNote = 60);
+    // Nota Mosaic's program; waits (up to timeoutMs) until its samples are in, so the
+    // offline render that follows hears them. False when the instrument isn't a Mosaic.
+    bool    setMosaicProgram(const std::string& text, int32_t timeoutMs = 20000);
     bool    setSourceFile(const std::string& path, double maxSeconds);
     // Mixes another rig's rendered result into this rig's source (a demo track's part).
     bool    addSourceFrom(const AuditionRig& part, float gain);

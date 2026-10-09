@@ -230,6 +230,9 @@ public sealed class BrowserView : UserControl
     public PreviewPlayer Preview => _previewFooter;
     /// <summary>Reveal a sample / folder / project in the system file manager.</summary>
     public event Action<BrowserItem>? RevealRequested;
+
+    /// <summary>Map a sample folder into Nota Mosaic presets (the auto-multisample preview).</summary>
+    public event Action<BrowserItem>? CreateMultisampleRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
     public event Action<BrowserItem>? DeleteProjectRequested;
     /// <summary>Open the tag editor. Item null = manage all tags; non-null = create a tag
@@ -308,6 +311,13 @@ public sealed class BrowserView : UserControl
         _search.TextChanged += (_, _) => { ApplyFilter(_active); };
         _search.GotFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.Accent");
         _search.LostFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        // Esc leaves the search (the query stays) so the keyboard goes back to the app.
+        _search.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            TopLevel.GetTopLevel(_search)?.FocusManager?.Focus(null);
+            e.Handled = true;
+        };
         _matchCount = new TextBlock
         {
             FontSize = 9,
@@ -455,6 +465,8 @@ public sealed class BrowserView : UserControl
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
+    /// <summary>Opens the History tab (the project's versions).</summary>
+    public void ShowHistory() { SelectTab(HistoryTab); SetCollapsed(false, persist: true); }
 
     /// <summary>Fold the browser down to its icon rail, or unfold it.</summary>
     public void SetCollapsed(bool collapsed, bool persist)
@@ -615,7 +627,7 @@ public sealed class BrowserView : UserControl
             2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
             3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample Packs, then browse them here as a folder tree. You can also drag files in from Finder."),
             4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
-            _ => ("No projects yet", "Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here."),
+            _ => ("No projects yet", MenuKit.Keys("Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here.")),
         };
     }
 
@@ -1553,8 +1565,12 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Folder when _active == FilesTab:   // real sample folders (preset folders are synthetic)
             {
+                var multi = new MenuItem { Header = "Create multisample…" };
+                multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
+                ToolTip.SetTip(multi, "Map the folder's samples by their names into Nota Mosaic presets");
                 var reveal = new MenuItem { Header = "Reveal in Finder" };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
+                flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
                 return flyout;
             }

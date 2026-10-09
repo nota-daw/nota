@@ -25,7 +25,7 @@ using Nota.Application.Midi;
 
 namespace Nota.App;
 
-public sealed class PianoRollView : UserControl
+public sealed partial class PianoRollView : UserControl
 {
     public Action<IReadOnlyList<NotaNote>>? Commit { get; set; }
     /// <summary>Live, no-undo push during a note drag so playback follows instantly. The grid
@@ -34,7 +34,18 @@ public sealed class PianoRollView : UserControl
     /// <summary>Polls the engine for currently-pressed live-input pitches (keyboard + MIDI) into
     /// the buffer, returning the count — used to light up the played key. Set by the host.</summary>
     public Func<int[], int>? PollHeldNotes { get; set; }
+    /// <summary>A note's recorded MPE by <see cref="NotaNote.ExprId"/>, drawn over the note.
+    /// Curves never change under an id, so they are fetched once. Set by the host.</summary>
+    public Func<int, NotaExprPoint[]>? ExpressionOf { get; set; }
     public event Action? Changed;
+
+    private readonly Dictionary<int, NotaExprPoint[]> _exprCache = new();
+    private NotaExprPoint[] ExprOf(int id)
+    {
+        if (id <= 0 || ExpressionOf is null) return Array.Empty<NotaExprPoint>();
+        if (!_exprCache.TryGetValue(id, out var pts)) _exprCache[id] = pts = ExpressionOf(id);
+        return pts;
+    }
 
     // Currently-pressed keys (from PollHeldNotes), for the played-key highlight.
     private readonly HashSet<int> _held = new();
@@ -215,6 +226,11 @@ public sealed class PianoRollView : UserControl
     private static readonly IBrush KeyLabelHot = NotaPalette.TextPrimary;
     private static readonly IBrush KeyLabelOnAccent = NotaPalette.TextOnAccent;
     private static readonly IBrush Divider = NotaPalette.BorderDefault;
+    // Recorded MPE over a note: the bend as the pitch line it played, pressure as a shade
+    // rising from the note's floor.
+    private static readonly IPen BendPen = new Pen(NotaPalette.TextPrimary, 1.25, lineCap: PenLineCap.Round);
+    private static readonly IPen BendPenOnSel = new Pen(NotaPalette.TextOnAccent, 1.25, lineCap: PenLineCap.Round);
+    private static readonly IBrush PressureShade = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0x66);
     private static readonly Typeface Mono = NotaFonts.Mono;
 
     private static double RangeH => (MaxPitch - MinPitch + 1) * RowH;
@@ -227,6 +243,7 @@ public sealed class PianoRollView : UserControl
         _keys = new KeysColumn(this) { Height = RangeH };
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
+        _expr = new ExpressionLane(this) { ClipToBounds = true };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -249,12 +266,10 @@ public sealed class PianoRollView : UserControl
         rulerRow.Children.Add(_ruler);
 
         var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
-        var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0), Padding = new Thickness(0, 8, 0, 0) };
-        velLabelHost.Child = new TextBlock
-        {
-            Text = "VEL", FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.9, Foreground = LabelText,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-        };
+        _laneRow = velRow;
+        // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
+        var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
+        velLabelHost.Child = _laneTabs = new LaneTabs(this);
         velRow.Children.Add(velLabelHost);
         Avalonia.Controls.Grid.SetColumn(_velHost, 1);
         velRow.Children.Add(_velHost);
@@ -732,6 +747,7 @@ public sealed class PianoRollView : UserControl
         _keys.InvalidateVisual();
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
+        _expr.InvalidateVisual();
     }
 
     private static bool IsBlack(int pitch) { int n = ((pitch % 12) + 12) % 12; return n is 1 or 3 or 6 or 8 or 10; }
@@ -990,6 +1006,7 @@ public sealed class PianoRollView : UserControl
                     if (!_o.InScale(n.Pitch)) a *= 0.4;   // out-of-scale notes read faint
                     ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
                 }
+                if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
                 bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft) && sel) || (_drag == Mode.None && _hoverNote == i);
                 if (edgeHi)
@@ -1009,6 +1026,58 @@ public sealed class PianoRollView : UserControl
                 var r = RectOf(_marqueeA, _marqueeB);
                 ctx.FillRectangle(MarqueeFill, r);
                 ctx.DrawRectangle(null, MarqueePen, r);
+            }
+        }
+
+        // The note's recorded MPE: pressure shades up from its floor, the bend is drawn as the
+        // pitch it played (a semitone per row), both held flat before the first point and after
+        // the last, and both kept within the note's length.
+        private void DrawExpression(DrawingContext ctx, int index, NotaNote n, Rect r, bool sel, double ppb)
+        {
+            double x0 = r.X, x1 = r.Right, mid = r.Y + RowH * 0.5;
+            List<Point> Curve(NoteExpressionDim d, Func<float, double> y)
+            {
+                var line = new List<Point>();
+                // A curve being edited in the lane shows here live.
+                foreach (var (b, v) in _o._expr.EditingCurve(index, d) ?? _o.CurveOf(n, d))
+                {
+                    double x = Math.Clamp(x0 + b * ppb, x0, x1);
+                    if (line.Count == 0 && x > x0) line.Add(new Point(x0, y(v)));
+                    line.Add(new Point(x, y(v)));
+                }
+                if (line.Count > 0 && line[^1].X < x1) line.Add(new Point(x1, line[^1].Y));
+                return line;
+            }
+            var pressure = Curve(NoteExpressionDim.Pressure, v => r.Bottom - Math.Clamp(v, 0, 1) * (r.Height - 1));
+            if (pressure.Count > 1)
+            {
+                var g = new StreamGeometry();
+                using (var gc = g.Open())
+                {
+                    gc.BeginFigure(new Point(pressure[0].X, r.Bottom), true);
+                    foreach (var p in pressure) gc.LineTo(p);
+                    gc.LineTo(new Point(pressure[^1].X, r.Bottom));
+                    gc.EndFigure(true);
+                }
+                using (ctx.PushClip(r)) ctx.DrawGeometry(PressureShade, null, g);
+            }
+            var bend = Curve(NoteExpressionDim.Bend, v => mid - v * RowH);
+            if (bend.Count > 1)
+            {
+                var g = new StreamGeometry();
+                using (var gc = g.Open())
+                {
+                    gc.BeginFigure(bend[0], false);
+                    for (int i = 1; i < bend.Count; i++) gc.LineTo(bend[i]);
+                    gc.EndFigure(false);
+                }
+                if (!sel) ctx.DrawGeometry(null, BendPen, g);
+                else
+                {
+                    // Brass where it leaves the (brass) note, dark ink across the note itself.
+                    ctx.DrawGeometry(null, CurvePen, g);
+                    using (ctx.PushClip(r)) ctx.DrawGeometry(null, BendPenOnSel, g);
+                }
             }
         }
 

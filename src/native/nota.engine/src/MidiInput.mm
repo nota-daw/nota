@@ -19,25 +19,36 @@ struct MidiInput::Impl {
     MIDIClientRef        client = 0;
     MIDIPortRef          port = 0;
     MidiInput::MessageCallback cb;
+    Byte                 running[MidiInput::kMaxSources] = {};
 };
 
-static void readProc(const MIDIPacketList* pktlist, void* refCon, void* /*srcConn*/) {
+static void readProc(const MIDIPacketList* pktlist, void* refCon, void* srcConn) {
     auto* impl = static_cast<MidiInput::Impl*>(refCon);
     if (!impl->cb) return;
+    const int32_t source = static_cast<int32_t>(reinterpret_cast<intptr_t>(srcConn));
+    // Running status survives across packets of one source (an MPE controller streams
+    // bend/pressure with it); a fixed table — CoreMIDI calls this on one thread.
+    Byte& running = impl->running[std::clamp(source, 0, MidiInput::kMaxSources - 1)];
     const MIDIPacket* packet = &pktlist->packet[0];
     for (unsigned p = 0; p < pktlist->numPackets; ++p) {
         const Byte* d = packet->data;
-        UInt16 len = packet->length;
-        for (UInt16 i = 0; i + 2 < len + 1; ) {
-            const Byte status = d[i] & 0xF0;
-            // Note on/off and control-change all carry two data bytes; report them
-            // uniformly and let the engine route. Skip anything else (sysex, etc.).
-            if ((status == 0x90 || status == 0x80 || status == 0xB0) && i + 2 < len) {
-                impl->cb(status, d[i] & 0x0F, d[i + 1] & 0x7F, d[i + 2] & 0x7F);
-                i += 3;
-            } else {
-                i += 1; // skip unknown/other messages
+        const UInt16 len = packet->length;
+        UInt16 i = 0;
+        while (i < len) {
+            const Byte b = d[i];
+            if (b >= 0xF8) { ++i; continue; }                       // real-time: interleaved, ignore
+            if (b == 0xF0) {                                        // sysex: skip to its end
+                while (i < len && d[i] != 0xF7) ++i;
+                ++i; running = 0; continue;
             }
+            if (b >= 0xF0) { ++i; running = 0; continue; }          // system common: skip
+            Byte status = running;
+            if (b & 0x80) { status = b; running = b; ++i; }
+            const int n = MidiInput::dataBytes(status);
+            if (n == 0 || i + n > len) { ++i; continue; }           // no status yet / truncated
+            const int d1 = d[i] & 0x7F, d2 = n > 1 ? d[i + 1] & 0x7F : 0;
+            impl->cb(source, status & 0xF0, status & 0x0F, d1, d2);
+            i += n;
         }
         packet = MIDIPacketNext(packet);
     }
@@ -53,7 +64,9 @@ bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disable
     if (MIDIInputPortCreate(impl_->client, CFSTR("Nota In"), readProc, impl_, &impl_->port) != noErr)
         return false;
 
+    std::fill(std::begin(impl_->running), std::end(impl_->running), Byte{0});
     const ItemCount n = MIDIGetNumberOfSources();
+    intptr_t index = 0;
     for (ItemCount i = 0; i < n; ++i) {
         MIDIEndpointRef src = MIDIGetSource(i);
         if (!src) continue;
@@ -62,7 +75,9 @@ bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disable
         if (!uid.empty()
             && std::find(disabledUids.begin(), disabledUids.end(), uid) != disabledUids.end())
             continue;
-        MIDIPortConnectSource(impl_->port, src, nullptr);
+        // The source's index rides along as the connection refCon (readProc's srcConn);
+        // past kMaxSources they share the last slot.
+        MIDIPortConnectSource(impl_->port, src, reinterpret_cast<void*>(std::min<intptr_t>(index++, MidiInput::kMaxSources - 1)));
     }
     return true;
 }

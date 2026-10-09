@@ -6,6 +6,7 @@
 // getters/setters (M7-6b: audio clips, samples, sampler).
 
 #include "nota_engine_internal.h"
+#include "Mosaic.h"
 
 #include <algorithm>
 #include <cstring>
@@ -144,6 +145,30 @@ int32_t nota_engine_add_pentad_track(NotaEngine* e) {
 }
 int32_t nota_engine_add_consort_track(NotaEngine* e) {
     return e ? ENG(e)->addConsortTrack() : 0;
+}
+int32_t nota_engine_add_keys_track(NotaEngine* e) {
+    return e ? ENG(e)->addKeysTrack() : 0;
+}
+int32_t nota_engine_add_mosaic_track(NotaEngine* e) {
+    return e ? ENG(e)->addMosaicTrack() : 0;
+}
+int32_t nota_track_mosaic_set_program(NotaEngine* e, int32_t track_id, const char* text, int32_t checkpoint) {
+    return e && text && ENG(e)->mosaicSetProgram(track_id, std::string(text), checkpoint != 0) ? 1 : 0;
+}
+int32_t nota_track_mosaic_program(const NotaEngine* e, int32_t track_id, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->mosaicProgram(track_id);
+    if (out && cap > 0) std::memcpy(out, s.data(), std::min<size_t>(s.size(), static_cast<size_t>(cap)));
+    return static_cast<int32_t>(s.size());
+}
+int32_t nota_track_mosaic_status(const NotaEngine* e, int32_t track_id, NotaMosaicStatus* out) {
+    return e && out && CENG(e)->mosaicStatus(track_id, out) ? 1 : 0;
+}
+int64_t nota_track_mosaic_zone_sample_id(const NotaEngine* e, int32_t track_id, int32_t zone) {
+    return e ? CENG(e)->mosaicZoneSampleId(track_id, zone) : 0;
+}
+void nota_path_root_set(const char* name, const char* path) {
+    if (name && path) nota::mosaic::setRoot(std::string(name), std::string(path));
 }
 void nota_track_instrument_action(NotaEngine* e, int32_t track_id, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->instrumentAction(track_id, id, iarg, farg);
@@ -622,6 +647,12 @@ int32_t nota_clip_get_notes(const NotaEngine* e, int32_t track_id, int32_t clip_
 }
 int32_t nota_clip_note_count(const NotaEngine* e, int32_t track_id, int32_t clip_index) {
     return e ? CENG(e)->clipNoteCount(track_id, clip_index) : 0;
+}
+int32_t nota_note_expr_create(NotaEngine* e, const NotaExprPoint* points, int32_t count) {
+    return (e && points && count > 0) ? ENG(e)->createNoteExpr(points, count) : 0;
+}
+int32_t nota_note_expr_points(const NotaEngine* e, int32_t expr_id, NotaExprPoint* out, int32_t max_points) {
+    return e ? CENG(e)->noteExprPoints(expr_id, out, max_points) : 0;
 }
 
 NotaResult nota_track_set_armed(NotaEngine* e, int32_t track_id, int32_t armed) {

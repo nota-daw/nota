@@ -120,6 +120,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_note_off")]
     internal static partial NotaResult TrackNoteOff(IntPtr engine, int trackId, int pitch);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_note_expression")]
+    internal static partial NotaResult NoteExpression(IntPtr engine, int pitch, int dim, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_note_expression")]
+    internal static partial NotaResult TrackNoteExpression(IntPtr engine, int trackId, int pitch, int dim, float value);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_audition_track")]
     internal static partial void SetAuditionTrack(IntPtr engine, int trackId);
 

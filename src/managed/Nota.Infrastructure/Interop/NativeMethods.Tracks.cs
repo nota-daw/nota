@@ -362,6 +362,30 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_consort_track")]
     internal static partial int AddConsortTrack(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_keys_track")]
+    internal static partial int AddKeysTrack(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_mosaic_track")]
+    internal static partial int AddMosaicTrack(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_set_program", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MosaicSetProgram(IntPtr engine, int trackId, string text, int checkpoint);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_program")]
+    internal static unsafe partial int MosaicProgram(IntPtr engine, int trackId, byte* output, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_status")]
+    internal static partial int MosaicStatus(IntPtr engine, int trackId, out NotaMosaicStatus status);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_zone_sample_id")]
+    internal static partial long MosaicZoneSampleId(IntPtr engine, int trackId, int zone);
+
+    [LibraryImport(Lib, EntryPoint = "nota_path_root_set", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void PathRootSet(string name, string path);
+
+    [LibraryImport(Lib, EntryPoint = "nota_file_decode_mono", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial long FileDecodeMono(string path, double maxSeconds, float* output, long cap, out double sampleRate);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
 
@@ -516,6 +540,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_get_notes")]
     internal static partial int ClipGetNotes(IntPtr engine, int trackId, int clipIndex,
                                              [Out] NotaNote[] outNotes, int maxNotes);
+
+    [LibraryImport(Lib, EntryPoint = "nota_note_expr_create")]
+    internal static partial int NoteExprCreate(IntPtr engine, [In] NotaExprPoint[] points, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_note_expr_points")]
+    internal static partial int NoteExprPoints(IntPtr engine, int exprId, [Out] NotaExprPoint[]? outPoints, int maxPoints);
 
     [LibraryImport(Lib, EntryPoint = "nota_clip_note_count")]
     internal static partial int ClipNoteCount(IntPtr engine, int trackId, int clipIndex);

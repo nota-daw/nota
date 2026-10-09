@@ -20,6 +20,14 @@ namespace Nota.SmokeTest;
 
 internal static class RemoteTests
 {
+    // Energy at one frequency (Goertzel) of interleaved stereo at 48 kHz, left channel.
+    private static double Goertzel(float[] st, double hz)
+    {
+        double w = 2 * Math.PI * hz / 48000.0, c = 2 * Math.Cos(w), s1 = 0, s2 = 0;
+        for (int i = 0; i < st.Length; i += 2) { double s0 = st[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+        return s1 * s1 + s2 * s2 - c * s1 * s2;
+    }
+
     private static float Rms(float[] buf, int frames)
     {
         double sum = 0;
@@ -323,6 +331,17 @@ internal static class RemoteTests
         Thread.Sleep(60);
         float note = Loudest(e);
         yield return (note > 0.005f, $"a pad hit from the phone sounds on its track (rms={note:F4})");
+
+        // Expressive keys: the held note bends an octave (C4 → C5) through the phone's "x".
+        yield return (proj is { } pm && pm.GetProperty("tracks")[0].TryGetProperty("mpe", out var mf) && mf.GetBoolean(),
+            "the project marks a track whose instrument takes MPE");
+        Send(new { t = "x", p = 60, d = 0, v = 12.0 });
+        Send(new { t = "x", p = 61, d = 0, v = 12.0 });   // not held: ignored
+        Thread.Sleep(60);
+        var xb = new float[512 * 2 * 12];
+        { var b = new float[512 * 2]; for (int k = 0; k < 4; k++) e.RenderOffline(b, 512, 48000); for (int k = 0; k < 12; k++) { e.RenderOffline(b, 512, 48000); Array.Copy(b, 0, xb, k * 1024, 1024); } }
+        double c4 = Goertzel(xb, 261.63), c5 = Goertzel(xb, 523.25);
+        yield return (c5 > c4 * 4, $"the phone's expression bends its held note (C4/C5 energy {c4:E1}/{c5:E1})");
 
         // Dropping the link releases the held note (as when a gamepad is unplugged).
         ws.Abort();
