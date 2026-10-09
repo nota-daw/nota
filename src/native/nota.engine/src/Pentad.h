@@ -46,6 +46,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 #include "hiir/Downsampler2xFpu.h"
 
 #include <algorithm>
@@ -432,6 +433,7 @@ public:
                 if (fade) {
                     Voice& V = voices_[v];
                     V.pendNote = pitch; V.pendVel = vel; V.pendStack = s; V.pendStackN = S; V.pendGlide = glide;
+                    for (int d = 0; d < kExprDims; ++d) V.pendExpr[d] = kExprNeutral[d];
                     V.fade = fadeLen_;
                 } else {
                     startVoice(v, pitch, vel, s, S, glide);
@@ -471,6 +473,19 @@ public:
     }
     void allNotesOff() override { resetAll(); }
 
+    // MPE: bend → pitch; pressure → cutoff (by the patch's Aftertouch Cutoff, two octaves when
+    // that is off — it is poly aftertouch here) + level; slide → cutoff (±2 octaves). A keyboard's
+    // wheel rides Bend Range and its channel pressure adds to the Aftertouch control.
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        if (dim < 0 || dim >= kExprDims) return;
+        for (auto& V : voices_) {
+            if (V.gate && V.note == pitch && V.pendNote < 0) V.ex.set(dim, value, kNoExprAdd);
+            if (V.pendNote == pitch) V.pendExpr[dim] = value;   // a stolen voice still fading out
+        }
+    }
+
     // ---- render ---------------------------------------------------------------
     void render(float* out, int32_t frames) override {
         FtzGuard ftz;
@@ -509,6 +524,8 @@ private:
         // stolen-voice handoff (oldest-steal fade)
         int pendNote = -1, pendStack = 0, pendStackN = 1, fade = 0;
         float pendVel = 0.0f; bool pendGlide = false;
+        float pendExpr[kExprDims] = { 0.0f, 0.0f, 0.5f };
+        VoiceExpr ex;   // MPE bend / pressure / slide (the instrument-wide part rides the sm_ controls)
         // pitch (semitones, glided)
         float pitch = 60.0f, pitchTgt = 60.0f; bool hasPitch = false;
         // envelopes: stage 0 idle, 1 attack, 2 decay/sustain, 3 release
@@ -575,6 +592,7 @@ private:
     void startVoice(int v, int note, float vel, int s, int S, bool glide) {
         Voice& V = voices_[v];
         V.note = note; V.vel = vel; V.gate = true; V.stackIdx = s; V.stackN = S; V.order = ++orderCtr_;
+        V.ex.reset(kNoExprAdd);
         V.pitchTgt = static_cast<float>(note);
         if (!V.hasPitch || !glide) V.pitch = V.pitchTgt;
         V.hasPitch = true;
@@ -611,6 +629,7 @@ private:
             computeStatics(v);
         }
         heldN_ = 0; rr_ = 0; orderCtr_ = 0;
+        gexpr_.reset();
         lfoPh_ = 0.0; tFresh_ = true;
         noiseRng_.seed(pentad::hash32(seedCache_ ^ 0xA5A5A5A5U));
         wmRng_.seed(pentad::hash32(seedCache_ ^ 0x5A5A5A5AU));
@@ -665,9 +684,10 @@ private:
         const float sc = 1.0f - static_cast<float>(std::exp(-1.0 / (0.02 * sr)));
         const float bendRange = static_cast<float>(bendRangeOf(P[BendRange]));
         const float tgt[kSm] = {
-            (P[Tune] - 0.5f) * 2.0f + (P[Bend] - 0.5f) * 2.0f * bendRange,   // SmPitch (semis)
-            P[ModWheel], P[Aftertouch],
-            std::log2(20.0f) + std::clamp(P[Cutoff], 0.0f, 1.0f) * 9.96578428f, // SmCut (log2 Hz)
+            (P[Tune] - 0.5f) * 2.0f + ((P[Bend] - 0.5f) * 2.0f + gexpr_.wheel) * bendRange,   // SmPitch (semis)
+            P[ModWheel], std::min(1.0f, P[Aftertouch] + gexpr_.pressure),
+            std::log2(20.0f) + std::clamp(P[Cutoff], 0.0f, 1.0f) * 9.96578428f        // SmCut (log2 Hz)
+                + (gexpr_.slide - 0.5f) * 4.0f,
             4.6f * P[Reso],
             P[MixAOn] > 0.5f ? P[MixA] : 0.0f, P[MixBOn] > 0.5f ? P[MixB] : 0.0f,
             P[MixNoiseOn] > 0.5f ? P[MixNoise] : 0.0f,
@@ -687,6 +707,8 @@ private:
         tFresh_ = false;
         const bool wmA = P[WmFreqA] > 0.5f, wmB = P[WmFreqB] > 0.5f, wmPA = P[WmPwA] > 0.5f, wmPB = P[WmPwB] > 0.5f, wmF = P[WmFilter] > 0.5f;
         const float atCut = P[AtCutoff] * 4.0f, atLfo = P[AtLfo];
+        exprAtCut_ = atCut > 0.0f ? atCut : 2.0f;   // per-note pressure → cutoff, octaves
+        exprCoef_ = exprSmoothCoef(sr);
 
         for (int i = 0; i < n; ++i) {
             for (int k = 0; k < kSm; ++k) sm_[k] += (tgt[k] - sm_[k]) * sc;
@@ -826,6 +848,7 @@ private:
                         V.fenv = V.aenv = 0.0f;
                         const int pn = V.pendNote; V.pendNote = -1;
                         startVoice(static_cast<int>(&V - voices_), pn, V.pendVel, V.pendStack, V.pendStackN, V.pendGlide);
+                        for (int d = 0; d < kExprDims; ++d) V.ex.set(d, V.pendExpr[d], kNoExprAdd);
                     } else { V.active = false; V.gate = false; V.fst = V.ast = 0; V.fenv = V.aenv = 0.0f; V.level = 0.0f; return; }
                 }
             }
@@ -857,7 +880,8 @@ private:
             V.wA += (V.tA - V.wA) * c.walkC; V.wB += (V.tB - V.wB) * c.walkC; V.wC += (V.tC - V.wC) * c.walkC;
 
             // -- base-rate control targets --
-            const float key = V.pitch;
+            V.ex.tick(kNoExprAdd, exprCoef_);
+            const float key = V.pitch + V.ex.bend();
             const float det = V.stackN > 1 ? gDet_[i] * (2.0f * V.stackIdx / static_cast<float>(V.stackN - 1) - 1.0f) : 0.0f;
             const float fe = V.fenv;
             const float pmE = gPmE_[i] * gPmE_[i];
@@ -870,11 +894,12 @@ private:
             float cut = gCut_[i] + gFenv_[i] * fe * velF + gKey_[i] * (key - 60.0f) * (1.0f / 12.0f)
                       + c.drift * (0.3f * V.oCut + 0.1f * V.wC);
             if (c.pmFilt) cut += gPmE_[i] * 6.0f * fe;
+            cut += V.ex.slide() * 2.0f + V.ex.pressure() * exprAtCut_;
             const float fc = std::clamp(exp2f(cut), 8.0f, c.cutMax);
             const float g = tanPrewarp(kPiF * fc * static_cast<float>(c.invFsOs));
             const float pwA = gPwA_[i] + (c.pmPwA ? gPmE_[i] * 0.5f * fe : 0.0f) + c.drift * 0.02f * V.oPw;
             const float pwB = gPwB_[i];
-            const float amp = (V.aenv * velA + 3e-5f) * fadeG * gVol_[i];
+            const float amp = (V.aenv * velA + 3e-5f) * fadeG * gVol_[i] * (1.0f + 0.5f * V.ex.pressure());
             const float pmB = gPmB_[i] * gPmB_[i];
             const float fmOct = c.pmFreqA ? pmB * 4.0f : 0.0f;
             const float pwmB = c.pmPwA ? gPmB_[i] * 0.5f : 0.0f;
@@ -1009,6 +1034,9 @@ private:
     pentad::Rng noiseRng_, wmRng_;
     float pk0_ = 0, pk1_ = 0, pk2_ = 0;
     float sm_[kSm] = {}; bool smoothInit_ = false;
+    static constexpr float kNoExprAdd[kExprDims] = { 0.0f, 0.0f, 0.0f };
+    GlobalExpr gexpr_;              // pitch wheel / channel pressure / CC74 (pitch −1)
+    float exprCoef_ = exprSmoothCoef(44100.0), exprAtCut_ = 2.0f;
     float gPitchA_[kChunk], gPitchB_[kChunk], gPwA_[kChunk], gPwB_[kChunk], gCut_[kChunk], gK_[kChunk];
     float gMixA_[kChunk], gMixB_[kChunk], gMixN_[kChunk], gFenv_[kChunk], gPmE_[kChunk], gPmB_[kChunk];
     float gVol_[kChunk], gKey_[kChunk], gDet_[kChunk];

@@ -18,6 +18,10 @@ namespace nota {
 
 struct MidiConfig {
     std::vector<std::string> disabledInputUids; // empty = every input on
+    // MPE (MpeInput.h): channels 2..16 carry one note each with its own bend / pressure /
+    // slide. On by default — a keyboard on channel 1 plays exactly as without it.
+    bool    mpe = true;
+    int32_t mpeBendRange = 48;                  // member channels' bend range, semitones
 };
 
 struct MidiDeviceInfo {

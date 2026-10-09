@@ -55,6 +55,19 @@ public:
         if (!st) return;
         for (auto& c : st->chains) if (c.instrument) c.instrument->allNotesOff();
     }
+    // Expression goes to every chain: one whose zone kept the note out isn't holding the
+    // pitch, so it ignores it.
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains) if (c.instrument) c.instrument->noteExpression(pitch, dim, value);
+    }
+    bool supportsMpe() const override {
+        RackState* st = live();
+        if (!st) return false;
+        for (auto& c : st->chains) if (c.instrument && c.instrument->supportsMpe()) return true;
+        return false;
+    }
 
     // ---- render: sum every audible chain into `out` -------------------------
     void render(float* out, int32_t frames) override {

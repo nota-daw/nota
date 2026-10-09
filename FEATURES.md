@@ -198,6 +198,21 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
+- **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
+  bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
+  default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
+  is an ordinary keyboard whose pitch wheel, channel aftertouch and CC74 move the whole
+  instrument. **Nota Synth, Volt, Aurora, Operator, Pentad and Physical** play it: bend moves
+  the note's pitch; pressure raises its level and opens its filter (Operator: deepens the FM,
+  Pentad: poly aftertouch through *Aftertouch Cutoff*, Physical: bows the struck body so a held
+  note sustains); slide sweeps the filter (Aurora: the wavetable position, Operator: the FM
+  index, Physical: how long the body rings). Instrument Racks pass it to their chains; hosted
+  plug-ins get the wheel, channel pressure and polyphonic aftertouch. Expression is played
+  live — it is not recorded into clips.
+- **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
+  Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
+  it (a key's width is its pitch step), the height on the key is its slide, and a screen that
+  reports touch force sends pressure.
 - **Gamepad input (macOS)** — a connected controller (Xbox / DualShock / DualSense /
   Switch Pro / 8BitDo) acts as a small keyboard: the face buttons and bumpers/triggers play
   notes, the D-pad shifts octave and velocity. Notes travel the same path as typed ones
@@ -857,7 +872,8 @@ and user presets, automation, persistence and cloning.
 
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
   (Windows).
-- **MIDI**: which MIDI inputs are enabled (the house checkboxes).
+- **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
+  default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.

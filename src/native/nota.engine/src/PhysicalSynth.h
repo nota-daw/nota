@@ -28,6 +28,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 
 #include <algorithm>
 #include <atomic>
@@ -75,7 +76,18 @@ public:
     int32_t kind() const override { return 2; }
     const char* displayName() const override { return "Nota Physical"; }
 
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; exprCoef_ = exprSmoothCoef(sampleRate_); }
+
+    // MPE: bend retunes the ringing body, pressure bows it (a continuous noise exciter, so a
+    // held, pressed note sustains like a bowed bar), slide sets how long it rings (up = ring
+    // ×2, down = damped ×½, like a hand on the bar). A keyboard's wheel bends ±2 semitones.
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        float add[kExprDims]; gexpr_.offsets(kWheelRange, add);
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && !v.released && !v.choke) v.ex.set(dim, value, add);
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -183,6 +195,8 @@ public:
         v->pitch = pitch; v->vel = std::clamp(velocity, 0.0f, 1.0f);
         v->peak = v->vel;
         v->relEnv = 1.0f;
+        { float add[kExprDims]; gexpr_.offsets(kWheelRange, add); v->ex.reset(add); }
+        v->exBend = 0.0f; v->exSlide = 0.0f; v->bowLp = 0.0f; v->exAge = 0;
 
         // Mallet strike: contact time from Stiffness (soft = long/dark, hard = short/bright).
         const double contact = expMap(1.0 - get(MalletStiff), 0.0004, 0.010) * sampleRate_;   // samples
@@ -203,7 +217,7 @@ public:
     void noteOff(int32_t pitch) override {
         for (auto& v : voices_) if (v.active && v.pitch == pitch && !v.released) v.released = true;
     }
-    void allNotesOff() override { for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         const float malletVol = get(MalletVol);
@@ -229,11 +243,25 @@ public:
         const float pan = (get(Pan) - 0.5f) * 2.0f;
         const float gl = std::cos((pan + 1.0f) * 0.25f * (float)kPi);
         const float gr = std::sin((pan + 1.0f) * 0.25f * (float)kPi);
+        float exAdd[kExprDims]; gexpr_.offsets(kWheelRange, exAdd);
 
         for (int32_t i = 0; i < frames; ++i) {
             float mono = 0.0f;
             for (auto& v : voices_) {
                 if (!v.active) continue;
+
+                // --- expression: retune / re-damp the banks at control rate ----------
+                v.ex.tick(exAdd, exprCoef_);
+                if (--v.exAge <= 0) {
+                    v.exAge = 32;
+                    const float b = v.ex.bend(), sl = v.ex.slide();
+                    if (std::fabs(b - v.exBend) > 0.002f || std::fabs(sl - v.exSlide) > 0.004f) {
+                        v.exBend = b; v.exSlide = sl;
+                        const double mul = std::exp2(b / 12.0), ring = std::exp2(-(double)sl);   // R^ring: ring < 1 = longer
+                        retune(v.r1, mul, ring);
+                        if (r2on) retune(v.r2, mul, ring);
+                    }
+                }
 
                 // --- exciter: mallet strike + filtered noise burst -----------
                 float exc = 0.0f;
@@ -253,6 +281,14 @@ public:
                     exc += nf * v.nEnv * noiseVol;
                 }
 
+                // Bowing: pressure feeds coloured noise in, normalised by the fundamental's
+                // ring time so a long-ringing body doesn't build up into a roar.
+                const float pr = v.ex.pressure();
+                if (pr > 1e-4f) {
+                    v.bowLp += 0.15f * (noise() - v.bowLp);
+                    exc += v.bowLp * pr * pr * v.r1.bowNorm * kBowGain;
+                }
+
                 // --- resonator banks -----------------------------------------
                 float o1 = bank(v.r1, exc);
                 float wet;
@@ -265,10 +301,11 @@ public:
                 if (v.choke) { wet *= v.relEnv; v.relEnv *= chokeCoef; if (v.relEnv < 1.0e-4f) { v.active = false; continue; } }
                 else if (v.released) { wet *= v.relEnv; v.relEnv *= relCoef; }
 
-                const float s = wet * v.vel;
+                const float s = wet * v.vel * (1.0f + 0.5f * pr);
                 mono += s;
                 v.peak = std::max(v.peak * 0.99997f, std::fabs(s));
-                if (v.peak < 8.0e-5f && !v.mActive && v.nStage == Stage::Off) v.active = false;   // rang out
+                if (v.peak < 8.0e-5f && !v.mActive && v.nStage == Stage::Off
+                    && (v.released || pr <= 1e-4f)) v.active = false;   // rang out (a held, pressed note can still be bowed)
             }
             const float o = mono * volume * 0.4f;
             out[i * 2]     += o * gl;
@@ -298,6 +335,8 @@ private:
     struct Bank {
         double a1[kModes] = {}, a2[kModes] = {}, b0[kModes] = {}, bs[kModes] = {};   // 2R cos w, R², input gains
         double y1[kModes] = {}, y2[kModes] = {};
+        double R[kModes] = {}, w[kModes] = {}, amp[kModes] = {};   // as built, for retune()
+        float  bowNorm = 0.0f;                                     // bow noise gain (see render)
     };
 
     struct Voice {
@@ -312,8 +351,25 @@ private:
         float    nEnv = 0.0f;
         double   nIc1 = 0.0, nIc2 = 0.0;
         Bank     r1, r2;
+        VoiceExpr ex;                 // MPE bend / pressure / slide
+        float    exBend = 0.0f, exSlide = 0.0f, bowLp = 0.0f;   // what the banks were tuned for
+        int32_t  exAge = 0;
     };
     Voice voices_[kVoices];
+
+    // Re-pitch (mul) and re-damp (R^ring) a bank's modes from their note-on values, keeping
+    // the struck normalisation. Modes pushed past Nyquist fall silent.
+    void retune(Bank& b, double mul, double ring) const {
+        const double wMax = kPi * 0.98;
+        for (int m = 0; m < kModes; ++m) {
+            if (b.amp[m] == 0.0) continue;
+            const double w = b.w[m] * mul;
+            const double R = std::pow(b.R[m], ring);
+            b.a1[m] = w < wMax ? 2.0 * R * std::cos(w) : 0.0;
+            b.a2[m] = w < wMax ? R * R : 0.0;
+            b.bs[m] = b.amp[m] * (1.0 - R) * 2.0 * std::sin(std::min(w, wMax));
+        }
+    }
 
     void  set(Param p, float v) { pn_[p].store(v, std::memory_order_relaxed); }
     float get(Param p) const { return pn_[p].load(std::memory_order_relaxed); }
@@ -413,10 +469,11 @@ private:
     void buildBank(Bank& b, double f0, int type, float decay, float material, float bright,
                    float inharm, float ratioP, float hit) const {
         const double nyq = sampleRate_ * 0.49;
+        b.bowNorm = 0.0f;
         for (int m = 0; m < kModes; ++m) {
             const Mode md = modeOf(type, m, decay, material, bright, inharm, ratioP, hit);
             const double f = f0 * md.ratio;
-            if (f >= nyq || f <= 0.0) { b.a1[m] = b.a2[m] = b.b0[m] = b.bs[m] = 0.0; b.y1[m] = b.y2[m] = 0.0; continue; }
+            if (f >= nyq || f <= 0.0) { b.a1[m] = b.a2[m] = b.b0[m] = b.bs[m] = b.amp[m] = 0.0; b.y1[m] = b.y2[m] = 0.0; continue; }
             const double R = std::exp(-1.0 / (md.tau * sampleRate_));
             const double w = kTwoPi * f / sampleRate_;
             b.a1[m] = 2.0 * R * std::cos(w);
@@ -427,6 +484,9 @@ private:
             // Peak gain on resonance ≈ b / ((1 − R)·2 sin w) → normalise to amp.
             b.bs[m] = md.amp * (1.0 - R) * 2.0 * std::sin(w);
             b.y1[m] = b.y2[m] = 0.0;
+            b.R[m] = R; b.w[m] = w; b.amp[m] = md.amp;
+            // Noise through a mode rings up by ~1/√(4(1−R)); the fundamental sets the scale.
+            if (m == 0) b.bowNorm = static_cast<float>(2.0 * std::sqrt(1.0 - R));
         }
     }
 
@@ -438,6 +498,10 @@ private:
     }
 
     double sampleRate_ = 44100.0;
+    static constexpr float kWheelRange = 2.0f;   // a keyboard's pitch wheel, semitones
+    static constexpr float kBowGain = 1.0f;
+    float  exprCoef_ = exprSmoothCoef(44100.0);
+    GlobalExpr gexpr_;                            // pitch wheel / channel pressure (pitch −1)
     uint32_t rng_ = 0x2545F491u;
     std::atomic<float> pn_[kNumParams];
     std::atomic<int32_t> activeVoices_{0};

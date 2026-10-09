@@ -34,6 +34,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 
 #include <algorithm>
 #include <atomic>
@@ -119,7 +120,17 @@ public:
     int32_t kind() const override { return 6; }
     const char* displayName() const override { return "Nota Volt"; }
 
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; exprCoef_ = exprSmoothCoef(sampleRate_); }
+
+    // MPE: bend → pitch (a keyboard's wheel uses the patch's Bend Range), pressure → level +
+    // both cutoffs, slide → both cutoffs (±2 octaves).
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        float add[kExprDims]; gexpr_.offsets(static_cast<float>(wheelRange()), add);
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && v.aStage != Stage::Release && v.aStage != Stage::Off) v.ex.set(dim, value, add);
+    }
     void setTransport(double /*beatStart*/, double samplesPerBeat, bool /*playing*/) override {
         if (samplesPerBeat > 0.0) samplesPerBeat_ = samplesPerBeat;
     }
@@ -228,6 +239,7 @@ public:
             const bool legato = v->active && v->aStage != Stage::Off;
             v->pitch = pitch;
             v->freqTarget = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
+            resetExpr(*v);
             if (!legato) { v->freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freqTarget; startVoice(*v, pitch, velocity); }
             else if (!glideOn) v->freqCur = v->freqTarget;   // legato, no glide: jump pitch, keep envelopes
             v->active = true;
@@ -239,6 +251,7 @@ public:
         Voice* v = findFreeVoice();
         v->pitch = pitch;
         v->freqTarget = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
+        resetExpr(*v);
         v->freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freqTarget;
         startVoice(*v, pitch, velocity);
         v->active = true;
@@ -250,7 +263,7 @@ public:
                 v.aStage = Stage::Release; v.fStage = Stage::Release;
             }
     }
-    void allNotesOff() override { for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         // ---- macros first: six of the twelve destinations move the block snapshot
@@ -328,7 +341,8 @@ public:
         const float opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi), opR = std::sin((outPan + 1.0f) * 0.25f * (float)kPi);
 
         // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
-        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * std::round(1.0 + get(BendRange) * 11.0) / 12.0);
+        const double bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * wheelRange() / 12.0);
+        float exAdd[kExprDims]; gexpr_.offsets(static_cast<float>(wheelRange()), exAdd);
 
         // ---- modulation matrix: compact list of active (src,dst,amount) ----
         int amS[kSources * kDests], amD[kSources * kDests], amCount = 0;
@@ -378,7 +392,9 @@ public:
                 }
 
                 if (glideCoef < 1.0) v.freqCur += (v.freqTarget - v.freqCur) * glideCoef; else v.freqCur = v.freqTarget;
-                double base = v.freqCur * vibMult * bendMul * invSr;
+                v.ex.tick(exAdd, exprCoef_);
+                if (v.ex.bend() != v.exBendAt) { v.exBendAt = v.ex.bend(); v.exBendMul = std::exp2(v.exBendAt / 12.0); }
+                double base = v.freqCur * vibMult * bendMul * v.exBendMul * invSr;
                 double m1 = mult1, m2 = mult2;
                 if (pitchMod) {
                     const double pm = std::exp2(dst[0] * 2.0);        // ±24 semitones at full
@@ -402,7 +418,8 @@ public:
                 if (v.modCount-- <= 0) {
                     v.modCount = 15;
                     const double velF = 1.0f - velFilt + velFilt * v.vel;
-                    const double cutMod = dst[2] * 4.0;               // matrix Cutoff (±4 oct)
+                    const double cutMod = dst[2] * 4.0                // matrix Cutoff (±4 oct)
+                                        + v.ex.slide() * 2.0 + v.ex.pressure() * 2.0;   // MPE
                     double o1 = f1Env * 4.0 * v.fEnv * velF + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
                     double o2 = f2Env * 4.0 * v.fEnv * velF + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
                     const double k1 = resoToK(reso1 + dst[3]);
@@ -417,7 +434,7 @@ public:
                 double o2 = svf(v.s2, v.f2a1, v.f2a2, v.f2a3, v.k2, in2, t2);
                 if (slope2) o2 = svf(v.s2b, v.f2a1, v.f2a2, v.f2a3, v.k2, o2, t2);
 
-                float ampG = v.aEnv * (1.0f - velAmp + velAmp * v.vel);
+                float ampG = v.aEnv * (1.0f - velAmp + velAmp * v.vel) * (1.0f + 0.5f * v.ex.pressure());
                 if (lvlMod) ampG *= (float)std::clamp(1.0 + dst[4], 0.0, 4.0);
                 const float a1 = (float)o1 * l1 * ampG;
                 const float a2 = (float)o2 * l2 * ampG;
@@ -455,7 +472,16 @@ private:
         double   f1a1 = 0, f1a2 = 0, f1a3 = 0, f2a1 = 0, f2a2 = 0, f2a3 = 0;
         double   k1 = 1.0, k2 = 1.0;
         int32_t  modCount = 0;
+        VoiceExpr ex;                                     // MPE bend / pressure / slide
+        float    exBendAt = 0.0f;                         // bend the multiplier was built for
+        double   exBendMul = 1.0;
     };
+
+    double wheelRange() const { return std::round(1.0 + get(BendRange) * 11.0); }   // semitones
+    void resetExpr(Voice& v) {
+        float add[kExprDims]; gexpr_.offsets(static_cast<float>(wheelRange()), add);
+        v.ex.reset(add); v.exBendAt = 0.0f; v.exBendMul = 1.0;
+    }
 
     void  set(Param p, float v) { pn_[p].store(v, std::memory_order_relaxed); }
     float get(Param p) const { return pn_[p].load(std::memory_order_relaxed); }
@@ -587,6 +613,8 @@ private:
     static constexpr int kVoices = 16;
     Voice  voices_[kVoices];
     double sampleRate_ = 44100.0;
+    float  exprCoef_ = exprSmoothCoef(44100.0);
+    GlobalExpr gexpr_;              // pitch wheel / channel pressure (pitch −1)
     double samplesPerBeat_ = 0.0;   // from setTransport, for LFO sync
     double lfoPhase1_ = 0.0, lfoPhase2_ = 0.0, vibPhase_ = 0.0;
     float  lfoSh1_ = 0.0f, lfoSh2_ = 0.0f;   // sample & hold values

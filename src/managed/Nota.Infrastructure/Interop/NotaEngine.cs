@@ -115,6 +115,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public void NoteOff(int pitch) { ThrowIfDisposed(); Check(NativeMethods.NoteOff(_handle, pitch)); }
     public void TrackNoteOn(int trackId, int pitch, float velocity) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOn(_handle, trackId, pitch, velocity)); }
     public void TrackNoteOff(int trackId, int pitch) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOff(_handle, trackId, pitch)); }
+    public void NoteExpression(int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.NoteExpression(_handle, pitch, (int)dim, value)); }
+    public void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteExpression(_handle, trackId, pitch, (int)dim, value)); }
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }

@@ -19,6 +19,8 @@ export interface Prefs {
   countIn: boolean;
   fullVel: boolean;
   keysMode: 'Keyboard' | 'Scale' | 'Chords';
+  /** Keys: a finger keeps its note and slides it (bend sideways, slide up/down, pressure). */
+  expressive: boolean;
   octave: number;
   /** Phone-side key override: tonic 0..11 + minor, or null to use the project's. */
   key: { root: number; minor: boolean } | null;
@@ -28,7 +30,7 @@ export interface Prefs {
 }
 
 const defaultPrefs: Prefs = {
-  theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', octave: 3, key: null,
+  theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', expressive: false, octave: 3, key: null,
   xyHold: true, bank: 0, groupsOpen: [],
 };
 
@@ -349,10 +351,31 @@ export class App {
     if (this.prefs.haptics && navigator.vibrate) { try { navigator.vibrate(8); } catch { /* */ } }
   }
 
+  /** Per-note expression for a held note: d 0 = bend (semitones), 1 = pressure, 2 = slide.
+   * Coalesced to one message per note and dimension per frame — a finger moves far faster
+   * than Wi-Fi should carry. */
+  noteExpr(p: number, d: 0 | 1 | 2, v: number) {
+    if (!this.held.has(p)) return;
+    this.exprPending.set(p * 4 + d, Math.round(v * 1000) / 1000);
+    if (!this.exprFrame) this.exprFrame = requestAnimationFrame(() => this.flushExpr());
+  }
+
+  private exprPending = new Map<number, number>();
+  private exprFrame = 0;
+  private flushExpr() {
+    this.exprFrame = 0;
+    for (const [k, v] of this.exprPending) {
+      const p = k >> 2;
+      if (this.held.has(p)) this.send({ t: 'x', p, d: k & 3, v });
+    }
+    this.exprPending.clear();
+  }
+
   noteOff(p: number) {
     if (p < 0 || p > 127) return;
     const n = this.held.get(p) ?? 0;
     if (n > 1) { this.held.set(p, n - 1); return; }   // another finger still holds it
+    for (let d = 0; d < 3; d++) this.exprPending.delete(p * 4 + d);
     if (this.send({ t: 'off', p })) this.held.delete(p);
   }
 

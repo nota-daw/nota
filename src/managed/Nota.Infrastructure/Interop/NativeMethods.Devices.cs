@@ -203,6 +203,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_kind")]
     internal static partial int TrackInstrumentKind(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_supports_mpe")]
+    internal static partial int TrackInstrumentSupportsMpe(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_device_builtin_kind")]
     internal static partial int TrackDeviceBuiltinKind(IntPtr engine, int trackId, int deviceIndex);
 

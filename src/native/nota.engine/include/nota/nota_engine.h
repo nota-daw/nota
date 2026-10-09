@@ -684,6 +684,13 @@ NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
  * own track). Recorded only when that track holds the take. Safe from any thread. */
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
+/* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
+ * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral. pitch -1 addresses the whole
+ * instrument; its bend is the wheel normalized -1..+1 (the synth applies its own range).
+ * A note-on resets the note's expression; send it after the note-on. The engine_ form
+ * reaches the tracks live notes reach; the track_ form one track (Nota Remote). */
+NOTA_API NotaResult nota_engine_note_expression(NotaEngine* engine, int32_t pitch, int32_t dim, float value);
+NOTA_API NotaResult nota_track_note_expression(NotaEngine* engine, int32_t track_id, int32_t pitch, int32_t dim, float value);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);
@@ -730,6 +737,8 @@ NOTA_API void    nota_engine_reset(NotaEngine* engine);
 /* Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
  * -2=no instrument (audio/return track). */
 NOTA_API int32_t nota_track_instrument_kind(const NotaEngine* engine, int32_t track_id);
+/* 1 if the track's instrument responds to per-note expression (MPE), else 0. */
+NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, int32_t track_id);
 /* Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a
  * hosted plugin. */
 NOTA_API int32_t nota_track_device_builtin_kind(const NotaEngine* engine, int32_t track_id,
@@ -1590,6 +1599,15 @@ NOTA_API const char* nota_midi_input_device_name(int32_t index);
 NOTA_API NotaResult  nota_midi_set_input_enabled(NotaEngine* engine, const char* uid, int32_t enabled);
 /* 1 if the input with `uid` is currently enabled in the staged config. */
 NOTA_API int32_t     nota_midi_input_enabled(const NotaEngine* engine, const char* uid);
+/* MPE input: channels per MPE zones (each note its own channel with its own bend /
+ * pressure / CC74), and the member channels' bend range in semitones (1..96, 48 = the MPE
+ * default; a controller's RPN 0 overrides it). Staged; applied by nota_midi_apply. */
+NOTA_API NotaResult  nota_midi_set_mpe(NotaEngine* engine, int32_t enabled, int32_t bend_range);
+NOTA_API int32_t     nota_midi_mpe_enabled(const NotaEngine* engine);
+NOTA_API int32_t     nota_midi_mpe_bend_range(const NotaEngine* engine);
+/* Deterministic self-test of the MPE decoder (zones, member/master channels, RPN bend range,
+ * MCM, initial state after note-on): 0 = pass, else the number of the first failed check. */
+NOTA_API int32_t     nota_mpe_selftest(void);
 /* Persist the staged selection and reconnect the MIDI port. NOTA_OK on success. */
 NOTA_API NotaResult  nota_midi_apply(NotaEngine* engine);
 

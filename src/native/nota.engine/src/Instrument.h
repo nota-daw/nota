@@ -28,6 +28,17 @@ public:
     virtual void noteOff(int32_t pitch) = 0;
     virtual void allNotesOff() = 0;
 
+    // Per-note expression (MPE, see NoteExpression.h): dim is an ExprDim — ExprBend in
+    // semitones, ExprPressure 0..1, ExprSlide 0..1 (0.5 = neutral). pitch −1 addresses the
+    // whole instrument (a master-channel pitch wheel, channel pressure, CC74); there ExprBend
+    // is the wheel normalized −1..+1 and the instrument scales it by its own bend range.
+    // The engine applies these at segment boundaries, after the note-ons at the same offset,
+    // so a note's initial expression lands right after the note-on that starts it.
+    // A note-on resets that note's expression. Default: ignored (see supportsMpe).
+    virtual void noteExpression(int32_t /*pitch*/, int32_t /*dim*/, float /*value*/) {}
+    // True when noteExpression does something — the UI shows the MPE badge for it.
+    virtual bool supportsMpe() const { return false; }
+
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
 

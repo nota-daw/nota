@@ -3,6 +3,8 @@
 
 #include "MidiConfig.h"
 
+#include <algorithm>
+
 #import <CoreMIDI/CoreMIDI.h>
 #import <Foundation/Foundation.h>
 
@@ -85,6 +87,9 @@ MidiConfig loadMidiConfig() {
             if ([item isKindOfClass:[NSString class]])
                 cfg.disabledInputUids.push_back(((NSString*)item).UTF8String);
     }
+    if (NSNumber* m = d[@"mpe"]; [m isKindOfClass:[NSNumber class]]) cfg.mpe = m.boolValue;
+    if (NSNumber* r = d[@"mpeBendRange"]; [r isKindOfClass:[NSNumber class]])
+        cfg.mpeBendRange = std::clamp(r.intValue, 1, 96);
     return cfg;
 }
 
@@ -94,7 +99,9 @@ void saveMidiConfig(const MidiConfig& cfg) {
     NSMutableArray* arr = [NSMutableArray arrayWithCapacity:cfg.disabledInputUids.size()];
     for (const auto& uid : cfg.disabledInputUids)
         [arr addObject:[NSString stringWithUTF8String:uid.c_str()]];
-    NSDictionary* d = @{ @"disabledInputUids": arr };
+    NSDictionary* d = @{ @"disabledInputUids": arr,
+                         @"mpe": @(cfg.mpe),
+                         @"mpeBendRange": @(cfg.mpeBendRange) };
     NSData* data = [NSJSONSerialization dataWithJSONObject:d
                                                   options:NSJSONWritingPrettyPrinted
                                                     error:nil];

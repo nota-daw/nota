@@ -482,7 +482,41 @@ public sealed partial class PreferencesWindow : NotaWindow
             items.Add(Table(rows));
         }
         items.Add(Caption("Switch a controller off to stop Nota listening to it. New devices are on by default."));
-        return Sections(Section("MIDI INPUTS", 8, items.ToArray()));
+        return Sections(Section("MIDI INPUTS", 8, items.ToArray()), MpeSection(engine));
+    }
+
+    private static readonly int[] MpeBendRanges = [12, 24, 48, 96];
+
+    // MPE: each note on its own channel (2–16) with its own bend / pressure / slide. Channel 1
+    // stays an ordinary keyboard, so turning this on costs a plain controller nothing.
+    private Control MpeSection(IAudioEngine engine)
+    {
+        var (on, range) = engine.GetMpe();
+        var rangeCombo = Combo(150);
+        foreach (var r in MpeBendRanges) rangeCombo.Items.Add($"±{r} semitones");
+        int idx = Array.IndexOf(MpeBendRanges, range);
+        rangeCombo.SelectedIndex = idx >= 0 ? idx : Array.IndexOf(MpeBendRanges, 48);
+        rangeCombo.IsEnabled = on;
+        rangeCombo.SelectionChanged += (_, _) =>
+        {
+            int k = rangeCombo.SelectedIndex;
+            if (k < 0) return;
+            engine.SetMpe(engine.GetMpe().Enabled, MpeBendRanges[k]);
+            _main!.ApplyMidiSettings();
+        };
+        var sw = SwitchRow("Per-note expression from MPE controllers", on, v =>
+        {
+            rangeCombo.IsEnabled = v;
+            engine.SetMpe(v, engine.GetMpe().BendRange);
+            _main!.ApplyMidiSettings();
+        });
+        return Section("MPE", 8,
+            Row("Expression", sw),
+            Row("Bend range", rangeCombo),
+            Row("", Caption("Channels 2–16 each carry one note with its own pitch bend, pressure and slide (CC74). " +
+                            "A controller that announces its range overrides this one. Channel 1 plays as an ordinary keyboard, " +
+                            "its pitch wheel and aftertouch moving the whole instrument. Nota Synth, Volt, Aurora, Operator, " +
+                            "Pentad and Physical play per-note expression.")));
     }
 
     // ---- Gamepads -----------------------------------------------------------

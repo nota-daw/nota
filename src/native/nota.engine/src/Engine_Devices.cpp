@@ -69,6 +69,11 @@ int32_t Engine::trackInstrumentKind(int32_t trackId) const {
     return t->instrument ? t->instrument->kind() : -2;
 }
 
+bool Engine::trackInstrumentSupportsMpe(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && t->instrument && t->instrument->supportsMpe();
+}
+
 int32_t Engine::trackDeviceBuiltinKind(int32_t trackId, int32_t deviceIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return -1;

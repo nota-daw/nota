@@ -18,6 +18,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "NoteExpression.h"
 
 #include <algorithm>
 #include <atomic>
@@ -68,7 +69,16 @@ public:
     int32_t kind() const override { return 0; } // built-in Synth (M7-6) — project compat
     const char* displayName() const override { return "Nota Synth"; }
 
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; exprCoef_ = exprSmoothCoef(sampleRate_); }
+
+    // MPE: bend → pitch, pressure → level + brightness, slide → cutoff (±2 octaves).
+    bool supportsMpe() const override { return true; }
+    void noteExpression(int32_t pitch, int32_t dim, float value) override {
+        if (pitch < 0) { gexpr_.set(dim, value); return; }
+        float add[kExprDims]; gexpr_.offsets(kWheelRange, add);
+        for (auto& v : voices_)
+            if (v.active && v.pitch == pitch && v.stage != Stage::Release) v.ex.set(dim, value, add);
+    }
 
     // ---- parameters (automatable via the plugin-param interface) ----------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -138,6 +148,7 @@ public:
             v.target = target;
             v.pitch = pitch;
             v.velocity = velocity;
+            resetExpr(v);
             if (!legato) startEnvelope(v, !v.active || releasing);
             v.active = true;
             return;
@@ -148,6 +159,7 @@ public:
         v.velocity = velocity;
         v.target = freqOf(pitch);
         v.freq = v.target;                                 // no portamento in poly
+        resetExpr(v);
         startEnvelope(v, true);
         v.active = true;
     }
@@ -168,7 +180,7 @@ public:
                 v.stage = Stage::Release;
     }
 
-    void allNotesOff() override { heldCount_ = 0; for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { heldCount_ = 0; gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         // Snapshot params once per block (denormalise to musical units).
@@ -206,13 +218,19 @@ public:
         const double pan = (pn_[Pan].load(std::memory_order_relaxed) - 0.5) * 2.0;
         const double panL = std::sqrt(0.5 * (1.0 - pan)) * kSqrt2;
         const double panR = std::sqrt(0.5 * (1.0 + pan)) * kSqrt2;
+        float exAdd[kExprDims]; gexpr_.offsets(kWheelRange, exAdd);
 
         for (auto& v : voices_) {
             if (!v.active) continue;
             double coefEnv = -1.0;                     // env value the coefficients were built for
+            double coefExpr = 0.0;                     // expression octaves they were built for
             double a1 = 0, a2 = 0, a3 = 0, k = 0;
             int coefAge = 0;
+            double bendMul = 1.0;
+            float  bendAt = 0.0f;
             for (int32_t i = 0; i < frames; ++i) {
+                v.ex.tick(exAdd, exprCoef_);
+                if (v.ex.bend() != bendAt) { bendAt = v.ex.bend(); bendMul = std::exp2(bendAt / 12.0); }
                 switch (v.stage) {
                     case Stage::Attack:
                         v.env += atkRate;
@@ -239,7 +257,7 @@ public:
 
                 // Oscillator stack: `uni` detuned copies, panned across the stereo field.
                 double sl = 0.0, sr = 0.0;
-                const double base = v.freq * tune / sampleRate_;
+                const double base = v.freq * tune * bendMul / sampleRate_;
                 for (int u = 0; u < uni; ++u) {
                     const double s = oscSample(wave, v.phase[u], pw);
                     v.phase[u] += base * uDet[u];
@@ -250,23 +268,26 @@ public:
                 sl *= uNorm; sr *= uNorm;
 
                 if (filType > 0) {
-                    // Rebuild the coefficients when the envelope has moved the cutoff far
-                    // enough to matter (every 16 samples at most) — tan() is not cheap.
-                    if (coefEnv < 0.0 || (filEnv != 0.0f && --coefAge <= 0)) {
-                        const double octs = filEnv * v.env * 4.0;                 // ±4 octaves
+                    // Rebuild the coefficients when the envelope or the note's expression has
+                    // moved the cutoff far enough to matter (every 16 samples at most) — tan()
+                    // is not cheap.
+                    const double exOcts = v.ex.slide() * 2.0 + v.ex.pressure() * 2.0;
+                    const bool moving = filEnv != 0.0f || std::fabs(exOcts - coefExpr) > 0.01;
+                    if (coefEnv < 0.0 || (moving && --coefAge <= 0)) {
+                        const double octs = filEnv * v.env * 4.0 + exOcts;        // ±4 octaves + MPE
                         const double fc = std::clamp(baseCut * std::pow(2.0, octs), 20.0, 20000.0);
                         const double g = std::tan(kPi * std::min(fc, sampleRate_ * 0.49) / sampleRate_);
                         k  = 2.0 - 1.94 * reso;                                    // 2 = no res
                         a1 = 1.0 / (1.0 + g * (g + k));
                         a2 = g * a1;
                         a3 = g * a2;
-                        coefEnv = v.env; coefAge = 16;
+                        coefEnv = v.env; coefExpr = exOcts; coefAge = 16;
                     }
                     sl = svf(v.fl, sl, a1, a2, a3, k, filType);
                     sr = svf(v.fr, sr, a1, a2, a3, k, filType);
                 }
 
-                const double amp = (1.0f - velAmp) + velAmp * v.velocity;
+                const double amp = ((1.0f - velAmp) + velAmp * v.velocity) * (1.0 + 0.5 * v.ex.pressure());
                 const double e = v.env * amp * gain * 0.25;
                 out[i * 2]     += static_cast<float>(sl * e * panL);
                 out[i * 2 + 1] += static_cast<float>(sr * e * panR);
@@ -280,6 +301,7 @@ private:
     static constexpr double kSqrt2 = 1.41421356237309504880;   // equal-power pan back to unity at centre
     static constexpr int kMaxUnison = 7;
     static constexpr int kHeldStack = 16;
+    static constexpr float kWheelRange = 2.0f;                  // a keyboard's pitch wheel, semitones
 
     // Naive (aliased) shapes — deliberately modest, as the rest of the synth.
     static double oscSample(int wave, double phase, double pw) {
@@ -340,7 +362,10 @@ private:
         float    velocity = 0.0f, env = 0.0f;
         Svf      fl, fr;                      // one filter per channel (unison is stereo)
         Stage    stage = Stage::Attack;
+        VoiceExpr ex;                         // MPE bend / pressure / slide
     };
+
+    void resetExpr(Voice& v) { float add[kExprDims]; gexpr_.offsets(kWheelRange, add); v.ex.reset(add); }
 
     // Retrigger: a fresh note resets the phases and the filter; a legato slide does not.
     void startEnvelope(Voice& v, bool fresh) {
@@ -375,6 +400,8 @@ private:
     int32_t held_[kHeldStack] = {};
     int     heldCount_ = 0;
     double sampleRate_ = 44100.0;
+    float  exprCoef_ = exprSmoothCoef(44100.0);
+    GlobalExpr gexpr_;                    // pitch wheel / channel pressure (pitch −1)
     std::atomic<float> pn_[kNumParams];   // normalized param values
 };
 

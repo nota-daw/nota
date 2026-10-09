@@ -763,6 +763,10 @@ public interface IAudioEngine : IDisposable
     /// its own track). Recorded when that track holds the take. Safe to call from any thread.</summary>
     void TrackNoteOn(int trackId, int pitch, float velocity);
     void TrackNoteOff(int trackId, int pitch);
+    /// <summary>Per-note expression (MPE) for a live note: send it after the note-on (a note-on
+    /// resets it). Pitch −1 addresses the whole instrument, where Bend is the wheel −1..+1.</summary>
+    void NoteExpression(int pitch, NoteExpressionDim dim, float value);
+    void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
@@ -793,6 +797,8 @@ public interface IAudioEngine : IDisposable
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
     int TrackInstrumentKind(int trackId);
+    /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
+    bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);
     string TrackInstrumentPluginId(int trackId);
     string TrackDevicePluginId(int trackId, int deviceIndex);
@@ -829,6 +835,8 @@ public interface IAudioEngine : IDisposable
     // --- MIDI device settings (M7-2) ---------------------------------------
     bool IsMidiInputEnabled(string uid);
     void SetMidiInputEnabled(string uid, bool enabled);
+    (bool Enabled, int BendRange) GetMpe();
+    void SetMpe(bool enabled, int bendRange);
     void ApplyMidi();
 
     // --- MIDI learn: drain incoming CC/note-on events (4 int32 per event) ---

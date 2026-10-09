@@ -18,6 +18,7 @@
 #include "Graph.h"
 #include "MidiConfig.h"
 #include "MidiInput.h"
+#include "MpeInput.h"
 #include "GamepadInput.h"
 #include "SampleBuffer.h"
 #include "Transport.h"
@@ -41,7 +42,9 @@ class ClipWarpStream;   // offline warp-cache builder (WarpStream.h); held by un
 
 // trackId -1 = ordinary live input (armed / audition tracks); >= 0 = addressed to that
 // one track whatever its arm state (a Nota Remote phone playing its own track).
-struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; };
+// expr ≥ 0 makes it a per-note expression (an ExprDim, NoteExpression.h) carrying its value
+// in `velocity`; pitch −1 then addresses the whole instrument.
+struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1; int32_t expr = -1; };
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
@@ -93,6 +96,9 @@ public:
     const MidiConfig& midiConfig() const { return midiConfig_; }
     void setMidiInputEnabled(const std::string& uid, bool enabled);
     bool midiInputEnabled(const std::string& uid) const;
+    // MPE input (MpeInput.h): channels per MPE zones, and the member channels' default bend
+    // range in semitones. Staged like the inputs; applyMidiConfig persists + reconnects.
+    void setMpe(bool enabled, int32_t bendRange) { midiConfig_.mpe = enabled; midiConfig_.mpeBendRange = std::clamp(bendRange, 1, 96); }
     bool applyMidiConfig();
 
     // MIDI-learn: drain up to `max` incoming CC/note-on events captured since the
@@ -563,6 +569,7 @@ public:
     // Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
     // -2=track has no instrument (audio/return). Message thread only.
     int32_t trackInstrumentKind(int32_t trackId) const;
+    bool    trackInstrumentSupportsMpe(int32_t trackId) const;   // per-note expression (MPE)
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.
     int32_t trackDeviceBuiltinKind(int32_t trackId, int32_t deviceIndex) const;
@@ -906,12 +913,18 @@ public:
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
-    void noteOn(int32_t pitch, float velocity);         // lock-free
-    void noteOff(int32_t pitch);                         // lock-free
+    // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
+    // serialize on liveMidiMx_; the audio thread only pops (AR-6).
+    void noteOn(int32_t pitch, float velocity);
+    void noteOff(int32_t pitch);
+    // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
+    // the whole instrument. Reaches the same tracks as live notes do.
+    void noteExpression(int32_t pitch, int32_t dim, float value);
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
     void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
     void trackNoteOff(int32_t trackId, int32_t pitch);
+    void trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
@@ -1063,6 +1076,15 @@ private:
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
     void openMidiInput();            // (re)connect MIDI sources per midiConfig_
+    // MIDI-thread MPE decoding, one per input source (each touched only by its own thread).
+    struct MpeSink final : MpeInput::Sink {
+        Engine* e = nullptr;
+        void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
+        void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
+        void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
+    };
+    MpeSink                       mpeSink_;
+    std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;
@@ -1072,6 +1094,7 @@ private:
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
     CommandQueue                  commands_;
     MidiQueue                     liveMidi_;
+    std::mutex                    liveMidiMx_;      // producer side only (UI, MIDI threads)
     MidiQueue                     remoteMidi_;      // track-addressed notes (any thread → audio)
     std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
@@ -1370,6 +1393,16 @@ private:
     // render sorts offs ahead of ons there, so one pitch's on and off must not share a block.
     MidiEvent liveCarry_{};
     bool      liveCarried_ = false;
+    // The block's live expression, coalesced: the latest value per (track, pitch, dim), so a
+    // controller streaming bend/pressure never backs the note queue up. Applied after the
+    // block's offset-0 note events (Instrument::noteExpression).
+    static constexpr int kMaxLiveExpr = 256;
+    MidiEvent liveExpr_[kMaxLiveExpr];
+    int       liveExprCount_ = 0;
+    // Whether a live event reaches track t (armed / audition, or addressed to it).
+    bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
+    // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.
+    void applyLiveExpression(Graph* g, const Track& t, Instrument& inst) const;
     std::atomic<int32_t> auditionTrackId_{-1};   // live notes also play this track (pad audition)
     // Currently-held live-input pitches (computer keyboard + MIDI), independent of track
     // routing, so the piano roll can highlight the key you're pressing. 128 bits, set/cleared

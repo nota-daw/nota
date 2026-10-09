@@ -255,6 +255,7 @@ void Engine::drainCommands() {
 
 void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     liveCount_ = 0;
+    liveExprCount_ = 0;
     const bool rec = recording_.load(std::memory_order_relaxed);
     if (rec != prevRecording_)
         for (int i = 0; i < 128; ++i) { pendingActive_[i] = false; recRoutedActive_[i] = false; }
@@ -281,6 +282,14 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     for (;;) {
         if (liveCarried_) { e = liveCarry_; liveCarried_ = false; }
         else if (!liveMidi_.pop(e) && !remoteMidi_.pop(e)) break;
+        if (e.expr >= 0) {   // expression: keep the latest per (track, pitch, dim), never carried
+            int k = 0;
+            while (k < liveExprCount_ && (liveExpr_[k].pitch != e.pitch || liveExpr_[k].expr != e.expr
+                                          || liveExpr_[k].trackId != e.trackId)) ++k;
+            if (k < liveExprCount_) liveExpr_[k].velocity = e.velocity;
+            else if (liveExprCount_ < kMaxLiveExpr) liveExpr_[liveExprCount_++] = e;
+            continue;
+        }
         const bool valid = e.pitch >= 0 && e.pitch < 128;
         const uint32_t bit = valid ? 1u << (e.pitch & 31) : 0u;
         if (liveCount_ >= kMaxLive || (valid && (seen[e.pitch >> 5] & bit))) {
@@ -361,13 +370,31 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
     // A track-addressed event (Nota Remote) plays only its own track.
-    const bool takesLive = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        if (le.trackId < 0 ? takesLive : le.trackId == t.id())
-            evs[n++] = {0, le.on, le.pitch, le.velocity};
+        if (takesLiveEvent(t, le)) evs[n++] = {0, le.on, le.pitch, le.velocity};
     }
     return n;
+}
+
+bool Engine::takesLiveEvent(const Track& t, const MidiEvent& e) const {
+    if (e.trackId >= 0) return e.trackId == t.id();
+    return t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+}
+
+// Live expression bypasses the MIDI FX chain (it is keyed by the pitch the player holds) and
+// reaches an instrument the way live notes do: through its own track, or through the track
+// it takes its MIDI from.
+void Engine::applyLiveExpression(Graph* g, const Track& t, Instrument& inst) const {
+    const Track* src = nullptr;
+    if (g && t.midiFromTrackId() >= 0)
+        for (const auto& p : g->tracks)
+            if (p && p.get() != &t && p->type() == TrackType::Instrument && p->id() == t.midiFromTrackId()) { src = p.get(); break; }
+    for (int i = 0; i < liveExprCount_; ++i) {
+        const MidiEvent& e = liveExpr_[i];
+        if (takesLiveEvent(t, e) || (src && takesLiveEvent(*src, e)))
+            inst.noteExpression(e.pitch, e.expr, e.velocity);
+    }
 }
 
 // A track's own MIDI *output* for this block: its clips + live input, drum-rack swing, then
@@ -488,13 +515,20 @@ void Engine::renderInstrumentRaw(Graph* g, Track& t, float* dst, int32_t frames,
 
     std::sort(evs, evs + n, midiEvLess);
 
+    // Live expression lands after the offset-0 note events (live notes all sit at 0), so a
+    // note's initial MPE values follow the note-on that starts it.
+    bool exprDone = liveExprCount_ == 0;
     int32_t cursor = 0;
     for (int k = 0; k < n; ++k) {
         const int32_t segEnd = std::clamp(evs[k].off, 0, frames);
-        if (segEnd > cursor) { inst->render(&dst[cursor * 2], segEnd - cursor); cursor = segEnd; }
+        if (segEnd > cursor) {
+            if (!exprDone) { applyLiveExpression(g, t, *inst); exprDone = true; }
+            inst->render(&dst[cursor * 2], segEnd - cursor); cursor = segEnd;
+        }
         if (evs[k].on) inst->noteOn(evs[k].pitch, evs[k].vel);
         else           inst->noteOff(evs[k].pitch);
     }
+    if (!exprDone) applyLiveExpression(g, t, *inst);
     if (cursor < frames) inst->render(&dst[cursor * 2], frames - cursor);
 
     // MIDI clip volume envelope (M9 follow-up): scale the instrument output per
@@ -546,7 +580,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         }
     }
     // Live monitoring while overdub-recording into this slot (M5-4).
-    if (recordSlotPlayer_.load(std::memory_order_acquire) == &sp)
+    const bool monitoring = recordSlotPlayer_.load(std::memory_order_acquire) == &sp;
+    if (monitoring)
         for (int i = 0; i < liveCount_ && n < 1024; ++i)
             if (liveEvents_[i].trackId < 0 || liveEvents_[i].trackId == t.id())   // a phone plays only its own track
                 evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
@@ -561,13 +596,24 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         std::sort(evs, evs + n, midiEvLess);
     }
 
+    // The monitored live expression, after the offset-0 notes (as in renderInstrumentRaw).
+    auto applyExpr = [&] {
+        for (int i = 0; i < liveExprCount_; ++i)
+            if (liveExpr_[i].trackId < 0 || liveExpr_[i].trackId == t.id())
+                inst->noteExpression(liveExpr_[i].pitch, liveExpr_[i].expr, liveExpr_[i].velocity);
+    };
+    bool exprDone = !monitoring || liveExprCount_ == 0;
     int32_t cursor = 0;
     for (int k = 0; k < n; ++k) {
         const int32_t segEnd = std::clamp(evs[k].off, 0, frames);
-        if (segEnd > cursor) { inst->render(&dst[cursor * 2], segEnd - cursor); cursor = segEnd; }
+        if (segEnd > cursor) {
+            if (!exprDone) { applyExpr(); exprDone = true; }
+            inst->render(&dst[cursor * 2], segEnd - cursor); cursor = segEnd;
+        }
         if (evs[k].on) inst->noteOn(evs[k].pitch, evs[k].vel);
         else           inst->noteOff(evs[k].pitch);
     }
+    if (!exprDone) applyExpr();
     if (cursor < frames) inst->render(&dst[cursor * 2], frames - cursor);
     sp.localBeats = p + db;
 }

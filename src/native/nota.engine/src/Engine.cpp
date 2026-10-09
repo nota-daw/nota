@@ -88,13 +88,15 @@ void Engine::propagateSampleRate(double sr) {
     preparedSR_ = sr;   // the offline render re-prepares only when this changes
 }
 
-// Connect hardware MIDI controllers (honouring the user's disabled set) — the
-// callback pushes into the same lock-free live queue (RT-safe).
+// Connect hardware MIDI controllers (honouring the user's disabled set). Each source has
+// its own MPE decoder (channel state is per controller); notes and expression go into the
+// live queue, CC + note-on also to MIDI learn.
 void Engine::openMidiInput() {
-    midiInput_->open([this](int32_t status, int32_t channel, int32_t d1, int32_t d2) {
-        // Route notes to instruments exactly as before.
-        if (status == 0x90 && d2 > 0)                          noteOn(d1, d2 / 127.0f);
-        else if (status == 0x80 || (status == 0x90 && d2 == 0)) noteOff(d1);
+    mpeSink_.e = this;
+    for (auto& m : mpeInputs_) m.configure(midiConfig_.mpe, midiConfig_.mpeBendRange);
+    midiInput_->open([this](int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
+        mpeInputs_[static_cast<size_t>(std::clamp(source, 0, MidiInput::kMaxSources - 1))]
+            .message(status, channel, d1, d2, mpeSink_);
         // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue
         // is full — learn is best-effort and must never block the MIDI thread).
         if (status == 0xB0)              midiControl_.push({0, channel, d1, d2});

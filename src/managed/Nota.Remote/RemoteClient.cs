@@ -159,6 +159,12 @@ public sealed class RemoteClient
         }
     }
 
+    /// <summary>The track a held note started on (false when the phone doesn't hold it).</summary>
+    internal bool TrackOf(int pitch, out int track)
+    {
+        lock (_notesGate) return _held.TryGetValue(pitch, out track);
+    }
+
     internal bool NoteOff(int pitch, out int track)
     {
         lock (_notesGate) return _held.Remove(pitch, out track);

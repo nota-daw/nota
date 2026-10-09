@@ -138,6 +138,18 @@ public sealed partial class RemoteHub
                 if (c.NoteOff(p, out int track)) _engine.TrackNoteOff(track, p);
                 break;
             }
+            case "x":
+            {
+                // Per-note expression (the Keys screen's expressive mode): d 0 = bend in
+                // semitones, 1 = pressure, 2 = slide. Only for a note this phone holds, on the
+                // track that note started on.
+                int p = Int(m, "p"), d = Int(m, "d");
+                if (d is < 0 or > 2 || !c.TrackOf(p, out int track)) break;
+                double v = Num(m, "v", d == 2 ? 0.5 : 0.0);
+                v = d == 0 ? Math.Clamp(v, -24, 24) : Math.Clamp(v, 0, 1);
+                _engine.TrackNoteExpression(track, p, (NoteExpressionDim)d, (float)v);
+                break;
+            }
             case "panic": ReleaseNotes(c); break;
             case "bye": _ = c.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye"); break;
             default:

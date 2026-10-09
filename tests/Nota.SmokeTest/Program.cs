@@ -199,6 +199,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// MPE alone (fast iteration): `--mpe`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--mpe")
+{
+    Console.WriteLine("-- mpe: per-note expression --");
+    foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MPE PASSED" : $"MPE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Nota Remote alone (fast iteration): `--remote`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--remote")
 {
@@ -14199,6 +14207,8 @@ foreach (var (ok, label) in HistoryTests.RunMcp()) Check(ok, label);
 // --- nota remote: track-addressed notes, pairing, a phone session over a real socket ---
 Console.WriteLine("-- nota remote --");
 foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
+Console.WriteLine("-- mpe: per-note expression --");
+foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

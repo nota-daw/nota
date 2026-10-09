@@ -32,6 +32,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   when your system is), the start window links to the first-track tutorial, and every device's
   header menu has a **Documentation** item that opens that device's page.
 
+- **MPE — per-note expression for the built-in synths.** Play an MPE controller (Seaboard,
+  LinnStrument, Osmose, Sensel…) and every note bends, swells and changes timbre on its own:
+  Nota Synth, Volt, Aurora, Operator, Pentad and Physical respond to per-note pitch bend,
+  pressure and slide (CC74). Pressure opens the filter and lifts the level — on Physical it
+  bows the bar so a held note sustains; slide sweeps the filter, Aurora's wavetable position or
+  Operator's FM depth. Settings ▸ MIDI ▸ MPE switches it and sets the bend range (±48 by
+  default; a controller that announces its own range wins). An ordinary keyboard on channel 1
+  plays as before — and its pitch wheel and aftertouch now reach Nota's synths and hosted
+  plug-ins too. Expression is played live; it isn't recorded into clips yet.
+- **Nota Remote: Expressive keys.** On a track that takes MPE, the Keys screen's Keyboard and
+  Scale modes get an **Expressive** switch: a finger keeps its note, sliding sideways bends it,
+  the height on the key changes its timbre, and a phone that senses touch force sends pressure.
+
 ### Changed
 - **The menu, the keyboard shortcuts and the command palette run the same commands**, so a
   shortcut and its menu item can no longer drift apart. Settings ▸ Shortcuts now also lists
