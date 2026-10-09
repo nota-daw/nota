@@ -19,6 +19,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Edit MPE in the piano roll.** The lane under the notes now switches between **VEL**,
+  **BEND**, **PRES** and **SLIDE**. Pick a note and draw its bend, pressure or slide right over
+  its span — hold ⌥ for a straight line — drag a point to reshape it, double-click to add or
+  remove a point, or right-click to clear a curve. It works on recorded takes and on notes you
+  drew yourself, so you can give a plain MIDI part a bend or a swell without an MPE controller.
 - **Command palette — ⌘⇧P (Ctrl+Shift+P on Windows and Linux).** One search field for every
   command, track, device, plug-in and preset, from any window. What you pick goes where you
   opened it: in Devices right after the selected card (⌥Enter replaces it), in Modular onto

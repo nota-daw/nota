@@ -213,6 +213,12 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   from the clip, moves, copies and quantizes with the note, is saved with the project, and the
   piano roll draws it over the note (bend as the pitch it played, pressure as a shade). The
   pitch wheel, channel pressure and sustain pedal aren't recorded.
+  - **MPE lanes in the piano roll** — the lane under the notes switches between **VEL**,
+    **BEND**, **PRES** and **SLIDE**. In an MPE lane every note's curve sits over its own
+    span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
+    to move it, double-click to add or delete a point, right-click for **Clear Bend /
+    Pressure / Slide** and **Clear All Expression**. The bend lane scales itself (±2, 12, 24,
+    48 or 96 semitones); each gesture is one undo step and plays back straight away.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that

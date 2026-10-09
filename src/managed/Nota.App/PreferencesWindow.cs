@@ -1070,6 +1070,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Delete", "Delete the selected notes"),
             ("Drag note edge", "Change the note's start or end"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
+            ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
+            ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
         }),
         ("PLAY NOTES (COMPUTER KEYBOARD)", new[]
         {
