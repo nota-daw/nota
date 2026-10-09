@@ -162,13 +162,15 @@ void Engine::noteOff(int32_t pitch) {
 }
 
 void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
-    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprDims || !std::isfinite(value)) return;
+    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
+        || !std::isfinite(value)) return;
     std::lock_guard<std::mutex> lk(liveMidiMx_);
     liveMidi_.push(MidiEvent{false, pitch, value, -1, dim});
 }
 
 void Engine::trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value) {
-    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprDims || !std::isfinite(value)) return;
+    if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
+        || !std::isfinite(value)) return;
     std::lock_guard<std::mutex> lk(remoteMidiMx_);
     remoteMidi_.push(MidiEvent{false, pitch, value, trackId, dim});
 }

@@ -216,7 +216,8 @@ public enum MidiClipEnvelope { Velocity = 0, Volume = 1 }
 
 /// <summary>A per-note expression dimension (MPE). Matches native ExprDim: Bend in semitones
 /// (the whole-instrument wheel −1..+1), Pressure 0..1, Slide (CC74 timbre) 0..1 with 0.5 neutral.</summary>
-public enum NoteExpressionDim { Bend = 0, Pressure = 1, Slide = 2 }
+/// <remarks>Sustain (the CC64 pedal, 0/1) is instrument-wide only — send it with pitch −1.</remarks>
+public enum NoteExpressionDim { Bend = 0, Pressure = 1, Slide = 2, Sustain = 3 }
 
 /// <summary>An automation breakpoint, blittable and laid out to match native
 /// NotaAutomationPoint (M9). Value is in the target's native units; Curve (M9-D)

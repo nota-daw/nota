@@ -183,11 +183,11 @@ NotaResult nota_track_note_off(NotaEngine* e, int32_t track_id, int32_t pitch) {
     ENG(e)->trackNoteOff(track_id, pitch); return NOTA_OK;
 }
 NotaResult nota_engine_note_expression(NotaEngine* e, int32_t pitch, int32_t dim, float value) {
-    if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 2) return NOTA_ERR_INVALID_ARG;
+    if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 3 || (dim == 3 && pitch >= 0)) return NOTA_ERR_INVALID_ARG;
     ENG(e)->noteExpression(pitch, dim, value); return NOTA_OK;
 }
 NotaResult nota_track_note_expression(NotaEngine* e, int32_t track_id, int32_t pitch, int32_t dim, float value) {
-    if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 2) return NOTA_ERR_INVALID_ARG;
+    if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 3 || (dim == 3 && pitch >= 0)) return NOTA_ERR_INVALID_ARG;
     ENG(e)->trackNoteExpression(track_id, pitch, dim, value); return NOTA_OK;
 }
 void nota_engine_set_audition_track(NotaEngine* e, int32_t track_id) {

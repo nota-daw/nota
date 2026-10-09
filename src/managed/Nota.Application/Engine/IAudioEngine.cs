@@ -374,6 +374,8 @@ public interface IAudioEngine : IDisposable
     int AddPentadTrack();
     /// <summary>Adds an instrument track with the built-in Nota Consort paraphonic semi-modular synth (kind 15).</summary>
     int AddConsortTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Keys modelled electric piano (kind 16).</summary>
+    int AddKeysTrack();
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>

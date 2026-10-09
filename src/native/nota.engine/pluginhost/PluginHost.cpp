@@ -637,6 +637,7 @@ public:
             if (dim == 0) pending_.addEvent(juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), 0);
             else if (dim == 1) pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), 0);
             else if (dim == 2) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 74, u7(value)), 0);
+            else if (dim == 3) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 64, value >= 0.5f ? 127 : 0), 0);
         } else if (dim == 1) {
             pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), 0);
         }

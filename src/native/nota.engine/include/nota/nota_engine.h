@@ -593,6 +593,8 @@ NOTA_API int32_t nota_engine_add_monolith_track(NotaEngine* engine);
 NOTA_API int32_t nota_engine_add_pentad_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Consort (paraphonic semi-modular synth, kind 15). id (>0). */
 NOTA_API int32_t nota_engine_add_consort_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Keys (modelled electric piano, kind 16). id (>0). */
+NOTA_API int32_t nota_engine_add_keys_track(NotaEngine* engine);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);
@@ -685,8 +687,9 @@ NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
 /* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
- * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral. pitch -1 addresses the whole
- * instrument; its bend is the wheel normalized -1..+1 (the synth applies its own range).
+ * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0/1 —
+ * instrument-wide only (pitch -1). pitch -1 addresses the whole instrument; its bend is
+ * the wheel normalized -1..+1 (the synth applies its own range).
  * A note-on resets the note's expression; send it after the note-on. The engine_ form
  * reaches the tracks live notes reach; the track_ form one track (Nota Remote). */
 NOTA_API NotaResult nota_engine_note_expression(NotaEngine* engine, int32_t pitch, int32_t dim, float value);

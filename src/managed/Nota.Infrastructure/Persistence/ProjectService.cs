@@ -534,6 +534,7 @@ public sealed class ProjectService
                         { Kind: 13 } => engine.AddMonolithTrack(),       // Nota Monolith
                         { Kind: 14 } => engine.AddPentadTrack(),         // Nota Pentad
                         { Kind: 15 } => engine.AddConsortTrack(),        // Nota Consort
+                        { Kind: 16 } => engine.AddKeysTrack(),           // Nota Keys
                         _ => engine.AddInstrumentTrack(),                // Nota Synth
                     };
                     if (t.Instrument?.State is { } synthState)

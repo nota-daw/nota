@@ -17,6 +17,7 @@ internal static class MpeTests
     private static readonly (int Kind, string Name)[] Synths =
     {
         (0, "Nota Synth"), (6, "Nota Volt"), (5, "Nota Aurora"), (9, "Nota Operator"), (14, "Nota Pentad"), (2, "Nota Physical"),
+        (16, "Nota Keys"),
     };
     private const int NotMpeKind = 13;   // Nota Monolith (mono)
 

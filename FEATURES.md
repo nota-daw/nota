@@ -202,13 +202,14 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
   is an ordinary keyboard whose pitch wheel, channel aftertouch and CC74 move the whole
-  instrument. **Nota Synth, Volt, Aurora, Operator, Pentad and Physical** play it: bend moves
+  instrument. **Nota Synth, Volt, Aurora, Operator, Pentad, Physical and Keys** play it: bend moves
   the note's pitch; pressure raises its level and opens its filter (Operator: deepens the FM,
   Pentad: poly aftertouch through *Aftertouch Cutoff*, Physical: bows the struck body so a held
   note sustains); slide sweeps the filter (Aurora: the wavetable position, Operator: the FM
-  index, Physical: how long the body rings). Instrument Racks pass it to their chains; hosted
-  plug-ins get the wheel, channel pressure and polyphonic aftertouch. Expression is played
-  live — it is not recorded into clips.
+  index, Physical: how long the body rings, Keys: drives the tine into the pickup / shifts its
+  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get the wheel, channel
+  pressure, polyphonic aftertouch and the sustain pedal (CC64), which also holds Nota Keys'
+  notes. Expression is played live — it is not recorded into clips.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -423,6 +424,15 @@ and user presets, automation, persistence and cloning.
   a six-shape LFO, a stereo bucket-brigade delay, a 16-step sequencer / arpeggiator with
   ratchets and ties, and a 12-cable patch bay over 42 points (matrix, jack strip or full-card
   overlay). Cables are parameters: saved, preset-able and automatable. 28 factory presets.
+- **Nota Keys** — modelled electric piano: Tine, Suitcase, Reed and Clav models (a hammer
+  pulse into tine + tone bar, reed or string modes). The PICKUP graph is the transfer curve the
+  sound passes — drag for symmetry (X) and distance (Y), with H1–H8 bars and the bark readout;
+  Clav shows its string and Upper / Both / Lower pickups. Hammer (hardness, vel → hardness,
+  noise), resonator (decay, body, bright, key → bright), damper with release noise and a sustain
+  pedal (button, automation or CC64), tune / age / stretch, 8 / 16 / 32 / 64 voices. FX tab:
+  preamp (drive, bass, treble), mono or stereo-pan tremolo (free or tempo-synced), phaser,
+  chorus, Suitcase / Combo / DI cabinet, volume and pan. Two sizes: L (Sound / FX tabs) and S
+  (model, pickup, four knobs). 40 factory presets; MCP `read_keys` / `set_keys`.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
@@ -903,7 +913,8 @@ Coverage:
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
-- **Instruments**: add by kind, read and write parameters (by index or by stable id).
+- **Instruments**: add by kind, read and write parameters (by index or by stable id); read /
+  shape Nota Keys in musical terms (`read_keys`, `set_keys`).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move

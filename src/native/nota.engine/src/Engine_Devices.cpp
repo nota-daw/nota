@@ -41,6 +41,7 @@
 #include "Monolith.h"
 #include "Pentad.h"
 #include "Consort.h"
+#include "Keys.h"
 #include "GrainSynth.h"
 #include "Arpeggiator.h"
 #include "MidiChord.h"
@@ -240,6 +241,18 @@ int32_t Engine::addConsortTrack() {
     const int32_t id = nextTrackId_++;
     auto track = std::make_shared<Track>(id, TrackType::Instrument);
     auto inst = std::make_shared<Consort>();
+    inst->setSampleRate(transport_.sampleRate());
+    track->instrument = inst;
+    g->tracks.push_back(track);
+    publish(g);
+    return id;
+}
+
+int32_t Engine::addKeysTrack() {
+    auto g = std::make_shared<Graph>(*authoring_);
+    const int32_t id = nextTrackId_++;
+    auto track = std::make_shared<Track>(id, TrackType::Instrument);
+    auto inst = std::make_shared<Keys>();
     inst->setSampleRate(transport_.sampleRate());
     track->instrument = inst;
     g->tracks.push_back(track);
@@ -501,6 +514,7 @@ std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
         case 13: { auto mo = std::make_shared<Monolith>(); mo->setSampleRate(sr); return mo; }
         case 14: { auto pe = std::make_shared<Pentad>(); pe->setSampleRate(sr); return pe; }
         case 15: { auto co = std::make_shared<Consort>(); co->setSampleRate(sr); return co; }
+        case 16: { auto ke = std::make_shared<Keys>(); ke->setSampleRate(sr); return ke; }
         default: return nullptr;
     }
 }
@@ -635,6 +649,7 @@ std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
         case 13: return std::make_shared<Monolith>();
         case 14: return std::make_shared<Pentad>();
         case 15: return std::make_shared<Consort>();
+        case 16: return std::make_shared<Keys>();
         default: return nullptr;                          // Racks (3/4) / unknown: no simple swap
     }
 }

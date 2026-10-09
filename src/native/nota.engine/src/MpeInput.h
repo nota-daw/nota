@@ -135,6 +135,9 @@ private:
                 if (isMember(channel)) forHeld(c, [&](int32_t p) { out.mpeExpression(p, ExprSlide, c.slide); });
                 else                   out.mpeExpression(-1, ExprSlide, c.slide);
                 break;
+            case 64:   // sustain pedal: instrument-wide on any channel (an MPE master or member)
+                out.mpeExpression(-1, ExprSustain, v >= 64 ? 1.0f : 0.0f);
+                break;
             case 101: c.rpnMsb = v; break;
             case 100: c.rpnLsb = v; break;
             case 6:   dataEntry(channel, v); break;

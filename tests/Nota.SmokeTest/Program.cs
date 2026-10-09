@@ -199,6 +199,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Nota Keys alone (fast iteration): `--keys`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--keys")
+{
+    Console.WriteLine("-- nota keys --");
+    foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MPE alone (fast iteration): `--mpe`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--mpe")
 {
@@ -14209,6 +14217,8 @@ Console.WriteLine("-- nota remote --");
 foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
 Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota keys --");
+foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

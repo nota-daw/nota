@@ -23,6 +23,12 @@ namespace nota {
 
 enum ExprDim : int32_t { ExprBend = 0, ExprPressure = 1, ExprSlide = 2, kExprDims = 3 };
 
+// The sustain pedal (CC64, 0 = up, 1 = down) rides the same channel, instrument-wide only
+// (pitch −1) and outside the per-note set above, so a VoiceExpr never sees it. Instruments
+// that don't model a damper ignore it (GlobalExpr::set drops unknown dims).
+inline constexpr int32_t ExprSustain = 3;
+inline constexpr int32_t kExprWireDims = 4;   // every dim the engine accepts
+
 inline constexpr float kExprNeutral[kExprDims] = { 0.0f, 0.0f, 0.5f };
 
 // One-pole smoothing coefficient for a ~3 ms time constant.

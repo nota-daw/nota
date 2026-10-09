@@ -32,6 +32,7 @@
 #include "Monolith.h"
 #include "Pentad.h"
 #include "Consort.h"
+#include "Keys.h"
 #include "GrainSynth.h"
 #include "Sampler.h"
 #include "SampleBuffer.h"
@@ -686,6 +687,7 @@ public:
             case 13: return std::make_shared<Monolith>();
             case 14: return std::make_shared<Pentad>();
             case 15: return std::make_shared<Consort>();
+            case 16: return std::make_shared<Keys>();
             default: return nullptr;   // -1 = no instrument (effect rack); plugins are a follow-up
         }
     }

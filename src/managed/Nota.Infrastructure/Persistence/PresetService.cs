@@ -223,6 +223,7 @@ public static class PresetService
                     13 => engine.AddMonolithTrack(),
                     14 => engine.AddPentadTrack(),
                     15 => engine.AddConsortTrack(),
+                    16 => engine.AddKeysTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
                 if (t <= 0) return "Failed to add instrument.";

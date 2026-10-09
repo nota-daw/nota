@@ -44,6 +44,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Nota Remote: Expressive keys.** On a track that takes MPE, the Keys screen's Keyboard and
   Scale modes get an **Expressive** switch: a finger keeps its note, sliding sideways bends it,
   the height on the key changes its timbre, and a phone that senses touch force sends pressure.
+- **Nota Keys — a modelled electric piano.** Four instruments in one: Tine, Suitcase, Reed and
+  Clav. A hammer strikes a tine (with its tone bar), a reed or a string, and the PICKUP graph is
+  the very curve the sound passes — drag the point to set symmetry and distance: close and
+  off-centre growls (the bark), far and centred stays round; play harder and it barks more. The
+  Clav shows its string and two pickups (Upper / Both / Lower). Hammer hardness, velocity →
+  hardness and thump, decay, body, brightness and key tracking, damper and release noise, a
+  sustain pedal (click it, automate it, or press a keyboard's CC64), age, stretch tuning and 8–64
+  voices. The FX tab chains a preamp, a mono or stereo-pan tremolo (free or synced to the
+  tempo), a phaser, a chorus and a Suitcase / Combo / DI cabinet. Two sizes: L with Sound and FX
+  tabs, S with the model, the pickup and four knobs. MPE: bend, pressure drives the tine harder
+  into the pickup, slide shifts its symmetry. 40 factory presets; MCP `read_keys` / `set_keys`.
+- **The sustain pedal (CC64) reaches instruments.** A keyboard's pedal now holds Nota Keys' notes
+  and reaches hosted plug-ins as CC64.
 
 ### Changed
 - **The menu, the keyboard shortcuts and the command palette run the same commands**, so a

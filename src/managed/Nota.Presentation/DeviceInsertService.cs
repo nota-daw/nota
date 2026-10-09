@@ -133,6 +133,7 @@ public sealed class DeviceInsertService
                 13 => _engine.AddMonolithTrack(),
                 14 => _engine.AddPentadTrack(),
                 15 => _engine.AddConsortTrack(),
+                16 => _engine.AddKeysTrack(),
                 1 => _engine.AddSamplerInstrumentTrack(),
                 _ => _engine.AddInstrumentTrack(),
             };

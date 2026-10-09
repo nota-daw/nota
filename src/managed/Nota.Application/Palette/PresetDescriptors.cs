@@ -83,6 +83,11 @@ public static class PresetDescriptors
         ["humanize"] = new() { Character = ["subtle"] },
         ["ratchets & rolls"] = new() { Source = ["drums"] },
         ["melodic"] = new() { Sound = ["seq"] },
+        ["tine"] = new() { Sound = ["keys"], Character = ["bright"] },
+        ["suitcase"] = new() { Sound = ["keys"], Character = ["warm", "wide"] },
+        ["reed"] = new() { Sound = ["keys"], Character = ["gritty", "vintage"] },
+        ["clav"] = new() { Sound = ["keys"], Character = ["punchy"], Genre = ["funk"] },
+        ["character"] = new() { Character = ["lofi", "vintage"] },
     };
 
     /// <summary>A factory or user preset's descriptor (CP-13.2/13.3): the device's role,
