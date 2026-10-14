@@ -1687,6 +1687,14 @@ NOTA_API void nota_encoder_discard(NotaEncoder* enc);
  * is idempotent; repeated calls just re-show the window. Temporary entry point. */
 NOTA_API NotaResult nota_pluginhost_open_test_window(void);
 
+/* Services JUCE's message loop: plugin editor windows (X11 events, repaints) and
+ * hosted plugins' timers / async work registered through the host IRunLoop. Only
+ * needed on Linux, where JUCE's loop is not shared with the app's run loop; a
+ * no-op (returns 0) on macOS / Windows, before any plugin is instantiated, and off
+ * the message (UI) thread. Non-blocking; call often (~10 ms) from the UI thread.
+ * Returns the number of message batches dispatched. */
+NOTA_API int32_t nota_pluginhost_pump(void);
+
 /* ---- Plugin scanning & catalog (M3-1, FR-33/NFR-5) ----------------------- */
 /* Scans installed plugins out-of-process, AudioUnit first then VST3. Each
  * candidate is probed in a separate `worker_path` child process with a timeout,

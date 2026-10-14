@@ -106,6 +106,16 @@ public partial class App : Avalonia.Application
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
         catch (Exception e) { log.Error("Couldn't register the Get Plug-ins folder", e); }
 
+        // Linux: JUCE's message loop isn't shared with Avalonia's (it is on macOS/Windows),
+        // so hosted plugins' editors and timers only run when we service it. Without this,
+        // plugin windows stay black and unclosable and plugins stay silent.
+        if (OperatingSystem.IsLinux())
+        {
+            var pump = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(10),
+                Avalonia.Threading.DispatcherPriority.Normal, (_, _) => NotaEngine.PumpPluginHost());
+            pump.Start();
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // A downloaded update installs once the app is gone (see AppUpdater).

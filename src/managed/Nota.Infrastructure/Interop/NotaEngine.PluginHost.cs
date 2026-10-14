@@ -15,6 +15,14 @@ public sealed partial class NotaEngine
     /// </summary>
     public static void OpenPluginHostTestWindow() => Check(NativeMethods.PluginHostOpenTestWindow());
 
+    /// <summary>
+    /// Services JUCE's message loop (plugin editor windows, hosted plugins' timers).
+    /// Needed on Linux only, where JUCE's loop isn't shared with Avalonia's; a no-op
+    /// elsewhere. Non-blocking; call from the UI thread every ~10 ms. Returns the
+    /// number of message batches dispatched.
+    /// </summary>
+    public static int PumpPluginHost() => NativeMethods.PluginHostPump();
+
     // --- Plugin scanning & catalog (M3-1) ----------------------------------
 
     /// <summary>

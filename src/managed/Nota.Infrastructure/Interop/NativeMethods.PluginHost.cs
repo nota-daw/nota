@@ -12,6 +12,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_open_test_window")]
     internal static partial NotaResult PluginHostOpenTestWindow();
 
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_pump")]
+    internal static partial int PluginHostPump();
+
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int PluginHostScan(string workerPath);
 

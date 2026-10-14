@@ -74,6 +74,34 @@ extern "C" NOTA_API NotaResult nota_pluginhost_open_test_window(void) {
     return NOTA_OK;
 }
 
+// ---- JUCE message pump (Linux) ---------------------------------------------
+// The spike premise above holds on macOS (shared CFRunLoop) and Windows (JUCE's
+// message HWND is serviced by Avalonia's Win32 loop), but on Linux JUCE runs its
+// own poll()-based loop over the X11 display fd, its message pipe and any fds a
+// hosted VST3 registers through the host IRunLoop. Nothing services that loop
+// unless we do: editor windows stay black and unclosable, and plugins — which
+// hand their message thread to the host's IRunLoop on creation — never run their
+// timers/async work and stay silent. The app calls this from a UI-thread timer.
+
+#if JUCE_LINUX || JUCE_BSD
+namespace juce::detail { bool dispatchNextMessageOnSystemQueue(bool returnIfNoPendingMessages); }
+#endif
+
+extern "C" NOTA_API int32_t nota_pluginhost_pump(void) {
+#if JUCE_LINUX || JUCE_BSD
+    if (g_juceGui == nullptr) return 0;   // no plugin/editor yet: nothing to service
+    auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+    if (mm == nullptr || !mm->isThisTheMessageThread()) return 0;
+    // Bounded so a plugin that keeps re-posting messages can't starve Avalonia.
+    constexpr int kMaxPerPump = 64;
+    int n = 0;
+    while (n < kMaxPerPump && juce::detail::dispatchNextMessageOnSystemQueue(true)) ++n;
+    return n;
+#else
+    return 0;
+#endif
+}
+
 // ---- Plugin scanning & catalog (M3-1) --------------------------------------
 
 namespace {

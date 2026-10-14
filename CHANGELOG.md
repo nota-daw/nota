@@ -63,6 +63,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Return tracks can be deleted in the arrangement:** the Return row's context menu has
   Delete track, and Delete / Backspace removes a selected Return, in one undo step. The
   Returns that stay keep sounding, and every track's sends stay on the same Returns.
+- **Plug-ins work on Linux:** VST3 plug-ins (including those from Get Plug-ins) play sound
+  again, and their windows draw their interface and close with the close button. Before,
+  they stayed silent behind a black window that only closed when Nota quit.
 
 ## [0.52.1] — 2026-10-13
 

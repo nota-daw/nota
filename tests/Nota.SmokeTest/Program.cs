@@ -14614,6 +14614,12 @@ foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 Console.WriteLine("-- pan law --");
 foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
 
+// The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
+// platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).
+Console.WriteLine("-- plugin host pump --");
+Check(NotaEngine.PumpPluginHost() == 0 && NotaEngine.PumpPluginHost() == 0,
+    "plugin host pump: exported, non-blocking no-op with no plugin loaded");
+
 Console.WriteLine("-- mix undo --");
 foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
 
