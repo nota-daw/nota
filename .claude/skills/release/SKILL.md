@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Nota release in three phases. `prepare` (on develop) promotes CHANGELOG.md [Unreleased] to a dated version, writes the curated EN + RU release notes in release-notes/ (the one source for the GitHub release and the news channels), bumps the app and engine versions, makes the release image and the PR text. `tag` (on main, after the user merged the develop → main PR) creates the vX.Y.Z tag. `verify` (after the user pushed the tag) waits for the build and checks the GitHub draft against the curated notes. Run this when the user asks to release, ship, cut a version, tag a release or check a release build.
+description: Cut a Nota release in three phases. `prepare` (on a release/X.Y.Z branch from develop) promotes CHANGELOG.md [Unreleased] to a dated version, writes the curated EN + RU release notes in release-notes/ (the one source for the GitHub release and the news channels), bumps the app and engine versions, makes the release image and the PR texts. `tag` (on main, after the user merged the release PR into develop and the develop → main PR) creates the vX.Y.Z tag. `verify` (after the user pushed the tag) waits for the build and checks the GitHub draft against the curated notes. Run this when the user asks to release, ship, cut a version, tag a release or check a release build.
 user-invocable: true
 ---
 
@@ -26,17 +26,23 @@ The release runs through the branches like this. **The user does every commit, p
 by hand.** This skill never commits, pushes or opens a PR (see the user-commits rule).
 
 ```
-develop ── /release prepare ── user commits, pushes, opens PR develop → main
-main    ── user merges ── /release tag ── user pushes the tag
-CI      ── release.yml builds 6 files + draft release ── /release verify ── user publishes
+release/X.Y.Z ── /release prepare ── user commits, pushes, opens PR → develop (squash)
+develop       ── CI green, user merges ── user opens PR develop → main (merge commit)
+main          ── CI green, user merges ── /release tag ── user pushes the tag
+CI            ── release.yml builds 6 files + draft release ── /release verify ── user publishes
 ```
+
+`develop` and `main` are protected (rulesets): changes land only through a pull request
+with the `macOS`, `Windows` and `Linux` CI checks green; `develop` takes squash merges,
+`main` takes merge commits only, so `develop` → `main` never rewrites history. Release
+tags `v*` can be created only by maintainers.
 
 **Argument** (`/release <phase> [bump]`): the phase is `prepare` (default), `tag` or
 `verify`. For `prepare` the bump is `minor` or `patch` (see step P2).
 
 ---
 
-## Phase 1 — `prepare` (on `develop`)
+## Phase 1 — `prepare` (on a `release/X.Y.Z` branch from `develop`)
 
 ### P1. Preflight. Stop if any check fails
 
@@ -44,8 +50,11 @@ CI      ── release.yml builds 6 files + draft release ── /release verify
 2. The tree is clean (`git status --porcelain` is empty). Otherwise ask the user to commit
    or stash first, so the release changes stay separate.
 3. Up to date: `git fetch origin`, then `git rev-list --left-right --count origin/develop...HEAD`
-   must show `0` behind.
+   must show `0` behind and `0` ahead (unpushed commits on `develop` can't reach it any
+   more except through a pull request).
 4. `## [Unreleased]` has real entries.
+5. Once the version is chosen (P2), create the branch: `git switch -c release/X.Y.Z`. This is
+   the only branch operation the skill does itself; every later step edits files on it.
 
 ### P2. Choose the bump
 
@@ -148,12 +157,16 @@ Don't commit. Give the user:
 - the version change (`app a → b`, `engine c → d`) and the list of changed files:
   `CHANGELOG.md`, `VERSION`, `src/native/nota.engine/VERSION`, `FEATURES.md`,
   `release-notes/X.Y.Z.{en,ru}.md`,
-- the commit message `(chore) Release X.Y.Z`,
-- the **PR text** for develop → main. Title `Release X.Y.Z`, body = the output of
-  `scripts/release-notes.sh X.Y.Z github`, so the reviewer reads exactly what will be
-  published,
+- the commit message `(chore) Release X.Y.Z` and the push command
+  `git push -u origin release/X.Y.Z`,
+- the **PR into develop**: title `(chore) Release X.Y.Z` (it becomes the squash commit
+  message), body = a short list of the changed files,
+- the **PR text** for develop → main, opened after the first one is merged. Title
+  `Release X.Y.Z`, body = the output of `scripts/release-notes.sh X.Y.Z github`, so the
+  reviewer reads exactly what will be published. Merge it with **Create a merge commit**
+  (the only method `main` allows),
 - the image path and any docs gaps,
-- the next step: merge the PR, then run `/release tag`.
+- the next step: merge both PRs once CI is green, then run `/release tag`.
 
 ---
 
@@ -172,7 +185,8 @@ Don't commit. Give the user:
    ```
 
 If the script fails, report its message as is. Common causes: the PR isn't merged yet, or
-local main is behind.
+local main is behind. After the tag, `develop` needs no sync: the merge commit on `main`
+already has `develop` as a parent.
 
 ---
 
