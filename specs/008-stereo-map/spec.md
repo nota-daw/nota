@@ -15,6 +15,10 @@
   headers, the map), one gesture = one step. That capability is its own prerequisite spec
   (volume/pan undo), done before this one, like the Stereo pan law (specs/006); this spec
   only requires that a map drag uses it as one step.
+- Q: At what correlation should the map mark a track red (cloud outline, handle ring, master
+  correlation bar)? → A: Below −0.05 — a small tolerance so unrelated stereo material, whose
+  correlation hovers around 0, doesn't flicker red; real phase problems (well below 0) still
+  show.
 
 **Input**: User description: "Stereo Map — MVP (first of three specs: MVP, then V2 diagnostics, then V3 Remote/automation). A "Stereo Map" tab in the Mixer window (title-bar switch Strips | Stereo Map, per nota-design/Nota Mixer v2.html) that shows where every track really sits in the stereo field. Plane: X = pan L100…C…R100, Y = fader volume. Each track, return and the master gets a handle (the control) and a measured cloud (centre = measured balance, width = measured stereo width, opacity = measured level), measured post-fader and post-pan. Master: fixed handle, master correlation bar. Drag a handle = pan + volume, Shift locks the axis, double-click resets pan, ⌥+double-click resets volume; click selects; hover tooltip with the measurements. Requires the Stereo pan law (specs/006). Out of scope for MVP: Frequency axis, warnings, Conflicts, Hold, Mono, filters, Export PNG, Remote, automation write from the map, multi-select, MCP."
 
@@ -88,7 +92,7 @@ with the known material.
 4. **Given** one track soloed, **When** the map is open, **Then** the other tracks'
    dots and clouds are dimmed.
 5. **Given** the song plays, **When** the user looks under the map, **Then** a master
-   correlation bar (−1 … +1) moves with the mix, red when below 0.
+   correlation bar (−1 … +1) moves with the mix, red when below −0.05.
 
 ---
 
@@ -207,13 +211,14 @@ a dot and check the arrangement selection.
 - **FR-009**: Each handle with sound MUST have a **cloud** at the handle's height: a
   horizontal ellipse centred on the measured balance, half as wide as the measured width
   spans the map (a minimum visible width for mono), in the track colour, more opaque the
-  louder the measured level; a cloud with negative correlation gets a red outline.
+  louder the measured level; a cloud whose correlation is below −0.05 (negative beyond a small
+  tolerance) gets a red outline, and so does its handle's ring.
 - **FR-010**: Silent tracks MUST show no cloud; muted tracks MUST show a dimmed handle and
   no cloud; with any solo active, non-soloed tracks (not returns or master) MUST be dimmed.
 - **FR-011**: Each handle MUST carry its track name as a label (truncated), unless the
   label would overlap another; drawing order is selected first, then by level.
 - **FR-012**: A **MASTER CORR** bar (−1 … +1, centre mark, value as a number) under the map
-  MUST show the master correlation, green above 0 and red below.
+  MUST show the master correlation, green at or above −0.05 and red below it.
 - **FR-013**: The map MUST update at the display rate and follow track list changes,
   renames, recolours, mute/solo, automation and edits made elsewhere.
 

@@ -108,6 +108,15 @@ dragging; rows and notes per FR-019; "Image is off the pan" when `|balance − p
   correlation of the unrelated pair ≈ 0; measuring cost: render time with 64 tracks within
   1 % of the same render with measurement disabled via a test-only switch, or (if a switch
   is not worth adding) within the run-to-run noise of two plain renders (SC-004).
+- **SC-004, measured (2026-10-14, implementation)**: no test-only switch was added to the
+  engine, so the cost was measured once as an A/B of two engine builds — the committed tree
+  before the Stereo Map sums (built in a temporary `git worktree`, `vendor/` linked from the main
+  checkout) against the tree with them — on the same render: 64 stereo audio tracks (unrelated
+  440 Hz / 1 kHz WAV), Stereo law, 8 s in 512-frame blocks at 48 kHz, best of 6 runs, two rounds:
+  **169.2 / 170.1 µs per block with the sums vs 171.0 / 171.8 µs without** — a difference inside
+  the run-to-run noise, far below 1 % of the 10.7 ms block budget (SC-004). To repeat: build the
+  engine at the two commits, run the same render through `NotaEngine.RenderOffline` with each
+  `libnota_engine.dylib`, compare the best times.
 - **Headless UI** (harness): handles at the right positions, drag = one undo step moving pan
   and volume, Shift lock, resets, master fixed, selection both ways, labels never overlap,
   screenshots in both themes vs the mock.

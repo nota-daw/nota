@@ -68,6 +68,9 @@ public sealed class StereoMapView : Control
     private readonly Dictionary<int, (string name, IBrush color)> _looks = new();
     private readonly Dictionary<int, (string text, IBrush brush, FormattedText ft)> _labels = new();
     private readonly List<Rect> _placedLabels = new();   // this frame's label boxes (no two overlap)
+    // The last tooltip drawn: its rows and note titles (read by the UI checks).
+    private readonly List<(string key, string value)> _tooltipRows = new();
+    private readonly List<string> _tooltipNotes = new();
     private int _frame;
     private bool _frameRequested;
 
@@ -321,6 +324,11 @@ public sealed class StereoMapView : Control
             notes.Add(("Image is off the pan", $"The pan is at {PanText(it.Pan)}, but the signal measures {PanText(it.M.Balance)}. The source itself is unbalanced.", NotaPalette.Accent));
         if (it.Muted) notes.Add(("Muted", "No cloud while the track is muted.", NotaPalette.TextSecondary));
         else if (!it.Has || it.M.Silent) notes.Add(("Silent", "Below −60 dBFS, so the cloud is hidden.", NotaPalette.TextSecondary));
+
+        _tooltipRows.Clear();
+        foreach (var (k, v, _) in rows) _tooltipRows.Add((k, v));
+        _tooltipNotes.Clear();
+        foreach (var n in notes) _tooltipNotes.Add(n.title);
 
         const double W = 188, Pad = 10, RowH = 13;
         var bodies = new List<FormattedText>();
