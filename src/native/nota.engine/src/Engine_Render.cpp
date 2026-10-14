@@ -325,6 +325,11 @@ void Engine::attachRecordedExpr(Note& n, int32_t pitch, double startBeat) {
 // --- audio thread ----------------------------------------------------------
 
 void Engine::render(float* out, int32_t numFrames) {
+    // start() is still re-preparing the nodes on the control thread: output silence.
+    if (renderSuspended_.load(std::memory_order_acquire)) {
+        std::fill(out, out + static_cast<size_t>(numFrames) * 2, 0.0f);
+        return;
+    }
     ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     processBlock(out, numFrames);
@@ -345,6 +350,12 @@ void Engine::renderOffline(float* out, int32_t frames, double sampleRate) {
 }
 
 void Engine::renderOffline(float* out, int32_t frames) {
+    // Offline rendering re-prepares and processes the graph on the calling thread — with the
+    // device live that would race the audio thread. Callers stop the backend first; enforce it.
+    if (isRunning()) {
+        std::fill(out, out + static_cast<size_t>(frames) * 2, 0.0f);
+        return;
+    }
     stopPreview(); // audition must never bleed into a bounce (M7-4a)
     if (transport_.sampleRate() <= 0) transport_.setSampleRate(44100.0);
     const double sr = transport_.sampleRate();

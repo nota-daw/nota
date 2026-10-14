@@ -60,14 +60,19 @@ bool Engine::start() {
     bc.bufferFrames    = config_.bufferFrames;
     bc.wasapiExclusive = config_.wasapiExclusive;
     backend_->setXrunCallback([this] { notifyXrun(); }); // device dropouts (M7-8)
+    // The device rate is only known once the backend is open, so the nodes are re-prepared
+    // after it starts. Until then the callback must stay out of the graph: prepare()
+    // reallocates buffers (and hosted plugins run prepareToPlay) the audio thread would read.
+    renderSuspended_.store(true, std::memory_order_release);
     const bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
     if (ok) {
         transport_.setSampleRate(backend_->sampleRate());
         propagateSampleRate(backend_->sampleRate()); // re-prepare every node (incl. master + racks) at the new rate
         reconfigureAllWarpStreams(); // warp transpose + window sizes depend on the device SR
         recomputePdc(); // latencies are known once plugins are prepared
-        openMidiInput();
     }
+    renderSuspended_.store(false, std::memory_order_release);
+    if (ok) openMidiInput();
     return ok;
 }
 

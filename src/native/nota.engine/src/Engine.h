@@ -1320,6 +1320,9 @@ private:
     std::atomic<bool>  recording_{false};
     std::atomic<int32_t> xruns_{0};           // device dropouts since launch (M7-8)
     std::atomic<float>   cpuLoad_{0.0f};      // smoothed RT DSP load 0..1 (Phase 11)
+    // Set by start() before the device opens, cleared (release) once every node is re-prepared
+    // at the negotiated rate: while set, render() outputs silence and never touches the graph.
+    std::atomic<bool>    renderSuspended_{false};
     std::atomic<double> launchQuant_{4.0};   // Session launch quantize, beats (M5-2)
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.

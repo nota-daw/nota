@@ -63,6 +63,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Multi-output plug-ins no longer crash Nota when added:** Nota switched off a plug-in's
   extra outputs, and some instruments (Vienna Synchron Pianos on Windows) still wrote to them
   and crashed on the first block. Every output is now on; Nota plays the main stereo pair.
+- **No crash when audio restarts with plug-ins loaded:** after an export, a track freeze or
+  Apply in Preferences → Audio, Nota could play a few blocks while it was still getting the
+  project's plug-ins and devices ready for the audio device, which could crash inside a
+  plug-in. Audio now stays silent until everything is ready.
 - **Return tracks can be deleted in the arrangement:** the Return row's context menu has
   Delete track, and Delete / Backspace removes a selected Return, in one undo step. The
   Returns that stay keep sounding, and every track's sends stay on the same Returns.
