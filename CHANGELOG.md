@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.53.1] — 2026-10-15
+
 ### Added
 - **Note length and velocity from the keyboard:** in the piano roll, **⇧← / ⇧→** shorten
   or lengthen every selected note by one grid step (starts stay put), and **⌥↑ / ⌥↓**
