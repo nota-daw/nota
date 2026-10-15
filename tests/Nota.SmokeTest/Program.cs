@@ -14645,6 +14645,7 @@ foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
 Console.WriteLine("-- plugin host pump --");
 Check(NotaEngine.PumpPluginHost() == 0 && NotaEngine.PumpPluginHost() == 0,
     "plugin host pump: exported, non-blocking no-op with no plugin loaded");
+foreach (var (ok, label) in PumpPacerTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- mix undo --");
 foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);

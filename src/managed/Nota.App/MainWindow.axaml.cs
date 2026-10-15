@@ -266,9 +266,15 @@ public partial class MainWindow : Window
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
         var cpuRed = (IBrush?)NotaPalette.Danger;
+        int cpuShown = -1;   // the CPU read-out's last percentage, so an unchanged one isn't re-laid-out
         vm.PlayheadUpdated += beats =>
         {
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
+            SyncSceneTempo();        // a launched scene set tempo / signature
+            // Nothing of the window can be seen: keep servicing MIDI and scenes, skip the
+            // meters, playheads and live knobs — they'd redraw ~30×/s for nobody (#55).
+            if (WindowState == WindowState.Minimized
+                && _detailWindow is not { IsVisible: true, WindowState: not WindowState.Minimized }) return;
             LearnOverlay.Refresh();  // keep highlights over rebuilt cards while armed
             Timeline.SetPlayhead(beats);
             _masterMeter?.Push(vm.Engine.MasterMeter());
@@ -276,7 +282,6 @@ public partial class MainWindow : Window
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
             SyncReenableAutomation();                                  // "a control is overriding its lane"
             if (_session?.IsVisible == true) _session.UpdateStates(); // live launch/queue/play
-            SyncSceneTempo();                                          // a launched scene set tempo / signature
             if (_mixer?.IsVisible == true) _mixer.UpdateMeters();      // Mixer tab strips
             if (_modular?.IsVisible == true) _modular.Tick(vm.Engine.IsPlaying); // graph knobs follow automation + edge pulse
             if (DetailBody.Content is MixerView mx && mx.IsEffectivelyVisible) mx.UpdateMeters(); // 1f strips
@@ -296,9 +301,14 @@ public partial class MainWindow : Window
                 _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
-            CpuFill.Width = load * 52;
-            CpuFill.Background = load > 0.9 ? cpuRed : load > 0.7 ? cpuAmber : cpuGreen;
-            CpuText.Text = "CPU " + (int)Math.Round(load * 100) + "%";
+            int pct = (int)Math.Round(load * 100);
+            if (pct != cpuShown)
+            {
+                cpuShown = pct;
+                CpuFill.Width = pct * 0.52;
+                CpuFill.Background = pct > 90 ? cpuRed : pct > 70 ? cpuAmber : cpuGreen;
+                CpuText.Text = "CPU " + pct + "%";
+            }
             SyncMidiDot();
         };
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT

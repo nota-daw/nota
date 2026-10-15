@@ -552,6 +552,7 @@ public sealed partial class ArrangementView : UserControl
 
     public void SetPlayhead(double beats)
     {
+        bool moved = beats != _playheadBeats;
         _playheadBeats = beats;
         // While following, the view scrolls under the playhead — the lane surface (clips /
         // waveforms) must repaint along with the ruler+overlay, not just the overlay.
@@ -559,12 +560,20 @@ public sealed partial class ArrangementView : UserControl
         if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
+        bool loopChanged = false;
         if (!_loopDragging && _engine is { } eng)
         {
             bool on = eng.LoopEnabled; double s = eng.LoopStart, e = eng.LoopEnd;
             if (on != _loopActive || s != _loopS || e != _loopE)
-            { _loopActive = on; _loopS = s; _loopE = e; }
+            { _loopActive = on; _loopS = s; _loopE = e; loopChanged = true; }
         }
+        // Automation mode: an empty lane draws a baseline at the param's live value, so it must
+        // follow a knob turned in the device. Redraw the lanes only when a visible empty lane's
+        // baseline actually changed (params with points are automation-driven — no baseline).
+        if (_automationMode) RefreshAutoBaselines();
+        // Stopped with nothing moving: the playhead chrome is already right — repainting it
+        // every tick kept the whole window redrawing ~30×/s while idle (#55).
+        if (!moved && !scrolled && !loopChanged) return;
         // Only the overlay (playhead + loop band) moves each tick — the lane surface
         // beneath is unchanged, so leave it be to avoid a full clip/waveform repaint.
         _ruler.InvalidateVisual();
@@ -572,11 +581,6 @@ public sealed partial class ArrangementView : UserControl
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
         TickOverviewPlayhead();   // only when the marker crossed a pixel of the strip
-
-        // Automation mode: an empty lane draws a baseline at the param's live value, so it must
-        // follow a knob turned in the device. Redraw the lanes only when a visible empty lane's
-        // baseline actually changed (params with points are automation-driven — no baseline).
-        if (_automationMode) RefreshAutoBaselines();
     }
 
     // Repaint the lane surface when a visible un-automated (empty-lane) target's live value

@@ -38,10 +38,12 @@ public sealed class MeterBar : Control
     /// <summary>Feed a fresh reading. The bar takes the value at once; the hold keeps the maximum.</summary>
     public void Push(NotaMeter m)
     {
-        _levelL = MeterScale.Norm(m.PeakL);
-        _levelR = MeterScale.Norm(m.PeakR);
-        _holdL = Math.Max(_holdL, _levelL);
-        _holdR = Math.Max(_holdR, _levelR);
+        double l = MeterScale.Norm(m.PeakL), r = MeterScale.Norm(m.PeakR);
+        double hl = Math.Max(_holdL, l), hr = Math.Max(_holdR, r);
+        // Readings arrive at the UI clock even in silence: repaint only when something moved,
+        // or every meter redraws ~30×/s while idle (#55).
+        if (l == _levelL && r == _levelR && hl == _holdL && hr == _holdR) return;
+        _levelL = l; _levelR = r; _holdL = hl; _holdR = hr;
         InvalidateVisual();
     }
 

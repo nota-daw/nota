@@ -82,6 +82,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **Less CPU while idle:** Nota no longer redraws its meters, playhead and CPU read-out
+  ~30 times a second when nothing on them has changed. It skips them entirely while the
+  window is minimized, and on Linux the plug-in message pump slows down when no plug-in
+  needs it. Most noticeable on Linux, where Nota used much more CPU than other DAWs.
 - **New tracks scroll into view:** a track added to a full arrangement was drawn under the
   pinned Return and Master rows. The arrangement now scrolls to show it, and the pinned
   rows sit on a line of their own.
