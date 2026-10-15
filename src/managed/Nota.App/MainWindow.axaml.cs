@@ -307,8 +307,9 @@ public partial class MainWindow : Window
                 cpuShown = pct;
                 CpuFill.Width = pct * 0.52;
                 CpuFill.Background = pct > 90 ? cpuRed : pct > 70 ? cpuAmber : cpuGreen;
-                CpuText.Text = "CPU " + pct + "%";
+                CpuText.Text = "DSP " + pct + "%";
             }
+            _cpuTipTick?.Invoke();
             SyncMidiDot();
         };
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT
@@ -459,6 +460,7 @@ public partial class MainWindow : Window
         ReleaseTextFocusOnOutsidePress(this);
 
         Closed += (_, _) => vm.Dispose();
+        SetUpCpuTip(vm.Engine);
 
         // MCP server: MCP tool edits redraw the arrangement + device panel; start the server if
         // enabled in Preferences (loopback only). Runs off the settings toggle thereafter.
@@ -638,6 +640,34 @@ public partial class MainWindow : Window
             f.Items.Add(mi);
         }
         f.ShowAt(MetronomeBtn);
+    }
+
+    // The transport meter shows DSP load (what predicts dropouts); its tooltip adds the whole
+    // process's CPU in the platform monitor's own scale (issue #54). Refreshed from the
+    // transport tick, at most once a second.
+    private Action? _cpuTipTick;
+
+    private void SetUpCpuTip(IAudioEngine engine)
+    {
+        var cpu = App.Services.GetRequiredService<IProcessCpu>();
+        bool wholeMachine = ProcessCpuScale.WholeMachine;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var next = TimeSpan.Zero;
+        string? shown = null;
+        _cpuTipTick = () =>
+        {
+            if (clock.Elapsed < next) return;
+            next = clock.Elapsed + TimeSpan.FromSeconds(1);
+            double dsp = Math.Clamp(engine.CpuLoad, 0, 1) * 100;
+            string proc = cpu.CorePercent() is { } core
+                ? NotaNum.Unit(ProcessCpuScale.ToDisplay(core, cpu.LogicalCpus, wholeMachine), "0", "%")
+                  + " " + ProcessCpuScale.Unit(wholeMachine)
+                : "measuring…";
+            string tip = $"DSP load: {NotaNum.Unit(dsp, "0", "%")} of the audio buffer time — dropouts start near 100\u2009%\n"
+                + $"Nota process CPU: {proc} (audio, interface, plugins)";
+            if (tip != shown) ToolTip.SetTip(CpuMeter, shown = tip);   // re-set only when it changed (#66)
+        };
+        _cpuTipTick();
     }
 
     private readonly TapTempo _tap = new();

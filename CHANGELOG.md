@@ -82,6 +82,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **The transport meter says what it measures:** it read "CPU" but showed only the audio
+  engine's load, so it sat far below the system monitor. It is now labelled **DSP** — the
+  share of each audio buffer the engine needs, which is what causes dropouts — and its
+  tooltip adds the CPU used by the whole Nota process over the last few seconds, in the
+  same scale as your system monitor (Windows: of all CPUs; macOS and Linux: of one core).
+  Instrument cards that showed the engine load now say DSP too.
 - **Less CPU while idle:** Nota no longer redraws its meters, playhead and CPU read-out
   ~30 times a second when nothing on them has changed. It skips them entirely while the
   window is minimized, and on Linux the plug-in message pump slows down when no plug-in

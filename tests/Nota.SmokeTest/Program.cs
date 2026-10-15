@@ -229,6 +229,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Process CPU readout alone: `--cpu`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--cpu")
+{
+    Console.WriteLine("-- process cpu --");
+    foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CPU PASSED" : $"CPU FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Tap tempo alone: `--tap`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--tap")
 {
@@ -14624,6 +14632,9 @@ foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- process cpu --");
+foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- snap grid --");
 foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);

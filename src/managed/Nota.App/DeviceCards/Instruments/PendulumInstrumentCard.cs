@@ -171,7 +171,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             int voices = snap.Live ? snap.Voices : Math.Max(0, engine.InstrumentVoiceCount(track));
             lastNote.Text = $"last note {PendulumModel.NoteName(snap.LastPitch)} · {voices} {(voices == 1 ? "voice" : "voices")}";
             double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             status.Text = Summary();
         }
 

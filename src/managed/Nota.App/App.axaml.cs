@@ -58,6 +58,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<GamepadService>();
         services.AddSingleton<IGamepadService>(sp => sp.GetRequiredService<GamepadService>());
         services.AddSingleton<IAudioExporter, AudioExporter>();
+        services.AddSingleton<IProcessCpu, ProcessCpuSampler>();
         // UI-thread timer factory lives in the App layer (over DispatcherTimer).
         services.AddSingleton<IPeriodicTimerFactory, AvaloniaPeriodicTimerFactory>();
         services.AddSingleton<RecoveryService>();

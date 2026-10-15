@@ -1258,7 +1258,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             samSnap.Note = snap.Note; samSnap.CutoffHz = snap.CutoffHz; samSnap.PlayPos = snap.Pos;
             map.SetSounding(snap.Zones, snap.Keys);
             if (tab == 1) wave.SetPlayhead(snap.Live && snap.Zone == ui.Zone ? snap.Pos : -1);
-            meta.Text = $"{Rate()} · {snap.Voices}/{Poly()} voices · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+            meta.Text = $"{Rate()} · {snap.Voices}/{Poly()} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             bool ld = Loading(), miss = AllMissing();
             if (ld != lastLoading || miss != lastMissing)
             {

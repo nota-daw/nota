@@ -693,7 +693,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             }
             int voices = Math.Max(0, engine.InstrumentVoiceCount(track));
             double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{RM.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+            meta.Text = $"{voices}/{RM.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
         }
 
         // ---- assembly --------------------------------------------------------------------------

@@ -559,8 +559,8 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             int voices = snap.Live ? snap.Voices : 0;
             double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
             meta.Text = hasSample
-                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
-                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
+                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             Refresh();
         }
         registerTick(Live);

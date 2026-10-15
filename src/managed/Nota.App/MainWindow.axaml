@@ -356,14 +356,14 @@
         <Border x:Name="CpuSep" Grid.Column="7" Width="1" Height="18" Margin="10,0"
                 Background="{DynamicResource Brush.Rule}"/>
 
-        <!-- CPU: live DSP load -->
-        <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center">
+        <!-- DSP load (audio-callback time ÷ buffer); the tooltip adds process CPU (MainWindow.SetUpCpuTip) -->
+        <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center" Background="Transparent">
           <Border Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
                   CornerRadius="{StaticResource Radius.Clip}" ClipToBounds="True">
             <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Clip}"
                     Background="{DynamicResource Brush.Success}"/>
           </Border>
-          <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="CPU 0%" FontWeight="Normal"/>
+          <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="DSP 0%" FontWeight="Normal"/>
         </StackPanel>
 
         <!-- Master: fader over its meter, with the gain in dB -->
