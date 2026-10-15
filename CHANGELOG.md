@@ -95,6 +95,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **Popping out the piano roll no longer crashes on Linux:** opening Devices / Clip in its
+  own window could close Nota at once on Linux ("Attempt to call InvalidateArrange on wrong
+  LayoutManager"). The editor's pending layout in the main window is now finished before it
+  moves to the new window, and the same on the way back.
 - **The transport meter says what it measures:** it read "CPU" but showed only the audio
   engine's load, so it sat far below the system monitor. It is now labelled **DSP** — the
   share of each audio buffer the engine needs, which is what causes dropouts — and its

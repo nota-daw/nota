@@ -78,9 +78,11 @@ internal sealed class DetailWindow : NotaWindow
         base.OnClosing(e);
         if (e.Cancel) return;
         // Detach the hosted controls before they go back to the main window (a control
-        // can have only one parent).
+        // can have only one parent), then run this window's pending layout so no entry
+        // queued for them here outlives the move (see MainWindow.SetHost).
         ClipHost.Content = null;
         ChainHost.Content = null;
+        UpdateLayout();
         DockRequested?.Invoke();
     }
 }
