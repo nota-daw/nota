@@ -125,7 +125,7 @@ public sealed class SampleTools(IAudioEngine engine, IEngineDispatch dispatch, I
         var ids = new Dictionary<string, int>();
         for (int i = 0; i < pc; i++) ids[E.PluginParamId(trackId, -1, i)] = i;
         float Get(string id) => ids.TryGetValue(id, out var i) ? E.PluginParamGet(trackId, -1, i) : 0f;
-        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) E.PluginParamSet(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
+        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) PlugParam(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
         static int Find(string[] names, string v) => Array.FindIndex(names, n => string.Equals(n, v.Trim(), StringComparison.OrdinalIgnoreCase)
             || n.StartsWith(v.Trim(), StringComparison.OrdinalIgnoreCase));
         var errors = new List<string>();

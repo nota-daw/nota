@@ -54,7 +54,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     [McpServerTool(Name = "set_midi_fx_param"), Description("Set a MIDI effect parameter by index (value in the param's min..max range).")]
-    public Task SetMidiFxParam(int trackId, int index, int paramIndex, float value) => Mutate(() => E.MidiEffectSetParam(trackId, index, paramIndex, value));
+    public Task SetMidiFxParam(int trackId, int index, int paramIndex, float value) => Mutate(() => MidiParam(trackId, index, paramIndex, value));
 
     // ---- Nota Arp (kind 0) — named access to its globals and 16-step Groove lanes ----------
     // Param layout mirrors Arpeggiator.h: 13 globals, 7 lanes × 16 steps, then VelAmt / View.
@@ -131,7 +131,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         string? loopMode = null, string? view = null) => Mutate(() =>
     {
         RequireArp(trackId, index);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (order is not null) S(GOrder, Pick(ArpOrders, order, "order"));
         if (rate is not null) { S(GRate, Pick(ArpRates, rate, "rate")); S(GSync, 1); }
         if (freeMs is { } ms) { S(GFreeRate, 1000f / Math.Clamp(ms, 20, 1000)); S(GSync, 0); }
@@ -156,7 +156,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         RequireArp(trackId, index);
         if (!ArpLanes.TryGetValue(lane.Trim().ToLowerInvariant(), out var l))
             throw new ArgumentException($"Unknown lane '{lane}'. Use one of: {string.Join(", ", ArpLanes.Keys)}.");
-        for (int s = 0; s < values.Length && s < ArpSteps; s++) E.MidiEffectSetParam(trackId, index, l.Base + s, l.From(values[s]));
+        for (int s = 0; s < values.Length && s < ArpSteps; s++) MidiParam(trackId, index, l.Base + s, l.From(values[s]));
     });
 
     [McpServerTool(Name = "set_arp_step"), Description(
@@ -166,7 +166,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
     {
         RequireArp(trackId, index);
         int s = Math.Clamp(step, 1, ArpSteps) - 1;
-        void L(string n, float? v) { if (v is { } x) { var l = ArpLanes[n]; E.MidiEffectSetParam(trackId, index, l.Base + s, l.From(x)); } }
+        void L(string n, float? v) { if (v is { } x) { var l = ArpLanes[n]; MidiParam(trackId, index, l.Base + s, l.From(x)); } }
         L("velocity", velocity); L("length", length); L("chance", chance);
         L("ratchet", ratchet); L("transpose", transpose); L("on", on is { } b ? (b ? 1 : 0) : null);
     });
@@ -232,7 +232,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         bool? keepRoot = null, bool? fold = null, string? foldKey = null, string? foldMode = null, string? view = null) => Mutate(() =>
     {
         RequireChord(trackId, index);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         int[]? iv = shifts;
         if (iv is null && type is not null)
         {
@@ -267,7 +267,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         RequireChord(trackId, index);
         if (slot is < 1 or > CSlots) throw new ArgumentException("slot must be 1..6.");
         int s = slot - 1;
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (semitones is { } st) { S(CVoice + s, Math.Clamp(st, -12, 12)); if (on is null) S(COn + s, 1); }
         if (on is { } o) S(COn + s, o ? 1 : 0);
         if (velocity is { } v) S(CVel + s, Math.Clamp(v, -64, 63));
@@ -313,8 +313,8 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
     {
         if ((int)MathF.Round(E.MidiEffectGetParam(trackId, index, SScale)) >= SCustom) return;
         int m = ScaleMask(trackId, index);
-        for (int i = 0; i < 12; i++) E.MidiEffectSetParam(trackId, index, SMask + i, (m >> i) & 1);
-        E.MidiEffectSetParam(trackId, index, SScale, SCustom);
+        for (int i = 0; i < 12; i++) MidiParam(trackId, index, SMask + i, (m >> i) & 1);
+        MidiParam(trackId, index, SScale, SCustom);
     }
 
     [McpServerTool(Name = "get_scale"), Description(
@@ -365,7 +365,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         string? view = null) => Mutate(() =>
     {
         RequireScale(trackId, index);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (root is not null) S(SRoot, ParsePc(root));
         if (scale is not null)
         {
@@ -406,7 +406,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         RequireScale(trackId, index);
         ScaleMakeCustom(trackId, index);
         int r = ((int)MathF.Round(E.MidiEffectGetParam(trackId, index, SRoot)) % 12 + 12) % 12;
-        E.MidiEffectSetParam(trackId, index, SMask + ((ParsePc(note) - r) % 12 + 12) % 12, on ? 1 : 0);
+        MidiParam(trackId, index, SMask + ((ParsePc(note) - r) % 12 + 12) % 12, on ? 1 : 0);
     });
 
     // ---- Nota Length (kind 3) — named access in musical units --------------------------------
@@ -469,7 +469,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         bool? legato = null, bool? clipLimit = null, string? view = null) => Mutate(() =>
     {
         RequireLength(trackId, index);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (division is not null)
         {
             string d = division.Trim().Replace("D", ".", StringComparison.OrdinalIgnoreCase).Replace("t", "T");
@@ -564,7 +564,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
     {
         RequireVelocity(trackId, index);
         float G(int p) => E.MidiEffectGetParam(trackId, index, p);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (drive is { } d) S(VDrive, MathF.Round(Math.Clamp(d, 0.25f, 4f), 2));
         if (fixedValue is { } fv) { S(VFixed, Math.Clamp(fv, 1, 127) / 127f); S(VMode, 2); }
         if (mode is not null)
@@ -645,7 +645,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         bool? stayInScale = null, int? seed = null, bool? reroll = null, bool? locked = null, int? lockBar = null, string? view = null) => Mutate(() =>
     {
         RequireRandom(trackId, index);
-        void S(int p, float v) => E.MidiEffectSetParam(trackId, index, p, v);
+        void S(int p, float v) => MidiParam(trackId, index, p, v);
         if (chancePercent is { } c) S(RChance, Math.Clamp(c, 0, 100) / 100f);
         if (noteRangeSemitones is { } n) S(RNote, Math.Clamp(n, 0, 12));
         if (velocityRange is { } v) S(RVel, Math.Clamp(v, 0, 64) / 64f);

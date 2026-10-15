@@ -71,12 +71,23 @@ using MonitorQueue = SpscRingBuffer<InputFrame, 1u << 14>; // input thread -> au
 // is the pitch and value the velocity. The engine still routes notes to instruments.
 struct ControlEvent { int32_t kind; int32_t channel; int32_t number; int32_t value; };
 
-// Mix undo (specs/009): volume / pan / master volume live in atomics outside the graph, so
-// their undo steps carry values instead of a snapshot. They share one history with the
-// structural snapshots (UndoEntry), which keeps the order of all edits.
-enum class MixKind : int32_t { TrackVolume = 0, TrackPan = 1, MasterVolume = 2 };
-struct MixTarget { MixKind kind; int32_t trackId; };          // trackId ignored for MasterVolume
-struct MixChange { MixKind kind; int32_t trackId; float before; float after; };
+// Value undo (specs/009, specs/016): volume / pan / master volume live in atomics outside the
+// graph, and device parameters live in Device objects that cloned tracks share — restoring
+// an older graph restores neither. Their undo steps carry values instead of a snapshot. They
+// share one history with the structural snapshots (UndoEntry), which keeps the order of all
+// edits. Parameter kinds address (track, device index, parameter index): DeviceParam an audio
+// effect, MidiDeviceParam a MIDI effect, PluginParam a normalized hosted-plugin / built-in
+// instrument parameter (deviceIndex -1 = the instrument).
+enum class MixKind : int32_t { TrackVolume = 0, TrackPan = 1, MasterVolume = 2,
+                               DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5 };
+struct MixTarget {
+    MixKind kind; int32_t trackId;                   // trackId ignored for MasterVolume
+    int32_t deviceIndex = -1; int32_t paramIndex = -1; // parameter kinds only
+};
+struct MixChange {
+    MixKind kind; int32_t trackId; float before; float after;
+    int32_t deviceIndex = -1; int32_t paramIndex = -1; // parameter kinds only
+};
 struct UndoEntry {
     std::shared_ptr<Graph> graph;   // the state to restore; null for a mix-only step
     std::vector<MixChange> mix;     // empty for a structural step; one change per target
@@ -999,9 +1010,9 @@ public:
     // previous authoring_ is already a complete restore point. Undo/redo just
     // swap the authoring/live pointer between retained snapshots (audio sample
     // buffers are shared via shared_ptr, so a snapshot costs only metadata).
-    // Scope: structural graph edits, plus volume / pan / master volume steps made through
-    // mix gestures (specs/009). Mute, solo, sends, bypass, device params and the transport
-    // live outside the Graph and are not covered.
+    // Scope: structural graph edits (arrangement sections included, specs/016), plus volume /
+    // pan / master volume (specs/009) and device-parameter (specs/016) steps made through
+    // value gestures. Mute, solo, sends, bypass and the transport are not covered.
     bool undo();
     bool redo();
     bool canUndo() const { return !undoStack_.empty(); }
@@ -1016,10 +1027,12 @@ public:
     // built default project). Message thread only.
     void clearUndoHistory();
 
-    // --- mix gestures (specs/009) ---
+    // --- value gestures (specs/009 volume / pan, specs/016 device parameters) ---
     // begin records the targets' values; end pushes ONE undo step with the values that
     // changed (none → no step), merged into a structural checkpoint pushed meanwhile
-    // (automation recording). The plain setters never record. Message thread only.
+    // (automation recording). The plain setters never record. An unlatched automation-write
+    // touch on a parameter (every on-screen control's press / release) opens and closes one
+    // for that parameter. Message thread only.
     int32_t beginMixGesture(const MixTarget* targets, int32_t count);   // handle > 0, or 0
     void    endMixGesture(int32_t handle);                               // unknown handle: no-op
     float   masterVolume() const { return masterVolume_.load(std::memory_order_relaxed); }
@@ -1037,6 +1050,10 @@ public:
     // Graph-level, so undo/redo restore it. checkpoint = false for load / the new-project
     // baseline. False for an unknown law; a no-op (no undo step) if unchanged. Message thread.
     bool setPanLaw(PanLaw law, bool checkpoint);
+    // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
+    // one undo step (an identical list makes none); false = baseline (project load).
+    void setSections(std::vector<Section> sections, bool checkpoint);
+    const std::vector<Section>& sections() const { static const std::vector<Section> none; return authoring_ ? authoring_->sections : none; }
     PanLaw panLaw() const { return authoring_ ? authoring_->panLaw : PanLaw::Balance; }
 
     // --- offline render (tests / export) ---
@@ -1105,6 +1122,8 @@ private:
     float modOutput(Track& t, int32_t modId, double beat, double timeSec);
     void restoreLinkTarget(int32_t ownerTrack, const CvLink& l);   // drive target param back to base
     void routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float value);
+    // The base a CV link holds for this target, if one targets it (what a UI edit sets).
+    bool cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const;
     int32_t addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcParam,
                           int32_t targetKind, int32_t targetTrack, int32_t targetDevice, int32_t targetParam);
     Modulator* modulatorPtr(Track& t, int32_t modId);
@@ -1304,6 +1323,7 @@ private:
     std::vector<OpenMixGesture> mixGestures_;   // message thread; `before` filled at begin
     int32_t nextMixGesture_ = 1;
     bool mixValue(const MixTarget& t, float& v) const;            // current value; false = gone
+    bool paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     bool applyMix(const MixChange& c, bool after);                // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;
@@ -1384,6 +1404,15 @@ private:
     // reenableAutomation() (Live's "Re-Enable Automation").
     struct OverrideTarget { int32_t trackId; int32_t laneIndex; };
     std::vector<ActiveWrite>    activeWrites_;
+    // Value gestures opened by unlatched parameter touches (specs/016), closed by the
+    // matching endAutomationWrite. One per touch identity.
+    struct TouchGesture {
+        int32_t trackId; int32_t target; int32_t deviceIndex; int32_t paramIndex;
+        std::string paramId; int32_t handle;
+    };
+    std::vector<TouchGesture>   touchGestures_;
+    void beginParamTouch(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const std::string& id);
+    void endParamTouch(int32_t trackId, int32_t target, int32_t deviceIndex, int32_t paramIndex, const std::string& id);
     std::vector<OverrideTarget> overrides_;
     bool wasPlaying_ = false;                 // poll() edge detection: stop ends latched writes
     bool renderWasPlaying_ = false;           // audio-thread play→stop edge (flush stuck notes)

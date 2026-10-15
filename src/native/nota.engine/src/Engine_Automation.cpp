@@ -278,9 +278,50 @@ static int32_t findLaneFor(const Track& t, int32_t target, int32_t deviceIndex,
     return -1;
 }
 
+// specs/016: an unlatched touch — a mouse press on a parameter control, or a one-off edit
+// bracketed by begin/end — is one value-undo gesture on that parameter. Latched touches
+// (hardware controls) end by pause on the managed side instead; volume / pan touches are
+// gestured by their sources (specs/009).
+void Engine::beginParamTouch(int32_t trackId, int32_t target, int32_t deviceIndex,
+                             int32_t paramIndex, const std::string& id) {
+    MixKind kind;
+    switch (static_cast<AutomationTarget>(target)) {
+        case AutomationTarget::DeviceParam:     kind = MixKind::DeviceParam; break;
+        case AutomationTarget::MidiDeviceParam: kind = MixKind::MidiDeviceParam; break;
+        case AutomationTarget::PluginParam:     kind = MixKind::PluginParam;
+            paramIndex = pluginParamIndexOfId(trackId, deviceIndex, id); break;
+        default: return;
+    }
+    for (const auto& tg : touchGestures_)
+        if (tg.trackId == trackId &&
+            sameTarget(tg.target, tg.deviceIndex, tg.paramIndex, tg.paramId, target, deviceIndex, paramIndex, id))
+            return;   // already open
+    const MixTarget mt{ kind, trackId, deviceIndex, paramIndex };
+    if (const int32_t h = beginMixGesture(&mt, 1))
+        touchGestures_.push_back({ trackId, target, deviceIndex, paramIndex, id, h });
+}
+
+void Engine::endParamTouch(int32_t trackId, int32_t target, int32_t deviceIndex,
+                           int32_t paramIndex, const std::string& id) {
+    for (size_t i = 0; i < touchGestures_.size(); ++i) {
+        const auto& tg = touchGestures_[i];
+        // PluginParam touches match by id (sameTarget ignores the index begin resolved).
+        if (tg.trackId != trackId ||
+            !sameTarget(tg.target, tg.deviceIndex, tg.paramIndex, tg.paramId, target, deviceIndex, paramIndex, id))
+            continue;
+        const int32_t h = tg.handle;
+        touchGestures_.erase(touchGestures_.begin() + static_cast<std::ptrdiff_t>(i));
+        endMixGesture(h);
+        return;
+    }
+}
+
 void Engine::beginAutomationWrite(int32_t trackId, int32_t target, int32_t deviceIndex,
                                   int32_t paramIndex, const char* paramId, bool latch) {
     const std::string id = paramId ? paramId : "";
+    // Open the undo gesture first, so a checkpoint the write pushes below (recording) merges
+    // into it and the lane edit and the value undo as one step.
+    if (!latch) beginParamTouch(trackId, target, deviceIndex, paramIndex, id);
     for (auto& aw : activeWrites_)        // already writing this target?
         if (aw.trackId == trackId &&
             sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id))
@@ -325,6 +366,7 @@ void Engine::endAutomationWrite(int32_t trackId, int32_t target, int32_t deviceI
     // A released mouse gesture stops writing here; a latched one (hardware control)
     // keeps writing its last value until the transport stops (finishAllWrites).
     const std::string id = paramId ? paramId : "";
+    endParamTouch(trackId, target, deviceIndex, paramIndex, id);   // the value-undo step (specs/016)
     for (size_t i = 0; i < activeWrites_.size(); ++i) {
         auto& aw = activeWrites_[i];
         if (aw.trackId == trackId &&

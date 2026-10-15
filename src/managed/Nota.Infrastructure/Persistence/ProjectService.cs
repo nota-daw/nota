@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Nota.Application;
 
 namespace Nota.Infrastructure;
 
@@ -73,6 +74,8 @@ public sealed class ProjectService
                 PanLaw = engine.PanLaw == PanLaw.Stereo ? "stereo" : "balance",
                 PanLawLegacy = transport.PanLawLegacy,
             },
+            // Always written ([] when none), so a load can tell "no sections" from "older file".
+            Sections = engine.Sections.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList(),
         };
 
         int trackCount = engine.TrackCount;
@@ -443,6 +446,11 @@ public sealed class ProjectService
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
         engine.SetPanLaw(ParsePanLaw(doc.Mixer?.PanLaw, warnings), checkpoint: false);
+
+        // Arrangement sections (specs/016), also a baseline. A file from before they moved into
+        // the project keeps them in the bundle's sidecar.
+        var sections = doc.Sections ?? ReadLegacySections(bundleDir);
+        engine.SetSections(sections.Select(d => new SectionInfo(d.Start, d.Length, d.Name ?? "")).ToList(), checkpoint: false);
 
         // Restore the scene count before tracks so their session slots size to it (the doc may
         // hold more/fewer scenes than the fresh default after add/remove-scene edits).
@@ -854,6 +862,20 @@ public sealed class ProjectService
 
         // Only now that the new manifest is in place: nothing on disk points at these any more.
         BundleContent.PruneUnreferenced(bundleDir, doc);
+        // The sections now live in the manifest; a leftover sidecar would only mislead an older build.
+        try { File.Delete(Path.Combine(bundleDir, LegacySectionsSidecar)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Where builds before specs/016 kept the arrangement sections, next to the manifest.</summary>
+    public const string LegacySectionsSidecar = "sections.json";
+
+    // Sections of a project saved before they moved into the manifest (absent / corrupt → none).
+    private static List<SectionDto> ReadLegacySections(string bundleDir)
+    {
+        string path = Path.Combine(bundleDir, LegacySectionsSidecar);
+        if (!File.Exists(path)) return new();
+        try { return JsonSerializer.Deserialize<List<SectionDto>>(File.ReadAllText(path)) ?? new(); }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { return new(); }
     }
 
     /// <summary>Serializes just the manifest JSON (same options Save uses). Used by

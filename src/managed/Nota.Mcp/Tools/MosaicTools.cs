@@ -40,7 +40,7 @@ public sealed class MosaicTools(IAudioEngine engine, IEngineDispatch dispatch, I
     private void Set(int t, string id, double v)
     {
         int pc = E.PluginParamCount(t, -1);
-        for (int i = 0; i < pc; i++) if (E.PluginParamId(t, -1, i) == id) { E.PluginParamSet(t, -1, i, (float)Math.Clamp(v, 0, 1)); return; }
+        for (int i = 0; i < pc; i++) if (E.PluginParamId(t, -1, i) == id) { PlugParam(t, -1, i, (float)Math.Clamp(v, 0, 1)); return; }
     }
     private bool IsMosaic(int t) => E.TrackInstrumentKind(t) == MosaicModel.Kind;
 

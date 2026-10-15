@@ -181,7 +181,7 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         int v = VoiceIndex(voice);
         if (v < 0) return $"error: voice '{voice}' (0..7 or kick, snare, clap, rim, ch, oh, tom, perc)";
         var ids = Ids(trackId);
-        void Set(string p, float? val) { if (val is { } x && ids.TryGetValue(RM.Id(v, p), out var i)) E.PluginParamSet(trackId, -1, i, Math.Clamp(x, 0f, 1f)); }
+        void Set(string p, float? val) { if (val is { } x && ids.TryGetValue(RM.Id(v, p), out var i)) PlugParam(trackId, -1, i, Math.Clamp(x, 0f, 1f)); }
         Set("tune", tune); Set("decay", decay); Set("punch", punch); Set("tone", tone); Set("drive", drive);
         Set("level", level); Set("pan", pan); Set("start", start); Set("length", length);
         if (semitones is { } st) Set("tune", RM.SampleSemisNorm(st));
@@ -223,7 +223,7 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         if (E.TrackInstrumentKind(trackId) != RM.Kind) return $"error: track {trackId} is not a Nota Rhythm";
         if (macro is < 0 or >= RM.Macros) return "error: macro 0..7";
         if (name is not null) E.RhythmSetMacroName(trackId, macro, name);
-        if (value is { } v && Ids(trackId).TryGetValue(RM.MacroId(macro), out var pi)) E.PluginParamSet(trackId, -1, pi, Math.Clamp(v, 0f, 1f));
+        if (value is { } v && Ids(trackId).TryGetValue(RM.MacroId(macro), out var pi)) PlugParam(trackId, -1, pi, Math.Clamp(v, 0f, 1f));
         return $"{E.RhythmMacroName(trackId, macro)}";
     });
 
@@ -276,7 +276,7 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
     {
         if (E.TrackInstrumentKind(trackId) != RM.Kind) return $"error: track {trackId} is not a Nota Rhythm";
         var ids = Ids(trackId);
-        void Set(string id, float? val) { if (val is { } x && ids.TryGetValue(id, out var i)) E.PluginParamSet(trackId, -1, i, Math.Clamp(x, 0f, 1f)); }
+        void Set(string id, float? val) { if (val is { } x && ids.TryGetValue(id, out var i)) PlugParam(trackId, -1, i, Math.Clamp(x, 0f, 1f)); }
         Set("swing", swing); Set("humanize", humanize); Set("accent", accent); Set("glue", glue); Set("volume", volume);
         var g = Getter(trackId);
         return $"swing {RM.Pct(g("swing"))} · humanize {RM.Pct(g("humanize"))} · accent {RM.Pct(g("accent"))} · glue {RM.Pct(g("glue"))} · volume {RM.Pct(g("volume"))}";
@@ -304,7 +304,7 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         if (!E.SetRhythmVoiceSample(trackId, v, path)) return false;
         var ids = Ids(trackId);
         foreach (var (p, val) in new[] { ("tune", 0.5f), ("tone", 1f), ("start", 0f), ("length", 1f) })
-            if (ids.TryGetValue(RM.Id(v, p), out var i)) E.PluginParamSet(trackId, -1, i, val);
+            if (ids.TryGetValue(RM.Id(v, p), out var i)) PlugParam(trackId, -1, i, val);
         return true;
     });
 

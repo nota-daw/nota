@@ -833,9 +833,16 @@ public interface IAudioEngine : IDisposable
     /// step (project load, the new-project baseline). No-op if unchanged.</summary>
     void SetPanLaw(PanLaw law, bool checkpoint = true);
 
-    // --- Mix undo (specs/009) --------------------------------------------
-    /// <summary>Starts a gesture on volume / pan / master volume: their values now are what
-    /// undo returns to. Returns a handle (0 = no valid target).</summary>
+    // --- Arrangement sections (specs/016) -------------------------------
+    /// <summary>The project's sections, sorted by start.</summary>
+    IReadOnlyList<SectionInfo> Sections { get; }
+    /// <summary>Replaces the sections (sorted; zero-length dropped). <paramref name="checkpoint"/>
+    /// = one undo step (an identical list makes none); false = baseline (project load).</summary>
+    void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true);
+
+    // --- Value undo (specs/009, specs/016) -------------------------------
+    /// <summary>Starts a gesture on volume / pan / master volume / device parameters: their
+    /// values now are what undo returns to. Returns a handle (0 = no valid target).</summary>
     int BeginMixGesture(params MixTarget[] targets);
     /// <summary>Ends the gesture: one undo step for whatever it changed (none → no step).</summary>
     void EndMixGesture(int handle);

@@ -9,6 +9,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Nota.Application;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -37,6 +38,9 @@ internal sealed class GenericMidiBody : IMidiDeviceBody
             var bar = new Knob((v - min) / Math.Max(1e-6f, max - min), 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center,
                 Default = (engine.MidiEffectParamDefault(track, index, pi) - min) / Math.Max(1e-6f, max - min) };
             bar.ValueChanged += nv => { float nvv = (float)(min + nv * (max - min)); engine.MidiEffectSetParam(track, index, pi, nvv); value.Text = FmtParam(nvv, integral); };
+            // The touch makes a drag one undo step and lets automation record it (specs/016).
+            bar.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.MidiDeviceParam, index, pi, "");
+            bar.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.MidiDeviceParam, index, pi, "");
             MidiLearn.Bind(bar, MidiTarget.MidiDeviceParam(track, index, pi), engine.MidiEffectParamName(track, index, pi));
             panel.Children.Add(new StackPanel { Spacing = 2, Children = { top, bar } });
         }

@@ -45,10 +45,12 @@ JUCE module; the engine core is JUCE-free.
 ## Project and transport
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
-  operation — including volume, pan and master-volume moves from any source (Mixer, track
-  headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move;
-  a recorded automation pass undoes with its value. Mute, solo and sends are not in the
-  history; automation playback, opening a project and freezing add no steps.
+  operation — including volume, pan and master-volume moves and the parameters of effects,
+  MIDI effects, instruments and plug-ins, from any source (device cards, Mixer, track
+  headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move,
+  and every arrangement section edit; a recorded automation pass undoes with its value.
+  Mute, solo, sends and devices inside racks are not in the history; automation playback,
+  opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
   instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
   and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
@@ -107,7 +109,8 @@ track count and closes with Escape.
     (Intro, Verse, Drop). Drag the empty lane to mark one, click it to jump the playhead
     there, double-click to rename, drag its body or edges to move and resize it (always on
     whole bars). Its menu loops the section, selects it as a time range across every track,
-    duplicates it or deletes it. Saved with the project; View ▸ Toggle sections hides it.
+    duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
+    `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
@@ -1048,7 +1051,8 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome.
-- **Project**: `get_overview` (a full snapshot); version history — `list_versions` (with what
+- **Project**: `get_overview` (a full snapshot); the arrangement's sections
+  (`list_sections`, `set_sections`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.

@@ -62,7 +62,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     [McpServerTool(Name = "set_device_param"), Description("Set a device parameter by index (value is in the param's own min..max range from get_device_params).")]
-    public Task SetDeviceParam(int trackId, int deviceIndex, int paramIndex, float value) => Mutate(() => E.DeviceSetParam(trackId, deviceIndex, paramIndex, value));
+    public Task SetDeviceParam(int trackId, int deviceIndex, int paramIndex, float value) => Mutate(() => DevParam(trackId, deviceIndex, paramIndex, value));
 
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));

@@ -21,6 +21,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 
 namespace Nota.App;
 
@@ -177,10 +178,14 @@ internal sealed class ArpGrid : Control
         if (!Mini && p.Y > w.Bottom)
         {
             int s = Math.Clamp((int)((p.X - w.X) / w.Width * n), 0, n - 1);
-            _e.MidiEffectSetParam(_t, _mi, LOn + s, G(LOn + s) > 0.5 ? 0f : 1f);
+            MixEdit.Step(_e, () => _e.MidiEffectSetParam(_t, _mi, LOn + s, G(LOn + s) > 0.5 ? 0f : 1f),
+                MixTarget.MidiDeviceParam(_t, _mi, LOn + s));   // one undo step (specs/016)
             e.Handled = true; InvalidateVisual(); Edited?.Invoke(); return;
         }
         _dragStep = StepAt(p.X); _dragDisp = DispAt(p.Y);
+        // A drag (Alt draws a line across steps) is one undo step over the lane's steps.
+        var lane = Lanes[_lane];
+        _dragGesture = _e.BeginMixGesture(Enumerable.Range(0, n).Select(i => MixTarget.MidiDeviceParam(_t, _mi, lane.Base + i)).ToArray());
         Apply(_dragStep, _dragDisp);
         e.Pointer.Capture(this); e.Handled = true;
     }
@@ -195,10 +200,13 @@ internal sealed class ArpGrid : Control
         }
         else Apply(s, d);
     }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e) { if (_dragStep >= 0) { _dragStep = -1; InvalidateVisual(); e.Pointer.Capture(null); } }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e) { if (_dragStep >= 0) { _dragStep = -1; EndDragGesture(); InvalidateVisual(); e.Pointer.Capture(null); } }
 
     // Capture taken away mid-drag (the window deactivates): end the drag.
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_dragStep >= 0) { _dragStep = -1; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_dragStep >= 0) { _dragStep = -1; EndDragGesture(); InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+
+    private int _dragGesture;
+    private void EndDragGesture() { if (_dragGesture != 0) { _e.EndMixGesture(_dragGesture); _dragGesture = 0; } }
 
     private int StepAt(double x) { var w = Well(); int n = StepCount; return Math.Clamp((int)((x - w.X) / w.Width * n), 0, n - 1); }
     private double DispAt(double y)

@@ -258,18 +258,31 @@ public struct StereoMeasure
     public readonly bool Silent => LevelDb < -60f;
 }
 
-/// <summary>What a mix gesture targets (specs/009). Matches NOTA_MIX_*.</summary>
-public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2 }
+/// <summary>What a value gesture targets (specs/009 volume / pan, specs/016 device
+/// parameters). Matches NOTA_MIX_*.</summary>
+public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5 }
 
-/// <summary>One parameter a mix gesture records for undo; laid out like native NotaMixTarget.
-/// <see cref="TrackId"/> is ignored for the master volume.</summary>
+/// <summary>One value a gesture records for undo; laid out like native NotaMixTarget.
+/// <see cref="TrackId"/> is ignored for the master volume; <see cref="DeviceIndex"/> /
+/// <see cref="ParamIndex"/> address a device parameter (−1 otherwise; a plugin parameter's
+/// device −1 is the track's instrument).</summary>
 [StructLayout(LayoutKind.Sequential)]
-public readonly record struct MixTarget(MixKind Kind, int TrackId)
+public readonly record struct MixTarget(MixKind Kind, int TrackId, int DeviceIndex = -1, int ParamIndex = -1)
 {
     public static MixTarget Volume(int trackId) => new(MixKind.TrackVolume, trackId);
     public static MixTarget Pan(int trackId) => new(MixKind.TrackPan, trackId);
     public static MixTarget Master => new(MixKind.MasterVolume, -1);
+    /// <summary>A built-in audio effect's parameter (its own min..max range).</summary>
+    public static MixTarget DeviceParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.DeviceParam, trackId, deviceIndex, paramIndex);
+    /// <summary>A MIDI effect's parameter.</summary>
+    public static MixTarget MidiDeviceParam(int trackId, int index, int paramIndex) => new(MixKind.MidiDeviceParam, trackId, index, paramIndex);
+    /// <summary>A normalized plugin / built-in instrument parameter (device −1 = the instrument).</summary>
+    public static MixTarget PluginParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.PluginParam, trackId, deviceIndex, paramIndex);
 }
+
+/// <summary>A named span of arrangement time — Intro / Verse / Drop (specs/016). Project
+/// data held by the engine: undoable, saved with the project.</summary>
+public readonly record struct SectionInfo(double StartBeat, double LengthBeats, string Name);
 
 
 /// <summary>MIDI clip envelope target (M9 follow-up). Velocity scales note velocities;

@@ -293,6 +293,21 @@ void Engine::routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device
     }
 }
 
+bool Engine::cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const {
+    if (!authoring_) return false;
+    for (auto& op : authoring_->tracks) {
+        const int32_t owner = op->id();
+        for (auto& l : op->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
+            if (tgt == trackId && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param) {
+                out = l.base.load(std::memory_order_relaxed);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // ---- device edit → CV-link index fix-up (message thread) -------------------
 
 // New index of `idx` after the device at `from` is moved to `to` (vector erase+insert).

@@ -22,6 +22,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Undo covers device knobs** (nota-daw/nota#30): turning a knob, flipping a switch or
+  typing a value on an effect, a MIDI effect, an instrument or a plug-in is now one undo
+  step, in order with note and clip edits — before, ⌘Z skipped it and undid the edit before.
+  A drag is one step; so is an A/B switch, a MIDI controller movement (ended by a one-second
+  pause), a touch on Nota Remote's macro knobs or XY pad, and each MCP tool call.
+- **Undo covers arrangement sections** (nota-daw/nota#64): creating, renaming, moving,
+  resizing, duplicating and deleting a section are each one undo step. Sections are now
+  stored in the project file; a project saved by an earlier version keeps its sections and
+  moves them into the project file on the next save.
+
+### Added
+- **MCP `list_sections` and `set_sections`**: read and replace the arrangement's sections.
+
 ## [0.55.1] — 2026-10-15
 
 ### Added

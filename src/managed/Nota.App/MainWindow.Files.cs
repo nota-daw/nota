@@ -184,7 +184,6 @@ public partial class MainWindow
         _panLawLegacy = false;     // new projects use the Stereo pan law (set by the template)
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
-        Timeline.ClearSections();   // …and a clean song structure
         Timeline.ResetTrackView();  // …at the default track sizes
         Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);   // instrument, audio, Reverb + Delay returns
         RefreshAfterLoad();
@@ -249,7 +248,6 @@ public partial class MainWindow
             _projectPath = dir;
             _learn?.LoadMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.LoadLayout(dir);   // modular-editor node/island positions (sidecar)
-            Timeline.LoadSections(dir);  // arrangement song sections (sidecar)
             Timeline.LoadTrackView(dir); // track heights + track-list width (sidecar)
             LoadFreezeLinks(dir);        // live-freeze links (v1.1) — re-sleep linked sources
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
@@ -318,7 +316,6 @@ public partial class MainWindow
             var warnings = _projects.Save(Engine, TransportSnapshot(), dir);
             _learn?.SaveMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
-            Timeline.SaveSections(dir);  // arrangement song sections (sidecar)
             Timeline.SaveTrackView(dir); // track heights + track-list width (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle

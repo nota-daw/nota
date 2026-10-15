@@ -48,6 +48,7 @@ internal static partial class ValueEntry
             {
                 double from = norm();
                 double? to = Solve(typed, text(), n => { setNorm(n); return text(); });
+                setNorm(from);   // the probes moved it: the gesture must open on the old value (undo, specs/016)
                 begin?.Invoke();
                 setNorm(to ?? from);
                 end?.Invoke();

@@ -63,7 +63,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
 
     [McpServerTool(Name = "set_instrument_param"), Description("Set a track instrument parameter by index to a normalized value (0..1). Use get_instrument_params for indices.")]
     public Task SetInstrumentParam(int trackId, int paramIndex, [Description("Normalized 0..1")] float value)
-        => Mutate(() => E.PluginParamSet(trackId, -1, paramIndex, Math.Clamp(value, 0f, 1f)));
+        => Mutate(() => PlugParam(trackId, -1, paramIndex, Math.Clamp(value, 0f, 1f)));
 
     public sealed record PhysicalPartial(int Index, double Ratio, double Hz, double Amp, double RingSeconds, bool Audible);
     public sealed record PhysicalReading(string Summary, string Guide, int ActiveVoices, int MaxVoices, bool Mono,
@@ -175,7 +175,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         int pc = E.PluginParamCount(trackId, -1);
         var ids = new Dictionary<string, int>();
         for (int i = 0; i < pc; i++) ids[E.PluginParamId(trackId, -1, i)] = i;
-        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) E.PluginParamSet(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
+        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) PlugParam(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
         static int Find(string[] names, string? v) => v is null ? -1 : Array.FindIndex(names, n => string.Equals(n, v.Trim(), StringComparison.OrdinalIgnoreCase));
         var errors = new List<string>();
 
@@ -276,7 +276,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         int pc = E.PluginParamCount(trackId, -1);
         var ids = new Dictionary<string, int>();
         for (int i = 0; i < pc; i++) ids[E.PluginParamId(trackId, -1, i)] = i;
-        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) E.PluginParamSet(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
+        void Set(string id, double v) { if (ids.TryGetValue(id, out var i)) PlugParam(trackId, -1, i, (float)Math.Clamp(v, 0, 1)); }
         static int Find(string[] names, string? v) => v is null ? -1 : Array.FindIndex(names, n => string.Equals(n, v.Trim(), StringComparison.OrdinalIgnoreCase));
         static double Pct(double p) => Math.Clamp(p, 0, 100) / 100.0;
         var errors = new List<string>();
@@ -347,7 +347,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         for (int i = 0; i < pc; i++)
         {
             if (E.PluginParamId(trackId, -1, i) != paramId) continue;
-            E.PluginParamSet(trackId, -1, i, Math.Clamp(value, 0f, 1f));
+            PlugParam(trackId, -1, i, Math.Clamp(value, 0f, 1f));
             return true;
         }
         return false;

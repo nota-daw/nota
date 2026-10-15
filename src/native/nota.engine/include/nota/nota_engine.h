@@ -430,7 +430,9 @@ NOTA_API int32_t nota_engine_automation_device_remap_selftest(NotaEngine* engine
  * gesture; latch != 0 means a hardware/MIDI control, which keeps writing past the
  * release until the transport stops. With record off, touching a parameter that
  * already carries automation overrides its lane until re-enable. For a
- * PluginParam target pass param_id; otherwise param_id may be NULL/empty. */
+ * PluginParam target pass param_id; otherwise param_id may be NULL/empty.
+ * An unlatched begin/end on a parameter target (device, MIDI-effect or plugin param) is
+ * also that parameter's value-undo gesture (specs/016): one undo step for what changed. */
 NOTA_API void    nota_engine_set_automation_record(NotaEngine* engine, int32_t on);
 NOTA_API int32_t nota_engine_automation_record(const NotaEngine* engine);
 NOTA_API void    nota_track_begin_automation_write(NotaEngine* engine, int32_t track_id,
@@ -790,10 +792,10 @@ NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);
 
 /* ---- Undo / redo (M6-6) -------------------------------------------------- */
 /* Undo/redo of structural edits (tracks, clips, notes, device chains, session
- * slots) — restores a retained Graph snapshot — and of volume / pan / master volume
- * steps made through mix gestures (009). Returns NOTA_OK if a step was applied,
- * NOTA_ERR_UNKNOWN if there was nothing to undo/redo. Mute, solo, sends, bypass,
- * device params and the transport are not covered. */
+ * slots, arrangement sections) — restores a retained Graph snapshot — and of volume /
+ * pan / master volume (009) and device-parameter (016) steps made through value
+ * gestures. Returns NOTA_OK if a step was applied, NOTA_ERR_UNKNOWN if there was nothing
+ * to undo/redo. Mute, solo, sends, bypass and the transport are not covered. */
 NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
@@ -807,8 +809,9 @@ NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
  * closed. Message thread only. No-op for a null engine. */
 NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 
-/* ---- Mix undo (009) ------------------------------------------------------ */
-/* Volume / pan / master volume changes become undo steps through gestures. A gesture
+/* ---- Value undo (009, 016) ----------------------------------------------- */
+/* Volume / pan / master volume and device-parameter changes become undo steps through
+ * gestures. A gesture
  * records its targets' values at begin and, at end, pushes ONE undo step with the values
  * that changed (none changed → no step). If a structural checkpoint was pushed during the
  * gesture (automation recording) the step merges into it. The plain setters never record:
@@ -816,13 +819,18 @@ NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 #define NOTA_MIX_TRACK_VOLUME  0
 #define NOTA_MIX_TRACK_PAN     1
 #define NOTA_MIX_MASTER_VOLUME 2
+#define NOTA_MIX_DEVICE_PARAM      3   /* audio effect: device_index = chain position */
+#define NOTA_MIX_MIDI_DEVICE_PARAM 4   /* MIDI effect: device_index = MIDI-FX chain position */
+#define NOTA_MIX_PLUGIN_PARAM      5   /* normalized 0..1; device_index -1 = the instrument */
 
 typedef struct NotaMixTarget {
-    int32_t kind;      /* NOTA_MIX_* */
-    int32_t track_id;  /* ignored for NOTA_MIX_MASTER_VOLUME */
+    int32_t kind;          /* NOTA_MIX_* */
+    int32_t track_id;      /* ignored for NOTA_MIX_MASTER_VOLUME; the master chain = master id */
+    int32_t device_index;  /* parameter kinds only (-1 otherwise) */
+    int32_t param_index;   /* parameter kinds only (-1 otherwise) */
 } NotaMixTarget;
 
-/* Returns a handle > 0, or 0 if no target is valid. */
+/* Returns a handle > 0, or 0 if no target is valid (a missing track, device or param). */
 NOTA_API int32_t nota_mix_gesture_begin(NotaEngine* engine, const NotaMixTarget* targets, int32_t count);
 /* Ends the gesture; unknown / already-ended handles are ignored. */
 NOTA_API void    nota_mix_gesture_end(NotaEngine* engine, int32_t handle);
@@ -869,6 +877,26 @@ NOTA_API NotaResult nota_engine_set_pan_law(NotaEngine* engine, int32_t law, int
 
 /* Current law (authoring graph). NOTA_PAN_LAW_BALANCE for a null engine. */
 NOTA_API int32_t    nota_engine_pan_law(const NotaEngine* engine);
+
+/* ---- Arrangement sections (016) ----------------------------------------- */
+/* Named spans of arrangement time (Intro / Verse / Drop), project-level data in the graph
+ * snapshot: undo/redo restore them, a reset (load / new) clears them. Sorted by start. */
+typedef struct NotaSection {
+    double      start_beat;
+    double      length_beats;
+    const char* name_utf8;     /* NULL = "" */
+} NotaSection;
+
+NOTA_API int32_t     nota_engine_section_count(const NotaEngine* engine);
+/* Out-of-range index: 0.0 / 0.0 / "". The name stays valid until the next edit. */
+NOTA_API double      nota_engine_section_start(const NotaEngine* engine, int32_t index);
+NOTA_API double      nota_engine_section_length(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_engine_section_name(const NotaEngine* engine, int32_t index);
+/* Replace the list: sorted by start, entries with length <= 0 dropped, start clamped to
+ * >= 0. checkpoint = 1: one undo step (user edit; an identical list makes none); 0: no
+ * undo entry (project load). count 0 clears. Message thread only. */
+NOTA_API NotaResult  nota_engine_set_sections(NotaEngine* engine, const NotaSection* sections,
+                                              int32_t count, int32_t checkpoint);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,

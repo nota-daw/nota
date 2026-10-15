@@ -186,6 +186,24 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_pan_law")]
     internal static partial int PanLaw(IntPtr engine);
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly record struct NotaSection(double StartBeat, double LengthBeats, IntPtr Name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_count")]
+    internal static partial int SectionCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_start")]
+    internal static partial double SectionStart(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_length")]
+    internal static partial double SectionLength(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_name")]
+    internal static partial IntPtr SectionName(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_sections")]
+    internal static partial NotaResult SetSections(IntPtr engine, [In] NotaSection[] sections, int count, int checkpoint);
+
     [LibraryImport(Lib, EntryPoint = "nota_mix_gesture_begin")]
     internal static partial int MixGestureBegin(IntPtr engine, [In] MixTarget[] targets, int count);
 

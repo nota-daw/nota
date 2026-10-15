@@ -27,8 +27,8 @@ public sealed class MidiLearnService
     private const float RackGainMax = 2.0f; // rack out / chain gain travel (matches the rack faders)
 
     private readonly IAudioEngine _engine;
-    // One undo step per controller movement on a mapped volume / pan target, ended by a 1 s
-    // pause (specs/009); the pause is checked on every Tick.
+    // One undo step per controller movement on a mapped volume / pan / parameter target, ended by a 1 s
+    // pause (specs/009, specs/016); the pause is checked on every Tick.
     private static readonly TimeSpan MixPause = TimeSpan.FromSeconds(1);
     private readonly Dictionary<MixTarget, MixMovement> _mixUndo = new();
     private void MixTouch(MixTarget target, Action set)
@@ -340,24 +340,28 @@ public sealed class MidiLearnService
 
         switch (t.Kind)
         {
+            // Device parameters, volume and pan: one undo step per movement, ended by a 1 s
+            // pause (specs/009, specs/016).
             case MidiTargetKind.DeviceParam:
             {
                 float min = _engine.DeviceParamMin(t.TrackId, t.DeviceIndex, t.ParamIndex);
                 float max = _engine.DeviceParamMax(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                _engine.DeviceSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min)));
+                MixTouch(MixTarget.DeviceParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
+                    () => _engine.DeviceSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min))));
                 break;
             }
             case MidiTargetKind.PluginParam:
-                _engine.PluginParamSet(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)outv);
+                MixTouch(MixTarget.PluginParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
+                    () => _engine.PluginParamSet(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)outv));
                 break;
             case MidiTargetKind.MidiDeviceParam:
             {
                 float min = _engine.MidiEffectParamMin(t.TrackId, t.DeviceIndex, t.ParamIndex);
                 float max = _engine.MidiEffectParamMax(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                _engine.MidiEffectSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min)));
+                MixTouch(MixTarget.MidiDeviceParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
+                    () => _engine.MidiEffectSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min))));
                 break;
             }
-            // Volume / pan: one undo step per movement, ended by a 1 s pause (specs/009).
             case MidiTargetKind.TrackVolume:
                 MixTouch(MixTarget.Volume(t.TrackId), () => _engine.SetTrackVolume(t.TrackId, (float)(outv * VolumeMax)));
                 break;

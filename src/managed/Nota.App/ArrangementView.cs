@@ -787,6 +787,7 @@ public sealed partial class ArrangementView : UserControl
                 foreach (var c in t.Clips)
                     if (!c.IsMidi && c.Peaks is not null) oldClips[(t.Id, c.ClipIndex)] = c;
         }
+        if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
         _tracks.Clear();
         _returns.Clear();
         if (_engine is { } eng)

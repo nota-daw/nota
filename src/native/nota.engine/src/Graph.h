@@ -14,6 +14,7 @@
 
 #include "Track.h"
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace nota {
@@ -22,6 +23,15 @@ namespace nota {
 // the far channel as the pan moves; Stereo folds it into the near side. Identical for
 // mono material and at centre. Groups, clip pan envelopes and rack chains ignore it.
 enum class PanLaw : int32_t { Balance = 0, Stereo = 1 };
+
+// A named span of arrangement time — Intro / Verse / Drop (specs/016). Project-level
+// authoring data: the audio thread never reads it.
+struct Section {
+    double startBeat = 0.0;     // >= 0
+    double lengthBeats = 0.0;   // > 0
+    std::string name;
+    bool operator==(const Section&) const = default;
+};
 
 struct Graph {
     std::vector<std::shared_ptr<Track>> tracks;
@@ -40,6 +50,9 @@ struct Graph {
     // Project pan law (specs/006). In the snapshot so undo/redo restore it; Balance is the
     // engine default (and every project before format v21).
     PanLaw panLaw = PanLaw::Balance;
+    // Arrangement sections (specs/016), sorted by start. In the snapshot so undo/redo
+    // restore them and the project saves them.
+    std::vector<Section> sections;
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must
@@ -51,6 +64,7 @@ inline void inheritGraphLevel(Graph& dst, const Graph& src) {
     dst.masterVolume = src.masterVolume;
     dst.masterTrack  = src.masterTrack;
     dst.panLaw       = src.panLaw;
+    dst.sections     = src.sections;
 }
 
 } // namespace nota

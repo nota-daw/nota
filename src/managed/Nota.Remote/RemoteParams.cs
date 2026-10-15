@@ -181,6 +181,15 @@ public static class RemoteParams
         }
     }
 
+    /// <summary>The undo target for a parameter (specs/016); none for a rack macro, which
+    /// value undo does not cover.</summary>
+    public static MixTarget? UndoTarget(RemoteParam p) => p.Kind switch
+    {
+        RemoteParamKind.DeviceParam => MixTarget.DeviceParam(p.TrackId, p.DeviceIndex, p.ParamIndex),
+        RemoteParamKind.PluginParam => MixTarget.PluginParam(p.TrackId, p.DeviceIndex, p.ParamIndex),
+        _ => null,
+    };
+
     /// <summary>Move a parameter to <paramref name="norm"/> as a hardware control would: a
     /// latching automation write (an override when Record is off).</summary>
     public static void Set(IAudioEngine e, RemoteParam p, double norm)

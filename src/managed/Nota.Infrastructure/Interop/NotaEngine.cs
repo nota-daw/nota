@@ -163,7 +163,38 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetPanLaw(PanLaw law, bool checkpoint = true)
     { ThrowIfDisposed(); Check(NativeMethods.SetPanLaw(_handle, (int)law, checkpoint ? 1 : 0)); }
 
-    // --- Mix undo (specs/009) --------------------------------------------------
+    // --- Arrangement sections (specs/016) ---------------------------------------
+    public IReadOnlyList<SectionInfo> Sections
+    {
+        get
+        {
+            ThrowIfDisposed();
+            int n = NativeMethods.SectionCount(_handle);
+            var list = new SectionInfo[n];
+            for (int i = 0; i < n; i++)
+                list[i] = new SectionInfo(NativeMethods.SectionStart(_handle, i), NativeMethods.SectionLength(_handle, i),
+                    Marshal.PtrToStringUTF8(NativeMethods.SectionName(_handle, i)) ?? "");
+            return list;
+        }
+    }
+    public void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true)
+    {
+        ThrowIfDisposed();
+        var rows = new NativeMethods.NotaSection[sections.Count];
+        try
+        {
+            for (int i = 0; i < rows.Length; i++)
+                rows[i] = new NativeMethods.NotaSection(sections[i].StartBeat, sections[i].LengthBeats,
+                    Marshal.StringToCoTaskMemUTF8(sections[i].Name ?? ""));
+            Check(NativeMethods.SetSections(_handle, rows, rows.Length, checkpoint ? 1 : 0));
+        }
+        finally
+        {
+            foreach (var r in rows) if (r.Name != IntPtr.Zero) Marshal.FreeCoTaskMem(r.Name);
+        }
+    }
+
+    // --- Value undo (specs/009, specs/016) -------------------------------------
     public int BeginMixGesture(params MixTarget[] targets)
     { ThrowIfDisposed(); return targets.Length == 0 ? 0 : NativeMethods.MixGestureBegin(_handle, targets, targets.Length); }
     public void EndMixGesture(int handle) { ThrowIfDisposed(); if (handle > 0) NativeMethods.MixGestureEnd(_handle, handle); }

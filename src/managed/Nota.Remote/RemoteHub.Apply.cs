@@ -119,7 +119,7 @@ public sealed partial class RemoteHub
                 if (r != PhoneControlResult.None) break;
                 var devs = MacroDevicesFor(c.TrackId);
                 if (c.MacroDevice < devs.Count && knob < devs[c.MacroDevice].Params.Count)
-                    RemoteParams.Set(_engine, devs[c.MacroDevice].Params[knob], cmd.V);
+                    SetParam(c, devs[c.MacroDevice].Params[knob], cmd.V, cmd.Phase);
                 if (cmd.Phase == 2) host.Refresh();
                 break;
             }
@@ -140,7 +140,8 @@ public sealed partial class RemoteHub
         _heldFaders[faderId] = (c.ConnectionId, ShortName(c.Name), DateTime.UtcNow.Add(FaderHold).Ticks);
     }
 
-    // Undo (specs/009): one step per touch on a volume / pan / master fader — opened by the
+    // Undo (specs/009, specs/016): one step per touch on a volume / pan / master fader, a
+    // macro knob or the XY pad — opened by the
     // touch's first command, closed by its phase-2 command, by the phone going away, or after
     // FaderHold without a command (a lost finger-up never leaves a gesture open).
     private readonly Dictionary<(int Conn, MixTarget Target), (int Handle, long Until)> _mixUndo = new();
@@ -152,6 +153,13 @@ public sealed partial class RemoteHub
         set();
         if (phase == 2) { _engine.EndMixGesture(handle); _mixUndo.Remove(key); }
         else _mixUndo[key] = (handle, DateTime.UtcNow.Add(FaderHold).Ticks);
+    }
+
+    // A device parameter moved from the phone: one undo step per touch, as a fader (specs/016).
+    private void SetParam(RemoteClient c, RemoteParam p, double norm, int phase)
+    {
+        if (RemoteParams.UndoTarget(p) is { } target) MixTouch(c, target, phase, () => RemoteParams.Set(_engine, p, norm));
+        else RemoteParams.Set(_engine, p, norm);
     }
 
     private void ExpireMixUndo()
@@ -200,7 +208,7 @@ public sealed partial class RemoteHub
                 if (r2 == PhoneControlResult.Mapped) return;
             }
             if (!defResolved) { def = RemoteParams.DefaultXy(_engine, c.TrackId); defResolved = true; }
-            if (def is { } d) RemoteParams.Set(_engine, isX ? d.X : d.Y, v);
+            if (def is { } d) SetParam(c, isX ? d.X : d.Y, v, cmd.Phase);
         }
 
         if (doX) Axis(true, Math.Clamp(cmd.V, 0, 1));

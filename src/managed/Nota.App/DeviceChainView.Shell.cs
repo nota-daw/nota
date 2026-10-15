@@ -89,7 +89,13 @@ public sealed partial class DeviceChainView
     {
         int n = Math.Min(p.Length, ParamCount(k, di));
         int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
-        for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]);
+        // One undo step for the whole switch (specs/016).
+        var targets = new List<MixTarget>(n);
+        for (int i = 0; i < n; i++)
+            if (i != view)
+                targets.Add(k == ChainKind.Instrument ? MixTarget.PluginParam(_trackId, -1, i)
+                    : k == ChainKind.Midi ? MixTarget.MidiDeviceParam(_trackId, di, i) : MixTarget.DeviceParam(_trackId, di, i));
+        Nota.Application.Editing.MixEdit.Step(_engine, () => { for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]); }, targets.ToArray());
     }
 
     internal readonly record struct ShellSpec(

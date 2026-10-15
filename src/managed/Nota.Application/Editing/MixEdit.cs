@@ -8,6 +8,7 @@
 // freeze, the template, automation) keep using the plain setters and never make steps.
 
 using System;
+using System.Collections.Generic;
 
 namespace Nota.Application.Editing;
 
@@ -16,10 +17,32 @@ public static class MixEdit
     /// <summary>Runs <paramref name="set"/> as one undo step over <paramref name="targets"/>.</summary>
     public static void Step(IAudioEngine engine, Action set, params MixTarget[] targets)
     {
-        int handle = engine.BeginMixGesture(targets);
-        try { set(); }
-        finally { engine.EndMixGesture(handle); }
+        if (targets.Length <= MaxGestureTargets)
+        {
+            int handle = engine.BeginMixGesture(targets);
+            try { set(); }
+            finally { engine.EndMixGesture(handle); }
+            return;
+        }
+        // More targets than one gesture holds (a plug-in's whole parameter set, specs/016):
+        // several gestures inside an undo group still undo as one step.
+        engine.BeginUndoGroup();
+        var handles = new List<int>();
+        try
+        {
+            for (int i = 0; i < targets.Length; i += MaxGestureTargets)
+                handles.Add(engine.BeginMixGesture(targets[i..Math.Min(targets.Length, i + MaxGestureTargets)]));
+            set();
+        }
+        finally
+        {
+            foreach (int h in handles) engine.EndMixGesture(h);
+            engine.EndUndoGroup();
+        }
     }
+
+    /// <summary>The most targets one engine gesture takes (<c>nota_mix_gesture_begin</c>).</summary>
+    public const int MaxGestureTargets = 64;
 }
 
 /// <summary>A gesture held by one control or source: <see cref="Begin"/> on press,

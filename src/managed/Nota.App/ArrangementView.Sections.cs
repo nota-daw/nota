@@ -4,8 +4,9 @@
 // Arrangement · Sections — the song-structure lane between the Overview and the ruler
 // (design 1a, "structure first"). A bar of numbers says nothing about a song; a row of named
 // spans — Intro, Verse, Drop — says where you are. Sections are authoring metadata, not
-// audio: they live in the view and ride in the bundle as a sidecar, so a project written by
-// an older build still opens and simply has none.
+// audio, but they belong to the project (specs/016): the engine holds them next to scenes,
+// so every edit is one undo step and project.json stores them. The view keeps a working
+// copy that a drag reshapes live and commits to the engine on release.
 
 using System;
 using System.Collections.Generic;
@@ -18,6 +19,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Nota.Application;
 
 namespace Nota.App;
 
@@ -74,33 +76,33 @@ public sealed partial class ArrangementView
 
     // ---- model ------------------------------------------------------------
 
-    /// <summary>The sections, in start order (what the bundle sidecar persists).</summary>
+    /// <summary>The sections, in start order.</summary>
     public IReadOnlyList<ArrangementSection> SectionList
     {
         get { _sections.Sort((a, b) => a.StartBeat.CompareTo(b.StartBeat)); return _sections; }
     }
 
-    /// <summary>Replace the whole list (project load).</summary>
-    public void SetSections(IEnumerable<ArrangementSection> sections)
+    /// <summary>Re-read the sections from the engine (load, new, undo / redo, an MCP edit).
+    /// Skipped while a drag is reshaping the working copy.</summary>
+    public void ReloadSections()
     {
+        if (_engine is not { } eng || _sectionsLane.IsDragging) return;
         _sections.Clear();
-        foreach (var s in sections)
-            if (s.LengthBeats > 0) _sections.Add(new ArrangementSection { StartBeat = Math.Max(0, s.StartBeat), LengthBeats = s.LengthBeats, Name = s.Name });
-        _sections.Sort((a, b) => a.StartBeat.CompareTo(b.StartBeat));
+        foreach (var s in eng.Sections)
+            _sections.Add(new ArrangementSection { StartBeat = s.StartBeat, LengthBeats = s.LengthBeats, Name = s.Name });
         _sectionsLane.InvalidateVisual();
     }
 
-    /// <summary>Drop every section (File ▸ New).</summary>
-    public void ClearSections()
-    {
-        if (_sections.Count == 0) return;
-        _sections.Clear();
-        _sectionsLane.InvalidateVisual();
-    }
-
+    // Commit the working copy as one edit: one undo step, none if nothing changed. The
+    // engine normalises the list (sorted, empty spans dropped), so read it back.
     private void SectionsEdited()
     {
         _sections.Sort((a, b) => a.StartBeat.CompareTo(b.StartBeat));
+        if (_engine is { } eng)
+        {
+            eng.SetSections(_sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats, s.Name)).ToList());
+            ReloadSections();
+        }
         _sectionsLane.InvalidateVisual();
         SectionsChanged?.Invoke();
     }
@@ -125,15 +127,20 @@ public sealed partial class ArrangementView
             Name = NextSectionName(),
         };
         _sections.Add(s);
-        SectionsEdited();
         return s;
     }
 
     private void RemoveSection(ArrangementSection s)
     {
-        if (!_sections.Remove(s)) return;
+        if (Live(s) is not { } live || !_sections.Remove(live)) return;
         SectionsEdited();
     }
+
+    // A reload (undo, an MCP edit) replaces the working copy, so a menu or rename flyout
+    // opened before it may hold a stale span: find the one it still means.
+    private ArrangementSection? Live(ArrangementSection s)
+        => _sections.Contains(s) ? s
+         : _sections.FirstOrDefault(x => x.StartBeat == s.StartBeat && x.LengthBeats == s.LengthBeats && x.Name == s.Name);
 
     // Snap a section edge to whole bars — song structure is bar-aligned, always, so this
     // ignores the clip snap grid (which is often finer than a bar).
@@ -149,7 +156,11 @@ public sealed partial class ArrangementView
         var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
         box.KeyDown += (_, ke) =>
         {
-            if (ke.Key == Key.Enter) { s.Name = box.Text ?? ""; SectionsEdited(); flyout.Hide(); ke.Handled = true; }
+            if (ke.Key == Key.Enter)
+            {
+                if (Live(s) is { } live) { live.Name = box.Text ?? ""; SectionsEdited(); }
+                flyout.Hide(); ke.Handled = true;
+            }
             else if (ke.Key == Key.Escape) { flyout.Hide(); ke.Handled = true; }
         };
         flyout.ShowAt(anchor);
@@ -185,6 +196,9 @@ public sealed partial class ArrangementView
         private ArrangementSection? _active;
         private double _pressBeat, _grabOffset, _fixedBeat;
         private bool _moved;
+
+        /// <summary>A span is being drawn, moved or resized: the working copy is ahead of the engine.</summary>
+        public bool IsDragging => _mode != Mode.None;
 
         public SectionsControl(ArrangementView o)
         {
@@ -293,6 +307,7 @@ public sealed partial class ArrangementView
                     double a = _o.SnapBar(Math.Min(_pressBeat, _draftEnd));
                     double b = _o.SnapBar(Math.Max(_pressBeat, _draftEnd));
                     _o.AddSection(a, Math.Max(_o._beatsPerBar, b - a));
+                    _o.SectionsEdited();
                 }
                 else _o.SeekTo(_o.SnapBar(_pressBeat));   // a plain click on empty lane scrubs
                 InvalidateVisual();
@@ -327,9 +342,10 @@ public sealed partial class ArrangementView
                 var dup = new MenuItem { Header = "Duplicate", Icon = MenuKit.Icon(GlyphKind.Duplicate) };
                 dup.Click += (_, _) =>
                 {
+                    if (_o.Live(s) is null) return;
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
                     copy.Name = s.Name;
-                    _o.SectionsEdited();
+                    _o.SectionsEdited();   // one step: the copy arrives already named
                 };
                 var del = new MenuItem { Header = "Delete", Icon = MenuKit.Icon(GlyphKind.Trash) };
                 del.Click += (_, _) => _o.RemoveSection(s);
@@ -343,12 +359,12 @@ public sealed partial class ArrangementView
             else
             {
                 var add = new MenuItem { Header = "Add section here", Icon = MenuKit.Icon(GlyphKind.Plus) };
-                add.Click += (_, _) => _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8);
+                add.Click += (_, _) => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); };
                 flyout.Items.Add(add);
                 if (_o._sections.Count > 0)
                 {
                     var clear = new MenuItem { Header = "Delete all sections", Icon = MenuKit.Icon(GlyphKind.Trash) };
-                    clear.Click += (_, _) => { _o.ClearSections(); _o.SectionsChangedRaise(); };
+                    clear.Click += (_, _) => { _o._sections.Clear(); _o.SectionsEdited(); };
                     flyout.Items.Add(clear);
                 }
             }
@@ -407,53 +423,11 @@ public sealed partial class ArrangementView
 
     // ---- commands the lane's menu reaches ---------------------------------
 
-    internal void SectionsChangedRaise() => SectionsChanged?.Invoke();
-
     /// <summary>Make a section's span the arrangement's time selection, across every row —
     /// so Delete / Duplicate / Consolidate act on the whole section.</summary>
     internal void SelectSectionRange(ArrangementSection s)
     {
         if (_tracks.Count == 0) return;
         SetTimeSelection(s.StartBeat, s.StartBeat + s.LengthBeats, 0, _tracks.Count - 1);
-    }
-
-    // ---- sidecar persistence ---------------------------------------------
-
-    private const string SectionsSidecar = "sections.json";
-
-    private sealed class SectionDto
-    {
-        public double Start { get; set; }
-        public double Length { get; set; }
-        public string Name { get; set; } = "";
-    }
-
-    /// <summary>Write the sections into a .nota bundle. Cosmetic metadata — a failure here
-    /// must never fail the save.</summary>
-    public void SaveSections(string bundleDir)
-    {
-        var path = System.IO.Path.Combine(bundleDir, SectionsSidecar);
-        try
-        {
-            if (_sections.Count == 0) { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); return; }
-            var dto = SectionList.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList();
-            System.IO.File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(dto));
-        }
-        catch { /* sections are cosmetic — never block a save */ }
-    }
-
-    /// <summary>Read the sections back out of a bundle (absent / corrupt → none).</summary>
-    public void LoadSections(string bundleDir)
-    {
-        ClearSections();
-        var path = System.IO.Path.Combine(bundleDir, SectionsSidecar);
-        if (!System.IO.File.Exists(path)) return;
-        try
-        {
-            var dto = System.Text.Json.JsonSerializer.Deserialize<List<SectionDto>>(System.IO.File.ReadAllText(path));
-            if (dto is null) return;
-            SetSections(dto.Select(d => new ArrangementSection { StartBeat = d.Start, LengthBeats = d.Length, Name = d.Name }));
-        }
-        catch { /* a corrupt sidecar just means no sections */ }
     }
 }

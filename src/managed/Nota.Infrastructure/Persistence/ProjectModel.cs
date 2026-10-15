@@ -35,6 +35,10 @@ public sealed class ProjectDocument
     /// <summary>Mixer-wide settings: the project pan law (format v21). Null = a pre-v21 project
     /// (migration fills it in) = Balance + older project.</summary>
     public MixerDto? Mixer { get; set; }
+    /// <summary>Arrangement sections (specs/016), sorted by start. Null in files from before
+    /// sections moved into the project: their bundle's <c>sections.json</c> sidecar is read
+    /// once on load instead.</summary>
+    public List<SectionDto>? Sections { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
@@ -70,6 +74,17 @@ public sealed class MixerDto
 {
     public string PanLaw { get; set; } = "balance";
     public bool PanLawLegacy { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A named span of arrangement time (specs/016). The same shape the legacy
+/// <c>sections.json</c> sidecar used.</summary>
+public sealed class SectionDto
+{
+    public double Start { get; set; }
+    public double Length { get; set; }
+    public string Name { get; set; } = "";
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
