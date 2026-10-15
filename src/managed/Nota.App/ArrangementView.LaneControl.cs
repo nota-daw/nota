@@ -181,8 +181,39 @@ public sealed partial class ArrangementView
             return null;
         }
 
+        // Row seams (specs/015): the thin band on a track row's bottom edge resizes the row —
+        // checked before clips, trims and automation so the band always means "resize".
+        private static readonly Cursor RowResizeCursor = new(StandardCursorType.SizeNorthSouth);
+        private bool _rowSeamCursorOn;
+
+        private bool RowSeamPressed(PointerPressedEventArgs e)
+        {
+            var pt = e.GetCurrentPoint(this);
+            if (!pt.Properties.IsLeftButtonPressed) return false;
+            int row = _o.RowSeamAtY(pt.Position.Y);
+            if (row < 0) return false;
+            int trackId = _o._tracks[row].Id;
+            e.Handled = true;
+            if (e.ClickCount == 2) { _o.ResetRowHeight(trackId); return true; }
+            _o.BeginRowResize(trackId, pt.Position.Y, e.KeyModifiers);
+            e.Pointer.Capture(this);
+            return true;
+        }
+
+        // Hover over a row seam owns the cursor; leaving it hands the cursor back.
+        private bool RowSeamHover(Point pos)
+        {
+            bool on = _o.RowSeamAtY(pos.Y) >= 0;
+            if (on == _rowSeamCursorOn) return on;
+            _rowSeamCursorOn = on;
+            _resizeCursorOn = false;   // the clip-edge cursor state restarts from Arrow
+            Cursor = on ? RowResizeCursor : ArrowCursor;
+            return on;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            if (RowSeamPressed(e)) return;
             if (_o._automationMode) { AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
@@ -330,6 +361,9 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
+            if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
+            if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
+                && RowSeamHover(e.GetPosition(this))) return;
             if (_o._automationMode) { AutoPointerMoved(e); return; }
             var pos = e.GetPosition(this);
             _lastPos = pos;
@@ -495,6 +529,7 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
+            if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
             if (_o._automationMode) { AutoPointerReleased(e); return; }
             var eng = _o._engine;
 

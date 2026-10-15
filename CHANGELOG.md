@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Resizable tracks in the arrangement** (nota-daw/nota#52): drag the bottom edge of a
+  track — in its header or its lane — to make it taller or shorter (30 to 256 px; it
+  snaps lightly to the Compact, Standard and Large sizes). Drag with several tracks
+  selected to resize them all together, hold **Alt** (**Option** on macOS) to resize every
+  track at once, and double-click the edge to go back to the standard height. The track's
+  context menu has **Track height** with the three sizes for the selection or for all
+  tracks. Clips, waveforms and automation grow with the row.
+- **Track headers that fit their height:** a short track shows its name and mute, solo
+  and record-arm on one line; a standard one looks as before; a tall one gives the input
+  or MIDI source, the volume fader and the pan a row each.
+- **Resizable track list:** drag the seam between the track headers and the lanes to
+  widen or narrow the header column (160 to 480 px); double-click it to reset. Track
+  heights and the column width are saved with the project.
 - **Colour themes:** Preferences → Appearance now offers colour themes — Studio Dark,
   Studio Light, and **Ember Graphite** / **Ember Paper**, the warm browns and brass of
   Nota's earlier look, on the new layout. Choose **Dark**, **Light** or **Follow system**,

@@ -102,6 +102,13 @@ floating window (**View → Mixer**, ⌘M).
     there, double-click to rename, drag its body or edges to move and resize it (always on
     whole bars). Its menu loops the section, selects it as a time range across every track,
     duplicates it or deletes it. Saved with the project; View ▸ Toggle sections hides it.
+  - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
+    set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
+    multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
+    The track menu's **Track height** sets a size for the selection or all tracks. Headers
+    fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
+    of their own when tall. Drag the seam between headers and lanes to set the header
+    width (160–480 px). Both are saved with the project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its

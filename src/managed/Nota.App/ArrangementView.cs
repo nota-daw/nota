@@ -87,8 +87,8 @@ public sealed partial class ArrangementView : UserControl
     // Per-track chosen automation target, kept across Refresh (which rebuilds VMs).
     private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId)> _autoTargets = new();
 
-    private const double HeaderW = 228;
-    private const double RowHeight = 64;         // a track row: header carries every control
+    // Header column width and track row heights are user-resizable (ArrangementView.Sizing.cs).
+    private double HeaderW => _headerW;
     private const double GroupRowHeight = 26;    // a group row: a slim titled bar, no controls
     private const double RulerH = 24;
     private const double SectionsH = 22;    // song-structure lane above the ruler
@@ -106,7 +106,7 @@ public sealed partial class ArrangementView : UserControl
         for (int i = 0; i < _tracks.Count; i++)
         {
             tops[i] = y;
-            y += IsSlimRow(_tracks[i]) ? GroupRowHeight : RowHeight;
+            y += IsSlimRow(_tracks[i]) ? GroupRowHeight : TrackRowHeight(_tracks[i]);
         }
         tops[_tracks.Count] = y;
         _rowTops = tops;
@@ -114,7 +114,8 @@ public sealed partial class ArrangementView : UserControl
 
     /// <summary>Height of arrangement row <paramref name="i"/> — a slim bar for a group.</summary>
     internal double RowHeightAt(int i)
-        => i >= 0 && i < _tracks.Count && IsSlimRow(_tracks[i]) ? GroupRowHeight : RowHeight;
+        => i < 0 || i >= _tracks.Count ? DefaultRowHeight
+         : IsSlimRow(_tracks[i]) ? GroupRowHeight : TrackRowHeight(_tracks[i]);
 
     /// <summary>A group is a slim titled bar (1a: "groups weigh the same as their children"
     /// was the problem) — until it is the selected track, where it opens to a full row so its
@@ -123,12 +124,12 @@ public sealed partial class ArrangementView : UserControl
     internal bool IsSlimRowAt(int i) => i >= 0 && i < _tracks.Count && IsSlimRow(_tracks[i]);
 
     /// <summary>Top edge of row <paramref name="i"/> in lane coordinates. Indices past the
-    /// last row extrapolate by a full track row, so "the gap after the end" still has a y.</summary>
+    /// last row extrapolate by a default track row, so "the gap after the end" still has a y.</summary>
     internal double RowTop(int i)
     {
         if (i <= 0) return 0;
         int n = _tracks.Count;
-        return i <= n ? _rowTops[i] : _rowTops[n] + (i - n) * RowHeight;
+        return i <= n ? _rowTops[i] : _rowTops[n] + (i - n) * DefaultRowHeight;
     }
 
     /// <summary>Combined height of every visible row.</summary>
@@ -206,7 +207,7 @@ public sealed partial class ArrangementView : UserControl
     private Point _hdrDragStart;
     private readonly Border _trackDropLine = new()
     {
-        IsVisible = false, IsHitTestVisible = false, Height = 2, Width = HeaderW,
+        IsVisible = false, IsHitTestVisible = false, Height = 2, Width = DefaultHeaderW,
         Background = NotaPalette.AccentBright,
     };
 
@@ -216,7 +217,7 @@ public sealed partial class ArrangementView : UserControl
     private readonly Border _footerDropRing = DropRing();
     private static Border DropRing() => new()
     {
-        IsVisible = false, IsHitTestVisible = false, Width = HeaderW,
+        IsVisible = false, IsHitTestVisible = false, Width = DefaultHeaderW,
         BorderThickness = new Thickness(2), BorderBrush = DropEdge, Background = DropWash,
     };
 
@@ -290,6 +291,10 @@ public sealed partial class ArrangementView : UserControl
         // tall as the tracks, so instruments dropped in the empty space beneath them
         // (the natural "make a new track" gesture) would otherwise miss.
         _headers = new Canvas { Width = HeaderW, VerticalAlignment = VerticalAlignment.Top };
+        _headerColumnParts.Add(_headers);
+        _headerColumnParts.Add(_trackDropLine);
+        _headerColumnParts.Add(_headerDropRing);
+        _headerColumnParts.Add(_footerDropRing);
         _hScroll = new ThinScrollBar();
         _hScroll.Scroll += (_, _) => { _scrollBeats = _hScroll.Value; Redraw(); };
         // Keep the scroll range in sync with the visible width — outside the
@@ -312,6 +317,7 @@ public sealed partial class ArrangementView : UserControl
                 zoomOut, zoomIn,
             },
         };
+        _headerColumnParts.Add(zoomBar);
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         topGrid.Children.Add(topLeft);
@@ -382,6 +388,7 @@ public sealed partial class ArrangementView : UserControl
             HorizontalAlignment = HorizontalAlignment.Left,
             BorderThickness = new Thickness(0, 0, 1, 0),
         };
+        _headerColumnParts.Add(leftBackdrop);
         leftBackdrop.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         leftBackdrop.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         var centerArea = new Grid();
@@ -391,6 +398,8 @@ public sealed partial class ArrangementView : UserControl
         // Return / Master: a slim section pinned under the tracks (no scroll).
         _footerHeaders = new Canvas { Width = HeaderW };
         var footerHeaderPanel = new Border { Width = HeaderW, BorderThickness = new Thickness(0, 0, 1, 0), Child = _footerHeaders };
+        _headerColumnParts.Add(_footerHeaders);
+        _headerColumnParts.Add(footerHeaderPanel);
         footerHeaderPanel.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         footerHeaderPanel.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _footerLanes = new FooterLaneControl(this);
@@ -439,11 +448,16 @@ public sealed partial class ArrangementView : UserControl
         // A docked panel like the browser: square, no frame of its own — it meets its
         // neighbours on the seam the shell grid draws. ClipToBounds keeps the ruler, the
         // header column and the pinned footer inside it.
+        // The header/lane seam is draggable along the view's full height (overview to footer).
+        _columnSeam = BuildColumnSeam();
+        var layered = new Grid { Children = { root, _columnSeam } };
+        SizeChanged += (_, _) => OnViewSizeChanged();
+
         var island = new Border
         {
             BorderThickness = new Thickness(0),
             ClipToBounds = true,
-            Child = root,
+            Child = layered,
         };
         island.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
         island.BindResource(Border.BackgroundProperty, "Brush.BgApp");   // lanes sit on the ground
@@ -859,6 +873,7 @@ public sealed partial class ArrangementView : UserControl
         }
 
         ApplyHierarchy();   // reorder _tracks into group DFS order (depth + collapse-filtered)
+        PruneTrackHeights();    // heights of deleted tracks go with them
         RebuildRowGeometry();   // row tops depend on which rows are groups → after the reorder
         RecomputeTotalBeats();
         LoadMasterAuto();   // master-volume automation for the footer row (M9 follow-up)
@@ -867,7 +882,7 @@ public sealed partial class ArrangementView : UserControl
             RebuildHeaders();
             RebuildFooterHeaders();
         }
-        _lanes.Height = Math.Max(RowHeight, RowsHeight);
+        _lanes.Height = Math.Max(DefaultRowHeight, RowsHeight);
         _overlay.Height = _lanes.Height;   // keep the playhead/loop overlay the same span
         double footerH = (_returns.Count + 1) * FooterRowH;   // returns + master
         _footer.Height = footerH;
@@ -1298,7 +1313,7 @@ public sealed partial class ArrangementView : UserControl
     {
         RebuildRowGeometry();
         RebuildHeaders();
-        _lanes.Height = Math.Max(RowHeight, RowsHeight);
+        _lanes.Height = Math.Max(DefaultRowHeight, RowsHeight);
         _overlay.Height = _lanes.Height;
     }
 
@@ -1694,6 +1709,7 @@ public sealed partial class ArrangementView : UserControl
         _panBars.Clear();
         _volDb.Clear();
         _headerCards.Clear();
+        _cardTiers.Clear();
         for (int i = 0; i < _tracks.Count; i++)
         {
             var card = BuildHeaderCard(_tracks[i]);
@@ -1701,9 +1717,10 @@ public sealed partial class ArrangementView : UserControl
             Canvas.SetTop(card, RowTop(i));     // pin to the same Y as the lane row
             _headers.Children.Add(card);
         }
+        AddRowSeamGrips();                       // row-height grips sit above the cards
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
         _headers.Children.Add(_headerDropRing);  // browser drop target (kept invisible until a drag)
-        _headers.Height = Math.Max(RowHeight, RowsHeight);
+        _headers.Height = Math.Max(DefaultRowHeight, RowsHeight);
     }
 
     private Control BuildHeaderCard(TrackVM t)
@@ -1785,10 +1802,16 @@ public sealed partial class ArrangementView : UserControl
         return card;
     }
 
+    // One builder, three layouts picked by the row's height (specs/015): compact puts the name
+    // and M/S/arm on one line; standard is the classic three rows; large gives the routing,
+    // the fader and the pan a row each. The controls and their wiring are shared.
     private Control BuildTrackCard(TrackVM t)
     {
         bool selected = IsTrackMultiSelected(t.Id);
         var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
+        double rowH = TrackRowHeight(t);
+        var tier = TierFor(rowH);
+        _cardTiers[t.Id] = tier;
 
         // Row 1: [group ▸/▾] name (ellipsised) + type-tag chip.
         var name = new TextBlock
@@ -1839,29 +1862,37 @@ public sealed partial class ArrangementView : UserControl
         if (!t.IsReturn && !t.IsGroup)
             btnRow.Children.Add(ArmToggle(t.Armed, v => _engine?.SetTrackArmed(t.Id, v)));
 
-        // A compact routing selector sits with the arm button (the 64px row leaves no room
-        // for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".
+        // A compact routing selector sits with the arm button (the standard row leaves no
+        // room for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".
+        // A large row gives it a row of its own; a compact one leaves it to the context menu.
         bool isAudioTrack = !t.IsInstrument && !t.IsReturn && !t.IsGroup;
         Control row2 = btnRow;
-        if (isAudioTrack || t.IsInstrument)
+        Control? routingRow = null;
+        if (tier != HeaderTier.Compact && (isAudioTrack || t.IsInstrument))
         {
             // Audio tracks: a monitor chip right of the input selector hears that input live.
             var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
             var combo = isAudioTrack ? BuildInputCombo(t.Id, monitor) : BuildMidiSourceCombo(t.Id);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3};
-            btnRow.Margin = new Thickness(0);
-            Grid.SetColumn(btnRow, 0);
-            Grid.SetColumn(combo, 1);
-            g.Children.Add(btnRow);
+            bool ownRow = tier == HeaderTier.Large;
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(ownRow ? "*,Auto" : "Auto,*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3};
+            int col = 0;
+            if (!ownRow)
+            {
+                btnRow.Margin = new Thickness(0);
+                Grid.SetColumn(btnRow, col);
+                g.Children.Add(btnRow);
+                col++;
+            }
+            Grid.SetColumn(combo, col);
             g.Children.Add(combo);
             if (monitor is not null)
             {
                 combo.Margin = new Thickness(0);
                 monitor.Chip.Margin = new Thickness(0, 0, 12, 0);   // the row's right inset moves to the chip
-                Grid.SetColumn(monitor.Chip, 2);
+                Grid.SetColumn(monitor.Chip, col + 1);
                 g.Children.Add(monitor.Chip);
             }
-            row2 = g;
+            if (ownRow) routingRow = g; else row2 = g;
         }
 
         // Row 3: volume (mini fader + dB readout) and a bipolar pan bar in one row —
@@ -1910,9 +1941,42 @@ public sealed partial class ArrangementView : UserControl
         volRow.Children.Add(pan);
 
         // Indent nested rows so the group hierarchy reads at a glance.
-        var stack = new StackPanel { Margin = new Thickness(8, 6, 8, 6), Children = { nameRow, row2, volRow } };
+        var stack = new StackPanel { Margin = new Thickness(8, 6, 8, 6) };
+        switch (tier)
+        {
+            case HeaderTier.Compact:
+                // One line: name · tag · M S ●. Volume, pan and routing stay in the mixer and
+                // the track's context menu. A narrow column drops the tag before the name.
+                nameRow.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto");
+                if (HeaderW < 200) typeTag.IsVisible = false;
+                btnRow.Margin = new Thickness(6, 0, 0, 0);
+                btnRow.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(btnRow, 3);
+                nameRow.Children.Add(btnRow);
+                stack.Margin = new Thickness(8, 0, 8, 0);
+                stack.VerticalAlignment = VerticalAlignment.Center;
+                stack.Children.Add(nameRow);
+                break;
+            case HeaderTier.Large:
+                // A row each: the fader takes the full width, the pan its own row below.
+                volRow.ColumnDefinitions = new ColumnDefinitions("*");
+                volRow.RowDefinitions = new RowDefinitions("Auto,Auto");
+                volRow.RowSpacing = 6;
+                Grid.SetColumn(pan, 0);
+                Grid.SetRow(pan, 1);
+                stack.Children.Add(nameRow);
+                stack.Children.Add(row2);
+                if (routingRow is not null) stack.Children.Add(routingRow);
+                stack.Children.Add(volRow);
+                break;
+            default:
+                stack.Children.Add(nameRow);
+                stack.Children.Add(row2);
+                stack.Children.Add(volRow);
+                break;
+        }
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = new Thickness(0, 6, 3, 6) };
+        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) };
         _meters[t.Id] = meter;
         DockPanel.SetDock(meter, Dock.Right);
         var body = new DockPanel { LastChildFill = true, Children = { meter, stack } };
@@ -1924,7 +1988,7 @@ public sealed partial class ArrangementView : UserControl
         var card = new Border
         {
             Width = HeaderW,
-            Height = RowHeight,
+            Height = rowH,
             ClipToBounds = true,
             Background = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : t.IsGroup ? Brush("Brush.SurfaceRaised") : Brush("Brush.SurfaceCard"),
             BorderBrush = Brush("Brush.BorderDefault"),
@@ -2123,7 +2187,7 @@ public sealed partial class ArrangementView : UserControl
         // its children); paste lands right after this track.
         var one = new[] { trackId };
         var copy = new MenuItem { Header = "Copy track", Icon = MenuKit.Icon(GlyphKind.Copy), InputGesture = MenuKit.CopyKey };
-        copy.Click += (_, _) => _engine.CopyTracks(one);
+        copy.Click += (_, _) => CopyTracksToClipboard(one);
         var cut = new MenuItem { Header = "Cut track", Icon = MenuKit.Icon(GlyphKind.Cut), InputGesture = MenuKit.CutKey };
         cut.Click += (_, _) => CutTracks(one);
         var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
@@ -2151,6 +2215,7 @@ public sealed partial class ArrangementView : UserControl
 
         flyout.Items.Add(rename);
         flyout.Items.Add(color);
+        flyout.Items.Add(BuildTrackHeightSubmenu(one));
         if (recInput is not null) flyout.Items.Add(recInput);
         if (midiFrom is not null) flyout.Items.Add(midiFrom);
         if (freeze.Count > 0)
@@ -2594,10 +2659,11 @@ public sealed partial class ArrangementView : UserControl
         HorizontalContentAlignment = HorizontalAlignment.Center,
     };
 
-    // Fixed-width header-column chrome (SurfaceCard + right divider).
+    // Header-column chrome (SurfaceCard + right divider), as wide as the header column.
     private Border HeaderPanel(Control? child)
     {
         var b = new Border { Width = HeaderW, BorderThickness = new Thickness(0, 0, 1, 0), Child = child };
+        _headerColumnParts.Add(b);   // follows the header-column width
         b.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         b.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         return b;

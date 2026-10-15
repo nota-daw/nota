@@ -79,7 +79,7 @@ public sealed partial class ArrangementView
     public bool CopySelectedTracks()
     {
         var ids = SelectedTrackIds();
-        return ids.Count > 0 && _engine is not null && _engine.CopyTracks(ids.ToArray());
+        return CopyTracksToClipboard(ids);
     }
 
     public bool CutSelectedTracks() => CutTracks(SelectedTrackIds());
@@ -105,7 +105,7 @@ public sealed partial class ArrangementView
 
     private bool CutTracks(IReadOnlyList<int> ids)
     {
-        if (_engine is null || ids.Count == 0 || !_engine.CopyTracks(ids.ToArray())) return false;
+        if (!CopyTracksToClipboard(ids)) return false;
         return DeleteTracks(ids);
     }
 
@@ -114,6 +114,7 @@ public sealed partial class ArrangementView
         if (_engine is null || !_engine.HasTrackClipboard()) return false;
         var newIds = _engine.PasteTracks(anchorTrackId);
         if (newIds.Length == 0) return false;
+        if (_clipboardHeights is { } heights) CarryHeights(heights, newIds);   // pasted rows keep their height
         Refresh();
         SelectNewTracks(newIds);
         AfterTrackEdit();
@@ -125,6 +126,7 @@ public sealed partial class ArrangementView
         if (_engine is null || ids.Count == 0) return false;
         var newIds = _engine.DuplicateTracks(ids.ToArray());
         if (newIds.Length == 0) return false;
+        CarryHeightsFrom(ids, newIds);   // a duplicate keeps its source's height
         Refresh();
         SelectNewTracks(newIds);
         AfterTrackEdit();
@@ -198,7 +200,7 @@ public sealed partial class ArrangementView
         var group = MenuKit.Item($"Group {n}", GlyphKind.Folder, () => GroupTracks(-1), MenuKit.GroupKey);
         var color = BuildColorSubmenu(ids);
         var freeze = FreezeTracksMenuItems?.Invoke(ids) ?? Array.Empty<Control>();
-        var copy = MenuKit.Item($"Copy {n}", GlyphKind.Copy, () => _engine.CopyTracks(ids.ToArray()), MenuKit.CopyKey);
+        var copy = MenuKit.Item($"Copy {n}", GlyphKind.Copy, () => CopyTracksToClipboard(ids), MenuKit.CopyKey);
         var cut = MenuKit.Item($"Cut {n}", GlyphKind.Cut, () => CutTracks(ids), MenuKit.CutKey);
         var paste = MenuKit.Item("Paste track", GlyphKind.Paste, () => PasteTracksAfter(ids[^1]), MenuKit.PasteKey,
                                  enabled: _engine.HasTrackClipboard());
@@ -207,6 +209,7 @@ public sealed partial class ArrangementView
 
         flyout.Items.Add(group);
         flyout.Items.Add(color);
+        flyout.Items.Add(BuildTrackHeightSubmenu(ids));
         if (freeze.Count > 0)
         {
             flyout.Items.Add(new Separator());
