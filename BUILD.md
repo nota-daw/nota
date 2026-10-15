@@ -9,9 +9,10 @@ Nota? Grab a ready build from [Releases](https://github.com/nota-daw/nota/releas
 - macOS 26+, Xcode 26+ (clang, CoreAudio SDK).
 - CMake 3.24+ and Ninja — `brew install cmake ninja`.
 - .NET SDK 10.
-- Node.js 22 (or 20.19+) — `brew install node`. Optional: the build uses it to rebuild the
-  Nota Remote phone page (`src/web/remote`) when its sources change; without it the
-  committed `src/managed/Nota.Remote/wwwroot` ships as is, with a warning.
+- Node.js 22 (or 20.19+) — `brew install node`. The build uses it to build the Nota Remote
+  phone page (`src/web/remote`) into `src/managed/Nota.Remote/wwwroot`, which is build output
+  and not committed. To build without Node, pass `-p:NotaSkipWebBuild=true`; the phone then
+  gets a "not built" page.
 - Avalonia templates, only if you are scaffolding new projects —
   `dotnet new install Avalonia.Templates`.
 
@@ -120,7 +121,7 @@ cmake --build build-pentad --target NotaPentad_VST3
 - CMake 3.24+ and Ninja (both ship with the VS 2022 "C++ CMake tools", or
   `winget install Ninja-build.Ninja`).
 - .NET SDK 10.
-- Node.js 22 (optional, for the Nota Remote phone page — see the macOS requirements).
+- Node.js 22 (or 20.19+), for the Nota Remote phone page — see the macOS requirements.
 - For the installer, Inno Setup **6.3+** (`winget install JRSoftware.InnoSetup`).
 
 ### Quick start
@@ -152,7 +153,7 @@ a single x64 host. An ARM64 build cannot be run on x64 — the smoke test is x64
 ### Requirements
 
 - `build-essential`, CMake 3.24+, Ninja, .NET SDK 10.
-- Node.js 22 (optional, for the Nota Remote phone page — see the macOS requirements).
+- Node.js 22 (or 20.19+), for the Nota Remote phone page — see the macOS requirements.
 - Native dev packages:
 
 ```bash
@@ -215,11 +216,11 @@ dropped by some terminals and break the `apt-get` package list.
 **x86_64 (linux-x64)** → `dist/Nota-<version>-x86_64.AppImage`:
 
 ```bash
-docker run --rm --platform linux/amd64 -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
+docker run --rm --platform linux/amd64 -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates gnupg && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y --no-install-recommends nodejs cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
 ```
 
 **arm64 (linux-arm64)** → `dist/Nota-<version>-aarch64.AppImage` (drop `--platform`; native on Apple Silicon, fast):
 
 ```bash
-docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
+docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates gnupg && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y --no-install-recommends nodejs cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
 ```

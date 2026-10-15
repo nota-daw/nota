@@ -19,6 +19,10 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '../../../managed/Nota.Remote/wwwroot');
+if (!existsSync(join(root, 'index.html'))) {
+  console.error('nota-mock: Nota.Remote/wwwroot has no built page yet; run `npm run build` first.');
+  process.exit(1);
+}
 const themesDir = join(here, '../../../managed/Nota.App/Theme/Themes');
 const port = Number(process.env.PORT ?? 7790);
 

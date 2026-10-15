@@ -20,11 +20,12 @@
     <ProjectReference Include="..\Nota.Application\Nota.Application.csproj" />
   </ItemGroup>
 
-  <!-- The phone app. `npm run build` in src/web/remote writes into wwwroot/, which is committed;
-       the files are embedded so the app ships as one assembly and needs no web root on disk.
-       The build runs when its sources are newer than the output and a Node that Vite supports
-       is on the PATH (^20.19 or >= 22.12); without one (the Linux Docker image, an old Node)
-       the committed wwwroot ships as it is, with a warning. NotaSkipWebBuild=true skips it. -->
+  <!-- The phone app. `npm run build` in src/web/remote writes into wwwroot/, which is build
+       output and not committed (.gitignore); the files are embedded so the app ships as one
+       assembly and needs no web root on disk. The build runs when its sources are newer than
+       the output, and needs a Node that Vite supports on the PATH (^20.19 or >= 22.12). Without
+       one, an earlier wwwroot ships as it is, with a warning, and a checkout that has none
+       fails. NotaSkipWebBuild=true skips it: the phone is then shown a "not built" page. -->
   <PropertyGroup>
     <RemoteWebDir>$(MSBuildProjectDirectory)/../../web/remote</RemoteWebDir>
     <RemoteWwwRoot>$(MSBuildProjectDirectory)/wwwroot</RemoteWwwRoot>
@@ -38,7 +39,8 @@
           IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
       <Output TaskParameter="ExitCode" PropertyName="NodeExit" />
     </Exec>
-    <Warning Condition="'$(NodeExit)' != '0'" Text="Node.js 20.19+ / 22.12+ not found: the Nota Remote phone page is not rebuilt; the committed wwwroot ships as it is." />
+    <Error Condition="'$(NodeExit)' != '0' and !Exists('$(RemoteWwwRoot)/index.html')" Text="Node.js 20.19+ / 22.12+ not found: it builds the Nota Remote phone page (src/web/remote) into Nota.Remote/wwwroot. Install Node, or build with -p:NotaSkipWebBuild=true to go without the page." />
+    <Warning Condition="'$(NodeExit)' != '0' and Exists('$(RemoteWwwRoot)/index.html')" Text="Node.js 20.19+ / 22.12+ not found: the Nota Remote phone page is not rebuilt; the existing wwwroot ships as it is." />
     <!-- Install when there is no node_modules yet, or the lockfile changed since the last install. -->
     <Exec Condition="'$(NodeExit)' == '0' and (!Exists('$(RemoteWebDir)/node_modules/.package-lock.json') or $([System.IO.File]::GetLastWriteTime('$(RemoteWebDir)/package-lock.json').Ticks) &gt; $([System.IO.File]::GetLastWriteTime('$(RemoteWebDir)/node_modules/.package-lock.json').Ticks))"
           WorkingDirectory="$(RemoteWebDir)" Command="npm ci --no-audit --no-fund" />
