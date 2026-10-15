@@ -6,8 +6,8 @@
 // audio.json / midi.json writers). Platform conventions:
 //   macOS   -> ~/Library/Application Support/Nota   (unchanged from the mac-only era)
 //   Windows -> %APPDATA%\Nota                       (Roaming AppData)
-//   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota
-// The native side resolves the same locations (SHGetKnownFolderPath / NSHomeDirectory)
+//   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota (lowercase, XDG style)
+// The native side resolves the same locations (cfgfile::dataDir, the plugin host)
 // so config written by C++ and C# lands in one place.
 
 namespace Nota.Infrastructure;

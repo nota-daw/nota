@@ -7,8 +7,8 @@
 // engine-internal (the managed layer reads them only through C ABI getters), so a
 // hand-rolled parser is sufficient — but string values (WASAPI endpoint ids can contain
 // backslashes/braces) are properly escaped. The directory mirrors NotaPaths.DataDir on
-// the managed side: %APPDATA%\Nota on Windows, $XDG_CONFIG_HOME/Nota (or ~/.config/Nota)
-// on Linux.
+// the managed side: %APPDATA%\Nota on Windows, $XDG_CONFIG_HOME/nota (or ~/.config/nota)
+// on Linux, or NOTA_DATA_DIR when set (tests). The plugin host's catalog lives here too.
 
 #pragma once
 

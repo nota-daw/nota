@@ -95,6 +95,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **One settings folder on Linux:** Nota kept its files in two folders, `~/.config/nota`
+  and `~/.config/Nota`; the audio and MIDI device choice and the plugin list went to the
+  second. Everything now lives in `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`), and on the
+  first launch Nota moves the files over from `~/.config/Nota` — nothing to set up again.
 - **The transport meter says what it measures:** it read "CPU" but showed only the audio
   engine's load, so it sat far below the system monitor. It is now labelled **DSP** — the
   share of each audio buffer the engine needs, which is what causes dropouts — and its

@@ -82,26 +82,55 @@ size_t findValue(const std::string& json, const std::string& key) {
     return skipWs(json, p + 1);
 }
 
+#if !defined(_WIN32)
+// Earlier engine builds wrote audio.json / midi.json / plugins.xml / scanpaths.txt to
+// <root>/Nota while the managed side used <root>/nota. Move what is there into the one
+// folder, never overwriting, and drop the old folder once it is empty. Best-effort.
+void migrateLegacyDir(const std::filesystem::path& legacy, const std::filesystem::path& dir) {
+    std::error_code ec;
+    if (!std::filesystem::is_directory(legacy, ec)) return;
+    if (std::filesystem::equivalent(legacy, dir, ec)) return; // case-insensitive filesystem
+    for (const auto& entry : std::filesystem::directory_iterator(legacy, ec)) {
+        auto target = dir / entry.path().filename();
+        if (!std::filesystem::exists(target, ec))
+            std::filesystem::rename(entry.path(), target, ec);
+    }
+    std::filesystem::remove(legacy, ec); // only succeeds if empty
+}
+#endif
+
 } // namespace
 
 std::string dataDir() {
-    // Resolve the per-user config root, then append "Nota". Windows: %APPDATA%.
-    // Linux: $XDG_CONFIG_HOME, else $HOME/.config (XDG Base Directory spec) —
-    // mirrors NotaPaths.DataDir on the managed side.
+    // NOTA_DATA_DIR (tests) relocates the data root, like NotaPaths.DataDir.
+    if (const char* over = std::getenv("NOTA_DATA_DIR"); over && *over) {
+        std::error_code ec;
+        std::filesystem::create_directories(over, ec);
+        return over;
+    }
+    // Resolve the per-user config root, then append the app folder — mirrors
+    // NotaPaths.DataDir on the managed side. Windows: %APPDATA%\Nota.
+    // Linux: $XDG_CONFIG_HOME, else $HOME/.config (XDG Base Directory spec), + "nota".
     std::filesystem::path root;
 #if defined(_WIN32)
     if (const char* appdata = std::getenv("APPDATA"); appdata && *appdata)
         root = appdata;
+    if (root.empty()) return {};
+    std::filesystem::path dir = root / "Nota";
 #else
     if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
         root = xdg;
     else if (const char* home = std::getenv("HOME"); home && *home)
         root = std::filesystem::path(home) / ".config";
-#endif
     if (root.empty()) return {};
-    std::filesystem::path dir = root / "Nota";
+    std::filesystem::path dir = root / "nota";
+#endif
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
+#if !defined(_WIN32)
+    static const bool migrated = (migrateLegacyDir(root / "Nota", dir), true);
+    (void)migrated;
+#endif
     return dir.string();
 }
 

@@ -17,6 +17,9 @@
 #include "Instrument.h"
 #include "PluginHostBridge.h"
 #include "CommandQueue.h"   // SpscRingBuffer: message-thread -> audio-thread note injection
+#if !defined(__APPLE__) // JUCE_MAC is not defined yet: the JUCE headers come below
+#include "NotaConfigFile.h" // cfgfile::dataDir: the Windows/Linux per-user data dir
+#endif
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -126,7 +129,7 @@ juce::KnownPluginList& catalog() {
 // Per-user Nota data dir (mirrors NotaPaths.DataDir / cfgfile::dataDir):
 //   macOS   -> ~/Library/Application Support/Nota
 //   Windows -> %APPDATA%\Nota
-//   Linux   -> ~/.config/Nota
+//   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota
 juce::File notaSupportDir() {
     // NOTA_DATA_DIR (tests) relocates the catalog + scan paths, like NotaPaths.DataDir.
     // Needed because on macOS JUCE resolves the home folder via NSHomeDirectory(), not $HOME.
@@ -139,14 +142,12 @@ juce::File notaSupportDir() {
     auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                    .getChildFile("Application Support")
                    .getChildFile("Nota");
-#else
-    // On Windows userApplicationDataDirectory resolves to %APPDATA%; on Linux to
-    // ~/.config (matching cfgfile::dataDir's XDG default).
-    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                   .getChildFile("Nota");
-#endif
     dir.createDirectory();
     return dir;
+#else
+    // Windows + Linux share the engine's config dir (same folder as audio.json / midi.json).
+    return juce::File{juce::CharPointer_UTF8(nota::cfgfile::dataDir().c_str())};
+#endif
 }
 
 juce::File catalogFile()   { return notaSupportDir().getChildFile("plugins.xml"); }
