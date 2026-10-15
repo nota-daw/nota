@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.53.1** (plus changes in development on `main`). This document describes what is
+**0.55.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -33,7 +33,8 @@ Contents
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
-  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`).
+  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`). Settings live in
+  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
@@ -71,6 +72,8 @@ JUCE module; the engine core is JUCE-free.
   - **Launch quantize** (Q): None … 1/16 … 4 Bars — applied when launching slots and
     scenes in Session.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
+  - **DSP meter**: the share of each audio buffer the engine needs; its tooltip adds the
+    CPU used by the whole Nota process, in the system monitor's scale.
 - **Tempo (BPM)** and **time signature** (edited by dragging; the denominator snaps to a
   power of two), grid and quantization.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
@@ -82,11 +85,14 @@ JUCE module; the engine core is JUCE-free.
 
 ---
 
+## Views
+
 Three top-level views, switched by three icon keys in the transport (**Arrangement ·
 Session · Modular**; each names its view in a tooltip); the mixer opens as a separate
-floating window (**View → Mixer**, ⌘M).
+floating window (**View → Mixer**, ⌘M) that is as wide as its channel strips, follows the
+track count and closes with Escape.
 
-- **Arrangement View** — a linear timeline, floating on the app ground as its own island:
+- **Arrangement View** — a linear timeline:
   place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
@@ -143,7 +149,7 @@ floating window (**View → Mixer**, ⌘M).
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
   scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch
   and gain, as one undo step.
-- **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
+- **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
   tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —

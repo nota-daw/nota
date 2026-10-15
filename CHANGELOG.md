@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.55.1] — 2026-10-15
+
 ### Added
 - **Resizable tracks in the arrangement** (nota-daw/nota#52): drag the bottom edge of a
   track — in its header or its lane — to make it taller or shorter (30 to 256 px; it
