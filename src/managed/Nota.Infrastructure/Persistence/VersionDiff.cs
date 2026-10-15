@@ -107,8 +107,17 @@ internal static class VersionDiff
             NewAudio = newAudio,
             Other = changedFiles
                 .Select(f => OtherNames.TryGetValue(f, out var label) ? label : Path.GetFileNameWithoutExtension(f))
+                .Concat(SectionsDiffer(before, after) ? ["sections"] : [])
                 .Distinct().ToList(),
         };
+    }
+
+    // Arrangement sections live in the manifest since specs/016 (before that, in the
+    // sections.json sidecar above). A version without the member has none.
+    private static bool SectionsDiffer(JsonNode? before, JsonNode? after)
+    {
+        static JsonNode? Of(JsonNode? doc) => doc?["sections"] is JsonArray { Count: > 0 } a ? a : null;
+        return !JsonNode.DeepEquals(Of(before), Of(after));
     }
 
     private static List<JsonObject> Tracks(JsonNode? manifest)

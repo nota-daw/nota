@@ -88,7 +88,7 @@ internal static class HistoryTests
             yield return (c6.TracksRenamed.Count == 1 && c6.TracksRenamed[0] == new TrackRename("Lead", "Strings")
                           && c6.TracksAdded.Count == 0 && c6.TracksRemoved.Count == 0, "a renamed track reads as a rename");
 
-            var c7 = Step(() => { e.RemoveTrack(vox); File.WriteAllText(Path.Combine(dir, "sections.json"), "[]"); });
+            var c7 = Step(() => { e.RemoveTrack(vox); e.SetSections([new SectionInfo(0, 16, "Intro")]); });
             yield return (c7.TracksRemoved.SequenceEqual(["Vox"]) && c7.Other.SequenceEqual(["sections"]),
                 $"a removed track and edited sections are seen ({string.Join(" · ", VersionSummary.Parts(c7, Bpm))})");
 

@@ -19,7 +19,7 @@ description: "Task list for 016 Undo for Device Parameters and Arrangement Secti
 
 ## Phase 1: Setup
 
-- [ ] T001 Build the untouched tree (engine + managed + smoke, `CI=true`) and confirm green
+- [x] T001 Build the untouched tree (engine + managed + smoke, `CI=true`) and confirm green
 
 ## Phase 2: Foundational
 
@@ -57,4 +57,4 @@ description: "Task list for 016 Undo for Device Parameters and Arrangement Secti
 ## Phase 6: Polish
 
 - [x] T023 [P] CHANGELOG `[Unreleased]`, FEATURES.md (nota-features), user docs EN + RU (nota-docs)
-- [ ] T024 Full build + smoke (`CI=true`) green; re-check the compliance list
+- [x] T024 Full build + smoke (`CI=true`) green; re-check the compliance list
