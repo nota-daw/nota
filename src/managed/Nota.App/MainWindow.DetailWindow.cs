@@ -28,10 +28,19 @@ public partial class MainWindow
     private ContentControl ClipDetailHost => _detailWindow?.ClipHost ?? DetailBody;
 
     // Assign a control to a ContentControl host, detaching it from any previous host first
-    // (a control can have only one parent).
+    // (a control can have only one parent). Moving to another window, the old window's
+    // pending layout is run between the detach and the attach: each window keeps its own
+    // layout queue (the detach itself queues the control there), and an entry left behind for
+    // a control that now lives in the other window throws "InvalidateArrange on wrong
+    // LayoutManager" on a later frame (seen on Linux/X11 popping out the piano roll).
     private static void SetHost(ContentControl host, Control? content)
     {
-        if (content?.Parent is ContentControl prev && !ReferenceEquals(prev, host)) prev.Content = null;
+        if (content?.Parent is ContentControl prev && !ReferenceEquals(prev, host))
+        {
+            var from = TopLevel.GetTopLevel(prev);
+            prev.Content = null;
+            if (from is not null && !ReferenceEquals(from, TopLevel.GetTopLevel(host))) from.UpdateLayout();
+        }
         if (!ReferenceEquals(host.Content, content)) host.Content = content;
     }
 
