@@ -35,6 +35,18 @@ public struct NotaExprPoint(NoteExpressionDim dim, float beat, float value)
     public float Value = value;
 }
 
+/// <summary>A note held into the in-progress MIDI take (live-recording preview). Matches native
+/// NotaRecordHeldNote. StartBeat is an absolute timeline beat for an arrangement take (it may
+/// precede the take's clip and be negative — played on the count-in), slot-local for Session.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaRecordHeldNote
+{
+    public int Pitch;
+    public int Source;      // 0 live input, 1 routed MIDI ("MIDI In")
+    public double StartBeat;
+    public float Velocity;
+}
+
 /// <summary>Track summary for the Arrangement View. Matches native NotaTrackInfo.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaTrackInfo

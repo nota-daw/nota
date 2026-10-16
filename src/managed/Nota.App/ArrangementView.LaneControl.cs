@@ -1328,6 +1328,11 @@ public sealed partial class ArrangementView
                 // One pitch scale for the whole track, so a clip an octave up reads higher
                 // than its neighbour instead of every clip auto-fitting to its own notes.
                 var pitches = TrackPitchRange(_o._tracks[i].Clips);
+                // The recording take's row (#56): the scale includes the keys being held, so a
+                // stored note doesn't jump when the held one lands; new notes animate in.
+                var rp = _o.RecordPreview;
+                bool take = rp is { Active: true, SessionScene: < 0 } && rp.TrackId == tid;
+                if (take) pitches = WithHeld(pitches, rp!.Held);
                 // A track still being filled by a background import reads as translucent.
                 using (ctx.PushOpacity(_o.IsProcessingTrack(tid) ? 0.5 : 1.0))
                     foreach (var c in _o._tracks[i].Clips)
@@ -1337,8 +1342,10 @@ public sealed partial class ArrangementView
                         var edgeHi = Drag.None;
                         if (_hoverEdge != Drag.None && _hoverEdgeTrack == tid && _hoverEdgeClip == c.ClipIndex) edgeHi = _hoverEdge;
                         else if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && _dragTrackId == tid && _dragClipIndex == c.ClipIndex) edgeHi = _drag;
-                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi, pitches, tid, i);
+                        DrawClipBody(ctx, _o._tracks[i].ColorIndex, _o._tracks[i].Name, c, y, rh, _o.IsSelected(tid, c.ClipIndex), edgeHi, pitches, tid, i,
+                                     take ? rp : null);
                     }
+                if (take) DrawHeldNotes(ctx, rp!, _o._tracks[i].ColorIndex, y, rh, w, pitches);
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
                     foreach (var c in _o.PendingClipsFor(tid))
@@ -1484,7 +1491,62 @@ public sealed partial class ArrangementView
             return lo <= hi ? (lo, hi) : null;
         }
 
-        private void DrawNotes(DrawingContext ctx, ClipVM c, Rect r, IBrush brush, (int lo, int hi)? pitches = null)
+        // A track's pitch range widened to the keys held into its recording take.
+        private static (int lo, int hi)? WithHeld((int lo, int hi)? range, ReadOnlySpan<NotaRecordHeldNote> held)
+        {
+            if (held.IsEmpty) return range;
+            int lo = range?.lo ?? int.MaxValue, hi = range?.hi ?? int.MinValue;
+            foreach (var h in held) { lo = Math.Min(lo, h.Pitch); hi = Math.Max(hi, h.Pitch); }
+            return (lo, hi);
+        }
+
+        // A note settling in (#56): the accent fading into the note's own ink, ease-out.
+        private static IBrush AppearBrush(IBrush ink, double p)
+            => RecordPreview.AppearBrush((ink as ISolidColorBrush)?.Color ?? NotaPalette.Accent.Color, p);
+
+        // Notes still animating in, drawn one by one after the clip's batched geometry.
+        private readonly List<(Rect r, double p)> _appearing = new();
+
+        // The recording take's held notes (#56): from where each key went down to the capture
+        // clock, on the take row's content area and pitch scale. Keys held since before the
+        // take's clip (the count-in) sit on a faint extension of the take, not on bare lane.
+        private void DrawHeldNotes(DrawingContext ctx, RecordPreview rp, int colorIndex, double y, double rowH,
+                                   double w, (int lo, int hi)? pitches)
+        {
+            var held = rp.Held;
+            if (held.IsEmpty || pitches is not { } pr) return;
+            var content = new Rect(0, y + 2 + BandH, w, Math.Max(0, rowH - 4 - BandH));
+            if (content.Height <= 0) return;
+            double first = double.MaxValue;
+            foreach (var h in held) first = Math.Min(first, h.StartBeat);
+            double clipStart = rp.TakeClipIndex >= 0 ? rp.TakeClipStart : rp.NowBeat;
+            if (first < clipStart)
+            {
+                double ex0 = _o.BeatToX(first), ex1 = _o.BeatToX(clipStart);
+                var (_, _, _, body) = ClipColors(colorIndex);
+                using (ctx.PushClip(new Rect(0, y + 2, w, Math.Max(0, rowH - 4))))
+                using (ctx.PushOpacity(0.45))
+                    ctx.DrawRectangle(body, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), NotaRadius.ClipValue, NotaRadius.ClipValue);
+            }
+            // Under the take's title band, as the stored notes are (the band covers them there).
+            double top = y + 2 + (rowH - 4 > TitleBandH * 2.5 ? TitleBandH : BandH);
+            using var _ = ctx.PushClip(new Rect(0, top, w, Math.Max(0, y + rowH - 2 - top)));
+            int span = Math.Max(1, pr.hi - pr.lo + 1);
+            double step = Math.Min(content.Height / span, 4), noteH = Math.Max(1, step);
+            var ink = ClipInk(colorIndex);
+            foreach (var h in held)
+            {
+                double x0 = _o.BeatToX(h.StartBeat), x1 = _o.BeatToX(Math.Max(h.StartBeat, rp.NowBeat));
+                if (x1 < 0 || x0 > w) continue;
+                double ny = Math.Max(content.Y, content.Bottom - (h.Pitch - pr.lo + 1) * step);
+                var nr = new Rect(x0, ny, Math.Max(2, x1 - x0), noteH);
+                double p = rp.Progress(h.Pitch, h.StartBeat);
+                ctx.FillRectangle(p < 1 ? AppearBrush(ink, p) : ink, nr);
+            }
+        }
+
+        private void DrawNotes(DrawingContext ctx, ClipVM c, Rect r, IBrush brush, (int lo, int hi)? pitches = null,
+                               RecordPreview? appear = null)
         {
             if (c.Notes is null || c.Notes.Length == 0 || c.LengthBeats <= 0 || r.Height <= 0) return;
             // Auto-range to the pitches actually present on the track (all its clips share
@@ -1505,9 +1567,14 @@ public sealed partial class ArrangementView
                     double nw = Math.Max(2, (n.LengthBeats / c.LengthBeats) * r.Width);
                     double ny = Math.Max(r.Y, r.Bottom - (n.Pitch - lo + 1) * step);
                     double ww = Math.Min(nw, r.Right - nx);
-                    if (ww > 0) AddRect(g, nx, ny, ww, noteH);
+                    if (ww <= 0) continue;
+                    double p = appear?.Progress(n.Pitch, c.StartBeat + n.StartBeat) ?? 1;
+                    if (p < 1) _appearing.Add((new Rect(nx, ny, ww, noteH), p));
+                    else AddRect(g, nx, ny, ww, noteH);
                 }
             ctx.DrawGeometry(brush, null, geo);
+            foreach (var (ar, p) in _appearing) ctx.FillRectangle(AppearBrush(brush, p), ar);
+            _appearing.Clear();
         }
 
         // Scratch buffer for live capture peaks — reused each frame (no per-render alloc).
@@ -1578,7 +1645,7 @@ public sealed partial class ArrangementView
 
         private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y,
                                   double rowH, bool selected, Drag edgeHi = Drag.None, (int lo, int hi)? pitches = null,
-                                  int trackId = -1, int row = -1)
+                                  int trackId = -1, int row = -1, RecordPreview? appear = null)
         {
             double w = Bounds.Width;
             double x0 = _o.BeatToX(c.StartBeat);
@@ -1602,7 +1669,7 @@ public sealed partial class ArrangementView
             // height. Content first, then the band and the name over it. Both DrawNotes and
             // DrawWaveform already clip themselves to the rect they are handed.
             var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
-            if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches);
+            if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
             else DrawWaveform(ctx, c, contentRect, content);
 
             // The title band: the track colour mixed 30% toward black across the top, the

@@ -26,6 +26,8 @@ public sealed partial class SessionView
 
     private readonly HashSet<int> _armed = new();
     private int _recTrack, _recScene = -1;
+    /// <summary>The recording MIDI take's held notes and appear animation (#56).</summary>
+    internal RecordPreview? RecordPreview { get; init; }
     private double _recElapsed;
 
     // Clip drag between slots: the cell the pointer is over while a clip is dragged.
@@ -568,6 +570,45 @@ public sealed partial class SessionView
                 var buf = new float[44 * 2];
                 int n = _o._engine.AudioRecordPeaks(buf, 44);
                 DrawPeaks(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31), buf, n, NotaPalette.DangerBright);
+            }
+            else DrawRecordingNotes(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31));
+        }
+
+        // A MIDI slot being recorded (#56): the notes stored so far plus the keys held into it,
+        // growing to the slot's clock; a held note that wrapped past the loop end draws as its
+        // tail plus the part from the loop start. New notes settle in from the accent.
+        private void DrawRecordingNotes(DrawingContext ctx, Rect area)
+        {
+            var rp = _o.RecordPreview;
+            var stored = _o._engine.GetSessionNotes(_c.TrackId, _scene);
+            ReadOnlySpan<NotaRecordHeldNote> held = rp is { } p0 && p0.TrackId == _c.TrackId && p0.SessionScene == _scene
+                ? p0.Held : ReadOnlySpan<NotaRecordHeldNote>.Empty;
+            if ((stored.Length == 0 && held.IsEmpty) || area.Width <= 0 || area.Height <= 3) return;
+            double slotLen = _o._engine.SessionSlotLength(_c.TrackId, _scene);
+            // An open-ended take shows whole bars recorded so far, not its provisional length.
+            double len = Math.Min(slotLen > 0 ? slotLen : 4, Math.Max(4, Math.Ceiling((_o._recElapsed + 1e-6) / 4) * 4));
+            int lo = 127, hi = 0;
+            foreach (var n in stored) { lo = Math.Min(lo, n.Pitch); hi = Math.Max(hi, n.Pitch); }
+            foreach (var h in held) { lo = Math.Min(lo, h.Pitch); hi = Math.Max(hi, h.Pitch); }
+            int range = Math.Max(1, hi - lo);
+            var ink = NotaPalette.DangerBright;
+            using var _ = ctx.PushClip(area);
+            void Bar(int pitch, double start, double length, double prog)
+            {
+                double x = area.X + start / len * area.Width;
+                double wd = Math.Max(1.5, Math.Min(length, len - start) / len * area.Width);
+                double y = area.Y + (hi - pitch) / (double)range * (area.Height - 3);
+                var b = prog < 1 ? RecordPreview.AppearBrush(ink.Color, prog) : ink;
+                ctx.DrawRectangle(b, null, new Rect(x, y, wd, 3), 1, 1);
+            }
+            foreach (var n in stored)
+                if (n.StartBeat < len) Bar(n.Pitch, n.StartBeat, n.LengthBeats, rp?.Progress(n.Pitch, n.StartBeat) ?? 1);
+            double now = rp?.NowBeat ?? 0;
+            foreach (var h in held)
+            {
+                double prog = rp!.Progress(h.Pitch, h.StartBeat);
+                if (now >= h.StartBeat) Bar(h.Pitch, h.StartBeat, now - h.StartBeat, prog);
+                else { Bar(h.Pitch, h.StartBeat, len - h.StartBeat, prog); Bar(h.Pitch, 0, now, prog); }   // wrapped
             }
         }
     }

@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private IAudioExporter _exporter = default!;
 
     private SessionView? _session;
+    private readonly RecordPreview _recordPreview = new();   // held notes of a recording MIDI take (#56)
     private MeterBar? _masterMeter;
     private MidiLearnService? _learn;
     /// <summary>The MIDI-learn service, so secondary windows can host their own learn glass.</summary>
@@ -315,7 +316,23 @@ public partial class MainWindow : Window
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT
         // rebuilding the header cards — otherwise the input combobox and any open track/
         // clip context menu are torn down every frame and can't be used while recording.
-        vm.RecordingTick += () => { Timeline.Refresh(rebuildHeaders: false); ReloadEditorNotes(); };
+        // The live-recording preview (#56) reads the held notes first, so the lanes, the piano
+        // roll and the Session slot all draw the same frame of the growing take.
+        Timeline.RecordPreview = _recordPreview;
+        vm.RecordingTick += () =>
+        {
+            _recordPreview.Update(vm.Engine);
+            Timeline.Refresh(rebuildHeaders: false);
+            ReloadEditorNotes();
+        };
+        // The take ended: drop the preview and redraw once so no growing note lingers.
+        vm.PlayheadUpdated += _ =>
+        {
+            if (!_recordPreview.Active || vm.Engine.IsRecording) return;
+            _recordPreview.Clear();
+            Timeline.Refresh(rebuildHeaders: false);
+            ReloadEditorNotes();
+        };
         // Hit Record with nothing armed → auto-arm the selected/last track (M-fix).
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
         vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
@@ -366,6 +383,7 @@ public partial class MainWindow : Window
             GetMasterVolume = () => (float)vm.Transport.MasterVolume,
             SetMasterVolume = v => vm.Transport.MasterVolume = v,
             GetTempo = () => ((double)vm.Transport.Bpm, vm.Transport.TimeSigNumerator, vm.Transport.TimeSigDenominator),
+            RecordPreview = _recordPreview,
         };
         _session.SlotEditRequested += OpenSessionClipEditor;
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)

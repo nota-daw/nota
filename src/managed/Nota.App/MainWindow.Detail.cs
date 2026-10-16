@@ -501,8 +501,13 @@ public partial class MainWindow
     {
         _patternView?.Reload();   // the step grid is a second view of the same notes
         if (_vm is null || _editorRoll is null || _editorTrackId < 0) return;
-        double len = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
+        bool hasInfo = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci);
+        double len = hasInfo && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
         _editorRoll.SetNotes(Engine.GetClipNotes(_editorTrackId, _editorClipIndex), len);
+        // The roll shows the recording take: draw its held notes too (#56).
+        bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
+                    && rp.TrackId == _editorTrackId && rp.TakeClipIndex == _editorClipIndex;
+        _editorRoll.SetRecordTake(take ? _recordPreview : null, hasInfo ? ci.StartBeat : 0);
     }
 
     // Tab (when the detail panel was last used) flips between Devices and Clip.

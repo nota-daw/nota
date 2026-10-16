@@ -1001,6 +1001,10 @@ public:
     // a growing waveform (not just a flat box). 0 when not capturing. UI-thread
     // only — serialised with poll()'s drain, which is the sole writer.
     int32_t audioRecordPeaks(float* outMinMax, int32_t maxPoints) const;
+    // Notes held into the in-progress MIDI take (live-recording preview, #56). Lock-free
+    // read of the audio thread's per-block snapshot; take geometry from the message thread.
+    int32_t recordHeldNotes(NotaRecordHeldNote* out, int32_t maxN, int32_t* trackId,
+                            int32_t* sessionScene, double* nowBeat) const;
     void pushInputFramesForTest(const float* interleavedStereo, int32_t frames); // feed the ring without a device
     bool audioRecordSelfTest();                          // ring -> accumulate -> clip, no device
     bool sessionAudioRecordSelfTest();                   // ring -> slot.audio -> looped playback, no device (M5-4)
@@ -1462,8 +1466,42 @@ private:
     bool   recRoutedActive_[128] = {};
     double recRoutedStart_[128] = {};
     float  recRoutedVel_[128] = {};
-    void   captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb);
+    void   captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);
     void   captureLiveExpr(double nowBeat, double slotLen);   // recorded MPE (drainLiveMidi)
+    // Live keys down, tracked whether or not a take records, so keys already held when
+    // Record is pressed join the take from where they started (#56). pressBeat is NaN for a
+    // key pressed while stopped (no timeline position).
+    bool    liveDown_[128] = {};
+    double  livePressBeat_[128] = {};
+    float   livePressVel_[128] = {};
+    int32_t livePressTrack_[128] = {};
+    // Routed MIDI ("MIDI In") sounding into an armed destination, tracked whether or not a take
+    // records, so notes already held on the source when Record is pressed join the take too.
+    // routedOwner_ is the destination the arrays describe.
+    bool    routedDown_[128] = {};
+    double  routedPressBeat_[128] = {};
+    float   routedPressVel_[128] = {};
+    int32_t routedOwner_ = -1;
+    bool    routedSeedPending_ = false;   // a take just started: seed after this block's routed events
+    void    trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
+    // Capture clock: during a count-in the transport holds still, so notes are timed back
+    // from the take start (negative offsets — before 1.1 when the take starts there).
+    double  countInClockOffset() const { return countInActive_ ? -(countInTotal_ - countInPos_) : 0.0; }
+    // Held-note snapshot for the live-recording preview: written once per block by the
+    // audio thread behind a sequence counter (odd while writing), read by the UI.
+    static constexpr int kMaxHeldSnap = 256;   // 128 pitches × live + routed
+    struct HeldSnapSlot {
+        std::atomic<int32_t> pitch{0};
+        std::atomic<int32_t> source{0};
+        std::atomic<double>  startBeat{0.0};
+        std::atomic<float>   velocity{0.0f};
+    };
+    std::atomic<uint32_t> heldSeq_{0};
+    std::atomic<int32_t>  heldCount_{0};
+    std::atomic<double>   heldNow_{0.0};
+    HeldSnapSlot          heldSnap_[kMaxHeldSnap];
+    double captureNow_ = 0.0;   // capture clock at this block's start (drainLiveMidi)
+    void   publishHeldSnapshot(double nowBeat);
 
     // Clip-note expression replayed per block (computeBlockMidi fills, the render pass merges),
     // per track position like blockMidi_.

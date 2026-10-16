@@ -653,6 +653,16 @@ NotaResult nota_clip_set_notes_live(NotaEngine* e, int32_t track_id, int32_t cli
 int32_t nota_engine_live_held_notes(const NotaEngine* e, int32_t* out, int32_t max_n) {
     return e ? CENG(e)->liveHeldNotes(out, max_n) : 0;
 }
+int32_t nota_engine_record_held_notes(const NotaEngine* e, NotaRecordHeldNote* out, int32_t max_n,
+                                      int32_t* track_id, int32_t* session_scene, double* now_beat) {
+    if (!e) {
+        if (track_id) *track_id = 0;
+        if (session_scene) *session_scene = -1;
+        if (now_beat) *now_beat = 0.0;
+        return 0;
+    }
+    return CENG(e)->recordHeldNotes(out, max_n, track_id, session_scene, now_beat);
+}
 int32_t nota_clip_get_notes(const NotaEngine* e, int32_t track_id, int32_t clip_index,
                             NotaNoteData* out, int32_t max_notes) {
     if (!e || !out || max_notes <= 0) return 0;

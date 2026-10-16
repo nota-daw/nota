@@ -812,6 +812,11 @@ public interface IAudioEngine : IDisposable
     int MasterTrackId { get; }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     int AudioRecordPeaks(float[] outMinMax, int maxPoints);
+    /// <summary>Notes held into the in-progress MIDI take, for drawing them growing. Fills
+    /// <paramref name="buffer"/> and returns the count (0 when no MIDI take records); trackId is
+    /// the take's track (0 = none), sessionScene the Session scene (-1 = arrangement take),
+    /// nowBeat the capture clock — the held notes' right edge, running through the count-in.</summary>
+    int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat);
     void Poll();
 
     // --- Undo / redo (M6-6) ------------------------------------------------

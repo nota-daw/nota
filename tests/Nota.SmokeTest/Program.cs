@@ -360,6 +360,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--live-record")
+{
+    Console.WriteLine("-- live midi recording --");
+    foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MPE alone (fast iteration): `--mpe`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--mpe")
 {
@@ -14633,6 +14641,8 @@ Console.WriteLine("-- nota remote --");
 foreach (var (ok, label) in RemoteTests.Run()) Check(ok, label);
 Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
+Console.WriteLine("-- live midi recording --");
+foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");

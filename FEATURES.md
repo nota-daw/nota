@@ -81,7 +81,7 @@ JUCE module; the engine core is JUCE-free.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection).
-- **Metronome** and **count-in** before recording.
+- **Metronome** and **count-in** before recording (notes played on the count-in are recorded).
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -266,6 +266,12 @@ track count and closes with Escape.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
+- **MIDI recording**: a note appears in the take as soon as its key goes down and grows
+  with the playhead while held, settling in from the accent colour — in the arrangement, in a
+  recording Session slot and in the piano roll showing the take, for keyboard, MIDI and
+  routed ("MIDI In") input. Notes played on the count-in and keys already held when
+  recording starts are recorded where they started: the take's clip begins earlier to hold
+  them (at 1.1 the part before the song start is kept beyond the clip's left edge).
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1

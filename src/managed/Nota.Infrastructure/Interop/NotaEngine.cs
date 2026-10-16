@@ -142,6 +142,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public int MasterTrackId { get { ThrowIfDisposed(); return NativeMethods.MasterTrackId(_handle); } }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     public int AudioRecordPeaks(float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaks(_handle, outMinMax, maxPoints); }
+    public int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat)
+    { ThrowIfDisposed(); return NativeMethods.RecordHeldNotes(_handle, buffer, buffer.Length, out trackId, out sessionScene, out nowBeat); }
 
     /// <summary>Message-thread pump: materialises recorded notes into clips. Call from the UI timer.</summary>
     public void Poll() { ThrowIfDisposed(); NativeMethods.Poll(_handle); }

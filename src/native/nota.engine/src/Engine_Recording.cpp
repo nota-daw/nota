@@ -207,6 +207,41 @@ int32_t Engine::liveHeldNotes(int32_t* out, int32_t maxN) const {
     return n;
 }
 
+// The live-recording preview (#56): the audio thread's held-note snapshot, retried while a
+// block is writing it. Take geometry comes from the message-thread record state (this
+// runs on the UI thread, which owns it). A read that keeps racing returns 0 — one
+// frame without preview, never a wait.
+int32_t Engine::recordHeldNotes(NotaRecordHeldNote* out, int32_t maxN, int32_t* trackId,
+                                int32_t* sessionScene, double* nowBeat) const {
+    // An audio take into a Session slot records no MIDI: recordTrackId_ may still name the
+    // last MIDI take's track (it isn't reset on stop), so it must not light up here.
+    const bool rec = recording_.load(std::memory_order_relaxed) && !recordSessionAudio_;
+    const bool slot = rec && recordSessionScene_ >= 0 && recordSessionTrackId_ > 0;
+    const int32_t tid = !rec ? 0 : slot ? recordSessionTrackId_ : (recordTrackId_ > 0 ? recordTrackId_ : 0);
+    if (trackId) *trackId = tid;
+    if (sessionScene) *sessionScene = slot ? recordSessionScene_ : -1;
+    if (nowBeat) *nowBeat = 0.0;
+    if (tid <= 0) return 0;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        const uint32_t s0 = heldSeq_.load(std::memory_order_acquire);
+        if (s0 & 1u) continue;
+        const int32_t n = std::clamp(heldCount_.load(std::memory_order_relaxed), 0, kMaxHeldSnap);
+        const double now = heldNow_.load(std::memory_order_relaxed);
+        const int32_t m = (out && maxN > 0) ? std::min(n, maxN) : 0;
+        for (int32_t i = 0; i < m; ++i) {
+            out[i].pitch      = heldSnap_[i].pitch.load(std::memory_order_relaxed);
+            out[i].source     = heldSnap_[i].source.load(std::memory_order_relaxed);
+            out[i].start_beat = heldSnap_[i].startBeat.load(std::memory_order_relaxed);
+            out[i].velocity   = heldSnap_[i].velocity.load(std::memory_order_relaxed);
+        }
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (heldSeq_.load(std::memory_order_relaxed) != s0) continue;
+        if (nowBeat) *nowBeat = now;
+        return n;
+    }
+    return 0;
+}
+
 void Engine::setRecording(bool on) {
     // The record button is also the automation-record switch (M9-C): while it is
     // engaged, moving any control writes that parameter's lane. This is set even

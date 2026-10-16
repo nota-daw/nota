@@ -156,6 +156,10 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_peaks")]
     internal static partial int AudioRecordPeaks(IntPtr engine, [Out] float[] outMinMax, int maxPoints);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_record_held_notes")]
+    internal static partial int RecordHeldNotes(IntPtr engine, [Out] NotaRecordHeldNote[] outNotes, int maxN,
+                                                out int trackId, out int sessionScene, out double nowBeat);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_poll")]
     internal static partial NotaResult Poll(IntPtr engine);
 

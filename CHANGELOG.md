@@ -35,6 +35,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
 - **MCP `list_sections` and `set_sections`**: read and replace the arrangement's sections.
+- **See MIDI notes while you record** (nota-daw/nota#56): a note now shows up in the take
+  the moment the key goes down and grows with the playhead while the key is held, instead
+  of appearing only on release. A new note fades in from the accent colour. Works in the
+  arrangement, in a Session slot being recorded, and in the piano roll when it shows the
+  take, for keyboard and MIDI input and for MIDI routed in from another track.
+
+### Changed
+- **Notes played on the count-in are recorded:** a pickup played during the count-in, or a
+  key already held when recording starts, now lands in the take where it actually started.
+  The take's clip begins earlier to include it. If the take starts at 1.1, the clip still
+  starts there, and the part of the note before 1.1 is kept: extend the clip's left edge
+  after moving it to hear it.
 
 ## [0.55.1] — 2026-10-15
 

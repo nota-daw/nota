@@ -771,6 +771,10 @@ public sealed partial class ArrangementView : UserControl
     /// <paramref name="rebuildHeaders"/>=false to refresh only the clip data + lane drawing
     /// (used during recording, so the header controls — the input combobox — and any open
     /// context menu survive the 60 Hz tick instead of being torn down each frame).</summary>
+    /// <summary>The recording MIDI take's held notes and appear animation (#56), drawn on the
+    /// take's row. Owned and updated by the window on its recording tick.</summary>
+    internal RecordPreview? RecordPreview { get; set; }
+
     public void Refresh(bool rebuildHeaders = true)
     {
         if (rebuildHeaders) RefreshStarting?.Invoke();

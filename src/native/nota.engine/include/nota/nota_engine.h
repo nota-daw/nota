@@ -786,6 +786,26 @@ NOTA_API int32_t    nota_engine_master_track_id(const NotaEngine* engine);
 /* Live min/max peaks (interleaved, out_min_max[2*max_points]) over the in-progress
  * capture buffer so the take draws a growing waveform. Returns buckets written. */
 NOTA_API int32_t    nota_engine_audio_record_peaks(const NotaEngine* engine, float* out_min_max, int32_t max_points);
+/* One note held into the in-progress MIDI take (live-recording preview). */
+typedef struct NotaRecordHeldNote {
+    int32_t pitch;        /* 0..127 */
+    int32_t source;       /* 0 live input (keyboard, MIDI, Remote), 1 routed MIDI ("MIDI In") */
+    double  start_beat;   /* arrangement: absolute timeline beat, may precede the take's clip
+                             and be < 0 (played on the count-in before 1.1);
+                             Session: slot-local beat */
+    float   velocity;     /* 0..1 */
+} NotaRecordHeldNote;
+/* Notes currently held into the in-progress MIDI take — keys down that will be written
+ * into the take on release — for drawing them growing. Copies up to max_n entries and
+ * returns the count (0 when no MIDI take is recording or nothing is held; out may be NULL
+ * to query it). Optional outputs: *track_id the take's track (0 = none), *session_scene
+ * the Session scene being recorded (-1 = arrangement take), *now_beat the capture clock
+ * (the held notes' right edge; runs during the count-in too, in start_beat's coordinates).
+ * Lock-free; call from the UI thread. */
+NOTA_API int32_t    nota_engine_record_held_notes(const NotaEngine* engine,
+                                                  NotaRecordHeldNote* out, int32_t max_n,
+                                                  int32_t* track_id, int32_t* session_scene,
+                                                  double* now_beat);
 /* Message-thread pump: materialises recorded notes into clips and drains engine
  * events. Call periodically from the UI (e.g. the position timer). */
 NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);

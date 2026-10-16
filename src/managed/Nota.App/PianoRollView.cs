@@ -35,6 +35,20 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Polls the engine for currently-pressed live-input pitches (keyboard + MIDI) into
     /// the buffer, returning the count — used to light up the played key. Set by the host.</summary>
     public Func<int[], int>? PollHeldNotes { get; set; }
+
+    // The recording take shown in this roll (#56): its held notes grow on the grid and new
+    // notes settle in. Null when the roll shows any other clip.
+    private RecordPreview? _recPreview;
+    private double _recClipStart;
+    /// <summary>Show (or, with null, hide) the recording take's held notes; clipStart is the
+    /// take clip's timeline start — it moves left while early notes land.</summary>
+    internal void SetRecordTake(RecordPreview? preview, double clipStart)
+    {
+        if (preview is null && _recPreview is null) return;
+        _recPreview = preview;
+        _recClipStart = clipStart;
+        _gridControl.InvalidateVisual();
+    }
     /// <summary>A note's recorded MPE by <see cref="NotaNote.ExprId"/>, drawn over the note.
     /// Curves never change under an id, so they are fetched once. Set by the host.</summary>
     public Func<int, NotaExprPoint[]>? ExpressionOf { get; set; }
@@ -1143,7 +1157,10 @@ public sealed partial class PianoRollView : UserControl
                     // (or all of it, when it goes) reads faint behind a dashed track-colour edge.
                     var fate = _o._placementPending && _o._selection.Count > 0
                         ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender()) : default;
-                    if (fate.Kind == NoteFateKind.Kept)
+                    double appear = _o._recPreview?.Progress(n.Pitch, _o._recClipStart + n.StartBeat) ?? 1;
+                    if (fate.Kind == NoteFateKind.Kept && appear < 1)
+                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, 2);
+                    else if (fate.Kind == NoteFateKind.Kept)
                         ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
                     else
                     {
@@ -1172,6 +1189,21 @@ public sealed partial class PianoRollView : UserControl
                 foreach (var d in _doomed) ctx.DrawRectangle(null, pen, d.Deflate(0.5), 2, 2);
                 _doomed.Clear();
             }
+            // Keys held into the recording take (#56): from the key-down to the capture clock,
+            // not editable — they become ordinary notes when released.
+            if (_o._recPreview is { } rp)
+                foreach (var hn in rp.Held)
+                {
+                    if (hn.Pitch < MinPitch || hn.Pitch > MaxPitch) continue;
+                    double s = hn.StartBeat - _o._recClipStart, e = Math.Max(hn.StartBeat, rp.NowBeat) - _o._recClipStart;
+                    double hx = BeatToX(s), hw = Math.Max(3, (e - s) * ppb);
+                    if (hx + hw < 0 || hx > w) continue;
+                    var c = _o._trackColor;
+                    double p = rp.Progress(hn.Pitch, hn.StartBeat);
+                    var hr = new Rect(hx, PitchToY(hn.Pitch), Math.Max(2, hw - 1), RowH - 1);
+                    ctx.FillRectangle(p < 1 ? RecordPreview.AppearBrush(c, p)
+                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, 2);
+                }
             _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
             {

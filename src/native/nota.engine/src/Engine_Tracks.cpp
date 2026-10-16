@@ -1804,12 +1804,13 @@ MidiClip consolidateMidiClips(const std::vector<MidiClip>& clips, double s, doub
         spans.push_back({std::max(cs, s), ce, cs, &c->volumeEnvelope});
         const bool hasVel = !c->velocityEnvelope.points.empty();
         for (const Note& n : c->notes) {
-            if (n.startBeat < 0.0 || n.startBeat >= c->lengthBeats) continue;
-            const double on = cs + n.startBeat;
+            // A note starting before its clip (#56) sounds from the clip start, as in playback.
+            if (n.startBeat >= c->lengthBeats || n.startBeat + n.lengthBeats <= 0.0) continue;
+            const double on = cs + std::max(0.0, n.startBeat);
             if (on < s - eps || on >= e - eps) continue;
             Note m = n;
             m.startBeat = std::max(0.0, on - s);
-            m.lengthBeats = std::min(on + n.lengthBeats, ce) - on;
+            m.lengthBeats = std::min(cs + n.startBeat + n.lengthBeats, ce) - on;
             if (m.lengthBeats <= 0.0) continue;
             if (hasVel) m.velocity = n.velocity * std::clamp(c->velocityEnvelope.valueAt(n.startBeat), 0.0f, 1.0f);
             out.notes.push_back(m);
