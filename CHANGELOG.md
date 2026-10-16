@@ -22,6 +22,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
+  or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
+  530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys
+  (down taller, up shorter), or with ⌥ + pinch on a trackpad. The pitch under the pointer
+  stays put. **Fit to notes** (⇧F, the "Fit" button in the clip editor header, or the
+  command palette) zooms and scrolls so every note of the clip is in view. Each clip
+  remembers its own zoom.
+
 ### Fixed
 - **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
   back to its start, a key you're holding keeps sounding and release tails (pads, strings)

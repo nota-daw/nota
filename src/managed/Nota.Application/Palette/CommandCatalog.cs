@@ -92,6 +92,7 @@ public static class CommandCatalog
         C("roll.octaveUp", "Transpose notes up an octave", "Piano roll", "", "pitch shift"),
         C("roll.octaveDown", "Transpose notes down an octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove out-of-scale notes", "Piano roll", "", "key fix"),
+        C("roll.fitNotes", "Fit to notes", "Piano roll", "⇧F", "zoom vertical rows height"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
         C("grid.narrower", "Narrow grid", "Grid", "⌘1", "finer smaller snap"),

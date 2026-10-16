@@ -61,11 +61,20 @@ public sealed class ClipEditorView : UserControl
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
+            Children = { FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
         var header = Header(roll.TrackBrush, clipName, "MIDI", tabs, null, right);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+    }
+
+    // Fit to notes (⇧F): rows zoom so every note of the clip is in view.
+    private static Control FitControl(PianoRollView roll)
+    {
+        var b = new Button { Content = "Fit", Padding = new Thickness(10, 0), Classes = { "chip" } };
+        ToolTip.SetTip(b, "Fit to notes (⇧F)");
+        b.Click += (_, _) => roll.FitToNotes();
+        return b;
     }
 
     // The piano roll's snap chip: "Auto · 1/16", live with the roll's zoom; click for the grid menu.

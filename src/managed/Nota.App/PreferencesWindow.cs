@@ -1169,6 +1169,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
+            ("Drag on the keys", "Zoom rows · down taller, up shorter"),
+            ("⌥ + pinch", "Zoom rows (trackpad)"),
+            ("⇧F", "Fit to notes"),
         }),
         ("Play notes (computer keyboard)", new[]
         {

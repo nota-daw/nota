@@ -233,7 +233,13 @@ track count and closes with Escape.
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.
-  - Scroll and zoom are remembered per clip; a new clip centres on its own notes.
+  - **Vertical zoom**: rows from 6 to 36 px (all 88 keys fit at the smallest) with
+    ⌘⌥ + wheel (Ctrl + Alt on Windows / Linux), a drag on the keys (down taller, up
+    shorter) or ⌥ + pinch on a trackpad, keeping the pitch under the pointer in place.
+    **Fit to notes** (⇧F, the **Fit** button in the clip editor header, or the command
+    palette) sizes and scrolls the rows so every note of the clip is in view.
+  - Scroll and both zooms are remembered per clip; a new clip opens at the default row
+    height, centred on its own notes.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.

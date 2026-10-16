@@ -125,6 +125,7 @@ public partial class MainWindow
         B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = "Quantized notes"; } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
+        B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
             c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
 
