@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Fixed
+- **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
+  back to its start, a key you're holding keeps sounding and release tails (pads, strings)
+  ring out. Before, every voice was cut at the seam. A clip note running past the loop end
+  now releases there, and an arpeggiator keeps its pattern and held keys going across the
+  seam instead of starting over. Recording in a loop, a note held across the seam is stored
+  as two notes, one up to the loop end and one from the loop start. Before, it was saved
+  as a short blip.
 - **Undo covers device knobs** (nota-daw/nota#30): turning a knob, flipping a switch or
   typing a value on an effect, a MIDI effect, an instrument or a plug-in is now one undo
   step, in order with note and clip edits — before, ⌘Z skipped it and undid the edit before.

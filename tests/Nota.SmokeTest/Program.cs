@@ -365,6 +365,8 @@ if (args.Length >= 1 && args[0] == "--live-record")
 {
     Console.WriteLine("-- live midi recording --");
     foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+    Console.WriteLine("-- loop seam --");
+    foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -14643,6 +14645,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- loop seam --");
+foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");

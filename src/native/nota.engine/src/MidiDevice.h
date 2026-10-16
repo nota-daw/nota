@@ -46,9 +46,14 @@ public:
                          int32_t frames, double beatStart, double spb, bool playing) = 0;
 
     // Flush all live state (held notes, pending offs, phase) WITHOUT touching params.
-    // Called at transport stop / loop wrap / session slot switch, alongside the
+    // Called at transport stop / seek / session slot switch, alongside the
     // instrument's allNotesOff, to avoid ghost/stuck notes across clock changes.
     virtual void reset() {}
+
+    // The transport loop wrapped: beatStart jumps by deltaBeats (−loop length) while time
+    // runs on. A device keeping state in transport beats (pending offs, pattern phase) shifts
+    // it by deltaBeats so it carries on across the seam — held keys and all (#29).
+    virtual void timeJump(double /*deltaBeats*/) {}
 
     // Built-in identity (0 = Arpeggiator), or -1 for a future hosted MIDI plugin.
     virtual int32_t     midiKind() const { return -1; }

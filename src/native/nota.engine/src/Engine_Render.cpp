@@ -633,6 +633,10 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                 if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
                     evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel, static_cast<float>((offS - onS) / spb)};
+                // Loop seam: a note still sounding at the loop end releases here, ahead of any
+                // chase re-trigger at the same offset (offs sort first).
+                if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
+                    evs[n++] = {0, false, note.pitch, 0.0f};
                 // Chase: a note already held at the jump point starts sounding right here.
                 if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
                     evs[n++] = {0, true, note.pitch, vel};
@@ -1063,6 +1067,28 @@ static inline bool sessionActiveOf(const Track& t) {
     return t.sessionPlayer && t.sessionPlayer->playing.load(std::memory_order_relaxed) >= 0;
 }
 
+// The transport loop just wrapped (audio thread, #29). MIDI FX keep their pattern and pending
+// offs across the seam instead of being reset. A take recording into the Arrangement splits each
+// note held across the seam: the part played so far ends at the loop end, and the note carries
+// on from the loop start (a key pressed just before the seam — a head under 1/64 beat — moves
+// to the loop start whole). A Session slot take times notes on its own loop clock: untouched.
+void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
+    const double jump = loopStartBeat - loopEndBeat;
+    if (g) for (auto& tptr : g->tracks)
+        if (tptr && tptr->instrument && !sessionActiveOf(*tptr))
+            for (auto& md : tptr->midiEffects) if (md) md->timeJump(jump);
+
+    if (!recording_.load(std::memory_order_relaxed) || recordSlotPlayer_.load(std::memory_order_acquire)) return;
+    constexpr double kMinHead = 1.0 / 64.0;
+    auto split = [&](int32_t pitch, double& start, float vel) {
+        const double head = loopEndBeat - start;
+        if (head >= kMinHead) recorded_.push(RecordedNote{pitch, start, head, vel});
+        start = loopStartBeat;
+    };
+    for (int p = 0; p < 128; ++p) if (pendingActive_[p]) split(p, pendingStart_[p], pendingVel_[p]);
+    for (int p = 0; p < 128; ++p) if (recRoutedActive_[p]) split(p, recRoutedStart_[p], recRoutedVel_[p]);
+}
+
 void Engine::processBlock(float* out, int32_t numFrames) {
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
@@ -1102,8 +1128,12 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     while (done < numFrames) {
         if (playing && transport_.isLooping()
             && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
+            // No voice flush here: clip notes crossing the loop end get note-offs in the next
+            // segment (seamOffs_), so live-held keys keep sounding and tails ring out (#29).
+            seamEndSamples_ = transport_.playheadSamples();
             transport_.wrapToLoopStart();
-            flushArrangementVoices();
+            if (spb > 0.0) onLoopWrap(g, transport_.loopStartSamples() / spb, seamEndSamples_ / spb);
+            seamOffs_ = true;
             chase = true;
             if (nLoopSeams < 16) loopSeams[nLoopSeams++] = done;   // declick this seam below
         }
@@ -1120,7 +1150,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         const double segStart = transport_.playheadSamples();
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
-        chaseNotes_ = chase = false;
+        chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
         else if (countInActive_) countInDone = renderCountIn(out + done * 2, seg, spb);

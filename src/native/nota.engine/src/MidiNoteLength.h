@@ -77,6 +77,12 @@ public:
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
     void  setParam(int32_t i, float v) override { if (i >= 0 && i < kNumParams) p_[i].store(v, std::memory_order_relaxed); }
     void  reset() override { nPending_ = 0; nHeld_ = 0; nSound_ = 0; intBeat_ = 0.0; sounding_.store(0, std::memory_order_relaxed); }
+    void  timeJump(double d) override {   // loop wrap: scheduled offs keep their real time
+        intBeat_ += d;
+        for (int i = 0; i < nPending_; ++i) { pending_[i].on += d; pending_[i].off += d; }
+        for (int i = 0; i < nSound_; ++i) sound_[i].on += d;
+        for (int i = 0; i < nHeld_; ++i) held_[i].onBeat += d;
+    }
 
     // Editor / MCP telemetry: [0] last input pitch, [1] its velocity 0..1, [2] its held length
     // (beats, −1 = still held), [3] last finished output pitch, [4] its actual length (beats),

@@ -1430,6 +1430,11 @@ private:
     bool seekedThisBlock_ = false;            // a Seek command was drained this block (audio thread)
     bool seekedWhileRolling_ = false;         // ...and it arrived while the transport was rolling
     bool chaseNotes_ = false;                 // this segment starts at a discontinuity: re-trigger held clip notes
+    // This segment starts right after a loop wrap: clip notes still sounding at the loop end
+    // (seamEndSamples_, the pre-wrap playhead) get their note-off here — a release, not a cut (#29).
+    bool   seamOffs_ = false;
+    double seamEndSamples_ = 0.0;
+    void   onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat);   // processBlock, at the wrap
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time

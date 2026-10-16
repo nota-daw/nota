@@ -133,6 +133,13 @@ public:
         curLp_.store(-1, std::memory_order_relaxed); curK_.store(-1, std::memory_order_relaxed);
         heldLive_.store(0, std::memory_order_relaxed);
     }
+    // Loop wrap: the pattern continues from where it was — phase and pending events move
+    // with the transport's beat clock.
+    void timeJump(double d) override {
+        arpBeat_ += d; phaseRef_ += d;
+        for (int i = 0; i < nOns_; ++i) { onBuf_[i].onBeat += d; onBuf_[i].offBeat += d; }
+        for (int i = 0; i < nOffs_; ++i) offBuf_[i].beat += d;
+    }
 
     // Editor commands: 1 = restart the pattern (step 1) at the next block.
     void midiCommand(int32_t cmd) override { if (cmd == 1) restartReq_.store(true, std::memory_order_relaxed); }
