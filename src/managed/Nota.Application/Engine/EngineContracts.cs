@@ -301,6 +301,51 @@ public readonly record struct SectionInfo(double StartBeat, double LengthBeats, 
 /// Volume scales the instrument output during the clip.</summary>
 public enum MidiClipEnvelope { Velocity = 0, Volume = 1 }
 
+/// <summary>Instrument-wide MIDI controllers (specs/020), one id space matching native
+/// NOTA_CTL_*: 0..127 the CC, <see cref="PitchWheel"/>, <see cref="ChannelPressure"/>. Values
+/// are normalised: a CC 0..1 (data / 127; CC64–69 are switches, on at ≥ 0.5), the wheel −1..+1,
+/// pressure 0..1.</summary>
+public static class MidiController
+{
+    public const int PitchWheel = 128;
+    public const int ChannelPressure = 129;
+    public const int Count = 130;
+    public const int ModWheel = 1;
+    public const int Sustain = 64;
+
+    /// <summary>Data entry / RPN / NRPN and the channel mode messages: never recorded,
+    /// drawn or automated.</summary>
+    public static bool IsReserved(int ctl) =>
+        ctl < 0 || ctl >= Count || ctl == 6 || ctl == 38 || (ctl >= 96 && ctl <= 101) || (ctl >= 120 && ctl <= 127);
+
+    /// <summary>CC64–69 (sustain, portamento, sostenuto, soft, legato, hold 2): on/off.</summary>
+    public static bool IsSwitch(int ctl) => ctl >= 64 && ctl <= 69;
+
+    public static (float Min, float Max) Range(int ctl) => ctl == PitchWheel ? (-1f, 1f) : (0f, 1f);
+
+    private static readonly Dictionary<int, string> Names = new()
+    {
+        [0] = "Bank select", [1] = "Mod wheel", [2] = "Breath", [4] = "Foot", [5] = "Portamento time",
+        [7] = "Volume", [8] = "Balance", [10] = "Pan", [11] = "Expression", [12] = "Effect 1", [13] = "Effect 2",
+        [64] = "Sustain", [65] = "Portamento", [66] = "Sostenuto", [67] = "Soft pedal", [68] = "Legato", [69] = "Hold 2",
+        [71] = "Resonance", [72] = "Release", [73] = "Attack", [74] = "Brightness", [75] = "Decay",
+        [76] = "Vibrato rate", [77] = "Vibrato depth", [78] = "Vibrato delay",
+        [84] = "Portamento control", [91] = "Reverb", [92] = "Tremolo", [93] = "Chorus", [94] = "Detune", [95] = "Phaser",
+        [PitchWheel] = "Pitch wheel", [ChannelPressure] = "Channel pressure",
+    };
+
+    /// <summary>The controller's standard name ("Mod wheel", "Sustain"), or "CC 3" when it has none.</summary>
+    public static string Name(int ctl) => Names.TryGetValue(ctl, out var n) ? n : $"CC {ctl}";
+
+    /// <summary>A short label for a lane tab: "Sustain", "Mod wheel", "Pressure", "CC 74".</summary>
+    public static string ShortName(int ctl) => ctl switch
+    {
+        ChannelPressure => "Pressure",
+        PitchWheel or ModWheel or Sustain or 2 or 11 => Name(ctl),
+        _ => $"CC {ctl}",
+    };
+}
+
 /// <summary>A per-note expression dimension (MPE). Matches native ExprDim: Bend in semitones
 /// (the whole-instrument wheel −1..+1), Pressure 0..1, Slide (CC74 timbre) 0..1 with 0.5 neutral.</summary>
 /// <remarks>Sustain (the CC64 pedal, 0/1) is instrument-wide only — send it with pitch −1.</remarks>

@@ -135,6 +135,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_note_expression")]
     internal static partial NotaResult TrackNoteExpression(IntPtr engine, int trackId, int pitch, int dim, float value);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_controller")]
+    internal static partial NotaResult Controller(IntPtr engine, int ctl, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_controller")]
+    internal static partial NotaResult TrackController(IntPtr engine, int trackId, int ctl, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_delivered_controller")]
+    internal static partial float TrackDeliveredController(IntPtr engine, int trackId, int ctl);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_midi_ctl_selftest")]
+    internal static partial int MidiCtlSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_audition_track")]
     internal static partial void SetAuditionTrack(IntPtr engine, int trackId);
 

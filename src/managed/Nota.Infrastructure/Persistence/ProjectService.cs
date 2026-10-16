@@ -31,7 +31,8 @@ public sealed class ProjectService
     /// per-segment curvature (automationPoint.curve). v5 adds audio-clip pitch + warp
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
-    public const int CurrentFormatVersion = 21;
+    /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
+    public const int CurrentFormatVersion = 22;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -202,6 +203,7 @@ public sealed class ProjectService
                         Notes = ToDtos(engine, engine.GetClipNotes(ti.Id, c)),
                         VelocityEnvelope = vel.Length > 0 ? System.Array.ConvertAll(vel, p => new AutomationPointDto(p)) : null,
                         VolumeEnvelope = vol.Length > 0 ? System.Array.ConvertAll(vol, p => new AutomationPointDto(p)) : null,
+                        Controllers = CaptureControllers(engine.GetMidiClipControllers(ti.Id, c), ctl => engine.GetMidiClipController(ti.Id, c, ctl)),
                     });
                 }
             }
@@ -234,6 +236,7 @@ public sealed class ProjectService
                         Scene = s,
                         LengthBeats = engine.SessionSlotLength(ti.Id, s),
                         Notes = ToDtos(engine, engine.GetSessionNotes(ti.Id, s)),
+                        Controllers = CaptureControllers(engine.GetSessionControllers(ti.Id, s), ctl => engine.GetSessionController(ti.Id, s, ctl)),
                     }));
                 }
                 else if (ti.Type == 0 && engine.TryGetSessionAudioSlot(ti.Id, s, out var sa))
@@ -639,6 +642,7 @@ public sealed class ProjectService
                     engine.SetMidiClipEnvelope(id, ci, MidiClipEnvelope.Velocity, System.Array.ConvertAll(ve, p => p.ToPoint()));
                 if (c.VolumeEnvelope is { Length: > 0 } vo)
                     engine.SetMidiClipEnvelope(id, ci, MidiClipEnvelope.Volume, System.Array.ConvertAll(vo, p => p.ToPoint()));
+                ApplyControllers(c.Controllers, warnings, (ctl, pts) => engine.SetMidiClipController(id, ci, ctl, pts));
             }
 
             foreach (var ac in t.AudioClips)
@@ -676,6 +680,7 @@ public sealed class ProjectService
                 {
                     engine.AddSessionMidiClip(id, sl.Scene, sl.LengthBeats);
                     if (sl.Notes.Length > 0) engine.SetSessionNotes(id, sl.Scene, ToNotes(engine, sl.Notes));
+                    ApplyControllers(sl.Controllers, warnings, (ctl, pts) => engine.SetSessionController(id, sl.Scene, ctl, pts));
                 }
                 ApplyClipProps(engine, id, sl);
             }
@@ -1055,6 +1060,34 @@ public sealed class ProjectService
                 Color = sc.Color, Tempo = sc.Tempo, SigNum = sc.SigNum, SigDen = sc.SigDen,
                 Follow = sc.Follow ? 1 : 0, FollowBeats = sc.FollowBeats,
             });
+        }
+    }
+
+    // A clip's controller curves (specs/020); null when it has none, so older files stay alike.
+    private static ControllerCurveDto[]? CaptureControllers(int[] ctls, Func<int, AutomationPoint[]> get)
+    {
+        if (ctls.Length == 0) return null;
+        var list = new List<ControllerCurveDto>(ctls.Length);
+        foreach (int ctl in ctls)
+        {
+            var pts = get(ctl);
+            if (pts.Length > 0) list.Add(ControllerCurveDto.From(ctl, pts));
+        }
+        return list.Count > 0 ? list.ToArray() : null;
+    }
+
+    private static void ApplyControllers(ControllerCurveDto[]? curves, List<string> warnings, Action<int, AutomationPoint[]> set)
+    {
+        if (curves is null) return;
+        foreach (var cc in curves)
+        {
+            var pts = cc.ToPoints();
+            if (MidiController.IsReserved(cc.Ctl) || pts.Length == 0)
+            {
+                warnings.Add($"Skipped a clip's controller curve for an unsupported controller ({cc.Ctl}).");
+                continue;
+            }
+            set(cc.Ctl, pts);
         }
     }
 

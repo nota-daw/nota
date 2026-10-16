@@ -210,6 +210,40 @@ public sealed class AutomationPointDto
     public AutomationPoint ToPoint() => new(Beat, Value, Curve);
 }
 
+/// <summary>One controller curve of a MIDI clip (specs/020): the controller (a CC 0..127, 128 the
+/// pitch wheel, 129 channel pressure) and its breakpoints in clip-local beats, values normalised.
+/// Stored as parallel arrays — a recorded curve can hold a few thousand points, and an object per
+/// point would grow a project by ~150 bytes each. Curves is null when every segment is linear.</summary>
+public sealed class ControllerCurveDto
+{
+    public int Ctl { get; set; }
+    public double[] Beats { get; set; } = System.Array.Empty<double>();
+    public float[] Values { get; set; } = System.Array.Empty<float>();
+    public float[]? Curves { get; set; }
+
+    public static ControllerCurveDto From(int ctl, AutomationPoint[] pts)
+    {
+        var dto = new ControllerCurveDto
+        {
+            Ctl = ctl,
+            Beats = System.Array.ConvertAll(pts, p => Math.Round(p.Beat, 6)),
+            Values = System.Array.ConvertAll(pts, p => (float)Math.Round(p.Value, 4)),
+        };
+        if (System.Array.Exists(pts, p => p.Curve != 0f)) dto.Curves = System.Array.ConvertAll(pts, p => (float)Math.Round(p.Curve, 4));
+        return dto;
+    }
+
+    public AutomationPoint[] ToPoints()
+    {
+        int n = Math.Min(Beats.Length, Values.Length);
+        var pts = new AutomationPoint[n];
+        for (int i = 0; i < n; i++) pts[i] = new AutomationPoint(Beats[i], Values[i], Curves is { } c && i < c.Length ? c[i] : 0f);
+        return pts;
+    }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class InstrumentDto
 {
     /// <summary>0 = Nota Synth, 1 = Sampler, 2 = Nota Physical, -1 = hosted plugin.</summary>
@@ -347,6 +381,7 @@ public sealed class MidiClipDto
     public NoteDto[] Notes { get; set; } = System.Array.Empty<NoteDto>();
     public AutomationPointDto[]? VelocityEnvelope { get; set; }  // clip velocity envelope (v10)
     public AutomationPointDto[]? VolumeEnvelope { get; set; }    // clip volume envelope (v10)
+    public ControllerCurveDto[]? Controllers { get; set; }       // MIDI controller curves (v22, specs/020)
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -380,6 +415,7 @@ public sealed class SessionSlotDto
     public int Scene { get; set; }
     public double LengthBeats { get; set; } = 4.0;
     public NoteDto[] Notes { get; set; } = System.Array.Empty<NoteDto>();
+    public ControllerCurveDto[]? Controllers { get; set; }       // MIDI controller curves (v22, specs/020)
     /// <summary>Set for audio-track slots (a captured take); Notes is empty then.</summary>
     public AudioClipDto? Audio { get; set; }
     // Clip properties (Session P0); defaults match a fresh clip.

@@ -306,6 +306,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         t = findTrackAuthoring(trackId); if (!t) return;
     }
 
+    resetCtlFold();
     recordSessionTrackId_ = trackId;
     recordSessionScene_   = scene;
     recordSlotLen_.store(t->sessionSlots[scene].lengthBeats, std::memory_order_relaxed);
@@ -327,6 +328,8 @@ void Engine::finalizeSessionRecord(bool relaunch) {
         stopAudioRecording();
         if (relaunch && tid > 0 && sc >= 0) launchSlot(tid, sc);
     }
+    // The take's last controller points (held back for thinning) go in before the target does.
+    if (recordSessionScene_ >= 0 && !recordSessionAudio_) flushCtlTake();
     // A fresh MIDI take that ran open-ended: cut it to whole launch quanta (a bar when
     // launching is unquantized) — no undo step of its own, so undo drops the whole take.
     if (recordSessionGrowing_ && recordSessionScene_ >= 0) {

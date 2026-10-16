@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <cmath>
 
 namespace nota {
@@ -761,6 +762,144 @@ bool Engine::setMidiClipEnvelope(int32_t trackId, int32_t clipIndex, int32_t kin
               [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
     republishWithTrack(trackId, nt);
     return true;
+}
+
+// --- clip controller curves (specs/020) ---------------------------------------
+static const MidiClip* ctlClipOf(const Track& t, bool slot, int32_t index) {
+    if (slot) {
+        if (index < 0 || index >= static_cast<int32_t>(t.sessionSlots.size()) || !t.sessionSlots[index].hasClip) return nullptr;
+        return &t.sessionSlots[index].midi;
+    }
+    if (index < 0 || index >= static_cast<int32_t>(t.midiClips.size())) return nullptr;
+    return &t.midiClips[index];
+}
+
+int32_t Engine::ctlList(int32_t trackId, bool slot, int32_t index, int32_t* out, int32_t cap) const {
+    auto t = findTrackAuthoring(trackId);
+    const MidiClip* c = t ? ctlClipOf(*t, slot, index) : nullptr;
+    if (!c) return 0;
+    int32_t n = 0;
+    for (const auto& cv : c->controllers) {
+        if (!cv) continue;
+        if (out && n < cap) out[n] = cv->ctl;
+        ++n;
+    }
+    return out ? std::min(n, cap) : n;
+}
+
+int32_t Engine::ctlGet(int32_t trackId, bool slot, int32_t index, int32_t ctl, NotaAutomationPoint* out, int32_t cap) const {
+    auto t = findTrackAuthoring(trackId);
+    const MidiClip* c = t ? ctlClipOf(*t, slot, index) : nullptr;
+    const ControllerCurve* cv = c ? c->controller(ctl) : nullptr;
+    if (!cv) return 0;
+    const auto& pts = cv->points;
+    if (!out) return static_cast<int32_t>(pts.size());
+    const int32_t n = std::min<int32_t>(cap, static_cast<int32_t>(pts.size()));
+    for (int32_t i = 0; i < n; ++i) { out[i].beat = pts[i].beat; out[i].value = pts[i].value; out[i].curve = pts[i].curve; }
+    return n;
+}
+
+bool Engine::ctlSet(int32_t trackId, bool slot, int32_t index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count) {
+    if (ctlIsReserved(ctl) || count < 0 || (count > 0 && !pts)) return false;
+    auto old = findTrackAuthoring(trackId);
+    if (!old || !ctlClipOf(*old, slot, index)) return false;
+    auto nt = cloneTrack(*old);
+    MidiClip& c = slot ? nt->sessionSlots[index].midi : nt->midiClips[index];
+    std::vector<AutomationPoint> p;
+    p.reserve(count);
+    for (int32_t i = 0; i < count; ++i)
+        p.push_back({ pts[i].beat, ctlClamp(ctl, pts[i].value), std::clamp(pts[i].curve, -1.0f, 1.0f) });
+    c.setController(ctl, std::move(p));
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+float Engine::deliveredController(int32_t trackId, int32_t ctl) const {
+    if (ctl < 0 || ctl >= kCtlCount) return std::numeric_limits<float>::quiet_NaN();
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument) return std::numeric_limits<float>::quiet_NaN();
+    return t->instrument->deliveredCtl[ctl].load(std::memory_order_relaxed);
+}
+
+// Device-free checks of the controller curves (specs/020): numbered, 0 = pass. Runs on the
+// message thread with private state (the fold scratch is saved and restored).
+int32_t Engine::midiCtlSelfTest() {
+    auto near = [](float a, float b) { return std::fabs(a - b) < 1e-3f; };
+    ControllerCurve sus; sus.ctl = kCtlSustain; sus.points = { { 1.0, 1.0f, 0.0f }, { 3.0, 0.0f, 0.0f } };
+    ControllerCurve mod; mod.ctl = kCtlModWheel; mod.points = { { 0.0, 0.0f, 0.0f }, { 2.0, 1.0f, 0.0f } };
+    // 1-2: value at a beat — a switch steps, the rest interpolate.
+    if (!near(sus.valueAt(2.0), 1.0f) || !near(sus.valueAt(2.999), 1.0f) || !near(sus.valueAt(3.5), 0.0f)) return 1;
+    if (!near(mod.valueAt(1.0), 0.5f) || !near(mod.valueAt(5.0), 1.0f)) return 2;
+    // 3: a slice pins the value at its start, keeps its points, drops the rest.
+    {
+        auto p = sliceCtlPoints(sus, 2.0, 4.0);
+        if (p.size() != 2 || !near(p[0].value, 1.0f) || p[0].beat != 0.0 || p[1].beat != 1.0 || !near(p[1].value, 0.0f)) return 3;
+        if (!sliceCtlPoints(sus, 0.0, 0.5).empty()) return 3;   // before its first point: nothing
+    }
+    // 4: the playback wire — a clip starting in the block sends its values from there; a switch
+    // whose first point lies later sends nothing until it; points land on their sample.
+    {
+        MidiClip c; c.lengthBeats = 4.0;
+        c.setController(kCtlSustain, sus.points);
+        c.setController(kCtlModWheel, mod.points);
+        ExprEv ev[256]; int n = 0;
+        clipCtlEvents(c, 0.0, 400.0, 0.0, 256, 100.0, false, ev, n, 256);   // spb 100: beat 1 = sample 100
+        bool modStart = false, susAt100 = false, susAtStart = false, modMoves = false;
+        for (int i = 0; i < n; ++i) {
+            if (ev[i].dim == kCtlDimBase + kCtlModWheel && ev[i].off == 0 && near(ev[i].value, 0.0f)) modStart = true;
+            if (ev[i].dim == kCtlDimBase + kCtlModWheel && ev[i].off == 128 && near(ev[i].value, 0.64f)) modMoves = true;
+            if (ev[i].dim == kCtlDimBase + kCtlSustain && ev[i].off == 100 && near(ev[i].value, 1.0f)) susAt100 = true;
+            if (ev[i].dim == kCtlDimBase + kCtlSustain && ev[i].off == 0) susAtStart = true;
+        }
+        if (!modStart || !susAt100 || susAtStart || !modMoves) return 4;
+        // 5: chase — a jump to beat 2.5 sends the pedal down and the wheel up there.
+        n = 0;
+        clipCtlEvents(c, 0.0, 400.0, 250.0, 64, 100.0, true, ev, n, 256);
+        bool chSus = false, chMod = false;
+        for (int i = 0; i < n; ++i) {
+            if (ev[i].off == 0 && ev[i].dim == kCtlDimBase + kCtlSustain && near(ev[i].value, 1.0f)) chSus = true;
+            if (ev[i].off == 0 && ev[i].dim == kCtlDimBase + kCtlModWheel && near(ev[i].value, 1.0f)) chMod = true;
+        }
+        if (!chSus || !chMod) return 5;
+        // 6: a clip that ends with the pedal down releases it there; the mod wheel stays.
+        MidiClip d; d.lengthBeats = 2.0;
+        d.setController(kCtlSustain, { { 0.0, 1.0f, 0.0f } });
+        d.setController(kCtlModWheel, { { 0.0, 0.7f, 0.0f } });
+        n = 0;
+        clipCtlEndResets(d, 0.0, 200.0, 150.0, 100, ev, n, 256);
+        if (n != 1 || ev[0].off != 50 || ev[0].dim != kCtlDimBase + kCtlSustain || ev[0].value != kCtlRest) return 6;
+    }
+    // 7-8: the recording fold.
+    auto savedFold = ctlFold_; auto savedBatch = ctlBatch_; auto savedTake = takeCtls_;
+    const bool savedStop = ctlStopPending_; const double savedStopAt = ctlStopAt_;
+    int32_t fail = 0;
+    {
+        // 7: overdub — pass 1 moves the mod wheel from beat 2: it replaces from there to the
+        // pass end; pass 0's earlier point stays.
+        for (auto& f : ctlFold_) f = CtlFold{};
+        ctlBatch_.clear(); takeCtls_.clear(); ctlStopPending_ = false;
+        MidiClip c; c.lengthBeats = 4.0;
+        c.setController(kCtlModWheel, { { 0.2, 0.3f, 0.0f }, { 2.5, 0.3f, 0.0f }, { 3.5, 0.1f, 0.0f } });
+        ctlBatch_ = { { kCtlModWheel, 2.0, 0.9f, 1 }, { kCtlModWheel, 3.0, 0.9f, 1 }, { -1, 4.0, 0.0f, 1 } };
+        foldRecordedCtl(c, 0.0);
+        const ControllerCurve* m = c.controller(kCtlModWheel);
+        if (!m || !near(m->valueAt(1.0), 0.3f) || !near(m->valueAt(3.0), 0.9f) || !near(m->valueAt(3.8), 0.9f)) fail = 7;
+        // 8: a take that stops at beat 4 hands back to what the clip held after it.
+        if (!fail) {
+            for (auto& f : ctlFold_) f = CtlFold{};
+            MidiClip e; e.lengthBeats = 8.0;
+            e.setController(kCtlModWheel, { { 0.0, 0.2f, 0.0f }, { 6.0, 0.2f, 0.0f } });
+            ctlBatch_ = { { kCtlModWheel, 2.0, 0.8f, 0 }, { kCtlModWheel, 3.0, 0.8f, 0 } };
+            ctlStopPending_ = true; ctlStopAt_ = 4.0;
+            foldRecordedCtl(e, 0.0);
+            const ControllerCurve* w = e.controller(kCtlModWheel);
+            if (!w || !near(w->valueAt(1.0), 0.2f) || !near(w->valueAt(2.5), 0.8f) || !near(w->valueAt(4.0), 0.2f) || !near(w->valueAt(7.0), 0.2f))
+                fail = 8;
+        }
+    }
+    ctlFold_ = savedFold; ctlBatch_ = savedBatch; takeCtls_ = savedTake;
+    ctlStopPending_ = savedStop; ctlStopAt_ = savedStopAt;
+    return fail;
 }
 
 } // namespace nota

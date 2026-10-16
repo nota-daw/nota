@@ -30,6 +30,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   stays put. **Fit to notes** (⇧F, the "Fit" button in the clip editor header, or the
   command palette) zooms and scrolls so every note of the clip is in view. Each clip
   remembers its own zoom.
+- **Record the sustain pedal, the wheels and any CC** (nota-daw/nota#69): recording MIDI now
+  keeps the sustain pedal, the pitch wheel, the mod wheel, channel pressure and every other
+  controller (expression, breath, CC74…) with the notes, and the clip plays them back to the
+  instrument. Starting playback in the middle of a clip first sets each controller to where
+  the clip has it (the pedal is already down), and when a clip ends or you stop, its pedal is
+  released and the wheel centred, so no note hangs. A pedal already down when you press Record
+  is in the take from its start. In loop recording, a pass replaces a controller only where
+  you moved it: re-record just the pedal on the next pass and the notes stay. Controllers
+  travel with the clip when you move, copy, split, trim or consolidate it, and are saved with
+  the project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's
+  pressure. MCP: `get_clip_controllers`, `set_clip_controller`.
 
 ### Fixed
 - **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
@@ -66,6 +77,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   take, for keyboard and MIDI input and for MIDI routed in from another track.
 
 ### Changed
+- **Hosted plug-ins get every MIDI controller** (nota-daw/nota#69): the mod wheel and any
+  other CC from your keyboard now reach a plug-in instrument (before, only the wheel, pressure,
+  CC74 and the sustain pedal did), and the sustain pedal arrives with its real value, so a
+  piano plug-in can half-pedal. Built-in synths with a Mod Wheel control (Bass, Monolith,
+  Volt, Aurora, Operator, Pentad, Consort) follow the keyboard's mod wheel.
 - **Notes played on the count-in are recorded:** a pickup played during the count-in, or a
   key already held when recording starts, now lands in the take where it actually started.
   The take's clip begins earlier to include it. If the take starts at 1.1, the clip still

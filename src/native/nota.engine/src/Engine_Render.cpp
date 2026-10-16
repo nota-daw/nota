@@ -116,6 +116,31 @@ inline bool midiEvLess(const MidiEv& a, const MidiEv& b) {
     return a.off < b.off || (a.off == b.off && !a.on && b.on);
 }
 
+// Stop / jump: pedals left down and a bent wheel go back to rest (the chase that follows a jump
+// sets them again where the clip has them).
+inline void releaseHeldControllers(Instrument& inst) {
+    for (int32_t ctl : { 64, 65, 66, 67, 68, 69, static_cast<int32_t>(kCtlPitchWheel) }) {
+        const float v = inst.deliveredCtl[ctl].load(std::memory_order_relaxed);
+        if (std::isnan(v) || v == kCtlRest) continue;
+        inst.deliveredCtl[ctl].store(kCtlRest, std::memory_order_relaxed);
+        inst.controller(ctl, kCtlRest);
+    }
+}
+
+// One expression-wire value into an instrument: a controller (dim >= kCtlDimBase, pitch −1)
+// or a note's / the instrument's expression. Controllers are remembered on the instrument for
+// the stop reset.
+inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float value) {
+    if (dim >= kCtlDimBase) {
+        const int32_t ctl = dim - kCtlDimBase;
+        if (ctl < 0 || ctl >= kCtlCount) return;
+        inst.deliveredCtl[ctl].store(value, std::memory_order_relaxed);
+        inst.controller(ctl, value);
+    } else {
+        inst.noteExpression(pitch, dim, value);
+    }
+}
+
 // Drive an instrument through one block: note events and clip-note expression merged by
 // sample offset (notes first at a shared offset, so a note's opening expression lands on it),
 // rendering the stretches in between. `live` runs once, before the first sample is rendered —
@@ -142,7 +167,7 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
             ++k;
         } else {
             renderTo(xOff);
-            inst.noteExpression(xev[x].pitch, xev[x].dim, xev[x].value);
+            deliverExpr(inst, xev[x].pitch, xev[x].dim, xev[x].value);
             ++x;
         }
     }
@@ -170,6 +195,52 @@ void Engine::noteExprEvents(const Note& note, double onS, double offS, int32_t f
         const double moveTo = onS + c.back().beat * spb + kExprStep;
         for (int32_t off = (first / kExprStep + 1) * kExprStep; off < end && n < cap; off += kExprStep)
             if (off >= moveFrom && off <= moveTo) out[n++] = ExprEv{ off, note.pitch, d, valueAt(off) };
+    }
+}
+
+void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
+                           int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap) {
+    static constexpr int32_t kStep = 64;   // as recorded MPE: the instrument smooths between
+    if (clip.controllers.empty() || spb <= 0.0) return;
+    const double b1 = blockStart + frames;
+    const double from = std::max(blockStart, clipStartS), to = std::min(b1, clipEndS);
+    if (to <= from) return;
+    const int32_t first = static_cast<int32_t>(from - blockStart);
+    const int32_t end = std::min(frames, static_cast<int32_t>(std::ceil(to - blockStart)));
+    const bool entry = chase || (clipStartS >= blockStart - 0.5 && clipStartS < b1 - 0.5);   // half-sample slack, as below
+    auto beatAt = [&](double off) { return (blockStart + off - clipStartS) / spb; };
+    for (const auto& cp : clip.controllers) {
+        if (!cp || cp->points.empty()) continue;
+        const ControllerCurve& c = *cp;
+        const int32_t dim = kCtlDimBase + c.ctl;
+        const double firstBeat = c.points.front().beat;
+        // Before a curve's first point it has no say: the controller keeps what it had.
+        if (entry && beatAt(first) >= firstBeat - 1e-9 && n < cap) out[n++] = ExprEv{ first, -1, dim, c.valueAt(beatAt(first)) };
+        // Recorded points sit on block starts (the capture is block-timed): place each on a whole
+        // sample, with a hair of slack, so rounding never lets one fall between two blocks.
+        for (const auto& p : c.points) {
+            if (n >= cap) break;
+            const double rel = clipStartS + p.beat * spb - blockStart;
+            const int64_t off = static_cast<int64_t>(std::floor(rel + 1e-6));
+            if (off < first || off >= end || off >= frames) continue;
+            out[n++] = ExprEv{ static_cast<int32_t>(off), -1, dim, p.value };
+        }
+        if (!ctlIsSwitch(c.ctl) && c.movesIn(beatAt(first), beatAt(end)))
+            for (int32_t off = (first / kStep + 1) * kStep; off < end && n < cap; off += kStep)
+                if (beatAt(off) >= firstBeat) out[n++] = ExprEv{ off, -1, dim, c.valueAt(beatAt(off)) };
+    }
+}
+
+void Engine::clipCtlEndResets(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
+                              int32_t frames, ExprEv* out, int& n, int cap) {
+    if (clip.controllers.empty() || clipEndS <= clipStartS || clipEndS < blockStart || clipEndS >= blockStart + frames) return;
+    const double lenBeats = clip.lengthBeats;
+    const int32_t off = static_cast<int32_t>(clipEndS - blockStart);
+    for (const auto& cp : clip.controllers) {
+        if (!cp || cp->points.empty() || n >= cap) continue;
+        if (!ctlIsSwitch(cp->ctl) && cp->ctl != kCtlPitchWheel) continue;
+        if (cp->points.front().beat > lenBeats || cp->valueAt(lenBeats) == kCtlRest) continue;
+        out[n++] = ExprEv{ off, -1, kCtlDimBase + cp->ctl, kCtlRest };
     }
 }
 
@@ -256,12 +327,14 @@ void Engine::poll() {
     while (recorded_.pop(rn)) batch.push_back(rn);
     // Expression after the notes: a note's points were all queued before its note-off was.
     collectRecordedExpr();
+    { RecordedCtl x; while (recordedCtl_.pop(x)) ctlBatch_.push_back(x); }   // controllers (specs/020)
+    const bool ctlWork = !ctlBatch_.empty() || ctlStopPending_;
     const bool replacePending = replaceUpTo > appliedReplaceUpTo_ && recordSessionScene_ < 0;
-    if (batch.empty() && !replacePending) return;
+    if (batch.empty() && !replacePending && !ctlWork) return;
 
     // Session-slot recording (M5-4): notes are already loop-local; append into the slot.
     if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
-        if (batch.empty()) return;
+        if (batch.empty() && !ctlWork) return;
         auto st = findTrackAuthoring(recordSessionTrackId_);
         if (!st || recordSessionScene_ >= static_cast<int32_t>(st->sessionSlots.size())) return;
         auto nt = cloneTrack(*st);
@@ -275,13 +348,14 @@ void Engine::poll() {
             attachRecordedExpr(n, r.pitch, r.startBeat);
             s.midi.notes.push_back(n);
         }
+        foldRecordedCtl(s.midi, L);
         republishWithTrackRaw(recordSessionTrackId_, nt); // grows the live take, not a new undo step
         return;
     }
 
-    if (recordTrackId_ <= 0 || recordClipIndex_ < 0) return;
+    if (recordTrackId_ <= 0 || recordClipIndex_ < 0) { ctlBatch_.clear(); ctlStopPending_ = false; return; }
     auto t = findTrackAuthoring(recordTrackId_);
-    if (!t || recordClipIndex_ >= static_cast<int32_t>(t->midiClips.size())) return;
+    if (!t || recordClipIndex_ >= static_cast<int32_t>(t->midiClips.size())) { ctlBatch_.clear(); ctlStopPending_ = false; return; }
     auto nt = cloneTrack(*t);
     MidiClip& clip = nt->midiClips[recordClipIndex_];
     for (auto& r : batch) {
@@ -314,6 +388,7 @@ void Engine::poll() {
         const double end = n.startBeat + n.lengthBeats;
         if (end > clip.lengthBeats) clip.lengthBeats = end;
     }
+    foldRecordedCtl(clip, 0.0);
     // Replace: remove the notes this take recorded on earlier passes — matched by pitch and
     // absolute start, so notes the clip held before the take (or the user drew) stay.
     if (replacePending) {
@@ -333,6 +408,19 @@ void Engine::poll() {
         takeNotes_.erase(std::remove_if(takeNotes_.begin(), takeNotes_.end(),
                                         [&](const TakeNote& k) { return k.pass < replaceUpTo; }),
                          takeNotes_.end());
+        // ...and the controller points those passes recorded (the whole pass is replaced).
+        for (const TakeCtl& k : takeCtls_) {
+            if (k.pass >= replaceUpTo) continue;
+            const ControllerCurve* cur = clip.controller(k.ctl);
+            if (!cur) continue;
+            std::vector<AutomationPoint> pts;
+            const double lb = k.absBeat - clip.startBeat;
+            for (const auto& p : cur->points) if (std::fabs(p.beat - lb) > 1e-6) pts.push_back(p);
+            clip.setController(k.ctl, std::move(pts));
+        }
+        takeCtls_.erase(std::remove_if(takeCtls_.begin(), takeCtls_.end(),
+                                       [&](const TakeCtl& k) { return k.pass < replaceUpTo; }),
+                        takeCtls_.end());
         appliedReplaceUpTo_ = replaceUpTo;
     }
     republishWithTrackRaw(recordTrackId_, nt); // grows the live take, not a new undo step
@@ -365,6 +453,192 @@ void Engine::attachRecordedExpr(Note& n, int32_t pitch, double startBeat) {
     if (e->empty()) return;
     n.expr = e;
     n.exprId = storeNoteExpr(e);
+}
+
+// --- recorded controllers (specs/020) -------------------------------------------
+// The audio thread queues every controller sample of the take (RecordedCtl); each poll folds the
+// new ones into the take's clip. A controller a pass moves is replaced over the range it touched
+// — from its first point in the pass up to the pass end (the loop end, or the record stop) — so
+// two passes of the mod wheel never interleave; the controllers a pass didn't move stay, and so
+// do the notes (a pedal-only pass re-records only the pedal). The run since the last poll is
+// thinned on its own, anchored on the range's last committed point, so a long take stays a
+// handful of points per gesture as it grows.
+
+void Engine::resetCtlFold() {
+    for (auto& f : ctlFold_) f = CtlFold{};
+    ctlBatch_.clear();
+    takeCtls_.clear();
+    ctlStopPending_ = false;
+    RecordedCtl x;
+    while (recordedCtl_.pop(x)) {}
+}
+
+bool Engine::foldRecordedCtl(MidiClip& clip, double slotLen) {
+    const bool slot = slotLen > 0.0;
+    bool changed = false;
+    for (const RecordedCtl& x : ctlBatch_) {
+        if (x.ctl < 0) {   // a loop pass ended: its ranges run to the loop end
+            for (int32_t c = 0; c < kCtlCount; ++c) {
+                CtlFold& f = ctlFold_[c];
+                if (!f.open || f.pass != x.pass) continue;
+                commitCtlRun(clip, c, slotLen, true);
+                closeCtlRange(clip, c, x.beat - clip.startBeat, slotLen);
+                f.open = false;
+                changed = true;
+            }
+            continue;
+        }
+        if (x.ctl >= kCtlCount || ctlIsReserved(x.ctl)) continue;
+        CtlFold& f = ctlFold_[x.ctl];
+        // A Session take wraps at the slot's end: the range closes there and a new one opens.
+        const bool wrapped = slot && f.open && x.beat < f.lastAbs - slotLen * 0.5;
+        if (f.open && (f.pass != x.pass || wrapped)) {
+            commitCtlRun(clip, x.ctl, slotLen, true);
+            closeCtlRange(clip, x.ctl, slot ? slotLen : f.lastAbs - clip.startBeat, slotLen);
+            f.open = false;
+            changed = true;
+        }
+        if (!f.open) { f.open = true; f.pass = x.pass; f.startAbs = x.beat; f.hasCommitted = false; f.before = clip.controllerPtr(x.ctl); }
+        f.lastAbs = x.beat;
+        f.run.push_back(x);
+    }
+    ctlBatch_.clear();
+    for (int32_t c = 0; c < kCtlCount; ++c)
+        if (!ctlFold_[c].run.empty()) { commitCtlRun(clip, c, slotLen, false); changed = true; }
+    if (ctlStopPending_) {   // the take stopped: the open ranges end at the stop
+        ctlStopPending_ = false;
+        for (int32_t c = 0; c < kCtlCount; ++c) {
+            CtlFold& f = ctlFold_[c];
+            if (!f.open) continue;
+            commitCtlRun(clip, c, slotLen, true);   // the points held back for thinning
+            closeCtlRange(clip, c, slot ? std::fmod(std::max(0.0, f.lastAbs), slotLen) : ctlStopAt_ - clip.startBeat, slotLen);
+            f.open = false;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+void Engine::commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool final) {
+    CtlFold& f = ctlFold_[ctl];
+    if (f.run.empty()) return;
+    const bool slot = slotLen > 0.0;
+    // A controller moved before the take's clip (on the count-in) moves its left edge back to
+    // it, like a pickup note does; never before 1.1.
+    if (!slot) {
+        double minAbs = f.run.front().beat;
+        for (const auto& x : f.run) minAbs = std::min(minAbs, x.beat);
+        if (minAbs < clip.startBeat) {
+            const double newStart = std::max(0.0, minAbs);
+            const double delta = clip.startBeat - newStart;
+            if (delta > 0.0) {
+                for (auto& o : clip.notes) o.startBeat += delta;
+                clip.shiftControllers(delta);
+                clip.lengthBeats += delta;
+                clip.startBeat = newStart;
+            }
+        }
+    }
+    auto local = [&](double abs) { return slot ? std::fmod(std::max(0.0, abs), slotLen) : abs - clip.startBeat; };
+
+    // The run on the take clock, after the range's last committed point (the thinning anchor).
+    std::vector<AutomationPoint> pts;
+    if (f.hasCommitted) pts.push_back(f.committed);
+    for (const auto& x : f.run) {
+        const AutomationPoint p{ x.beat, ctlClamp(ctl, x.value), 0.0f };
+        if (!pts.empty() && std::fabs(pts.back().beat - p.beat) < 1e-9) pts.back().value = p.value;
+        else pts.push_back(p);
+    }
+    f.run.clear();
+    const double loAbs = f.hasCommitted ? f.committed.beat : f.startAbs;
+    const double hiAbs = pts.back().beat;
+    std::vector<AutomationPoint> kept = ctlIsSwitch(ctl) ? dedupeSwitch(pts) : thinCtlCurve(pts, ctlThinTolerance(ctl));
+    if (f.hasCommitted && !kept.empty() && std::fabs(kept.front().beat - f.committed.beat) < 1e-9) kept.erase(kept.begin());
+    // A moving curve keeps its last segment back: the points after the last-but-one kept point
+    // wait for the next poll, where the thinning may find them on one longer line.
+    // (A long straight or steady stretch is committed at 512 points, so the tail stays small.)
+    if (!final && !ctlIsSwitch(ctl) && pts.size() <= 512) {
+        const double holdFrom = kept.size() >= 2 ? kept[kept.size() - 2].beat
+                                                 : (f.hasCommitted ? f.committed.beat : -std::numeric_limits<double>::infinity());
+        if (kept.size() >= 2) kept.pop_back(); else kept.clear();
+        for (const auto& p : pts)
+            if (p.beat > holdFrom + 1e-12 || (kept.empty() && !f.hasCommitted)) f.run.push_back(RecordedCtl{ ctl, p.beat, p.value, f.pass });
+        if (kept.empty()) return;   // nothing settled yet; the range keeps growing
+    }
+
+    // Replace what the clip held over the range so far, then add the run.
+    const double loL = local(loAbs), hiL = local(hiAbs);
+    std::vector<AutomationPoint> out;
+    if (const ControllerCurve* cur = clip.controller(ctl))
+        for (const auto& p : cur->points) {
+            const bool inRange = f.hasCommitted ? (p.beat > loL + 1e-9 && p.beat <= hiL + 1e-9)
+                                                : (p.beat >= loL - 1e-9 && p.beat <= hiL + 1e-9);
+            if (!inRange) out.push_back(p);
+        }
+    // The range's first commit steps out of the old curve: its value holds to just before.
+    if (!f.hasCommitted && f.before && !f.before->points.empty() && f.before->points.front().beat < loL - kCtlJunction) {
+        const double j = loL - kCtlJunction;
+        if (!kept.empty() && f.before->valueAt(j) != kept.front().value) out.push_back({ j, f.before->valueAt(j), 0.0f });
+    }
+    for (const auto& p : kept) {
+        out.push_back({ local(p.beat), p.value, 0.0f });
+        takeCtls_.push_back({ ctl, p.beat, f.pass });
+    }
+    if (!kept.empty()) { f.committed = kept.back(); f.hasCommitted = true; }
+    clip.setController(ctl, std::move(out));
+    // Grow the clip so the controller's last move falls inside it (a pedal released late).
+    if (!slot && hiL > clip.lengthBeats) clip.lengthBeats = hiL;
+}
+
+void Engine::flushCtlTake() {
+    { RecordedCtl x; while (recordedCtl_.pop(x)) ctlBatch_.push_back(x); }
+    ctlStopPending_ = true;
+    ctlStopAt_ = transport_.uiPositionBeats();
+    if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
+        auto st = findTrackAuthoring(recordSessionTrackId_);
+        if (st && recordSessionScene_ < static_cast<int32_t>(st->sessionSlots.size())) {
+            auto nt = cloneTrack(*st);
+            SessionSlot& s = nt->sessionSlots[recordSessionScene_];
+            if (foldRecordedCtl(s.midi, s.lengthBeats > 0 ? s.lengthBeats : 4.0))
+                republishWithTrackRaw(recordSessionTrackId_, nt);
+        }
+    } else if (recordTrackId_ > 0 && recordClipIndex_ >= 0) {
+        auto t = findTrackAuthoring(recordTrackId_);
+        if (t && recordClipIndex_ < static_cast<int32_t>(t->midiClips.size())) {
+            auto nt = cloneTrack(*t);
+            if (foldRecordedCtl(nt->midiClips[recordClipIndex_], 0.0)) republishWithTrackRaw(recordTrackId_, nt);
+        }
+    }
+    resetCtlFold();
+}
+
+// End ctl's range at `atLocal` (clip-local): what the clip held between the range's last point
+// and there is replaced too; where the old curve goes on past it, a junction point at `atLocal`
+// hands back to it with the value it had there.
+void Engine::closeCtlRange(MidiClip& clip, int32_t ctl, double atLocal, double slotLen) {
+    CtlFold& f = ctlFold_[ctl];
+    const ControllerCurve* cur = clip.controller(ctl);
+    if (!cur || !f.hasCommitted) return;
+    const double lastL = slotLen > 0.0 ? std::fmod(std::max(0.0, f.committed.beat), slotLen) : f.committed.beat - clip.startBeat;
+    if (atLocal <= lastL + 1e-9) return;
+    // The value the curve had there before this range replaced anything (rest when it had none).
+    const float old = f.before && !f.before->points.empty() ? f.before->valueAt(atLocal) : kCtlRest;
+    std::vector<AutomationPoint> out;
+    bool after = false, at = false;
+    for (const auto& p : cur->points) {
+        if (p.beat > lastL + 1e-9 && p.beat < atLocal - 1e-9) continue;
+        if (p.beat >= atLocal - 1e-9) after = true;
+        if (std::fabs(p.beat - atLocal) < 1e-9) at = true;
+        out.push_back(p);
+    }
+    if (after && !at) {
+        // Hold the range's last value up to the junction, then hand back to the old curve.
+        if (!ctlIsSwitch(ctl) && atLocal - kCtlJunction > lastL + 1e-9 && old != f.committed.value)
+            out.push_back({ atLocal - kCtlJunction, f.committed.value, 0.0f });
+        out.push_back({ atLocal, old, 0.0f });
+    }
+    clip.setController(ctl, std::move(out));
+    f.before.reset();
 }
 
 // --- audio thread ----------------------------------------------------------
@@ -580,6 +854,23 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             pendingVel_[p] = livePressVel_[p];
         }
     if (rec && timed && liveExprCount_ > 0) captureLiveExpr(nowBeat, slot ? slotLen : 0.0);
+
+    // Recorded controllers (specs/020): the block's coalesced instrument-wide controllers that
+    // reach the take, on the capture clock. A take starts with every controller already away
+    // from rest (a pedal held down when Record is pressed), at the record start.
+    if (rec && takeStarted) {
+        const double seedAt = slot ? nowBeat : blockStartBeat;
+        for (int32_t c = 0; c < kCtlCount; ++c) {
+            const float v = liveCtl_[c].load(std::memory_order_relaxed);
+            if (v != kCtlRest && !ctlIsReserved(c)) recordedCtl_.push(RecordedCtl{ c, seedAt, v, recordPass_ });
+        }
+    }
+    if (rec && timed)
+        for (int i = 0; i < liveExprCount_; ++i) {
+            const MidiEvent& e = liveExpr_[i];
+            if (e.expr < kCtlDimBase || (e.trackId >= 0 && e.trackId != recTrack)) continue;
+            recordedCtl_.push(RecordedCtl{ e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_ });
+        }
 }
 
 // Recorded MPE: the block's (coalesced) live expression for a note being recorded becomes a
@@ -655,6 +946,13 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
 int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                                   double blockStart, double spb, bool playing, ExprEv* xev, int* xn) {
     if (playing) {
+        // Controllers first: a clip ending here releases its pedal ahead of the next clip's
+        // values at the same offset (the render keeps their order).
+        if (xev)
+            for (const MidiClip& clip : t.midiClips)
+                if (clip.active)
+                    clipCtlEndResets(clip, clip.startBeat * spb, (clip.startBeat + clip.lengthBeats) * spb,
+                                     blockStart, frames, xev, *xn, kMaxBlockExpr);
         for (const MidiClip& clip : t.midiClips) {
             // Deactivated clip (key 0): emit NO new note-ons, but still emit note-offs — so a
             // note already sounding when the clip was switched off releases instead of hanging.
@@ -692,6 +990,8 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                     noteExprEvents(note, clipStart + note.startBeat * spb - blockStart, offS - blockStart,
                                    frames, spb, xev, *xn, kMaxBlockExpr);   // curve timed from the true start
             }
+            // The clip's controllers (specs/020).
+            if (xev && clipActive) clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr);
         }
     }
     // Notes a loop record replace removed from this track's take: release them (once), unless
@@ -728,7 +1028,7 @@ void Engine::applyLiveExpression(Graph* g, const Track& t, Instrument& inst) con
     for (int i = 0; i < liveExprCount_; ++i) {
         const MidiEvent& e = liveExpr_[i];
         if (takesLiveEvent(t, e) || (src && takesLiveEvent(*src, e)))
-            inst.noteExpression(e.pitch, e.expr, e.velocity);
+            deliverExpr(inst, e.pitch, e.expr, e.velocity);
     }
 }
 
@@ -854,7 +1154,17 @@ void Engine::renderInstrumentRaw(Graph* g, Track& t, float* dst, int32_t frames,
             if (j < blockExprN_.size())
                 for (int k = 0; k < blockExprN_[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = blockExpr_[j][k];
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
-            if (routed && captureRouted) captureRoutedNotes(srcEvs, m, blockStart, spb, countInClockOffset());
+            if (routed && captureRouted) {
+                captureRoutedNotes(srcEvs, m, blockStart, spb, countInClockOffset());
+                // The source's controllers (its clips' curves) print into the take too.
+                if (j < blockExprN_.size())
+                    for (int k = 0; k < blockExprN_[j]; ++k) {
+                        const ExprEv& x = blockExpr_[j][k];
+                        if (x.dim < kCtlDimBase) continue;
+                        recordedCtl_.push(RecordedCtl{ x.dim - kCtlDimBase, (blockStart + x.off) / spb + countInClockOffset(),
+                                                       x.value, recordPass_ });
+                    }
+            }
         }
     } else {
         n = computeInstrumentMidi(t, evs, frames, blockStart, spb, playing,
@@ -926,6 +1236,20 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
             noteExprEvents(note, (onAbs - p) * spb, (onAbs + note.lengthBeats - p) * spb, frames, spb, xev, xn, kMaxBlockExpr);
         }
     }
+    // The slot clip's controllers, per loop iteration: a release at each iteration's end, then
+    // its values from the start of the next (specs/020).
+    if (!s.midi.controllers.empty())
+        for (long it = std::max(0L, i0 - 1); it <= i0 + 1; ++it) {
+            if (!s.loop && it > 0) break;
+            const double cs = (it * L - p) * spb, ce = ((it + 1) * L - p) * spb;
+            clipCtlEndResets(s.midi, cs, ce, 0.0, frames, xev, xn, kMaxBlockExpr);
+        }
+    if (!s.midi.controllers.empty())
+        for (long it = std::max(0L, i0 - 1); it <= i0 + 1; ++it) {
+            if (!s.loop && it > 0) break;
+            const double cs = (it * L - p) * spb, ce = ((it + 1) * L - p) * spb;
+            clipCtlEvents(s.midi, cs, ce, 0.0, frames, spb, false, xev, xn, kMaxBlockExpr);
+        }
     std::stable_sort(xev, xev + xn, [](const ExprEv& a, const ExprEv& b) { return a.off < b.off; });
 
     // Live monitoring while overdub-recording into this slot (M5-4).
@@ -950,7 +1274,7 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         if (!monitoring) return;
         for (int i = 0; i < liveExprCount_; ++i)
             if (liveExpr_[i].trackId < 0 || liveExpr_[i].trackId == t.id())
-                inst->noteExpression(liveExpr_[i].pitch, liveExpr_[i].expr, liveExpr_[i].velocity);
+                deliverExpr(*inst, liveExpr_[i].pitch, liveExpr_[i].expr, liveExpr_[i].velocity);
     });
     sp.localBeats = p + db;
 }
@@ -1140,6 +1464,8 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     };
     for (int p = 0; p < 128; ++p) if (pendingActive_[p]) split(p, pendingStart_[p], pendingVel_[p]);
     for (int p = 0; p < 128; ++p) if (recRoutedActive_[p]) split(p, recRoutedStart_[p], recRoutedVel_[p]);
+    // Controllers being replaced over a range stop at the pass end (specs/020).
+    recordedCtl_.push(RecordedCtl{ -1, loopEndBeat, 0.0f, recordPass_ });
     // A new pass of the take: the continuations above belong to it (they don't trigger a
     // replace — only a fresh note does), and it takes the loop record mode set right now.
     ++recordPass_;
@@ -1172,6 +1498,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         if (g) for (auto& tptr : g->tracks)
             if (tptr->instrument && !sessionActiveOf(*tptr)) {
                 tptr->instrument->allNotesOff();
+                releaseHeldControllers(*tptr->instrument);   // a clip's pedal / wheel (specs/020)
                 for (auto& md : tptr->midiEffects) if (md) md->reset();   // flush arp held/pending
             }
     };

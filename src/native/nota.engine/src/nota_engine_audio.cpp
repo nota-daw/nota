@@ -139,6 +139,13 @@ int32_t nota_mpe_selftest(void) {
         void mpeNoteOn(int32_t p, float v) override { ev.push_back({0, p, -1, v}); }
         void mpeNoteOff(int32_t p) override { ev.push_back({1, p, -1, 0.0f}); }
         void mpeExpression(int32_t p, int32_t d, float v) override { ev.push_back({2, p, d, v}); }
+        // Controllers read as instrument-wide expression where they have a dim, else dim
+        // kCtlDimBase + ctl.
+        void mpeController(int32_t c, float v) override {
+            const int32_t d = c == nota::kCtlPitchWheel ? 0 : c == nota::kCtlChannelPressure ? 1 : c == 74 ? 2
+                            : c == nota::kCtlSustain ? 3 : nota::kCtlDimBase + c;
+            ev.push_back({2, -1, d, v});
+        }
         bool has(int kind, int32_t p, int32_t d, float v) const {
             for (const auto& e : ev) if (e.kind == kind && e.pitch == p && e.dim == d && std::fabs(e.v - v) < 0.02f) return true;
             return false;
@@ -180,6 +187,16 @@ int32_t nota_mpe_selftest(void) {
     { const int raw = 16383; off.message(0xE0, 1, raw & 0x7F, raw >> 7, r); }
     off.message(0xA0, 1, 60, 127, r);
     if (r.ev.size() != 3 || !r.has(2, -1, 0, 1.0f) || !r.has(2, 60, 1, 1.0f)) return 8;
+    // 9: every other CC of an ordinary channel is a controller (the mod wheel, expression), the
+    // pedal keeps its value, and data entry / channel mode messages are not controllers.
+    r.ev.clear();
+    off.message(0xB0, 1, 1, 127, r); off.message(0xB0, 1, 11, 64, r); off.message(0xB0, 1, 64, 40, r);
+    off.message(0xB0, 1, 123, 0, r); off.message(0xB0, 1, 38, 5, r);
+    if (r.ev.size() != 3 || !r.has(2, -1, nota::kCtlDimBase + 1, 1.0f) || !r.has(2, -1, nota::kCtlDimBase + 11, 64 / 127.0f)
+        || !r.has(2, -1, 3, 40 / 127.0f)) return 9;
+    // 10: a member channel's CC stays out of the instrument-wide controllers (MPE on).
+    r.ev.clear(); m.message(0xB0, 1, 1, 100, r);
+    if (!r.ev.empty()) return 10;
     return 0;
 }
 

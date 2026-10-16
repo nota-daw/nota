@@ -245,4 +245,15 @@ int32_t nota_session_take_scene_tempo(NotaEngine* e, double* bpm, int32_t* num, 
     return (e && ENG(e)->takeSceneTempoChange(bpm, num, den)) ? 1 : 0;
 }
 
+int32_t nota_session_ctl_list(const NotaEngine* e, int32_t track_id, int32_t scene, int32_t* out_ctls, int32_t cap) {
+    return e ? CENG(e)->ctlList(track_id, true, scene, out_ctls, cap) : 0;
+}
+int32_t nota_session_ctl_get(const NotaEngine* e, int32_t track_id, int32_t scene, int32_t ctl, NotaAutomationPoint* out, int32_t cap) {
+    return e ? CENG(e)->ctlGet(track_id, true, scene, ctl, out, cap) : 0;
+}
+NotaResult nota_session_ctl_set(NotaEngine* e, int32_t track_id, int32_t scene, int32_t ctl, const NotaAutomationPoint* pts, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->ctlSet(track_id, true, scene, ctl, pts, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
 } // extern "C"

@@ -703,4 +703,15 @@ int32_t nota_track_sampler_info(const NotaEngine* e, int32_t track_id, NotaSampl
     return (e && CENG(e)->samplerInfo(track_id, out)) ? 1 : 0;
 }
 
+int32_t nota_midi_clip_ctl_list(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t* out_ctls, int32_t cap) {
+    return e ? CENG(e)->ctlList(track_id, false, clip_index, out_ctls, cap) : 0;
+}
+int32_t nota_midi_clip_ctl_get(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t ctl, NotaAutomationPoint* out, int32_t cap) {
+    return e ? CENG(e)->ctlGet(track_id, false, clip_index, ctl, out, cap) : 0;
+}
+NotaResult nota_midi_clip_ctl_set(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->ctlSet(track_id, false, clip_index, ctl, pts, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
 } // extern "C"

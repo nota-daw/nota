@@ -802,6 +802,12 @@ public interface IAudioEngine : IDisposable
     /// resets it). Pitch −1 addresses the whole instrument, where Bend is the wheel −1..+1.</summary>
     void NoteExpression(int pitch, NoteExpressionDim dim, float value);
     void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value);
+    /// <summary>A live instrument-wide controller (<see cref="MidiController"/>): plays now and
+    /// is recorded into the take. The track form addresses one track.</summary>
+    void SendController(int ctl, float value);
+    void SendTrackController(int trackId, int ctl, float value);
+    /// <summary>The last controller value delivered to the track's instrument; NaN when none.</summary>
+    float DeliveredController(int trackId, int ctl);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
@@ -1018,6 +1024,15 @@ public interface IAudioEngine : IDisposable
     /// <summary>MIDI clip envelope (velocity or volume; 0..1, clip-local beats).</summary>
     AutomationPoint[] GetMidiClipEnvelope(int trackId, int clipIndex, MidiClipEnvelope kind);
     void SetMidiClipEnvelope(int trackId, int clipIndex, MidiClipEnvelope kind, AutomationPoint[] points);
+    /// <summary>The controllers (<see cref="MidiController"/> ids, ascending) a MIDI clip holds
+    /// curves for, and each curve (clip-local beats). Set replaces it — empty removes; one undo
+    /// step. The Session forms address a slot's clip.</summary>
+    int[] GetMidiClipControllers(int trackId, int clipIndex);
+    AutomationPoint[] GetMidiClipController(int trackId, int clipIndex, int ctl);
+    void SetMidiClipController(int trackId, int clipIndex, int ctl, AutomationPoint[] points);
+    int[] GetSessionControllers(int trackId, int scene);
+    AutomationPoint[] GetSessionController(int trackId, int scene, int ctl);
+    void SetSessionController(int trackId, int scene, int ctl, AutomationPoint[] points);
 
     /// <summary>Smoothed real-time DSP load, 0..1 (0 when no live device runs).</summary>
     float CpuLoad { get; }

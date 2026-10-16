@@ -26,6 +26,7 @@
 #include <bit>
 #include <cstdint>
 
+#include "MidiController.h"
 #include "NoteExpression.h"
 
 namespace nota {
@@ -37,6 +38,9 @@ public:
         virtual void mpeNoteOn(int32_t pitch, float velocity) = 0;
         virtual void mpeNoteOff(int32_t pitch) = 0;
         virtual void mpeExpression(int32_t pitch, int32_t dim, float value) = 0;   // pitch −1 = all
+        // An instrument-wide controller (MidiController.h): the wheel, channel pressure and
+        // every CC of an ordinary / master channel, the sustain pedal of any channel.
+        virtual void mpeController(int32_t ctl, float value) = 0;
     };
 
     // enabled = treat channels per MPE zones; bendRange = the member channels' default
@@ -81,13 +85,13 @@ public:
                 const int32_t raw = (d2 << 7) | d1;                       // 0..16383, 8192 = centre
                 c.bend = std::clamp((raw - 8192) / 8191.0f, -1.0f, 1.0f);
                 if (member) forHeld(c, [&](int32_t p) { out.mpeExpression(p, ExprBend, c.bend * c.range); });
-                else        out.mpeExpression(-1, ExprBend, c.bend);
+                else        out.mpeController(kCtlPitchWheel, c.bend);
                 break;
             }
             case 0xD0:
                 c.pressure = d1 / 127.0f;
                 if (member) forHeld(c, [&](int32_t p) { out.mpeExpression(p, ExprPressure, c.pressure); });
-                else        out.mpeExpression(-1, ExprPressure, c.pressure);
+                else        out.mpeController(kCtlChannelPressure, c.pressure);
                 break;
             case 0xA0:
                 out.mpeExpression(d1, ExprPressure, d2 / 127.0f);
@@ -133,15 +137,18 @@ private:
             case 74:
                 c.slide = v / 127.0f;
                 if (isMember(channel)) forHeld(c, [&](int32_t p) { out.mpeExpression(p, ExprSlide, c.slide); });
-                else                   out.mpeExpression(-1, ExprSlide, c.slide);
+                else                   out.mpeController(74, c.slide);
                 break;
-            case 64:   // sustain pedal: instrument-wide on any channel (an MPE master or member)
-                out.mpeExpression(-1, ExprSustain, v >= 64 ? 1.0f : 0.0f);
+            case 64:   // sustain pedal: instrument-wide on any channel (an MPE master or member);
+                       // its real value, so a plug-in piano can half-pedal (built-ins: >= 0.5 down)
+                out.mpeController(kCtlSustain, v / 127.0f);
                 break;
             case 101: c.rpnMsb = v; break;
             case 100: c.rpnLsb = v; break;
             case 6:   dataEntry(channel, v); break;
-            default: break;
+            default:   // any other controller of an ordinary / master channel: instrument-wide
+                if (!ctlIsReserved(cc) && !isMember(channel)) out.mpeController(cc, v / 127.0f);
+                break;
         }
     }
 

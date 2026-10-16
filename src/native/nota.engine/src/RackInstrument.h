@@ -62,6 +62,12 @@ public:
         if (!st) return;
         for (auto& c : st->chains) if (c.instrument) c.instrument->noteExpression(pitch, dim, value);
     }
+    // Controllers too: every chain hears the pedal and the wheels, like live input.
+    void controller(int32_t ctl, float value) override {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains) if (c.instrument) c.instrument->controller(ctl, value);
+    }
     bool supportsMpe() const override {
         RackState* st = live();
         if (!st) return false;

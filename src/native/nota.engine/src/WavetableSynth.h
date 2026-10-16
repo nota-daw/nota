@@ -109,6 +109,11 @@ public:
     int32_t kind() const override { return 5; }
     const char* displayName() const override { return "Nota Aurora"; }
 
+    // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
+    void controller(int32_t ctl, float value) override {
+        if (ctl == kCtlModWheel) pn_[ModWheel].store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+        Instrument::controller(ctl, value);
+    }
     void setSampleRate(double sr) override {
         sampleRate_ = sr > 0 ? sr : 44100.0;
         chorusBuf_.assign((size_t)(sampleRate_ * 0.05) + 2, 0.0f); chorusW_ = 0;

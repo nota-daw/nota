@@ -286,6 +286,18 @@ track count and closes with Escape.
   Cmd/Ctrl+Shift+R or the Transport menu; applies from the next pass; remembered between
   sessions. A note held across the loop seam is recorded as two notes, up to the loop end
   and on from the loop start.
+- **MIDI controllers in clips** — recording keeps the sustain pedal, pitch wheel, mod wheel,
+  channel pressure and any other CC with the notes (a pedal already down at Record is in the
+  take from its start), and the clip plays them back to the instrument. Starting mid-clip sets
+  each controller to the clip's value there; at a clip's end or on stop its pedals are
+  released and the wheel centred. In loop recording a pass replaces a controller only over the
+  range it moved it, so a pedal-only pass re-records the pedal and keeps the notes.
+  Controllers move, copy, split, trim and consolidate with the clip and are saved with the
+  project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's pressure.
+  Live and from clips, hosted plug-ins get every controller (the pedal with its real value, for
+  half-pedalling); built-ins act on those they know — the pedal (Keys, Mosaic), the wheel,
+  pressure, CC74, and the mod wheel on synths with a *Mod Wheel* control (Bass, Monolith, Volt,
+  Aurora, Operator, Pentad, Consort). MCP `get_clip_controllers` / `set_clip_controller`.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
@@ -295,12 +307,10 @@ track count and closes with Escape.
   Pentad: poly aftertouch through *Aftertouch Cutoff*, Physical: bows the struck body so a held
   note sustains); slide sweeps the filter (Aurora: the wavetable position, Operator: the FM
   index, Physical: how long the body rings, Keys: drives the tine into the pickup / shifts its
-  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get the wheel, channel
-  pressure, polyphonic aftertouch and the sustain pedal (CC64), which also holds Nota Keys'
-  notes. **Recording** keeps each note's bend, pressure and slide with the note: it plays back
+  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get polyphonic
+  aftertouch (and every instrument-wide controller, see above). **Recording** keeps each note's bend, pressure and slide with the note: it plays back
   from the clip, moves, copies and quantizes with the note, is saved with the project, and the
-  piano roll draws it over the note (bend as the pitch it played, pressure as a shade). The
-  pitch wheel, channel pressure and sustain pedal aren't recorded.
+  piano roll draws it over the note (bend as the pitch it played, pressure as a shade).
   - **MPE lanes in the piano roll** — the lane under the notes switches between **VEL**,
     **BEND**, **PRES** and **SLIDE**. In an MPE lane every note's curve sits over its own
     span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
@@ -1082,7 +1092,7 @@ Coverage:
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
-  and split.
+  and split; read and write a clip's controller curves (sustain, wheels, any CC).
 - **Automation**: create a lane, read and write points.
 - **MIDI effects** and engine status.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,

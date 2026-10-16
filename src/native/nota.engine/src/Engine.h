@@ -59,6 +59,11 @@ using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // and start (as its RecordedNote will carry them), `beat` is the offset from that start.
 struct RecordedExpr { int32_t pitch; double startBeat; int32_t dim; float beat; float value; };
 using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
+// A recorded controller sample (audio -> message): at an absolute beat of the take (a Session
+// take: loop-local), in loop pass `pass`. ctl -1 is a pass-end marker at `beat` (the loop end):
+// controllers still being replaced over a range stop there (specs/020, FR-021).
+struct RecordedCtl { int32_t ctl; double beat; float value; int32_t pass; };
+using RecordedCtlQueue = SpscRingBuffer<RecordedCtl, 1u << 14>;
 // A clip note's expression at a sample offset of the block (the render pass replays these).
 struct ExprEv { int32_t off; int32_t pitch; int32_t dim; float value; };
 
@@ -260,6 +265,13 @@ public:
     // MIDI clip envelopes (kind: 0 = velocity, 1 = volume; 0..1 in clip-local beats).
     int32_t getMidiClipEnvelope(int32_t trackId, int32_t clipIndex, int32_t kind, NotaAutomationPoint* out, int32_t cap) const;
     bool    setMidiClipEnvelope(int32_t trackId, int32_t clipIndex, int32_t kind, const NotaAutomationPoint* pts, int32_t count);
+    // Clip controller curves (specs/020). slot: false = arrangement clip `index`, true = the
+    // Session slot of scene `index`. set: count 0 removes the curve; one undo step.
+    int32_t ctlList(int32_t trackId, bool slot, int32_t index, int32_t* out, int32_t cap) const;
+    int32_t ctlGet(int32_t trackId, bool slot, int32_t index, int32_t ctl, NotaAutomationPoint* out, int32_t cap) const;
+    bool    ctlSet(int32_t trackId, bool slot, int32_t index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count);
+    float   deliveredController(int32_t trackId, int32_t ctl) const;
+    int32_t midiCtlSelfTest();
 
     // --- hosted-plugin parameter automation (M9-B) ---
     // deviceIndex < 0 = the track's instrument; otherwise the effect at that index.
@@ -979,6 +991,10 @@ public:
     // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
     // the whole instrument. Reaches the same tracks as live notes do.
     void noteExpression(int32_t pitch, int32_t dim, float value);
+    // Instrument-wide MIDI controller (specs/020, MidiController.h), live: like a note, to the
+    // armed / audition tracks (or one track), and recorded when the take records. Any thread.
+    void controller(int32_t ctl, float value);
+    void trackController(int32_t trackId, int32_t ctl, float value);
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
     void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
@@ -1182,6 +1198,7 @@ private:
         void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
         void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
         void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
+        void mpeController(int32_t ctl, float value) override { e->controller(ctl, value); }
     };
     MpeSink                       mpeSink_;
     std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
@@ -1199,6 +1216,7 @@ private:
     std::mutex                    remoteMidiMx_;    // producer side only
     RecordedQueue                 recorded_;
     RecordedExprQueue             recordedExpr_;
+    RecordedCtlQueue              recordedCtl_;
     mutable std::mutex            exprMx_;          // the expression store
     std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
     int32_t                       nextExprId_ = 1;
@@ -1373,6 +1391,38 @@ private:
     struct TakeNote { int32_t pitch; double absStart; int32_t pass; };
     std::vector<TakeNote> takeNotes_;
     int32_t appliedReplaceUpTo_ = 0;
+    // Recorded controllers folding into the take (message thread, specs/020). Each controller a
+    // pass moves is replaced over the range it touched — from its first point in the pass to the
+    // pass end (or the record stop) — so overdubbing a controller never interleaves two takes of
+    // it; controllers it didn't move, and the notes, stay.
+    struct CtlFold {
+        std::vector<RecordedCtl> run;       // this range's points since the last commit
+        bool   open = false;                // a replace range is running
+        int32_t pass = 0;
+        double startAbs = 0.0;              // range start (take beats)
+        double lastAbs = 0.0;               // the range's latest point (take beats)
+        bool   hasCommitted = false;
+        AutomationPoint committed{};        // the range's last committed point (take beats)
+        std::shared_ptr<const ControllerCurve> before;   // the clip's curve when the range opened
+    };
+    std::array<CtlFold, kCtlCount> ctlFold_{};
+    std::vector<RecordedCtl> ctlBatch_;     // drained this poll, in arrival order
+    bool   ctlStopPending_ = false;         // the take stopped: close the open ranges there
+    double ctlStopAt_ = 0.0;
+    struct TakeCtl { int32_t ctl; double absBeat; int32_t pass; };   // committed by this take
+    std::vector<TakeCtl> takeCtls_;
+    void resetCtlFold();
+    // Fold ctlBatch_ (and a pending stop) into the take's clip. clipStartAbs is the clip's start
+    // on the take clock (0 for a Session slot, whose take is loop-local over slotLen). Returns
+    // true when the clip changed.
+    bool foldRecordedCtl(MidiClip& clip, double slotLen);
+    // final: the range ends here, commit every point; otherwise a moving curve keeps its last
+    // thinned segment back for the next poll, so thinning spans polls (one gesture, few points).
+    void commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool final);
+    void closeCtlRange(MidiClip& clip, int32_t ctl, double atAbs, double slotLen);
+    // A take that ends without a record stop (a Session slot take finalised, the record track
+    // disarmed): fold what is still queued or held back into it now, while its target is known.
+    void flushCtlTake();
     std::atomic<double>  uiCountIn_{0.0};      // beats of count-in left (UI mirror)
     // False while a count-in runs: takes started from stop don't capture the clicks-only
     // pre-roll (the hardware tap and the internal-resampling tap both honour it).
@@ -1537,6 +1587,15 @@ private:
     // Clip-note expression replayed per block (computeBlockMidi fills, the render pass merges),
     // per track position like blockMidi_.
     static constexpr int kMaxBlockExpr = 1024;
+    // A clip's controller curves on the playback wire for one block (specs/020): the value at the
+    // clip's start or at a jump into it (chase), every point inside the block, and a value every
+    // 64 samples while a curve moves. Times are in samples on the block's clock.
+    static void clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
+                              int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap);
+    // At a clip's end, the pedals it holds down and a bent wheel go back to rest — no note stays
+    // held by a clip that is over.
+    static void clipCtlEndResets(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
+                                 int32_t frames, ExprEv* out, int& n, int cap);
     std::vector<std::vector<ExprEv>> blockExpr_;
     std::vector<int>                 blockExprN_;
     // Appends a clip note's recorded expression for the block: the note sounds over
@@ -1616,6 +1675,15 @@ private:
     // routing, so the piano roll can highlight the key you're pressing. 128 bits, set/cleared
     // on noteOn/noteOff (message/CoreMIDI thread), read lock-free by the UI.
     std::atomic<uint32_t> liveHeld_[4]{};
+    // Every live controller's latest value and a count of its moves (any producer thread
+    // writes, the audio thread seeds takes from it, the message thread starts automation
+    // writes from it). Values start at rest.
+    std::atomic<float>    liveCtl_[kCtlCount]{};
+    std::atomic<uint32_t> liveCtlTouch_[kCtlCount]{};
+    void noteLiveController(int32_t ctl, float value) {
+        liveCtl_[ctl].store(value, std::memory_order_relaxed);
+        liveCtlTouch_[ctl].fetch_add(1, std::memory_order_relaxed);
+    }
 
     // instrument render scratch (pre-allocated, big enough for any device block).
     static constexpr int32_t kMaxBlock = 16384;

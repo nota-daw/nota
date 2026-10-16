@@ -282,6 +282,11 @@ public:
     const char* displayName() const override { return "Nota Consort"; }
 
     // Deferred to the audio thread (render) so a device-rate change can't race a render.
+    // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
+    void controller(int32_t ctl, float value) override {
+        if (ctl == kCtlModWheel) pn_[ModWheel].store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+        Instrument::controller(ctl, value);
+    }
     void setSampleRate(double sr) override { pendingRate_.store(sr > 0 ? sr : 44100.0, std::memory_order_relaxed); }
 
     int32_t activeVoiceCount() const override { return static_cast<int32_t>(tele_[ScActive].load(std::memory_order_relaxed)); }

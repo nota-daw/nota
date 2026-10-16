@@ -764,13 +764,47 @@ NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
 /* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
- * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0/1 —
+ * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0..1 (down at >= 0.5) —
  * instrument-wide only (pitch -1). pitch -1 addresses the whole instrument; its bend is
  * the wheel normalized -1..+1 (the synth applies its own range).
  * A note-on resets the note's expression; send it after the note-on. The engine_ form
  * reaches the tracks live notes reach; the track_ form one track (Nota Remote). */
 NOTA_API NotaResult nota_engine_note_expression(NotaEngine* engine, int32_t pitch, int32_t dim, float value);
 NOTA_API NotaResult nota_track_note_expression(NotaEngine* engine, int32_t track_id, int32_t pitch, int32_t dim, float value);
+
+/* ---- MIDI controllers (specs/020) ----------------------------------------
+ * Instrument-wide controllers, one id space: ctl 0..127 = that CC, NOTA_CTL_PITCH_WHEEL,
+ * NOTA_CTL_CHANNEL_PRESSURE. Values are normalised: a CC 0..1 (data / 127; CC64-69 are
+ * switches, on at >= 0.5), the wheel -1..+1 (centre 0), pressure 0..1. Data entry / RPN /
+ * NRPN (6, 38, 96-101) and channel mode (120-127) are reserved: refused everywhere.
+ * The instrument-wide expression above (pitch -1, dim 0..3) is the wheel / pressure / CC74 /
+ * CC64 of this space. */
+#define NOTA_CTL_PITCH_WHEEL       128
+#define NOTA_CTL_CHANNEL_PRESSURE  129
+#define NOTA_CTL_COUNT             130
+/* Live controller input, like note_on: the engine_ form reaches the tracks live notes reach,
+ * the track_ form one track. Plays now and is recorded into the take when it records. Safe
+ * from any thread. */
+NOTA_API NotaResult nota_engine_controller(NotaEngine* engine, int32_t ctl, float value);
+NOTA_API NotaResult nota_track_controller(NotaEngine* engine, int32_t track_id, int32_t ctl, float value);
+/* The last value the engine delivered to the track's instrument for `ctl` (live, clip or
+ * automation), NaN when none since the instrument was created. A read for tests and meters. */
+NOTA_API float      nota_track_delivered_controller(const NotaEngine* engine, int32_t track_id, int32_t ctl);
+/* A MIDI clip's controller curves (clip-local beats; may start before 0 like a pickup note).
+ * list fills the ctls holding data (ascending) and returns their count (out may be NULL).
+ * get(out=NULL) returns the point count. set replaces the curve (count 0 removes it; points
+ * in any order, the last one given per beat kept); one undo step, plays from the next block. */
+NOTA_API int32_t    nota_midi_clip_ctl_list(const NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t* out_ctls, int32_t cap);
+NOTA_API int32_t    nota_midi_clip_ctl_get(const NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t ctl, NotaAutomationPoint* out, int32_t cap);
+NOTA_API NotaResult nota_midi_clip_ctl_set(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count);
+/* The same for a Session slot's clip (beats in [0, slot length)). */
+NOTA_API int32_t    nota_session_ctl_list(const NotaEngine* engine, int32_t track_id, int32_t scene, int32_t* out_ctls, int32_t cap);
+NOTA_API int32_t    nota_session_ctl_get(const NotaEngine* engine, int32_t track_id, int32_t scene, int32_t ctl, NotaAutomationPoint* out, int32_t cap);
+NOTA_API NotaResult nota_session_ctl_set(NotaEngine* engine, int32_t track_id, int32_t scene, int32_t ctl, const NotaAutomationPoint* pts, int32_t count);
+/* Device-free self-test of controller curves: value at a beat (switch + linear), split / slice,
+ * chase and end-of-clip release on the playback wire, the recording fold (overdub touched
+ * range). 0 = pass, else the number of the first failed check. */
+NOTA_API int32_t    nota_engine_midi_ctl_selftest(NotaEngine* engine);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);

@@ -9,6 +9,8 @@
 
 #include "nota_engine_internal.h"
 
+#include <cmath>
+#include <limits>
 #include <new>
 #include <string>
 
@@ -202,6 +204,18 @@ NotaResult nota_track_note_expression(NotaEngine* e, int32_t track_id, int32_t p
     if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 3 || (dim == 3 && pitch >= 0)) return NOTA_ERR_INVALID_ARG;
     ENG(e)->trackNoteExpression(track_id, pitch, dim, value); return NOTA_OK;
 }
+NotaResult nota_engine_controller(NotaEngine* e, int32_t ctl, float value) {
+    if (!e || nota::ctlIsReserved(ctl) || !std::isfinite(value)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->controller(ctl, value); return NOTA_OK;
+}
+NotaResult nota_track_controller(NotaEngine* e, int32_t track_id, int32_t ctl, float value) {
+    if (!e || nota::ctlIsReserved(ctl) || !std::isfinite(value)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->trackController(track_id, ctl, value); return NOTA_OK;
+}
+float nota_track_delivered_controller(const NotaEngine* e, int32_t track_id, int32_t ctl) {
+    return e ? CENG(e)->deliveredController(track_id, ctl) : std::numeric_limits<float>::quiet_NaN();
+}
+int32_t nota_engine_midi_ctl_selftest(NotaEngine* e) { return e ? ENG(e)->midiCtlSelfTest() : -1; }
 void nota_engine_set_audition_track(NotaEngine* e, int32_t track_id) {
     if (e) ENG(e)->setAuditionTrack(track_id);
 }

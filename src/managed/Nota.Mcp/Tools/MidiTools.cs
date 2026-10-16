@@ -55,6 +55,57 @@ public sealed class MidiTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     public Task TrimClip(int trackId, int clipIndex, double newStartBeat, double newLengthBeats)
         => Mutate(() => E.TrimClip(trackId, clipIndex, Math.Max(0, newStartBeat), Math.Max(0.25, newLengthBeats)));
 
+    public sealed record ControllerPoint(
+        [property: Description("Beat, relative to the clip start")] double Beat,
+        [property: Description("Value: a CC 0..1 (data / 127; sustain and other pedals are down at >= 0.5), the pitch wheel -1..1 (0 = centre), channel pressure 0..1")] float Value);
+
+    public sealed record ClipController(
+        [property: Description("Controller id: 0..127 a CC, 128 the pitch wheel, 129 channel pressure")] int Ctl,
+        [property: Description("Its name: Sustain, Mod wheel, Pitch wheel, Expression, CC 3, ...")] string Name,
+        ControllerPoint[] Points);
+
+    // A controller by number or name: "sustain", "mod_wheel", "pitch_wheel", "channel_pressure", "expression", "64", "cc74".
+    private static int ResolveCtl(string ctl)
+    {
+        var k = ctl.Trim().ToLowerInvariant().Replace(" ", "_");
+        if (k.StartsWith("cc")) k = k[2..].TrimStart('_', ' ');
+        int id = k switch
+        {
+            "sustain" or "sustain_pedal" or "pedal" => MidiController.Sustain,
+            "mod" or "mod_wheel" or "modwheel" or "modulation" => MidiController.ModWheel,
+            "pitch_wheel" or "pitchwheel" or "pitch_bend" or "bend" or "wheel" => MidiController.PitchWheel,
+            "channel_pressure" or "pressure" or "aftertouch" => MidiController.ChannelPressure,
+            "breath" => 2,
+            "expression" => 11,
+            _ => int.TryParse(k, out var n) ? n : -1,
+        };
+        if (MidiController.IsReserved(id))
+            throw new ArgumentException($"'{ctl}' is not a controller Nota records (0..127 except 6, 38, 96-101, 120-127; pitch_wheel; channel_pressure).");
+        return id;
+    }
+
+    [McpServerTool(Name = "get_clip_controllers"), Description(
+        "Get a MIDI clip's controller curves — the sustain pedal, mod wheel, pitch wheel, channel pressure and any CC recorded " +
+        "with the notes or drawn in the piano roll. Each curve: its controller id and name, and its points (beat in the clip, " +
+        "value). Pedals step from point to point; the others glide linearly. Before a curve's first point the controller " +
+        "keeps whatever value it had.")]
+    public Task<ClipController[]> GetClipControllers(int trackId, int clipIndex) => Read(() =>
+        Array.ConvertAll(E.GetMidiClipControllers(trackId, clipIndex), ctl => new ClipController(ctl, MidiController.Name(ctl),
+            Array.ConvertAll(E.GetMidiClipController(trackId, clipIndex, ctl), p => new ControllerPoint(p.Beat, p.Value)))));
+
+    [McpServerTool(Name = "set_clip_controller"), Description(
+        "Replace one controller curve of a MIDI clip (an empty list removes it); one undo step, heard on the next pass. ctl: a " +
+        "CC number (\"64\", \"cc74\") or a name (\"sustain\", \"mod_wheel\", \"pitch_wheel\", \"channel_pressure\", " +
+        "\"expression\", \"breath\"). Example — the pedal down on beat 0, up just before the chord change on beat 4: " +
+        "[{beat:0,value:1},{beat:3.9,value:0}].")]
+    public Task SetClipController(int trackId, int clipIndex, string ctl, ControllerPoint[] points) => Mutate(() =>
+    {
+        int id = ResolveCtl(ctl);
+        var (lo, hi) = MidiController.Range(id);
+        E.SetMidiClipController(trackId, clipIndex, id,
+            Array.ConvertAll(points, p => new AutomationPoint(Math.Max(-64, p.Beat), Math.Clamp(p.Value, lo, hi))));
+    });
+
     public sealed record ClipRef(int TrackId, int ClipIndex);
 
     [McpServerTool(Name = "consolidate_clips"), Description(

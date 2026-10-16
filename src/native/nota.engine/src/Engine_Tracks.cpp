@@ -1163,11 +1163,13 @@ double placeAudioNonOverlap(const Track& t, double start, double len, double spb
 MidiClip midiCarveLeft(const MidiClip& src, double endLocal) {   // keep [start, start+endLocal)
     MidiClip r; r.name = src.name; r.startBeat = src.startBeat; r.lengthBeats = endLocal;
     for (const auto& n : src.notes) if (n.startBeat < endLocal) r.notes.push_back(n);
+    r.sliceControllersFrom(src, 0.0, endLocal);
     return r;
 }
 MidiClip midiCarveRight(const MidiClip& src, double startLocal) {   // keep [start+startLocal, end)
     MidiClip r; r.name = src.name; r.startBeat = src.startBeat + startLocal; r.lengthBeats = src.lengthBeats - startLocal;
     for (const auto& n : src.notes) if (n.startBeat >= startLocal) { Note m = n; m.startBeat -= startLocal; r.notes.push_back(m); }
+    r.sliceControllersFrom(src, startLocal, r.lengthBeats);
     return r;
 }
 // Both carves work in PLAYED time, so a reversed clip mirrors: its audible head is the
@@ -1817,6 +1819,27 @@ MidiClip consolidateMidiClips(const std::vector<MidiClip>& clips, double s, doub
         }
     }
     out.volumeEnvelope = stitchEnvelopes(spans, s, e);
+    // Controllers (specs/020): each clip's piece in turn; where a clip ends holding a pedal down
+    // or the wheel bent, it goes back to rest there, as playback releases it.
+    std::vector<int32_t> ctls;
+    for (const MidiClip* c : src) for (const auto& cv : c->controllers) if (cv && std::find(ctls.begin(), ctls.end(), cv->ctl) == ctls.end()) ctls.push_back(cv->ctl);
+    for (int32_t ctl : ctls) {
+        std::vector<AutomationPoint> pts;
+        for (const MidiClip* c : src) {
+            if (!c->active) continue;
+            const ControllerCurve* cv = c->controller(ctl);
+            if (!cv) continue;
+            const double cs = c->startBeat, a = std::max(cs, s), b = std::min(cs + c->lengthBeats, e);
+            if (b <= a) continue;
+            for (auto p : sliceCtlPoints(*cv, a - cs, b - cs)) { p.beat += a - s; pts.push_back(p); }
+            if ((ctlIsSwitch(ctl) || ctl == kCtlPitchWheel) && cv->valueAt(b - cs) != kCtlRest && !cv->points.empty()
+                && b - cs >= cv->points.front().beat)
+                pts.push_back({ b - s, kCtlRest, 0.0f });
+        }
+        // A point the next clip pins on the same beat wins (setController keeps the last).
+        std::stable_sort(pts.begin(), pts.end(), [](const AutomationPoint& x, const AutomationPoint& y) { return x.beat < y.beat; });
+        if (!pts.empty()) out.setController(ctl, std::move(pts));
+    }
     return out;
 }
 } // namespace
@@ -1912,6 +1935,7 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
         MidiClip& c = nt->midiClips[clipIndex];
         const double delta = newStartBeat - c.startBeat;  // shift notes to stay put
         for (auto& n : c.notes) n.startBeat -= delta;
+        c.shiftControllers(-delta);   // and controllers (a point left of the new start still sets the value there)
         c.startBeat = newStartBeat;
         c.lengthBeats = newLengthBeats;
     } else {
@@ -2062,6 +2086,8 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
             if (n.startBeat < local) left.notes.push_back(n);
             else { Note m = n; m.startBeat -= local; right.notes.push_back(m); }
         }
+        left.sliceControllersFrom(src, 0.0, local);
+        right.sliceControllersFrom(src, local, right.lengthBeats);
         nt->midiClips[clipIndex] = left;
         nt->midiClips.insert(nt->midiClips.begin() + clipIndex + 1, right);
     } else {

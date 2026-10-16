@@ -30,6 +30,7 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
+        flushCtlTake();   // the take's controllers still in flight (specs/020)
         recordTrackId_ = -1;
         recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
@@ -161,9 +162,20 @@ void Engine::noteOff(int32_t pitch) {
         liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }
 
+// The instrument-wide dims (pitch −1) are controllers now: one path plays and records them.
+static int32_t ctlOfGlobalDim(int32_t dim) {
+    switch (dim) {
+        case ExprBend: return kCtlPitchWheel;
+        case ExprPressure: return kCtlChannelPressure;
+        case ExprSlide: return 74;
+        default: return kCtlSustain;   // ExprSustain
+    }
+}
+
 void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
     if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
         || !std::isfinite(value)) return;
+    if (pitch < 0) { controller(ctlOfGlobalDim(dim), value); return; }
     std::lock_guard<std::mutex> lk(liveMidiMx_);
     liveMidi_.push(MidiEvent{false, pitch, value, -1, dim});
 }
@@ -171,8 +183,25 @@ void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
 void Engine::trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value) {
     if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
         || !std::isfinite(value)) return;
+    if (pitch < 0) { trackController(trackId, ctlOfGlobalDim(dim), value); return; }
     std::lock_guard<std::mutex> lk(remoteMidiMx_);
     remoteMidi_.push(MidiEvent{false, pitch, value, trackId, dim});
+}
+
+void Engine::controller(int32_t ctl, float value) {
+    if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
+    value = ctlClamp(ctl, value);
+    noteLiveController(ctl, value);
+    std::lock_guard<std::mutex> lk(liveMidiMx_);
+    liveMidi_.push(MidiEvent{false, -1, value, -1, kCtlDimBase + ctl});
+}
+
+void Engine::trackController(int32_t trackId, int32_t ctl, float value) {
+    if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
+    value = ctlClamp(ctl, value);
+    noteLiveController(ctl, value);
+    std::lock_guard<std::mutex> lk(remoteMidiMx_);
+    remoteMidi_.push(MidiEvent{false, -1, value, trackId, kCtlDimBase + ctl});
 }
 
 void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
@@ -248,8 +277,10 @@ void Engine::setRecording(bool on) {
     // when no track is armed for a take — if the UI then pops the button back up
     // it calls us again with false, which clears it.
     setAutomationRecord(on);
-    if (on) { collectRecordedExpr(); pendingExpr_.clear(); }   // a new take starts with no stale curves
+    if (on) { collectRecordedExpr(); pendingExpr_.clear(); resetCtlFold(); }   // a new take starts with no stale curves
     if (!on) {
+        // Controllers still being replaced over a range end where the take stops (poll folds it).
+        if (recording_.load(std::memory_order_relaxed)) { ctlStopPending_ = true; ctlStopAt_ = transport_.uiPositionBeats(); }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
         // If the take started the transport, stop it and rewind to where the

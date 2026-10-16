@@ -91,6 +91,9 @@ public static class ProjectMigrations
             if (root["mixer"] is null)
                 root["mixer"] = new JsonObject { ["panLaw"] = "balance", ["panLawLegacy"] = true };
         }),
+        // v21 -> v22: MIDI clips and Session slot clips gain controller curves (Controllers,
+        // specs/020). Absent in v21 documents; null = none matches old behaviour — no-op.
+        new Migration(21, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

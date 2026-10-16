@@ -372,6 +372,14 @@ if (args.Length >= 1 && args[0] == "--live-record")
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// MIDI controllers alone (fast iteration): `--midi-ctl`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--midi-ctl")
+{
+    Console.WriteLine("-- midi controllers --");
+    foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MIDI CTL PASSED" : $"MIDI CTL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MPE alone (fast iteration): `--mpe`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--mpe")
 {
@@ -13688,9 +13696,24 @@ Console.WriteLine("-- MCP tools --");
     }).Wait();
     var mcpNotes = mcpMidi.GetClipNotes(mcpT, mcpClip).Result;
     Check(mcpNotes.Length == 3 && mcpNotes[0].Pitch == 60 && Math.Abs(mcpNotes[2].Length - 2) < 1e-3, $"MCP set/get_clip_notes round-trip ({mcpNotes.Length})");
+    mcpMidi.SetClipController(mcpT, mcpClip, "sustain", new[]
+    {
+        new Nota.Mcp.Tools.MidiTools.ControllerPoint(0, 1f), new Nota.Mcp.Tools.MidiTools.ControllerPoint(3.9, 0f),
+    }).Wait();
+    mcpMidi.SetClipController(mcpT, mcpClip, "cc11", new[] { new Nota.Mcp.Tools.MidiTools.ControllerPoint(0, 0.5f) }).Wait();
+    var mcpCtl = mcpMidi.GetClipControllers(mcpT, mcpClip).Result;
+    bool mcpBadCtl = false;
+    try { mcpMidi.SetClipController(mcpT, mcpClip, "cc121", Array.Empty<Nota.Mcp.Tools.MidiTools.ControllerPoint>()).Wait(); }
+    catch (AggregateException ex) when (ex.InnerException is ArgumentException) { mcpBadCtl = true; }
+    catch (ArgumentException) { mcpBadCtl = true; }
+    Check(mcpCtl.Length == 2 && mcpCtl[0].Ctl == 11 && mcpCtl[0].Name == "Expression" && mcpCtl[1].Name == "Sustain"
+          && mcpCtl[1].Points.Length == 2 && mcpBadCtl,
+          $"MCP set/get_clip_controller round-trip by name and number; a reserved CC is refused ({mcpCtl.Length})");
     var mcpCons = mcpMidi.ConsolidateClips(new[] { mcpT }, 0, 4).Result;
     Check(mcpCons.Length == 1 && mcpCons[0].TrackId == mcpT && mcpMidi.GetClipNotes(mcpT, mcpCons[0].ClipIndex).Result.Length == 3,
           "MCP consolidate_clips keeps the notes in one clip");
+    Check(mcpCons.Length == 1 && mcpMidi.GetClipControllers(mcpT, mcpCons[0].ClipIndex).Result.Length == 2,
+          "consolidate keeps the clip's controller curves");
 
     int mcpDev = mcpDevices.AddDevice(mcpT, 2).Result;        // 2 = Reverb
     Check(mcpDev >= 0 && mcpEng.TrackDeviceBuiltinKind(mcpT, mcpDev) == 2, "MCP add_device (Reverb)");
@@ -14647,6 +14670,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- midi controllers --");
+foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");

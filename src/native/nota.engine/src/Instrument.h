@@ -8,11 +8,15 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "MidiController.h"
+#include "NoteExpression.h"
 #include "TransportInfo.h"
 
 namespace nota {
@@ -38,6 +42,28 @@ public:
     virtual void noteExpression(int32_t /*pitch*/, int32_t /*dim*/, float /*value*/) {}
     // True when noteExpression does something — the UI shows the MPE badge for it.
     virtual bool supportsMpe() const { return false; }
+
+    // An instrument-wide MIDI controller (specs/020, MidiController.h): ctl 0..127 a CC,
+    // kCtlPitchWheel, kCtlChannelPressure; value normalised (CC 0..1, wheel −1..+1). Applied
+    // like expression, at segment boundaries. Default: the controllers every built-in already
+    // understands go to the instrument-wide expression (wheel, pressure, CC74 slide, CC64
+    // sustain — which instruments read as down at >= 0.5); the rest are ignored. A hosted
+    // plug-in overrides this to receive every controller as the MIDI message itself.
+    // The last value the engine delivered per controller (NaN = none since creation), kept on
+    // the instrument because it outlives graph snapshots. Audio thread only: the stop reset
+    // and "send on change" read it.
+    // Relaxed atomics so a test / meter can read them from the message thread.
+    std::atomic<float> deliveredCtl[kCtlCount];
+    Instrument() { for (auto& v : deliveredCtl) v.store(std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed); }
+    virtual void controller(int32_t ctl, float value) {
+        switch (ctl) {
+            case kCtlPitchWheel:      noteExpression(-1, ExprBend, value); break;
+            case kCtlChannelPressure: noteExpression(-1, ExprPressure, value); break;
+            case 74:                  noteExpression(-1, ExprSlide, value); break;
+            case kCtlSustain:         noteExpression(-1, ExprSustain, value); break;
+            default: break;
+        }
+    }
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;

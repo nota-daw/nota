@@ -83,6 +83,11 @@ public:
     int32_t kind() const override { return 7; }
     const char* displayName() const override { return "Nota Bass"; }
 
+    // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
+    void controller(int32_t ctl, float value) override {
+        if (ctl == kCtlModWheel) pn_[ModWheel].store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+        Instrument::controller(ctl, value);
+    }
     void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
 
     // ---- parameters -------------------------------------------------------

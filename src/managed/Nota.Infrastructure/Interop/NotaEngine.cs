@@ -129,6 +129,11 @@ public sealed partial class NotaEngine : IAudioEngine
     public void TrackNoteOff(int trackId, int pitch) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOff(_handle, trackId, pitch)); }
     public void NoteExpression(int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.NoteExpression(_handle, pitch, (int)dim, value)); }
     public void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteExpression(_handle, trackId, pitch, (int)dim, value)); }
+    public void SendController(int ctl, float value) { ThrowIfDisposed(); Check(NativeMethods.Controller(_handle, ctl, value)); }
+    public void SendTrackController(int trackId, int ctl, float value) { ThrowIfDisposed(); Check(NativeMethods.TrackController(_handle, trackId, ctl, value)); }
+    public float DeliveredController(int trackId, int ctl) { ThrowIfDisposed(); return NativeMethods.TrackDeliveredController(_handle, trackId, ctl); }
+    /// <summary>Device-free self-test of the clip controller curves (specs/020); 0 = pass.</summary>
+    public int MidiCtlSelfTest() { ThrowIfDisposed(); return NativeMethods.MidiCtlSelfTest(_handle); }
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }

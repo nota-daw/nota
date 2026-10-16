@@ -159,6 +159,24 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midi_clip_env_set")]
     internal static partial NotaResult MidiClipEnvSet(IntPtr engine, int trackId, int clipIndex, int kind, [In] AutomationPoint[] points, int count);
 
+    [LibraryImport(Lib, EntryPoint = "nota_midi_clip_ctl_list")]
+    internal static partial int MidiClipCtlList(IntPtr engine, int trackId, int clipIndex, [Out] int[]? outCtls, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_clip_ctl_get")]
+    internal static partial int MidiClipCtlGet(IntPtr engine, int trackId, int clipIndex, int ctl, [Out] AutomationPoint[]? outPoints, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_clip_ctl_set")]
+    internal static partial NotaResult MidiClipCtlSet(IntPtr engine, int trackId, int clipIndex, int ctl, [In] AutomationPoint[] points, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_ctl_list")]
+    internal static partial int SessionCtlList(IntPtr engine, int trackId, int scene, [Out] int[]? outCtls, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_ctl_get")]
+    internal static partial int SessionCtlGet(IntPtr engine, int trackId, int scene, int ctl, [Out] AutomationPoint[]? outPoints, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_ctl_set")]
+    internal static partial NotaResult SessionCtlSet(IntPtr engine, int trackId, int scene, int ctl, [In] AutomationPoint[] points, int count);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_warp_markers")]
     internal static partial NotaResult ClipSetWarpMarkers(IntPtr engine, int trackId, int clipIndex, [In] double[] srcFrames, [In] double[] beats, int count);
 

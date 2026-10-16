@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Automation.h"
+#include "MidiController.h"
 #include "NoteExpression.h"
 #include <algorithm>
 #include <cmath>
@@ -86,6 +87,52 @@ struct MidiClip {
     // sample during the clip. Empty = no envelope (fast path).
     AutomationLane velocityEnvelope;
     AutomationLane volumeEnvelope;
+    // Instrument-wide controllers (specs/020): at most one curve per ctl, sorted by ctl.
+    // Shared, immutable curves — a clip copy shares them; an edit swaps in a new one.
+    std::vector<std::shared_ptr<const ControllerCurve>> controllers;
+
+    const ControllerCurve* controller(int32_t ctl) const {
+        for (const auto& c : controllers) if (c && c->ctl == ctl) return c.get();
+        return nullptr;
+    }
+    std::shared_ptr<const ControllerCurve> controllerPtr(int32_t ctl) const {
+        for (const auto& c : controllers) if (c && c->ctl == ctl) return c;
+        return nullptr;
+    }
+    // Replace ctl's curve with `pts` (normalised here); empty removes it.
+    void setController(int32_t ctl, std::vector<AutomationPoint> pts) {
+        normalizeCtlPoints(pts);
+        auto it = std::find_if(controllers.begin(), controllers.end(), [&](const auto& c) { return c && c->ctl == ctl; });
+        if (pts.empty()) { if (it != controllers.end()) controllers.erase(it); return; }
+        auto c = std::make_shared<ControllerCurve>();
+        c->ctl = ctl;
+        c->points = std::move(pts);
+        if (it != controllers.end()) { *it = std::move(c); return; }
+        auto at = std::find_if(controllers.begin(), controllers.end(), [&](const auto& x) { return x && x->ctl > ctl; });
+        controllers.insert(at, std::move(c));
+    }
+    // This clip as a piece of `src` starting `from` beats into it, `len` long: its controllers
+    // cut to the piece (the first piece keeps a pickup's points before 0).
+    void sliceControllersFrom(const MidiClip& src, double from, double len) {
+        controllers.clear();
+        for (const auto& c : src.controllers) {
+            if (!c) continue;
+            std::vector<AutomationPoint> p;
+            if (from <= 0.0) { for (const auto& x : c->points) if (x.beat < len) p.push_back(x); }
+            else p = sliceCtlPoints(*c, from, from + len);
+            if (!p.empty()) setController(c->ctl, std::move(p));
+        }
+    }
+    // Shift every controller point by `delta` beats (the clip's left edge moved, notes with it).
+    void shiftControllers(double delta) {
+        if (delta == 0.0) return;
+        for (auto& c : controllers) {
+            if (!c) continue;
+            auto n = std::make_shared<ControllerCurve>(*c);
+            for (auto& p : n->points) p.beat += delta;
+            c = std::move(n);
+        }
+    }
 };
 
 } // namespace nota

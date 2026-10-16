@@ -236,6 +236,53 @@ public sealed partial class NotaEngine
     public void SetMidiClipEnvelope(int trackId, int clipIndex, MidiClipEnvelope kind, AutomationPoint[] points)
     { ThrowIfDisposed(); Check(NativeMethods.MidiClipEnvSet(_handle, trackId, clipIndex, (int)kind, points, points.Length)); }
 
+    /// <summary>The controllers a MIDI clip holds curves for (specs/020).</summary>
+    public int[] GetMidiClipControllers(int trackId, int clipIndex)
+    {
+        ThrowIfDisposed();
+        int count = NativeMethods.MidiClipCtlList(_handle, trackId, clipIndex, null, 0);
+        if (count == 0) return System.Array.Empty<int>();
+        var buf = new int[count];
+        int written = NativeMethods.MidiClipCtlList(_handle, trackId, clipIndex, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
+    public AutomationPoint[] GetMidiClipController(int trackId, int clipIndex, int ctl)
+    {
+        ThrowIfDisposed();
+        int count = NativeMethods.MidiClipCtlGet(_handle, trackId, clipIndex, ctl, null, 0);
+        if (count == 0) return System.Array.Empty<AutomationPoint>();
+        var buf = new AutomationPoint[count];
+        int written = NativeMethods.MidiClipCtlGet(_handle, trackId, clipIndex, ctl, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
+    public void SetMidiClipController(int trackId, int clipIndex, int ctl, AutomationPoint[] points)
+    { ThrowIfDisposed(); Check(NativeMethods.MidiClipCtlSet(_handle, trackId, clipIndex, ctl, points, points.Length)); }
+
+    public int[] GetSessionControllers(int trackId, int scene)
+    {
+        ThrowIfDisposed();
+        int count = NativeMethods.SessionCtlList(_handle, trackId, scene, null, 0);
+        if (count == 0) return System.Array.Empty<int>();
+        var buf = new int[count];
+        int written = NativeMethods.SessionCtlList(_handle, trackId, scene, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
+    public AutomationPoint[] GetSessionController(int trackId, int scene, int ctl)
+    {
+        ThrowIfDisposed();
+        int count = NativeMethods.SessionCtlGet(_handle, trackId, scene, ctl, null, 0);
+        if (count == 0) return System.Array.Empty<AutomationPoint>();
+        var buf = new AutomationPoint[count];
+        int written = NativeMethods.SessionCtlGet(_handle, trackId, scene, ctl, buf, count);
+        return written == count ? buf : buf[..written];
+    }
+
+    public void SetSessionController(int trackId, int scene, int ctl, AutomationPoint[] points)
+    { ThrowIfDisposed(); Check(NativeMethods.SessionCtlSet(_handle, trackId, scene, ctl, points, points.Length)); }
+
     /// <summary>Replaces a warped clip's source↔beat markers (≥2; sorted internally).</summary>
     public void SetClipWarpMarkers(int trackId, int clipIndex, double[] srcFrames, double[] beats)
     { ThrowIfDisposed(); Check(NativeMethods.ClipSetWarpMarkers(_handle, trackId, clipIndex, srcFrames, beats, srcFrames.Length)); }
