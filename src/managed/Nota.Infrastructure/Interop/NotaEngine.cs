@@ -80,6 +80,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public void PlayWithCountIn() { ThrowIfDisposed(); Check(NativeMethods.TransportPlayCountIn(_handle)); }
     public void SetCountIn(int bars) { ThrowIfDisposed(); Check(NativeMethods.SetCountIn(_handle, Math.Max(0, bars))); }
     public double CountInBeats { get { ThrowIfDisposed(); return NativeMethods.CountInBeats(_handle); } }
+    public void SetLoopRecordMode(bool replace) { ThrowIfDisposed(); Check(NativeMethods.SetLoopRecordMode(_handle, replace ? 1 : 0)); }
+    public bool LoopRecordReplace { get { ThrowIfDisposed(); return NativeMethods.LoopRecordMode(_handle) == 1; } }
     public void StopTransport() { ThrowIfDisposed(); Check(NativeMethods.TransportStop(_handle)); }
     public void SetBpm(double bpm) { ThrowIfDisposed(); Check(NativeMethods.SetBpm(_handle, bpm)); }
     public double Bpm { get { ThrowIfDisposed(); return NativeMethods.TransportBpm(_handle); } }

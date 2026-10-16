@@ -33,6 +33,9 @@ enum class CommandType : uint32_t {
     SetLoop,
     SetMetronome,
     Seek,
+    // Loop record replace (#29): release a pitch on a track — a note just removed from the take
+    // may still be sounding (played back from an earlier pass). i0 = track id, i1 = pitch.
+    ReleaseNote,
 };
 
 struct Command {

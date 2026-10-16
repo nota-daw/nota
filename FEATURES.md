@@ -80,7 +80,9 @@ JUCE module; the engine core is JUCE-free.
   power of two), grid and quantization.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
-- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection).
+- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection). Notes held across the
+  loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
+  pattern going across the seam.
 - **Metronome** and **count-in** before recording (notes played on the count-in are recorded).
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
@@ -272,6 +274,12 @@ track count and closes with Escape.
   routed ("MIDI In") input. Notes played on the count-in and keys already held when
   recording starts are recorded where they started: the take's clip begins earlier to hold
   them (at 1.1 the part before the song start is kept beyond the clip's left edge).
+- **Loop recording: Overdub / Replace** — with the loop on, **Overdub** adds every pass to the
+  MIDI take; **Replace** keeps only the latest pass you play on (a silent pass keeps the take,
+  notes already in the clip stay). Switched by the cell next to Loop in the transport,
+  Cmd/Ctrl+Shift+R or the Transport menu; applies from the next pass; remembered between
+  sessions. A note held across the loop seam is recorded as two notes, up to the loop end
+  and on from the loop start.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
@@ -1056,7 +1064,8 @@ or Claude Code) write music directly in the open Nota project. Enable it in Pref
 appears in the UI immediately.
 
 Coverage:
-- **Transport**: play/stop, tempo, time signature, loop, metronome.
+- **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
+  (`set_loop_record_mode`; `get_transport` reports it).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
   (`list_sections`, `set_sections`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,

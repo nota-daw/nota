@@ -36,6 +36,7 @@ public partial class MainWindow
         new Control[] { RemotePanel },          // MIDI learn (the panel goes with its last chip)
         new Control[] { SnapChip },             // the grid; snapping itself stays switchable
         new Control[] { SnapToggle },           // hold Alt to drag freely
+        new Control[] { LoopRecordCell },       // ⌘⇧R / Transport menu
         new Control[] { LoopSep, LoopCell },    // ⌘L; the range stays visible on the ruler
         new Control[] { MasterWell },           // the master strip is in the mixer
     };

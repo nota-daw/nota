@@ -98,6 +98,7 @@
             <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
+            <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
@@ -215,6 +216,18 @@
                            Text="{Binding Transport.LoopRangeText}"
                            Foreground="{Binding $parent[ToggleButton].Foreground}"/>
               </StackPanel>
+            </ToggleButton>
+            <!-- Loop record mode: Overdub (rests neutral) or Replace (lit, the non-default choice) -->
+            <ToggleButton x:Name="LoopRecordCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopRecordReplace}"
+                          ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
+              <Panel>
+                <!-- Sizer: the cell keeps the longer label's width in both states, so the bar doesn't shift -->
+                <TextBlock Classes="CellLabel" Text="Overdub" Opacity="0" VerticalAlignment="Center"/>
+                <TextBlock Classes="CellLabel" Text="Overdub" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           IsVisible="{Binding !Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+                <TextBlock Classes="CellLabel" Text="Replace" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           IsVisible="{Binding Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+              </Panel>
             </ToggleButton>
           </StackPanel>
         </Border>

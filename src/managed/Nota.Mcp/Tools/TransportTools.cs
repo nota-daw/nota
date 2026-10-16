@@ -13,11 +13,12 @@ namespace Nota.Mcp.Tools;
 public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh)
     : EngineTools(engine, dispatch, refresh)
 {
-    public sealed record TransportState(bool Playing, double PositionBeats, double Bpm, bool LoopEnabled, double LoopStart, double LoopEnd);
+    public sealed record TransportState(bool Playing, double PositionBeats, double Bpm, bool LoopEnabled, double LoopStart, double LoopEnd,
+                                        bool LoopRecordReplace);
 
-    [McpServerTool(Name = "get_transport"), Description("Current transport state: playing, playhead position (beats), tempo (BPM), and loop region.")]
+    [McpServerTool(Name = "get_transport"), Description("Current transport state: playing, playhead position (beats), tempo (BPM), loop region, and loop record mode (LoopRecordReplace: false = overdub, true = replace).")]
     public Task<TransportState> GetTransport()
-        => Read(() => new TransportState(E.IsPlaying, E.PositionBeats, E.Bpm, E.LoopEnabled, E.LoopStart, E.LoopEnd));
+        => Read(() => new TransportState(E.IsPlaying, E.PositionBeats, E.Bpm, E.LoopEnabled, E.LoopStart, E.LoopEnd, E.LoopRecordReplace));
 
     [McpServerTool(Name = "play"), Description("Start playback from the current playhead position.")]
     public Task Play() => Mutate(() => E.Play());
@@ -38,6 +39,9 @@ public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch
     [McpServerTool(Name = "set_loop"), Description("Enable/disable the loop region and set its start/end in beats.")]
     public Task SetLoop([Description("Loop on/off")] bool enabled, [Description("Loop start beat")] double startBeat, [Description("Loop end beat")] double endBeat)
         => Mutate(() => E.SetLoop(enabled, Math.Max(0, startBeat), Math.Max(startBeat, endBeat)));
+
+    [McpServerTool(Name = "set_loop_record_mode"), Description("Loop record mode for MIDI recorded with the loop on: replace=false overdubs (every pass adds to the take), replace=true keeps only the latest pass you play on. Applies from the next pass; an app preference.")]
+    public Task SetLoopRecordMode([Description("true = replace, false = overdub")] bool replace) => Mutate(() => E.SetLoopRecordMode(replace));
 
     [McpServerTool(Name = "set_metronome"), Description("Turn the metronome click on or off.")]
     public Task SetMetronome([Description("Metronome on/off")] bool enabled) => Mutate(() => E.SetMetronome(enabled));

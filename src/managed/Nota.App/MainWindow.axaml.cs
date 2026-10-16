@@ -345,6 +345,15 @@ public partial class MainWindow : Window
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
+        vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
+        vm.Transport.PropertyChanged += (_, e) =>
+        {
+            // The loop record mode is an app preference: every switch (toggle, ⌘⇧R, menu, MCP) persists.
+            if (e.PropertyName != nameof(vm.Transport.LoopRecordReplace)
+                || vm.Settings.Current.LoopRecordReplace == vm.Transport.LoopRecordReplace) return;
+            vm.Settings.Current.LoopRecordReplace = vm.Transport.LoopRecordReplace;
+            vm.Settings.Save();
+        };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style while the arrangement is open.

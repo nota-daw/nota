@@ -458,6 +458,12 @@ NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_play_count_in(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_count_in(NotaEngine* engine, int32_t bars);
 NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
+/* Loop record mode for MIDI recorded into the Arrangement with the loop on:
+ * 0 = overdub (every pass adds to the take), 1 = replace (the first new note of a
+ * pass removes what earlier passes of this take recorded). App preference; takes
+ * effect from the next pass. Session slot recording is unaffected. */
+NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
+NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);

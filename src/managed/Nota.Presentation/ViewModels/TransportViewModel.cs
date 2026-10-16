@@ -38,6 +38,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     /// <summary>The count-in is clicking (the transport hasn't rolled yet).</summary>
     [ObservableProperty] private bool _isCountingIn;
     [ObservableProperty] private bool _loopOn;
+    /// <summary>Loop record mode: false = Overdub, true = Replace (the first new note of a loop
+    /// pass replaces what earlier passes of the take recorded).</summary>
+    [ObservableProperty] private bool _loopRecordReplace;
     [ObservableProperty] private string _loopRangeText = "1.1–5.1";
     [ObservableProperty] private bool _recordOn;
     /// <summary>Which clock the position readout is showing, printed under it so the
@@ -76,6 +79,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     }
     partial void OnMetronomeOnChanged(bool value) => _engine.SetMetronome(value);
     partial void OnCountInBarsChanged(int value) => _engine.SetCountIn(value);
+    partial void OnLoopRecordReplaceChanged(bool value) => _engine.SetLoopRecordMode(value);
 
     partial void OnLoopOnChanged(bool value)
     {
@@ -193,6 +197,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? "count-in" : ShowTimeDisplay ? "time" : "bars";
         IsPlaying = _engine.IsPlaying || IsCountingIn;   // the Play button lights from the first click
         PlayLabel = IsPlaying ? "■ Stop" : "▶ Play";
+        // The loop record mode can also be set from outside the UI (MCP): follow the engine.
+        bool replace = _engine.LoopRecordReplace;
+        if (replace != LoopRecordReplace) LoopRecordReplace = replace;
     }
 
     /// <summary>The count-in as negative bars counting up to the start: −2.1 … −2.4, −1.1 … −1.4.</summary>

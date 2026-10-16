@@ -71,6 +71,7 @@ public static class CommandCatalog
         C("transport.record", "Record", "Transport", "⌘R", "arm capture"),
         C("transport.loop", "Toggle loop", "Transport", "⌘L", "cycle repeat"),
         C("transport.metronome", "Metronome", "Transport", "⌘M", "click"),
+        C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", "⌘⇧R", "overdub replace take pass loop record"),
         C("transport.tapTempo", "Tap tempo", "Transport", "", "bpm beat tap"),
 
         // ---- Track ------------------------------------------------------------------------

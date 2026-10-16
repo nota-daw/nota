@@ -81,6 +81,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_transport_count_in_beats")]
     internal static partial double CountInBeats(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_transport_set_loop_record_mode")]
+    internal static partial NotaResult SetLoopRecordMode(IntPtr engine, int mode);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_loop_record_mode")]
+    internal static partial int LoopRecordMode(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_transport_set_metronome")]
     internal static partial NotaResult SetMetronome(IntPtr engine, int enabled);
 

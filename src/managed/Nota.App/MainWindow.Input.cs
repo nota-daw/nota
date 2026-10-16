@@ -194,6 +194,13 @@ public partial class MainWindow
             e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
+        // ⌘⇧R / ⌃⇧R: loop record mode, Overdub ↔ Replace.
+        if (mod && e.Key == Key.R && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
+        {
+            if (_heldKeys.Add(e.Key)) _commands.Run("transport.loopRecordMode");
+            e.Handled = true;
+            return;
+        }
         if (plainMod && e.Key == Key.M)
         {
             if (_heldKeys.Add(e.Key)) _commands.Run("transport.metronome");

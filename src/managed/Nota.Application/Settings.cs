@@ -55,6 +55,10 @@ public sealed class Settings
     /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from
     /// the metronome button's right-click menu.</summary>
     public int CountInBars { get; set; }
+    /// <summary>Loop record mode (#29): false = Overdub (every loop pass adds to the MIDI take),
+    /// true = Replace (a new pass you play on replaces the earlier ones). Set from the transport
+    /// toggle next to Loop, ⌘⇧R, or the Transport menu.</summary>
+    public bool LoopRecordReplace { get; set; }
     /// <summary>Run the built-in MCP server so an AI (Claude Desktop / Claude Code) can drive the
     /// live app. Off by default; loopback-only. Toggled in Preferences.</summary>
     public bool McpEnabled { get; set; }

@@ -297,6 +297,11 @@ void Engine::setRecording(bool on) {
             republishWithTrack(recordTrackId_, nt);
         }
         recordClipIndex_ = idx;
+        // A fresh take for loop record replace: nothing recorded, nothing replaced yet (the
+        // audio thread also zeroes replaceUpTo_ when it sees the take start).
+        takeNotes_.clear();
+        appliedReplaceUpTo_ = 0;
+        replaceUpTo_.store(0, std::memory_order_relaxed);
         recording_.store(true, std::memory_order_relaxed);
     }
 

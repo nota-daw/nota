@@ -51,7 +51,9 @@ struct MidiEvent { bool on; int32_t pitch; float velocity; int32_t trackId = -1;
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
 // Recorded note (audio -> message), lock-free up-queue. startBeat is absolute.
-struct RecordedNote { int32_t pitch; double startBeat; double lengthBeats; float velocity; };
+// pass: the loop pass of the take the note started in (0 without a loop; a note held across
+// the loop seam is split, its continuation starting the next pass) — loop record mode (#29).
+struct RecordedNote { int32_t pitch; double startBeat; double lengthBeats; float velocity; int32_t pass = 0; };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // A recorded note's expression sample (audio -> message): the note is identified by its pitch
 // and start (as its RecordedNote will carry them), `beat` is the offset from that start.
@@ -304,6 +306,11 @@ public:
     // (transportPlayCountIn) and a Record from stop use it — exports / freezes / session
     // launches roll immediately. The clicks sound whether or not the metronome is on.
     void    setCountInBars(int32_t bars) { countInBars_.store(std::clamp(bars, 0, 8), std::memory_order_relaxed); }
+    // Loop record mode (#29): false = overdub (every loop pass adds to the take), true = replace
+    // (the first fresh note of a pass removes what earlier passes of this take recorded).
+    // Arrangement MIDI takes only; latched by the audio thread at take start and at each wrap.
+    void    setLoopRecordReplace(bool on) { loopRecordReplace_.store(on, std::memory_order_relaxed); }
+    bool    loopRecordReplace() const { return loopRecordReplace_.load(std::memory_order_relaxed); }
     int32_t countInBars() const { return countInBars_.load(std::memory_order_relaxed); }
     void    transportPlayCountIn();
     // Beats of count-in still to click (0 = not counting in). UI poll.
@@ -1352,6 +1359,20 @@ private:
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
     std::atomic<bool>   arrangementActive_{false};
     std::atomic<int32_t> countInBars_{0};      // count-in length setting (bars)
+    std::atomic<bool>    loopRecordReplace_{false};   // loop record mode setting (true = replace)
+    // Loop record passes (audio thread): the take's current pass, the mode latched for it, and
+    // whether a fresh note already fired its replace. replaceUpTo_ (audio → message, release):
+    // this take's notes from passes before it are to be removed (collectRecorded applies it).
+    int32_t recordPass_ = 0;
+    bool    passReplace_ = false;
+    bool    passTriggered_ = false;
+    std::atomic<int32_t> replaceUpTo_{0};
+    void    triggerPassReplace();   // audio thread: a fresh recorded note-on in this pass
+    // The notes this take appended to its Arrangement clip (message thread), by identity so a
+    // replace removes exactly them — never notes the clip held before the take.
+    struct TakeNote { int32_t pitch; double absStart; int32_t pass; };
+    std::vector<TakeNote> takeNotes_;
+    int32_t appliedReplaceUpTo_ = 0;
     std::atomic<double>  uiCountIn_{0.0};      // beats of count-in left (UI mirror)
     // False while a count-in runs: takes started from stop don't capture the clicks-only
     // pre-roll (the hardware tap and the internal-resampling tap both honour it).
@@ -1435,6 +1456,11 @@ private:
     bool   seamOffs_ = false;
     double seamEndSamples_ = 0.0;
     void   onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat);   // processBlock, at the wrap
+    // Pitches to release on one track in the next segment (ReleaseNote command, audio thread):
+    // notes a loop record replace removed while they may be sounding. A key the player holds
+    // live is skipped.
+    int32_t  releaseTrack_ = -1;
+    uint32_t releasePitches_[4] = {};
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time

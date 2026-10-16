@@ -367,6 +367,8 @@ if (args.Length >= 1 && args[0] == "--live-record")
     foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
     Console.WriteLine("-- loop seam --");
     foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
+    Console.WriteLine("-- loop record mode --");
+    foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -14647,6 +14649,8 @@ Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
+Console.WriteLine("-- loop record mode --");
+foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");

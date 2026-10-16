@@ -122,6 +122,13 @@ NotaResult nota_transport_set_count_in(NotaEngine* e, int32_t bars) {
 double nota_transport_count_in_beats(const NotaEngine* e) {
     return e ? CENG(e)->countInBeatsRemaining() : 0.0;
 }
+NotaResult nota_transport_set_loop_record_mode(NotaEngine* e, int32_t mode) {
+    if (!e || mode < 0 || mode > 1) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setLoopRecordReplace(mode == 1); return NOTA_OK;
+}
+int32_t nota_transport_loop_record_mode(const NotaEngine* e) {
+    return e && CENG(e)->loopRecordReplace() ? 1 : 0;
+}
 NotaResult nota_transport_stop(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->transportStop(); return NOTA_OK;
 }

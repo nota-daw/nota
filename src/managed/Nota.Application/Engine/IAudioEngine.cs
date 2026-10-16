@@ -31,6 +31,11 @@ public interface IAudioEngine : IDisposable
     void SetCountIn(int bars);
     /// <summary>Beats of count-in still to click (0 = not counting in).</summary>
     double CountInBeats { get; }
+    /// <summary>Loop record mode for MIDI recorded into the Arrangement with the loop on:
+    /// false = overdub (every pass adds to the take), true = replace (the first new note of a
+    /// pass removes what earlier passes of the take recorded). Applies from the next pass.</summary>
+    void SetLoopRecordMode(bool replace);
+    bool LoopRecordReplace { get; }
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
