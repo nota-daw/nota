@@ -583,7 +583,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   and lists gaps, duplicates and guessed notes (browser folder menu, or files dropped on the
   card). Installed sample packs become presets under Nota Mosaic → Packs. 11 factory presets
   on built-in multisamples (felt piano with release samples, mallets, nylon guitar, brass, pad,
-  music box) rendered on first use; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
+  music box) rendered on first use; Init in the card's preset list empties the instrument; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
   `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
   `load_mosaic_preset`, `scan_sample_packs`.
 
