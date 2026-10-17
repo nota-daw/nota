@@ -36,6 +36,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include "signalsmith-linear/fft.h"
 
@@ -123,9 +124,22 @@ public:
         for (int i = 0; i < fftN_; ++i) win_[(size_t)i] = (float)(0.5 - 0.5 * std::cos(2.0 * kPi * i / fftN_));
         lastAnaS_ = -1.0; lastAnaW_ = 0; anaValid_ = false;
         for (int k = 0; k < 2; ++k) for (int b = 0; b < kSpec; ++b) { aSpec_[k][b] = 0.0; spec_[k][b] = -120.0f; }
+        idle_ = false;
+        tailFrames_ = 2048;
     }
 
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return false; }
+    void wake() override { idle_ = false; tailFrames_ = 2048; }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
+        if (frames <= 0) return;
+        if (inputSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         const double sr = sr_;
         const double scale = clampd(get(Scale), 0.0, 200.0) / 100.0;
@@ -177,13 +191,14 @@ public:
         float inPk = 0.0f, outPk = 0.0f;
         uint32_t w = ringW_.load(std::memory_order_relaxed);
         const bool ringOk = !ring_[0].empty();
-        for (int32_t i = 0; i < frames; ++i) {
-            double l = buf[i * 2], r = buf[i * 2 + 1];
-            inPk = std::max(inPk, (float)std::max(std::fabs(l), std::fabs(r)));
-            if (ringOk) ring_[0][w & ringMask_] = (float)(0.5 * (l + r));
+
+        static constexpr int kChunkMax = 64;
+        for (int32_t done = 0; done < frames;) {
+            int32_t chunk = std::min<int32_t>(kChunkMax, frames - done);
+            if (moving && ctrl_ > 0) chunk = std::min(chunk, ctrl_);
 
             // Gliding bands: step toward the targets and re-build the cascade every kCtrl samples.
-            if (moving && --ctrl_ <= 0) {
+            if (moving && ctrl_ <= 0) {
                 ctrl_ = kCtrl;
                 moving = false;
                 for (int b = 0; b < kBands; ++b) {
@@ -191,43 +206,80 @@ public:
                     glF_[b] = settle(glF_[b] + (tF[b] - glF_[b]) * glideC, tF[b], 1e-5);
                     glG_[b] = settle(glG_[b] + (tG[b] - glG_[b]) * glideC, tG[b], 1e-4);
                     glQ_[b] = settle(glQ_[b] + (tQ[b] - glQ_[b]) * glideC, tQ[b], 1e-5);
-                    cascade(c[b], ty[b], sl[b], sr, std::exp2(glF_[b]), glG_[b], std::exp2(glQ_[b]));
+                    cascade(c[b], ty[b], sl[b], sr, fast_math::exp2f(static_cast<float>(glF_[b])), glG_[b], fast_math::exp2f(static_cast<float>(glQ_[b])));
                     moving |= glMoving_[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
                 }
+                if (moving) chunk = std::min(chunk, ctrl_);
+            }
+
+            double scL[kChunkMax], scR[kChunkMax];
+            for (int32_t j = 0; j < chunk; ++j) {
+                const double l = buf[(done + j) * 2], r = buf[(done + j) * 2 + 1];
+                scL[j] = l;
+                scR[j] = r;
+                inPk = std::max(inPk, static_cast<float>(std::max(std::fabs(l), std::fabs(r))));
+                if (ringOk) ring_[0][(w + j) & ringMask_] = static_cast<float>(0.5 * (l + r));
             }
 
             for (int b = 0; b < kBands; ++b) {
                 if (!on[b]) continue;
                 const int n = nSec[b];
                 switch (ch[b]) {
-                    case ChLeft:  l = run(s_[0][b], c[b], n, l); break;
-                    case ChRight: r = run(s_[1][b], c[b], n, r); break;
+                    case ChLeft: {
+                        for (int32_t j = 0; j < chunk; ++j)
+                            scL[j] = run(s_[0][b], c[b], n, scL[j]);
+                        break;
+                    }
+                    case ChRight: {
+                        for (int32_t j = 0; j < chunk; ++j)
+                            scR[j] = run(s_[1][b], c[b], n, scR[j]);
+                        break;
+                    }
                     case ChMid: {
-                        double m = 0.5 * (l + r); const double sd = 0.5 * (l - r);
-                        m = run(s_[0][b], c[b], n, m);
-                        l = m + sd; r = m - sd;
+                        for (int32_t j = 0; j < chunk; ++j) {
+                            double m = 0.5 * (scL[j] + scR[j]);
+                            const double sd = 0.5 * (scL[j] - scR[j]);
+                            m = run(s_[0][b], c[b], n, m);
+                            scL[j] = m + sd;
+                            scR[j] = m - sd;
+                        }
                         break;
                     }
                     case ChSide: {
-                        const double m = 0.5 * (l + r); double sd = 0.5 * (l - r);
-                        sd = run(s_[0][b], c[b], n, sd);
-                        l = m + sd; r = m - sd;
+                        for (int32_t j = 0; j < chunk; ++j) {
+                            const double m = 0.5 * (scL[j] + scR[j]);
+                            double sd = 0.5 * (scL[j] - scR[j]);
+                            sd = run(s_[0][b], c[b], n, sd);
+                            scL[j] = m + sd;
+                            scR[j] = m - sd;
+                        }
                         break;
                     }
-                    default:
-                        l = run(s_[0][b], c[b], n, l);
-                        r = run(s_[1][b], c[b], n, r);
+                    default: {
+                        for (int32_t j = 0; j < chunk; ++j) {
+                            scL[j] = run(s_[0][b], c[b], n, scL[j]);
+                            scR[j] = run(s_[1][b], c[b], n, scR[j]);
+                        }
                         break;
+                    }
                 }
             }
-            autoCur_ += (autoTarget - autoCur_) * glide;
-            outCur_ += (outTarget - outCur_) * glide;
-            const double g = autoCur_ * outCur_;
-            const float ol = (float)(l * g), orr = (float)(r * g);
-            buf[i * 2] = ol; buf[i * 2 + 1] = orr;
-            outPk = std::max(outPk, std::max(std::fabs(ol), std::fabs(orr)));
-            if (ringOk) ring_[1][w & ringMask_] = 0.5f * (ol + orr);
-            ++w;
+
+            for (int32_t j = 0; j < chunk; ++j) {
+                autoCur_ += (autoTarget - autoCur_) * glide;
+                outCur_ += (outTarget - outCur_) * glide;
+                const double g = autoCur_ * outCur_;
+                const float ol = static_cast<float>(scL[j] * g);
+                const float orr = static_cast<float>(scR[j] * g);
+                buf[(done + j) * 2] = ol;
+                buf[(done + j) * 2 + 1] = orr;
+                outPk = std::max(outPk, std::max(std::fabs(ol), std::fabs(orr)));
+                if (ringOk) ring_[1][(w + j) & ringMask_] = 0.5f * (ol + orr);
+            }
+
+            if (moving) ctrl_ -= chunk;
+            w += chunk;
+            done += chunk;
         }
         ringW_.store(w, std::memory_order_release);
 
@@ -243,6 +295,18 @@ public:
             const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             cpuS_ = cpuS_ * 0.9 + (el / blockS) * 0.1;
             cpuA_.store((float)cpuS_, std::memory_order_relaxed);
+        }
+
+        if (!inputSilent) {
+            idle_ = false;
+            tailFrames_ = 2048;
+        } else {
+            if (tailFrames_ > 0) {
+                tailFrames_ -= frames;
+            } else {
+                idle_ = true;
+                for (auto& ch : s_) for (auto& bd : ch) for (auto& st : bd) st = {};
+            }
         }
     }
 
@@ -284,6 +348,7 @@ public:
         return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f;
     }
     void setParam(int32_t i, float v) override {
+        wake();
         if (i >= 0 && i < kNumParams && std::isfinite(v))
             p_[i].store(std::clamp(v, paramMin(i), paramMax(i)), std::memory_order_relaxed);
     }
@@ -554,6 +619,8 @@ private:
     // Meters (audio thread) and their published values.
     float inPk_ = 0.0f, outPk_ = 0.0f;
     double cpuS_ = 0.0;
+    bool idle_ = false;
+    int tailFrames_ = 2048;
     std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, autoA_{0.0f}, cpuA_{0.0f}, srA_{44100.0f};
     std::atomic<bool> resetPk_{false};
 

@@ -17,14 +17,13 @@
 #include "Utility.h"
 #include "WarpStream.h"
 
+#include "Simd.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#if defined(__SSE__) || defined(_M_X64) || defined(_M_IX86)
-#include <xmmintrin.h>
-#endif
 
 namespace nota {
 
@@ -1625,15 +1624,33 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     // Master effect chain (post-mix, pre-fader): run the whole mix through the master
     // track's devices, in kMaxBlock chunks so each device sees at most a full block.
     if (g && g->masterTrack) {
-        // The master runs after the transport advanced past this block; recover the
-        // block's start beat so tempo-synced master devices line up.
-        const double masterStartBeat = spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
-        for (auto& d : g->masterTrack->devices) {
-            if (!d || d->bypassed()) continue;
-            for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
-                const int32_t n = std::min(numFrames - off, kMaxBlock);
-                if (spb > 0.0) d->setTransport(masterStartBeat + off / spb, spb, playing);
-                d->process(out + off * 2, n);
+        Track& mt = *g->masterTrack;
+        const SignalState masterActivity = mt.silenceDetector
+            ? mt.silenceDetector->process(out, numFrames)
+            : SignalState::Active;
+        const bool outPeakSilent = isBufferSilent(out, numFrames);
+        const bool outSilent = outPeakSilent && (masterActivity == SignalState::Silent);
+        bool devicesIdle = true;
+        for (auto& d : mt.devices) {
+            if (d && !d->bypassed() && !d->isIdle()) {
+                devicesIdle = false;
+                break;
+            }
+        }
+        if (!outSilent || !devicesIdle) {
+            // The master runs after the transport advanced past this block; recover the
+            // block's start beat so tempo-synced master devices line up.
+            const double masterStartBeat = spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
+            bool currentSilent = outSilent;
+            for (auto& d : mt.devices) {
+                if (!d || d->bypassed()) continue;
+                if (currentSilent && d->isIdle() && !d->hasTail()) continue;
+                for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
+                    const int32_t n = std::min(numFrames - off, kMaxBlock);
+                    if (spb > 0.0) d->setTransport(masterStartBeat + off / spb, spb, playing);
+                    d->process(out + off * 2, n, currentSilent);
+                }
+                if (!d->isIdle()) currentSilent = false;
             }
         }
     }
@@ -1682,6 +1699,181 @@ void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t fr
     }
     const int32_t slot = routeSlotForTrack(src);
     if (slot >= 0) std::copy_n(routeBus_[slot].data(), frames * 2, dst);
+}
+
+void Engine::executeLeafTask(void* ctx) {
+    auto* arg = static_cast<Engine::LeafTaskArg*>(ctx);
+    auto* job = arg->job;
+    Track& t = *job->track;
+    float* scratch = t.scratchBuf ? t.scratchBuf->data() : arg->engine->scratch_.data();
+    const int32_t routeSlot = arg->engine->routeSlotForTrack(t.id());
+    float* route = routeSlot >= 0 ? arg->engine->routeBusNext_[routeSlot].data() : nullptr;
+
+    arg->engine->renderLeafTrack(
+        arg->g, t, scratch, arg->frames,
+        arg->blockStart, arg->spb, arg->playing,
+        arg->arrangementActive, arg->ti,
+        arg->stereoA, arg->panLawStep,
+        job->audible, job->capturing, job->toMix,
+        arg->recSrc, route, job->rendered
+    );
+}
+
+void Engine::renderLeafTrack(Graph* g, Track& t, float* scratch, int32_t frames,
+                             double blockStart, double spb, bool playing,
+                             bool arrangementActive, const TransportInfo& ti,
+                             float stereoA, float panLawStep,
+                             bool audible, bool capturing, bool toMix,
+                             int recSrc, float* route, bool& renderedOut) {
+    renderedOut = false;
+    const bool frozenActive = t.frozen() && t.frozenBuf;
+    const bool monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
+
+    bool sessionActive = false;
+    if (!frozenActive && !capturing && !monitoring) if (auto& sp = t.sessionPlayer) {
+        if (playing) sessionPreApply(t, frames / spb);
+        if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
+            if (t.instrument) t.instrument->allNotesOff();
+            for (auto& md : t.midiEffects) if (md) md->reset();
+        }
+        sessionActive = sp->playing.load(std::memory_order_relaxed) >= 0;
+    }
+
+    // 1) Render the track's dry stereo into scratch.
+    if (frozenActive) {
+        if (!playing) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); return; }
+        fillFrozen(t, scratch, frames, blockStart, spb);
+    } else {
+        if (t.instrument) {
+            t.instrument->setTransportInfo(ti);
+            const int32_t iSc = t.instrument->sidechainSourceTrackId();
+            if (iSc >= 0) {
+                const int32_t s = routeSlotForTrack(iSc);
+                t.instrument->setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
+            }
+        }
+        if (monitoring)
+            renderMonitorInput(g, t, scratch, frames);
+        else if (sessionActive && t.type() == TrackType::Instrument)
+            { renderSessionSlotRaw(t, scratch, frames, spb); sessionPostRender(t, frames / spb); }
+        else if (sessionActive && t.type() == TrackType::Audio)
+            { renderSessionAudioSlotRaw(t, scratch, frames, spb); sessionPostRender(t, frames / spb); }
+        else if (t.type() == TrackType::Instrument)
+            renderInstrumentRaw(g, t, scratch, frames, blockStart, spb, playing);
+        else if (playing && arrangementActive)
+            renderAudioClipsRaw(t.clips, scratch, frames, blockStart, spb);
+        else
+            { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); return; }
+    }
+
+    // Activity & silence detection: evaluate generator output with hysteresis
+    const SignalState genActivity = t.silenceDetector
+        ? t.silenceDetector->process(scratch, frames)
+        : SignalState::Active;
+    const bool genPeakSilent = isBufferSilent(scratch, frames);
+    const bool inSilent = genPeakSilent && (genActivity == SignalState::Silent);
+
+    if (inSilent) {
+        bool devicesIdle = true;
+        for (auto& d : t.devices) {
+            if (d && !d->bypassed() && !d->isIdle()) {
+                devicesIdle = false;
+                break;
+            }
+        }
+        const bool pdcIdle = !t.pdc || t.pdc->isIdle();
+        const bool tapRec = (recSrc > 0 && t.id() == recSrc);
+        if (devicesIdle && pdcIdle && !tapRec) {
+            t.setMeter(0, 0, 0, 0);
+            t.stereoFold(0, 0, 0, frames, stereoA);
+            if (capturing) {
+                freezeCursor_ = std::min(static_cast<int64_t>(freezeCapFrames_), freezeCursor_ + frames);
+            }
+            return;
+        }
+    }
+
+    // 1b) Pre-FX tap
+    {
+        const int32_t preSlot = routeSlotForTrack(t.id());
+        if (preSlot >= 0) {
+            float* pre = routeBusPreNext_[preSlot].data();
+            for (int32_t i = 0; i < frames * 2; ++i) pre[i] += scratch[i];
+        }
+    }
+
+    // 2) Insert effect chain
+    if (!frozenActive) {
+        bool currentSilent = inSilent;
+        for (auto& d : t.devices)
+            if (d && !d->bypassed()) {
+                const int32_t src = d->sidechainSourceTrackId();
+                if (src >= 0) {
+                    const int32_t s = routeSlotForTrack(src);
+                    const float* sc = s < 0 ? nullptr
+                        : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
+                    d->setSidechain(sc, frames);
+                    if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
+                } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());
+                if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
+                d->setTransportInfo(ti);
+                if (currentSilent && d->isIdle() && !d->hasTail()) {
+                    continue;
+                }
+                d->process(scratch, frames, currentSilent);
+                if (!d->isIdle()) {
+                    currentSilent = false;
+                }
+            }
+    }
+
+    // 2b) Plugin delay compensation
+    if (!frozenActive && t.pdc) t.pdc->process(scratch, frames);
+
+    // 2c) Freeze capture
+    if (capturing) {
+        int64_t c = freezeCursor_;
+        for (int32_t i = 0; i < frames && c < freezeCapFrames_; ++i, ++c) {
+            freezeCaptureBuf_[c * 2]     = scratch[i * 2];
+            freezeCaptureBuf_[c * 2 + 1] = scratch[i * 2 + 1];
+        }
+        freezeCursor_ = c;
+    }
+
+    // 3) Channel fader + equal-power pan
+    const float vol = t.volume();
+    const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
+    const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);
+    const bool tapRec = (recSrc > 0 && t.id() == recSrc);
+    float pkL = 0.0f, pkR = 0.0f;
+    double sqL = 0.0, sqR = 0.0, sLR = 0.0;
+    int64_t recDropped = 0;
+
+    for (int32_t i = 0; i < frames; ++i) {
+        float l, r;
+        ps.apply(i, scratch[i * 2], scratch[i * 2 + 1], l, r);
+        scratch[i * 2]     = l;
+        scratch[i * 2 + 1] = r;
+        if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;
+        if (route) { route[i * 2] += l; route[i * 2 + 1] += r; }
+        const float al = std::fabs(l), ar = std::fabs(r);
+        if (al > pkL) pkL = al;
+        if (ar > pkR) pkR = ar;
+        sqL += l * (double)l;
+        sqR += r * (double)r;
+        sLR += l * (double)r;
+    }
+    if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
+    if (!toMix) {
+        t.setMeter(0, 0, 0, 0);
+        t.stereoFold(0.0, 0.0, 0.0, frames, stereoA);
+        return;
+    }
+    t.stereoFold(sqL, sqR, sLR, frames, stereoA);
+    t.setMeter(pkL, pkR,
+               static_cast<float>(std::sqrt(sqL / frames)),
+               static_cast<float>(std::sqrt(sqR / frames)));
+    renderedOut = true;
 }
 
 void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, bool playing, double spb) {
@@ -1802,161 +1994,99 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         computeBlockMidi(g, frames, blockStart, spb, playing, arrangementActive);
 
         // Pass 1: leaf tracks -> parent group bus (or master), tapping post-fader sends.
+        int numLeafJobs = 0;
+        const int maxLeafJobs = static_cast<int>(leafJobs_.size());
         for (auto& tptr : g->tracks) {
             Track& t = *tptr;
             if (t.type() == TrackType::Return) continue;  // return buses run in pass 2
             if (t.type() == TrackType::Group) continue;   // group submixes run in pass 1.5
-            // Freeze (M7): a frozen track plays its captured buffer instead of the live
-            // instrument + device chain (sounds only while rolling, like an audio clip).
-            const bool frozenActive = t.frozen() && t.frozenBuf;
-            // While this track is being frozen, render + capture it regardless of the
-            // mixer mute/solo gate (freeze captures the sound the track makes, not the mix)
-            // — otherwise a soloed sibling would punch silent gaps into the buffer.
             const bool capturing = (t.id() == freezeCaptureTrackId_.load(std::memory_order_relaxed));
             const bool audible = !leafMute(t) && (!anySolo || leafSolo(t));
-            // Soloing a monitoring (or recording) track must not silence what it listens to.
             const bool feeding = !audible && !leafMute(t) && feedsMonitor(t.id());
-            if (!audible && !capturing && !feeding) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
-            const bool toMix = audible || capturing;   // false: render only for the taps
-            // Destination: this leaf's parent group's submix bus, else the master mix.
-            const int destSlot = slotOf(t.groupId());
-            float* dest = destSlot >= 0 ? groupBus_[destSlot].data() : out;
-
-            // 0) Session view (M5-2): apply quantized launch/stop; a playing slot
-            //    overrides this track's arrangement content. (Skipped for a frozen or
-            //    capturing track — the buffer/arrangement is the source of truth.)
-            // Input monitoring (Monitor "In"): the track plays its record-input source live
-            // in place of its clips — hardware input this segment, or the source track's
-            // post-fader tap from the previous one. Master (-1) would feed back: silent.
-            const bool monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
-
-            bool sessionActive = false;
-            if (!frozenActive && !capturing && !monitoring) if (auto& sp = t.sessionPlayer) {
-                // Follow actions + Repeat launch mode queue the next request before it applies.
-                if (playing) sessionPreApply(t, frames / spb);
-                if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
-                    if (t.instrument) t.instrument->allNotesOff();
-                    for (auto& md : t.midiEffects) if (md) md->reset();   // clock switch → flush arp
-                }
-                sessionActive = sp->playing.load(std::memory_order_relaxed) >= 0;
-            }
-
-            // 1) Render the track's dry stereo (pre-fader) into scratch_.
-            if (frozenActive) {
-                if (!playing) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; } // frozen sounds only while rolling
-                fillFrozen(t, scratch_.data(), frames, blockStart, spb);
-            } else {
-                if (t.instrument) {
-                    t.instrument->setTransportInfo(ti);   // hosted-plugin sync
-                    // React (Nota Flux): hand a listening instrument its source track's
-                    // previous-block, post-fader signal just before it renders.
-                    const int32_t iSc = t.instrument->sidechainSourceTrackId();
-                    if (iSc >= 0) {
-                        const int32_t s = routeSlotForTrack(iSc);
-                        t.instrument->setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
-                    }
-                }
-                if (monitoring)
-                    renderMonitorInput(g, t, scratch_.data(), frames);
-                else if (sessionActive && t.type() == TrackType::Instrument)
-                    { renderSessionSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
-                else if (sessionActive && t.type() == TrackType::Audio)
-                    { renderSessionAudioSlotRaw(t, scratch_.data(), frames, spb); sessionPostRender(t, frames / spb); }
-                else if (t.type() == TrackType::Instrument)
-                    renderInstrumentRaw(g, t, scratch_.data(), frames, blockStart, spb, playing);
-                else if (playing && arrangementActive)
-                    renderAudioClipsRaw(t.clips, scratch_.data(), frames, blockStart, spb);
-                else
-                    { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; } // stopped / session-only audio track: nothing to do
-            }
-
-            // 1b) Pre-FX tap (Phase D): if this track feeds a sidechain, capture its
-            //     dry pre-fader signal now, before its own devices colour it.
-            {
-                const int32_t preSlot = routeSlotForTrack(t.id());
-                if (preSlot >= 0) {
-                    float* pre = routeBusPreNext_[preSlot].data();
-                    for (int32_t i = 0; i < frames * 2; ++i) pre[i] += scratch_[i];
-                }
-            }
-
-            // 2) Insert effect chain (M3), in place. Hand each sidechain consumer
-            //    its source track's signal (previous block) just before it runs —
-            //    the pre-FX or post-FX tap per the device's setting (Phase D). A frozen
-            //    track skips this: its buffer already baked in the devices.
-            if (!frozenActive)
-            for (auto& d : t.devices)
-                if (d && !d->bypassed()) {
-                    const int32_t src = d->sidechainSourceTrackId();
-                    if (src >= 0) {
-                        const int32_t s = routeSlotForTrack(src);
-                        const float* sc = s < 0 ? nullptr
-                            : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
-                        d->setSidechain(sc, frames);
-                        if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                    } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());   // no key track: this track's notes
-                    if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);  // tempo-synced devices
-                    d->setTransportInfo(ti);                                          // hosted-plugin sync
-                    d->process(scratch_.data(), frames);
-                }
-
-            // 2b) Plugin delay compensation (M3-7): align to the latest track.
-            if (!frozenActive && t.pdc) t.pdc->process(scratch_.data(), frames);
-
-            // 2c) Freeze capture (M7): stash this track's post-device, pre-fader signal
-            //     into the freeze buffer. Sequential from a seek(0) render, so the write
-            //     cursor tracks the playhead frame.
-            if (capturing) {
-                int64_t c = freezeCursor_;
-                for (int32_t i = 0; i < frames && c < freezeCapFrames_; ++i, ++c) {
-                    freezeCaptureBuf_[c * 2]     = scratch_[i * 2];
-                    freezeCaptureBuf_[c * 2 + 1] = scratch_[i * 2 + 1];
-                }
-                freezeCursor_ = c;
-            }
-
-            // 3) Channel fader + equal-power pan into the master mix + sends.
-            const float vol = t.volume();
-            const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
-            const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);   // project pan law
-            float sends[kMaxReturns]; bool anySend = false;   // post-fader send taps (M6-1)
-            for (int b = 0; b < numReturns; ++b) { sends[b] = t.send(b); if (sends[b] != 0.0f) anySend = true; }
-            const int32_t routeSlot = routeSlotForTrack(t.id());   // Phase B: this track is a sidechain source?
-            float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
-            const bool tapRec = (recSrc > 0 && t.id() == recSrc);   // internal resampling source
-            float pkL = 0.0f, pkR = 0.0f;
-            double sqL = 0.0, sqR = 0.0, sLR = 0.0;   // sLR: Stereo Map (specs/008)
-            int64_t recDropped = 0;
-            for (int32_t i = 0; i < frames; ++i) {
-                float l, r;
-                ps.apply(i, scratch_[i * 2], scratch_[i * 2 + 1], l, r);
-                if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;   // record this track's output
-                if (route) { route[i * 2] += l; route[i * 2 + 1] += r; }   // tap post-fader → route bus
-                if (!toMix) continue;                                         // solo-gated feeder: taps only
-                dest[i * 2]     += l;
-                dest[i * 2 + 1] += r;
-                if (anySend)
-                    for (int b = 0; b < numReturns; ++b) if (sends[b] != 0.0f) {
-                        returnBus_[b][i * 2]     += l * sends[b];
-                        returnBus_[b][i * 2 + 1] += r * sends[b];
-                    }
-                const float al = std::fabs(l), ar = std::fabs(r);
-                if (al > pkL) pkL = al;
-                if (ar > pkR) pkR = ar;
-                sqL += l * (double)l;
-                sqR += r * (double)r;
-                sLR += l * (double)r;
-            }
-            if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
-            if (!toMix) {   // muted / solo-gated: nothing reaches the master, the averages decay
+            if (!audible && !capturing && !feeding) {
                 t.setMeter(0, 0, 0, 0);
-                t.stereoFold(0.0, 0.0, 0.0, frames, stereoA);
+                t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
             }
-            t.stereoFold(sqL, sqR, sLR, frames, stereoA);
-            t.setMeter(pkL, pkR,
-                       static_cast<float>(std::sqrt(sqL / frames)),
-                       static_cast<float>(std::sqrt(sqR / frames)));
+            const bool toMix = audible || capturing;
+            const int destSlot = slotOf(t.groupId());
+
+            if (numLeafJobs < maxLeafJobs) {
+                LeafTrackJob& job = leafJobs_[numLeafJobs];
+                job.track = &t;
+                job.audible = audible;
+                job.capturing = capturing;
+                job.feeding = feeding;
+                job.toMix = toMix;
+                job.destSlot = destSlot;
+                job.anySend = false;
+                for (int b = 0; b < numReturns; ++b) {
+                    job.sends[b] = t.send(b);
+                    if (job.sends[b] != 0.0f) job.anySend = true;
+                }
+                job.rendered = false;
+
+                LeafTaskArg& arg = leafTaskArgs_[numLeafJobs];
+                arg.engine = this;
+                arg.g = g;
+                arg.job = &job;
+                arg.frames = frames;
+                arg.blockStart = blockStart;
+                arg.spb = spb;
+                arg.playing = playing;
+                arg.arrangementActive = arrangementActive;
+                arg.ti = ti;
+                arg.stereoA = stereoA;
+                arg.panLawStep = panLawStep;
+                arg.recSrc = recSrc;
+
+                leafTasks_[numLeafJobs].fn = executeLeafTask;
+                leafTasks_[numLeafJobs].ctx = &arg;
+
+                ++numLeafJobs;
+            } else {
+                // Inline fallback if tracks exceed preallocated worker slots
+                float* scratch = t.scratchBuf ? t.scratchBuf->data() : scratch_.data();
+                const int32_t routeSlot = routeSlotForTrack(t.id());
+                float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
+                bool rendered = false;
+                renderLeafTrack(g, t, scratch, frames, blockStart, spb, playing,
+                                arrangementActive, ti, stereoA, panLawStep,
+                                audible, capturing, toMix, recSrc, route, rendered);
+                if (rendered && toMix) {
+                    float* dest = destSlot >= 0 ? groupBus_[destSlot].data() : out;
+                    simdAdd(dest, scratch, frames * 2);
+                    for (int b = 0; b < numReturns; ++b) {
+                        const float s = t.send(b);
+                        if (s != 0.0f) simdAddScaled(returnBus_[b].data(), scratch, s, frames * 2);
+                    }
+                }
+            }
+        }
+
+        // Run leaf tracks in parallel across worker pool
+        if (numLeafJobs > 0) {
+            threadPool_.runTasks(leafTasks_.data(), numLeafJobs);
+
+            // Sum parallel rendered results into destination bus and return sends
+            for (int j = 0; j < numLeafJobs; ++j) {
+                const LeafTrackJob& job = leafJobs_[j];
+                if (!job.rendered || !job.toMix) continue;
+
+                Track& t = *job.track;
+                const float* scratch = t.scratchBuf ? t.scratchBuf->data() : scratch_.data();
+                float* dest = job.destSlot >= 0 ? groupBus_[job.destSlot].data() : out;
+
+                simdAdd(dest, scratch, frames * 2);
+
+                if (job.anySend) {
+                    for (int b = 0; b < numReturns; ++b) {
+                        if (job.sends[b] != 0.0f) {
+                            simdAddScaled(returnBus_[b].data(), scratch, job.sends[b], frames * 2);
+                        }
+                    }
+                }
+            }
         }
 
         // Pass 1.5: group submixes. Process deepest-first so a nested group folds into its
@@ -2035,6 +2165,27 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             if (bus < 0 || bus >= numReturns || t.mute()) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
 
             std::copy_n(returnBus_[bus].data(), frames * 2, scratch_.data());
+            const SignalState retActivity = t.silenceDetector
+                ? t.silenceDetector->process(scratch_.data(), frames)
+                : SignalState::Active;
+            const bool retPeakSilent = isBufferSilent(scratch_.data(), frames);
+            const bool inSilent = retPeakSilent && (retActivity == SignalState::Silent);
+            const bool tapRec = (recSrc > 0 && t.id() == recSrc);
+            if (inSilent) {
+                bool devicesIdle = true;
+                for (auto& d : t.devices) {
+                    if (d && !d->bypassed() && !d->isIdle()) {
+                        devicesIdle = false;
+                        break;
+                    }
+                }
+                const bool pdcIdle = !t.pdc || t.pdc->isIdle();
+                if (devicesIdle && pdcIdle && !tapRec) {
+                    t.setMeter(0, 0, 0, 0);
+                    t.stereoFold(0, 0, 0, frames, stereoA);
+                    continue;
+                }
+            }
             {
                 const int32_t preSlot = routeSlotForTrack(t.id());   // Phase D pre-FX tap
                 if (preSlot >= 0) {
@@ -2042,6 +2193,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     for (int32_t i = 0; i < frames * 2; ++i) pre[i] += scratch_[i];
                 }
             }
+            bool currentSilent = inSilent;
             for (auto& d : t.devices)
                 if (d && !d->bypassed()) {
                     const int32_t src = d->sidechainSourceTrackId();
@@ -2054,7 +2206,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     } else if (d->wantsOwnMidiKey()) feedMidiKey(g, *d, t.id());   // no key track: this track's notes
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti);                                          // hosted-plugin sync
-                    d->process(scratch_.data(), frames);
+                    if (currentSilent && d->isIdle() && !d->hasTail()) {
+                        continue;
+                    }
+                    d->process(scratch_.data(), frames, currentSilent);
+                    if (!d->isIdle()) {
+                        currentSilent = false;
+                    }
                 }
             if (t.pdc) t.pdc->process(scratch_.data(), frames);
 
@@ -2063,7 +2221,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);   // project pan law
             const int32_t routeSlot = routeSlotForTrack(t.id());
             float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
-            const bool tapRec = (recSrc > 0 && t.id() == recSrc);   // internal resampling source (a return)
             float pkL = 0.0f, pkR = 0.0f;
             double sqL = 0.0, sqR = 0.0, sLR = 0.0;   // sLR: Stereo Map (specs/008)
             int64_t recDropped = 0;

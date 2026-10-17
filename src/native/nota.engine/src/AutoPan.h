@@ -31,6 +31,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 #include "TransportInfo.h"
 
 #include <algorithm>
@@ -116,7 +117,15 @@ public:
     // Live stereo position (0 = hard left, 0.5 = centre, 1 = hard right) — the old pan dot's feed.
     float gainReductionDb() const override { return panPos_.load(std::memory_order_relaxed); }
 
+    bool isIdle() const override { return true; }
+    bool hasTail() const override { return false; }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
+        if (frames <= 0) return;
         const auto t0 = std::chrono::steady_clock::now();
         if (restartReq_.exchange(false, std::memory_order_acquire)) { cycle_ = 0; frac_ = 0.0; }
         if (resetReq_.exchange(false, std::memory_order_acquire)) resetMeters();
@@ -132,9 +141,19 @@ public:
         const double rateHz = sync ? sr_ / (spb * div) : expMap(get(Rate), 0.01, 40.0);
         const double inc    = rateHz / sr_;
         const bool   locked = sync && playing_ && spb_ > 0.0;
+
+        if (inputSilent) {
+            if (!locked) {
+                frac_ += frames * inc;
+                while (frac_ >= 1.0) { ++cycle_; frac_ -= 1.0; }
+            }
+            return;
+        }
         // The restart span: the bar, or as many bars as a cycle longer than one needs.
         const double span   = barBeats_ * std::max(1.0, std::ceil(div / barBeats_ - 1e-9));
         const float  slew   = 1.0f - std::exp(-1.0f / (0.001f * (float)sr_));   // ~1 ms
+        const double kk     = 1.0 + shape * 12.0;
+        const double invTanhKk = shape > 1.0e-3f ? 1.0 / std::tanh(kk) : 1.0;
 
         float inPk = 0.0f, outPkL = 0.0f, outPkR = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
@@ -147,9 +166,9 @@ public:
                 frac_  = c - k;
             }
 
-            const float lfoL = lfoAt(wave, shape, cycle_, frac_);
+            const float lfoL = lfoAt(wave, shape, cycle_, frac_, invTanhKk);
             const double fr  = frac_ + phOff;
-            const float lfoR = fr >= 1.0 ? lfoAt(wave, shape, cycle_ + 1, fr - 1.0) : lfoAt(wave, shape, cycle_, fr);
+            const float lfoR = fr >= 1.0 ? lfoAt(wave, shape, cycle_ + 1, fr - 1.0, invTanhKk) : lfoAt(wave, shape, cycle_, fr, invTanhKk);
 
             // Amplitude per channel: lfo = +1 → full, lfo = −1 → (1 − amount); Mix blends toward 1.
             const float tL = 1.0f - mix * amount * 0.5f * (1.0f - lfoL);
@@ -350,7 +369,7 @@ private:
 
     // LFO value in [−1, 1] at cycle k, phase f (0..1). Shape sharpens the smooth waves toward
     // a square; on S&H it is the glide from the previous step; Square ignores it.
-    static float lfoAt(int wave, float shape, int64_t k, double f) {
+    static float lfoAt(int wave, float shape, int64_t k, double f, double invTanhKk = 0.0) {
         double v;
         switch (wave) {
             case 1:  v = 4.0 * std::fabs(f - 0.5) - 1.0; break;      // triangle
@@ -362,11 +381,12 @@ private:
                 t = t * t * (3.0 - 2.0 * t);
                 return (float)(a + (bb - a) * t);
             }
-            default: v = std::sin(2.0 * kPi * f); break;             // sine
+            default: v = fast_math::fastSin(static_cast<float>(f)); break;             // sine
         }
         if (shape > 1.0e-3f) {
             const double kk = 1.0 + shape * 12.0;
-            const double sharp = std::tanh(kk * v) / std::tanh(kk);
+            const double invT = invTanhKk > 0.0 ? invTanhKk : (1.0 / std::tanh(kk));
+            const double sharp = fast_math::fastTanh(static_cast<float>(kk * v)) * invT;
             v = v * (1.0 - shape) + sharp * shape;
         }
         return (float)v;

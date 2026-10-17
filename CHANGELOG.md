@@ -23,6 +23,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Multi-core parallel track rendering & SIMD vectorization** (specs/026-dsp-parallel-vectorization):
+  real-time safe multi-threaded rendering across CPU cores and SIMD acceleration in the C++20 DSP engine.
+  Features `AudioThreadPool`, a lock-free worker thread pool with atomic ticket dispatch and non-allocating
+  barrier synchronization strictly adhering to Real-Time Audio Rule AR-6. Independent leaf tracks render
+  concurrently across available physical cores before summing into group buses and return sends via SIMD FMA
+  accumulation. Accelerates 4× True-Peak inter-sample peak detection in `Ceiling` using a double-buffered
+  contiguous 16-element history and vectorized 16-tap FIR interpolation (ARM NEON / x86 SSE). Eliminates inner-loop
+  transcendental math overhead across `Chamber` (ducking follower with `fast_math::linToDb`/`dbToLin`),
+  `Reverb` (modulation LFO with `fast_math::fastSin`), and `Ceiling` (fast gain conversions). Decimates
+  `Compressor` telemetry atomic stores to reduce memory bus contention.
+- **DSP silence detection & auto-sleep bypass** (specs/025-dsp-silence-bypass): real-time safe
+  hybrid auto-sleep and silence detection across tracks and native effect devices. Evaluates audio activity
+  with a stateful `SilenceDetector` using dual-threshold hysteresis (-80 dBFS attack / -90.5 dBFS release)
+  and sample-accurate hold time to eliminate chattering around zero-crossings and noise floors. Empty tracks
+  and return buses whose effect chains are idle skip insert device loops, PDC lines, and send accumulations entirely.
+  Propagates `currentSilent` metadata down the DSP device graph so downstream devices avoid analyzing buffers twice.
+  Time-based effects (Delay, Chamber, Reverb, Compressor, Ceiling) naturally decay their acoustic tails and
+  release envelopes below -100 dBFS before sleeping, and wake sample-accurately on incoming transients with
+  zero latency or dropped attacks. Memoryless devices (EQ, AutoPan, Utility, Vintage) instantly bypass zero-signal blocks.
 - **Release notes from the status bar** (nota-daw/nota#127): the version number at the
   bottom right of the main window, next to the sample rate, is now a button: click it to
   open What's New for the installed version (it never starts an update). Escape closes What's
@@ -80,6 +99,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   part one after another (each swap is one undo step). With no track selected, an audio
   track, or a rack selected, it starts a new track as before; ⌥ + double-click (Alt on
   Windows and Linux) always starts a new track.
+
+### Changed
+- **Real-time DSP performance optimizations across native engine devices**:
+  Core audio processing paths across Delay, Compressor, Eq, Chamber, Pentad, Vintage, AutoFilter,
+  AutoPan, BassSynth, DynamicEq, and Ceiling have been optimized to significantly reduce audio
+  thread CPU load:
+  - Fast, bounded mathematical approximations (exp2, log2, fast tanh, fast sin/cos, db/lin conversions)
+    are centralized in `FastMath.h`.
+  - Delay, AutoFilter, AutoPan, and Vintage use fast trigonometric approximations for LFOs and wow/flutter modulation.
+  - Delay, AutoFilter, Vintage, Chamber, and Ceiling use fast rational tanh for non-linear saturation, waveshaping, and soft-clipping.
+  - Delay, AutoPan, BassSynth, and Ceiling hoist loop-invariant math (e.g. `1.0 / tanh(...)`, `invCeil`) outside the inner per-sample and per-voice loops.
+  - Compressor and DynamicEq use fast logarithmic and exponential conversions (`linToDb`, `exp2f`) for envelope detection and dynamic filter modulation.
+  - Eq processes audio in chunked blocks of up to 64 samples with upfront channel mode routing, eliminating per-sample branch penalties.
+  - Chamber fully unrolls the 8-point Fast Walsh-Hadamard Transform into branchless stages, unrolls the 4-stage diffusion loop, and dispatches cubic interpolation outside the processing loop.
+  - All paths strictly adhere to real-time audio safety rule AR-6 with zero heap allocations, zero locks, and no blocking calls in the audio thread.
+
 
 ### Fixed
 - **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a

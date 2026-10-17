@@ -34,6 +34,8 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
+#include "Simd.h"
 
 #include <algorithm>
 #include <array>
@@ -123,9 +125,31 @@ public:
         lvlCellN_ = std::max(1, (int)std::lround(sr_ * kLvlSeconds / kLvl));
         clipHoldN_ = std::max(1, (int)std::lround(sr_ * 0.020));
         clearLevel(); clearLoudness();
+        idle_ = false;
+        tailFramesRemaining_ = calculateTailSamples();
     }
 
+    int calculateTailSamples() const {
+        const int la = lookaheadSamples();
+        const int ch = std::clamp((int)std::lround(get(Character)), 0, 2);
+        static const float chRel[3] = { 1.0f, 0.65f, 2.6f };
+        const float relMs = std::max(1.0f, get(Release)) * chRel[ch];
+        return la + static_cast<int>(relMs * 5.0f * 0.001 * sr_) + static_cast<int>(sr_ * 0.05);
+    }
+
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return true; }
+    void wake() override { idle_ = false; tailFramesRemaining_ = calculateTailSamples(); }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
+        const bool inSilent = inputSilent;
+        const bool scSilent = !scBuf_ || scFrames_ < frames || isBufferSilent(scBuf_, frames);
+        if (inSilent && scSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         if (resetPeaksReq_.exchange(false, std::memory_order_acq_rel)) clearLevel();
         if (resetLoudReq_.exchange(false, std::memory_order_acq_rel)) { clearLoudness(); clearLevel(); }
@@ -138,8 +162,8 @@ public:
         static const float chSoft[3] = { 0.0f, 0.0f, 0.6f };
 
         const float ceilDb  = get(Ceil);
-        const float ceilLin = std::pow(10.0f, ceilDb / 20.0f);
-        const float inGain  = std::pow(10.0f, get(Gain) / 20.0f);
+        const float ceilLin = fast_math::dbToLin(ceilDb);
+        const float inGain  = fast_math::dbToLin(get(Gain));
         const float relMs   = std::max(1.0f, get(Release)) * chRel[ch];
         const bool  autoRel = get(AutoRelease) > 0.5f;
         const float link    = std::clamp(get(StereoLink) * 0.01f, 0.0f, 1.0f);
@@ -158,9 +182,10 @@ public:
         float relEff = relMs;
 
         const float* sc = (scBuf_ && scFrames_ >= frames) ? scBuf_ : nullptr;
-        const float scGain = std::pow(10.0f, sidechainGainDb() / 20.0f);
+        const float scGain = fast_math::dbToLin(sidechainGainDb());
 
         float inPk = 0.0f, outPk = 0.0f, tpPk = 0.0f, maxGr = 0.0f;
+        const float invCeil = 1.0f / std::max(1e-6f, ceilLin);
 
         for (int32_t i = 0; i < frames; ++i) {
             // Control rate: the auto stage slows the release as the reduction deepens
@@ -194,7 +219,7 @@ public:
             else env_ = (float)(relC * env_ + (1.0 - relC) * det);
 
             float gain = env_ > ceilLin ? ceilLin / env_ : 1.0f;   // linked target gain
-            grPrev_ = gain < 1.0f ? -20.0f * std::log10(std::max(1e-6f, gain)) : 0.0f;
+            grPrev_ = gain < 1.0f ? -fast_math::linToDb(std::max(1e-6f, gain)) : 0.0f;
             if (grPrev_ > maxGr) maxGr = grPrev_;
 
             // Stereo link: 100 % = one gain for both; less = ease each channel toward
@@ -216,7 +241,7 @@ public:
 
             // Character soft-clip (Glue) then the hard safety ceiling — brick wall. A
             // transient that reaches the clip (Punch lets the attack through) is counted.
-            if (soft > 0.0f) { ol = softClip(ol, ceilLin, soft); or_ = softClip(or_, ceilLin, soft); }
+            if (soft > 0.0f) { ol = softClip(ol, ceilLin, soft, invCeil); or_ = softClip(or_, ceilLin, soft, invCeil); }
             const bool clipping = std::max(std::fabs(ol), std::fabs(or_)) > ceilLin * 1.0001f;
             ol = std::clamp(ol, -ceilLin, ceilLin);
             or_ = std::clamp(or_, -ceilLin, ceilLin);
@@ -274,6 +299,22 @@ public:
             const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
             cpuA_.store((float)cpuS_, std::memory_order_relaxed);
+        }
+
+        if (!inSilent || !scSilent) {
+            idle_ = false;
+            tailFramesRemaining_ = calculateTailSamples();
+        } else {
+            if (tailFramesRemaining_ > 0) {
+                tailFramesRemaining_ -= frames;
+            } else {
+                if (maxGr < 0.01f && inDb <= -99.0f && outDb <= -99.0f) {
+                    idle_ = true;
+                    std::fill(laBuf_.begin(), laBuf_.end(), 0.0f);
+                    env_ = 1.0f;
+                    grPrev_ = 0.0f;
+                }
+            }
         }
     }
 
@@ -379,6 +420,7 @@ public:
     }
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
     void setParam(int32_t i, float v) override {
+        wake();
         if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, paramMin(i), paramMax(i)), std::memory_order_relaxed);
     }
 
@@ -455,9 +497,10 @@ private:
         return std::clamp(la, 0, laMax_ - 1);
     }
 
-    static float softClip(float x, float ceil, float amt) {
+    static float softClip(float x, float ceil, float amt, float invCeil = 0.0f) {
         // Gentle tanh knee that engages near the ceiling; blended by amount.
-        float s = ceil * std::tanh(x / std::max(1e-6f, ceil));
+        const float invC = invCeil > 0.0f ? invCeil : (1.0f / std::max(1e-6f, ceil));
+        float s = ceil * fast_math::fastTanh(x * invC);
         return x + amt * (s - x);
     }
     static float db(float lin) { return lin > 1e-6f ? 20.0f * std::log10(lin) : -120.0f; }
@@ -467,7 +510,10 @@ private:
     // a short history; the peak is the highest of the sample and the three points after it. The
     // reading is kTpDelay samples behind its input (the filter's centre).
     static constexpr int kTpTaps = 16, kTpDelay = 8;
-    struct TpState { std::array<float, kTpTaps> h {}; int w = 0; };
+    struct TpState {
+        alignas(16) std::array<float, 32> h {};
+        int w = 0;
+    };
     static const std::array<std::array<float, kTpTaps>, 3>& tpCoefs() {
         static const auto c = [] {
             std::array<std::array<float, kTpTaps>, 3> k {};
@@ -488,12 +534,14 @@ private:
     }
     static float tpPush(TpState& s, float x) {
         s.h[(size_t)s.w] = x;
-        s.w = (s.w + 1) % kTpTaps;                     // s.w is now the oldest sample
+        s.h[(size_t)(s.w + kTpTaps)] = x;               // duplicate write gives contiguous 16-sample slice
+        s.w = (s.w + 1) & (kTpTaps - 1);              // s.w is now the oldest sample (0..15)
         const auto& c = tpCoefs();
-        float pk = std::fabs(s.h[(size_t)((s.w + kTpDelay - 1) % kTpTaps)]);
+        float pk = std::fabs(s.h[(size_t)(s.w + kTpDelay - 1)]);
+
+        const float* hPtr = &s.h[(size_t)s.w];
         for (int p = 0; p < 3; ++p) {
-            float acc = 0.0f;
-            for (int i = 0; i < kTpTaps; ++i) acc += c[(size_t)p][(size_t)i] * s.h[(size_t)((s.w + i) % kTpTaps)];
+            const float acc = simd::dot16(hPtr, &c[(size_t)p][0]);
             pk = std::max(pk, std::fabs(acc));
         }
         return pk;
@@ -662,6 +710,8 @@ private:
     float pkInHold_ = -120.0f, pkOutHold_ = -120.0f, maxGrHold_ = 0.0f, tpHold_ = -120.0f;
     int64_t clips_ = 0;
     double cpuS_ = 0.0;
+    bool idle_ = false;
+    int tailFramesRemaining_ = 0;
 
     std::array<std::array<float, kLvl>, kLvlSeries> lvl_ {};
     std::array<std::array<float, kLoud>, kLoudSeries> loud_ {};

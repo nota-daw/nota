@@ -24,6 +24,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -72,11 +73,31 @@ public:
         preW_ = 0;
         for (int k = 0; k < kInAp; ++k) inAp_[k].resize(static_cast<int>(sr_ * kInApSec[k]));
         hpL_ = hpR_ = hpPrevL_ = hpPrevR_ = lpL_ = lpR_ = vlp_ = monoS_ = 0.0f;
+        idle_ = false;
+        tailFramesRemaining_ = calculateTailSamples();
         srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
     }
 
+    int calculateTailSamples() const {
+        if (on(Freeze)) return 100 * static_cast<int>(sr_);
+        const float preMs = clamp01(PreDelay) * 200.0f;
+        const double preSamples = preMs * 0.001 * sr_;
+        const double rt60 = expMap(clamp01(Decay), 0.2, 12.0);
+        return static_cast<int>(preSamples + 1.7 * rt60 * sr_ + sr_ * 0.2);
+    }
+
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return true; }
+    void wake() override { idle_ = false; tailFramesRemaining_ = calculateTailSamples(); }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
         if (frames <= 0 || preL_.size() < 4) return;
+        if (inputSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         if (kill_.exchange(false, std::memory_order_relaxed)) wipe();
 
@@ -154,7 +175,7 @@ public:
             // Write first so a zero pre-delay reads back the current sample (passthrough).
             preL_[preW_] = l; preR_[preW_] = r;
 
-            const float lfo = std::sin(static_cast<float>(kTwoPi * modPhase_));
+            const float lfo = fast_math::fastSin(static_cast<float>(kTwoPi * modPhase_));
             modPhase_ += modInc; if (modPhase_ >= 1.0) modPhase_ -= 1.0;
             // Mod on tail: the comb lines wobble. Off: the early part (pre-delay read) wobbles
             // instead and the tail stays still — never reading ahead of the write head.
@@ -223,6 +244,20 @@ public:
         const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
         cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
+
+        if (!inputSilent || freeze) {
+            idle_ = false;
+            tailFramesRemaining_ = calculateTailSamples();
+        } else {
+            if (tailFramesRemaining_ > 0) {
+                tailFramesRemaining_ -= frames;
+            } else {
+                if (outPkL < 1.0e-5f && outPkR < 1.0e-5f && wetPk < 1.0e-5f) {
+                    idle_ = true;
+                    wipe();
+                }
+            }
+        }
     }
 
     // ---- identity / params -------------------------------------------------------
@@ -238,7 +273,10 @@ public:
     float paramMin(int32_t) const override { return 0.0f; }
     float paramMax(int32_t) const override { return 1.0f; }
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
-    void setParam(int32_t i, float v) override { if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
+    void setParam(int32_t i, float v) override {
+        wake();
+        if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
 
     // Regression self-test for the comb read wrap (nota_engine_reverb_wrap_selftest): put the
     // read position a hair past the write head — the case that used to read buf[size] — and
@@ -439,6 +477,8 @@ private:
     double erSmp_[kEr] = {};
     float hpL_ = 0, hpR_ = 0, hpPrevL_ = 0, hpPrevR_ = 0, lpL_ = 0, lpR_ = 0, vlp_ = 0, monoS_ = 0;
     double cpuS_ = 0.0;
+    bool idle_ = false;
+    int tailFramesRemaining_ = 0;
     std::atomic<bool> kill_{false};
     std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, rt60A_{0}, preA_{0}, diffA_{0}, erOnA_{0};
     std::atomic<float> p_[kNumParams] = {};

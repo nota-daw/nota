@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 #include "Oversampler.h"
 
 #include <algorithm>
@@ -136,13 +137,32 @@ public:
         if (id == A_ResetWear) resetReq_.store(true, std::memory_order_relaxed);
     }
 
+    bool isIdle() const override {
+        const float n = get(Noise), c = get(Crackle);
+        if (n > 0.001f || c > 0.001f) return false;
+        return idle_;
+    }
+    bool hasTail() const override {
+        const float n = get(Noise), c = get(Crackle);
+        return n > 0.001f || c > 0.001f;
+    }
+    void wake() override { idle_ = false; tailFrames_ = 512; }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
+        if (frames <= 0) return;
+        const Params P = params();
+        const bool noiseGen = P.noise > 0.001f || P.crackle > 0.001f;
+        if (inputSilent && !noiseGen && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         if (resetReq_.exchange(false, std::memory_order_relaxed)) {
             wowPh_ = 0.0; flutPh_ = 0.0; flutNoise_ = flutNoiseT_ = 0.0f;
             clickEnv_[0] = clickEnv_[1] = 0.0f;
         }
-        const Params P = params();
         const ModeChar& md = P.md;
         const Curve cv = curveFor(P);
 
@@ -226,17 +246,19 @@ public:
             double centsW = 0.0, centsF = 0.0;
             if (modOn) {
                 const double fl = 1.0 + flutWander * flutNoise_;
-                const double sW = std::sin(2.0 * kPi * wowPh_), sF = std::sin(2.0 * kPi * flutPh_);
+                const float sW = fast_math::fastSin(static_cast<float>(wowPh_));
+                const float sF = fast_math::fastSin(static_cast<float>(flutPh_));
                 wl = readFrac(0, baseDelay + wowSamp * sW + flutSamp * fl * sF);
                 if (stereoOff > 0.0) {
-                    const double sWr = std::sin(2.0 * kPi * (wowPh_ + stereoOff)), sFr = std::sin(2.0 * kPi * (flutPh_ + stereoOff));
+                    const float sWr = fast_math::fastSin(static_cast<float>(wowPh_ + stereoOff));
+                    const float sFr = fast_math::fastSin(static_cast<float>(flutPh_ + stereoOff));
                     wr = readFrac(1, baseDelay + wowSamp * sWr + flutSamp * fl * sFr);
                 } else {
                     wr = readFrac(1, baseDelay + wowSamp * sW + flutSamp * fl * sF);
                 }
                 // Pitch = the read head's speed: 1 − dD/dn. In cents ≈ −1731 · dD/dn.
-                centsW = -1731.2 * wowSamp * 2.0 * kPi * wowInc * std::cos(2.0 * kPi * wowPh_);
-                centsF = -1731.2 * flutSamp * fl * 2.0 * kPi * flutInc * std::cos(2.0 * kPi * flutPh_);
+                centsW = -1731.2 * wowSamp * 2.0 * kPi * wowInc * fast_math::fastCos(static_cast<float>(wowPh_));
+                centsF = -1731.2 * flutSamp * fl * 2.0 * kPi * flutInc * fast_math::fastCos(static_cast<float>(flutPh_));
             }
             dw_ = (dw_ + 1) & (kDelay - 1);
             wowPh_ += wowInc; if (wowPh_ >= 1.0) wowPh_ -= 1.0;
@@ -316,6 +338,17 @@ public:
             cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
             cpuA_.store((float)cpuS_, std::memory_order_relaxed);
         }
+
+        if (!inputSilent || noiseGen) {
+            idle_ = false;
+            tailFrames_ = 512;
+        } else {
+            if (tailFrames_ > 0) {
+                tailFrames_ -= frames;
+            } else {
+                idle_ = true;
+            }
+        }
     }
 
     // Telemetry block, the transfer curve, then the pitch histories (see the header note).
@@ -383,6 +416,7 @@ public:
         return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f;
     }
     void setParam(int32_t i, float v) override {
+        wake();
         if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
 
@@ -542,14 +576,15 @@ private:
             if (even) {
                 // An even function of the driven input added to the clean one: only even
                 // harmonics (and DC, which the low cut removes).
+                constexpr float kTanh06 = 0.53704957f;
                 const float pre = x * g;
-                const float e = 0.5f * (std::tanh(pre + 0.6f) + std::tanh(0.6f - pre)) - std::tanh(0.6f);
+                const float e = 0.5f * (fast_math::fastTanh(pre + 0.6f) + fast_math::fastTanh(0.6f - pre)) - kTanh06;
                 y = x - e * evenAmt;
             } else {
                 y = saturate(shape, x * g, bias, biasDC) * makeup;
             }
             switch (stage) {
-                case 1:  y = (std::tanh(1.4f * y + 0.12f) - 0.11943f) * 0.75f; break;   // tube: warm, asymmetric
+                case 1:  y = (fast_math::fastTanh(1.4f * y + 0.12f) - 0.11943f) * 0.75f; break;   // tube: warm, asymmetric
                 case 2:  y = y / (1.0f + 0.3f * std::fabs(y)) * 1.1f; break;         // analog: console soft clip
                 default: break;
             }
@@ -561,7 +596,7 @@ private:
         c.shape = P.md.shape; c.stage = P.stage; c.even = P.even;
         c.g      = 1.0f + P.md.driveMul * P.drive * 3.0f;
         c.bias   = P.md.bias * (0.3f + P.drive);   // bias grows with drive → even harmonics
-        c.biasDC = std::tanh(c.bias);
+        c.biasDC = fast_math::fastTanh(c.bias);
         c.makeup = 1.0f / (0.7f + 0.5f * P.md.driveMul * P.drive);
         c.evenAmt = (0.2f + 1.3f * P.drive) * 0.9f / (0.35f + 0.25f * c.g);
         return c;
@@ -571,9 +606,9 @@ private:
     // 2 tape (algebraic soft knee with gentle compression).
     static inline float saturate(int shape, float pre, float bias, float biasDC) {
         switch (shape) {
-            case 1:  return std::tanh(pre + bias) - biasDC;          // tube: DC-corrected asymmetry
+            case 1:  return fast_math::fastTanh(pre + bias) - biasDC;          // tube: DC-corrected asymmetry
             case 2:  return (pre / (1.0f + std::fabs(pre))) * 1.2f;  // tape: soft knee
-            default: return std::tanh(pre);                          // soft
+            default: return fast_math::fastTanh(pre);                          // soft
         }
     }
 
@@ -664,6 +699,8 @@ private:
 
     double beatStart_ = 0.0, spb_ = 0.0;    // transport (for wow sync)
     bool playing_ = false;
+    bool idle_ = false;
+    int tailFrames_ = 512;
     std::atomic<bool> resetReq_{false};
 
     // Telemetry.

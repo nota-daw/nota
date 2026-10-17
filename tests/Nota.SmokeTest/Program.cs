@@ -261,6 +261,14 @@ if (args.Length >= 1 && args[0] == "--glide")
     Console.WriteLine(failures == 0 ? "GLIDE PASSED" : $"GLIDE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// DSP optimizations alone: `--dsp`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--dsp")
+{
+    Console.WriteLine("-- dsp optimizations --");
+    foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DSP PASSED" : $"DSP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Snap grid alone: `--grid`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--grid")
 {
@@ -14857,6 +14865,12 @@ foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 // --- shortcut builder: canonical ordering, platform strings, key caps, gestures ---
 Console.WriteLine("-- shortcut builder --");
 foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- dsp optimizations --");
+foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- dsp silence bypass & auto-sleep --");
+foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
