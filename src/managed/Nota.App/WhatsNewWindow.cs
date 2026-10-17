@@ -70,6 +70,7 @@ public sealed class WhatsNewWindow : NotaWindow
             Classes = { "primary" },
         };
         ok.Click += (_, _) => Close();
+        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) { Close(); e.Handled = true; } };
 
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         Grid.SetRow(header, 0);

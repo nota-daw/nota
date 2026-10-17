@@ -15,7 +15,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IPeriodicTimer _clock;
     private readonly IPeriodicTimer _autosave;
-    private readonly EngineBuildInfo _build;
     private readonly ILogSink _log;
     private int _lastXrunCount;
 
@@ -72,13 +71,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Transport = transport;
         Browser = browser;
         Settings = settings;
-        _build = build;
         _log = log;
 
         Engine.Start();
         Engine.SetBpm(120);
         Engine.SetTimeSignature(4, 4);
-        // EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0} Hz";
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
         _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");
 
@@ -151,7 +148,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SuspendEnginePolling = false;
         }
 
-        EngineInfo = $"v{_build.Version} · {Engine.SampleRate:0}\u2009Hz";
+        EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";   // the version sits beside it, as its own button (#127)
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
         bool fallback = Engine.AudioExclusiveFallback;

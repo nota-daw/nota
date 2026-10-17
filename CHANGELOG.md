@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Release notes from the status bar** (nota-daw/nota#127): the version number at the
+  bottom right of the main window, next to the sample rate, is now a button: click it to
+  open What's New for the installed version (it never starts an update). Escape closes What's
+  New. The status bar now always shows the app version; before, it showed nothing at launch
+  and the engine's version after an audio device change.
 - **Back to Init from any preset** (nota-daw/nota#57): the preset list on a built-in
   instrument or effect card (and its right-click Preset menu) now starts with **Init**,
   which puts every parameter back to its default, as on a freshly added device. The card

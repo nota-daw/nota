@@ -498,6 +498,10 @@ public partial class MainWindow : Window
         // Clicking away from a text field (browser search, rename boxes…) hands the keyboard back.
         ReleaseTextFocusOnOutsidePress(this);
 
+        // Status bar: the installed version opens its release notes (#127).
+        VersionText.Text = $"v{AppInfo.Version}";
+        VersionButton.Click += (_, _) => ShowWhatsNew();
+
         Closed += (_, _) => vm.Dispose();
         SetUpCpuTip(vm.Engine);
 

@@ -1029,7 +1029,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   on Windows and Linux — hides the title bar and its separator so the workspace fills the
   screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
-  after the first launch on a new version.
+  after the first launch on a new version; any time from Help ▸ What's New or the version
+  number in the status bar.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
   downloads the build for this platform (with progress, checked against the release's
   sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.
