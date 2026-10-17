@@ -8047,6 +8047,26 @@ engine.StopTransport();
     engine.StopTransport();
 }
 
+// -- Transport Stop also stops Session clips, at once (#139) --
+{
+    using var e = new NotaEngine();
+    e.SetBpm(120); e.SetLaunchQuant(1.0);              // a quantized stop would wait for a bar line
+    int st = e.AddInstrumentTrack();
+    e.AddSessionMidiClip(st, 0, 4.0);
+    e.SetSessionNotes(st, 0, new[] { new NotaNote(60, 0.0, 4.0, 1.0f) });
+    e.LaunchSlot(st, 0);
+    e.RenderOffline(buf, 2048);
+    Check(e.SessionSlotState(st, 0) == 3, "a launched session clip plays");
+    e.StopTransport();
+    e.RenderOffline(buf, 64);                          // the stop lands on the next block
+    Check(e.SessionSlotState(st, 0) == 1, "transport Stop stops the session clip (back to filled)");
+    e.Play();
+    e.RenderOffline(buf, frames);
+    Check(e.SessionSlotState(st, 0) == 1 && Rms(buf, frames) < 1e-5f,
+        $"…and Play afterwards doesn't bring it back (rms={Rms(buf, frames):F5})");
+    e.StopTransport();
+}
+
 // -- Session vs Arrangement: a session-only jam must NOT roll the Arrangement --
 {
     using var e = new NotaEngine();

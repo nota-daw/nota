@@ -82,6 +82,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **The Clip editor keeps its height** (nota-daw/nota#53): clicking clips no longer makes
   the panel at the bottom a little shorter each time at display scaling such as 150 % or
   175 %. The height you drag it to is kept.
+- **Stop also stops Session clips** (nota-daw/nota#139): the transport's Stop (Return, or
+  Space while playing) now stops the clips launched in the Session view right away, as Stop
+  all clips does. Before, they stayed launched and started again on the next Play.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
