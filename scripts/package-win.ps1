@@ -62,13 +62,18 @@ function Find-ISCC {
     # Both Program Files roots (Inno Setup 6.4+ installs as 64-bit into %ProgramFiles%).
     $candidates = @(
         (Join-Path ${env:ProgramFiles}       'Inno Setup 6\ISCC.exe'),
-        (Join-Path ${env:ProgramFiles(x86)}  'Inno Setup 6\ISCC.exe')
+        (Join-Path ${env:ProgramFiles}       'Inno Setup 7\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)}  'Inno Setup 6\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)}  'Inno Setup 7\ISCC.exe')
     )
     # Registry install location (per-machine 64/32-bit + per-user).
     $regKeys = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1',
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1'
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1'
     )
     foreach ($k in $regKeys) {
         $loc = (Get-ItemProperty -Path $k -ErrorAction SilentlyContinue).InstallLocation
@@ -78,7 +83,7 @@ function Find-ISCC {
     return $null
 }
 $iscc = Find-ISCC
-if (-not $iscc) { throw "Inno Setup (ISCC.exe) not found — install Inno Setup 6.3+ (winget install JRSoftware.InnoSetup)." }
+if (-not $iscc) { throw "Inno Setup (ISCC.exe) not found — install Inno Setup 6/7 (winget install JRSoftware.InnoSetup)." }
 Write-Host "    using $iscc"
 & $iscc "/DAppVersion=$Version" "/DArch=$Arch" "/DPubDir=$PubDir" (Join-Path $PSScriptRoot 'nota.iss')
 
