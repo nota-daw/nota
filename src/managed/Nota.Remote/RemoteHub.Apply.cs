@@ -65,7 +65,7 @@ public sealed partial class RemoteHub
             case "rec": host.SetRecord(cmd.On); break;
             case "loop": host.SetLoop(cmd.On); break;
             case "met": host.SetMetronome(cmd.On); break;
-            case "bpm": if (cmd.V is >= 20 and <= 300) host.SetBpm(Math.Round(cmd.V, 2)); break;
+            case "bpm": if (cmd.V is >= 1 and <= 999) host.SetBpm(Math.Round(cmd.V, 2)); break;
             case "seek": _engine.Seek(Math.Max(0, cmd.V)); break;
             case "loopRange":
                 if (cmd.V2 > cmd.V)

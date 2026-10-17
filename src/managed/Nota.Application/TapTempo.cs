@@ -14,7 +14,7 @@ namespace Nota.Application;
 
 public sealed class TapTempo
 {
-    public const double MinBpm = 20, MaxBpm = 300;
+    public const double MinBpm = 1, MaxBpm = 999;
     private const int MaxGaps = 8;
     private const double ResetMs = 60000.0 / MinBpm;   // 3 s: a longer pause is a new series
     private const double BounceMs = 50;

@@ -243,6 +243,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **A slimmer "add device" target:** the end of a device chain is a narrow "+" instead of
   a large dashed tile; the dashed outline appears only while you drag a device over the
   chain.
+- **Extended imit of tempo range:** minimum tempo has changed to: 1 BPM, maximum tempo
+  has changed to: 999 BPM.
 
 ### Fixed
 - **One settings folder on Linux:** Nota kept its files in two folders, `~/.config/nota`
