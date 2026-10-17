@@ -299,7 +299,13 @@ public static class PresetService
     {
         if (trackId <= 0) return "Select a track first.";
         if (deviceIndex < 0)
-            return ApplyInPlace(new PresetDocument { Type = "builtin-instrument", NamedParams = new() }, engine, trackId, -1);
+        {
+            string warn = ApplyInPlace(new PresetDocument { Type = "builtin-instrument", NamedParams = new() }, engine, trackId, -1);
+            // Mosaic's sound is its program, not its params: Init empties it, as on a fresh Mosaic (#165).
+            if (warn.Length == 0 && engine.TrackInstrumentKind(trackId) == MosaicModel.Kind && engine.MosaicProgram(trackId).Length > 0)
+                engine.MosaicSetProgram(trackId, "");
+            return warn;
+        }
         if (midiEffect)
         {
             int pc = engine.MidiEffectParamCount(trackId, deviceIndex);

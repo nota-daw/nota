@@ -108,9 +108,11 @@ public sealed partial class DeviceChainView
     /// <summary>A card's own preset list, in place of the factory presets for its kind — the
     /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
     /// names the one the device holds now ("" when none fits); <paramref name="Apply"/> loads
-    /// one by id and returns a warning, or "".</summary>
+    /// one by id and returns a warning, or "". <paramref name="Init"/>, when given, puts the
+    /// device back as freshly added and returns a warning, or "": the list gets an Init entry.</summary>
     internal sealed record CardPresets(
-        IReadOnlyList<(string Id, string Name)> Items, Func<string> Current, Func<string, string> Apply);
+        IReadOnlyList<(string Id, string Name)> Items, Func<string> Current, Func<string, string> Apply,
+        Func<string>? Init = null);
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
@@ -202,7 +204,7 @@ public sealed partial class DeviceChainView
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
         Action<string> applyById;
-        Action? resetToInit = null;   // factory lists only: Init isn't a preset, it's every default (#57)
+        Action? resetToInit = null;   // Init isn't a preset, it's every default (#57); an own list opts in (#165)
         if (s.Presets is { } own)
         {
             presets = own.Items.ToList();
@@ -216,6 +218,13 @@ public sealed partial class DeviceChainView
                 if (warn.Length > 0) StatusMessage?.Invoke(warn);
                 Changed?.Invoke();
             };
+            if (own.Init is { } init)
+                resetToInit = () =>
+                {
+                    string warn = init();
+                    if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                    Changed?.Invoke();
+                };
         }
         else
         {

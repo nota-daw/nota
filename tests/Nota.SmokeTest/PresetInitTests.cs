@@ -4,8 +4,10 @@
 // Init in the preset list (#57): after a factory preset, ResetInPlace puts every parameter of a
 // built-in instrument, audio effect or MIDI effect back to its default, as on a freshly added
 // device, and keeps the card size (the instrument's view param, a MIDI effect's "View").
+// Nota Mosaic (#165): Init also empties its program, back to a fresh Mosaic, in one undo step.
 
 using Nota.Application;
+using Nota.Application.Mosaic;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
@@ -56,5 +58,19 @@ internal static class PresetInitTests
         int mOff = Enumerable.Range(0, mc).Count(i => i != mView && Math.Abs(e.MidiEffectGetParam(t, m, i) - e.MidiEffectParamDefault(t, m, i)) > 1e-4);
         yield return (mc > 0 && mOff == 0, $"Init puts every MIDI effect param back to its default ({mOff} of {mc} left off)");
         yield return (mView < 0 || Math.Abs(e.MidiEffectGetParam(t, m, mView) - mViewBefore) < 1e-6, "Init keeps the MIDI effect card's size (View)");
+
+        // ---- Nota Mosaic: its sound is the program, so Init empties it (#165) ---------------
+        int ms = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(ms, MosaicModel.Kind);
+        int msc = e.PluginParamCount(ms, -1), msView = InstrumentView.Index(e, ms);
+        e.MosaicSetProgram(ms, new MosaicProgram { Name = "Test Piano", SourceKind = "files" }.Serialize());
+        for (int i = 0; i < msc; i++)
+            if (i != msView) e.PluginParamSet(ms, -1, i, e.InstrumentParamDefault(ms, i) < 0.5f ? 0.9f : 0.1f);
+        bool held = e.MosaicProgram(ms).Length > 0;
+        yield return (cat.ResetInPlace(e, ms, -1, midiEffect: false).Length == 0, "Init on Mosaic reports no warning");
+        int msOff = Enumerable.Range(0, msc).Count(i => i != msView && Math.Abs(e.PluginParamGet(ms, -1, i) - e.InstrumentParamDefault(ms, i)) > 1e-4);
+        yield return (held && e.MosaicProgram(ms).Length == 0 && msOff == 0,
+            $"Init empties Mosaic's program and resets its params (program held before: {held}, {msOff} params left off)");
+        yield return (e.Undo() && MosaicProgram.Parse(e.MosaicProgram(ms)).Name == "Test Piano", "undo brings Mosaic's program back");
     }
 }
