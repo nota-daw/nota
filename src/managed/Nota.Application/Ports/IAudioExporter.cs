@@ -28,7 +28,8 @@ public enum ExportFormat
 /// <paramref name="Dither"/> adds TPDF dither before 16-bit quantization (ignored
 /// for 24-bit / float output and for MP3, which has no integer target).
 /// <paramref name="Format"/> picks the file format (WAV default);
-/// <paramref name="Mp3BitrateKbps"/> is the MP3 CBR bitrate (Format == Mp3 only).</summary>
+/// <paramref name="Mp3BitrateKbps"/> is the MP3 CBR bitrate (Format == Mp3 only).
+/// <paramref name="StartBeats"/> is where the bounce starts; it lasts <paramref name="TotalBeats"/>.</summary>
 public readonly record struct ExportRequest(
     string Path,
     double TotalBeats,
@@ -40,7 +41,8 @@ public readonly record struct ExportRequest(
     bool Normalize = false,
     bool Dither = false,
     ExportFormat Format = ExportFormat.Wav,
-    int Mp3BitrateKbps = 320);
+    int Mp3BitrateKbps = 320,
+    double StartBeats = 0);
 
 /// <summary>Renders the master bus offline to an audio file (WAV / FLAC / MP3 —
 /// M6-4). Stops the audio backend for exclusive engine access, then restarts it;

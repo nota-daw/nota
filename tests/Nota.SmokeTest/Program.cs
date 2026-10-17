@@ -8685,6 +8685,38 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     }
 }
 
+// -- Export range start (#102): a Custom range that doesn't start at 1.1 renders from
+// its start, and the bounce puts the user's loop region back afterwards. ---------
+{
+    using var re = new NotaEngine();
+    re.SetBpm(120); re.SetTimeSignature(4, 4);
+    string sine = Path.Combine(Path.GetTempPath(), $"nota-sine-{Guid.NewGuid():N}.wav");
+    Nota.SmokeTest.WavWriter.WriteSine(sine, 2.0, 440.0, 48000);   // 2 s = 4 beats at 120
+    int rTrk = re.AddAudioTrack();
+    re.AddAudioClip(rTrk, sine, 8.0);                              // bar 3 to bar 4
+    re.SetMetronome(false); re.SetLoop(true, 4.0, 12.0);
+    string late = Path.Combine(Path.GetTempPath(), $"nota-range-{Guid.NewGuid():N}.wav");
+    string early = late.Replace(".wav", ".early.wav");
+    try
+    {
+        new AudioExporter().ExportMaster(re, new ExportRequest(late, 4.0, 120, 48000, WavBitDepth.Pcm24,
+                                                               RestoreLoop: true, RestoreMetronome: false, StartBeats: 8.0));
+        new AudioExporter().ExportMaster(re, new ExportRequest(early, 4.0, 120, 48000, WavBitDepth.Pcm24,
+                                                               RestoreLoop: true, RestoreMetronome: false));
+        var lateMono = NotaEngine.DecodeMono(late, 10.0, out _);
+        var earlyMono = NotaEngine.DecodeMono(early, 10.0, out _);
+        Check(lateMono is not null && Math.Abs(lateMono.Length - 96000) <= 8 && MonoRms(lateMono) > 0.1f,
+              $"export from beat 8 renders the clip there ({lateMono?.Length} frames, rms {(lateMono is null ? 0 : MonoRms(lateMono)):F3})");
+        Check(earlyMono is not null && MonoRms(earlyMono) < 1e-4f, "export from beat 0 over the same length is silent");
+        Check(re.LoopEnabled && Math.Abs(re.LoopStart - 4.0) < 1e-9 && Math.Abs(re.LoopEnd - 12.0) < 1e-9,
+              $"export puts the loop region back ({re.LoopStart}–{re.LoopEnd})");
+    }
+    finally
+    {
+        try { File.Delete(sine); File.Delete(late); File.Delete(early); } catch { }
+    }
+}
+
 // -- M7: MP3 master export — CBR size, duration, decodes audible --------------
 {
     using var me = new NotaEngine();

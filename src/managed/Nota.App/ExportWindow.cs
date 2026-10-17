@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Export audio (mockup 1i). Range (Loop / Full song are real; Custom is M7+),
+// Export audio (mockup 1i). Range (the transport loop, the full song, or a typed
+// Custom start / end),
 // format (WAV / FLAC / MP3) / sample-rate / bit-depth-or-bitrate (M6-4 + M7
 // codecs), release tail, normalize (−1 dBTP true peak) and dither (16-bit
 // targets only), plus stem export. The option rows adapt to the format: FLAC
@@ -22,7 +23,8 @@ namespace Nota.App;
 
 public sealed record ExportOptions(int SampleRate, WavBitDepth Depth, double TailBeats, double RangeBeats,
                                    bool Stems, bool Normalize, bool Dither,
-                                   ExportFormat Format = ExportFormat.Wav, int BitrateKbps = 320);
+                                   ExportFormat Format = ExportFormat.Wav, int BitrateKbps = 320,
+                                   double StartBeats = 0);
 
 public sealed class ExportWindow : NotaWindow
 {
@@ -43,8 +45,14 @@ public sealed class ExportWindow : NotaWindow
     private const int BeatsPerBar = 4;
 
     private readonly double _bpm;
-    private double _rangeBeats;
+    private double _startBeats, _rangeBeats;   // the range: where it starts and how long it is
+    private int _rangeMode;                     // 0 loop · 1 full song · 2 custom
+    private double _customStart, _customEnd;
+    private bool _customValid = true;
     private TextBlock _rangeReadout = null!;
+    private TextBlock _customError = null!;
+    private Control _customRow = null!;
+    private Border? _export;
     private TextBlock _estimate = null!;
     private ComboBox _format = null!;
     private ComboBox _rate = null!;
@@ -59,10 +67,28 @@ public sealed class ExportWindow : NotaWindow
     private Action? _refreshDitherEnabled;
     private TextBlock _exportLabel = null!;
 
-    public ExportWindow(double fullBeats, double loopBeats, double bpm)
+    /// <summary>A loop region from the song start, <paramref name="loopBeats"/> long.</summary>
+    public ExportWindow(double fullBeats, double loopBeats, double bpm) : this(fullBeats, 0, loopBeats, bpm) { }
+
+    /// <param name="fullBeats">The song's end (last clip end).</param>
+    /// <param name="loopStart">The transport loop region's start; <paramref name="loopEnd"/> its end.</param>
+    public ExportWindow(double fullBeats, double loopStart, double loopEnd, double bpm)
     {
         _bpm = bpm;
-        _rangeBeats = loopBeats > 0 ? loopBeats : fullBeats;
+        bool hasLoop = loopEnd > loopStart;
+        // Custom starts from the loop region when there is one, else the whole song.
+        (_customStart, _customEnd) = hasLoop ? (loopStart, loopEnd) : (0, fullBeats);
+        void SetRange(int mode)
+        {
+            _rangeMode = mode;
+            (_startBeats, _rangeBeats) = mode switch
+            {
+                1 => (0, fullBeats),
+                2 => (_customStart, _customEnd - _customStart),
+                _ => hasLoop ? (loopStart, loopEnd - loopStart) : (0, fullBeats),
+            };
+        }
+        SetRange(0);
         Title = "Export audio";
         Width = 560;
         SizeToContent = SizeToContent.Height;
@@ -74,19 +100,38 @@ public sealed class ExportWindow : NotaWindow
 
         var body = new StackPanel { Margin = new Thickness(18, 16), Spacing = 14 };
 
-        // Range.
+        // Range. Custom shows a start and an end (bar.beat), checked as you type (#102).
         _rangeReadout = Mono("", TextSecondary);
-        var range = Segmented(new[] { ("Loop", true), ("Full song", true), ("Custom", false) }, 0, i =>
+        var range = Segmented(new[] { ("Loop", true), ("Full song", true), ("Custom", true) }, 0, i =>
         {
-            _rangeBeats = i == 1 ? fullBeats : loopBeats > 0 ? loopBeats : fullBeats;
+            SetRange(i);
             RefreshRange();
         });
         var rangeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
         rangeRow.Children.Add(range);
-        var customNa = new NaBadge { Kind = NaBadgeKind.Future, VerticalAlignment = VerticalAlignment.Center };
-        rangeRow.Children.Add(customNa);
         rangeRow.Children.Add(_rangeReadout);
-        body.Children.Add(Section("Range", rangeRow));
+        var startBox = PositionBox(_customStart);
+        var endBox = PositionBox(_customEnd);
+        _customError = new TextBlock { FontSize = 10, Foreground = NotaPalette.Danger, VerticalAlignment = VerticalAlignment.Center };
+        void ReadCustom()
+        {
+            var a = ParsePosition(startBox.Text);
+            var b = ParsePosition(endBox.Text);
+            _customValid = a is not null && b is not null && b > a;
+            _customError.Text = a is null || b is null ? "Type a position as bar.beat, like 5.1"
+                              : b <= a ? "The end must be after the start" : "";
+            if (_customValid) { _customStart = a!.Value; _customEnd = b!.Value; }
+            SetRange(2);
+            RefreshRange();
+        }
+        startBox.TextChanged += (_, _) => ReadCustom();
+        endBox.TextChanged += (_, _) => ReadCustom();
+        _customRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Caption("Start"), startBox, Caption("End"), endBox, _customError },
+        };
+        body.Children.Add(Section("Range", new StackPanel { Spacing = 8, Children = { rangeRow, _customRow } }));
 
         // Format / SR / bit-depth-or-quality. The third column swaps its control
         // (and title) with the format: depth for WAV/FLAC, bitrate for MP3.
@@ -134,7 +179,7 @@ public sealed class ExportWindow : NotaWindow
         _estimate = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         // The dialog's primary action: set apart by weight and one tone step, not by colour
         // (orange is for what is live or chosen).
-        var export = new Border
+        var export = _export = new Border
         {
             Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Control, Padding = new Thickness(18, 0), Height = 28,
@@ -144,6 +189,7 @@ public sealed class ExportWindow : NotaWindow
         export.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
         export.PointerPressed += (_, _) =>
         {
+            if (!RangeValid) return;
             var fmt = SelectedFormat;
             int sr = Rates[_rate.SelectedIndex < 0 ? 1 : _rate.SelectedIndex];
             // MP3 has no bit-depth target; Pcm24 keeps Depth well-formed for the request.
@@ -152,7 +198,7 @@ public sealed class ExportWindow : NotaWindow
             double tailBeats = _tailOn ? BeatsPerBar : 0.0;
             bool dither = _dither && d == WavBitDepth.Pcm16;   // only meaningful for 16-bit targets
             int kbps = Bitrates[_quality.SelectedIndex < 0 ? 0 : _quality.SelectedIndex];
-            Close(new ExportOptions(sr, d, tailBeats, _rangeBeats, _stems, _normalize, dither, fmt, kbps));
+            Close(new ExportOptions(sr, d, tailBeats, _rangeBeats, _stems, _normalize, dither, fmt, kbps, _startBeats));
         };
         var cancel = new TextBlock { Text = "Cancel", FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
         cancel.PointerPressed += (_, _) => Close(null);
@@ -210,19 +256,57 @@ public sealed class ExportWindow : NotaWindow
         _exportLabel.Text = _stems ? "Export stems" : $"Export {SelectedFormat.ToString().ToUpperInvariant()}";
     }
 
+    private bool RangeValid => _rangeMode != 2 || _customValid;
+
     private void RefreshRange()
     {
+        _customRow.IsVisible = _rangeMode == 2;
+        _rangeReadout.IsVisible = RangeValid;
         double sec = _bpm > 0 ? _rangeBeats * 60.0 / _bpm : 0;
-        int endBar = (int)(_rangeBeats / BeatsPerBar) + 1;
-        _rangeReadout.Text = string.Format(NotaNum.Culture, "1.1.1 → {0}.1.1 · {1:0.0} s", endBar, sec);
+        _rangeReadout.Text = string.Format(NotaNum.Culture, "{0} → {1} · {2:0.0} s",
+                                           BarBeatText(_startBeats), BarBeatText(_startBeats + _rangeBeats), sec);
+        if (_export is not null) Inactive.Set(_export, !RangeValid);
         RefreshEstimate();
     }
+
+    // bar.beat.sixteenth, 1-based, as the readout shows a position.
+    private static string BarBeatText(double beats)
+    {
+        int bar = (int)Math.Floor(beats / BeatsPerBar) + 1;
+        double inBar = beats - (bar - 1) * BeatsPerBar;
+        int beat = (int)Math.Floor(inBar) + 1;
+        int six = (int)Math.Floor((inBar - (beat - 1)) * 4 + 1e-9) + 1;
+        return string.Format(NotaNum.Culture, "{0}.{1}.{2}", bar, beat, six);
+    }
+
+    /// <summary>Reads a typed position — "5", "5.2" or "5.2.3" (bar, beat, sixteenth, all
+    /// 1-based) — as beats from the song start; null when it isn't one.</summary>
+    internal static double? ParsePosition(string? text)
+    {
+        var parts = (text ?? "").Trim().Split('.');
+        if (parts.Length > 3) return null;
+        var n = new[] { 1, 1, 1 };
+        for (int i = 0; i < parts.Length; i++)
+            if (!int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out n[i]) || n[i] < 1) return null;
+        if (n[1] > BeatsPerBar || n[2] > 4) return null;
+        return (n[0] - 1) * BeatsPerBar + (n[1] - 1) + (n[2] - 1) / 4.0;
+    }
+
+    private TextBox PositionBox(double beats)
+    {
+        var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11 };
+        box.BindResource(TextBox.FontFamilyProperty, "Font.Mono");
+        return box;
+    }
+
+    private TextBlock Caption(string text)
+        => new() { Text = text, FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
 
     private void RefreshEstimate()
     {
         if (_estimate is null) return;
         double tail = _tailOn ? BeatsPerBar : 0;
-        double sec = _bpm > 0 ? (_rangeBeats + tail) * 60.0 / _bpm : 0;
+        double sec = _bpm > 0 ? (Math.Max(0, _rangeBeats) + tail) * 60.0 / _bpm : 0;
         int sr = Rates[_rate.SelectedIndex < 0 ? 1 : _rate.SelectedIndex];
         int bytesPerSample = _depth.SelectedIndex switch { 0 => 2, 2 => 4, _ => 3 };
         double mb = SelectedFormat switch

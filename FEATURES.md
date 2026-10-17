@@ -907,8 +907,9 @@ and user presets, automation, persistence and cloning.
   group by source, favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
-- **Sample player** under the Files tab: the file's real waveform (click to play from a
-  point, hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
+- **Sample player** under the Files tab: the file's real waveform, drawn as Bars or Solid
+  like the arrangement (Settings → Appearance → Waveform; click to play from a point,
+  hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
@@ -964,7 +965,8 @@ and user presets, automation, persistence and cloning.
 
 ## Export
 
-- **Export the master** to WAV, FLAC or MP3: range, sample rate and, per format,
+- **Export the master** to WAV, FLAC or MP3: range (the loop region, the full song, or a
+  Custom start and end typed as bar.beat), sample rate and, per format,
   bit depth (**pcm16 / pcm24 / float32** WAV; **16/24-bit** FLAC) or MP3 quality
   (**CBR 128/192/256/320 kbps**, 320 default). MP3 tops out at 48 kHz, so 96 kHz is
   not selectable for it; the footer size estimate follows the format.
@@ -1116,7 +1118,8 @@ Coverage:
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add and remove chains, parameters, 8 macros.
 - **Export** the master or stems to WAV (pcm16/pcm24/float32), FLAC (pcm16/pcm24) or
-  MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3.
+  MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3, `startBeat` sets
+  where the render starts.
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.

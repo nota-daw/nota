@@ -69,6 +69,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Modular: the Math node's Gain uses its whole range** (nota-daw/nota#92): Gain now goes
   up to 2.00 as the knob shows. Before, anything above 1.00 was cut back to 1.00 and the
   knob snapped back.
+- **Export audio: Custom range, and Loop exports the real loop** (nota-daw/nota#102): pick
+  **Custom** and type a start and an end as bar.beat (`5.1`, or `5.2.3` to the sixteenth);
+  the readout shows both ends and the length, and Export waits until the end comes after
+  the start. **Loop** now exports the transport's loop region wherever it is. Before, it
+  always bounced bars 1–5, and exporting reset the loop region to bars 1–5. MCP:
+  `export_master` and `export_stems` take a `startBeat`.
+- **The browser preview follows Appearance → Waveform** (nota-daw/nota#107): with Solid
+  chosen, the sample player under the browser draws a continuous waveform too, and
+  switching the setting redraws a preview that is already showing.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,

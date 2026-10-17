@@ -61,8 +61,10 @@ public partial class MainWindow
         }
 
         double bpm = (double)_vm.Transport.Bpm;
-        const double loopBeats = 4 * 4;   // transport loop region (0..4 bars)
-        var opts = await new ExportWindow(endBeats, loopBeats, bpm).ShowDialog<ExportOptions?>(this);
+        // The transport's loop region; with none set yet, the first four bars (as Loop on uses).
+        double loopStart = Engine.LoopStart, loopEnd = Engine.LoopEnd;
+        if (loopEnd <= loopStart) (loopStart, loopEnd) = (0, 4 * 4);
+        var opts = await new ExportWindow(endBeats, loopStart, loopEnd, bpm).ShowDialog<ExportOptions?>(this);
         if (opts is null) return;
 
         Activate(); // keep the native panel focused (see DoImportAsync)
@@ -105,7 +107,7 @@ public partial class MainWindow
                 path, opts.RangeBeats + opts.TailBeats, bpm, opts.SampleRate, opts.Depth,
                 RestoreLoop: _vm.Transport.LoopOn, RestoreMetronome: _vm.Transport.MetronomeOn,
                 Normalize: opts.Normalize, Dither: opts.Dither,
-                Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps);
+                Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps, StartBeats: opts.StartBeats);
             await RunBlockingAsync("Export", opts.Stems ? "Exporting stems…" : "Exporting…", async prog =>
             {
                 var frac = new Progress<double>(f =>

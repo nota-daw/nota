@@ -24,6 +24,7 @@ public sealed class AudioExporter : IAudioExporter
         long totalFrames = FramesFor(r);
 
         bool wasRunning = engine.IsRunning; // restart afterwards only what was running
+        var loop = (engine.LoopStart, engine.LoopEnd);   // the region to put back afterwards
         engine.Stop();               // halt the audio backend: no audio thread during render
         engine.SetLoop(false, 0, 0); // don't wrap; render the whole range once
         engine.SetMetronome(false);  // keep clicks out of the bounce
@@ -40,7 +41,7 @@ public sealed class AudioExporter : IAudioExporter
             string tmp = r.Path + ".norm.tmp";
             try
             {
-                float peak = RenderToTemp(engine, tmp, totalFrames, sr, ref firstOverall, progress, 0.0, 0.7);
+                float peak = RenderToTemp(engine, tmp, totalFrames, sr, r.StartBeats, ref firstOverall, progress, 0.0, 0.7);
                 Transcode(tmp, r.Path, sr, r, GainFor(peak), progress, 0.7, 0.3);
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
@@ -51,7 +52,7 @@ public sealed class AudioExporter : IAudioExporter
                              0.0, 1.0);
         }
 
-        Restore(engine, r, wasRunning);
+        Restore(engine, r, wasRunning, loop);
         progress?.Report(1.0);
     }
 
@@ -71,6 +72,7 @@ public sealed class AudioExporter : IAudioExporter
         for (int i = 0; i < tracks.Count; i++) savedMute[i] = tracks[i].Muted != 0;
 
         bool wasRunning = engine.IsRunning;
+        var loop = (engine.LoopStart, engine.LoopEnd);
         engine.Stop();
         engine.SetLoop(false, 0, 0);
         engine.SetMetronome(false);
@@ -84,7 +86,7 @@ public sealed class AudioExporter : IAudioExporter
         double stemsBase = 0.0;
         if (r.Normalize)
         {
-            gain = GainFor(ScanPeak(engine, totalFrames, sr, ref firstOverall, progress, 0.0, 0.15));
+            gain = GainFor(ScanPeak(engine, totalFrames, sr, r.StartBeats, ref firstOverall, progress, 0.0, 0.15));
             stemsBase = 0.15;
         }
         int written = 0;
@@ -102,13 +104,13 @@ public sealed class AudioExporter : IAudioExporter
         }
 
         for (int j = 0; j < count; j++) engine.SetTrackMute(tracks[j].Id, savedMute[j]); // restore mutes
-        Restore(engine, r, wasRunning);
+        Restore(engine, r, wasRunning, loop);
         progress?.Report(1.0);
         return written;
     }
 
     // Renders `totalFrames` of the current graph to one output file (WAV / FLAC /
-    // MP3 per the request). Seeks to 0 and plays (audio clips only render while
+    // MP3 per the request). Seeks to the range start and plays (audio clips only render while
     // playing). The first render overall sets the export sample rate; later ones
     // inherit it. Reports progress into [baseFrac, baseFrac+spanFrac] as the render
     // advances (throttled to whole-percent changes).
@@ -118,7 +120,7 @@ public sealed class AudioExporter : IAudioExporter
                                          float gain = 1f)
     {
         engine.StopTransport();
-        engine.Seek(0);
+        engine.Seek(r.StartBeats);
         engine.Play();
 
         var buf = new float[Chunk * 2];
@@ -159,12 +161,12 @@ public sealed class AudioExporter : IAudioExporter
 
     // Renders the current graph once to a temp float32 WAV, returning its true peak.
     // Used by master normalize so the transcode pass scales the exact samples measured.
-    private static float RenderToTemp(IAudioEngine engine, string tmpPath, long totalFrames, int sr,
+    private static float RenderToTemp(IAudioEngine engine, string tmpPath, long totalFrames, int sr, double startBeats,
                                       ref bool firstOverall, IProgress<double>? progress,
                                       double baseFrac, double spanFrac)
     {
         engine.StopTransport();
-        engine.Seek(0);
+        engine.Seek(startBeats);
         engine.Play();
 
         var scanner = new TruePeakScanner();
@@ -241,11 +243,11 @@ public sealed class AudioExporter : IAudioExporter
 
     // Renders the current graph once without writing, returning its true peak (for
     // normalize). Same render path as the write pass, so the measured peak matches.
-    private static float ScanPeak(IAudioEngine engine, long totalFrames, int sr, ref bool firstOverall,
+    private static float ScanPeak(IAudioEngine engine, long totalFrames, int sr, double startBeats, ref bool firstOverall,
                                   IProgress<double>? progress, double baseFrac, double spanFrac)
     {
         engine.StopTransport();
-        engine.Seek(0);
+        engine.Seek(startBeats);
         engine.Play();
 
         var scanner = new TruePeakScanner();
@@ -332,11 +334,11 @@ public sealed class AudioExporter : IAudioExporter
     private static long FramesFor(ExportRequest r)
         => (long)System.Math.Ceiling(r.TotalBeats * (r.SampleRate * 60.0 / r.Bpm));
 
-    private static void Restore(IAudioEngine engine, ExportRequest r, bool wasRunning)
+    private static void Restore(IAudioEngine engine, ExportRequest r, bool wasRunning, (double Start, double End) loop)
     {
         engine.StopTransport();
         engine.Seek(0);
-        engine.SetLoop(r.RestoreLoop, 0, 16);
+        engine.SetLoop(r.RestoreLoop, loop.Start, loop.End);   // the user's region, not a fixed 1–5 (#102)
         engine.SetMetronome(r.RestoreMetronome);
         // Resume live audio at the device sample rate — only if it was live: an engine that
         // was never started (headless, no output device) has nothing to resume.

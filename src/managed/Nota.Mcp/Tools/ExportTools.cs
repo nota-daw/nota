@@ -37,7 +37,7 @@ public sealed class ExportTools(IAudioEngine engine, IEngineDispatch dispatch, I
     private static readonly int[] ValidBitrates = { 128, 192, 256, 320 };
 
     private ExportRequest BuildRequest(string path, double totalBeats, string bitDepth,
-                                       string format, int bitrateKbps)
+                                       string format, int bitrateKbps, double startBeat)
     {
         int sr = (int)Math.Round(E.SampleRate);
         if (sr <= 0) sr = 48000;   // engine hasn't negotiated a device rate yet — pick a sane default
@@ -55,18 +55,19 @@ public sealed class ExportTools(IAudioEngine engine, IEngineDispatch dispatch, I
         int kbps = ValidBitrates.Contains(bitrateKbps) ? bitrateKbps : 320;
         return new ExportRequest(path, Math.Max(0.25, totalBeats), E.Bpm > 0 ? E.Bpm : 120, sr, depth,
             RestoreLoop: E.LoopEnabled, RestoreMetronome: false,
-            Format: fmt, Mp3BitrateKbps: kbps);
+            Format: fmt, Mp3BitrateKbps: kbps, StartBeats: Math.Max(0, startBeat));
     }
 
     [McpServerTool(Name = "export_master"), Description(
         "Render the master bus offline to an audio file. path = output file, totalBeats = how many beats to render, "
+        + "startBeat = where the render starts (default 0), "
         + "bitDepth = pcm16 | pcm24 | float32 (wav/flac), format = wav | flac | mp3 (default wav), "
         + "bitrateKbps = 128 | 192 | 256 | 320 (mp3 only, default 320). Stops playback first. Returns the output path.")]
     public Task<string> ExportMaster(string path, double totalBeats, string bitDepth = "float32",
-                                     string format = "wav", int bitrateKbps = 320) => Mutate(() =>
+                                     string format = "wav", int bitrateKbps = 320, double startBeat = 0) => Mutate(() =>
     {
         E.StopTransport();
-        var req = BuildRequest(path, totalBeats, bitDepth, format, bitrateKbps);
+        var req = BuildRequest(path, totalBeats, bitDepth, format, bitrateKbps, startBeat);
         _exporter.ExportMaster(E, req);
         string note = req.Format == ExportFormat.Wav ? "" : $" ({format.ToLowerInvariant()})";
         if (req.Format == ExportFormat.Mp3 && (int)Math.Round(E.SampleRate) > 48000)
@@ -76,13 +77,13 @@ public sealed class ExportTools(IAudioEngine engine, IEngineDispatch dispatch, I
 
     [McpServerTool(Name = "export_stems"), Description(
         "Render one file per non-return track (stems) into the given folder. folder = output directory, "
-        + "totalBeats = how many beats to render, bitDepth = pcm16 | pcm24 | float32 (wav/flac), "
+        + "totalBeats = how many beats to render, startBeat = where the render starts (default 0), bitDepth = pcm16 | pcm24 | float32 (wav/flac), "
         + "format = wav | flac | mp3 (default wav), bitrateKbps = 128 | 192 | 256 | 320 (mp3 only, default 320). "
         + "Returns the number of stems written.")]
     public Task<int> ExportStems(string folder, double totalBeats, string bitDepth = "float32",
-                                 string format = "wav", int bitrateKbps = 320) => Mutate(() =>
+                                 string format = "wav", int bitrateKbps = 320, double startBeat = 0) => Mutate(() =>
     {
         E.StopTransport();
-        return _exporter.ExportStems(E, BuildRequest(folder, totalBeats, bitDepth, format, bitrateKbps));
+        return _exporter.ExportStems(E, BuildRequest(folder, totalBeats, bitDepth, format, bitrateKbps, startBeat));
     });
 }
