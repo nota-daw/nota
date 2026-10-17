@@ -1240,12 +1240,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         void Render()
         {
             groups.Children.Clear();
-            var q = _shortcutFilter.Trim();
+            // Each word must appear in the row's action, its keys or its group's title, so
+            // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40).
+            var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var (title, rows) in ShortcutGroups)
             {
-                var shown = rows.Where(r => q.Length == 0
-                                            || MenuKit.Keys(r.Action).Contains(q, StringComparison.OrdinalIgnoreCase)
-                                            || MenuKit.Keys(r.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                var shown = rows.Where(r => words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
                 if (shown.Count == 0) continue;
                 var head = new StackPanel
                 {

@@ -62,6 +62,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Transport tooltips name their real shortcuts** (nota-daw/nota#10): Play (Space),
   Stop (Return), Record (⌘R) and the metronome (⌘M) now show their keys. The metronome tip
   said a bare M, which does nothing. On Windows and Linux the tips spell Ctrl instead of ⌘.
+- **The Shortcuts filter searches group titles and each word** (nota-daw/nota#40): in
+  Settings → Shortcuts, `keyboard` now finds the whole "Play notes (computer keyboard)"
+  group, and a query of several words (`play keyboard`, `loop record`) matches rows that
+  contain every word, in any order.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
