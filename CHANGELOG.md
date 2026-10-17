@@ -31,6 +31,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   reverb tail rings out). Back on, it plays from the next note. The switch is saved with
   the project and kept when the track is duplicated; the AI assistant reaches it through
   `set_device_bypass` with device index -1.
+- **Double-click the loop brace to turn the loop off and on** (nota-daw/nota#59): in the
+  arrangement ruler, a double-click on the loop region switches looping off without losing
+  the region. It stays in the ruler in grey, and another double-click turns it back on. A
+  double-click elsewhere on the ruler still moves the playhead.
+- **Close the start screen with Esc or a click outside it** (nota-daw/nota#67): either one
+  closes it like its close button and keeps the current project. While Settings or What's New
+  is open from the start screen, a click outside goes back to that dialog instead.
 - **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
   or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
   530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys
@@ -87,6 +94,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **The browser preview follows Appearance → Waveform** (nota-daw/nota#107): with Solid
   chosen, the sample player under the browser draws a continuous waveform too, and
   switching the setting redraws a preview that is already showing.
+- **The Clip editor keeps its height** (nota-daw/nota#53): clicking clips no longer makes
+  the panel at the bottom a little shorter each time at display scaling such as 150 % or
+  175 %. The height you drag it to is kept.
+- **Stop also stops Session clips** (nota-daw/nota#139): the transport's Stop (Return, or
+  Space while playing) now stops the clips launched in the Session view right away, as Stop
+  all clips does. Before, they stayed launched and started again on the next Play.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,

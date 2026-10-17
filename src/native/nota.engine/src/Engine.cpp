@@ -413,6 +413,18 @@ void Engine::transportPlayCountIn() {
 void Engine::transportStop() {
     arrangementActive_.store(false, std::memory_order_relaxed);
     finalizeSessionRecord(false);   // don't lose an in-progress session take on a global stop
+    // Stop means everything stops, Session clips included (#139). Immediately, not on the
+    // next launch boundary: the clock halts with this command, so a quantized stop would
+    // never land and the clips would stay launched (and resume on the next Play).
+    // Only tracks with a clip launched or queued: applying a stop flushes the track's notes
+    // and MIDI effects, which must not touch a track that plays the Arrangement.
+    if (authoring_)
+        for (auto& t : authoring_->tracks)
+            if (auto& sp = t->sessionPlayer;
+                sp && (sp->playing.load(std::memory_order_relaxed) >= 0
+                       || sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone))
+                sp->requestStopNow();
+    sceneFollowScene_ = -1;
     Command c; c.type = CommandType::TransportStop; commands_.push(c);
 }
 // Hand every track back to the Arrangement: stop all session clips + re-activate the timeline.
