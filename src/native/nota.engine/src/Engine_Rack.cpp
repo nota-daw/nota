@@ -16,9 +16,11 @@
 #include "RackDevice.h"
 #include "DrumRack.h"
 #include "Sampler.h"
+#include "SnapshotHistory.h"
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 // Catalog id -> index resolution lives in the plugin host (C ABI); reused here so
@@ -492,6 +494,22 @@ bool Engine::drumRackSelfTest() {
     rk2.setSampleRate(44100.0);
     rk2.setState(blob.data(), static_cast<int32_t>(blob.size()));
     if (rk2.chainTriggerNote(0) != 36 || rk2.chainTriggerNote(1) != 38) return false;
+
+    // Snapshot lifetime (#177): a kit load commits dozens of times inside one audio block.
+    // The snapshot a render is walking must outlive all of them, and go two renders later.
+    SnapshotHistory<int> h;
+    auto first = std::make_shared<int>(0);
+    const std::weak_ptr<int> held = first;
+    h.publish(std::move(first));
+    {
+        const SnapshotHistory<int>::RenderScope block(h);
+        const int* walking = h.live();
+        for (int i = 1; i <= 40; ++i) h.publish(std::make_shared<int>(i));
+        if (held.expired() || *walking != 0) return false;
+    }
+    { const SnapshotHistory<int>::RenderScope block(h); }
+    h.publish(std::make_shared<int>(41));
+    if (!held.expired()) return false;
     return true;
 }
 

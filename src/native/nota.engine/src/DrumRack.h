@@ -63,6 +63,7 @@ public:
     // Sum every audible pad, applying the per-pad decay VCA. Mirrors
     // RackInstrument::render with the pad envelope folded into the mix loop.
     void render(float* out, int32_t frames) override {
+        const auto done = renderScope();
         RackState* st = live();
         if (!st || frames <= 0 || frames > kMaxBlock) return;
         bool anySolo = false;

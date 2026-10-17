@@ -77,6 +77,7 @@ public:
 
     // ---- render: sum every audible chain into `out` -------------------------
     void render(float* out, int32_t frames) override {
+        const auto done = renderScope();
         RackState* st = live();
         if (!st || frames <= 0 || frames > kMaxBlock) return;
         bool anySolo = false;

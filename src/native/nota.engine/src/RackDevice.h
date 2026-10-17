@@ -34,6 +34,7 @@ public:
 
     // ---- in-place processing: Parallel / Series / Select + dry-wet + gain ----
     void process(float* buf, int32_t frames) override {
+        const auto done = renderScope();
         RackState* st = live();
         if (!st || frames <= 0 || frames > kMaxBlock) return;
         if (st->chains.empty()) return;   // pass-through until chains exist

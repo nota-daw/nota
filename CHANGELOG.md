@@ -82,6 +82,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Drum Rack crash while loading a kit** (nota-daw/nota#177): building a Drum Rack kit (or
+  any burst of rack edits) while audio was running could crash the audio engine with a
+  use-after-free in the rack's render (seen on macOS). A rack keeps every replaced chain
+  layout alive until the audio thread has finished two more blocks, instead of only the last
+  16 edits; the Instrument Rack, Audio Effect Rack and Rhythm's voice effects get the same fix.
 - **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a
   scene) with the transport stopped now plays the metronome count-in first, with the slot
   blinking "Rec in…", and the take starts when it ends. A note you start during the count-in

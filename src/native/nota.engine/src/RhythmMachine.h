@@ -45,6 +45,7 @@
 #include "Instrument.h"
 #include "SampleBuffer.h"
 #include "BuiltinDevices.h"
+#include "SnapshotHistory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -130,11 +131,11 @@ public:
     void setTransport(double beatStart, double spb, bool playing) override {
         if (spb > 0.0) spb_ = spb;
         beatStart_ = beatStart; playing_ = playing;
-        if (FxState* fx = fxLive_.load(std::memory_order_acquire))   // tempo-synced voice FX (a synced Delay)
+        if (FxState* fx = fxStates_.live())   // tempo-synced voice FX (a synced Delay)
             for (auto& ch : fx->chain) for (auto& d : ch) if (d) d->setTransport(beatStart, spb, playing);
     }
     void setTransportInfo(const TransportInfo& ti) override {
-        if (FxState* fx = fxLive_.load(std::memory_order_acquire))
+        if (FxState* fx = fxStates_.live())
             for (auto& ch : fx->chain) for (auto& d : ch) if (d) d->setTransportInfo(ti);
     }
 
@@ -211,11 +212,11 @@ public:
 
     // ---- per-voice FX chains (message thread; the audio thread reads the live snapshot) ----
     int32_t voiceDeviceCount(int v) const {
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         return (fx && v >= 0 && v < kVoices) ? static_cast<int32_t>(fx->chain[v].size()) : 0;
     }
     Device* voiceDevice(int v, int d) const {
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         if (!fx || v < 0 || v >= kVoices || d < 0 || d >= static_cast<int>(fx->chain[v].size())) return nullptr;
         return fx->chain[v][d].get();
     }
@@ -289,9 +290,9 @@ public:
         applyMacro(macro, get(Macro0 + macro));
         return idx;
     }
-    int32_t macroMappingCount() const { FxState* fx = fxLive_.load(std::memory_order_acquire); return fx ? static_cast<int32_t>(fx->maps.size()) : 0; }
+    int32_t macroMappingCount() const { FxState* fx = fxStates_.live(); return fx ? static_cast<int32_t>(fx->maps.size()) : 0; }
     bool macroMapping(int i, MacroMap& out) const {
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         if (!fx || i < 0 || i >= static_cast<int>(fx->maps.size())) return false;
         out = fx->maps[i];
         return true;
@@ -347,7 +348,7 @@ public:
         // Voice FX + kit label, tagged "RFX1": per voice a device count, then per device its
         // builtinKind, bypass flag and params; then the kit label.
         putU32(b, kFxMagic);
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         for (int v = 0; v < kVoices; ++v) {
             const auto* ch = fx ? &fx->chain[v] : nullptr;
             const int n = ch ? static_cast<int>(ch->size()) : 0;
@@ -458,7 +459,7 @@ public:
         // The voice FX are copied device by device (kind + params + bypass): a clone must not
         // share DSP state with the original, which keeps playing until the swap.
         auto ns = std::make_shared<FxState>();
-        if (FxState* fx = fxLive_.load(std::memory_order_acquire))
+        if (FxState* fx = fxStates_.live())
             for (int v = 0; v < kVoices; ++v)
                 for (auto& d : fx->chain[v]) {
                     auto c = d ? makeChainDevice(d->builtinKind()) : nullptr;
@@ -470,7 +471,7 @@ public:
                     c->setBypassed(d->bypassed());
                     ns->chain[v].push_back(std::move(c));
                 }
-        if (FxState* fx = fxLive_.load(std::memory_order_acquire)) ns->maps = fx->maps;
+        if (FxState* fx = fxStates_.live()) ns->maps = fx->maps;
         r->commitFx(ns);
         r->kit_ = kit_;
         for (int m = 0; m < kMacros; ++m) r->macroNames_[m] = macroNames_[m];
@@ -493,6 +494,7 @@ public:
     void allNotesOff() override { for (auto& vc : voices_) vc.active = false; }
 
     void render(float* out, int32_t frames) override {
+        const SnapshotHistory<FxState>::RenderScope done(fxStates_);
         const float swing = get(Swing), human = get(Humanize);
         const float accentG = 1.0f + get(Accent) * 1.0f;   // up to +6 dB-ish
         const float vol = get(Volume) * 1.2f;
@@ -516,7 +518,7 @@ public:
         float grMax = 0.0f;
         // Voices with an FX chain render into their own buffer and run through it; the rest
         // go straight to the sum. Chunks keep the buffers small and the chain's block bounded.
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         bool hasFx[kVoices] = {false};
         bool anyFx = false;
         if (fx)
@@ -641,7 +643,7 @@ private:
     // Push macro m's value to its targets. Any thread (automation plays on the audio thread):
     // it only reads the live snapshot and stores atomics / device params.
     void applyMacro(int m, float value) {
-        FxState* fx = fxLive_.load(std::memory_order_acquire);
+        FxState* fx = fxStates_.live();
         if (!fx) return;
         for (const auto& mp : fx->maps) {
             if (mp.macro != m) continue;
@@ -654,13 +656,11 @@ private:
         }
     }
     std::shared_ptr<FxState> copyFx() const { return fxAuthoring_ ? std::make_shared<FxState>(*fxAuthoring_) : std::make_shared<FxState>(); }
-    // Publish a new FX snapshot. The last few stay alive so a block still reading an older
-    // one never sees it freed (the RackCore scheme).
+    // Publish a new FX snapshot. Older ones stay alive until no render can still be
+    // reading them (the RackCore scheme).
     void commitFx(std::shared_ptr<FxState> ns) {
         fxAuthoring_ = ns;
-        fxStates_.push_back(ns);
-        if (fxStates_.size() > 16) fxStates_.erase(fxStates_.begin());
-        fxLive_.store(ns.get(), std::memory_order_release);
+        fxStates_.publish(std::move(ns));
     }
     static void putU32(std::vector<uint8_t>& b, uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (i * 8))); }
     static constexpr double kTwoPi = 6.283185307179586;
@@ -854,8 +854,7 @@ private:
     std::atomic<float> pn_[kNumParams];
 
     std::shared_ptr<FxState>              fxAuthoring_;   // voice FX (message thread)
-    std::vector<std::shared_ptr<FxState>> fxStates_;      // recent snapshots kept alive
-    std::atomic<FxState*>                 fxLive_{nullptr};
+    SnapshotHistory<FxState>              fxStates_;      // live snapshot + retirees (audio reads fxStates_.live())
     std::string kit_;                                     // factory kit label (message thread)
     std::string macroNames_[kMacros];                     // custom macro names ("" = "Macro N"; message thread)
     float mix_[kChunk * 2];                               // audio thread: the chunk's sum
