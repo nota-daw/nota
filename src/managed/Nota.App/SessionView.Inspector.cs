@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Input;
 
 namespace Nota.App;
 
@@ -317,11 +318,11 @@ public sealed partial class SessionView
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
-            ("Duplicate", "⌘D", () => DuplicateSelection()),
+            ("Duplicate", Shortcut.Cmd('D'), () => DuplicateSelection()),
             ("Rename", "F2", () => RenameSelection()),
-            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement()),
+            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
             ("Edit", "", () => SlotEditRequested?.Invoke(id, scene)),
-            ("Delete", "⌫", () => DeleteSelection())));
+            ("Delete", Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
     }
 
     // A drag on a number is one undo step, however many values it passes through.
@@ -397,11 +398,11 @@ public sealed partial class SessionView
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
             ("Launch", "", () => LaunchSceneRow(scene)),
-            ("Insert below", "⌘I", () => InsertSceneAtSelection()),
-            ("Duplicate", "⌘D", () => DuplicateSelection()),
+            ("Insert below", Shortcut.Cmd('I'), () => InsertSceneAtSelection()),
+            ("Duplicate", Shortcut.Cmd('D'), () => DuplicateSelection()),
             ("Rename", "F2", () => RenameSelection()),
-            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement()),
-            ("Delete", "⌫", () => DeleteSelection())));
+            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
+            ("Delete", Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
     }
 
     // ---- empty slot + group slot ------------------------------------------------------------
@@ -423,7 +424,7 @@ public sealed partial class SessionView
         if (c.IsInstrument) actions.Add(("Insert MIDI clip", "", () => InsertMidiClip(c.TrackId, scene)));
         actions.Add(rec ? ("Stop recording", "", () => { _engine.StopSessionRecord(); Refresh(); })
                         : ("Record here", "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
-        if (CanPaste) actions.Add(("Paste", "⌘V", () => PasteSelection()));
+        if (CanPaste) actions.Add(("Paste", Shortcut.Cmd('V'), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
     }
 
@@ -435,8 +436,8 @@ public sealed partial class SessionView
             Text = "Launches every track's slot in this scene. The stop button stops them all.",
             FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
-        s.Children.Add(Actions(("Launch group slot", "↵", () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g)),
-            ("To Arrangement", "⌘⇧C", () => CopySelectionToArrangement())));
+        s.Children.Add(Actions(("Launch group slot", Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g)),
+            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));
     }
 
     /// <summary>The selected clip's notes / waveform with a live playhead.</summary>

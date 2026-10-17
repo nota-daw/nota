@@ -40,4 +40,9 @@
     <Using Include="Nota.Application" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <Compile Include="..\..\src\managed\Nota.App\Input\ShortcutAvaloniaExtensions.cs" Link="ShortcutAvaloniaExtensions.cs" />
+  </ItemGroup>
+
 </Project>

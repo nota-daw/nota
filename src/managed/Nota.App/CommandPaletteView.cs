@@ -21,6 +21,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Nota.Application.Input;
 using Nota.Application.Palette;
 
 namespace Nota.App;
@@ -500,23 +501,7 @@ internal sealed class CommandPaletteView : UserControl
     // ---- bits ------------------------------------------------------------------------------
 
     /// <summary>Glyph shortcut → key caps ("⌘⇧P" → ⌘ ⇧ P on macOS, Ctrl Shift P elsewhere).</summary>
-    internal static List<string> Caps(string glyphs)
-    {
-        var caps = new List<string>();
-        bool mac = OperatingSystem.IsMacOS();
-        int i = 0;
-        for (; i < glyphs.Length; i++)
-        {
-            string? m = glyphs[i] switch
-            {
-                '⌘' => mac ? "⌘" : "Ctrl", '⌃' => mac ? "⌃" : "Ctrl", '⌥' => mac ? "⌥" : "Alt", '⇧' => mac ? "⇧" : "Shift", _ => null,
-            };
-            if (m is null) break;
-            caps.Add(m);
-        }
-        if (i < glyphs.Length) caps.Add(glyphs[i..]);
-        return caps;
-    }
+    internal static List<string> Caps(string glyphs) => Shortcut.Parse(glyphs).ToKeyCaps().ToList();
 
     internal static Control KeyCap(string label, double size, double fontSize) => new Border
     {

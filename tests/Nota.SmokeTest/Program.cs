@@ -131,6 +131,14 @@ if (args.Length >= 1 && args[0] == "--palette")
     Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Shortcut builder alone: `--shortcuts`.
+if (args.Length >= 1 && args[0] == "--shortcuts")
+{
+    Console.WriteLine("-- shortcut builder --");
+    foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Browser device categories alone: `--browser`.
 if (args.Length >= 1 && args[0] == "--browser")
 {
@@ -14833,6 +14841,10 @@ foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
+
+// --- shortcut builder: canonical ordering, platform strings, key caps, gestures ---
+Console.WriteLine("-- shortcut builder --");
+foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
