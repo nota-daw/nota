@@ -74,7 +74,6 @@ public partial class MainWindow : Window
     // Remembered detail-panel height once the user drags the splitter, so reopening the
     // panel keeps their size instead of snapping back to the per-mode default. 0 = unset.
     private double _detailHeight;
-    private double _lastSetDetailHeight;
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
@@ -454,14 +453,15 @@ public partial class MainWindow : Window
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its
-        // drags aren't persisted (a programmatic set matches _lastSetDetailHeight and is
-        // ignored; only a real drag differs).
-        DetailPanel.SizeChanged += (_, e) =>
+        // drags aren't persisted. Only a finished splitter drag counts, and it stores the
+        // row's height (what ShowDetail sets), not the panel's: the panel sits 1px inside its
+        // row, and at fractional display scaling every re-show used to be recorded as a
+        // slightly shorter "drag", so the Clip tab shrank on each clip click (#53).
+        DetailSplitter.DragCompleted += (_, _) =>
         {
             bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
-            if (clipActive && DetailPanel.IsVisible && e.NewSize.Height > 120
-                && Math.Abs(e.NewSize.Height - _lastSetDetailHeight) > 1.0)
-                _detailHeight = e.NewSize.Height;
+            double h = BodyGrid.RowDefinitions[2].ActualHeight;
+            if (clipActive && DetailPanel.IsVisible && h > 120) _detailHeight = h;
         };
 
         // Track whether the detail panel was the last area the user clicked into, so Tab

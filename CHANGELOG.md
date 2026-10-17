@@ -79,6 +79,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **The browser preview follows Appearance → Waveform** (nota-daw/nota#107): with Solid
   chosen, the sample player under the browser draws a continuous waveform too, and
   switching the setting redraws a preview that is already showing.
+- **The Clip editor keeps its height** (nota-daw/nota#53): clicking clips no longer makes
+  the panel at the bottom a little shorter each time at display scaling such as 150 % or
+  175 %. The height you drag it to is kept.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
