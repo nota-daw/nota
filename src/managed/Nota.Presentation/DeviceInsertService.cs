@@ -170,6 +170,14 @@ public sealed class DeviceInsertService
 
     // ---- the entry points ---------------------------------------------------------------------
 
+    /// <summary>Double-click on an instrument in the browser: it replaces the instrument of the
+    /// selected plain instrument track (clips and effects stay); with no track selected, an
+    /// audio track, a rack — or ⌥ held (<paramref name="alwaysNewTrack"/>) — it starts a track.</summary>
+    public InsertTarget ActivationTarget(int selectedTrackId, bool alwaysNewTrack)
+        => !alwaysNewTrack && CanReplaceInstrument(selectedTrackId)
+            ? new InsertTarget(selectedTrackId, InsertPlacement.Replace)
+            : new InsertTarget(-1, NewTrack: true);
+
     /// <summary>Drag & drop onto an arrangement lane: an instrument replaces a plain track's
     /// instrument or starts its own track at the drop beat; effects and presets go to the
     /// track. Samples and MIDI files are imported by the view (they decode in the background).</summary>

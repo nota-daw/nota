@@ -56,6 +56,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   travel with the clip when you move, copy, split, trim or consolidate it, and are saved with
   the project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's
   pressure. MCP: `get_clip_controllers`, `set_clip_controller`.
+- **Double-click an instrument to swap the selected track's** (nota-daw/nota#145): with a
+  MIDI / instrument track selected, double-clicking an instrument in the browser replaces
+  that track's instrument and keeps its clips and effects, so you can try instruments on a
+  part one after another (each swap is one undo step). With no track selected, an audio
+  track, or a rack selected, it starts a new track as before; ⌥ + double-click (Alt on
+  Windows and Linux) always starts a new track.
 
 ### Fixed
 - **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):

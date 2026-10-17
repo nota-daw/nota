@@ -175,7 +175,9 @@ public sealed class BrowserView : UserControl
     private readonly Border _statusBar;
     private readonly TextBlock _statusText;
 
-    public event Action<BrowserItem>? ItemActivated;
+    /// <summary>A row double-clicked (or opened from its menu), with the keys held — ⌥ asks
+    /// an instrument for a new track instead of the selected one.</summary>
+    public event Action<BrowserItem, KeyModifiers>? ItemActivated;
     /// <summary>The Files tab's sample player (status messages ride its StatusChanged).</summary>
     public PreviewPlayer Preview => _previewFooter;
     /// <summary>Reveal a sample / folder / project in the system file manager.</summary>
@@ -1079,12 +1081,12 @@ public sealed class BrowserView : UserControl
 
     private void HookActivation(ListBox list)
     {
-        list.DoubleTapped += (_, _) =>
+        list.DoubleTapped += (_, e) =>
         {
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
             if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
-            else { DismissPreview(); ItemActivated?.Invoke(item); }
+            else { DismissPreview(); ItemActivated?.Invoke(item, e.KeyModifiers); }
         };
         list.SelectionChanged += (_, _) =>
         {
@@ -1548,7 +1550,7 @@ public sealed class BrowserView : UserControl
             case BrowserItemKind.Project:
             {
                 var open = new MenuItem { Header = "Open" };
-                open.Click += (_, _) => ItemActivated?.Invoke(item);
+                open.Click += (_, _) => ItemActivated?.Invoke(item, KeyModifiers.None);
                 var reveal = new MenuItem { Header = "Reveal in Finder" };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 var del = new MenuItem { Header = "Delete…" };

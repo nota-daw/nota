@@ -939,6 +939,9 @@ audio effects after it keep running and keep their settings; saved with the proj
     loads into that track's instrument (switching it if needed; the effects stay).
   - A drop selects the track it lands on (a newly created one included), in the
     arrangement and the session view.
+- **Double-click an instrument** to put it on the selected MIDI / instrument track in place
+  of its instrument (clips and effects stay; one undo step), or on a new track when no such
+  track is selected or a rack is. ⌥ + double-click always starts a new track.
 - **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
   Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
   built-in device (its default sound). These tabs have their own **Auto**, off by default:

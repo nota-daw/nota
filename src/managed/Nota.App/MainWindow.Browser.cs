@@ -66,10 +66,11 @@ public partial class MainWindow
         return ids;
     }
 
-    // Double-click / Return on a browser row: instruments start a track, effects go to the
-    // selected track (else the last instrument track), presets apply — through the same
-    // insert service as drag & drop and the command palette.
-    private void OnBrowserItemActivated(BrowserItem item)
+    // Double-click on a browser row: an instrument replaces the selected instrument track's
+    // instrument (clips and effects stay) — else, or with ⌥ held, it starts a track; effects
+    // go to the selected track (else the last instrument track), presets apply — through the
+    // same insert service as drag & drop and the command palette.
+    private void OnBrowserItemActivated(BrowserItem item, KeyModifiers mods)
     {
         if (_vm is null) return;
         try
@@ -80,7 +81,7 @@ public partial class MainWindow
                 case BrowserItemKind.BuiltinInstrument:
                 case BrowserItemKind.PluginInstrument:
                 {
-                    var r = Insertion.Insert(item, new InsertTarget(-1, NewTrack: true));
+                    var r = Insertion.Insert(item, Insertion.ActivationTarget(Timeline.SelectedTrackId, (mods & KeyModifiers.Alt) != 0));
                     ApplyInsertResult(r, revealDevices: item.BuiltinKind is 1 or 3 or 4 && item.Kind == BrowserItemKind.BuiltinInstrument);
                     break;
                 }

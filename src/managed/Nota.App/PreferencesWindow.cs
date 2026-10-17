@@ -1203,6 +1203,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Mouse", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
+            ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),
             ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
