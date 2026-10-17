@@ -65,7 +65,21 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
 
     private bool _syncingLoop;
 
-    partial void OnBpmChanged(decimal value) => _engine.SetBpm((double)value);
+    // The tempo this view-model last sent and is waiting to read back. SetBpm only queues
+    // the change for the audio thread, so until the engine reports it, Tick must not
+    // mistake the old tempo for an outside change and snap the field back mid-drag.
+    private double? _sentBpm;
+    private long _sentBpmAt;
+    private const long SentBpmTimeoutMs = 1000;   // no audio thread draining commands: stop waiting
+    private bool _followingBpm;                   // reflecting the engine's tempo, not a user edit
+
+    partial void OnBpmChanged(decimal value)
+    {
+        if (_followingBpm) return;   // the engine already has it (unrounded): don't echo it back
+        _sentBpm = (double)value;
+        _sentBpmAt = Environment.TickCount64;
+        _engine.SetBpm((double)value);
+    }
     partial void OnTimeSigNumeratorChanged(int value) => _engine.SetTimeSignature(value, TimeSigDenominator);
     partial void OnTimeSigDenominatorChanged(int value) => _engine.SetTimeSignature(TimeSigNumerator, value);
     partial void OnMasterVolumeChanged(double value)
@@ -200,6 +214,26 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         // The loop record mode can also be set from outside the UI (MCP): follow the engine.
         bool replace = _engine.LoopRecordReplace;
         if (replace != LoopRecordReplace) LoopRecordReplace = replace;
+        FollowEngineBpm();
+    }
+
+    /// <summary>The tempo can also be set from outside the UI (MCP, a controller driving
+    /// it): follow the engine, so the BPM field shows it and saving keeps it. Our own
+    /// change is still in flight until the engine reports it, so wait for that first.</summary>
+    private void FollowEngineBpm()
+    {
+        double engineBpm = _engine.Bpm;
+        if (_sentBpm is double sent)
+        {
+            bool landed = Math.Abs(engineBpm - sent) < 1e-6;
+            if (!landed && Environment.TickCount64 - _sentBpmAt < SentBpmTimeoutMs) return;
+            _sentBpm = null;
+        }
+        decimal bpm = Math.Round((decimal)engineBpm, 2);   // the field's resolution
+        if (bpm == Bpm) return;
+        _followingBpm = true;
+        Bpm = bpm;
+        _followingBpm = false;
     }
 
     /// <summary>The count-in as negative bars counting up to the start: −2.1 … −2.4, −1.1 … −1.4.</summary>

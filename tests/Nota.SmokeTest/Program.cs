@@ -14782,6 +14782,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- tempo follow --");
+foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");

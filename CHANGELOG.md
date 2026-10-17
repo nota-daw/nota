@@ -82,6 +82,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **A tempo set over MCP shows in the transport bar and is saved**: `set_tempo` (and
+  anything driving it, such as a hardware controller) changed the tempo you hear, but the
+  BPM field kept the old number, and saving, autosave and export used that stale tempo, so
+  a reopened project came back at the wrong speed. The transport bar now follows the
+  engine's tempo, and dragging the field never snaps back while the engine catches up.
 - **Send faders stay in step everywhere** (nota-daw/nota#138): turning a Send knob on a
   track's Sends card in the Devices panel now moves that send's fader in the Session mixer
   and the Mixer window at once, and the other way round. Automation of a send shows on all
