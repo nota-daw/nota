@@ -43,6 +43,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   pressure. MCP: `get_clip_controllers`, `set_clip_controller`.
 
 ### Fixed
+- **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):
+  open a launched slot and the piano roll's cursor, or the Drum Rack step grid's lit
+  column, now follows the slot as it loops. Before, only Arrangement clips showed one.
 - **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
   back to its start, a key you're holding keeps sounding and release tails (pads, strings)
   ring out. Before, every voice was cut at the seam. A clip note running past the loop end
