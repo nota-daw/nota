@@ -566,7 +566,9 @@ bool Engine::undo() {
         undoStack_.pop_back();
         bool applied = false;
         redoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
-        if (e.graph) { publishRaw(std::move(e.graph)); applied = true; }   // restore without a new checkpoint
+        // Restore without a new checkpoint; the restored chains may add or drop a latent
+        // device (a removed look-ahead coming back, #109), so compensation follows them.
+        if (e.graph) { publishRaw(std::move(e.graph)); recomputePdc(); applied = true; }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
         if (applied) return true;
     }
@@ -579,7 +581,7 @@ bool Engine::redo() {
         redoStack_.pop_back();
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
-        if (e.graph) { publishRaw(std::move(e.graph)); applied = true; }
+        if (e.graph) { publishRaw(std::move(e.graph)); recomputePdc(); applied = true; }
         for (const auto& c : e.mix) applied |= applyMix(c, true);
         if (applied) return true;
     }
