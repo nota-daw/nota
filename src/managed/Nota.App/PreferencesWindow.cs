@@ -1100,6 +1100,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the selected clips or time range"),
+            ("Double-click loop brace", "Loop on / off in the ruler · the region stays, greyed out while off"),
             ("⌘⇧R", "Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)"),
         }),
         ("Arrangement & editing", new[]
