@@ -141,6 +141,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Stop also stops Session clips** (nota-daw/nota#139): the transport's Stop (Return, or
   Space while playing) now stops the clips launched in the Session view right away, as Stop
   all clips does. Before, they stayed launched and started again on the next Play.
+- **Undo brings a removed device back where you can see it** (nota-daw/nota#109): removing a
+  device and pressing Undo now shows it again in the Devices panel for the track the panel
+  is showing (the Master, a track other than the selected one), and in Modular. Before, the
+  device came back in the engine but the panel kept the old chain until you clicked away.
+  Undo and Redo also restore the delay compensation a look-ahead device adds, so the other
+  tracks line up again. Devices inside a rack still aren't covered by undo.
+- **A Session take shows its notes when recording stops** (nota-daw/nota#156): stopping a
+  Session recording with the transport's Stop (or when the take ends on its own) now draws
+  the recorded clip and its notes in the slot right away, and in the piano roll if the slot
+  is open there. Before, the slot looked empty until you switched views.
+- **Mosaic: back to Init** (nota-daw/nota#165): choosing **Init** in a Nota Mosaic card's
+  preset list now empties the instrument, as on a freshly added Mosaic: no samples, every
+  parameter at its default. Before, Init reset the parameters but kept the multisample, so
+  the list jumped back to the preset's name.
+- **No crash when a panel moves between windows** (nota-daw/nota#164): opening or closing
+  the Mixer window, or popping the Devices or Clip panel out and back, no longer crashes the
+  app with "Attempt to call InvalidateArrange on wrong LayoutManager".
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
