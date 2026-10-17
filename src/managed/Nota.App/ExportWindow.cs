@@ -118,7 +118,7 @@ public sealed class ExportWindow : NotaWindow
             var a = ParsePosition(startBox.Text);
             var b = ParsePosition(endBox.Text);
             _customValid = a is not null && b is not null && b > a;
-            _customError.Text = a is null || b is null ? "Type a position as bar.beat, like 5.1"
+            _customError.Text = a is null || b is null ? "Not a position: type bar.beat, like 5.1"
                               : b <= a ? "The end must be after the start" : "";
             if (_customValid) { _customStart = a!.Value; _customEnd = b!.Value; }
             SetRange(2);
@@ -126,10 +126,27 @@ public sealed class ExportWindow : NotaWindow
         }
         startBox.TextChanged += (_, _) => ReadCustom();
         endBox.TextChanged += (_, _) => ReadCustom();
+        // Say what the numbers are: bar, beat and sixteenth, counted from 1 as the transport
+        // counter shows them, and that the end is where the export stops (#102).
+        var unitsHint = new TextBlock
+        {
+            Text = "Positions are bar.beat.sixteenth, counted from 1 as in the transport: 5 or 5.1 is the "
+                 + "start of bar 5, 5.3 its third beat. The export stops at the end position, so 1 to 5 is four bars.",
+            FontSize = 10, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, MaxWidth = 520,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
         _customRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Caption("Start"), startBox, Caption("End"), endBox, _customError },
+            Spacing = 6,
+            Children =
+            {
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+                    Children = { Caption("Start"), startBox, Caption("End"), endBox, _customError },
+                },
+                unitsHint,
+            },
         };
         body.Children.Add(Section("Range", new StackPanel { Spacing = 8, Children = { rangeRow, _customRow } }));
 
@@ -294,7 +311,8 @@ public sealed class ExportWindow : NotaWindow
 
     private TextBox PositionBox(double beats)
     {
-        var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11 };
+        var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11, PlaceholderText = "bar.beat" };
+        ToolTip.SetTip(box, "Bar.beat.sixteenth, counted from 1 — e.g. 5.1 or 5.3.2");
         box.BindResource(TextBox.FontFamilyProperty, "Font.Mono");
         return box;
     }

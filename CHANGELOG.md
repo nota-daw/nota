@@ -70,7 +70,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   up to 2.00 as the knob shows. Before, anything above 1.00 was cut back to 1.00 and the
   knob snapped back.
 - **Export audio: Custom range, and Loop exports the real loop** (nota-daw/nota#102): pick
-  **Custom** and type a start and an end as bar.beat (`5.1`, or `5.2.3` to the sixteenth);
+  **Custom** and type a start and an end as bar.beat (`5.1`, or `5.2.3` to the sixteenth,
+  counted from 1 as in the transport; the export stops at the end, so `1` to `5` is four bars);
   the readout shows both ends and the length, and Export waits until the end comes after
   the start. **Loop** now exports the transport's loop region wherever it is. Before, it
   always bounced bars 1–5, and exporting reset the loop region to bars 1–5. MCP:
