@@ -9,6 +9,7 @@
 
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -28,20 +29,29 @@ public partial class MainWindow
     private ContentControl ClipDetailHost => _detailWindow?.ClipHost ?? DetailBody;
 
     // Assign a control to a ContentControl host, detaching it from any previous host first
-    // (a control can have only one parent). Moving to another window, the old window's
-    // pending layout is run between the detach and the attach: each window keeps its own
-    // layout queue (the detach itself queues the control there), and an entry left behind for
-    // a control that now lives in the other window throws "InvalidateArrange on wrong
-    // LayoutManager" on a later frame (seen on Linux/X11 popping out the piano roll).
+    // (a control can have only one parent). Each window keeps its own layout queue, and an
+    // entry left in one window's queue for a control that now lives in another throws
+    // "InvalidateArrange on wrong LayoutManager" on a later frame and aborts the app (#83 on
+    // Linux, #164 on macOS). So before the attach, every other open window runs its pending
+    // layout while the control is detached, which drops those entries. That covers more than
+    // the old host's window: the control may have left its previous host earlier (a tab switch
+    // detaches the clip editor, _lastClipEditor is re-hosted later), and Avalonia re-queues a
+    // control caught in a layout cycle after the pass without scheduling another one, so an
+    // entry can sit in a window's queue long after the control left it.
     private static void SetHost(ContentControl host, Control? content)
     {
-        if (content?.Parent is ContentControl prev && !ReferenceEquals(prev, host))
-        {
-            var from = TopLevel.GetTopLevel(prev);
-            prev.Content = null;
-            if (from is not null && !ReferenceEquals(from, TopLevel.GetTopLevel(host))) from.UpdateLayout();
-        }
-        if (!ReferenceEquals(host.Content, content)) host.Content = content;
+        if (content?.Parent is ContentControl prev && !ReferenceEquals(prev, host)) prev.Content = null;
+        if (ReferenceEquals(host.Content, content)) return;
+        if (content is not null) FlushOtherWindows(TopLevel.GetTopLevel(host));
+        host.Content = content;
+    }
+
+    // Run the pending layout of every open window except `keep` (see SetHost).
+    private static void FlushOtherWindows(TopLevel? keep)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
+        foreach (var w in desktop.Windows)
+            if (!ReferenceEquals(w, keep)) w.UpdateLayout();
     }
 
     private void OnToggleDetailWindow(object? sender, RoutedEventArgs e)

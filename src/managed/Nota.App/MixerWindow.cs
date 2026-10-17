@@ -106,7 +106,10 @@ internal sealed class MixerWindow : NotaWindow
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        Host.Content = null;   // detach the mixer so it can be re-hosted next time
+        // Detach the mixer so it can be re-hosted next time, then run this window's pending
+        // layout so no entry queued for it here outlives the move (see MainWindow.SetHost).
+        Host.Content = null;
+        UpdateLayout();
         WindowClosed?.Invoke();
     }
 }

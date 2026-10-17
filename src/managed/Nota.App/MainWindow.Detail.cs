@@ -179,7 +179,7 @@ public partial class MainWindow
         _patternScene = -1;
         _sessionSlotTrack = -1;
         _sessionSlotScene = -1;
-        if (DetailFloating) _detailWindow!.ClipHost.Content = ClipPlaceholder();
+        if (DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
     }
 
     // The Clip tab targets the *currently selected* arrangement clip (MIDI or audio),
