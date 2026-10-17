@@ -11,6 +11,5 @@
 Nota.App/AboutWindow.cs	© 2026 Egor Khindikaynen (Ambertape)	# data: proper names (author, label)
 Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Ramp Up	# data: Shutter pattern preset name
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	The voice: soft Keys, bright Glass, Saw, hollow Square or inharmonic Bell	# data: names the Pendulum voice models
-Nota.App/DeviceCards/Midi/RandomMidiBody.cs	Distribution: Gauss / Even / Walk — click for the next, Shift-click for the previous	# data: names the Random distribution modes
 Nota.App/DetailWindow.cs	Devices / Clip	# data: names the window's two tabs, Devices and Clip
 Nota.App/MainWindow.Downloads.cs	Open Settings → Downloads	# data: names the Settings window and its Downloads page
