@@ -311,12 +311,13 @@ internal static class DeviceCardKit
         => Segments(options, () => Math.Clamp(get(), 0, options.Length - 1), set, out _);
 
     // Preset picker "‹ Name ▾ ›" — a sunken field (a list you pick from, not a button): the
-    // name opens the factory presets for this kind with the current one checked; ‹ › step to
-    // the previous / next preset, wrapping (from Init, › is the first and ‹ the last).
-    // Clicks are handled so they neither select nor start dragging the card. Shared by the
-    // card shell and the rack chain full-UI popups.
+    // name opens the factory presets for this kind with the current one checked — under an
+    // "Init" entry when the caller can reset to defaults (init); ‹ › step to the previous /
+    // next preset (from Init, › is the first and ‹ the last). Clicks are handled so they
+    // neither select nor start dragging the card. Shared by the card shell and the rack chain
+    // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18, Action? init = null)
     {
         double H = height;   // 18 in a card header, 22 in the device window's title bar
         var label = new TextBlock
@@ -338,6 +339,13 @@ internal static class DeviceCardKit
             if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
             var flyout = new MenuFlyout();
+            if (init != null)
+            {
+                var mi = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
+                mi.Click += (_, _) => init();
+                flyout.Items.Add(mi);
+                flyout.Items.Add(new Separator());
+            }
             for (int i = 0; i < presets.Count; i++)
             {
                 int iv = i;

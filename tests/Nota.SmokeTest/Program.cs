@@ -396,6 +396,14 @@ if (args.Length >= 1 && args[0] == "--instrument-off")
     Console.WriteLine(failures == 0 ? "INSTRUMENT OFF PASSED" : $"INSTRUMENT OFF FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Init in the preset list alone (fast iteration): `--preset-init`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--preset-init")
+{
+    Console.WriteLine("-- preset init --");
+    foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PRESET INIT PASSED" : $"PRESET INIT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MPE alone (fast iteration): `--mpe`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--mpe")
 {
@@ -14778,6 +14786,8 @@ Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
+Console.WriteLine("-- preset init --");
+foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");
 foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 

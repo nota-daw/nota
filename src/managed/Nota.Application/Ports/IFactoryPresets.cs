@@ -28,4 +28,9 @@ public interface IFactoryPresets
     /// <summary>Applies a factory preset by id to an EXISTING instrument/device in place
     /// (deviceIndex -1 = the track's instrument), for the in-header preset picker.</summary>
     string ApplyInPlace(IAudioEngine engine, string id, int trackId, int deviceIndex);
+
+    /// <summary>Returns an existing built-in instrument / effect / MIDI effect to Init — every
+    /// parameter at its default (deviceIndex -1 = the track's instrument). The card size and a
+    /// loaded sample stay as they are. Returns "" on success or a user-facing warning.</summary>
+    string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect);
 }

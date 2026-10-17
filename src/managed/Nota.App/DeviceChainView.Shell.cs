@@ -202,6 +202,7 @@ public sealed partial class DeviceChainView
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
         Action<string> applyById;
+        Action? resetToInit = null;   // factory lists only: Init isn't a preset, it's every default (#57)
         if (s.Presets is { } own)
         {
             presets = own.Items.ToList();
@@ -224,13 +225,26 @@ public sealed partial class DeviceChainView
                     .Select(p => (p.Id, p.DisplayName)).ToList()
                 : new List<(string Id, string Name)>();
             applyById = id => _factory.ApplyInPlace(_engine, id, _trackId, di);
+            // A device whose factory list already starts from its own "Init" preset needs no second one.
+            if (presets.Count > 0 && !presets.Any(p => p.Name == "Init"))
+                resetToInit = () =>
+                {
+                    string warn = _factory.ResetInPlace(_engine, _trackId, di, s.Kind == ChainKind.Midi);
+                    if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                };
         }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
+        bool atInit = curPreset < 0 && string.IsNullOrEmpty(extra.Preset);
         void ApplyPreset(int i) { var p = presets[i]; applyById(p.Id); extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild(); }
+        void ApplyInit() { resetToInit!(); extra.PresetId = ""; extra.Preset = ""; Rebuild(); }
         void StepPreset(int dir)
         {
             int n = presets.Count; if (n == 0) return;
-            ApplyPreset(curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n);
+            if (curPreset < 0) { ApplyPreset(dir > 0 ? 0 : n - 1); return; }   // from Init (or a preset not in the list)
+            int next = curPreset + dir;
+            // ‹ › walk Init → the presets → back to Init when there is an Init entry, else wrap.
+            if (resetToInit != null && (next < 0 || next >= n)) ApplyInit();
+            else ApplyPreset((next % n + n) % n);
         }
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
@@ -240,7 +254,7 @@ public sealed partial class DeviceChainView
         if (presets.Count > 0)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132);
+                nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
 
@@ -255,6 +269,12 @@ public sealed partial class DeviceChainView
                 var prev = new MenuItem { Header = "Previous preset", Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
                 var next = new MenuItem { Header = "Next preset", Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
+                if (resetToInit != null)
+                {
+                    var init = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = atInit };
+                    init.Click += (_, _) => ApplyInit();
+                    menu.Items.Add(init); menu.Items.Add(new Separator());
+                }
                 for (int i = 0; i < presets.Count; i++)
                 {
                     int iv = i;

@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Back to Init from any preset** (nota-daw/nota#57): the preset list on a built-in
+  instrument or effect card (and its right-click Preset menu) now starts with **Init**,
+  which puts every parameter back to its default, as on a freshly added device. The card
+  size and a loaded sample stay. ‹ › step through Init too: past the last preset comes Init,
+  then the first again. Devices whose factory list already has its own "Init" preset keep
+  just that one.
 - **Fold a device into a narrow strip** (nota-daw/nota#147): double-click a device's header
   (or choose Fold in its right-click menu) and the card collapses into a 28 px strip with its
   name, rotated, and its on/off switch, so a long chain fits the Devices panel. Double-click

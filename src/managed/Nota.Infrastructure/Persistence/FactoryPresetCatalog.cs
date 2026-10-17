@@ -2566,6 +2566,9 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ? PresetService.ApplyInPlace(doc, engine, trackId, deviceIndex)
             : "Unknown factory preset.";
 
+    public string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect)
+        => PresetService.ResetInPlace(engine, trackId, deviceIndex, midiEffect);
+
     // Nota Consort preset helpers (see the Consort block above).
     private static (string, float)[] P(params (string, float)[] ps) => ps;
     private static (string, float)[] Cat(params (string, float)[][] parts)

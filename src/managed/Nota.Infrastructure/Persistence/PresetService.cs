@@ -292,6 +292,30 @@ public static class PresetService
         return "";
     }
 
+    /// <summary>Init for a built-in device in place: every parameter back to its default, as on a
+    /// freshly added device (#57). An instrument goes through an empty preset, so it keeps its
+    /// card size, a loaded sample (and the Sampler's / Rhythm's sample regions) like any preset.</summary>
+    public static string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect)
+    {
+        if (trackId <= 0) return "Select a track first.";
+        if (deviceIndex < 0)
+            return ApplyInPlace(new PresetDocument { Type = "builtin-instrument", NamedParams = new() }, engine, trackId, -1);
+        if (midiEffect)
+        {
+            int pc = engine.MidiEffectParamCount(trackId, deviceIndex);
+            for (int i = 0; i < pc; i++)
+                if (engine.MidiEffectParamName(trackId, deviceIndex, i) != "View")   // the card size
+                    engine.MidiEffectSetParam(trackId, deviceIndex, i, engine.MidiEffectParamDefault(trackId, deviceIndex, i));
+        }
+        else
+        {
+            int pc = engine.DeviceParamCount(trackId, deviceIndex);
+            for (int i = 0; i < pc; i++)
+                engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
+        }
+        return "";
+    }
+
     /// <summary>Applies a preset to an EXISTING instrument/device in place (no new track/
     /// device is created) — for the in-header preset picker. Built-in instruments reset all
     /// params to default first so the patch is clean; effects set the preset's named params.</summary>
