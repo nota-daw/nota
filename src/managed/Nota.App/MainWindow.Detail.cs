@@ -130,7 +130,6 @@ public partial class MainWindow
         var row = BodyGrid.RowDefinitions[2];
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
-        _lastSetDetailHeight = h;
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = true;
         DetailPanel.IsVisible = true;
