@@ -258,6 +258,10 @@ public sealed class PreviewPlayer : UserControl
         var track = settings.Current.BrowserPreviewFxTrack;
         _fxTrack = track == AuditionTrackIds.Sample || audition.Tracks.Any(t => t.Id == track) ? track : AuditionTrackIds.Auto;
         SetSpectrum(settings.Current.BrowserPreviewSpectrum, persist: false);
+        // The Appearance → Waveform choice draws the well too, and follows it live (#107).
+        void ApplyWaveform() => _wave.Style = (WaveformStyle)Math.Clamp(settings.Current.ArrangementWaveform, 0, 1);
+        ApplyWaveform();
+        settings.Changed += ApplyWaveform;
     }
 
     /// <summary>The browser selection moved. A sample loads its waveform, a preset or built-in
@@ -916,6 +920,14 @@ public sealed class PreviewWaveform : Control
 
     public void SetPeaks(float[]? peaks) { _peaks = peaks; InvalidateVisual(); }
 
+    /// <summary>Bars (spaced strokes) or Solid (one column per pixel), as Appearance → Waveform sets.</summary>
+    public WaveformStyle Style
+    {
+        get => _style;
+        set { if (_style == value) return; _style = value; InvalidateVisual(); }
+    }
+    private WaveformStyle _style = WaveformStyle.Bars;
+
     public void SetState(double duration, double pos, bool playing)
     {
         _duration = duration; _pos = pos; _playing = playing;
@@ -1035,9 +1047,12 @@ public sealed class PreviewWaveform : Control
             ctx.FillRectangle(NotaPalette.GridBeat, new Rect(1, Math.Floor(h / 2), w - 2, 1));
             if (_peaks is { Length: > 0 } peaks && innerW > 8)
             {
-                // ~3.8px a bar with a 1px gap, as in the mockup (72 bars across its 274px well).
-                int n = Math.Max(8, (int)((innerW + 1) / 3.8));
-                double bw = (innerW - (n - 1)) / n;
+                // Bars: ~3.8px a bar with a 1px gap, as in the mockup (72 bars across its 274px
+                // well). Solid: one gapless column per pixel, so the outline reads continuous.
+                bool solid = _style == WaveformStyle.Solid;
+                double gap = solid ? 0 : 1;
+                int n = solid ? Math.Max(8, (int)innerW) : Math.Max(8, (int)((innerW + 1) / 3.8));
+                double bw = (innerW - (n - 1) * gap) / n;
                 for (int b = 0; b < n; b++)
                 {
                     int s0 = b * peaks.Length / n, s1 = Math.Max(s0 + 1, (b + 1) * peaks.Length / n);
@@ -1052,7 +1067,7 @@ public sealed class PreviewWaveform : Control
                              : _playing ? NotaPalette.TextMuted
                              : NotaPalette.TextFaint;
                     double bh = innerH * amp;
-                    ctx.FillRectangle(c, new Rect(InsetX + b * (bw + 1), mid - bh / 2, bw, bh), 1);
+                    ctx.FillRectangle(c, new Rect(InsetX + b * (bw + gap), mid - bh / 2, bw, bh), solid ? 0 : 1);
                 }
             }
             if (started && _duration > 0)
