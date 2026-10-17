@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
@@ -19,7 +21,7 @@ public partial class MainWindow
 {
     private const int MaxRecentProjects = 10;
 
-    /// <summary>Show the welcome launcher as a modal over the (empty) main window.</summary>
+    /// <summary>Show the welcome launcher over the (empty) main window; completes when it closes.</summary>
     private async Task ShowWelcomeAsync()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
@@ -62,7 +64,20 @@ public partial class MainWindow
                 });
         }, TaskScheduler.Default);
 
-        await win.ShowDialog(this);
+        // Shown owned rather than modal, so a click on the main window behind it can close it
+        // like the close button does (#67) — not while the launcher has its own dialog open
+        // (Settings, What's New), which that click is meant to come back to.
+        var closed = new TaskCompletionSource();
+        void OutsidePress(object? s, PointerPressedEventArgs e)
+        {
+            if (win.OwnedWindows.Count > 0) return;
+            win.Close();
+            e.Handled = true;   // the click only dismisses; it doesn't also act on the main window
+        }
+        AddHandler(PointerPressedEvent, OutsidePress, RoutingStrategies.Tunnel);
+        win.Closed += (_, _) => { RemoveHandler(PointerPressedEvent, OutsidePress); closed.TrySetResult(); };
+        win.Show(this);
+        await closed.Task;
     }
 
     // Turn the persisted path list into displayable rows, dropping folders that no longer

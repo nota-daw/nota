@@ -27,6 +27,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   arrangement ruler, a double-click on the loop region switches looping off without losing
   the region. It stays in the ruler in grey, and another double-click turns it back on. A
   double-click elsewhere on the ruler still moves the playhead.
+- **Close the start screen with Esc or a click outside it** (nota-daw/nota#67): either one
+  closes it like its close button and keeps the current project. While Settings or What's New
+  is open from the start screen, a click outside goes back to that dialog instead.
 - **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
   or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
   530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys

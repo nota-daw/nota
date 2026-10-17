@@ -267,10 +267,12 @@ public sealed class WelcomeWindow : NotaWindow
     private int _selected = -1;
     private bool _opening;
 
-    // ↑ / ↓ move the selection through the recent list, Return opens it.
+    // ↑ / ↓ move the selection through the recent list, Return opens it. Esc closes the
+    // launcher like its close button: the current project stays (#67).
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (_rows.Count > 0 && !_opening)
+        if (e.Key == Key.Escape && !_opening) { Close(); e.Handled = true; }
+        else if (_rows.Count > 0 && !_opening)
         {
             switch (e.Key)
             {
