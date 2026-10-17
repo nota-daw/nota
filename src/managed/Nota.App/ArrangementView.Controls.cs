@@ -27,6 +27,7 @@ public sealed partial class ArrangementView
 
         private double _pressBeat;
         private bool _dragging;   // a click scrubs the playhead; a drag defines a loop region
+        private bool _toggled;    // this press double-clicked the loop brace: no seek, no drag
 
         private double BeatAt(PointerEventArgs e) => _o._scrollBeats + e.GetPosition(this).X / _o._pixelsPerBeat;
 
@@ -35,20 +36,23 @@ public sealed partial class ArrangementView
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             _pressBeat = BeatAt(e);
             _dragging = false;
+            // Double-click on the loop brace turns the loop off / on; the region stays (#59).
+            _toggled = e.ClickCount == 2 && _o.ToggleLoopAt(_pressBeat);
             e.Pointer.Capture(this); e.Handled = true;
         }
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            if (_toggled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             double cur = BeatAt(e);
             if (!_dragging && Math.Abs(cur - _pressBeat) * _o._pixelsPerBeat > 4) _dragging = true;
             if (_dragging) _o.SetLoopPreview(_pressBeat, cur);
         }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (_dragging) _o.CommitLoopPreview();      // drag → loop region
+            if (_toggled) { }                           // the double-click already toggled the loop
+            else if (_dragging) _o.CommitLoopPreview(); // drag → loop region
             else _o.SeekTo(_pressBeat);                 // plain click → scrub playhead
-            _dragging = false;
+            _dragging = false; _toggled = false;
             e.Pointer.Capture(null);
         }
 
@@ -57,16 +61,18 @@ public sealed partial class ArrangementView
             double w = Bounds.Width, h = Bounds.Height;
             ctx.FillRectangle(ChromeBg, new Rect(0, 0, w, h));
 
-            // Loop brace across the ruler (drawn under bars/labels/playhead).
-            if (_o._loopActive && _o._loopE > _o._loopS)
+            // Loop brace across the ruler (drawn under bars/labels/playhead). A switched-off
+            // loop keeps its region, drawn in grey, so a double-click can bring it back.
+            if (_o._loopE > _o._loopS)
             {
                 double lx0 = _o.BeatToX(_o._loopS), lx1 = _o.BeatToX(_o._loopE);
                 if (lx1 > 0 && lx0 < w)
                 {
+                    var (fill, edge) = _o._loopActive ? (LoopBrace, LoopEdge) : (LoopBraceOff, LoopEdgeOff);
                     double cx0 = Math.Max(0, lx0), cx1 = Math.Min(w, lx1);
-                    ctx.FillRectangle(LoopBrace, new Rect(cx0, 0, cx1 - cx0, h));
-                    if (lx0 >= 0) ctx.DrawLine(LoopEdge, new Point(lx0, 0), new Point(lx0, h));
-                    if (lx1 <= w) ctx.DrawLine(LoopEdge, new Point(lx1, 0), new Point(lx1, h));
+                    ctx.FillRectangle(fill, new Rect(cx0, 0, cx1 - cx0, h));
+                    if (lx0 >= 0) ctx.DrawLine(edge, new Point(lx0, 0), new Point(lx0, h));
+                    if (lx1 <= w) ctx.DrawLine(edge, new Point(lx1, 0), new Point(lx1, h));
                 }
             }
 

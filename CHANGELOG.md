@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Double-click the loop brace to turn the loop off and on** (nota-daw/nota#59): in the
+  arrangement ruler, a double-click on the loop region switches looping off without losing
+  the region. It stays in the ruler in grey, and another double-click turns it back on. A
+  double-click elsewhere on the ruler still moves the playhead.
 - **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
   or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
   530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys

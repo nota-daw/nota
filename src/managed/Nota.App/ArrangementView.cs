@@ -644,6 +644,18 @@ public sealed partial class ArrangementView : UserControl
         LoopChanged?.Invoke();
     }
 
+    /// <summary>Turn the loop off / on when <paramref name="beat"/> is on the loop brace,
+    /// keeping its region (double-click on the ruler, #59). False when it isn't.</summary>
+    internal bool ToggleLoopAt(double beat)
+    {
+        if (_engine is null || _loopDragging || !(_loopE > _loopS) || beat < _loopS || beat > _loopE) return false;
+        _loopActive = !_loopActive;
+        _engine.SetLoop(_loopActive, _loopS, _loopE);
+        Redraw();
+        LoopChanged?.Invoke();
+        return true;
+    }
+
     private (double Start, double End) SnapLoopRange(double a, double b)
     {
         double s = Math.Max(0, Snap(Math.Min(a, b)));
@@ -2727,6 +2739,9 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush LoopBrace = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     private static readonly IBrush LoopBand = NotaPalette.Wash(NotaPalette.AccentBright, 0x14);
     private static readonly IPen   LoopEdge = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1);
+    // A switched-off loop keeps its brace on the ruler, in neutral grey (the accent is for what's live).
+    private static readonly IBrush LoopBraceOff = NotaPalette.Wash(NotaPalette.TextTertiary, 0x38);
+    private static readonly IPen   LoopEdgeOff = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x80), 1);
     // Automation overlay (M9-A3): a scrim mutes the clip content, a dashed line marks
     // the flat baseline of an empty lane.
     private static readonly IBrush AutoScrim = NotaPalette.Wash(NotaPalette.BgSunken, 0xC0);
