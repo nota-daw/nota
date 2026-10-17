@@ -78,6 +78,7 @@ public partial class MainWindow : Window
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
     private bool _trackHeadersFocused;
+    private bool _tempoRefreshPosted;
 
     private IAudioEngine Engine => _vm!.Engine;
 
@@ -252,7 +253,11 @@ public partial class MainWindow : Window
 
         vm.Transport.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(vm.Transport.Bpm)) bpmField.Value = (double)vm.Transport.Bpm;
+            if (e.PropertyName == nameof(vm.Transport.Bpm))
+            {
+                bpmField.Value = (double)vm.Transport.Bpm;
+                RequestTempoRefresh();   // un-warped audio clips change beat length with the tempo
+            }
             // Opening a project restores the master gain on the view model; move the fader
             // with it so the handle and the dB readout beside it never disagree. Skipped
             // mid-drag, where the fader is the one driving.
@@ -571,6 +576,17 @@ public partial class MainWindow : Window
             }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
+    }
+
+    /// <summary>A tempo change moves the beat length of every un-warped audio clip (its
+    /// seconds are fixed), but the arrangement only re-reads clip lengths on Refresh. A
+    /// BPM drag raises many changes a second, so coalesce them to one live refresh (clip
+    /// data + lanes, headers untouched) after the current batch.</summary>
+    private void RequestTempoRefresh()
+    {
+        if (_tempoRefreshPosted) return;
+        _tempoRefreshPosted = true;
+        Dispatcher.UIThread.Post(() => { _tempoRefreshPosted = false; Timeline.Refresh(rebuildHeaders: false); }, DispatcherPriority.Background);
     }
 
     private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Instrument);
