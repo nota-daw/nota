@@ -30,6 +30,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   menu; it works for audio effects, MIDI effects, plug-ins and the instrument. The fold is
   saved with the project (format v23) and follows the device when it is moved or its
   deletion is undone.
+- **An on/off switch on instrument cards** (nota-daw/nota#148): every instrument in the
+  Devices panel (built-in synths and samplers, Instrument and Drum Racks, hosted plug-ins)
+  now has the same switch as the effects. Off silences the instrument without muting the
+  track or deleting anything: it fades out over a few milliseconds and then uses no CPU,
+  while the MIDI effects before it and the audio effects after it keep their settings (a
+  reverb tail rings out). Back on, it plays from the next note. The switch is saved with
+  the project and kept when the track is duplicated; the AI assistant reaches it through
+  `set_device_bypass` with device index -1.
 - **Double-click the loop brace to turn the loop off and on** (nota-daw/nota#59): in the
   arrangement ruler, a double-click on the loop region switches looping off without losing
   the region. It stays in the ruler in grey, and another double-click turns it back on. A
@@ -57,6 +65,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   pressure. MCP: `get_clip_controllers`, `set_clip_controller`.
 
 ### Fixed
+- **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):
+  open a launched slot and the piano roll's cursor, or the Drum Rack step grid's lit
+  column, now follows the slot as it loops. Before, only Arrangement clips showed one.
 - **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
   back to its start, a key you're holding keeps sounding and release tails (pads, strings)
   ring out. Before, every voice was cut at the seam. A clip note running past the loop end

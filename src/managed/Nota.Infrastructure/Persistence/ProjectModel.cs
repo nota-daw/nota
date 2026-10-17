@@ -257,10 +257,12 @@ public sealed class InstrumentDto
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
-    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/021).</summary>
+    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
+    /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
+    public bool Bypassed { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -342,7 +344,7 @@ public sealed class MidiDeviceDto
 {
     public int Kind { get; set; }        // 0 = Arpeggiator
     public bool Bypassed { get; set; }
-    public bool Folded { get; set; }     // drawn as a strip in the Devices panel (v23, specs/021)
+    public bool Folded { get; set; }     // drawn as a strip in the Devices panel (v23, specs/022)
     public float[] Params { get; set; } = System.Array.Empty<float>();
     // Map/CC routing (arp): CC lane → an audio-device param on the same track.
     public int CcDestDevice { get; set; } = -2;   // -2 = no routing
@@ -357,7 +359,7 @@ public sealed class DeviceDto
     /// <summary>Built-in kind: 0=EQ, 1=Compressor, 2=Reverb, 3=Delay, 4=Utility; -1 = hosted plugin.</summary>
     public int BuiltinKind { get; set; }
     public bool Bypassed { get; set; }
-    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/021).</summary>
+    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
     public bool Folded { get; set; }
     public float[] Params { get; set; } = System.Array.Empty<float>();
     /// <summary>Stable plugin identifier when BuiltinKind == -1 (M7-6c).</summary>

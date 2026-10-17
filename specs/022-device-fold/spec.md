@@ -1,6 +1,6 @@
 # Feature Specification: Fold a device into a narrow strip
 
-**Feature Branch**: `021-device-fold`
+**Feature Branch**: `022-device-fold`
 
 **Created**: 2026-10-17
 

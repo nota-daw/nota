@@ -1,6 +1,6 @@
 # Implementation Plan: Fold a device into a narrow strip
 
-**Branch**: `021-device-fold` | **Date**: 2026-10-17 | **Spec**: [spec.md](spec.md)
+**Branch**: `022-device-fold` | **Date**: 2026-10-17 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 

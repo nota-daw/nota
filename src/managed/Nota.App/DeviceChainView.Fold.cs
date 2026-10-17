@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — folding a card into a narrow strip (specs/021), so a long chain fits
+// Detail · Devices — folding a card into a narrow strip (specs/022), so a long chain fits
 // the panel. A double-click on a card's header (or "Fold" in its menu) folds it; the strip
 // keeps the bypass switch on top and the name, rotated to read top to bottom, and still
 // selects, opens the device menu and drags like the card. A double-click on it unfolds.

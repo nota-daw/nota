@@ -54,7 +54,7 @@ public:
     // and "send on change" read it.
     // Relaxed atomics so a test / meter can read them from the message thread.
     std::atomic<float> deliveredCtl[kCtlCount];
-    // Fold (specs/021): the Devices panel draws the instrument as a narrow strip. A view flag
+    // Fold (specs/022): the Devices panel draws the instrument as a narrow strip. A view flag
     // saved with the project; message thread only.
     bool folded = false;
     Instrument() { for (auto& v : deliveredCtl) v.store(std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed); }
@@ -70,6 +70,15 @@ public:
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
+
+    // The card's on/off switch (#148). Off = the engine stops rendering the instrument (it
+    // fades out over one block and releases its voices); its settings, the MIDI effects
+    // before it and the audio effects after it are untouched. Atomic: set from the message
+    // thread, read on the audio thread. offSettled is the audio thread's own note that the
+    // fade-out has run.
+    bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
+    void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
+    bool offSettled = false;
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,
@@ -164,6 +173,9 @@ public:
     // engine from `kind()`; hosted plugins re-instantiate here (fresh DSP instance +
     // copied state). Returns nullptr if the engine should handle it. Message thread.
     virtual std::shared_ptr<Instrument> clone() const { return nullptr; }
+
+private:
+    std::atomic<bool> bypassed_{false};
 };
 
 } // namespace nota

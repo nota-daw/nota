@@ -1,7 +1,7 @@
 # C ABI: device fold
 
 ```c
-/* Device fold (specs/021): a view flag the Devices panel draws as a narrow strip. Saved with
+/* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
  * the project, never read by the audio thread. Kept on the device, so it follows moves and
  * undo/redo. device_index -1 = the track's instrument. Message thread. */
 NOTA_API void    nota_track_set_device_folded(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t folded);

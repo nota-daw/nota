@@ -245,7 +245,7 @@ public sealed partial class NotaEngine
         return NativeMethods.DeviceBypassed(_handle, trackId, deviceIndex) != 0;
     }
 
-    /// <summary>Folds (or unfolds) the device at deviceIndex in the Devices panel (specs/021);
+    /// <summary>Folds (or unfolds) the device at deviceIndex in the Devices panel (specs/022);
     /// -1 = the instrument. A view flag, saved with the project.</summary>
     public void SetDeviceFolded(int trackId, int deviceIndex, bool folded)
     {

@@ -32,7 +32,7 @@ public sealed class ProjectService
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
     /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
-    /// v23 (specs/021) adds the Devices-panel fold on devices, MIDI effects and instruments.
+    /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
     public const int CurrentFormatVersion = 23;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
@@ -164,6 +164,7 @@ public sealed class ProjectService
                 int instScSrc = engine.InstrumentSidechainSource(ti.Id);
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
                 instDto.Folded = engine.DeviceFolded(ti.Id, -1);
+                instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
                 t.Instrument = instDto;
             }
 
@@ -593,6 +594,8 @@ public sealed class ProjectService
             }
 
             if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
+            if (id > 0 && t.Instrument is { Bypassed: true })
+                engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
                 instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)

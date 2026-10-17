@@ -95,7 +95,7 @@ public static class ProjectMigrations
         // specs/020). Absent in v21 documents; null = none matches old behaviour — no-op.
         new Migration(21, _ => { }),
         // v22 -> v23: devices, MIDI effects and instruments gain Folded (drawn as a strip in
-        // the Devices panel, specs/021). Absent in v22 documents; false = unfolded — no-op.
+        // the Devices panel, specs/022). Absent in v22 documents; false = unfolded — no-op.
         new Migration(22, _ => { }),
     };
 

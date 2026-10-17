@@ -1384,7 +1384,7 @@ NOTA_API float       nota_midi_effect_get_param(const NotaEngine* engine, int32_
 NOTA_API NotaResult  nota_midi_effect_set_param(NotaEngine* engine, int32_t track_id, int32_t index, int32_t param_index, float value);
 NOTA_API void        nota_midi_effect_set_bypassed(NotaEngine* engine, int32_t track_id, int32_t index, int32_t bypassed);
 NOTA_API int32_t     nota_midi_effect_bypassed(const NotaEngine* engine, int32_t track_id, int32_t index);
-/* Fold (specs/021): as nota_track_set_device_folded, for a MIDI effect. */
+/* Fold (specs/022): as nota_track_set_device_folded, for a MIDI effect. */
 NOTA_API void        nota_midi_effect_set_folded(NotaEngine* engine, int32_t track_id, int32_t index, int32_t folded);
 NOTA_API int32_t     nota_midi_effect_folded(const NotaEngine* engine, int32_t track_id, int32_t index);
 /* Live IN/OUT of the last note-on a MIDI effect remapped (Nota Scale readout); -1 = none. */
@@ -1694,11 +1694,13 @@ NOTA_API NotaResult nota_plugin_set_state(NotaEngine* engine, int32_t track_id, 
                                           const uint8_t* data, int32_t size);
 
 /* Device bypass (M3-6, FR-37). When bypassed, the effect is skipped in the
- * render chain (buffer passes through untouched). */
+ * render chain (buffer passes through untouched). device_index -1 is the track's
+ * instrument (#148): switched off, it fades out over one block, releases its voices
+ * and is no longer rendered; its MIDI effects and audio effects keep running. */
 NOTA_API NotaResult nota_track_set_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t bypassed);
 NOTA_API int32_t    nota_track_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
-/* Device fold (specs/021): a view flag the Devices panel draws as a narrow strip. Saved with
+/* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
  * the project, never read by the audio thread. Kept on the device, so it follows moves and
  * undo/redo. device_index -1 = the track's instrument. Out of range: set is a no-op, get
  * returns 0. Message thread. */

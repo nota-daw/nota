@@ -180,7 +180,7 @@ public:
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
 
-    // Fold (specs/021): the Devices panel draws this device as a narrow strip. A view flag
+    // Fold (specs/022): the Devices panel draws this device as a narrow strip. A view flag
     // saved with the project; message thread only — the audio thread never reads it. Kept on
     // the device so it follows moves and undo/redo.
     bool folded() const { return folded_; }

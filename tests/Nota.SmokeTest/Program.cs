@@ -388,6 +388,14 @@ if (args.Length >= 1 && args[0] == "--midi-ctl")
     Console.WriteLine(failures == 0 ? "MIDI CTL PASSED" : $"MIDI CTL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The instrument's on/off switch alone (fast iteration): `--instrument-off`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--instrument-off")
+{
+    Console.WriteLine("-- instrument on/off --");
+    foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "INSTRUMENT OFF PASSED" : $"INSTRUMENT OFF FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MPE alone (fast iteration): `--mpe`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--mpe")
 {
@@ -14768,6 +14776,8 @@ Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- instrument on/off --");
+foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");
 foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 

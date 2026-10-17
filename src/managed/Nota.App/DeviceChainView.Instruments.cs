@@ -16,9 +16,9 @@ public sealed partial class DeviceChainView
     private Control InstrumentCard()
     {
         int kind = _engine.TrackInstrumentKind(_trackId);
-        // Folded: just the strip, whatever the instrument (no body is built). Instruments have
-        // no bypass yet, so the strip's power slot stays empty.
-        if (_engine.DeviceFolded(_trackId, -1)) return FoldedStrip(ChainKind.Instrument, -1, _engine.DeviceName(_trackId, -1), bypassable: false, bypassed: false);
+        // Folded: just the strip, whatever the instrument (no body is built), with the
+        // instrument's on/off switch on top like any other device's.
+        if (_engine.DeviceFolded(_trackId, -1)) return FoldedStrip(ChainKind.Instrument, -1, _engine.DeviceName(_trackId, -1), bypassable: true, _engine.DeviceBypassed(_trackId, -1));
         if (kind == 3) return InstrumentRackCard();
         if (kind == 4) return DrumRackCard();
         if (kind == -1) return PluginCardFor(ChainKind.Instrument, -1, 1);   // hosted VST3 / AU
@@ -32,7 +32,7 @@ public sealed partial class DeviceChainView
         double width = strategy.WidthFor(_engine, _trackId);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: strategy.Subtitle, DeviceIndex: -1, Count: 1,
-            Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
             PresetKind: kind, IsInstrument: true, Width: width, Kind: ChainKind.Instrument,
             VoiceLabel: strategy.VoiceLabel,
             Presets: kind == Nota.Application.RhythmModel.Kind ? KitPresets() : kind == Nota.Application.MosaicModel.Kind ? MosaicPresets() : null,
@@ -91,7 +91,7 @@ public sealed partial class DeviceChainView
         var body = new RackCardView(NewCardContext()).BuildInstrumentRackBody(out int chains);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
-            Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
             PresetKind: 3, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument);
         return BuildCardShell(spec, body);
     }
@@ -104,7 +104,7 @@ public sealed partial class DeviceChainView
         var kits = KitPresets();
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Drums · {pads} pad{(pads == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
-            Bypassed: false, Bypassable: false, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
             PresetKind: 4, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument, Presets: kits);
         return BuildCardShell(spec, body);
     }

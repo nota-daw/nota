@@ -94,7 +94,7 @@ public:
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
 
-    // Fold (specs/021): drawn as a narrow strip in the Devices panel. Message thread only.
+    // Fold (specs/022): drawn as a narrow strip in the Devices panel. Message thread only.
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 

@@ -2665,6 +2665,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
     nt->name         = src.name;
     nt->colorIndex   = src.colorIndex;
     nt->instrument   = cloneInstrument(src);
+    if (nt->instrument && src.instrument) nt->instrument->setBypassed(src.instrument->bypassed());
     for (auto& m : src.midiEffects) if (auto nm = cloneMidiDevice(*m)) nt->midiEffects.push_back(nm);
     for (auto& d : src.devices) if (auto nd = cloneDevice(*d)) nt->devices.push_back(nd);
     // Warped clips must not share a stretcher across tracks — rebuild per clip.

@@ -291,14 +291,26 @@ public partial class MainWindow : Window
             if (_audioEditor is { IsEffectivelyVisible: true })
                 _audioEditor.OnPlayhead(beats, vm.Engine.IsPlaying);       // live clip playback cursor
             // Piano-roll playback cursor: map the global beat to clip-local time for the
-            // open arrangement MIDI clip (session slots run their own clock → skipped).
-            if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null
-                && _editorTrackId > 0 && Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                _editorRoll.SetPlayhead(beats - pci.StartBeat, vm.Engine.IsPlaying);
-            // Same for the Drum Rack step grid (Session slots run their own clock → skipped).
-            if (_patternView is { IsEffectivelyVisible: true } && _patternTrackId > 0 && _patternScene < 0
-                && Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var ppi) && ppi.IsMidi)
-                _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
+            // open arrangement MIDI clip; a session slot runs its own loop clock, so follow
+            // the slot's position instead (#137).
+            if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null)
+            {
+                if (_editorTrackId > 0)
+                {
+                    if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
+                        _editorRoll.SetPlayhead(beats - pci.StartBeat, vm.Engine.IsPlaying);
+                }
+                else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
+                    _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);
+            }
+            // Same for the Drum Rack step grid.
+            if (_patternView is { IsEffectivelyVisible: true } && _patternTrackId > 0)
+            {
+                if (_patternScene >= 0)
+                    _patternView.SetPlayhead(SessionSlotPlayhead(_patternTrackId, _patternScene), true);
+                else if (Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var ppi) && ppi.IsMidi)
+                    _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
+            }
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
             int pct = (int)Math.Round(load * 100);

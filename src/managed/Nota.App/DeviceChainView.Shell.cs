@@ -163,13 +163,15 @@ public sealed partial class DeviceChainView
         if (s.Bypassable)
         {
             var bypass = new SwitchTrack { IsOn = !s.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
-            ToolTip.SetTip(bypass, s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass");
+            ToolTip.SetTip(bypass, s.IsInstrument
+                ? (s.Bypassed ? "Off — click to turn the instrument on" : "On — click to turn the instrument off")
+                : (s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass"));
             bypass.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;   // not a drag, not a selection click
                 if (s.Kind == ChainKind.Midi) _engine.SetMidiEffectBypassed(_trackId, di, !s.Bypassed);
-                else _engine.SetDeviceBypassed(_trackId, di, !s.Bypassed);
+                else _engine.SetDeviceBypassed(_trackId, s.IsInstrument ? -1 : di, !s.Bypassed);   // -1: the instrument (#148)
                 Rebuild(); Changed?.Invoke();
             };
             power.Child = bypass;
@@ -312,7 +314,7 @@ public sealed partial class DeviceChainView
             if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(headerBar, s.Kind, di, HeaderMenu); return; }
             if (!pt.IsLeftButtonPressed) return;
             // A double-click on the header itself (not its picker, switch or accessories) folds
-            // the card into a strip (specs/021). ClickCount, not DoubleTapped: the first click
+            // the card into a strip (specs/022). ClickCount, not DoubleTapped: the first click
             // selects and rebuilds the row, so the second lands on a new header.
             if (e.ClickCount == 2 && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
             { e.Handled = true; SetFolded(s.Kind, di, true); return; }

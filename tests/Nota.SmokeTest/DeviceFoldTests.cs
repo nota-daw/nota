@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Device fold (specs/021): the Devices panel's "folded into a strip" flag lives on the engine
+// Device fold (specs/022): the Devices panel's "folded into a strip" flag lives on the engine
 // device. It round-trips through the C ABI for audio effects, MIDI effects and the instrument,
 // is safe out of range, follows a move and a delete + undo, and survives save/load; a v22
 // project opens unfolded. Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --fold`.
@@ -31,7 +31,13 @@ internal static class DeviceFoldTests
         eng.SetMidiEffectFolded(t, arp, true);
         yield return (eng.DeviceFolded(t, eq) && !eng.DeviceFolded(t, ut) && eng.DeviceFolded(t, -1) && eng.MidiEffectFolded(t, arp),
             "fold: set/get round-trips for an effect, the instrument and a MIDI effect");
-        yield return (!eng.DeviceBypassed(t, eq) && !eng.MidiEffectBypassed(t, arp), "fold: folding doesn't bypass");
+        yield return (!eng.DeviceBypassed(t, eq) && !eng.DeviceBypassed(t, -1) && !eng.MidiEffectBypassed(t, arp), "fold: folding doesn't bypass");
+        // The folded instrument strip's switch is the instrument's bypass (#148): it toggles while folded.
+        eng.SetDeviceBypassed(t, -1, true);
+        bool offFolded = eng.DeviceBypassed(t, -1) && eng.DeviceFolded(t, -1);
+        eng.SetDeviceBypassed(t, -1, false);
+        yield return (offFolded && !eng.DeviceBypassed(t, -1) && eng.DeviceFolded(t, -1),
+            "fold: a folded instrument switches off and on and stays folded");
 
         eng.SetDeviceFolded(t, 99, true); eng.SetMidiEffectFolded(t, 99, true); eng.SetDeviceFolded(9999, 0, true);
         yield return (!eng.DeviceFolded(t, 99) && !eng.MidiEffectFolded(t, 99) && !eng.DeviceFolded(9999, 0),

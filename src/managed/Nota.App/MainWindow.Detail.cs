@@ -226,6 +226,11 @@ public partial class MainWindow
     // The audio clip editor is open on a Session slot's take.
     private bool SessionAudioEditorOpen => _audioEditor is not null && SessionClip.SceneOf(_audioEditorClipIndex) >= 0;
 
+    // A Session slot's loop-local playback position in beats, or -1 (hidden) unless that
+    // slot is the one playing on its track — the slot loops on its own clock, not the song's.
+    private double SessionSlotPlayhead(int trackId, int scene) =>
+        Engine.SessionSlotState(trackId, scene) == 3 ? Engine.SessionSlotPosition(trackId) : -1;
+
     private bool IsDrumRackTrack(int trackId) => trackId > 0 && Engine.TrackInstrumentKind(trackId) == 4;
 
     // Build the step grid over one clip (scene >= 0: a Session slot). Both note sources are
