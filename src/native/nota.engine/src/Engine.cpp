@@ -404,6 +404,9 @@ void Engine::transportPlayCountIn() {
     const int32_t bars = countInBars();
     if (bars <= 0 || transport_.uiIsPlaying()) { transportPlay(); return; }
     arrangementActive_.store(true, std::memory_order_relaxed);
+    startCountIn(bars);
+}
+void Engine::startCountIn(int32_t bars) {
     captureGate_.store(false, std::memory_order_relaxed);
     // Mirror it now so a poll before the audio thread picks the command up already sees
     // the count-in (Play pressed again = stop, not a second start).

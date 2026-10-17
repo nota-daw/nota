@@ -27,6 +27,7 @@ internal static class LiveRecordTests
         foreach (var r in SessionSlot()) yield return r;
         foreach (var r in RoutedHeldAcrossRecord()) yield return r;
         foreach (var r in SessionAudioTake()) yield return r;
+        foreach (var r in SessionCountIn()) yield return r;
     }
 
     // Render about `beats` beats in small chunks (events are timed per block).
@@ -360,5 +361,87 @@ internal static class LiveRecordTests
         yield return (e.GetSessionNotes(t, 0).Any(x => x.Pitch == 72), "session: the note is stored into the slot on release");
         e.StopAllSession();
         e.StopTransport();
+    }
+    // Recording into a Session slot from stop counts in first (#158): the clicks run with the
+    // transport and the slot still, the slot starts on the sample the count-in runs out (not a
+    // launch quantum later), a note held into the take starts the slot and one released in
+    // the count-in is dropped. Stop during the count-in leaves the slot as it was; a take
+    // started while the transport rolls doesn't count in.
+    private static IEnumerable<(bool, string)> SessionCountIn()
+    {
+        using (var e = Armed(out int t))
+        {
+            e.SetLaunchQuant(4.0);
+            e.Seek(16.0);
+            Beats(e, 0.01);
+            e.SetCountIn(1);
+            e.RecordSessionSlot(t, 0);
+            yield return (e.CountInBeats > 0 && !e.IsPlaying, $"session count-in: armed from stop ({e.CountInBeats:F2} beats)");
+            Beats(e, 1.0);
+            e.NoteOn(64, 0.8f);             // played and released inside the count-in
+            Beats(e, 0.5);
+            e.NoteOff(64);
+            Beats(e, 2.0);                  // 3.5 beats into the bar
+            e.TryGetSessionRecordTarget(out _, out _, out double waiting);
+            yield return (!e.IsPlaying && e.SessionPlayingSlot(t) < 0 && waiting == 0.0,
+                $"session count-in: slot and transport wait (playing={e.IsPlaying}, slot={e.SessionPlayingSlot(t)}, elapsed={waiting:F2})");
+            e.NoteOn(60, 0.8f);             // a pickup held into the take
+            Beats(e, 1.0);                  // the count-in ran out half a beat ago
+            e.NoteOff(60);
+            e.TryGetSessionRecordTarget(out _, out _, out double el);
+            yield return (e.IsPlaying && e.SessionPlayingSlot(t) == 0 && Near(el, 0.5),
+                $"session count-in: the slot starts as it runs out, not a quantum later (elapsed {el:F2})");
+            Beats(e, 0.25);
+            e.NoteOn(67, 0.8f);
+            Beats(e, 0.25);
+            e.NoteOff(67);
+            Beats(e, 0.1);
+            e.Poll();
+            e.StopSessionRecord();
+            e.Poll();
+            var notes = e.GetSessionNotes(t, 0);
+            var pickup = notes.FirstOrDefault(x => x.Pitch == 60);
+            yield return (notes.Any(x => x.Pitch == 60) && Near(pickup.StartBeat, 0.0) && Near(pickup.LengthBeats, 0.5),
+                $"session count-in: a note held into the take starts the slot (start {pickup.StartBeat:F2}, length {pickup.LengthBeats:F2})");
+            yield return (!notes.Any(x => x.Pitch == 64) && notes.Any(x => x.Pitch == 67),
+                $"session count-in: a note over before the take is dropped, the take records ({string.Join(",", notes.Select(x => x.Pitch))})");
+            e.StopAllSession();
+            e.StopTransport();
+        }
+
+        using (var e = Armed(out int t))
+        {
+            e.Seek(0.0);
+            Beats(e, 0.01);
+            e.SetCountIn(1);
+            bool couldUndo = e.CanUndo;
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 1.0);
+            e.StopTransport();              // Stop during the count-in cancels the take
+            Beats(e, 0.1);
+            yield return (!e.IsPlaying && e.CountInBeats == 0 && !e.IsRecording && e.SessionSlotLength(t, 0) == 0.0,
+                $"session count-in: Stop cancels it and the slot is empty again (len {e.SessionSlotLength(t, 0):F2})");
+            yield return (e.CanUndo == couldUndo, "session count-in: a cancelled take leaves no undo step");
+            Beats(e, 4.0);
+            yield return (!e.IsPlaying && e.SessionPlayingSlot(t) < 0, "session count-in: a cancelled count-in never starts the slot");
+
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 1.0);
+            e.StopSessionRecord();          // the slot's own stop, too
+            Beats(e, 0.1);
+            yield return (!e.IsPlaying && e.CountInBeats == 0 && e.SessionSlotLength(t, 0) == 0.0,
+                "session count-in: stopping the take from the slot cancels it too");
+
+            e.SetLaunchQuant(0.0);
+            e.Play();
+            Beats(e, 0.5);
+            e.RecordSessionSlot(t, 0);      // transport rolling: no count-in
+            Beats(e, 0.1);
+            yield return (e.CountInBeats == 0 && e.SessionPlayingSlot(t) == 0, "session count-in: none while the transport rolls");
+            e.StopSessionRecord();
+            e.StopAllSession();
+            e.StopTransport();
+            e.SetCountIn(0);
+        }
     }
 }

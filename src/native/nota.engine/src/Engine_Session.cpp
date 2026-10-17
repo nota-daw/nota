@@ -274,6 +274,12 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return;
     if (scene < 0 || scene >= authoring_->sceneCount) return;
+    // From stop, a take counts in first when a count-in is set (#158), as an Arrangement take
+    // does; with the transport already rolling it starts on the launch quantum as before.
+    const bool countIn = !transport_.uiIsPlaying() && uiCountIn_.load(std::memory_order_relaxed) <= 0.0
+                         && countInBars() > 0;
+    sessionCountIn_ = false;
+    sessionCountInFresh_ = false;
 
     // Audio track: capture input into the slot (M5-4). Reuses the M4-3 input
     // pipeline; stopSessionRecord() materialises the take into slot.audio.
@@ -281,9 +287,13 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         recordSessionTrackId_ = trackId;
         recordSessionScene_   = scene;
         recordSessionAudio_   = true;
-        if (startAudioRecording(trackId)) {
+        recordCountIn_ = countIn;   // startAudioRecording leaves rolling the transport to us
+        const bool ok = startAudioRecording(trackId);
+        recordCountIn_ = false;
+        if (ok) {
             recordStartStatus_ = 0;
             recording_.store(true, std::memory_order_relaxed); // drives slot state = recording
+            if (countIn) { sessionCountIn_ = true; transportPlayCountIn(); }   // the capture tap stays gated meanwhile
         } else {
             recordStartStatus_ = 2;
             recordSessionAudio_ = false;
@@ -304,14 +314,27 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         recordSessionGrowing_ = sessionRecordLen_ <= 0.0;
         addSessionMidiClip(trackId, scene, recordSessionGrowing_ ? kGrowingTakeBeats : sessionRecordLen_);
         t = findTrackAuthoring(trackId); if (!t) return;
+        sessionCountInFresh_ = true;
+        sessionCountInUndo_ = undoPushCount_;
     }
 
     resetCtlFold();
     recordSessionTrackId_ = trackId;
     recordSessionScene_   = scene;
     recordSlotLen_.store(t->sessionSlots[scene].lengthBeats, std::memory_order_relaxed);
-    launchSlot(trackId, scene); // play + loop the slot (also auto-starts transport)
     recordSlotPlayer_.store(t->sessionPlayer.get(), std::memory_order_release);
+    if (countIn && t->sessionPlayer) {
+        // The slot waits for the count-in: the audio thread launches it the moment the
+        // clicks run out (Engine_Render). Session-only, like any launch from stop.
+        sessionCountIn_ = true;
+        if (t->sessionPlayer->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+            t->sessionPlayer->requestStopNow();   // no earlier request may start it before then
+        countInLaunchScene_.store(scene, std::memory_order_release);
+        arrangementActive_.store(false, std::memory_order_relaxed);
+        startCountIn(countInBars());
+    } else {
+        launchSlot(trackId, scene); // play + loop the slot (also auto-starts transport)
+    }
     recording_.store(true, std::memory_order_relaxed);
 }
 
@@ -322,6 +345,15 @@ void Engine::stopSessionRecord() { finalizeSessionRecord(true); }
 // so the take isn't lost). No-op when nothing is recording into a session slot.
 void Engine::finalizeSessionRecord(bool relaunch) {
     if (recordSessionScene_ < 0 && !recordSessionAudio_) return;   // not a session record
+    // Stopped while still counting in (#158): nothing was recorded, so put things back.
+    if (sessionCountIn_) {
+        sessionCountIn_ = false;
+        const bool pendingSlot = countInLaunchScene_.exchange(-1, std::memory_order_acq_rel) >= 0;
+        if (pendingSlot || (recordSessionAudio_ && uiCountIn_.load(std::memory_order_relaxed) > 0.0)) {
+            cancelSessionCountIn();
+            return;
+        }
+    }
     // Audio take: materialise into the slot (reads recordSession* + clears the audio flags).
     if (recordSessionAudio_) {
         const int32_t tid = recordSessionTrackId_, sc = recordSessionScene_;
@@ -351,6 +383,40 @@ void Engine::finalizeSessionRecord(bool relaunch) {
     recordSlotPlayer_.store(nullptr, std::memory_order_release);
     recordSessionScene_ = -1;
     recordSessionTrackId_ = 0;
+    recordSessionAudio_ = false;   // also when the take captured nothing (stopAudioRecording left it)
+}
+
+// A Session take stopped during its count-in: stop the clicks (the transport never rolled),
+// drop the capture, and take a fresh take's empty clip back out when nothing was edited since
+// it went in, so the slot is as it was.
+void Engine::cancelSessionCountIn() {
+    const int32_t tid = recordSessionTrackId_, sc = recordSessionScene_;
+    if (recordSessionAudio_) stopAudioRecording();   // nothing captured: the tap was gated
+    resetCtlFold();
+    recording_.store(false, std::memory_order_relaxed);
+    recordSlotPlayer_.store(nullptr, std::memory_order_release);
+    recordSessionScene_ = -1;
+    recordSessionTrackId_ = 0;
+    recordSessionAudio_ = false;
+    recordSessionGrowing_ = false;
+    arrangementActive_.store(false, std::memory_order_relaxed);
+    uiCountIn_.store(0.0, std::memory_order_relaxed);
+    Command c; c.type = CommandType::TransportStop; commands_.push(c);   // also reopens the capture gate
+    if (sessionCountInFresh_ && undoPushCount_ == sessionCountInUndo_ && !undoStack_.empty() && undoStack_.back().graph) {
+        // The last checkpoint is the empty clip going in: drop it, and give the slot back
+        // what it held before (only the slot — anything else published since stays).
+        auto before = std::move(undoStack_.back().graph);
+        undoStack_.pop_back();
+        const SessionSlot* was = nullptr;
+        for (auto& bt : before->tracks)
+            if (bt->id() == tid && sc >= 0 && sc < static_cast<int32_t>(bt->sessionSlots.size())) was = &bt->sessionSlots[sc];
+        if (auto old = findTrackAuthoring(tid); old && sc >= 0 && sc < static_cast<int32_t>(old->sessionSlots.size())) {
+            auto nt = cloneTrack(*old);
+            nt->sessionSlots[sc] = was ? *was : SessionSlot{};
+            republishWithTrackRaw(tid, nt);
+        }
+    }
+    sessionCountInFresh_ = false;
 }
 
 // A take's loop length: the recorded beats rounded to whole launch quanta (bars when

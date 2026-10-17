@@ -1144,6 +1144,7 @@ private:
     // Click the count-in for numFrames and advance it; true once it has run out.
     bool renderCountIn(float* out, int32_t numFrames, double spb);
     void endCountIn();   // audio thread: drop the count-in state and reopen the capture gate
+    void launchCountInSlot();   // audio thread: start the Session slot a count-in was waiting for
     void renderClick(float* out, int32_t i, int clickLen, double sr);   // one sample of the click voice
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
@@ -1435,6 +1436,18 @@ private:
     std::atomic<bool>    captureGate_{true};
     bool                 recordCountIn_ = false;   // setRecording → startAudioRecording: count-in pending
     void playClock();   // push a TransportPlay command without touching arrangementActive_
+    // Click `bars` of count-in, then roll the clock (arrangementActive_ untouched). Message thread.
+    void startCountIn(int32_t bars);
+    // A Session take started from stop counts in first (#158). sessionCountIn_: this take
+    // started the count-in (message thread). countInLaunchScene_: the slot the audio thread
+    // launches on recordSlotPlayer_ the moment the count-in runs out, -1 once launched or
+    // cancelled. sessionCountInUndo_: undoPushCount_ right after a fresh take's empty clip was
+    // added, so a take stopped during its count-in can take that clip back out.
+    bool                 sessionCountIn_ = false;
+    std::atomic<int32_t> countInLaunchScene_{-1};
+    bool                 sessionCountInFresh_ = false;
+    uint64_t             sessionCountInUndo_ = 0;
+    void cancelSessionCountIn();
     void finalizeSessionRecord(bool relaunch);   // materialise an in-progress session take
     // Build a fresh graph with a new scene count, cloning tracks so slot vectors resize safely.
     std::shared_ptr<Graph> rebuildScenes(int32_t newCount,

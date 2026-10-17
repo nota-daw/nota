@@ -362,6 +362,13 @@ void Engine::poll() {
             Note n; n.pitch = r.pitch;
             n.startBeat = std::fmod(r.startBeat < 0 ? 0 : r.startBeat, L);
             n.lengthBeats = r.lengthBeats > 0.0 ? r.lengthBeats : 0.1;
+            // Played on the count-in (#158): a slot has nothing before its start, so a note
+            // released before the take began is dropped and one held into it starts there.
+            if (r.startBeat < 0.0) {
+                const double end = r.startBeat + r.lengthBeats;
+                if (end <= 1e-9) { Note gone; attachRecordedExpr(gone, r.pitch, r.startBeat); continue; }
+                n.lengthBeats = end;
+            }
             n.velocity = r.velocity;
             attachRecordedExpr(n, r.pitch, r.startBeat);
             s.midi.notes.push_back(n);
@@ -716,6 +723,13 @@ void Engine::endCountIn() {
     captureGate_.store(true, std::memory_order_relaxed);
 }
 
+// A Session take counted in (#158): its slot starts as the transport rolls, on that sample,
+// rather than on the next launch quantum. No-op when no take is waiting.
+void Engine::launchCountInSlot() {
+    if (const int32_t sc = countInLaunchScene_.exchange(-1, std::memory_order_acq_rel); sc >= 0)
+        if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire)) sp->requestLaunch(sc, 0.0);
+}
+
 void Engine::drainCommands() {
     Command c;
     while (commands_.pop(c)) {
@@ -732,6 +746,7 @@ void Engine::drainCommands() {
                 } else {
                     endCountIn();
                     transport_.play();
+                    launchCountInSlot();   // Play pressed during a Session take's count-in
                 }
                 break;
             case CommandType::TransportStop:    endCountIn(); transport_.stop(); break;
@@ -787,11 +802,13 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // When recording into a Session slot, time notes against the slot's own loop
     // clock (localBeats holds this block's start position) instead of the global
     // transport, so overdubs land at the right spot in the loop. During a count-in the
-    // transport holds still and notes are timed back from the take start (#56).
+    // transport holds still and notes are timed back from the take start (#56) — for a slot
+    // take, back from the slot's start (#158).
     SessionPlayer* slot = recordSlotPlayer_.load(std::memory_order_acquire);
     const double slotLen = recordSlotLen_.load(std::memory_order_relaxed);
     const bool timed = playing || countInActive_;   // the timeline has a position for an event
-    const double nowBeat = slot ? (slotLen > 0.0 ? std::fmod(slot->localBeats, slotLen) : slot->localBeats)
+    const double nowBeat = slot ? (countInActive_ ? countInClockOffset()
+                                   : slotLen > 0.0 ? std::fmod(slot->localBeats, slotLen) : slot->localBeats)
                                 : blockStartBeat + countInClockOffset();
     captureNow_ = nowBeat;
 
@@ -1571,6 +1588,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         if (countInDone) {
             endCountIn();
             transport_.play();
+            launchCountInSlot();
             // Let the metronome click the beat we launch on (not when starting mid-beat).
             const double b = transport_.playheadSamples() / spb;
             const int64_t fb = static_cast<int64_t>(std::floor(b));

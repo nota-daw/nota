@@ -82,6 +82,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a
+  scene) with the transport stopped now plays the metronome count-in first, with the slot
+  blinking "Rec in…", and the take starts when it ends. A note you start during the count-in
+  and still hold when the take begins is kept, from the take's start. Stop cancels the
+  count-in and leaves the slot empty, with no undo step. With the transport already
+  running, nothing changes: the take starts on the launch quantization.
 - **A tempo set over MCP shows in the transport bar and is saved**: `set_tempo` (and
   anything driving it, such as a hardware controller) changed the tempo you hear, but the
   BPM field kept the old number, and saving, autosave and export used that stale tempo, so
