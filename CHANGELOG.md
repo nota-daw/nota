@@ -71,6 +71,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Send faders stay in step everywhere** (nota-daw/nota#138): turning a Send knob on a
+  track's Sends card in the Devices panel now moves that send's fader in the Session mixer
+  and the Mixer window at once, and the other way round. Automation of a send shows on all
+  three too. Before, the other controls kept the old value until the view was rebuilt.
 - **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):
   open a launched slot and the piano roll's cursor, or the Drum Rack step grid's lit
   column, now follows the slot as it loops. Before, only Arrangement clips showed one.

@@ -87,6 +87,9 @@ public sealed partial class SessionView
 
         if (_showIO) root.Children.Add(Section(InputRow(c), MonitorRow(c), OutputRow(c)));
 
+        // Send faders follow changes made elsewhere — the Devices panel's Sends card, the
+        // Mixer window, automation (#138) — on the same tick as the meters.
+        var sendSyncs = new List<Action>();
         if (_showSends && ReturnRows > 0)
         {
             var rows = new List<Control>();
@@ -100,6 +103,12 @@ public sealed partial class SessionView
                     void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
                     f.ValueChanged += v => { _engine.SetTrackSend(id, bus, (float)v); Show(); };
                     Show();
+                    sendSyncs.Add(() =>
+                    {
+                        if (f.Dragging) return;
+                        double v = _engine.GetTrackSend(id, bus);
+                        if (Math.Abs(v - f.Value) > 1e-3) { f.Value = v; Show(); }
+                    });
                     rows.Add(FaderRow(f, read));
                 }
                 else rows.Add(new Border { Height = FaderRowH });
@@ -164,6 +173,11 @@ public sealed partial class SessionView
                     }));
             }
             root.Children.Add(Section(panRow, FaderRow(vol, db), meters, btns));
+        }
+        if (sendSyncs.Count > 0)
+        {
+            var meterOnly = meter;
+            meter = () => { meterOnly(); foreach (var sync in sendSyncs) sync(); };
         }
         return new MixerParts { Root = root, UpdateMeter = meter };
     }

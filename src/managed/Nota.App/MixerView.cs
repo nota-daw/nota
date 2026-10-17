@@ -44,6 +44,7 @@ public sealed class MixerView : UserControl
     private readonly IAudioEngine _engine;
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(10) };
     private readonly List<(int trackId, MeterBar meter)> _meters = new();
+    private readonly List<(int trackId, int bus, MiniFader fader)> _sendFaders = new();
     // Sends / I/O sections are collapsible across every strip (mockup 1f header
     // toggles); we keep the section borders so a toggle can hide them all at once.
     private readonly List<Control> _sendSections = new();
@@ -139,6 +140,7 @@ public sealed class MixerView : UserControl
     {
         _row.Children.Clear();
         _meters.Clear();
+        _sendFaders.Clear();
         _sendSections.Clear();
         _ioSections.Clear();
         _balBadges.Clear();
@@ -172,6 +174,13 @@ public sealed class MixerView : UserControl
         {
             double v = get();
             if (Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
+        }
+        // Sends follow the Devices panel's Sends card, the Session mixer and automation (#138).
+        foreach (var (id, bus, send) in _sendFaders)
+        {
+            if (send.Dragging) continue;
+            double v = _engine.GetTrackSend(id, bus);
+            if (Math.Abs(send.Value - v) > 1e-3) send.Value = v;
         }
         SyncPanLaw();   // undo/redo or a load elsewhere may have changed it
     }
@@ -444,6 +453,7 @@ public sealed class MixerView : UserControl
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
                 f.ValueChanged += v => _engine.SetTrackSend(id, b, (float)v);
+                _sendFaders.Add((id, b, f));
                 Grid.SetColumn(f, 1); grid.Children.Add(f);
             }
             else
