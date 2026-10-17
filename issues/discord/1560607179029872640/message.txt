@@ -1,0 +1,124 @@
+I'd love to suggest a comprehensive, cross-platform keyboard navigation system for Nota's browser.
+
+The idea is to make the entire browser fully usable without touching the mouse, including navigating categories, searching, browsing filtered results, and loading instruments or effects.
+
+This would be particularly valuable for users who strongly prefer keyboard-driven workflows.
+
+**1. Quick Access to Search**
+
+• Cmd+F (macOS) / Ctrl+F (Windows/Linux): Focus the browser's search field.
+• Automatically select existing search text when appropriate.
+• Allow immediate typing without additional interaction.
+• Avoid conflicts with existing shortcuts through context-sensitive handling.
+
+**2. Keyboard Navigation Between Categories**
+
+Categories such as Instruments, Audio Effects, MIDI Effects, and any future categories should be fully keyboard-accessible.
+
+Suggested shortcuts:
+
+• ↑ / ↓: Navigate to the previous/next category.
+• Cmd+↑ / Cmd+↓ (macOS): Jump directly to the first/last category.
+• Ctrl+↑ / Ctrl+↓ (Windows/Linux): Equivalent functionality.
+• Home / End: Alternative first/last navigation.
+• Enter: Activate the selected category.
+
+This approach would remain scalable even if more categories are introduced later.
+
+**3. Keyboard Navigation Through Search Results**
+
+The same navigation principles should apply to filtered search results:
+
+• ↑ / ↓: Previous/next result.
+• Cmd+↑ / Cmd+↓ (macOS): First/last result.
+• Ctrl+↑ / Ctrl+↓ (Windows/Linux): Equivalent functionality.
+• Home / End: First/last result.
+• Enter: Load or activate the selected item.
+
+Ideally, pressing ↓ while the search field is focused would move directly into the results list.
+
+The currently selected result should always have a clearly visible focus indicator.
+
+**4. Navigation Between Browser Sections**
+
+• Tab: Move forward between search, categories, and results.
+• Shift+Tab: Move backward.
+• Arrow keys: Navigate within the currently focused section.
+
+This would provide predictable navigation without interfering with unrelated controls.
+
+**5. Optional Category Access Keys**
+
+Another interesting possibility would be keyboard mnemonics for directly accessing categories.
+
+For example, each category could display an underlined character indicating its assigned access key.
+
+These should:
+
+• Be unique within their context.
+• Avoid conflicts with existing shortcuts.
+• Never interfere with typing in the search field.
+• Support international keyboard layouts.
+• Remain scalable as additional categories are introduced.
+
+Personally, I'd prefer this over assigning fixed numbers to categories, although arrow-key navigation should remain the primary method.
+
+**6. Intelligent Escape Behavior**
+
+A predictable, context-sensitive Escape mechanism would be useful.
+
+For example:
+
+• First Escape: Return focus from the results to the search field.
+• Second Escape: Clear the search query.
+• Third Escape: Leave the search interface or return to the previous browser section.
+
+The exact behavior could be adapted to Nota's existing UI conventions.
+
+**7. Persistent and Predictable Keyboard Focus**
+
+Maintaining keyboard focus throughout the workflow is particularly important.
+
+Ideally:
+
+• Switching categories shouldn't unexpectedly clear the search query.
+• Loading an item shouldn't unnecessarily reset the browser state.
+• Users should be able to continue browsing immediately after loading an item.
+• The currently focused element should always be visually identifiable.
+• Opening the browser should establish a sensible initial focus.
+
+**8. Customizable Keyboard Shortcuts**
+
+Ideally, all major browser navigation commands could be exposed through Nota's keyboard shortcut configuration.
+
+This would allow users to customize their workflow while maintaining sensible defaults across macOS, Windows, and Linux.
+
+Platform-specific conventions and international keyboard layouts should be considered.
+
+**9. Consistent Navigation Across All Browser Lists**
+
+One particularly important aspect would be consistent behavior.
+
+Whether navigating categories or search results, the same shortcuts should perform the same actions.
+
+For example:
+
+• ↑ / ↓: Previous/next item.
+• Cmd+↑ / Cmd+↓ (macOS): First/last item.
+• Ctrl+↑ / Ctrl+↓ (Windows/Linux): First/last item.
+• Home / End: First/last item.
+• Enter: Activate the selected item.
+
+These commands should always affect the currently focused list rather than scrolling the entire browser window.
+
+**Overall Goal**
+
+The ideal keyboard-only workflow would be:
+
+Open Browser → Select Category → Focus Search → Type Query → Navigate Results → Load Item → Continue Browsing
+
+All without ever touching the mouse.
+
+I believe this would significantly improve workflow efficiency, accessibility, and the overall user experience, particularly for keyboard-oriented users.
+
+Of course, these are suggestions rather than strict implementation requirements. Some details might be handled differently or more elegantly depending on Nota's architecture and existing keyboard conventions.

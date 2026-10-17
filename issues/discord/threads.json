@@ -1,0 +1,574 @@
+[
+  {
+    "issue": 102,
+    "thread_id": "1560665160899760128",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560665160899760128",
+    "title": "“Custom” Export Range Cannot Be Selected",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T14:46:10.115Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Custom-Export-Range-Unavailable.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560665160899760128/Nota-Custom-Export-Range-Unavailable.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560665160899760128/Nota-Custom-Export-Range-Unavailable.md"
+      },
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560665160899760128/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560665160899760128/image.png"
+      }
+    ]
+  },
+  {
+    "issue": 103,
+    "thread_id": "1560664783563264120",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560664783563264120",
+    "title": "MIDI Bindings for Actions in Settings > Shortcuts",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T14:44:40.151Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560664783563264120/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560664783563264120/image.png"
+      },
+      {
+        "filename": "Nota-MIDI-Bindings-for-Shortcut-Actions.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560664783563264120/Nota-MIDI-Bindings-for-Shortcut-Actions.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560664783563264120/Nota-MIDI-Bindings-for-Shortcut-Actions.md"
+      }
+    ]
+  },
+  {
+    "issue": 104,
+    "thread_id": "1560664347695390720",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560664347695390720",
+    "title": "Keyboard Shortcuts for Arrangement, Session and Modular Views",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T14:42:56.232Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-View-Switching-Shortcuts.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560664347695390720/Nota-View-Switching-Shortcuts.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560664347695390720/Nota-View-Switching-Shortcuts.md"
+      }
+    ]
+  },
+  {
+    "issue": 105,
+    "thread_id": "1560662867097681920",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560662867097681920",
+    "title": "Show Playhead and Optional Playback Following",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T14:37:03.230Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Show-Playhead-and-Follow.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560662867097681920/Nota-Show-Playhead-and-Follow.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560662867097681920/Nota-Show-Playhead-and-Follow.md"
+      }
+    ]
+  },
+  {
+    "issue": 106,
+    "thread_id": "1560660271851114536",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560660271851114536",
+    "title": "Section Renaming: Cancel Edits and Restore Automatic Names",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T14:26:44.475Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560660271851114536/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560660271851114536/image.png"
+      },
+      {
+        "filename": "Nota-Section-Renaming-and-Automatic-Names.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560660271851114536/Nota-Section-Renaming-and-Automatic-Names.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560660271851114536/Nota-Section-Renaming-and-Automatic-Names.md"
+      }
+    ]
+  },
+  {
+    "issue": 107,
+    "thread_id": "1560638650616643624",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560638650616643624",
+    "title": "Apply the Waveform Style Preference to Browser Previews",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T13:00:49.571Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560638650616643624/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560638650616643624/image.png"
+      },
+      {
+        "filename": "Nota-Waveform-Style-in-Browser-Previews.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560638650616643624/Nota-Waveform-Style-in-Browser-Previews.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560638650616643624/Nota-Waveform-Style-in-Browser-Previews.md"
+      }
+    ]
+  },
+  {
+    "issue": 108,
+    "thread_id": "1560638438670082068",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560638438670082068",
+    "title": "Native Chord Resonator for Dub Techno and Expressive Sound Design",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:59:59.039Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Native-Chord-Resonator.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560638438670082068/Nota-Native-Chord-Resonator.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560638438670082068/Nota-Native-Chord-Resonator.md"
+      }
+    ]
+  },
+  {
+    "issue": 109,
+    "thread_id": "1560637616607592538",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560637616607592538",
+    "title": "Cmd+Z Does Not Restore a Removed Device",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:56:43.044Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Undo-Device-Removal.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560637616607592538/Nota-Undo-Device-Removal.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560637616607592538/Nota-Undo-Device-Removal.md"
+      }
+    ]
+  },
+  {
+    "issue": 110,
+    "thread_id": "1560637469291061359",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560637469291061359",
+    "title": "Add a Clearly Visible Remove Button to Device Headers",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:56:07.921Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Visible-Remove-Device-Button.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560637469291061359/Nota-Visible-Remove-Device-Button.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560637469291061359/Nota-Visible-Remove-Device-Button.md"
+      }
+    ]
+  },
+  {
+    "issue": 113,
+    "thread_id": "1560634205908766822",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560634205908766822",
+    "title": "Effect: Vocoder",
+    "author_display_name": "Satoshi Wulkanoto",
+    "author_username": "satoshiwulkanoto",
+    "posted_at": "2026-10-16T12:43:09.870Z",
+    "text": "Just Vocoder with two inputs: modulated signal and modulator signal.",
+    "attachments": []
+  },
+  {
+    "issue": 114,
+    "thread_id": "1560630050079117342",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560630050079117342",
+    "title": "Grid and Transport Shortcuts Stop Responding After Clicking the Lower Clip Editor",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:26:39.043Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560630050079117342/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560630050079117342/image.png"
+      }
+    ]
+  },
+  {
+    "issue": 115,
+    "thread_id": "1560629462364852344",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560629462364852344",
+    "title": "Match Slider Drag Direction to Its Visual Orientation",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:24:18.921Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Slider-Drag-Direction.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560629462364852344/Nota-Slider-Drag-Direction.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560629462364852344/Nota-Slider-Drag-Direction.md"
+      }
+    ]
+  },
+  {
+    "issue": 116,
+    "thread_id": "1560628976844808212",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560628976844808212",
+    "title": "Advanced Envelope Editing – Multi-Point Selection, Transformations and Independent Reset",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:22:23.164Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Advanced-Envelope-Editing.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560628976844808212/Nota-Advanced-Envelope-Editing.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560628976844808212/Nota-Advanced-Envelope-Editing.md"
+      }
+    ]
+  },
+  {
+    "issue": 117,
+    "thread_id": "1560628219135271072",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560628219135271072",
+    "title": "Faster Envelope Point Editing and Continuous Real-Time Audio Feedback",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:19:22.512Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Envelope-Editing-and-Realtime-Feedback.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560628219135271072/Nota-Envelope-Editing-and-Realtime-Feedback.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560628219135271072/Nota-Envelope-Editing-and-Realtime-Feedback.md"
+      }
+    ]
+  },
+  {
+    "issue": 118,
+    "thread_id": "1560627364679909396",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560627364679909396",
+    "title": "Advanced Audio and MIDI Previewing, Sample Collections and Browser Tools",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:15:58.794Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Advanced-Audio-and-MIDI-Browser.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560627364679909396/Nota-Advanced-Audio-and-MIDI-Browser.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560627364679909396/Nota-Advanced-Audio-and-MIDI-Browser.md"
+      }
+    ]
+  },
+  {
+    "issue": 119,
+    "thread_id": "1560627175588237314",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560627175588237314",
+    "title": "Native Tempo-Synced Oscilloscope and Audio Visualizer",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:15:13.711Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Tempo-Synced-Audio-Visualizer.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560627175588237314/Nota-Tempo-Synced-Audio-Visualizer.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560627175588237314/Nota-Tempo-Synced-Audio-Visualizer.md"
+      }
+    ]
+  },
+  {
+    "issue": 120,
+    "thread_id": "1560627013327257682",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560627013327257682",
+    "title": "Native Reverb Retriggering, Tail Control and Reverb-Chain Management",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:14:35.025Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Nota-Reverb-Retriggering-and-Tail-Control.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560627013327257682/Nota-Reverb-Retriggering-and-Tail-Control.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560627013327257682/Nota-Reverb-Retriggering-and-Tail-Control.md"
+      }
+    ]
+  },
+  {
+    "issue": 121,
+    "thread_id": "1560625255863689277",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560625255863689277",
+    "title": "Download Speed, Progress and ETA for Updates and Resources",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:07:36.013Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Download-Speed-Progress-and-ETA.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560625255863689277/Download-Speed-Progress-and-ETA.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560625255863689277/Download-Speed-Progress-and-ETA.md"
+      }
+    ]
+  },
+  {
+    "issue": 122,
+    "thread_id": "1560624166879629392",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560624166879629392",
+    "title": "Custom Resource Sources and URLs in Downloads",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T12:03:16.379Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560624166879629392/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560624166879629392/image.png"
+      },
+      {
+        "filename": "Custom-Resource-Sources-and-URLs.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560624166879629392/Custom-Resource-Sources-and-URLs.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560624166879629392/Custom-Resource-Sources-and-URLs.md"
+      }
+    ]
+  },
+  {
+    "issue": 123,
+    "thread_id": "1560622226062053536",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560622226062053536",
+    "title": "Platform-Accurate Keyboard Shortcuts and Key Symbols Throughout Nota",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:55:33.652Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "Platform-Accurate-Keyboard-Shortcuts.md",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560622226062053536/Platform-Accurate-Keyboard-Shortcuts.md",
+        "content_type": "text/markdown",
+        "repo_path": "discord/1560622226062053536/Platform-Accurate-Keyboard-Shortcuts.md"
+      }
+    ]
+  },
+  {
+    "issue": 124,
+    "thread_id": "1560621494936146050",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560621494936146050",
+    "title": "Demo project after first DAW open",
+    "author_display_name": "Satoshi Wulkanoto",
+    "author_username": "satoshiwulkanoto",
+    "posted_at": "2026-10-16T11:52:39.338Z",
+    "text": "As in title, it would be cool",
+    "attachments": []
+  },
+  {
+    "issue": 125,
+    "thread_id": "1560618155049623693",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560618155049623693",
+    "title": "Clear and Resize the Arrangement Loop Region",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:39:23.047Z",
+    "text": "The loop-region editing in Nota’s arrangement timeline already feels easy and flexible. However, I haven’t found a clear way to remove the loop region, and I can’t seem to adjust its start and end boundaries independently.\n\nThis refers to the highlighted loop range in the timeline ruler above the tracks, not to the contents or boundaries of an individual clip.\n\nClear the Loop Region\nProvide a discoverable Clear Loop Region command, for example in the region’s context menu.\n,\nDistinguish clearing the range from temporarily disabling loop playback.\n,\nClearing the region must not delete or modify clips, notes, automation, or other project content.\n,\n\nAdjust Both Boundaries\nAllow dragging the start and end edges independently to shorten or extend the range.\n,\nPreserve the opposite boundary when resizing one edge.\n,\nRespect the current snapping setting, with an accessible way to make finer adjustments.\n,\nKeep moving the entire range distinct from resizing its boundaries.\n,\n\nMake Resizing Discoverable\nShow a horizontal resize cursor when hovering over either draggable boundary.\n,\nSubtly highlight the active edge and provide a sufficiently generous hit area.\n,\nShow the resulting start, end, or length while dragging.\n,\n\nSupport Undo/Redo for clearing, moving, and resizing the loop region.\n\nIf these interactions already exist, make them easier to discover. The goal is to preserve the current simplicity while making removal and boundary adjustments clear and predictable.",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560618155049623693/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560618155049623693/image.png"
+      }
+    ]
+  },
+  {
+    "issue": 126,
+    "thread_id": "1560616960482353282",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560616960482353282",
+    "title": "Smooth Transitions Between Themes",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:34:38.240Z",
+    "text": "Switching between Nota’s themes currently changes the appearance abruptly, particularly when moving between a light and a dark theme.\n\nAdd a short, smooth transition to make these changes feel less harsh while keeping theme selection responsive.\n\nSuggested behavior\nUse a subtle fade or color transition of approximately 200 ms as a starting point, with a gentle ease-in-out curve.\n,\nTransition backgrounds, panels, borders, text, and icons together so the interface remains visually coherent.\n,\nMaintain readable contrast throughout the transition and avoid a bright flash between dark themes.\n,\nKeep controls responsive; the transition must not block interaction or interrupt audio processing.\n,\nIf another theme is selected mid-transition, move smoothly toward the latest selection rather than queuing multiple animations.\n,\n\nAccessibility and Performance\nRespect the operating system’s reduced-motion preference, using an immediate change or an appropriately reduced transition.\n,\nAvoid unnecessary rendering work when the transition is complete.\n,\nDo not animate the initial theme application at startup in a way that briefly exposes the wrong theme.\n,\n\nA duration around 150–250 ms would be worth testing; 200 ms seems like a reasonable default. The goal is a quick, understated transition rather than a slow or decorative animation.",
+    "attachments": []
+  },
+  {
+    "issue": 127,
+    "thread_id": "1560613551482347560",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560613551482347560",
+    "title": "Open the Changelog from the Status-Bar Version Number",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:21:05.471Z",
+    "text": "Make the version number displayed at the bottom-right of Nota’s main window, next to the sample rate, clickable.\n\nExpected behavior\nClicking the version number opens Nota’s existing What’s New/changelog view inside the app, rather than introducing a separate duplicate view.\n,\nInitially show the release notes for the currently installed version, clearly labeled with its version number and release date.\n,\nAllow browsing other available changelog entries, ideally with search.\n,\nProvide an optional View on GitHub link to the corresponding release, where available.\n,\nIf an in-app changelog is not available, opening the matching official release page is a useful fallback.\n,\n\nInteraction details\nAdd a subtle hover state and a tooltip such as View release notes so the interaction is discoverable.\n,\nMake the version control keyboard-focusable and activatable with Enter or Space.\n,\nAllow the in-app view to close with Escape and restore focus appropriately.\n,\nKeep release notes for the installed version available offline where practical.\n,\n\nClicking the version number should show what changed in that version, without starting an update or interrupting the current project.",
+    "attachments": []
+  },
+  {
+    "issue": 128,
+    "thread_id": "1560612582862098442",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560612582862098442",
+    "title": "Visible Default Values and Per-Setting Reset",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:17:14.534Z",
+    "text": "Settings can be changed accidentally while clicking or navigating with the keyboard, sometimes without the user noticing. Every setting with a defined default should make that default discoverable and provide a straightforward way to restore it.\n\nShow the Default\nDisplay the default value and its unit, for example: Default: X semitones.\n,\nKeep this information easy to find without cluttering the interface, such as in a setting’s description or details popover.\n,\nSubtly indicate when the current value differs from its default.\n,\nMake default information accessible with the keyboard as well as the pointer.\n,\n\nReset Individual Settings\nProvide Reset to Default for each applicable setting.\n,\nMake the command accessible without requiring a mouse-only gesture.\n,\nClearly identify which setting will be reset.\n,\nAllow the reset itself to be undone where technically possible.\n,\nFor device-dependent settings, explain what the default means; never substitute an arbitrary value when no universal default exists.\n,\n\nRecover Previous Values\nResetting to the default and undoing an accidental change solve different problems. A user’s previous value may have been intentionally customized.\n\nSupport Undo/Redo for settings changes wherever technically possible, including changes made through keyboard input. Clearly explain any exceptions or changes with external side effects.\n\nOptional Section Reset\nA separate Reset This Section command could restore a whole category. Show its scope and request confirmation before resetting multiple settings, particularly audio or MIDI configuration.\n\nPrevent Accidental Edits\nKeep keyboard focus clearly visible and distinguish navigation from value editing. Navigating categories must not modify a parameter in another area.\n\nThe goal is to make defaults understandable and recovery predictable, without forcing users to remember every previous value or reset unrelated settings.",
+    "attachments": []
+  },
+  {
+    "issue": 129,
+    "thread_id": "1560611547968180304",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560611547968180304",
+    "title": "Automatic Keyboard Focus for Search Fields and Filters",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:13:07.796Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "message.txt",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560611547968180304/message.txt",
+        "content_type": "text/plain",
+        "repo_path": "discord/1560611547968180304/message.txt"
+      }
+    ]
+  },
+  {
+    "issue": 130,
+    "thread_id": "1560611053962789005",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560611053962789005",
+    "title": "Advanced Multi-Device Controller Support – Independent Gamepads & Keyboards",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:11:10.016Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "message.txt",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560611053962789005/message.txt",
+        "content_type": "text/plain",
+        "repo_path": "discord/1560611053962789005/message.txt"
+      }
+    ]
+  },
+  {
+    "issue": 131,
+    "thread_id": "1560610587640209410",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560610587640209410",
+    "title": "Keyboard Navigation for the Settings Sidebar",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:09:18.836Z",
+    "text": "Make all Settings categories accessible directly from the keyboard, including Audio, MIDI, Gamepads, Remote, Plug-ins, Downloads, Library, Appearance, and Shortcuts.\n\nExpected behavior\nUse Tab/Shift+Tab to move focus between the sidebar and the settings controls.\n,\nWhen the sidebar has focus, use ↑/↓ to move between categories.\n,\nSkip non-interactive group headings such as Devices, Plug-ins, and General.\n,\nKeep the focused category clearly visible and automatically scroll it into view when necessary.\n,\nAllow the selected page to open directly during navigation, or use Enter/Space to activate it, following a consistent interaction model.\n,\nKeep focus in the sidebar when switching pages so users can continue navigating without repeatedly refocusing it.\n,\nMake all interactive controls within each page keyboard-accessible as well.\n,\n\nPrevent accidental changes\nSidebar navigation must never alter a setting on the right. For example, pressing ↑/↓ to switch categories must not accidentally change the MIDI bend range.\n\nKeys should act only on the currently focused control, with a clear visual distinction between navigating categories and editing values. Open dropdowns should handle their own navigation, and Escape should close the dropdown before closing Settings.\n\nGoal\nOpen Settings → navigate categories → reach and edit the intended control → return to category navigation, without using the mouse.\n\nCommand Palette access can complement this, but the visible Settings interface should remain directly keyboard-operable.",
+    "attachments": [
+      {
+        "filename": "image.png",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560610587640209410/image.png",
+        "content_type": "image/png",
+        "repo_path": "discord/1560610587640209410/image.png"
+      }
+    ]
+  },
+  {
+    "issue": 132,
+    "thread_id": "1560607179029872640",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560607179029872640",
+    "title": "Comprehensive Keyboard Navigation for Nota's Browser",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T10:55:46.160Z",
+    "text": "",
+    "attachments": [
+      {
+        "filename": "message.txt",
+        "local_path": "/Users/chrislaupama/Downloads/nota-icons/discord-export/files/1560607179029872640/message.txt",
+        "content_type": "text/plain",
+        "repo_path": "discord/1560607179029872640/message.txt"
+      }
+    ]
+  },
+  {
+    "issue": 133,
+    "thread_id": "1560542579995578389",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560542579995578389",
+    "title": "Effect: Peak Controller",
+    "author_display_name": "Satoshi Wulkanoto",
+    "author_username": "satoshiwulkanoto",
+    "posted_at": "2026-10-16T06:39:04.550Z",
+    "text": "Effect that produces automation signal based on audio volume from channel that can be connected to automate some knob in e.g other effect. Useful for making sidechain effect. Something like Fruity Peak Controller in FL Studio.",
+    "attachments": []
+  },
+  {
+    "issue": 134,
+    "thread_id": "1560348821874155540",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560348821874155540",
+    "title": "Automatic Frequency-Based EQ Band Renumbering",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-15T17:49:09.014Z",
+    "text": "I would love an optional feature that automatically renumbers EQ bands according to their frequency positions, from lowest to highest.\n\nCurrently, in complex EQ workflows, adding a new band between existing bands can result in confusing numbering that no longer reflects the frequency spectrum.\n\nRequested functionality:\n\nAutomatically number EQ bands from low to high frequencies.\n,\nDynamically update the displayed numbering whenever bands are inserted, removed, or moved.\n,\nOptionally allow users to retain manual or original numbering.\n,\nPreserve stable internal parameter identities independently of visual band numbers.\n,\nKeep automation curves, automation lanes, parameter assignments, MIDI mappings, controller assignments, and other relevant references connected to the correct EQ bands.\n,\nNever accidentally reassign automation or control mappings to a different band.\n,\nMaintain consistent numbering throughout the entire application, including EQ views, parameter menus, automation editors, and related controls.\n,\nHandle overlapping bands, frequency crossings, presets, project reloads, and undo/redo safely.\n,\n\nImplementation suggestion: Treat the displayed band number as a dynamic visual identifier rather than the actual internal parameter identity. Every band should retain a stable unique ID.\n\nThis would make EQ workflows much more intuitive while maintaining full compatibility with existing projects and automation.",
+    "attachments": []
+  },
+  {
+    "issue": 135,
+    "thread_id": "1560348944544825525",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560348944544825525",
+    "title": "Always-Visible Custom EQ Band Labels with Expandable Notes",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-15T17:49:38.261Z",
+    "text": "I would love to have a labeling and note-taking system directly integrated into Nota's EQ interface.\n\nEvery EQ band should have an optional custom label that is immediately visible above or below its corresponding node in the frequency graph, without requiring the user to open an inspector or additional menu.\n\nClicking or tapping that label should expand a larger text field where users can add detailed notes explaining the purpose of the band.\n\nSuggested features:\n\nCustom short labels for individual EQ bands.\n,\nLabels always visible in the main EQ graph when enabled.\n,\nExpandable multiline notes accessible directly from each label.\n,\nAutomatic saving of labels and notes with the project or preset.\n,\nLabels and notes permanently associated with their specific EQ bands, even when bands are moved or renumbered.\n,\nSmart positioning to prevent label collisions when multiple bands are close together.\n,\nOptional global show/hide toggle for labels.\n,\nEasy editing with mouse, keyboard, trackpad, and touchscreen where supported.\n,\nNo impact on DSP performance, audio latency, or automation.\n,\n\nExample:\nLabel: 'Resonance Control'\nExpanded note: 'This band reduces a narrow resonance that becomes especially noticeable during sustained notes. Avoid excessive attenuation to preserve the natural sound.'\n\nThis would make complex EQ setups easier to understand at a glance and would be particularly valuable when returning to older projects or collaborating with other users.",
+    "attachments": []
+  },
+  {
+    "issue": 136,
+    "thread_id": "1560608928373416088",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560608928373416088",
+    "title": "Dismissible Start Screen and Settings with Theme-Aware Background Blur",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T11:02:43.236Z",
+    "text": "Dismissal\nThe start screen currently cannot be dismissed with Escape or by clicking outside it. Support both interactions, with consistent behavior for Settings where applicable:\n\nPress Escape to close the panel.\n,\nClick outside the panel to dismiss it.\n,\nKeep an explicit close button available.\n,\nRestore keyboard focus to the previous control or workspace after closing.\n,\nAn outside click should dismiss the panel without also activating controls underneath.\n,\nIf a nested menu or popup is open, Escape should close that first.\n,\nNever silently discard unapplied settings. Preserve them or ask before discarding changes.\n,\n\nTheme-Aware Backdrop\nApply a subtle blur to the interface behind the start screen and Settings, combined with a translucent overlay that matches the active theme:\n\nDark theme: a dark neutral overlay.\n,\nLight theme: a light neutral overlay, rather than applying the same dark tint.\n,\n\nKeep the panel itself sharp and readable. The backdrop should provide visual separation without making the surrounding workspace disappear. This is a visual preference intended to give these panels a calmer, more polished appearance.\n\nTransitions and Accessibility\nFade the backdrop in and out smoothly without delaying interaction.\n,\nRespect reduced-motion and reduced-transparency preferences where available.\n,\nOffer a simple non-blurred fallback with sufficient contrast.\n,\nKeep rendering lightweight and avoid affecting audio performance.\n,",
+    "attachments": []
+  },
+  {
+    "issue": 136,
+    "thread_id": "1560607543921872967",
+    "url": "https://discord.com/channels/1557280109017436190/1560032480055005286/threads/1560607543921872967",
+    "title": "More Intuitive Settings Window Dismissal",
+    "author_display_name": "ultimatelooper",
+    "author_username": "ultimatelooper",
+    "posted_at": "2026-10-16T10:57:13.157Z",
+    "text": "Currently, when opening Settings via Cmd+, on macOS, I've noticed that the window cannot be dismissed using Escape or by clicking outside the Settings panel.\n\nPersonally, I would expect both interactions to work, as they are common and intuitive ways to dismiss dialogs and similar interface elements.\n\nSuggested Improvements\n\n\nClose Settings with Escape\n,\n\n• Pressing Escape should close the Settings window.\n• This should work regardless of which settings category or control currently has keyboard focus.\n• If a dropdown, popup, or another temporary interface element is open, Escape should dismiss that element first, following standard UI conventions.\n• Any pending changes should be handled safely and consistently with Nota's existing settings behavior.\n\n\nClose Settings by Clicking Outside\n,\n\n• Clicking outside the Settings panel should dismiss it.\n• This would be particularly intuitive if Settings is implemented as a modal overlay.\n• If there are unsaved changes requiring confirmation, clicking outside should not silently discard them.\n• If Settings is implemented as a separate native window rather than a modal overlay, the behavior should follow the respective operating system's conventions.\n\n\nCross-Platform Consistency\n,\n\nIdeally, these interactions should behave consistently across macOS, Windows, and Linux, while respecting platform-specific UI conventions.\n\nExpected Behavior\n• Open Settings using the existing keyboard shortcut.\n• Press Escape to dismiss Settings.\n• Alternatively, click outside the Settings panel to dismiss it, where appropriate.\n• Return to the previous workspace without unnecessary additional interactions.\n\nOverall Goal\n\nMake opening and closing Settings feel more intuitive, predictable, and consistent with established desktop application conventions.\n\nThis is primarily a UX improvement suggestion rather than necessarily a bug report.",
+    "attachments": []
+  }
+]

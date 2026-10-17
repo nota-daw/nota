@@ -1,0 +1,114 @@
+**Feature Request: Automatic Keyboard Focus for Search Fields and Filters**
+
+Hi!
+
+I'd like to suggest a small but extremely useful workflow improvement for Nota:
+
+**Automatically focus the search input field whenever a search interface or search filter is opened.**
+
+**1. Current Workflow**
+
+Whenever users open a search interface or filter, they may first need to manually click inside the search field before they can start typing.
+
+This requires an unnecessary additional interaction with the mouse or trackpad.
+
+Although this might seem minor, these extra interactions accumulate significantly when searching frequently throughout the application.
+
+**2. Proposed Behavior**
+
+Whenever a search interface or search filter becomes active, Nota should automatically place keyboard focus inside the corresponding search input field.
+
+Ideally:
+
+• Open a search interface.
+• The search field automatically receives keyboard focus.
+• The text cursor is immediately active.
+• Start typing without any additional mouse or trackpad interaction.
+
+**No additional click should be necessary.**
+
+This should work consistently throughout Nota wherever searchable interfaces are available.
+
+**3. Application-Wide Consistency**
+
+Ideally, this behavior should apply to all relevant search interfaces, including:
+
+• Search dialogs.
+• Search popups.
+• Searchable menus.
+• Search filters.
+• Searchable lists.
+• Plugin browsers.
+• Effect browsers.
+• Preset browsers.
+• File browsers with search functionality.
+• Action and command searches.
+• Any other interface containing a dedicated search input field.
+
+The goal is consistent behavior across the entire application rather than implementing this improvement only in selected locations.
+
+**4. Keyboard-First Workflow**
+
+This would be particularly beneficial for users who prefer keyboard-driven workflows.
+
+For example:
+
+1. Open a searchable interface.
+2. Immediately type the desired search term.
+3. Navigate the results using the keyboard.
+4. Confirm the selection.
+
+Ideally, the entire interaction could be completed without touching the mouse or trackpad.
+
+**5. Additional Usability Considerations**
+
+A few details could make the implementation particularly convenient:
+
+• Automatically focus the search input when the corresponding interface opens.
+
+• Display the active text cursor immediately.
+
+• Allow users to start typing without any additional interaction.
+
+• Preserve existing search text where appropriate.
+
+• If an existing search term should be replaced, optionally select its contents automatically.
+
+• Ensure that keyboard shortcuts do not accidentally trigger unrelated Nota actions while the search field has focus.
+
+• Allow Escape to close the search interface or return focus appropriately.
+
+• Restore keyboard focus to the previously active interface when the search interface closes, where appropriate.
+
+• Avoid unexpectedly stealing keyboard focus when search interfaces update in the background.
+
+**6. Optional Preference**
+
+If necessary, this behavior could be configurable:
+
+**Automatically Focus Search Fields: On / Off**
+
+However, I believe enabling it by default would provide the most intuitive experience for the majority of users.
+
+**7. Main Benefits**
+
+• Faster navigation.
+• Fewer unnecessary mouse clicks.
+• Reduced dependence on the trackpad.
+• More efficient keyboard-driven workflows.
+• Improved consistency throughout the application.
+• Better usability during repetitive tasks.
+• Smoother interaction for power users.
+• Improved accessibility for keyboard-oriented users.
+
+**8. Overall Goal**
+
+Whenever a user intentionally opens a search interface in Nota, they should be able to start typing immediately.
+
+**Open Search → Type Immediately → Select Result**
+
+No unnecessary clicks, no additional focus management, and no interruption to the workflow.
+
+This is a relatively small usability improvement from the user's perspective, but one that could make a noticeable difference during everyday use.
+
+Thanks very much for considering this!

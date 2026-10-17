@@ -1,0 +1,494 @@
+**Feature Request: Advanced Multi-Device Controller Support – Independent Gamepads & Keyboards**
+
+Hi!
+
+I'd love to suggest expanding Nota's controller capabilities to support multiple physical gamepads and keyboards simultaneously, with independent device identification, per-device mappings, and direct triggering of Nota actions.
+
+The goal is to turn ordinary, inexpensive input devices into powerful, customizable DAW controllers without requiring dedicated MIDI hardware.
+
+I believe this could be particularly valuable for live performance, mobile music production, accessibility, and anyone who prefers flexible, affordable control solutions.
+
+**1. Why This Matters**
+
+**Affordability**
+• Keyboards and gamepads can be extremely inexpensive.
+• Second-hand devices can be even cheaper.
+• Users can repurpose hardware they already own.
+• Multiple controllers could be combined without investing in expensive specialized MIDI equipment.
+• Replacement devices are generally easy to obtain.
+
+**Portability**
+• Compact keyboards and gamepads are often extremely lightweight.
+• Small keyboards, numeric keypads, and gamepads can easily fit into a backpack.
+• This is particularly attractive for traveling musicians, street performers, and mobile production setups.
+• Users could build sophisticated controller configurations without transporting bulky equipment.
+
+**Physical Customization**
+• Keyboards provide many individually assignable physical keys.
+• Using a label printer, printable stickers, or custom keycaps, users could label every key according to its assigned function.
+• Different keyboard sections could be dedicated to recording, transport, effects, tracks, navigation, or macros.
+• Multiple keyboards could have completely different physical labels and mappings.
+• Users could immediately recognize their controls without memorizing arbitrary shortcuts.
+
+**Accessibility and Sustainability**
+• Inexpensive hardware makes custom control setups accessible to more users.
+• Different device sizes and layouts accommodate different preferences.
+• Repurposing existing or second-hand equipment can reduce electronic waste.
+
+For button-heavy workflows, ordinary keyboards and gamepads could become excellent alternatives or complements to specialized MIDI controllers.
+
+Of course, dedicated MIDI hardware would still offer advantages such as encoders, faders, displays, and other specialized controls.
+
+**2. Multiple Gamepads Simultaneously**
+
+Ideally, Nota should support multiple connected gamepads at the same time, each with independent mappings.
+
+This should include:
+
+• Different manufacturers and models.
+• Different models from the same manufacturer.
+• Multiple identical models from the same manufacturer.
+• USB and Bluetooth connections, where supported.
+
+Example:
+
+**Gamepad #1**
+• Button A → Start recording.
+• Button B → Stop recording.
+• Button X → Toggle an effect.
+
+**Gamepad #2**
+• Button A → Trigger a different action.
+• Button B → Select another track.
+• Button X → Activate another effect.
+
+Even when both devices are identical, pressing the same button should trigger different actions based on the originating physical device.
+
+Ideally, supported controls would include:
+
+• Individual buttons.
+• Button combinations.
+• D-pad directions.
+• Analog sticks.
+• Analog triggers.
+• Press and release events.
+
+Analog controls could support continuous parameter adjustment with configurable ranges, dead zones, sensitivity, and response curves.
+
+**3. Multiple Independent Physical Keyboards**
+
+I'd also love to see equivalent functionality for physical keyboards.
+
+Ideally, Nota could recognize multiple connected keyboards independently, including:
+
+• Different manufacturers.
+• Different models from the same manufacturer.
+• Multiple identical models.
+• USB keyboards.
+• Bluetooth keyboards.
+• Compact keyboards and numeric keypads.
+
+Each physical keyboard should have its own mapping.
+
+Example:
+
+**Keyboard #1 – Main Keyboard**
+• Normal text input.
+• Standard Nota keyboard shortcuts.
+• Regular computer keyboard functionality.
+
+**Keyboard #2 – Recording Controller**
+• Recording actions.
+• Transport controls.
+• Track operations.
+
+**Keyboard #3 – Effects Controller**
+• Plugin parameter control.
+• Effect toggles.
+• Custom actions and macros.
+
+Pressing R on Keyboard #1 could retain its normal functionality.
+
+Pressing R on Keyboard #2 could start recording.
+
+Pressing R on Keyboard #3 could toggle an effect.
+
+All three keyboards should operate independently without interfering with one another.
+
+**4. Dedicated Keyboard Controller Mode**
+
+This is particularly important.
+
+Ideally, Nota would provide three selectable operating modes for each physical keyboard.
+
+**Normal Keyboard**
+• Standard text input.
+• Regular application shortcuts.
+• Normal operating-system behavior.
+
+**Dedicated Controller**
+• Keys trigger assigned Nota actions.
+• Normal text input from that device is not generated within Nota.
+• Standard Nota shortcuts are not accidentally triggered.
+• Unassigned keys do not unexpectedly activate commands.
+• Other connected keyboards remain unaffected.
+
+**Hybrid Mode**
+• Normal keyboard functionality and selected controller mappings coexist.
+• Conflicts are explicitly detected and handled predictably.
+
+Where technically possible, input from dedicated controller keyboards should be processed separately from ordinary keyboard input.
+
+Importantly, dedicated controller mode should not interfere with other applications, accessibility functionality, or system-critical shortcuts.
+
+**5. Reliable Identification of Individual Physical Devices**
+
+One essential requirement would be distinguishing individual physical devices, even when they share the same manufacturer and model.
+
+For example:
+
+• Two identical Xbox controllers.
+• Three identical USB keyboards.
+• Multiple devices sharing the same Vendor ID and Product ID.
+
+Vendor ID and Product ID alone are insufficient to distinguish identical devices.
+
+Where available, Nota could potentially use:
+
+• Hardware serial numbers.
+• Operating-system-specific device instance identifiers.
+• HID device paths.
+• USB connection topology.
+• Bluetooth device identifiers.
+• Persistent application-level assignments.
+
+However, hardware serial numbers should not be mandatory, since many inexpensive devices do not expose unique serial numbers.
+
+It is also important to distinguish between two technical challenges:
+
+**A. Simultaneous Device Identification**
+Recognizing which physical device generated an event during the current session.
+
+**B. Persistent Device Identification**
+Recognizing the same physical device after disconnection, reconnection, or application restart.
+
+These are not necessarily equivalent.
+
+If identical devices cannot be reliably distinguished after reconnection, Nota should request explicit reassignment rather than silently applying mappings to the wrong controller.
+
+**6. Device Management and Identification**
+
+A dedicated controller management interface could simplify configuration.
+
+For example:
+
+**Connected Controllers**
+• Gamepad #1 – Xbox Controller.
+• Gamepad #2 – Xbox Controller.
+• Keyboard #1 – Main Keyboard.
+• Keyboard #2 – Recording Controller.
+• Keyboard #3 – Effects Controller.
+
+Each device could have:
+
+• A customizable name.
+• Independent mappings.
+• An assigned profile.
+• A selectable operating mode.
+• Enable/disable functionality.
+• Connection status.
+• Last received input.
+
+An especially useful feature would be **Identify Device**.
+
+Example:
+
+1. Select "Identify Controller".
+2. Press any button or key on the desired physical device.
+3. Nota highlights the corresponding device.
+4. Assign a name and configure its mappings.
+
+This would be particularly helpful when multiple identical devices are connected.
+
+**7. Flexible Per-Device Action Mapping**
+
+Each device should support independent mappings of its available controls.
+
+**Keyboard Controls**
+• Individual keys.
+• Modifier combinations.
+• Key combinations.
+• Key press.
+• Key release.
+• Optional long-press behavior.
+• Optional double-press behavior.
+
+**Gamepad Controls**
+• Individual buttons.
+• Button combinations.
+• D-pad directions.
+• Analog sticks.
+• Analog triggers.
+• Press and release events.
+
+Mappings could trigger:
+
+• Nota actions and commands.
+• Transport controls.
+• Recording functions.
+• Track operations.
+• Plugin parameters.
+• Effect toggles.
+• Macros or action sequences, where supported.
+• Other assignable functions.
+
+Ideally, controller mappings would integrate with Nota's existing action and shortcut infrastructure rather than requiring a completely separate system.
+
+**8. Independent Controller Profiles**
+
+Each physical device could have its own mapping profile.
+
+Useful capabilities would include:
+
+• Creating profiles.
+• Saving and loading profiles.
+• Duplicating profiles.
+• Renaming profiles.
+• Importing and exporting mappings.
+• Sharing profiles between compatible devices.
+• Assigning profiles to individual physical devices.
+• Automatically restoring mappings after reconnection, where reliable identification is possible.
+
+Profiles should distinguish between a device model and a specific physical device instance.
+
+For example, two identical keyboards could share the same profile template while maintaining independent assignments.
+
+Optional global and project-specific profiles could provide additional flexibility.
+
+Community-shared controller templates could also be useful.
+
+**9. Persistent Recognition and Reconnection**
+
+Assignments should ideally survive:
+
+• Application restarts.
+• Device disconnection and reconnection.
+• USB port changes, where reliable identification permits.
+• Bluetooth reconnection.
+• Changes in device connection order.
+
+If device identity becomes ambiguous, Nota should not silently assign mappings to the wrong controller.
+
+Instead, users should be offered a simple identification and reassignment process.
+
+This is especially important for live performance, where triggering an unintended action could disrupt a performance.
+
+**10. Conflict Prevention and Input Isolation**
+
+Reliable conflict prevention would be essential.
+
+For example:
+
+• Dedicated controller keyboards should not accidentally trigger normal Nota shortcuts.
+• Typing on the main keyboard should not activate mappings assigned to another keyboard.
+• Identical gamepads should not trigger each other's actions.
+• Controller input should not unexpectedly modify settings or text fields.
+• Unassigned keys should not activate unintended commands.
+• Device-specific mappings should remain isolated.
+• Key-repeat events should not unintentionally trigger actions multiple times.
+• Duplicate input events should be detected and prevented where necessary.
+
+Ideally, Nota could warn users about conflicting mappings.
+
+A controller input monitor would also be extremely useful for troubleshooting.
+
+For example:
+
+Device: Keyboard #2
+Input: R
+Event: Key Down
+Action: Start Recording
+
+This would make configuration and debugging much easier.
+
+**11. Cross-Platform Architecture**
+
+Ideally, the system should support macOS, Windows, and Linux.
+
+Possible technical approaches include:
+
+• macOS: IOKit / IOHIDManager and appropriate HID APIs.
+• Windows: Raw Input and relevant HID or game-controller APIs.
+• Linux: evdev and other suitable input interfaces, subject to device permissions and display-server restrictions.
+
+These are suggestions rather than strict implementation requirements.
+
+Gamepads and keyboards may require different platform-specific implementations.
+
+In particular, identifying multiple physical keyboards and suppressing their ordinary keyboard events can be substantially more complicated than ordinary keyboard shortcut handling.
+
+A robust implementation should consider:
+
+• Device enumeration.
+• Per-device event attribution.
+• Input isolation.
+• Prevention of duplicate keyboard events.
+• Keyboard layouts and physical key identification.
+• Hot-plugging.
+• Persistent device assignments.
+• Bluetooth reconnection.
+• Operating-system permissions and security restrictions.
+
+Where direct native support is insufficient, an optional companion application, background service, or bridge could potentially provide additional functionality.
+
+However, native integration would be preferable wherever possible.
+
+A unified controller mapping interface could operate above the platform-specific input backends.
+
+**12. Safety and Accessibility**
+
+Dedicated controller mode should never make the computer difficult or impossible to operate.
+
+For example:
+
+• The primary keyboard should remain usable.
+• Users should be able to restore normal keyboard functionality easily.
+• System-critical shortcuts should remain protected.
+• Device disconnection should be handled safely.
+• Accessibility-related functionality should be respected.
+• Controller configuration should remain accessible without requiring the controller being configured.
+• Device operating modes should be clearly visible.
+• International keyboard layouts should be supported.
+
+For keyboards, it would also be useful to distinguish physical key positions from layout-dependent characters.
+
+This could help maintain consistent mappings across different keyboard layouts.
+
+**13. Optional Advanced Features**
+
+Some additional possibilities:
+
+• Multiple actions per button or key.
+• Press, release, double-press, and long-press triggers.
+• Controller modifier keys.
+• Multiple mapping layers.
+• Conditional mappings.
+• Toggle and momentary modes.
+• Per-device sensitivity settings.
+• Visual feedback showing the last activated control.
+• Controller input monitoring.
+• Ready-made mapping templates.
+• Community-shared controller profiles.
+• Optional virtual MIDI translation.
+
+These should remain optional enhancements rather than prerequisites for the core functionality.
+
+**14. Practical Advantages for Musicians**
+
+I believe this feature has a particularly compelling practical advantage:
+
+**It could dramatically lower the cost of building a sophisticated DAW control setup.**
+
+Instead of requiring specialized hardware, users could repurpose devices they already own or purchase inexpensive second-hand alternatives.
+
+For example:
+
+• A compact second-hand keyboard could become a dedicated recording controller.
+• Another keyboard, customized with printed labels, could become an effects controller.
+• A small gamepad could provide additional performance controls.
+• Multiple devices could be combined into a highly customized setup.
+
+Because many keyboards and gamepads are lightweight, the entire setup could remain extremely portable.
+
+This could be especially attractive for:
+
+• Live musicians.
+• Traveling performers.
+• Street musicians.
+• Home studios.
+• Mobile production setups.
+• Experimental music workflows.
+• Accessibility-oriented setups.
+• Users with limited budgets.
+
+The possibility of physically labeling every keyboard key is particularly interesting.
+
+Using an inexpensive label printer, users could transform an ordinary keyboard into a clearly organized control surface with dozens of dedicated buttons.
+
+For workflows primarily requiring buttons rather than encoders or faders, this could be a remarkably cost-effective solution.
+
+**15. Suggested Implementation Priorities**
+
+To keep the feature manageable, a phased implementation could make sense.
+
+**Phase 1 – Core Functionality**
+• Multiple simultaneous gamepads.
+• Multiple simultaneous physical keyboards, where supported.
+• Independent per-device mappings.
+• Support for identical devices.
+• Dedicated keyboard controller mode.
+• Basic device identification and management.
+• Reliable conflict prevention.
+
+**Phase 2 – Profiles and Reliability**
+• Persistent device assignments.
+• Profile management.
+• Import/export functionality.
+• Reconnection handling.
+• Advanced analog mapping.
+• Controller input monitoring.
+
+**Phase 3 – Optional Advanced Features**
+• Mapping layers.
+• Advanced triggers.
+• Conditional actions.
+• Virtual MIDI translation.
+• Community-shared templates.
+
+These phases are suggestions, not strict requirements.
+
+**16. Overall Goal**
+
+The ideal setup could look like this:
+
+Main Keyboard → Normal typing and Nota shortcuts.
+
+Keyboard #2 → Dedicated recording and transport controller.
+
+Keyboard #3 → Dedicated effects and plugin controller.
+
+Keyboard #4 → Dedicated live-performance actions.
+
+Gamepad #1 → Performance controls.
+
+Gamepad #2 → Independent parameter and effect control.
+
+All devices operating simultaneously, each with independent mappings, without unintended conflicts.
+
+**Core Requirements**
+
+• Multiple simultaneous gamepads.
+• Multiple simultaneous physical keyboards.
+• Independent mappings for every device.
+• Support for identical devices.
+• Reliable device identification and reassignment.
+• Dedicated keyboard controller mode.
+• Prevention of conflicts with normal typing and application shortcuts.
+• Persistent mappings and predictable reconnection.
+• Cross-platform support wherever technically feasible.
+
+**Final Thoughts**
+
+I believe this could be a genuinely powerful addition to Nota.
+
+The combination of affordability, portability, physical customization, independent device mappings, and flexible action triggering could turn ordinary keyboards and gamepads into surprisingly sophisticated DAW control surfaces.
+
+What makes the concept especially appealing is that users wouldn't necessarily need to purchase any specialized hardware.
+
+They could start with inexpensive devices they already own, buy second-hand equipment, or build completely customized controller setups using compact keyboards, gamepads, and printed key labels.
+
+I understand that some aspects — especially distinguishing identical physical keyboards and isolating their input — may involve significant platform-specific challenges.
+
+I'd be very interested to hear which parts might already be possible within Nota's architecture and whether a unified multi-device controller system could be considered for future development.
+
+Thanks very much for considering this!
