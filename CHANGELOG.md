@@ -82,6 +82,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **No more benign IBus errors in the system log on Linux** (nota-daw/nota#36): with the
+  IBus input method (Linux Mint with Cinnamon, some Ubuntu and Fedora setups), the system
+  log filled up with `[IME] Error while destroying the context` entries — a harmless D-Bus
+  quirk in how Avalonia disposes its input contexts, repeated for every popup and tooltip.
+  Those known-harmless messages are now filtered out; every other error still reaches the
+  log unchanged.
 - **A tempo set over MCP shows in the transport bar and is saved**: `set_tempo` (and
   anything driving it, such as a hardware controller) changed the tempo you hear, but the
   BPM field kept the old number, and saving, autosave and export used that stale tempo, so

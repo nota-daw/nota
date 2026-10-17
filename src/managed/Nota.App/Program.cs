@@ -23,5 +23,6 @@ class Program
             .WithDeveloperTools()
 #endif
             .WithNotaFonts()
-            .LogToTrace();
+            .LogToTrace()
+            .WithImeLogNoiseFiltered();
 }
