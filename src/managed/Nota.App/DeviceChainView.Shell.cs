@@ -195,7 +195,7 @@ public sealed partial class DeviceChainView
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
-        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · right-click for A/B, move and delete" : "Right-click for more");
+        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
@@ -234,9 +234,10 @@ public sealed partial class DeviceChainView
         // the preset belongs to the device, not to the card size.
         // The picker has its own centre slot: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
+        Control? picker = null;
         if (presets.Count > 0)
         {
-            var picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+            picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
                 nameWidth: s.Compact ? 74 : 132);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
@@ -298,6 +299,9 @@ public sealed partial class DeviceChainView
                 NotaDocs.Open(headerBar, NotaDocs.DevicePage(s.Kind, kind));
             };
             flyout.Items.Add(docs);
+            var fold = new MenuItem { Header = "Fold" };   // the header's double-click, findable
+            fold.Click += (_, _) => SetFolded(s.Kind, di, true);
+            flyout.Items.Add(fold);
             flyout.Items.Add(new Separator());
         }
 
@@ -306,7 +310,13 @@ public sealed partial class DeviceChainView
         {
             var pt = e.GetCurrentPoint(headerBar).Properties;
             if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(headerBar, s.Kind, di, HeaderMenu); return; }
-            if (pt.IsLeftButtonPressed) SelectDevice(s.Kind, di);
+            if (!pt.IsLeftButtonPressed) return;
+            // A double-click on the header itself (not its picker, switch or accessories) folds
+            // the card into a strip (specs/021). ClickCount, not DoubleTapped: the first click
+            // selects and rebuilds the row, so the second lands on a new header.
+            if (e.ClickCount == 2 && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
+            { e.Handled = true; SetFolded(s.Kind, di, true); return; }
+            SelectDevice(s.Kind, di);
         };
 
         DockPanel.SetDock(headerBar, Dock.Top);

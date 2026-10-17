@@ -94,6 +94,10 @@ public:
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
 
+    // Fold (specs/021): drawn as a narrow strip in the Devices panel. Message thread only.
+    bool folded() const { return folded_; }
+    void setFolded(bool f) { folded_ = f; }
+
     // Map/CC routing: a device (the arpeggiator) can drive a target audio-device param
     // on the same track from its per-step CC lane. destDevice = the track's audio-device
     // chain index (-2 = no routing), destParam = that device's param index, depth 0..1
@@ -108,6 +112,7 @@ public:
 
 private:
     std::atomic<bool> bypassed_{false};
+    bool folded_ = false;
 };
 
 } // namespace nota

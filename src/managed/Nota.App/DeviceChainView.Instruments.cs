@@ -16,6 +16,9 @@ public sealed partial class DeviceChainView
     private Control InstrumentCard()
     {
         int kind = _engine.TrackInstrumentKind(_trackId);
+        // Folded: just the strip, whatever the instrument (no body is built). Instruments have
+        // no bypass yet, so the strip's power slot stays empty.
+        if (_engine.DeviceFolded(_trackId, -1)) return FoldedStrip(ChainKind.Instrument, -1, _engine.DeviceName(_trackId, -1), bypassable: false, bypassed: false);
         if (kind == 3) return InstrumentRackCard();
         if (kind == 4) return DrumRackCard();
         if (kind == -1) return PluginCardFor(ChainKind.Instrument, -1, 1);   // hosted VST3 / AU

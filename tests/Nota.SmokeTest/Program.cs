@@ -309,6 +309,14 @@ if (args.Length >= 1 && args[0] == "--paramundo")
     Console.WriteLine(failures == 0 ? "PARAMUNDO PASSED" : $"PARAMUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Device fold alone: `--fold`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--fold")
+{
+    Console.WriteLine("-- device fold --");
+    foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "FOLD PASSED" : $"FOLD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // The project pan law alone: `--panlaw`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--panlaw")
 {
@@ -14763,6 +14771,9 @@ foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- pan law --");
 foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- device fold --");
+foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).

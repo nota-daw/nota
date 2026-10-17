@@ -54,6 +54,9 @@ public:
     // and "send on change" read it.
     // Relaxed atomics so a test / meter can read them from the message thread.
     std::atomic<float> deliveredCtl[kCtlCount];
+    // Fold (specs/021): the Devices panel draws the instrument as a narrow strip. A view flag
+    // saved with the project; message thread only.
+    bool folded = false;
     Instrument() { for (auto& v : deliveredCtl) v.store(std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed); }
     virtual void controller(int32_t ctl, float value) {
         switch (ctl) {

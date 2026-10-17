@@ -18,6 +18,7 @@ public sealed partial class DeviceChainView
         bool bypassed = _engine.MidiEffectBypassed(_trackId, index);
         string name = _engine.MidiEffectName(_trackId, index);
         int kind = _engine.MidiEffectKind(_trackId, index);
+        if (_engine.MidiEffectFolded(_trackId, index)) return FoldedStrip(ChainKind.Midi, index, name, bypassable: true, bypassed);
         var body = _midiFactory.Resolve(kind);
         var ctx = NewCardContext();
         double width = body.WidthFor(_engine, _trackId, index);

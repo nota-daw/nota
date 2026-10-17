@@ -177,6 +177,7 @@ public sealed partial class DeviceChainView : UserControl
         int kind = _engine.TrackDeviceBuiltinKind(_trackId, index);
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
+        if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
 
         Control body;
         double width;

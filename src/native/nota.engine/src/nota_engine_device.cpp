@@ -148,6 +148,8 @@ NotaResult  nota_midi_effect_set_param(NotaEngine* e, int32_t t, int32_t i, int3
 }
 void        nota_midi_effect_set_bypassed(NotaEngine* e, int32_t t, int32_t i, int32_t b) { if (e) ENG(e)->setMidiEffectBypassed(t, i, b != 0); }
 int32_t     nota_midi_effect_bypassed(const NotaEngine* e, int32_t t, int32_t i) { return (e && CENG(e)->midiEffectBypassed(t, i)) ? 1 : 0; }
+void        nota_midi_effect_set_folded(NotaEngine* e, int32_t t, int32_t i, int32_t f) { if (e) ENG(e)->setMidiEffectFolded(t, i, f != 0); }
+int32_t     nota_midi_effect_folded(const NotaEngine* e, int32_t t, int32_t i) { return (e && CENG(e)->midiEffectFolded(t, i)) ? 1 : 0; }
 void        nota_midi_effect_set_cc_dest(NotaEngine* e, int32_t t, int32_t i, int32_t dev, int32_t param) { if (e) ENG(e)->setMidiEffectCcDest(t, i, dev, param); }
 void        nota_midi_effect_set_cc_depth(NotaEngine* e, int32_t t, int32_t i, float d) { if (e) ENG(e)->setMidiEffectCcDepth(t, i, d); }
 int32_t     nota_midi_effect_cc_dest_device(const NotaEngine* e, int32_t t, int32_t i) { return e ? CENG(e)->midiEffectCcDestDevice(t, i) : -2; }
@@ -312,6 +314,12 @@ NotaResult nota_track_set_device_bypassed(NotaEngine* e, int32_t track_id, int32
 }
 int32_t nota_track_device_bypassed(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return (e && CENG(e)->trackDeviceBypassed(track_id, device_index)) ? 1 : 0;
+}
+void nota_track_set_device_folded(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t folded) {
+    if (e) ENG(e)->setTrackDeviceFolded(track_id, device_index, folded != 0);
+}
+int32_t nota_track_device_folded(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return (e && CENG(e)->trackDeviceFolded(track_id, device_index)) ? 1 : 0;
 }
 int32_t nota_track_latency_samples(const NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackLatencySamples(track_id) : 0;

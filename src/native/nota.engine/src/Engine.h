@@ -796,6 +796,9 @@ public:
     // Device bypass (M3-6). Atomic on the stable Device — no snapshot republish.
     void    setTrackDeviceBypassed(int32_t trackId, int32_t deviceIndex, bool bypassed);
     bool    trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const;
+    // Device fold (specs/021): a view flag on the device; deviceIndex -1 = the instrument.
+    void    setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded);
+    bool    trackDeviceFolded(int32_t trackId, int32_t deviceIndex) const;
     // Plugin delay compensation (M3-7).
     int32_t trackLatencySamples(int32_t trackId) const;
 
@@ -818,6 +821,8 @@ public:
     void        midiEffectSetParam(int32_t trackId, int32_t index, int32_t paramIndex, float value);
     void        setMidiEffectBypassed(int32_t trackId, int32_t index, bool bypassed);
     bool        midiEffectBypassed(int32_t trackId, int32_t index) const;
+    void        setMidiEffectFolded(int32_t trackId, int32_t index, bool folded);
+    bool        midiEffectFolded(int32_t trackId, int32_t index) const;
     // Map/CC routing: the effect's CC lane modulates an audio-device param on the track.
     void        setMidiEffectCcDest(int32_t trackId, int32_t index, int32_t destDevice, int32_t destParam);
     void        setMidiEffectCcDepth(int32_t trackId, int32_t index, float depth);

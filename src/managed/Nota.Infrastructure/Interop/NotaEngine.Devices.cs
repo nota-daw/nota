@@ -157,6 +157,8 @@ public sealed partial class NotaEngine
     public void MidiEffectSetParam(int trackId, int index, int paramIndex, float value) { ThrowIfDisposed(); NativeMethods.MidiEffectSetParam(_handle, trackId, index, paramIndex, value); }
     public void SetMidiEffectBypassed(int trackId, int index, bool bypassed) { ThrowIfDisposed(); NativeMethods.MidiEffectSetBypassed(_handle, trackId, index, bypassed ? 1 : 0); }
     public bool MidiEffectBypassed(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectBypassed(_handle, trackId, index) != 0; }
+    public void SetMidiEffectFolded(int trackId, int index, bool folded) { ThrowIfDisposed(); NativeMethods.MidiEffectSetFolded(_handle, trackId, index, folded ? 1 : 0); }
+    public bool MidiEffectFolded(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectFolded(_handle, trackId, index) != 0; }
     public void SetMidiEffectCcDest(int trackId, int index, int destDevice, int destParam) { ThrowIfDisposed(); NativeMethods.MidiEffectSetCcDest(_handle, trackId, index, destDevice, destParam); }
     public void SetMidiEffectCcDepth(int trackId, int index, float depth) { ThrowIfDisposed(); NativeMethods.MidiEffectSetCcDepth(_handle, trackId, index, depth); }
     public int MidiEffectCcDestDevice(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDestDevice(_handle, trackId, index); }
@@ -241,6 +243,21 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         return NativeMethods.DeviceBypassed(_handle, trackId, deviceIndex) != 0;
+    }
+
+    /// <summary>Folds (or unfolds) the device at deviceIndex in the Devices panel (specs/021);
+    /// -1 = the instrument. A view flag, saved with the project.</summary>
+    public void SetDeviceFolded(int trackId, int deviceIndex, bool folded)
+    {
+        ThrowIfDisposed();
+        NativeMethods.SetDeviceFolded(_handle, trackId, deviceIndex, folded ? 1 : 0);
+    }
+
+    /// <summary>Whether the device at deviceIndex (-1 = the instrument) is folded.</summary>
+    public bool DeviceFolded(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.DeviceFolded(_handle, trackId, deviceIndex) != 0;
     }
 
     /// <summary>Total reported latency (samples) of a track's plugin chain (M3-7).</summary>

@@ -32,7 +32,8 @@ public sealed class ProjectService
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
     /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
-    public const int CurrentFormatVersion = 22;
+    /// v23 (specs/021) adds the Devices-panel fold on devices, MIDI effects and instruments.
+    public const int CurrentFormatVersion = 23;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -162,6 +163,7 @@ public sealed class ProjectService
                 // React source (Nota Flux): store as a doc index, resolved on load.
                 int instScSrc = engine.InstrumentSidechainSource(ti.Id);
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
+                instDto.Folded = engine.DeviceFolded(ti.Id, -1);
                 t.Instrument = instDto;
             }
 
@@ -169,7 +171,7 @@ public sealed class ProjectService
             int midiCount = engine.TrackMidiEffectCount(ti.Id);
             for (int m = 0; m < midiCount; m++)
             {
-                var mdev = new MidiDeviceDto { Kind = engine.MidiEffectKind(ti.Id, m), Bypassed = engine.MidiEffectBypassed(ti.Id, m) };
+                var mdev = new MidiDeviceDto { Kind = engine.MidiEffectKind(ti.Id, m), Bypassed = engine.MidiEffectBypassed(ti.Id, m), Folded = engine.MidiEffectFolded(ti.Id, m) };
                 int pc = engine.MidiEffectParamCount(ti.Id, m);
                 mdev.Params = new float[pc];
                 for (int p = 0; p < pc; p++) mdev.Params[p] = engine.MidiEffectGetParam(ti.Id, m, p);
@@ -348,7 +350,7 @@ public sealed class ProjectService
         for (int d = 0; d < deviceCount; d++)
         {
             int bk = engine.TrackDeviceBuiltinKind(trackId, d);
-            var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d) };
+            var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d), Folded = engine.DeviceFolded(trackId, d) };
             int scSrc = engine.DeviceSidechainSource(trackId, d);
             dev.SidechainSource = scSrc >= 0 && idToIndex.TryGetValue(scSrc, out var si) ? si : -1;
             dev.SidechainGain = engine.DeviceSidechainGain(trackId, d);
@@ -427,6 +429,7 @@ public sealed class ProjectService
                 }
             }
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
+            if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
             if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
@@ -589,6 +592,7 @@ public sealed class ProjectService
                 id = engine.AddAudioTrack();
             }
 
+            if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
                 instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)
@@ -622,6 +626,7 @@ public sealed class ProjectService
                 if (m.Kind == 3 && m.Params.Length <= 11) PresetService.LengthLegacy(engine, id, mi);          // pre-Division Nota Length
                 if (m.Kind == 4 && m.Params.Length <= 7) PresetService.VelocityLegacy(engine, id, mi);         // pre-switch Nota Velocity
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
+                if (m.Folded) engine.SetMidiEffectFolded(id, mi, true);
                 if (m.CcDestDevice >= 0 && m.CcDestParam >= 0)
                 {
                     engine.SetMidiEffectCcDest(id, mi, m.CcDestDevice, m.CcDestParam);

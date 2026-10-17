@@ -127,6 +127,10 @@ internal static partial class NativeMethods
     internal static partial void MidiEffectSetBypassed(IntPtr engine, int trackId, int index, int bypassed);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_bypassed")]
     internal static partial int MidiEffectBypassed(IntPtr engine, int trackId, int index);
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_folded")]
+    internal static partial void MidiEffectSetFolded(IntPtr engine, int trackId, int index, int folded);
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_folded")]
+    internal static partial int MidiEffectFolded(IntPtr engine, int trackId, int index);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_cc_dest")]
     internal static partial void MidiEffectSetCcDest(IntPtr engine, int trackId, int index, int destDevice, int destParam);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_cc_depth")]
@@ -196,6 +200,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_device_bypassed")]
     internal static partial int DeviceBypassed(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_device_folded")]
+    internal static partial void SetDeviceFolded(IntPtr engine, int trackId, int deviceIndex, int folded);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_device_folded")]
+    internal static partial int DeviceFolded(IntPtr engine, int trackId, int deviceIndex);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_latency_samples")]
     internal static partial int TrackLatencySamples(IntPtr engine, int trackId);

@@ -210,6 +210,8 @@ track count and closes with Escape.
   - **Send/Return** buses (sends to returns) with a return list.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row.
+  - Double-click a device's header (or Fold in its menu) to fold it into a narrow strip with
+    its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
 
 ---
 

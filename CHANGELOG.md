@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Fold a device into a narrow strip** (nota-daw/nota#147): double-click a device's header
+  (or choose Fold in its right-click menu) and the card collapses into a 28 px strip with its
+  name, rotated, and its on/off switch, so a long chain fits the Devices panel. Double-click
+  the strip to open it again. A folded device still selects, drags to a new slot and opens its
+  menu; it works for audio effects, MIDI effects, plug-ins and the instrument. The fold is
+  saved with the project (format v23) and follows the device when it is moved or its
+  deletion is undone.
 - **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
   or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
   530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys

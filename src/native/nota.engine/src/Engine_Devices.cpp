@@ -810,6 +810,8 @@ float       Engine::midiEffectGetParam(int32_t t, int32_t i, int32_t p) const { 
 void        Engine::midiEffectSetParam(int32_t t, int32_t i, int32_t p, float v) { routeCvBaseEdit(2, t, i, p, v); if (auto* m = midiDeviceAt(t, i)) m->setParam(p, v); }
 void        Engine::setMidiEffectBypassed(int32_t t, int32_t i, bool b) { if (auto* m = midiDeviceAt(t, i)) m->setBypassed(b); }
 bool        Engine::midiEffectBypassed(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->bypassed() : false; }
+void        Engine::setMidiEffectFolded(int32_t t, int32_t i, bool f) { if (auto* m = midiDeviceAt(t, i)) m->setFolded(f); }
+bool        Engine::midiEffectFolded(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->folded() : false; }
 int32_t     Engine::midiEffectLastIn(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastIn() : -1; }
 int32_t     Engine::midiEffectLastOut(int32_t t, int32_t i) const { auto* m = midiDeviceAt(t, i); return m ? m->midiLastOut() : -1; }
 int32_t     Engine::midiEffectScope(int32_t t, int32_t i, float* out, int32_t maxN) const { auto* m = midiDeviceAt(t, i); return m ? m->midiScope(out, maxN) : 0; }
@@ -1061,6 +1063,22 @@ bool Engine::trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return false;
     return t->devices[deviceIndex] && t->devices[deviceIndex]->bypassed();
+}
+
+void Engine::setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return;
+    if (deviceIndex < 0) { if (t->instrument) t->instrument->folded = folded; return; }
+    if (deviceIndex < static_cast<int32_t>(t->devices.size()) && t->devices[deviceIndex])
+        t->devices[deviceIndex]->setFolded(folded);
+}
+
+bool Engine::trackDeviceFolded(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return false;
+    if (deviceIndex < 0) return t->instrument && t->instrument->folded;
+    return deviceIndex < static_cast<int32_t>(t->devices.size()) && t->devices[deviceIndex]
+        && t->devices[deviceIndex]->folded();
 }
 
 // --- plugin delay compensation (M3-7) --------------------------------------

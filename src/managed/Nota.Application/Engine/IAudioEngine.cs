@@ -539,6 +539,10 @@ public interface IAudioEngine : IDisposable
     void MidiEffectSetParam(int trackId, int index, int paramIndex, float value);
     void SetMidiEffectBypassed(int trackId, int index, bool bypassed);
     bool MidiEffectBypassed(int trackId, int index);
+    /// <summary>Fold (specs/021): the Devices panel draws the MIDI effect as a narrow strip.
+    /// A view flag kept on the device (follows moves and undo) and saved with the project.</summary>
+    void SetMidiEffectFolded(int trackId, int index, bool folded);
+    bool MidiEffectFolded(int trackId, int index);
     void SetMidiEffectCcDest(int trackId, int index, int destDevice, int destParam);
     void SetMidiEffectCcDepth(int trackId, int index, float depth);
     int MidiEffectCcDestDevice(int trackId, int index);
@@ -592,6 +596,10 @@ public interface IAudioEngine : IDisposable
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
+    /// <summary>Fold (specs/021): the Devices panel draws the device as a narrow strip.
+    /// deviceIndex -1 = the instrument. Kept on the device; saved with the project.</summary>
+    void SetDeviceFolded(int trackId, int deviceIndex, bool folded);
+    bool DeviceFolded(int trackId, int deviceIndex);
     int TrackLatencySamples(int trackId);
 
     // --- Instrument Rack (parallel chains + 8 macros) ----------------------

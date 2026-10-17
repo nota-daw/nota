@@ -180,8 +180,15 @@ public:
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
 
+    // Fold (specs/021): the Devices panel draws this device as a narrow strip. A view flag
+    // saved with the project; message thread only — the audio thread never reads it. Kept on
+    // the device so it follows moves and undo/redo.
+    bool folded() const { return folded_; }
+    void setFolded(bool f) { folded_ = f; }
+
 private:
     std::atomic<bool> bypassed_{false};
+    bool folded_ = false;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};
