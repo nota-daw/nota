@@ -130,6 +130,35 @@ If this is your first contribution, a maintainer approves the CI run before it s
 - If you change engine behaviour, extend the smoke test to cover it.
 - If you change user-visible behaviour, add a `CHANGELOG.md` entry.
 - Say which platforms you actually built and tested on.
+- For a visible change, show it: add before/after screenshots to the description (see
+  below).
+
+### Screenshots and other images
+
+Images for pull request descriptions and issues live on the **`pr-assets`** branch. It
+is an orphan branch with no code that is never merged, so images don't bloat `develop`
+and stay available after a branch is deleted. Use that one branch rather than creating a
+new branch per pull request.
+
+- Put each pull request's images in their own folder, named after the change or the
+  issue, for example `fold/` or `issue-137/`. Images attached to issues from outside
+  GitHub go under `issues/`.
+- Add images by committing on top of `pr-assets`. Never force-push it or rewrite its
+  history, because existing descriptions link to its files.
+- Embed with the raw URL:
+  `![After](https://raw.githubusercontent.com/nota-daw/nota/pr-assets/<folder>/<file>.png)`
+
+```sh
+git fetch origin pr-assets
+git worktree add ../nota-assets pr-assets
+mkdir -p ../nota-assets/my-change && cp after.png ../nota-assets/my-change/
+git -C ../nota-assets add my-change && git -C ../nota-assets commit -m "Images for my change"
+git -C ../nota-assets push origin HEAD:pr-assets
+```
+
+You can also drag images straight into the GitHub description box when you write it by
+hand. The branch is for images added by scripts or tools, and for anything you want to
+keep alongside the repository.
 
 ## Reporting bugs
 
