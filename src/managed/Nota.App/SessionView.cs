@@ -269,7 +269,12 @@ public sealed partial class SessionView : UserControl
     /// <summary>Re-reads live slot state, progress and meters and repaints (no rebuild).</summary>
     public void UpdateStates()
     {
+        // A take that just ended (Stop / Space in the transport, a fixed length running out)
+        // leaves its cell drawing the notes it was built with — none, for a new slot — so
+        // rebuild that slot from what was recorded (#156).
+        int endedTrack = _recTrack, endedScene = _recScene;
         ReadRecordTarget();
+        if (endedScene >= 0 && (endedTrack != _recTrack || endedScene != _recScene)) RefreshSlot(endedTrack, endedScene);
         _blinkFrame++;
         _blinkOn = (_blinkFrame / 8) % 2 == 0;   // ~2 Hz at the 30 Hz UI clock
         bool active = false;
