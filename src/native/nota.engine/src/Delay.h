@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -72,14 +73,42 @@ public:
         curL_ = curR_ = oldL_ = oldR_ = 0.0;
         hpL_ = hpR_ = lpL_ = lpR_ = tapeL_ = tapeR_ = monoL_ = monoR_ = 0.0f;
         wowPhase_ = 0.0;
+        idle_ = false;
+        tailFramesRemaining_ = calculateTailSamples();
         srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
     }
     void setTransport(double, double samplesPerBeat, bool) override {
         if (samplesPerBeat > 0.0) spb_ = samplesPerBeat;
     }
 
+    int calculateTailSamples() const {
+        if (on(Freeze)) return 100 * static_cast<int>(sr_);
+        const bool sync = on(SyncMode) && spb_ > 0.0;
+        const double tgtL = delaySamples(TimeL, DivL, sync);
+        const double tgtR = on(LinkLR) ? tgtL : delaySamples(TimeR, DivR, sync);
+        const double maxDelay = std::max(tgtL, tgtR);
+        const float fb = std::clamp(get(Feedback), 0.0f, 0.98f);
+        int repeats = 1;
+        if (fb >= 0.95f) {
+            repeats = 100;
+        } else if (fb > 0.001f) {
+            repeats = std::clamp(static_cast<int>(std::ceil(-11.513f / std::log(fb))), 1, 100);
+        }
+        return static_cast<int>(maxDelay * repeats) + static_cast<int>(sr_ * 0.1);
+    }
+
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return true; }
+    void wake() override { idle_ = false; tailFramesRemaining_ = calculateTailSamples(); }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
         if (size_ <= 4 || frames <= 0) return;
+        if (inputSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         if (clear_.exchange(false, std::memory_order_relaxed)) wipe();
 
@@ -133,6 +162,7 @@ public:
         const bool hpOn = clamp01(LowCut) > 0.001f, lpOn = clamp01(HighCut) < 0.999f;
         const float tapeC = onePole(8000.0);                       // tape head loss
         const float drive = tape ? 1.0f + 2.0f * clamp01(Feedback) : 0.0f;
+        const float invTanhDrive = (tape && drive > 1e-4f) ? 1.0f / fast_math::fastTanh(drive) : 1.0f;
         const float apG = static_cast<float>(0.62 * diffuse);
         const float monoC = onePole(std::max(20.0, expMap(clamp01(BassMono), 30.0, 500.0)));
         const bool monoOn = clamp01(BassMono) > 0.001f;
@@ -146,7 +176,7 @@ public:
             } else if (fadePos_ < fadeLen_) {
                 ++fadePos_;
             }
-            const float lfo = std::sin(kTwoPi * wowPhase_);
+            const float lfo = fast_math::fastSin(static_cast<float>(wowPhase_));
             wowPhase_ += wowInc; if (wowPhase_ >= 1.0) wowPhase_ -= 1.0;
             const double mod = static_cast<double>(lfo * wowDepth);
 
@@ -171,8 +201,8 @@ public:
                 if (hpOn) { hpL_ += hpC * (inpL - hpL_); inpL -= hpL_; hpR_ += hpC * (inpR - hpR_); inpR -= hpR_; }
                 if (lpOn) { lpL_ += lpC * (inpL - lpL_); inpL = lpL_; lpR_ += lpC * (inpR - lpR_); inpR = lpR_; }
                 if (tape) {
-                    tapeL_ += tapeC * (inpL - tapeL_); inpL = std::tanh(tapeL_ * drive) / std::tanh(drive);
-                    tapeR_ += tapeC * (inpR - tapeR_); inpR = std::tanh(tapeR_ * drive) / std::tanh(drive);
+                    tapeL_ += tapeC * (inpL - tapeL_); inpL = fast_math::fastTanh(tapeL_ * drive) * invTanhDrive;
+                    tapeR_ += tapeC * (inpR - tapeR_); inpR = fast_math::fastTanh(tapeR_ * drive) * invTanhDrive;
                 }
             }
             inpL = ap_[1].tick(ap_[0].tick(inpL, apG), apG);
@@ -207,6 +237,20 @@ public:
         const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
         cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
+
+        if (!inputSilent || freeze) {
+            idle_ = false;
+            tailFramesRemaining_ = calculateTailSamples();
+        } else {
+            if (tailFramesRemaining_ > 0) {
+                tailFramesRemaining_ -= frames;
+            } else {
+                if (outPkL < 1.0e-5f && outPkR < 1.0e-5f && wetPk < 1.0e-5f) {
+                    idle_ = true;
+                    wipe();
+                }
+            }
+        }
     }
 
     // ---- identity / params -------------------------------------------------------
@@ -223,7 +267,10 @@ public:
     float paramMin(int32_t) const override { return 0.0f; }
     float paramMax(int32_t) const override { return 1.0f; }
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
-    void setParam(int32_t i, float v) override { if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
+    void setParam(int32_t i, float v) override {
+        wake();
+        if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
 
     // Nothing is added to the dry path — the wet is the effect itself.
     int32_t latencySamples() const override { return 0; }
@@ -338,6 +385,8 @@ private:
     AllPass ap_[4];
     float hpL_ = 0, hpR_ = 0, lpL_ = 0, lpR_ = 0, tapeL_ = 0, tapeR_ = 0, monoL_ = 0, monoR_ = 0;
     double cpuS_ = 0.0;
+    bool idle_ = false;
+    int tailFramesRemaining_ = 0;
     std::atomic<bool> clear_{false};
     std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
     std::atomic<float> p_[kNumParams] = {};

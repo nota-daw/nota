@@ -270,6 +270,7 @@ public:
         const float  panL = std::min(1.0f, 1.0f - pan), panR = std::min(1.0f, 1.0f + pan);
         const double outDrive = 1.0 + get(Drive) * 7.0;                     // 1..8
         const double outMakeup = 1.0 / std::tanh(outDrive);
+        const double preMakeup = preDrive > 1.001 ? 1.0 / std::tanh(preDrive) : 1.0;
         const float  volume = get(Volume);
         const double invSr = 1.0 / sampleRate_;
 
@@ -301,7 +302,7 @@ public:
                 v.phS += iS; if (v.phS >= 1.0) v.phS -= 1.0;
 
                 double in = (s + sub);
-                if (preDrive > 1.001) in = std::tanh(in * preDrive) / std::tanh(preDrive);
+                if (preDrive > 1.001) in = std::tanh(in * preDrive) * preMakeup;
 
                 // Control-rate filter cutoff (cutoff = base × 2^mod).
                 if (v.modCount-- <= 0) {

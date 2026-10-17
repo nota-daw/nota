@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "AudioBufferUtils.h"
+
 #include <atomic>
 #include <cstdint>
 #include <vector>
@@ -38,12 +40,25 @@ public:
 
     int32_t delay() const { return delay_.load(std::memory_order_relaxed); }
 
+    bool isIdle() const {
+        if (!ready_.load(std::memory_order_relaxed)) return true;
+        const int32_t d = delay_.load(std::memory_order_relaxed);
+        if (d <= 0) return true;
+        return tailRemaining_ <= 0;
+    }
+
     // Audio thread: delay `frames` of interleaved stereo in place. No-op until a
     // positive delay has been prepared.
     void process(float* buf, int32_t frames) {
         if (!ready_.load(std::memory_order_acquire)) return;
         const int32_t d = delay_.load(std::memory_order_relaxed);
         if (d <= 0) return;
+        const bool silent = isBufferSilent(buf, frames);
+        if (!silent) {
+            tailRemaining_ = d + 64;
+        } else if (tailRemaining_ > 0) {
+            tailRemaining_ -= frames;
+        }
         for (int32_t i = 0; i < frames; ++i) {
             int32_t rd = pos_ - d;
             if (rd < 0) rd += cap_;
@@ -60,6 +75,7 @@ private:
     std::vector<float> ring_;
     int32_t            cap_ = 0;   // published via ready_
     int32_t            pos_ = 0;   // audio thread only
+    int32_t            tailRemaining_ = 0;
     std::atomic<int32_t> delay_{0};
     std::atomic<bool>    ready_{false};
 };

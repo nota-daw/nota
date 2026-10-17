@@ -37,6 +37,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include "signalsmith-linear/fft.h"
 
@@ -181,7 +182,7 @@ public:
             if (on[b] && (!primed_ || !wasOn_[b])) { glF_[b] = tF[b]; glG_[b] = tG[b]; glQ_[b] = tQ[b]; }
             wasOn_[b] = on[b];
             if (on[b]) moving |= glMoving[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
-            f0[b] = std::exp2(glF_[b]); gStat[b] = glG_[b]; q[b] = std::exp2(glQ_[b]);
+            f0[b] = fast_math::exp2f(static_cast<float>(glF_[b])); gStat[b] = glG_[b]; q[b] = fast_math::exp2f(static_cast<float>(glQ_[b]));
             det[b] = bandpass(sr, f0[b], std::max(q[b], 0.5));
         }
         primed_ = true;
@@ -218,7 +219,7 @@ public:
                     glF_[b] = settle(glF_[b] + (tF[b] - glF_[b]) * glideC, tF[b], 1e-5);
                     glG_[b] = settle(glG_[b] + (tG[b] - glG_[b]) * glideC, tG[b], 1e-4);
                     glQ_[b] = settle(glQ_[b] + (tQ[b] - glQ_[b]) * glideC, tQ[b], 1e-5);
-                    f0[b] = std::exp2(glF_[b]); gStat[b] = glG_[b]; q[b] = std::exp2(glQ_[b]);
+                    f0[b] = fast_math::exp2f(static_cast<float>(glF_[b])); gStat[b] = glG_[b]; q[b] = fast_math::exp2f(static_cast<float>(glQ_[b]));
                     det[b] = bandpass(sr, f0[b], std::max(q[b], 0.5));
                     moving |= glMoving[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
                     glStepped[b] = true;
@@ -232,7 +233,7 @@ public:
                 if (!on[b]) continue;
                 const double d = detState_[b].run(det[b], ext[b] ? key : self);
                 detEnv_[b] += (std::fabs(d) - detEnv_[b]) * detC;
-                const double lvl = 20.0 * std::log10(detEnv_[b] + 1e-9);
+                const double lvl = fast_math::linToDb(static_cast<float>(detEnv_[b] + 1e-9));
                 if (lvl > lvlMax[b]) lvlMax[b] = lvl;
                 if (!dyn[b]) continue;
                 const double over = (mode[b] == DynAbove) ? (lvl - thr[b]) : (thr[b] - lvl);

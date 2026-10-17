@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -60,14 +61,38 @@ public:
         envCnt_ = 0; envIn_ = 0.0f; envGr_ = 0.0f;
         for (auto& c : ch_) c = Chan{};
         inMs_ = outMs_ = 0.0;
+        idle_ = false;
+        tailFramesRemaining_ = calculateTailSamples();
         srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
     }
     void setTransport(double, double samplesPerBeat, bool) override {
         if (samplesPerBeat > 0.0) spb_ = samplesPerBeat;
     }
 
+    int calculateTailSamples() const {
+        const int la = std::clamp(static_cast<int>(p_[Lookahead].load(std::memory_order_relaxed) * 0.001 * sr_), 0, std::max(0, laSize_ - 1));
+        const int chr = std::clamp(static_cast<int>(std::lround(p_[Character].load(std::memory_order_relaxed))), 0, kNumChars - 1);
+        static const float chRel[kNumChars] = {1.0f, 1.7f, 0.8f, 2.2f, 0.6f};
+        const float relMs = std::max(1.0f, p_[Release].load(std::memory_order_relaxed)) * chRel[chr];
+        const float holdMs = std::clamp(p_[Hold].load(std::memory_order_relaxed), 0.0f, 500.0f);
+        const float totalRelMs = holdMs + relMs * 5.0f;
+        return la + static_cast<int>(totalRelMs * 0.001 * sr_) + static_cast<int>(sr_ * 0.05);
+    }
+
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return true; }
+    void wake() override { idle_ = false; tailFramesRemaining_ = calculateTailSamples(); }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
         if (frames <= 0) return;
+        const bool inSilent = inputSilent;
+        const bool scSilent = !scBuf_ || scFrames_ < frames || isBufferSilent(scBuf_, frames);
+        if (inSilent && scSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         const double sr = sr_;
         const int   chr = charIndex();
@@ -114,6 +139,8 @@ public:
         // external source keys it (the older, generic sidechain control).
         const float keyGain = dbToLin(get(ScGain) + (sc ? sidechainGainDb() : 0.0f));
         const int la = lookaheadSamples();
+        int envW = envW_.load(std::memory_order_relaxed);
+        int keyW = keyW_.load(std::memory_order_relaxed);
 
         float maxGr = 0.0f, inPk = 0.0f, outPk = 0.0f, keyPk = 0.0f;
         const int nDet = linked ? 1 : 2;
@@ -148,7 +175,7 @@ public:
                     s.env = static_cast<float>(rc * s.env + (1.0 - rc) * det);
                 }
 
-                const float envDb = 20.0f * std::log10(s.env + 1e-9f);
+                const float envDb = fast_math::linToDb(s.env + 1e-9f);
                 const float over = envDb - threshDb;
                 float g;
                 if (kneeDb > 0.01f && 2.0f * over > -kneeDb && 2.0f * over < kneeDb)
@@ -187,17 +214,17 @@ public:
             envIn_ = std::max(envIn_, inA);
             envGr_ = std::max(envGr_, grMax);
             if (++envCnt_ >= envDecim_) {
-                const int w = envW_.load(std::memory_order_relaxed);
-                envRing_[w] = 20.0f * std::log10(envIn_ + 1e-9f);
-                grRing_[w] = envGr_;
-                envW_.store((w + 1) % kEnvN, std::memory_order_relaxed);
+                envRing_[envW] = fast_math::linToDb(envIn_ + 1e-9f);
+                grRing_[envW] = envGr_;
+                envW = (envW + 1) & (kEnvN - 1);
                 envCnt_ = 0; envIn_ = 0.0f; envGr_ = 0.0f;
             }
             // ---- key ring (unfiltered, so the card can draw what the filters take away) ----
-            const int kw = keyW_.load(std::memory_order_relaxed);
-            keyRing_[kw] = (keyRaw[0] + (linked ? keyRaw[0] : keyRaw[1])) * 0.5f;
-            keyW_.store((kw + 1) % kKeyN, std::memory_order_relaxed);
+            keyRing_[keyW] = (keyRaw[0] + (linked ? keyRaw[0] : keyRaw[1])) * 0.5f;
+            keyW = (keyW + 1) & (kKeyN - 1);
         }
+        envW_.store(envW, std::memory_order_relaxed);
+        keyW_.store(keyW, std::memory_order_relaxed);
         gr_.store(maxGr, std::memory_order_relaxed);
         scBuf_ = nullptr;
 
@@ -214,6 +241,21 @@ public:
         const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
         cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
+
+        if (!inSilent || !scSilent) {
+            idle_ = false;
+            tailFramesRemaining_ = calculateTailSamples();
+        } else {
+            if (tailFramesRemaining_ > 0) {
+                tailFramesRemaining_ -= frames;
+            } else {
+                if (maxGr < 0.01f && inPk < 1.0e-5f && outPk < 1.0e-5f) {
+                    idle_ = true;
+                    std::fill(laBuf_.begin(), laBuf_.end(), 0.0f);
+                    for (auto& c : ch_) c = Chan{};
+                }
+            }
+        }
     }
 
     // Look-ahead delays the audio by this much; the engine's PDC lines the other tracks up.
@@ -301,7 +343,10 @@ public:
             case ScLP: return 20000.0f; case ScGain: return 24.0f; case Hold: return 500.0f; case ScQ: return 4.0f; default: return 1.0f; }
     }
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
-    void setParam(int32_t i, float v) override { if (i >= 0 && i < kNumParams) p_[i].store(v, std::memory_order_relaxed); }
+    void setParam(int32_t i, float v) override {
+        wake();
+        if (i >= 0 && i < kNumParams) p_[i].store(v, std::memory_order_relaxed);
+    }
 
     Compressor() {
         set(Threshold, -18.0f); set(Ratio, 3.0f); set(Attack, 10.0f); set(Release, 120.0f); set(Makeup, 0.0f);
@@ -351,13 +396,15 @@ private:
     int lookaheadSamples() const {
         return std::clamp(static_cast<int>(getParam(Lookahead) * 0.001 * sr_), 0, std::max(0, laSize_ - 1));
     }
-    static float dbToLin(float db) { return std::exp(db * 0.11512925f); }
+    static float dbToLin(float db) { return fast_math::dbToLin(db); }
     static float decayPeak(float held, float now) { return now > held ? now : held * 0.86f; }
 
     double sr_ = 44100.0, spb_ = 0.0;
     Chan ch_[2];
     std::vector<float> laBuf_; int laSize_ = 0, laW_ = 0;
     double inMs_ = 0.0, outMs_ = 0.0, cpuS_ = 0.0;
+    bool idle_ = false;
+    int tailFramesRemaining_ = 0;
     int envDecim_ = 44, envCnt_ = 0;
     float envIn_ = 0.0f, envGr_ = 0.0f;
     float envRing_[kEnvN] = {}, grRing_[kEnvN] = {}, keyRing_[kKeyN] = {};

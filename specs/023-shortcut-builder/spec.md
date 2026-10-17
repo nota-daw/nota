@@ -4,9 +4,9 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Implemented
 
-**Input**: User description: "To jets DAW nota, stworzyłem kolejnie lepszy parser keyów między macos a windows i linux, przeszukaj kod w poszukiwaniu glyphów macos, trzeba zamienić te znaki na jakiś sensowny builder, postaraj się opracować to API"
+**Input**: User description: "Design a cross-platform keyboard shortcut builder and glyph parser for macOS, Windows, and Linux to replace hardcoded glyph strings with a robust, type-safe API."
 
 ## Nota Context
 

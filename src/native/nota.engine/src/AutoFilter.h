@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Device.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -485,7 +486,7 @@ private:
                            int type, float morph, float k, double a1, double a2, double a3,
                            bool slope24, float wet, float outGain, bool analog) {
         double x = xin;
-        if (drive > 0.0001f) x = std::tanh(x * driveGain) * driveComp;
+        if (drive > 0.0001f) x = fast_math::fastTanh(static_cast<float>(x * driveGain)) * driveComp;
 
         double lp, bp, hp, notch;
         svf_[ch * 2].tick(x, k, a1, a2, a3, lp, bp, hp, notch);
@@ -496,14 +497,14 @@ private:
         const double outs[4] = { lp, bp, hp, notch };
         double y = outs[type];
         if (morph > 0.0f) y = y * (1.0 - morph) + outs[(type + 1) & 3] * morph;   // blend toward next type
-        if (analog) y = std::tanh(y * 1.3) / 0.86172;                             // Analog: gentle saturation
+        if (analog) y = fast_math::fastTanh(static_cast<float>(y * 1.3)) * (1.0f / 0.86172f);                             // Analog: gentle saturation
         return (float)((xin * (1.0f - wet) + y * wet) * outGain);
     }
 
     // LFO shape at a given phase; morph skews the waveform (pulse width / slope).
     double lfoValue(int wave, float morph, double ph) const {
         switch (wave) {
-            case 0: return std::sin(2.0 * 3.14159265358979323846 * ph);                        // sine
+            case 0: return fast_math::fastSin(static_cast<float>(ph));                        // sine
             case 1: return 4.0 * std::fabs(ph - 0.5) - 1.0;                                     // triangle
             case 2: return 2.0 * ph - 1.0;                                                      // saw
             case 3: return ph < (0.5 + (morph - 0.0) * 0.49) ? 1.0 : -1.0;                      // square (PWM via morph)

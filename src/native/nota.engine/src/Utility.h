@@ -170,7 +170,16 @@ public:
         else if (id == A_ResetMeters) resetReq_.store(true, std::memory_order_relaxed);
     }
 
+    bool isIdle() const override { return true; }
+    bool hasTail() const override { return false; }
+
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
+        if (frames <= 0) return;
+        if (inputSilent) return;
         const auto t0 = std::chrono::steady_clock::now();
         if (resetReq_.exchange(false, std::memory_order_relaxed)) resetMeters();
 
