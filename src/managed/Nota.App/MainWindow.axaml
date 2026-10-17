@@ -181,15 +181,15 @@
             <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
               <!-- Shapes built from geometry: stop a square, play a filled triangle, record a
                    filled disc. No glyph font. Keys butt against each other on 1px seams. -->
-              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop"
+              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop (Return)"
                       Foreground="{DynamicResource Brush.TextStrong}" Command="{Binding Transport.StopCommand}">
                 <app:Glyph x:Name="StopGlyph" Kind="Stop" Width="9" Height="9"/>
               </Button>
-              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play"
+              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play (Space)"
                       Classes.playing="{Binding Transport.IsPlaying}" Command="{Binding Transport.PlayCommand}">
                 <app:Glyph x:Name="PlayGlyph" Kind="Play" Width="10" Height="12" Margin="2,0,0,0"/>
               </Button>
-              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="Record"
+              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="Record (⌘R)"
                             IsChecked="{Binding Transport.RecordOn}">
                 <app:Glyph x:Name="RecordGlyph" Kind="Record" Width="10" Height="10"/>
               </ToggleButton>
@@ -292,7 +292,7 @@
           <!-- Metronome: body, pendulum rod, weight -->
           <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
                         ContextRequested="OnMetronomeContext"
-                        ToolTip.Tip="Turn the metronome on or off (M) · right-click for count-in">
+                        ToolTip.Tip="Turn the metronome on or off (⌘M) · right-click for count-in">
             <app:Glyph Kind="Metronome" Size="15"/>
           </ToggleButton>
           <!-- Follow playhead: keep the arrangement scrolling with the cursor. The

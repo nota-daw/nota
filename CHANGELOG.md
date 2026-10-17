@@ -59,6 +59,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   resizing, duplicating and deleting a section are each one undo step. Sections are now
   stored in the project file; a project saved by an earlier version keeps its sections and
   moves them into the project file on the next save.
+- **Transport tooltips name their real shortcuts** (nota-daw/nota#10): Play (Space),
+  Stop (Return), Record (⌘R) and the metronome (⌘M) now show their keys. The metronome tip
+  said a bare M, which does nothing. On Windows and Linux the tips spell Ctrl instead of ⌘.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
