@@ -155,9 +155,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   preset list now empties the instrument, as on a freshly added Mosaic: no samples, every
   parameter at its default. Before, Init reset the parameters but kept the multisample, so
   the list jumped back to the preset's name.
-- **No crash when a panel moves between windows** (nota-daw/nota#164): opening or closing
-  the Mixer window, or popping the Devices or Clip panel out and back, no longer crashes the
-  app with "Attempt to call InvalidateArrange on wrong LayoutManager".
+- **No crash when a panel moves between windows** (nota-daw/nota#164): opening the command
+  palette (⌘⇧P / Ctrl+Shift+P) from the Mixer window or a popped-out panel after using it in
+  the main window, opening or closing the Mixer, or popping the Devices or Clip panel out and
+  back, no longer crashes the app with "Attempt to call InvalidateArrange on wrong
+  LayoutManager".
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,

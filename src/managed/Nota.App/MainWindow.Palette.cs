@@ -94,7 +94,9 @@ public partial class MainWindow
         Panel layer = source is NotaWindow nw and (MixerWindow or DetailWindow) ? nw.OverlayLayer : PaletteLayer;
         var host = source is MixerWindow or DetailWindow ? source : this;
         if (_palette.Parent is Panel old && !ReferenceEquals(old, layer)) { old.Children.Remove(_palette); old.Children.Remove(_paletteToast); }
-        if (_palette.Parent is null) { layer.Children.Add(_palette); layer.Children.Add(_paletteToast); }
+        // Moving to another window: let the other windows finish their layout pass first so no stale
+        // entry for the palette is left in the old window's queue (#164).
+        if (_palette.Parent is null) { FlushOtherWindows(TopLevel.GetTopLevel(layer)); layer.Children.Add(_palette); layer.Children.Add(_paletteToast); }
         _paletteReturnFocus = TopLevel.GetTopLevel(host)?.FocusManager?.GetFocusedElement();
         if (!ReferenceEquals(host, source) || source is null) Activate();
         _palette.Open(ctx with { Window = host }, it => PaletteTargets.Check(it, ctx, id => ActionAvailability(id, ctx)),
