@@ -8,6 +8,8 @@
 // smoke test checks that every id is bound and every shortcut is listed in
 // Settings → Shortcuts.
 
+using Nota.Application.Input;
+
 namespace Nota.Application.Palette;
 
 public static class CommandCatalog
@@ -19,37 +21,37 @@ public static class CommandCatalog
     public static List<PaletteCommand> Create() => new()
     {
         // ---- File -------------------------------------------------------------------------
-        C("file.new", "New project", "File", "⌘N", "create blank empty"),
-        C("file.open", "Open project…", "File", "⌘O", "load"),
-        C("file.save", "Save project", "File", "⌘S", "store write"),
-        C("file.saveAs", "Save project as…", "File", "⌘⇧S", "copy rename"),
-        C("file.saveVersion", "Save version with note…", "File", "⌥⌘S", "snapshot history commit"),
+        C("file.new", "New project", "File", Shortcut.Cmd('N'), "create blank empty"),
+        C("file.open", "Open project…", "File", Shortcut.Cmd('O'), "load"),
+        C("file.save", "Save project", "File", Shortcut.Cmd('S'), "store write"),
+        C("file.saveAs", "Save project as…", "File", Shortcut.CmdShift('S'), "copy rename"),
+        C("file.saveVersion", "Save version with note…", "File", Shortcut.CmdAlt('S'), "snapshot history commit"),
         C("file.import", "Import audio…", "File", "", "add file wav"),
-        C("file.export", "Export audio…", "File", "⌘⇧E", "render bounce mixdown stems"),
+        C("file.export", "Export audio…", "File", Shortcut.CmdShift('E'), "render bounce mixdown stems"),
 
         // ---- Edit -------------------------------------------------------------------------
-        C("edit.undo", "Undo", "Edit", "⌘Z", "back revert"),
-        C("edit.redo", "Redo", "Edit", "⌘⇧Z", "forward"),
-        C("edit.duplicate", "Duplicate", "Edit", "⌘D", "copy clone"),
-        C("edit.split", "Split at playhead", "Edit", "⌘E", "cut slice", view: "Arrangement"),
-        C("edit.consolidate", "Consolidate", "Edit", "⌘J", "join merge glue", view: "Arrangement"),
-        C("edit.duplicateTime", "Duplicate time", "Edit", "⌘⇧D", "repeat range", view: "Arrangement"),
-        C("edit.insertSilence", "Insert silence", "Edit", "⌘⇧I", "gap space", view: "Arrangement"),
+        C("edit.undo", "Undo", "Edit", Shortcut.Cmd('Z'), "back revert"),
+        C("edit.redo", "Redo", "Edit", Shortcut.CmdShift('Z'), "forward"),
+        C("edit.duplicate", "Duplicate", "Edit", Shortcut.Cmd('D'), "copy clone"),
+        C("edit.split", "Split at playhead", "Edit", Shortcut.Cmd('E'), "cut slice", view: "Arrangement"),
+        C("edit.consolidate", "Consolidate", "Edit", Shortcut.Cmd('J'), "join merge glue", view: "Arrangement"),
+        C("edit.duplicateTime", "Duplicate time", "Edit", Shortcut.CmdShift('D'), "repeat range", view: "Arrangement"),
+        C("edit.insertSilence", "Insert silence", "Edit", Shortcut.CmdShift('I'), "gap space", view: "Arrangement"),
         C("edit.lockEnvelopes", "Lock envelopes", "Edit", "", "automation pin"),
         C("edit.cut", "Cut", "Edit", "", ""),
         C("edit.copy", "Copy", "Edit", "", ""),
         C("edit.paste", "Paste", "Edit", "", ""),
-        C("edit.pasteBounced", "Paste bounced audio", "Edit", "⌘⇧V", "render resample", view: "Arrangement"),
-        C("edit.copyToOtherView", "Copy clips to Session / Arrangement", "Edit", "⌘⇧C", "transfer"),
+        C("edit.pasteBounced", "Paste bounced audio", "Edit", Shortcut.CmdShift('V'), "render resample", view: "Arrangement"),
+        C("edit.copyToOtherView", "Copy clips to Session / Arrangement", "Edit", Shortcut.CmdShift('C'), "transfer"),
         C("edit.delete", "Delete", "Edit", "", "remove erase"),
-        C("edit.selectAll", "Select all clips", "Edit", "⌘A", "everything", view: "Arrangement"),
-        C("edit.toggleClipActive", "Activate / deactivate clip", "Edit", "0", "mute disable", view: "Arrangement"),
+        C("edit.selectAll", "Select all clips", "Edit", Shortcut.Cmd('A'), "everything", view: "Arrangement"),
+        C("edit.toggleClipActive", "Activate / deactivate clip", "Edit", Shortcut.None('0'), "mute disable", view: "Arrangement"),
 
         // ---- View -------------------------------------------------------------------------
         C("view.arrangement", "Show Arrangement", "View", "", "timeline linear"),
         C("view.session", "Show Session", "View", "", "clips grid launch"),
         C("view.modular", "Show Modular", "View", "", "graph patch cv"),
-        C("view.mixer", "Show Mixer", "View", "⌘⇧M", "faders channels"),
+        C("view.mixer", "Show Mixer", "View", Shortcut.CmdShift('M'), "faders channels"),
         C("view.connectPhone", "Connect phone…", "View", "", "remote mobile qr"),
         C("view.toggleBrowser", "Toggle browser", "View", "", "library sidebar"),
         C("view.toggleDetail", "Toggle detail panel", "View", "", "devices clip"),
@@ -59,50 +61,50 @@ public static class CommandCatalog
         C("view.toggleSections", "Toggle sections", "View", "", "markers locators", view: "Arrangement"),
         C("view.follow", "Follow playhead", "View", "", "scroll"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
-        C("view.automation", "Toggle automation mode", "View", "⌘⇧A", "envelopes lanes", view: "Arrangement"),
+        C("view.automation", "Toggle automation mode", "View", Shortcut.CmdShift('A'), "envelopes lanes", view: "Arrangement"),
         C("view.history", "Show version history", "View", "", "undo history versions snapshots"),
         C("view.midiLearn", "MIDI learn", "View", "", "map controller"),
-        C("view.fullscreen", "Toggle full screen", "View", "F11", "maximize immersive hide chrome"),
-        C(Palette, "Command palette", "View", "⌘⇧P", "search", hide: true),
+        C("view.fullscreen", "Toggle full screen", "View", Shortcut.None("F11"), "maximize immersive hide chrome"),
+        C(Palette, "Command palette", "View", Shortcut.CmdShift('P'), "search", hide: true),
 
         // ---- Transport --------------------------------------------------------------------
-        C("transport.playStop", "Play / stop", "Transport", "Space", "start pause"),
-        C("transport.stop", "Stop", "Transport", "Return", "halt"),
-        C("transport.record", "Record", "Transport", "⌘R", "arm capture"),
-        C("transport.loop", "Toggle loop", "Transport", "⌘L", "cycle repeat"),
-        C("transport.metronome", "Metronome", "Transport", "⌘M", "click"),
-        C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", "⌘⇧R", "overdub replace take pass loop record"),
+        C("transport.playStop", "Play / stop", "Transport", Shortcut.None("Space"), "start pause"),
+        C("transport.stop", "Stop", "Transport", Shortcut.None("Return"), "halt"),
+        C("transport.record", "Record", "Transport", Shortcut.Cmd('R'), "arm capture"),
+        C("transport.loop", "Toggle loop", "Transport", Shortcut.Cmd('L'), "cycle repeat"),
+        C("transport.metronome", "Metronome", "Transport", Shortcut.Cmd('M'), "click"),
+        C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", Shortcut.CmdShift('R'), "overdub replace take pass loop record"),
         C("transport.tapTempo", "Tap tempo", "Transport", "", "bpm beat tap"),
 
         // ---- Track ------------------------------------------------------------------------
         C("track.newInstrument", "New MIDI track", "Track", "", "add instrument track"),
         C("track.newAudio", "New audio track", "Track", "", "add"),
         C("track.newReturn", "New return track", "Track", "", "add send bus aux"),
-        C("track.group", "Group tracks", "Track", "⌘G", "folder bus", view: "Arrangement"),
-        C("track.ungroup", "Ungroup tracks", "Track", "⌘⇧G", "", view: "Arrangement"),
+        C("track.group", "Group tracks", "Track", Shortcut.Cmd('G'), "folder bus", view: "Arrangement"),
+        C("track.ungroup", "Ungroup tracks", "Track", Shortcut.CmdShift('G'), "", view: "Arrangement"),
         C("track.freeze", "Freeze track", "Track", "", "render bounce cpu"),
 
         // ---- Session ----------------------------------------------------------------------
         C("session.launchScene", "Launch scene", "Session", "", "play row", view: "Session"),
         C("session.stopAll", "Stop all clips", "Session", "", "halt", view: "Session"),
-        C("session.insertScene", "Insert scene", "Session", "⌘I", "add scene row", view: "Session"),
+        C("session.insertScene", "Insert scene", "Session", Shortcut.Cmd('I'), "add scene row", view: "Session"),
 
         // ---- Piano roll -------------------------------------------------------------------
         C("roll.quantize", "Quantize notes", "Piano roll", "", "quantise grid snap align"),
         C("roll.octaveUp", "Transpose notes up an octave", "Piano roll", "", "pitch shift"),
         C("roll.octaveDown", "Transpose notes down an octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove out-of-scale notes", "Piano roll", "", "key fix"),
-        C("roll.fitNotes", "Fit to notes", "Piano roll", "⇧F", "zoom vertical rows height"),
+        C("roll.fitNotes", "Fit to notes", "Piano roll", Shortcut.Shift('F'), "zoom vertical rows height"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
-        C("grid.narrower", "Narrow grid", "Grid", "⌘1", "finer smaller snap"),
-        C("grid.wider", "Widen grid", "Grid", "⌘2", "coarser larger snap"),
-        C("grid.triplets", "Toggle triplet grid", "Grid", "⌘3", "triplet 1/8T swing"),
-        C("grid.snap", "Toggle snap to grid", "Grid", "⌘4", "magnet free"),
-        C("grid.adaptive", "Toggle adaptive grid", "Grid", "⌘5", "auto zoom fixed"),
+        C("grid.narrower", "Narrow grid", "Grid", Shortcut.Cmd('1'), "finer smaller snap"),
+        C("grid.wider", "Widen grid", "Grid", Shortcut.Cmd('2'), "coarser larger snap"),
+        C("grid.triplets", "Toggle triplet grid", "Grid", Shortcut.Cmd('3'), "triplet 1/8T swing"),
+        C("grid.snap", "Toggle snap to grid", "Grid", Shortcut.Cmd('4'), "magnet free"),
+        C("grid.adaptive", "Toggle adaptive grid", "Grid", Shortcut.Cmd('5'), "auto zoom fixed"),
 
         // ---- Settings ---------------------------------------------------------------------
-        C("prefs.open", "Settings", "Settings", "⌘,", "preferences options"),
+        C("prefs.open", "Settings", "Settings", Shortcut.Cmd(','), "preferences options"),
         C("prefs.audio", "Settings: Audio", "Settings", "", "preferences device driver sample rate buffer"),
         C("prefs.midi", "Settings: MIDI", "Settings", "", "preferences controller keyboard"),
         C("prefs.gamepads", "Settings: Gamepads", "Settings", "", "preferences joystick controller"),

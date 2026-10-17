@@ -10,6 +10,8 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Nota.App.Input;
+using Nota.Application.Input;
 
 namespace Nota.App;
 
@@ -23,40 +25,17 @@ public sealed class Commands : AvaloniaObject
 
     /// <summary>A catalog shortcut as a key gesture: ⌘ is Cmd on macOS and Ctrl elsewhere,
     /// ⌃ Ctrl, ⌥ Alt, ⇧ Shift; then a key ("S", ",", "Space", "F2", "0"). Null for "".</summary>
-    public static KeyGesture? Parse(string glyphs)
-    {
-        if (string.IsNullOrEmpty(glyphs)) return null;
-        var mods = KeyModifiers.None;
-        int i = 0;
-        for (; i < glyphs.Length; i++)
-        {
-            char c = glyphs[i];
-            if (c == '⌘') mods |= OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
-            else if (c == '⌃') mods |= KeyModifiers.Control;
-            else if (c == '⌥') mods |= KeyModifiers.Alt;
-            else if (c == '⇧') mods |= KeyModifiers.Shift;
-            else break;
-        }
-        string k = glyphs[i..];
-        Key key = k switch
-        {
-            "," => Key.OemComma,
-            "." => Key.OemPeriod,
-            "Esc" => Key.Escape,
-            _ when k.Length == 1 && char.IsDigit(k[0]) => Key.D0 + (k[0] - '0'),
-            _ => Enum.TryParse<Key>(k, ignoreCase: true, out var parsed) ? parsed : Key.None,
-        };
-        return key == Key.None ? null : new KeyGesture(key, mods);
-    }
+    public static KeyGesture? Parse(string glyphs) =>
+        string.IsNullOrEmpty(glyphs) ? null : Shortcut.Parse(glyphs).ToGesture();
 
     /// <summary>True for a shortcut with a modifier (⌘S, ⌥⌘S). Bare letter/digit keys stay
     /// out of menus — a bare Space or 0 as a menu key equivalent would swallow typing.</summary>
-    public static bool IsChord(string glyphs) => glyphs.IndexOfAny(['⌘', '⌃', '⌥']) >= 0;
+    public static bool IsChord(string glyphs) =>
+        !string.IsNullOrEmpty(glyphs) && Shortcut.Parse(glyphs).IsChord;
 
     /// <summary>True for a shortcut a menu item may carry: a chord, or a bare function key
     /// (F11) — function keys type nothing, so unlike a bare letter/digit they can't
     /// swallow text input.</summary>
     public static bool CanMenuGesture(string glyphs) =>
-        IsChord(glyphs) || (glyphs.Length > 1 && glyphs[0] == 'F'
-            && int.TryParse(glyphs[1..], out int n) && n is >= 1 and <= 12);
+        !string.IsNullOrEmpty(glyphs) && Shortcut.Parse(glyphs).CanMenuGesture;
 }

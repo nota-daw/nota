@@ -123,6 +123,7 @@ cmake --build build-pentad --target NotaPentad_VST3
 - .NET SDK 10.
 - Node.js 22 (or 20.19+), for the Nota Remote phone page — see the macOS requirements.
 - For the installer, Inno Setup **6.3+** (`winget install JRSoftware.InnoSetup`).
+- PowerShell 7.3+ for running build scripts.
 
 ### Quick start
 

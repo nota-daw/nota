@@ -87,6 +87,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   BPM field kept the old number, and saving, autosave and export used that stale tempo, so
   a reopened project came back at the wrong speed. The transport bar now follows the
   engine's tempo, and dragging the field never snaps back while the engine catches up.
+- **Un-warped audio clips follow the tempo as you change it**: an un-warped clip keeps its
+  length in seconds, so a new tempo makes it longer or shorter in bars. Changing the tempo
+  in the transport bar now shows that at once, while you drag, so a clip can be lined up
+  with a bar line. Before, the arrangement kept drawing each clip at its old width until
+  some other edit redrew it.
 - **Send faders stay in step everywhere** (nota-daw/nota#138): turning a Send knob on a
   track's Sends card in the Devices panel now moves that send's fader in the Session mixer
   and the Mixer window at once, and the other way round. Automation of a send shows on all
