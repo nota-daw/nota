@@ -500,7 +500,7 @@ private:
     static float softClip(float x, float ceil, float amt, float invCeil = 0.0f) {
         // Gentle tanh knee that engages near the ceiling; blended by amount.
         const float invC = invCeil > 0.0f ? invCeil : (1.0f / std::max(1e-6f, ceil));
-        float s = ceil * fast_math::fastTanh(x * invC);
+        float s = ceil * fast_math::tanh(x * invC);
         return x + amt * (s - x);
     }
     static float db(float lin) { return lin > 1e-6f ? 20.0f * std::log10(lin) : -120.0f; }

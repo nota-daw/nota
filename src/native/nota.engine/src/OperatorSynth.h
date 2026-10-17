@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "FastMath.h"
 #include "Instrument.h"
 #include "NoteExpression.h"
 
@@ -243,6 +244,7 @@ public:
         }
 
         double f0 = 0.0;   // frequency of the freshest active voice → spectrum base + label
+        uint32_t ringHead = ringW_.load(std::memory_order_relaxed);
         for (int32_t i = 0; i < frames; ++i) {
             float mono = 0.0f;
             for (int vi = 0; vi < kVoices; ++vi) {
@@ -289,11 +291,11 @@ public:
                 mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)) * (1.0 + 0.5 * v.ex.pressure()));
             }
             // Spectrum-analysis tap (pre-master timbre signal).
-            ring_[ringW_ & (kRing - 1)] = mono;
-            ringW_.fetch_add(1, std::memory_order_relaxed);
+            ring_[ringHead++ & (kRing - 1)] = mono;
             const float o = mono * (float)volume * 0.4f;
             out[i * 2] += o; out[i * 2 + 1] += o;
         }
+        ringW_.store(ringHead, std::memory_order_relaxed);
         if (f0 > 0.0) specF0_.store((float)f0, std::memory_order_relaxed);
     }
 
@@ -380,7 +382,7 @@ private:
             case 1: { double f = ph - std::floor(ph); return 4.0 * std::fabs(f - 0.5) - 1.0; }   // tri
             case 2: { double f = ph - std::floor(ph); return 2.0 * f - 1.0; }                    // saw
             case 3: { double f = ph - std::floor(ph); return f < 0.5 ? 1.0 : -1.0; }             // square
-            default: return std::sin(kTwoPi * ph);                                               // sine
+            default: return static_cast<double>(fast_math::sin(static_cast<float>(ph)));     // sine
         }
     }
     static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {

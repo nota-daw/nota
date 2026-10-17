@@ -175,7 +175,7 @@ public:
             // Write first so a zero pre-delay reads back the current sample (passthrough).
             preL_[preW_] = l; preR_[preW_] = r;
 
-            const float lfo = fast_math::fastSin(static_cast<float>(kTwoPi * modPhase_));
+            const float lfo = fast_math::sin(static_cast<float>(kTwoPi * modPhase_));
             modPhase_ += modInc; if (modPhase_ >= 1.0) modPhase_ -= 1.0;
             // Mod on tail: the comb lines wobble. Off: the early part (pre-delay read) wobbles
             // instead and the tail stays still — never reading ahead of the write head.

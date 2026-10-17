@@ -69,13 +69,13 @@ inline float tanhRatio(float v) {
 }
 
 // Fast rational tanh(x). Saturates smoothly to +/-1 for |v| >= 3.
-inline float fastTanh(float v) {
+inline float tanh(float v) {
     return v * tanhRatio(v);
 }
 
 // High-precision fast tanh using Padé [7/6] with monotonic asymptotic clamping to +/-1.
 // Accurate to < 0.005% relative error across the entire real line.
-inline float fastTanhPrecise(float x) {
+inline float tanhPrecise(float x) {
     if (x <= -4.2f) return -1.0f;
     if (x >=  4.2f) return  1.0f;
     const float x2 = x * x;
@@ -86,16 +86,22 @@ inline float fastTanhPrecise(float x) {
 
 // Fast branchless sine on normalized phase in [0, 1). Period is 1.0.
 // Max error < 0.0007. Uses single-instruction branchless floor (frintm/roundss).
-inline float fastSin(float phase01) {
+inline float sin(float phase01) {
     const float x = phase01 - std::floor(phase01) - 0.5f;
     const float x2 = x * x;
     return -x * (6.27974393f + x2 * (-41.13684264f + x2 * (78.33317205f - 57.13347787f * x2)));
 }
 
 // Fast branchless cosine on normalized phase in [0, 1). Period is 1.0.
-inline float fastCos(float phase01) {
-    return fastSin(phase01 + 0.25f);
+inline float cos(float phase01) {
+    return sin(phase01 + 0.25f);
 }
+
+// Backward-compatibility aliases
+inline float fastTanh(float v) { return tanh(v); }
+inline float fastTanhPrecise(float x) { return tanhPrecise(x); }
+inline float fastSin(float phase01) { return sin(phase01); }
+inline float fastCos(float phase01) { return cos(phase01); }
 
 // Padé tan for bilinear prewarp, x in [0, ~1.4].
 // Clamped to 1.45f to prevent denominator singularity near Nyquist (sqrt(2.5) ≈ 1.5811).

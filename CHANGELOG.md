@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Polyphonic synth FastMath & audio buffer vector utilities** (specs/027-dsp-synth-vector-optimizations):
+  vectorized mathematical optimizations across native polyphonic synths and engine mixing pipelines. Replaces
+  transcendental math operations with fast approximations across `OperatorSynth` (carrier and modulation sine oscillators),
+  `WavetableSynth` (tube drive saturation with `fastTanh` and `fastSin`), `VoltSynth` (sine mode and LFOs), `FluxSynth`
+  (analog drift and drive saturation), `BassSynth` (sub-oscillator sine and overdrive), and `PendulumSynth` (pendulum curve and
+  voice partials). Decimates high-frequency UI telemetry atomic writes across synth rendering loops to reduce bus contention.
+  Refactors architecture so generic vector math (`add`, `addScaled`, `scale`, `mul`, `dot16`, `maxAbs`, `clip`) resides in
+  `Simd.h`, while audio-specific vectorized routines (`isBufferSilent`, `peakAndSumSquares`, `SilenceDetector`, `scaleStereoMeter`,
+  `addStereoScaledMeter`, `addStereoScaledMeterMap`, `addStereoScaled`, `processMasterBus`) reside in `AudioBufferUtils.h`.
+  Accelerates mixer summing and bus routing in `Engine_Render.cpp`: vectorizes post-fader route taps across leaf tracks, group submixes,
+  and return buses without scalar loop dropback, vectorizes pre-FX route taps with `simd::add`, fixes a label typo in Pass 1 leaf summing,
+  replaces scalar buffer zeroing with `std::fill_n`, and unifies master volume scaling, branchless non-finite float (NaN / Inf) suppression,
+  clipping, and peak/RMS/stereo map metering into a single SIMD vector pass (`processMasterBus`).
 - **Multi-core parallel track rendering & SIMD vectorization** (specs/026-dsp-parallel-vectorization):
   real-time safe multi-threaded rendering across CPU cores and SIMD acceleration in the C++20 DSP engine.
   Features `AudioThreadPool`, a lock-free worker thread pool with atomic ticket dispatch and non-allocating

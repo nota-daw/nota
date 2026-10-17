@@ -33,6 +33,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -269,8 +270,8 @@ public:
         const float  pan = (get(OutPan) - 0.5f) * 2.0f;
         const float  panL = std::min(1.0f, 1.0f - pan), panR = std::min(1.0f, 1.0f + pan);
         const double outDrive = 1.0 + get(Drive) * 7.0;                     // 1..8
-        const double outMakeup = 1.0 / std::tanh(outDrive);
-        const double preMakeup = preDrive > 1.001 ? 1.0 / std::tanh(preDrive) : 1.0;
+        const double outMakeup = 1.0 / fast_math::tanh(static_cast<float>(outDrive));
+        const double preMakeup = preDrive > 1.001 ? 1.0 / fast_math::tanh(static_cast<float>(preDrive)) : 1.0;
         const float  volume = get(Volume);
         const double invSr = 1.0 / sampleRate_;
 
@@ -302,7 +303,7 @@ public:
                 v.phS += iS; if (v.phS >= 1.0) v.phS -= 1.0;
 
                 double in = (s + sub);
-                if (preDrive > 1.001) in = std::tanh(in * preDrive) * preMakeup;
+                if (preDrive > 1.001) in = static_cast<double>(fast_math::tanh(static_cast<float>(in * preDrive))) * preMakeup;
 
                 // Control-rate filter cutoff (cutoff = base × 2^mod).
                 if (v.modCount-- <= 0) {
@@ -319,7 +320,7 @@ public:
                 mono += (float)y * ampG;
             }
 
-            if (outDrive > 1.001) mono = (float)(std::tanh(mono * outDrive) * outMakeup);
+            if (outDrive > 1.001) mono = (float)(fast_math::tanh(static_cast<float>(mono * outDrive)) * outMakeup);
             const float o = mono * volume * 0.5f;
             out[i * 2]     += o * panL;
             out[i * 2 + 1] += o * panR;
@@ -402,7 +403,7 @@ private:
 
     // Continuous morph: sine → triangle → saw → pulse (with PWM at the square end).
     static double morphOsc(double shape, double ph, double dt, double pw) {
-        const double sine = std::sin(kTwoPi * ph);
+        const double sine = static_cast<double>(fast_math::sin(static_cast<float>(ph)));
         const double tri = 4.0 * std::fabs(ph - 0.5) - 1.0;
         const double saw = (2.0 * ph - 1.0) - polyBlep(ph, dt);
         double sq = ph < pw ? 1.0 : -1.0;
@@ -419,7 +420,7 @@ private:
         switch (wave) {
             case 1:  return ph < 0.5 ? 1.0 : -1.0;
             case 2:  return 4.0 * std::fabs(ph - 0.5) - 1.0;
-            default: return std::sin(kTwoPi * ph);
+            default: return static_cast<double>(fast_math::sin(static_cast<float>(ph)));
         }
     }
     static double polyBlep(double t, double dt) {
@@ -435,7 +436,7 @@ private:
             case 2:  return 2.0 * ph - 1.0;
             case 3:  return ph < 0.5 ? 1.0 : -1.0;
             case 4:  return sh;
-            default: return std::sin(kTwoPi * ph);
+            default: return static_cast<double>(fast_math::sin(static_cast<float>(ph)));
         }
     }
     float noise() {

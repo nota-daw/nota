@@ -31,6 +31,9 @@ internal static class DspOptimizationTests
             yield return TestCeilingFastMath(wav);
             yield return TestMultiCoreParallelRendering(wav);
             yield return TestTruePeakSimd(wav);
+            yield return TestPolyphonicSynthsFastMath();
+            yield return TestSilenceGatingAndMixerSumming();
+            yield return TestMixerVectorRoutingAndMasterSafety(wav);
         }
         finally
         {
@@ -464,5 +467,232 @@ internal static class DspOptimizationTests
         // -1.0 dBFS is ~0.891 linear, with inter-sample peak limit tolerance <= 1.05
         bool ok = allFinite && maxAmp > 0.05 && maxAmp <= 1.05;
         return (ok, $"Ceiling True-Peak SIMD interpolation: finite ({allFinite}), peak {maxAmp:F3} (<= 1.05)");
+    }
+
+    private static (bool, string) TestPolyphonicSynthsFastMath()
+    {
+        // Kinds: 5 (Wavetable), 6 (Volt), 7 (Bass), 8 (Pendulum), 9 (Operator), 11 (Flux)
+        var synths = new (int Kind, string Name)[]
+        {
+            (5, "Wavetable"),
+            (6, "Volt"),
+            (7, "Bass"),
+            (8, "Pendulum"),
+            (9, "Operator"),
+            (11, "Flux")
+        };
+
+        bool allOk = true;
+        var details = new List<string>();
+
+        foreach (var (kind, name) in synths)
+        {
+            using var e = new NotaEngine();
+            e.SetBpm(120);
+            int t = e.AddInstrumentTrack();
+            if (!e.SetTrackBuiltinInstrument(t, kind))
+            {
+                allOk = false;
+                details.Add($"{name}: failed to set instrument");
+                continue;
+            }
+
+            if (kind == 8)
+            {
+                // Unquantize Pendulum so degree crossings trigger immediately on note hold
+                e.DeviceSetParam(t, -1, 6, 0.0f);
+            }
+
+            // Play a polyphonic 4-voice chord
+            e.TrackNoteOn(t, 60, 0.8f);
+            e.TrackNoteOn(t, 64, 0.8f);
+            e.TrackNoteOn(t, 67, 0.8f);
+            e.TrackNoteOn(t, 71, 0.8f);
+
+            e.Play();
+            float[] buf = new float[Chunk * 2];
+            bool finite = true;
+            double maxAmp = 0.0;
+
+            for (int i = 0; i < 20; ++i)
+            {
+                e.RenderOffline(buf, Chunk);
+                for (int s = 0; s < Chunk * 2; ++s)
+                {
+                    float v = buf[s];
+                    if (!float.IsFinite(v)) finite = false;
+                    maxAmp = Math.Max(maxAmp, Math.Abs(v));
+                }
+            }
+
+            // Release chord
+            e.TrackNoteOff(t, 60);
+            e.TrackNoteOff(t, 64);
+            e.TrackNoteOff(t, 67);
+            e.TrackNoteOff(t, 71);
+
+            for (int i = 0; i < 10; ++i)
+            {
+                e.RenderOffline(buf, Chunk);
+                for (int s = 0; s < Chunk * 2; ++s)
+                {
+                    float v = buf[s];
+                    if (!float.IsFinite(v)) finite = false;
+                }
+            }
+
+            e.StopTransport();
+
+            bool synthOk = finite && maxAmp > 0.01 && maxAmp < 5.0;
+            if (!synthOk) allOk = false;
+            details.Add($"{name}: pk={maxAmp:F2}");
+        }
+
+        return (allOk, $"Polyphonic synths FastMath (Wavetable/Volt/Bass/Pendulum/Operator/Flux): {string.Join(", ", details)}");
+    }
+
+    private static (bool, string) TestSilenceGatingAndMixerSumming()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+
+        // Add 2 instrument tracks and a return track
+        int t1 = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t1, 9); // OperatorSynth
+        int t2 = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t2, 6); // VoltSynth
+
+        int ret = e.AddReturnTrack();
+        e.AddBuiltinDevice(ret, 2); // Reverb
+        e.SetTrackSend(t1, 0, 0.2f);
+        e.SetTrackSend(t2, 0, 0.2f);
+
+        float[] buf = new float[Chunk * 2];
+        e.Play();
+
+        // 1. Initial silence check: no notes playing -> output should be silent (peak < 1e-4)
+        double silentMax = 0.0;
+        for (int i = 0; i < 5; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+            for (int s = 0; s < Chunk * 2; ++s)
+            {
+                silentMax = Math.Max(silentMax, Math.Abs(buf[s]));
+            }
+        }
+
+        // 2. Play note on t1 -> output becomes active
+        e.TrackNoteOn(t1, 60, 0.8f);
+        double activeMax = 0.0;
+        bool allFinite = true;
+        for (int i = 0; i < 10; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+            for (int s = 0; s < Chunk * 2; ++s)
+            {
+                float v = buf[s];
+                if (!float.IsFinite(v)) allFinite = false;
+                activeMax = Math.Max(activeMax, Math.Abs(v));
+            }
+        }
+        e.TrackNoteOff(t1, 60);
+
+        // 3. Render tail and decay
+        for (int i = 0; i < 30; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+        }
+        e.StopTransport();
+
+        bool ok = allFinite && silentMax < 1e-4 && activeMax > 0.01 && activeMax < 4.0;
+        return (ok, $"Silence gating & mixer vector summing: silent peak {silentMax:E2}, active peak {activeMax:F3}");
+    }
+
+    private static (bool, string) TestMixerVectorRoutingAndMasterSafety(string wav)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+
+        // 1. Create source track with audio clip (generates audio for sidechain routing)
+        int scSrc = e.AddAudioTrack();
+        e.AddAudioClip(scSrc, wav, startBeat: 0.0);
+        e.SetTrackPan(scSrc, -0.2f);
+        e.SetTrackVolume(scSrc, 0.9f);
+
+        // 2. Create target track with compressor sidechained to scSrc (exercises post-fader route tap)
+        int scDst = e.AddAudioTrack();
+        e.AddAudioClip(scDst, wav, startBeat: 0.0);
+        int comp = e.AddBuiltinDevice(scDst, 1); // Compressor
+        e.DeviceSetParam(scDst, comp, 0, -24.0f); // threshold
+        e.DeviceSetParam(scDst, comp, 1, 4.0f);   // ratio
+        e.SetDeviceSidechainSource(scDst, comp, scSrc);
+
+        // 3. Create a Group track to test group submixing and route tap
+        int grp = e.AddGroupTrack();
+        e.SetTrackGroup(scSrc, grp);
+        e.SetTrackGroup(scDst, grp);
+        e.SetTrackVolume(grp, 0.85f);
+        e.SetTrackPan(grp, 0.1f);
+
+        // 4. Create a Return track with send to exercise return bus addStereoScaledMeterMap
+        int ret = e.AddReturnTrack();
+        e.AddBuiltinDevice(ret, 2); // Reverb
+        e.SetTrackSend(grp, 0, 0.25f);
+
+        // 5. Test master volume scaling and safety net limiting
+        e.SetMasterVolume(0.8f);
+
+        float[] buf = new float[Chunk * 2];
+        e.Play();
+
+        bool allFinite = true;
+        double maxPeak = 0.0;
+        for (int i = 0; i < 15; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+            for (int s = 0; s < Chunk * 2; ++s)
+            {
+                float v = buf[s];
+                if (!float.IsFinite(v)) allFinite = false;
+                maxPeak = Math.Max(maxPeak, Math.Abs(v));
+            }
+        }
+
+        // Test pre-FX tap mode
+        e.SetDeviceSidechainTapPre(scDst, comp, true);
+        for (int i = 0; i < 10; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+            for (int s = 0; s < Chunk * 2; ++s)
+            {
+                float v = buf[s];
+                if (!float.IsFinite(v)) allFinite = false;
+                maxPeak = Math.Max(maxPeak, Math.Abs(v));
+            }
+        }
+
+        // Test hard master clipping with excessive gain (safety net: non-finite squash and clamp to [-1, 1])
+        e.SetTrackVolume(scSrc, 2.0f);
+        e.SetMasterVolume(3.5f);
+        double clippedMax = 0.0;
+        for (int i = 0; i < 5; ++i)
+        {
+            e.RenderOffline(buf, Chunk);
+            for (int s = 0; s < Chunk * 2; ++s)
+            {
+                float v = buf[s];
+                if (!float.IsFinite(v)) allFinite = false;
+                clippedMax = Math.Max(clippedMax, Math.Abs(v));
+            }
+        }
+
+        var meter = e.MasterMeter();
+        e.StopTransport();
+
+        bool meterOk = meter.PeakL > 0.0f && meter.PeakR > 0.0f && float.IsFinite(meter.PeakL) && float.IsFinite(meter.RmsL);
+        bool clampOk = clippedMax <= 1.0001f;
+        bool ok = allFinite && maxPeak > 0.05 && clampOk && meterOk;
+
+        return (ok, $"Mixer vector routing & master safety: finite ({allFinite}), peak {maxPeak:F3}, clamped {clippedMax:F3} (<= 1.0), master meter ({meter.PeakL:F2}/{meter.PeakR:F2})");
     }
 }

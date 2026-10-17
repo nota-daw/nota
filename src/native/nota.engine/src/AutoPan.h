@@ -381,12 +381,12 @@ private:
                 t = t * t * (3.0 - 2.0 * t);
                 return (float)(a + (bb - a) * t);
             }
-            default: v = fast_math::fastSin(static_cast<float>(f)); break;             // sine
+            default: v = fast_math::sin(static_cast<float>(f)); break;             // sine
         }
         if (shape > 1.0e-3f) {
             const double kk = 1.0 + shape * 12.0;
             const double invT = invTanhKk > 0.0 ? invTanhKk : (1.0 / std::tanh(kk));
-            const double sharp = fast_math::fastTanh(static_cast<float>(kk * v)) * invT;
+            const double sharp = fast_math::tanh(static_cast<float>(kk * v)) * invT;
             v = v * (1.0 - shape) + sharp * shape;
         }
         return (float)v;

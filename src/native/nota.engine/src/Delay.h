@@ -162,7 +162,7 @@ public:
         const bool hpOn = clamp01(LowCut) > 0.001f, lpOn = clamp01(HighCut) < 0.999f;
         const float tapeC = onePole(8000.0);                       // tape head loss
         const float drive = tape ? 1.0f + 2.0f * clamp01(Feedback) : 0.0f;
-        const float invTanhDrive = (tape && drive > 1e-4f) ? 1.0f / fast_math::fastTanh(drive) : 1.0f;
+        const float invTanhDrive = (tape && drive > 1e-4f) ? 1.0f / fast_math::tanh(drive) : 1.0f;
         const float apG = static_cast<float>(0.62 * diffuse);
         const float monoC = onePole(std::max(20.0, expMap(clamp01(BassMono), 30.0, 500.0)));
         const bool monoOn = clamp01(BassMono) > 0.001f;
@@ -176,7 +176,7 @@ public:
             } else if (fadePos_ < fadeLen_) {
                 ++fadePos_;
             }
-            const float lfo = fast_math::fastSin(static_cast<float>(wowPhase_));
+            const float lfo = fast_math::sin(static_cast<float>(wowPhase_));
             wowPhase_ += wowInc; if (wowPhase_ >= 1.0) wowPhase_ -= 1.0;
             const double mod = static_cast<double>(lfo * wowDepth);
 
@@ -201,8 +201,8 @@ public:
                 if (hpOn) { hpL_ += hpC * (inpL - hpL_); inpL -= hpL_; hpR_ += hpC * (inpR - hpR_); inpR -= hpR_; }
                 if (lpOn) { lpL_ += lpC * (inpL - lpL_); inpL = lpL_; lpR_ += lpC * (inpR - lpR_); inpR = lpR_; }
                 if (tape) {
-                    tapeL_ += tapeC * (inpL - tapeL_); inpL = fast_math::fastTanh(tapeL_ * drive) * invTanhDrive;
-                    tapeR_ += tapeC * (inpR - tapeR_); inpR = fast_math::fastTanh(tapeR_ * drive) * invTanhDrive;
+                    tapeL_ += tapeC * (inpL - tapeL_); inpL = fast_math::tanh(tapeL_ * drive) * invTanhDrive;
+                    tapeR_ += tapeC * (inpR - tapeR_); inpR = fast_math::tanh(tapeR_ * drive) * invTanhDrive;
                 }
             }
             inpL = ap_[1].tick(ap_[0].tick(inpL, apG), apG);

@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "FastMath.h"
 #include "Instrument.h"
 #include "TransportInfo.h"
 
@@ -297,7 +298,7 @@ public:
                     v.env -= relInc; if (v.env <= 0.0f) { v.env = 0.0f; v.active = false; continue; }
                 }
 
-                double fm = fmAmt > 0.0 ? fmAmt * std::sin(kTwoPi * v.phM) : 0.0;
+                double fm = fmAmt > 0.0 ? fmAmt * static_cast<double>(fast_math::sin(static_cast<float>(v.phM))) : 0.0;
                 v.phM += v.incM; if (v.phM >= 1.0) v.phM -= 1.0;
                 double a = osc(wave, v.phA + fm, hi), c = osc(wave, v.phB + fm, hi);
                 v.phA += v.incA; if (v.phA >= 1.0) v.phA -= 1.0;
@@ -379,10 +380,10 @@ private:
     static double position(double ph, int type) {
         const double tri = 1.0 - 2.0 * std::fabs(ph - 0.5);
         switch (type) {
-            case 1:  return 0.5 - 0.5 * std::cos(kTwoPi * ph);
+            case 1:  return 0.5 - 0.5 * static_cast<double>(fast_math::cos(static_cast<float>(ph)));
             case 2:  return tri * tri * (3.0 - 2.0 * tri);                 // smoothstep(tri)
             case 3:  { double b = 1.0 - std::pow(1.0 - tri, 2.0);          // ease-out with a bounce ripple
-                       return std::clamp(b + 0.06 * std::sin(kTwoPi * 3.0 * tri) * (1.0 - tri), 0.0, 1.0); }
+                       return std::clamp(b + 0.06 * static_cast<double>(fast_math::sin(static_cast<float>(3.0 * tri))) * (1.0 - tri), 0.0, 1.0); }
             default: return tri;
         }
     }
@@ -392,15 +393,18 @@ private:
     // 4 Bell (inharmonic partials). Phase may exceed [0,1) (FM) — sines are periodic;
     // saw/square take the fractional part.
     static double osc(int tb, double ph, double hi) {
-        const double s1 = std::sin(kTwoPi * ph);
+        const double s1 = static_cast<double>(fast_math::sin(static_cast<float>(ph)));
         switch (tb) {
-            case 1:  return (s1 + hi * 0.9 * std::sin(kTwoPi * 3 * ph) + hi * 0.55 * std::sin(kTwoPi * 5 * ph)
-                                + hi * 0.30 * std::sin(kTwoPi * 7 * ph)) / (1.0 + hi * 1.75);
+            case 1:  return (s1 + hi * 0.9 * static_cast<double>(fast_math::sin(static_cast<float>(3 * ph)))
+                                + hi * 0.55 * static_cast<double>(fast_math::sin(static_cast<float>(5 * ph)))
+                                + hi * 0.30 * static_cast<double>(fast_math::sin(static_cast<float>(7 * ph)))) / (1.0 + hi * 1.75);
             case 2:  { double f = ph - std::floor(ph); return (2.0 * f - 1.0) * 0.7; }
-            case 3:  { double f = ph - std::floor(ph); return (f < 0.5 ? 0.55 : -0.55) + 0.28 * hi * std::sin(kTwoPi * 3 * ph); }
-            case 4:  return (s1 + hi * 0.8 * std::sin(kTwoPi * 2.76 * ph) + hi * 0.5 * std::sin(kTwoPi * 5.40 * ph)
-                                + hi * 0.28 * std::sin(kTwoPi * 8.93 * ph)) / (1.0 + hi * 1.6);
-            default: return (s1 + hi * 0.5 * std::sin(kTwoPi * 2 * ph) + hi * 0.22 * std::sin(kTwoPi * 3 * ph)) / (1.0 + hi * 0.72);
+            case 3:  { double f = ph - std::floor(ph); return (f < 0.5 ? 0.55 : -0.55) + 0.28 * hi * static_cast<double>(fast_math::sin(static_cast<float>(3 * ph))); }
+            case 4:  return (s1 + hi * 0.8 * static_cast<double>(fast_math::sin(static_cast<float>(2.76 * ph)))
+                                + hi * 0.5 * static_cast<double>(fast_math::sin(static_cast<float>(5.40 * ph)))
+                                + hi * 0.28 * static_cast<double>(fast_math::sin(static_cast<float>(8.93 * ph)))) / (1.0 + hi * 1.6);
+            default: return (s1 + hi * 0.5 * static_cast<double>(fast_math::sin(static_cast<float>(2 * ph)))
+                                + hi * 0.22 * static_cast<double>(fast_math::sin(static_cast<float>(3 * ph)))) / (1.0 + hi * 0.72);
         }
     }
 

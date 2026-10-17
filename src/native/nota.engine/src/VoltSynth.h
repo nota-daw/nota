@@ -33,6 +33,7 @@
 
 #pragma once
 
+#include "FastMath.h"
 #include "Instrument.h"
 #include "NoteExpression.h"
 
@@ -369,7 +370,7 @@ public:
             const double lfo1 = lfoValue(lfo1shape, lfoPhase1_, lfoSh1_);
             const double lfo2 = lfoValue(lfo2shape, lfoPhase2_, lfoSh2_);
             lfoPhase1_ += lfo1Inc; lfoPhase2_ += lfo2Inc;
-            const double vibv = std::sin(kTwoPi * vibPhase_); vibPhase_ += vibInc; if (vibPhase_ >= 1.0) vibPhase_ -= 1.0;
+            const double vibv = static_cast<double>(fast_math::sin(static_cast<float>(vibPhase_))); vibPhase_ += vibInc; if (vibPhase_ >= 1.0) vibPhase_ -= 1.0;
             const double vibMult = vibCents > 0.0 ? std::exp2(vibCents * vibv / 1200.0) : 1.0;
 
             // Shared noise source (one-pole "color" toward white).
@@ -554,7 +555,7 @@ private:
             case 1:  return ph < 0.5 ? (4.0 * ph - 1.0) : (3.0 - 4.0 * ph);   // triangle
             case 2:  return ph < 0.5 ? 1.0 : -1.0;                            // square
             case 3:  return shHold;                                           // sample & hold
-            default: return std::sin(kTwoPi * ph);                            // sine
+            default: return static_cast<double>(fast_math::sin(static_cast<float>(ph))); // sine
         }
     }
     // Free-run increment, or tempo-synced division when Sync param > 0.
@@ -580,7 +581,7 @@ private:
                 return s - polyBlep(p2, dt);
             }
             case 2:  return 4.0 * std::fabs(ph - 0.5) - 1.0;      // triangle
-            case 3:  return std::sin(kTwoPi * ph);                // sine
+            case 3:  return static_cast<double>(fast_math::sin(static_cast<float>(ph))); // sine
             default: return (2.0 * ph - 1.0) - polyBlep(ph, dt);  // saw
         }
     }

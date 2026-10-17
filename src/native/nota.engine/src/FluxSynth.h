@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "FastMath.h"
 #include "Instrument.h"
 
 #include <algorithm>
@@ -194,7 +195,7 @@ public:
         const double k = std::clamp(2.0 - 1.9 * w.reso, 0.10, 2.0);
         setSvf(a1_, a2_, a3_, fc, k);
         const double drive = 1.0 + w.drive * 7.0;
-        const double driveMk = 1.0 / std::tanh(drive);
+        const double driveMk = 1.0 / static_cast<double>(fast_math::tanh(static_cast<float>(drive)));
         const double waveMix = w.wave;
         const double m01 = std::clamp(waveMix * 2.0, 0.0, 1.0);          // saw → square
         const double noiseMix = std::clamp((waveMix - 0.5) * 2.0, 0.0, 1.0);
@@ -226,7 +227,7 @@ public:
         int active = 0;
         for (int32_t i = 0; i < frames; ++i) {
             driftPhase_ += driftInc; if (driftPhase_ >= 1.0) driftPhase_ -= 1.0;
-            const double driftLfo = std::sin(kTwoPi * driftPhase_);
+            const double driftLfo = static_cast<double>(fast_math::sin(static_cast<float>(driftPhase_)));
 
             float mono = 0.0f;
             for (auto& v : voices_) {
@@ -250,11 +251,11 @@ public:
                 v.phM += inc; if (v.phM >= 1.0) v.phM -= 1.0;
 
                 // Sub (sine, one octave down).
-                const double sub = std::sin(kTwoPi * v.phS) * subLvl;
+                const double sub = static_cast<double>(fast_math::sin(static_cast<float>(v.phS))) * subLvl;
                 v.phS += inc * 0.5; if (v.phS >= 1.0) v.phS -= 1.0;
 
                 double in = tone + sub;
-                in = std::tanh(in * drive) * driveMk;                    // saturation
+                in = static_cast<double>(fast_math::tanh(static_cast<float>(in * drive))) * driveMk; // saturation
                 double y = svf(v.s1, a1_, a2_, a3_, k, in);              // low-pass
                 mono += (float)y * v.aEnv * (0.4f + 0.6f * v.vel);
             }
@@ -269,8 +270,8 @@ public:
             l += (noise() * 2.0f - 1.0f) * hiss;
             r += (noise() * 2.0f - 1.0f) * hiss;
             // Gentle output soft-clip: dense chords + drive can't push past ±1 into overload.
-            l = std::tanh(l * gain);
-            r = std::tanh(r * gain);
+            l = fast_math::tanh(l * gain);
+            r = fast_math::tanh(r * gain);
             out[i * 2]     += l;
             out[i * 2 + 1] += r;
         }

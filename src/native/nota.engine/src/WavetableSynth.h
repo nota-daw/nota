@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "FastMath.h"
 #include "Instrument.h"
 #include "NoteExpression.h"
 
@@ -324,6 +325,8 @@ public:
         const bool driveOn = get(FxDriveOn) > 0.5f, chorusOn = get(FxChorusOn) > 0.5f, reverbOn = get(FxReverbOn) > 0.5f;
         const float drive = (float)std::clamp(get(FxDrive) + macroBlk[4], 0.0, 1.0);
         const int driveMode = std::clamp((int)std::lround(get(FxDriveMode) * 2.0f), 0, 2);
+        const float driveD = 1.0f + drive * 8.0f;
+        const float driveInvNorm = 1.0f / fast_math::tanh(driveD * 0.7f + 1.0f);
         // Tone is a tilt: below the middle a one-pole darkens, above it lifts the top.
         const float toneCoef = (float)std::clamp((get(FxTone) - 0.5) * 2.0, -1.0, 1.0);
         const float chAmt = get(FxChorus);
@@ -406,7 +409,7 @@ public:
 
             // --- global FX: drive → chorus → reverb, each on its own switch ---
             float l = mixL * 0.4f, r = mixR * 0.4f;
-            if (driveOn && drive > 1e-4f) { l = driveSample(driveMode, l, drive); r = driveSample(driveMode, r, drive); }
+            if (driveOn && drive > 1e-4f) { l = driveSample(driveMode, l, driveD, driveInvNorm); r = driveSample(driveMode, r, driveD, driveInvNorm); }
             if (driveOn && toneCoef != 0.0f) { l = tone(toneL_, l, toneCoef); r = tone(toneR_, r, toneCoef); }
             if (chorusOn && chAmt > 1e-4f) { float cl, cr; chorus(l, r, chAmt, chVoices, cl, cr); l = cl; r = cr; }
             if (reverbOn && rvAmt > 1e-4f) { float rl, rr; reverb(l, r, revFb, revDamp, rl, rr); l += rl * rvAmt; r += rr * rvAmt; }
@@ -473,7 +476,7 @@ private:
             default: return phase;                                                                        // Off / Fold (no phase change)
         }
     }
-    static float foldOut(float s, double amt) { float g = 1.0f + (float)amt * 3.0f; return std::sin((float)kHalfPi * g * s); }   // smooth wavefolder
+    static float foldOut(float s, double amt) { float g = 1.0f + (float)amt * 3.0f; return fast_math::sin(0.25f * g * s); }   // smooth wavefolder
 
     // One oscillator: a unison stack of wavetable reads, detuned in cents and spread
     // across the stereo field with equal power. Returns the mid (which the filters see)
@@ -502,7 +505,7 @@ private:
         return (accL + accR) * 0.5f;
     }
     static float subOsc(int wave, double ph) {
-        switch (wave) { case 1: return ph < 0.5 ? 1.0f : -1.0f; case 2: return (float)(4.0 * std::fabs(ph - 0.5) - 1.0); default: return (float)std::sin(kTwoPi * ph); }
+        switch (wave) { case 1: return ph < 0.5 ? 1.0f : -1.0f; case 2: return (float)(4.0 * std::fabs(ph - 0.5) - 1.0); default: return fast_math::sin(static_cast<float>(ph)); }
     }
 
     const float* frame(int bank, int f) const { return tables_ + (size_t)((bank * kFrames) + f) * kTableSize; }
@@ -541,19 +544,18 @@ private:
         return t.data();
     }
 
-    static double lfoValue(int shape, double ph, float sh) { switch (shape) { case 1: return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph; case 2: return ph < 0.5 ? 1 : -1; case 3: return sh; default: return std::sin(kTwoPi * ph); } }
+    static double lfoValue(int shape, double ph, float sh) { switch (shape) { case 1: return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph; case 2: return ph < 0.5 ? 1 : -1; case 3: return sh; default: return static_cast<double>(fast_math::sin(static_cast<float>(ph))); } }
     double lfoInc(int rate, int sync) const { int d = std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7); if (d > 0 && spb_ > 0.0) { static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625}; return 1.0 / (beats[d] * spb_); } return expMap(get(rate), 0.05, 20.0) / sampleRate_; }
 
     // FX · drive. Tube is the soft symmetric tanh this always had; Tape adds the second
     // harmonic a tape stage leans on; Fold turns the curve back on itself past the top.
-    static float driveSample(int mode, float x, float amt) {
-        const float d = 1.0f + amt * 8.0f;
+    static float driveSample(int mode, float x, float d, float invNorm) {
         switch (mode) {
             // Tape: a rational curve that bends earlier and saturates more slowly than tanh,
             // with a second-harmonic term for the asymmetry a tape stage has.
             case 1: { float u = x * d + 0.35f * x * x * d; float y = u / (1.0f + std::fabs(u)); return y / (1.0f - 1.0f / (d * 0.7f + 2.0f)); }
-            case 2: { float y = std::sin((float)kHalfPi * std::clamp(x * d, -3.0f, 3.0f)); return y * 0.8f; }     // Fold
-            default: return std::tanh(x * d) / std::tanh(d * 0.7f + 1.0f);                                        // Tube
+            case 2: { float y = fast_math::sin(0.25f * std::clamp(x * d, -3.0f, 3.0f)); return y * 0.8f; }     // Fold
+            default: return fast_math::tanh(x * d) * invNorm;                                                   // Tube
         }
     }
     // A tilt around the middle: negative darkens (one-pole low-pass), positive lifts the
@@ -570,7 +572,7 @@ private:
         const int sz = (int)chorusBuf_.size(); if (sz < 4) { outL = l; outR = r; return; }
         chorusBuf_[chorusW_] = (l + r) * 0.5f;
         const double rate = expMap(get(FxChorusRate), 0.1, 6.0); chorusPh_ += rate / sampleRate_; if (chorusPh_ >= 1.0) chorusPh_ -= 1.0;
-        auto tap = [&](double phase) { double d = (0.008 + 0.006 * std::sin(kTwoPi * (phase - std::floor(phase)))) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; float f = (float)(rp - i0); if (i0 >= sz) i0 -= sz; int i1 = (i0 + 1) % sz; return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
+        auto tap = [&](double phase) { double d = (0.008 + 0.006 * static_cast<double>(fast_math::sin(static_cast<float>(phase)))) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; float f = (float)(rp - i0); if (i0 >= sz) i0 -= sz; int i1 = (i0 + 1) % sz; return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
         float a = 0.0f, b = 0.0f;
         // Taps sit evenly around the LFO cycle; odd ones go left, even ones right.
         for (int k = 0; k < voices; ++k) { float t = tap(chorusPh_ + (double)k / voices); if (k % 2 == 0) a += t; else b += t; }
