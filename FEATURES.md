@@ -454,7 +454,10 @@ track count and closes with Escape.
 Every built-in device uses the same 700×260 shell with a shared header: on/bypass dot,
 name, subtitle, preset picker, **A/B comparison** (parameter snapshots), stereo meter,
 voice count (on synths), move arrows, delete, and the ⠿ drag handle. All support factory
-and user presets, automation, persistence and cloning.
+and user presets, automation, persistence and cloning. Instrument cards (built-in, racks
+and hosted plug-ins) have the same on/off switch as effects: off silences the instrument
+(after a one-block fade it isn't rendered at all) while the MIDI effects before it and the
+audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
 - **Nota Synth** — subtractive synthesizer (the basic one): one oscillator
@@ -1089,7 +1092,8 @@ Coverage:
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
-- **Instruments**: add by kind, read and write parameters (by index or by stable id); read /
+- **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
+  on or off (`set_device_bypass` with device index -1; `get_overview` shows it); read /
   shape Nota Keys in musical terms (`read_keys`, `set_keys`).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).

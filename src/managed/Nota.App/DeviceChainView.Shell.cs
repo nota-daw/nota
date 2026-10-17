@@ -163,13 +163,15 @@ public sealed partial class DeviceChainView
         if (s.Bypassable)
         {
             var bypass = new SwitchTrack { IsOn = !s.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
-            ToolTip.SetTip(bypass, s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass");
+            ToolTip.SetTip(bypass, s.IsInstrument
+                ? (s.Bypassed ? "Off — click to turn the instrument on" : "On — click to turn the instrument off")
+                : (s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass"));
             bypass.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;   // not a drag, not a selection click
                 if (s.Kind == ChainKind.Midi) _engine.SetMidiEffectBypassed(_trackId, di, !s.Bypassed);
-                else _engine.SetDeviceBypassed(_trackId, di, !s.Bypassed);
+                else _engine.SetDeviceBypassed(_trackId, s.IsInstrument ? -1 : di, !s.Bypassed);   // -1: the instrument (#148)
                 Rebuild(); Changed?.Invoke();
             };
             power.Child = bypass;

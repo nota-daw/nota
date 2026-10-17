@@ -48,7 +48,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "move_device"), Description("Reorder a device within a track's chain.")]
     public Task MoveDevice(int trackId, int fromIndex, int toIndex) => Mutate(() => E.MoveDevice(trackId, fromIndex, toIndex));
 
-    [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device.")]
+    [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device. deviceIndex -1 is the track's instrument: bypassed, it makes no sound (its MIDI effects and audio effects keep running).")]
     public Task SetDeviceBypass(int trackId, int deviceIndex, bool bypassed) => Mutate(() => E.SetDeviceBypassed(trackId, deviceIndex, bypassed));
 
     [McpServerTool(Name = "get_device_params"), Description("List a device's parameters (index, name, min, max, current value).")]

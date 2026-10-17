@@ -1691,7 +1691,9 @@ NOTA_API NotaResult nota_plugin_set_state(NotaEngine* engine, int32_t track_id, 
                                           const uint8_t* data, int32_t size);
 
 /* Device bypass (M3-6, FR-37). When bypassed, the effect is skipped in the
- * render chain (buffer passes through untouched). */
+ * render chain (buffer passes through untouched). device_index -1 is the track's
+ * instrument (#148): switched off, it fades out over one block, releases its voices
+ * and is no longer rendered; its MIDI effects and audio effects keep running. */
 NOTA_API NotaResult nota_track_set_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t bypassed);
 NOTA_API int32_t    nota_track_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 

@@ -162,6 +162,7 @@ public sealed class ProjectService
                 // React source (Nota Flux): store as a doc index, resolved on load.
                 int instScSrc = engine.InstrumentSidechainSource(ti.Id);
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
+                instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
                 t.Instrument = instDto;
             }
 
@@ -589,6 +590,8 @@ public sealed class ProjectService
                 id = engine.AddAudioTrack();
             }
 
+            if (id > 0 && t.Instrument is { Bypassed: true })
+                engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
                 instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)

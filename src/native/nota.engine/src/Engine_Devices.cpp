@@ -1053,13 +1053,17 @@ bool Engine::setPluginState(int32_t trackId, int32_t deviceIndex, const uint8_t*
 
 void Engine::setTrackDeviceBypassed(int32_t trackId, int32_t deviceIndex, bool bypassed) {
     auto t = findTrackAuthoring(trackId);
-    if (!t || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return;
+    if (!t) return;
+    if (deviceIndex == -1) { if (t->instrument) t->instrument->setBypassed(bypassed); return; }   // the instrument (#148)
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return;
     if (t->devices[deviceIndex]) t->devices[deviceIndex]->setBypassed(bypassed);
 }
 
 bool Engine::trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const {
     auto t = findTrackAuthoring(trackId);
-    if (!t || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return false;
+    if (!t) return false;
+    if (deviceIndex == -1) return t->instrument && t->instrument->bypassed();
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size())) return false;
     return t->devices[deviceIndex] && t->devices[deviceIndex]->bypassed();
 }
 

@@ -145,9 +145,17 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 // sample offset (notes first at a shared offset, so a note's opening expression lands on it),
 // rendering the stretches in between. `live` runs once, before the first sample is rendered —
 // after the offset-0 notes, where live input sits — to apply the block's live expression.
+// An instrument switched off (#148) renders its first block off once more, without the block's
+// events, fading what was sounding to silence, then releases every voice and held controller;
+// after that it isn't rendered at all (no CPU) until it is switched back on, so `dst` stays
+// silent. The MIDI before it keeps running.
 template <class Live>
 void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n,
                 const ExprEv* xev, int xn, Live&& live) {
+    const bool off = inst.bypassed();
+    if (!off) inst.offSettled = false;
+    else if (inst.offSettled) return;
+    if (off) n = xn = 0;   // nothing new starts on the way out
     int32_t cursor = 0;
     bool liveDone = false;
     auto renderTo = [&](int32_t to) {
@@ -173,6 +181,16 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     }
     if (!liveDone) { live(); liveDone = true; }
     renderTo(frames);
+    if (off) {
+        const float step = frames > 0 ? 1.0f / static_cast<float>(frames) : 1.0f;
+        for (int32_t i = 0; i < frames; ++i) {
+            const float g = 1.0f - static_cast<float>(i + 1) * step;
+            dst[i * 2] *= g; dst[i * 2 + 1] *= g;
+        }
+        inst.allNotesOff();
+        releaseHeldControllers(inst);
+        inst.offSettled = true;
+    }
 }
 }
 

@@ -794,6 +794,7 @@ public:
     int32_t getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const;
     bool    setPluginState(int32_t trackId, int32_t deviceIndex, const uint8_t* data, int32_t size);
     // Device bypass (M3-6). Atomic on the stable Device — no snapshot republish.
+    // deviceIndex -1 is the instrument's on/off switch (#148).
     void    setTrackDeviceBypassed(int32_t trackId, int32_t deviceIndex, bool bypassed);
     bool    trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const;
     // Plugin delay compensation (M3-7).

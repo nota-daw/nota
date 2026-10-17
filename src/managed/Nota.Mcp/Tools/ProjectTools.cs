@@ -18,12 +18,12 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
     public sealed record DeviceInfo(int Index, int BuiltinKind, string Name, bool Bypassed);
     public sealed record MidiFxInfo(int Index, int Kind, string Name, bool Bypassed);
     public sealed record TrackInfo(int Id, string Name, string Type, int ColorIndex, bool Muted, bool Soloed,
-        float Volume, float Pan, int InstrumentKind, int GroupId, ClipInfo[] Clips, MidiFxInfo[] MidiFx, DeviceInfo[] Devices);
+        float Volume, float Pan, int InstrumentKind, bool InstrumentOff, int GroupId, ClipInfo[] Clips, MidiFxInfo[] MidiFx, DeviceInfo[] Devices);
     public sealed record Overview(double Bpm, bool Playing, double PositionBeats, TrackInfo[] Tracks);
 
     [McpServerTool(Name = "get_overview"), Description(
         "Full snapshot of the open project: tempo, transport, and every track with its type, mixer state, "
-        + "instrument kind, clips (index/start/length/midi), MIDI effects and audio devices. Call this first to see state.")]
+        + "instrument kind (and whether its on/off switch is off), clips (index/start/length/midi), MIDI effects and audio devices. Call this first to see state.")]
     public Task<Overview> GetOverview() => Read(() =>
     {
         int n = E.TrackCount;
@@ -43,7 +43,7 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
             for (int d = 0; d < dc; d++) devs.Add(new DeviceInfo(d, E.TrackDeviceBuiltinKind(ti.Id, d), E.DeviceName(ti.Id, d), E.DeviceBypassed(ti.Id, d)));
             tracks.Add(new TrackInfo(ti.Id, E.GetTrackName(ti.Id), TypeName(ti.Type), E.GetTrackColorIndex(ti.Id),
                 ti.Muted != 0, ti.Soloed != 0, ti.Volume, ti.Pan, ti.IsInstrument ? E.TrackInstrumentKind(ti.Id) : -1,
-                ti.GroupId, clips.ToArray(), mfx.ToArray(), devs.ToArray()));
+                ti.IsInstrument && E.DeviceBypassed(ti.Id, -1), ti.GroupId, clips.ToArray(), mfx.ToArray(), devs.ToArray()));
         }
         return new Overview(E.Bpm, E.IsPlaying, E.PositionBeats, tracks.ToArray());
     });

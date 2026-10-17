@@ -259,6 +259,8 @@ public sealed class InstrumentDto
     public int SidechainSource { get; set; } = -1;
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
+    /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
+    public bool Bypassed { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
