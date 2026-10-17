@@ -179,7 +179,7 @@ public partial class MainWindow
         _patternScene = -1;
         _sessionSlotTrack = -1;
         _sessionSlotScene = -1;
-        if (DetailFloating) _detailWindow!.ClipHost.Content = ClipPlaceholder();
+        if (DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
     }
 
     // The Clip tab targets the *currently selected* arrangement clip (MIDI or audio),
@@ -504,7 +504,16 @@ public partial class MainWindow
     private void ReloadEditorNotes()
     {
         _patternView?.Reload();   // the step grid is a second view of the same notes
-        if (_vm is null || _editorRoll is null || _editorTrackId < 0) return;
+        if (_vm is null || _editorRoll is null) return;
+        if (_editorTrackId < 0)
+        {
+            // A Session slot's piano roll follows a take recorded into it the same way (#156).
+            if (_sessionSlotTrack <= 0 || _sessionSlotScene < 0) return;
+            double slotLen = Engine.SessionSlotLength(_sessionSlotTrack, _sessionSlotScene);
+            _editorRoll.SetNotes(Engine.GetSessionNotes(_sessionSlotTrack, _sessionSlotScene),
+                slotLen > 0 ? slotLen : _editorRoll.LengthBeats);
+            return;
+        }
         bool hasInfo = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci);
         double len = hasInfo && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
         _editorRoll.SetNotes(Engine.GetClipNotes(_editorTrackId, _editorClipIndex), len);

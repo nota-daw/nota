@@ -63,8 +63,13 @@ public partial class MainWindow
     {
         Timeline.Refresh();
         _session?.Refresh();
-        if (_deviceChain?.IsVisible == true && Timeline.SelectedTrackId > 0)
-            _deviceChain.Show(Timeline.SelectedTrackId); // reflect device-chain edits
+        // Reflect device-chain edits (a removed device coming back, #109) on the track the
+        // chain is showing, which isn't always the selected one (a peek, the master, nothing
+        // selected) — rebuilding the selected track's chain there showed the wrong devices.
+        if (_deviceChain is { TrackId: > 0 } chain)
+            chain.Show(chain.TrackId == Engine.MasterTrackId || TrackExists(chain.TrackId)
+                ? chain.TrackId : Timeline.SelectedTrackId);   // its track was undone away
+        if (_modular?.IsVisible == true) _modular.Refresh();
         ReloadEditorNotes();                             // reflect clip/note edits
         // Volume / pan / master steps (specs/009): the master volume lives on the view model
         // (MST, Master row, Mixer and Remote follow it), the track strips in the Mixer rebuild.

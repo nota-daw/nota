@@ -317,6 +317,14 @@ if (args.Length >= 1 && args[0] == "--paramundo")
     Console.WriteLine(failures == 0 ? "PARAMUNDO PASSED" : $"PARAMUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Undo of a removed device alone: `--device-undo`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-undo")
+{
+    Console.WriteLine("-- device remove undo --");
+    foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device fold alone: `--fold`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--fold")
 {
@@ -14837,6 +14845,8 @@ foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+Console.WriteLine("-- device remove undo --");
+foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);

@@ -63,7 +63,9 @@ public sealed partial class DeviceChainView
         int t = _trackId;
         var items = new System.Collections.Generic.List<(string, string)>();
         foreach (var p in _factory.All())
-            if (p.IsInstrument && p.BuiltinKind == Nota.Application.MosaicModel.Kind) items.Add(("factory:" + p.Id, p.DisplayName));
+            // The factory "Init" keeps the loaded program, so here it would read as the program's
+            // name again: the card's own Init (every default, no program) takes its place (#165).
+            if (p.IsInstrument && p.BuiltinKind == Nota.Application.MosaicModel.Kind && p.DisplayName != "Init") items.Add(("factory:" + p.Id, p.DisplayName));
         if (_mosaic is not null)
             foreach (var p in _mosaic.Presets()) items.Add((p.Path, $"{p.Folder} / {p.Name}"));
         // A program that is no preset (an SFZ, dropped files) still names itself in the picker.
@@ -82,7 +84,7 @@ public sealed partial class DeviceChainView
             if (id == "program:") return "";
             if (id.StartsWith("factory:", StringComparison.Ordinal)) return _factory.ApplyInPlace(_engine, id["factory:".Length..], t, -1);
             return _mosaic?.ApplyInPlace(_engine, id, t) ?? "Presets are unavailable.";
-        });
+        }, Init: () => _factory.ResetInPlace(_engine, t, -1, false));   // every param to default, no program (#165)
     }
 
     // The Instrument Rack in the shared shell; the badge counts its chains.
