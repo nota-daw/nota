@@ -83,7 +83,7 @@ JUCE module; the engine core is JUCE-free.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
-- **Metronome** and **count-in** before recording (notes played on the count-in are recorded).
+- **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
