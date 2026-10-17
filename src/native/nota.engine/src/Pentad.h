@@ -48,6 +48,7 @@
 #include "Instrument.h"
 #include "NoteExpression.h"
 #include "hiir/Downsampler2xFpu.h"
+#include "FastMath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -69,27 +70,9 @@ namespace nota {
 
 namespace pentad {
 
-// ---- fast math (accurate enough for pitch / cutoff; branch-light) ---------------------
-inline float exp2f(float x) {
-    x = std::clamp(x, -60.0f, 60.0f);
-    const float fi = std::floor(x);
-    const float f = x - fi;
-    // Taylor series of 2^f on [0,1): ~1.5e-5 relative error (≈0.03 cent).
-    const float p = 1.0f + f * (0.69314718f + f * (0.24022651f + f * (0.05550411f + f * (0.00961813f
-                  + f * (0.00133336f + f * 0.00015404f)))));
-    const int32_t e = static_cast<int32_t>(fi) + 127;
-    const uint32_t bits = static_cast<uint32_t>(e) << 23;
-    float s; std::memcpy(&s, &bits, sizeof s);
-    return p * s;
-}
-// tanh(v)/v (rational tanh, exact ±1 limit beyond |v| = 3) — the per-sample
-// linearisation gain of an OTA stage.
-inline float tanhRatio(float v) {
-    const float a = std::fabs(v);
-    if (a > 3.0f) return 1.0f / a;
-    const float v2 = v * v;
-    return (27.0f + v2) / (27.0f + 9.0f * v2);
-}
+using fast_math::exp2f;
+using fast_math::tanhRatio;
+using fast_math::tanPrewarp;
 // Mixer overdrive: a cubic soft clipper (unity slope at 0, flat at ±1.5) and its
 // antiderivative, run through first-order ADAA so the drive doesn't alias.
 inline double softClip(double x) {
@@ -113,11 +96,7 @@ struct Adaa {
     }
     void reset() { x1 = f1 = 0.0; }
 };
-// Padé tan for the bilinear prewarp, x ∈ [0, ~1.3].
-inline float tanPrewarp(float x) {
-    const float x2 = x * x;
-    return x * (15.0f - x2) / (15.0f - 6.0f * x2);
-}
+
 inline uint32_t hash32(uint32_t x) {
     x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16;
     return x;

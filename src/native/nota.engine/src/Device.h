@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "AudioBufferUtils.h"
 #include "TransportInfo.h"
 
 namespace nota {
@@ -32,6 +33,13 @@ public:
 
     // Process `frames` of interleaved stereo in place. Audio thread; no locks.
     virtual void process(float* buf, int32_t frames) = 0;
+
+    // Process with caller-provided silence hint. When inputSilent is true, the caller has
+    // already verified that `buf` contains silence. Devices avoid re-scanning the buffer.
+    virtual void process(float* buf, int32_t frames, bool inputSilent) {
+        (void)inputSilent;
+        process(buf, frames);
+    }
 
     // Reported processing latency, for future PDC (M3-7).
     virtual int32_t latencySamples() const { return 0; }
@@ -175,6 +183,14 @@ public:
     // effects (synced delays/LFOs) follow the DAW. Built-ins ignore it; a rack device
     // forwards it to its chain instruments/devices. Audio thread.
     virtual void setTransportInfo(const TransportInfo&) {}
+
+    // Sleep / silence bypass lifecycle:
+    // When true, the device is currently asleep and its process() produces zero output.
+    virtual bool isIdle() const { return false; }
+    // Whether this device produces an acoustic or filter tail after its input ceases.
+    virtual bool hasTail() const { return false; }
+    // Explicitly wake the device from idle state (e.g. on incoming audio or parameter edit).
+    virtual void wake() {}
 
     // Bypass (M3-6): when true, process() must leave the buffer untouched.
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }

@@ -305,8 +305,14 @@ public:
     // Plugin-delay compensation (M3-7). Shared across snapshots (state persists).
     std::shared_ptr<CompensationDelay> pdc = std::make_shared<CompensationDelay>();
 
+    // Signal activity & silence detector with hysteresis (specs/025). Shared across snapshots.
+    std::shared_ptr<SilenceDetector> silenceDetector = std::make_shared<SilenceDetector>();
+
     // Session playback (M5-2). Shared across snapshots (position/state persists).
     std::shared_ptr<SessionPlayer> sessionPlayer = std::make_shared<SessionPlayer>();
+
+    // Scratch render buffer for parallel rendering. Shared across snapshots.
+    std::shared_ptr<std::vector<float>> scratchBuf = std::make_shared<std::vector<float>>(16384 * 2, 0.0f);
 
     // Freeze buffer (M7): interleaved stereo PCM (null = not frozen), captured at
     // `frozenSpb` samples-per-beat. Shared across snapshots; only replaced on a

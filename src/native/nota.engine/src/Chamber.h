@@ -33,6 +33,7 @@
 
 #include "AudioFile.h"
 #include "Device.h"
+#include "FastMath.h"
 
 #include "signalsmith-linear/fft.h"
 
@@ -71,14 +72,14 @@ inline float flush(float x) { return std::fabs(x) < 1e-20f ? 0.0f : x; }
 inline float softClip(float x) {
     const float a = std::fabs(x);
     if (a <= 1.0f) return x;
-    const float y = 1.0f + 0.6f * std::tanh((a - 1.0f) / 0.6f);
+    const float y = 1.0f + 0.6f * fast_math::fastTanh((a - 1.0f) * (1.0f / 0.6f));
     return x < 0.0f ? -y : y;
 }
 // Loop guard: identity in the normal range, bounded when shimmer / freeze-in overdrives it.
 inline float loopLimit(float x) {
     const float a = std::fabs(x);
     if (a <= 2.0f) return x;
-    const float y = 2.0f + std::tanh(a - 2.0f);
+    const float y = 2.0f + fast_math::fastTanh(a - 2.0f);
     return x < 0.0f ? -y : y;
 }
 
@@ -620,10 +621,28 @@ struct DLine {
 };
 
 inline void hadamard8(float* x) {
-    for (int h = 1; h < 8; h <<= 1)
-        for (int i = 0; i < 8; i += h * 2)
-            for (int j = i; j < i + h; ++j) { const float a = x[j], b = x[j + h]; x[j] = a + b; x[j + h] = a - b; }
-    for (int i = 0; i < 8; ++i) x[i] *= 0.35355339f;
+    // Stage 1 (stride 1)
+    const float a0 = x[0] + x[1], a1 = x[0] - x[1];
+    const float a2 = x[2] + x[3], a3 = x[2] - x[3];
+    const float a4 = x[4] + x[5], a5 = x[4] - x[5];
+    const float a6 = x[6] + x[7], a7 = x[6] - x[7];
+
+    // Stage 2 (stride 2)
+    const float b0 = a0 + a2, b2 = a0 - a2;
+    const float b1 = a1 + a3, b3 = a1 - a3;
+    const float b4 = a4 + a6, b6 = a4 - a6;
+    const float b5 = a5 + a7, b7 = a5 - a7;
+
+    // Stage 3 (stride 4)
+    constexpr float kNorm = 0.35355339f;
+    x[0] = (b0 + b4) * kNorm;
+    x[1] = (b1 + b5) * kNorm;
+    x[2] = (b2 + b6) * kNorm;
+    x[3] = (b3 + b7) * kNorm;
+    x[4] = (b0 - b4) * kNorm;
+    x[5] = (b1 - b5) * kNorm;
+    x[6] = (b2 - b6) * kNorm;
+    x[7] = (b3 - b7) * kNorm;
 }
 
 // Two crossfaded read heads sweeping a 60 ms window (sin² windows sum to one).
@@ -730,70 +749,108 @@ public:
         int apLen[N];
         for (int i = 0; i < N; ++i) apLen[i] = std::max(1, static_cast<int>(kApMs[i] * 0.001 * sr));
 
-        for (int t = 0; t < n; ++t) {
-            float xL = inL[t], xR = inR[t];
-            if (p.vintage) {
-                vinL_[0] += vin * (xL - vinL_[0]); vinL_[1] += vin * (vinL_[0] - vinL_[1]); xL = vinL_[1];
-                vinR_[0] += vin * (xR - vinR_[0]); vinR_[1] += vin * (vinR_[0] - vinR_[1]); xR = vinR_[1];
-            }
-            float ch[N], direct[N];
-            for (int i = 0; i < N; ++i) { ch[i] = ((i & 1) ? xR : xL) * inSign[i]; direct[i] = ch[i]; }
-            float eL = 0.0f, eR = 0.0f;
-            for (int s = 0; s < 4; ++s) {
+        if (!shim) {
+            for (int i = 0; i < N; ++i) inj_[i] = 0.0f;
+        }
+
+        auto runAlgorithmicLoop = [&](auto cubicTag) {
+            constexpr bool kCubic = decltype(cubicTag)::value;
+            for (int t = 0; t < n; ++t) {
+                float xL = inL[t], xR = inR[t];
+                if (p.vintage) {
+                    vinL_[0] += vin * (xL - vinL_[0]); vinL_[1] += vin * (vinL_[0] - vinL_[1]); xL = vinL_[1];
+                    vinR_[0] += vin * (xR - vinR_[0]); vinR_[1] += vin * (vinR_[0] - vinR_[1]); xR = vinR_[1];
+                }
+                float ch[N], direct[N];
+                for (int i = 0; i < N; ++i) { ch[i] = ((i & 1) ? xR : xL) * inSign[i]; direct[i] = ch[i]; }
+
+                // Diffusion Stage 0
                 for (int i = 0; i < N; ++i) {
-                    ddCur_[s][i] += glide * (ddT[s][i] - ddCur_[s][i]);
-                    diff_[s][i].push(ch[i]);
-                    ch[i] = diff_[s][i].lin(ddCur_[s][i]);
+                    ddCur_[0][i] += glide * (ddT[0][i] - ddCur_[0][i]);
+                    diff_[0][i].push(ch[i]);
+                    ch[i] = diff_[0][i].lin(ddCur_[0][i]);
                 }
                 hadamard8(ch);
-                for (int i = 0; i < N; ++i) ch[i] *= flip_[s][i];
-                if (s == 1) { eL = ch[0] + ch[2] + ch[4] + ch[6]; eR = ch[1] + ch[3] + ch[5] + ch[7]; }
-            }
-            // LFO: one quadrature oscillator, eight phase-offset taps.
-            const float nc = lfoCos_ * rc - lfoSin_ * rs; lfoSin_ = lfoSin_ * rc + lfoCos_ * rs; lfoCos_ = nc;
-            float y[N], sum = 0.0f;
-            for (int i = 0; i < N; ++i) {
-                dCur_[i] += glide * (dT[i] - dCur_[i]);
-                const float dd = std::max(2.0f, dCur_[i] + md * (lfoSin_ * lfoC_[i] + lfoCos_ * lfoS_[i]));
-                float v = p.cubic ? line_[i].cubic(dd - 1.0f) : line_[i].lin(dd - 1.0f);
-                // in-loop allpass (g = 0 → a plain short delay, so switching is seamless)
-                const float z = ap_[i].tap(apLen[i] - 1);
-                const float wv = v + apG * z;
-                ap_[i].push(flush(wv));
-                v = z - apG * wv;
-                // three-band decay
-                bl1_[i] += a1 * (v - bl1_[i]); bl2_[i] += a2 * (v - bl2_[i]);
-                v = gL[i] * bl1_[i] + gM[i] * (bl2_[i] - bl1_[i]) + gH[i] * (v - bl2_[i]);
-                y[i] = v; sum += v;
-            }
-            sum *= 2.0f / N;
-            for (int i = 0; i < N; ++i) {
-                float v = y[i] - sum + (direct[i] + (ch[i] - direct[i]) * dmix) * inG + inj_[i];
-                if (p.vintage) v = std::floor(v * 8192.0f + 0.5f) * (1.0f / 8192.0f);
-                line_[i].push(flush(loopLimit(v)));
-            }
-            float oL = 0.0f, oR = 0.0f;
-            for (int i = 0; i < N; ++i) { oL += y[i] * sL[i]; oR += y[i] * sR[i]; }
-            oL *= outG; oR *= outG;
-            if (shim) {
-                float a = shL_.process(oL, p.shimRatio), b = shR_.process(oR, p.shimRatio);
-                shLpL_ += shLp * (a - shLpL_); shHpL_ += shHp * (shLpL_ - shHpL_); a = shLpL_ - shHpL_;
-                shLpR_ += shLp * (b - shLpR_); shHpR_ += shHp * (shLpR_ - shHpR_); b = shLpR_ - shHpR_;
-                if (shimFb) {
-                    const float g = p.shimAmt * shimLoop;
-                    for (int i = 0; i < N; ++i) inj_[i] = ((i & 1) ? b : a) * g * inSign[i];
-                    oL += a * p.shimAmt * 0.35f; oR += b * p.shimAmt * 0.35f;
-                } else {
-                    for (int i = 0; i < N; ++i) inj_[i] = 0.0f;
-                    oL += a * p.shimAmt; oR += b * p.shimAmt;
+                for (int i = 0; i < N; ++i) ch[i] *= flip_[0][i];
+
+                // Diffusion Stage 1 (early reflections tap)
+                for (int i = 0; i < N; ++i) {
+                    ddCur_[1][i] += glide * (ddT[1][i] - ddCur_[1][i]);
+                    diff_[1][i].push(ch[i]);
+                    ch[i] = diff_[1][i].lin(ddCur_[1][i]);
                 }
-            } else {
-                for (int i = 0; i < N; ++i) inj_[i] = 0.0f;
+                hadamard8(ch);
+                for (int i = 0; i < N; ++i) ch[i] *= flip_[1][i];
+                const float eL = ch[0] + ch[2] + ch[4] + ch[6];
+                const float eR = ch[1] + ch[3] + ch[5] + ch[7];
+
+                // Diffusion Stage 2
+                for (int i = 0; i < N; ++i) {
+                    ddCur_[2][i] += glide * (ddT[2][i] - ddCur_[2][i]);
+                    diff_[2][i].push(ch[i]);
+                    ch[i] = diff_[2][i].lin(ddCur_[2][i]);
+                }
+                hadamard8(ch);
+                for (int i = 0; i < N; ++i) ch[i] *= flip_[2][i];
+
+                // Diffusion Stage 3
+                for (int i = 0; i < N; ++i) {
+                    ddCur_[3][i] += glide * (ddT[3][i] - ddCur_[3][i]);
+                    diff_[3][i].push(ch[i]);
+                    ch[i] = diff_[3][i].lin(ddCur_[3][i]);
+                }
+                hadamard8(ch);
+                for (int i = 0; i < N; ++i) ch[i] *= flip_[3][i];
+
+                // LFO: one quadrature oscillator, eight phase-offset taps.
+                const float nc = lfoCos_ * rc - lfoSin_ * rs; lfoSin_ = lfoSin_ * rc + lfoCos_ * rs; lfoCos_ = nc;
+                float y[N], sum = 0.0f;
+                for (int i = 0; i < N; ++i) {
+                    dCur_[i] += glide * (dT[i] - dCur_[i]);
+                    const float dd = std::max(2.0f, dCur_[i] + md * (lfoSin_ * lfoC_[i] + lfoCos_ * lfoS_[i]));
+                    float v;
+                    if constexpr (kCubic) v = line_[i].cubic(dd - 1.0f);
+                    else v = line_[i].lin(dd - 1.0f);
+                    // in-loop allpass (g = 0 → a plain short delay, so switching is seamless)
+                    const float z = ap_[i].tap(apLen[i] - 1);
+                    const float wv = v + apG * z;
+                    ap_[i].push(flush(wv));
+                    v = z - apG * wv;
+                    // three-band decay
+                    bl1_[i] += a1 * (v - bl1_[i]); bl2_[i] += a2 * (v - bl2_[i]);
+                    v = gL[i] * bl1_[i] + gM[i] * (bl2_[i] - bl1_[i]) + gH[i] * (v - bl2_[i]);
+                    y[i] = v; sum += v;
+                }
+                sum *= (2.0f / N);
+                for (int i = 0; i < N; ++i) {
+                    float v = y[i] - sum + (direct[i] + (ch[i] - direct[i]) * dmix) * inG + inj_[i];
+                    if (p.vintage) v = std::floor(v * 8192.0f + 0.5f) * (1.0f / 8192.0f);
+                    line_[i].push(flush(loopLimit(v)));
+                }
+                float oL = 0.0f, oR = 0.0f;
+                for (int i = 0; i < N; ++i) { oL += y[i] * sL[i]; oR += y[i] * sR[i]; }
+                oL *= outG; oR *= outG;
+                if (shim) {
+                    float a = shL_.process(oL, p.shimRatio), b = shR_.process(oR, p.shimRatio);
+                    shLpL_ += shLp * (a - shLpL_); shHpL_ += shHp * (shLpL_ - shHpL_); a = shLpL_ - shHpL_;
+                    shLpR_ += shLp * (b - shLpR_); shHpR_ += shHp * (shLpR_ - shHpR_); b = shLpR_ - shHpR_;
+                    if (shimFb) {
+                        const float g = p.shimAmt * shimLoop;
+                        for (int i = 0; i < N; ++i) inj_[i] = ((i & 1) ? b : a) * g * inSign[i];
+                        oL += a * p.shimAmt * 0.35f; oR += b * p.shimAmt * 0.35f;
+                    } else {
+                        for (int i = 0; i < N; ++i) inj_[i] = 0.0f;
+                        oL += a * p.shimAmt; oR += b * p.shimAmt;
+                    }
+                }
+                oL += eL * erG; oR += eR * erG;
+                hcL_ += hc * (oL - hcL_); hcR_ += hc * (oR - hcR_);
+                outL[t] = hcL_; outR[t] = hcR_;
             }
-            oL += eL * erG; oR += eR * erG;
-            hcL_ += hc * (oL - hcL_); hcR_ += hc * (oR - hcR_);
-            outL[t] = hcL_; outR[t] = hcR_;
-        }
+        };
+
+        if (p.cubic) runAlgorithmicLoop(std::true_type{});
+        else runAlgorithmicLoop(std::false_type{});
         const float mag = std::sqrt(lfoCos_ * lfoCos_ + lfoSin_ * lfoSin_);   // keep the phasor on the unit circle
         if (mag > 1e-6f) { lfoCos_ /= mag; lfoSin_ /= mag; } else { lfoCos_ = 1.0f; lfoSin_ = 0.0f; }
     }
@@ -918,15 +975,27 @@ public:
         delete cur_; delete fade_; delete ramp_; delete xfOld_;
         cur_ = fade_ = ramp_ = xfOld_ = nullptr;
         prepared_ = true;
+        idle_ = false;
+        tailFramesRemaining_ = calculateTailSamples();
         rebuild(true);
         startWorker();
     }
 
     void setTransport(double /*beatStart*/, double spb, bool /*playing*/) override { if (spb > 1.0) spb_ = spb; }
 
+    bool isIdle() const override { return idle_; }
+    bool hasTail() const override { return true; }
+    void wake() override { idle_ = false; tailFramesRemaining_ = calculateTailSamples(); }
+
     // ---- DSP ---------------------------------------------------------------------
     void process(float* buf, int32_t frames) override {
+        process(buf, frames, isBufferSilent(buf, frames));
+    }
+
+    void process(float* buf, int32_t frames, bool inputSilent) override {
         if (!prepared_ || frames <= 0) return;
+        if (inputSilent && idle_) return;
+
         const auto t0 = std::chrono::steady_clock::now();
         flushSpill();
         if (!xfOld_) if (auto* k = ready_.exchange(nullptr, std::memory_order_acq_rel)) install(k);
@@ -1050,8 +1119,8 @@ public:
                 if (monoC > 0.0f) { msLp1_[0] += monoC * (side - msLp1_[0]); msLp1_[1] += monoC * (msLp1_[0] - msLp1_[1]); side -= msLp1_[1]; }
                 float target = 1.0f;
                 if (duckDb > 0.01f) {   // wet dips by up to Duck Amount as the input rises −42 → −12 dBFS
-                    const float envDb = 20.0f * std::log10(std::max(1e-6f, duckEnv_));
-                    target = std::pow(10.0f, -duckDb * std::clamp((envDb + 42.0f) / 30.0f, 0.0f, 1.0f) / 20.0f);
+                    const float envDb = fast_math::linToDb(std::max(1e-6f, duckEnv_));
+                    target = fast_math::dbToLin(-duckDb * std::clamp((envDb + 42.0f) / 30.0f, 0.0f, 1.0f));
                 }
                 duckGain_ += sm * (target - duckGain_);
                 wetS_ += sm * (wetMix - wetS_);
@@ -1087,6 +1156,21 @@ public:
         const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         cpuS_ = cpuS_ * 0.9 + (el / (frames / sr)) * 0.1;
         cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
+
+        if (!inputSilent || freeze) {
+            idle_ = false;
+            tailFramesRemaining_ = calculateTailSamples();
+        } else {
+            if (tailFramesRemaining_ > 0) {
+                tailFramesRemaining_ -= frames;
+            } else {
+                if (outPk[0] < 1.0e-5f && outPk[1] < 1.0e-5f && wetPk < 1.0e-5f) {
+                    idle_ = true;
+                    if (cur_) cur_->clear();
+                    algo_.reset();
+                }
+            }
+        }
     }
 
     // ---- identity / params ---------------------------------------------------------
@@ -1108,6 +1192,7 @@ public:
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
     void  setParam(int32_t i, float v) override {
         if (i < 0 || i >= kNumParams) return;
+        wake();
         p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
 
@@ -1301,6 +1386,18 @@ private:
         if (get(syncParam) >= 0.5f) s = beats[std::clamp(static_cast<int>(std::lround(v * (kSyncDivs - 1))), 0, kSyncDivs - 1)] * spb_;
         else s = 0.5 * v * v * sr_;   // 0..500 ms, quadratic
         return static_cast<float>(std::clamp(s, 0.0, 2.5 * sr_));
+    }
+
+    int calculateTailSamples() const {
+        if (get(Freeze) >= 0.5f) return 100 * static_cast<int>(sr_);
+        const float convPre = predelaySamples(ConvPredelay, ConvSync);
+        const float algoPre = predelaySamples(AlgoPredelay, AlgoSync);
+        const float maxPre = std::max(convPre, algoPre);
+        const float algoDecay = static_cast<float>(chamber::expMap(get(AlgoDecay), 0.2, 20.0)) * static_cast<float>(sr_);
+        const float convSec = cur_ ? cur_->seconds : 2.0f;
+        const float convDecay = convSec * static_cast<float>(sr_);
+        const float maxDecay = std::max(algoDecay * 1.7f, convDecay);
+        return static_cast<int>(maxPre + maxDecay + sr_ * 0.2);
     }
 
     // ---- EQ ----
@@ -1559,6 +1656,8 @@ private:
     std::atomic<float> p_[kNumParams] = {};
     double sr_ = 44100.0, spb_ = 22050.0;
     bool prepared_ = false;
+    bool idle_ = false;
+    int tailFramesRemaining_ = 0;
     std::atomic<double> srA_{44100.0};
 
     chamber::Algo algo_;

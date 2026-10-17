@@ -5,6 +5,7 @@ build/
 build-*/
 out/
 *.user
+.cache
 
 # .NET
 project.lock.json

@@ -43,6 +43,10 @@ Engine::Engine()
     liveGraph_.store(authoring_.get(), std::memory_order_release);
     retired_.push_back(authoring_);
     installRackPluginFactory();          // lets rack blobs rebuild hosted-plugin children on load
+    leafJobs_.resize(1024);
+    leafTasks_.resize(1024);
+    leafTaskArgs_.resize(1024);
+    threadPool_.configure(0);
 }
 
 Engine::~Engine() {
@@ -53,6 +57,7 @@ Engine::~Engine() {
 
 bool Engine::start() {
     if (backend_->isRunning()) return true;
+    threadPool_.configure(0);
     transport_.setSampleRate(backend_->sampleRate() > 0 ? backend_->sampleRate() : 44100.0);
     BackendConfig bc;
     bc.device          = resolveAudioDeviceId(config_.outputDeviceUid, /*inputScope=*/false);
@@ -85,9 +90,13 @@ bool Engine::start() {
 void Engine::propagateSampleRate(double sr) {
     if (sr <= 0.0) sr = 44100.0;
     auto rate = [&](Track& t) {
+        if (!t.scratchBuf || t.scratchBuf->size() < kMaxBlock * 2) {
+            t.scratchBuf = std::make_shared<std::vector<float>>(kMaxBlock * 2, 0.0f);
+        }
         if (t.instrument) t.instrument->setSampleRate(sr);
         for (auto& d : t.devices)     if (d) d->setSampleRate(sr, kMaxBlock);
         for (auto& m : t.midiEffects) if (m) m->setSampleRate(sr, kMaxBlock);
+        if (t.silenceDetector) t.silenceDetector->setSampleRate(sr);
     };
     for (auto& t : authoring_->tracks) if (t) rate(*t);
     if (authoring_->masterTrack) rate(*authoring_->masterTrack);
@@ -137,6 +146,7 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 }
 
 void Engine::stop() {
+    threadPool_.shutdown();
     if (midiInput_) midiInput_->close();
     if (backend_) backend_->stop();
 }
@@ -480,6 +490,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->midiEffects = t.midiEffects; // shared — arp held/phase state persists
     nt->devices = t.devices;         // shared — DSP state persists (M3)
     nt->pdc = t.pdc;                 // shared — delay-line state persists (M3-7)
+    nt->silenceDetector = t.silenceDetector; // shared — signal activity state persists (specs/025)
     nt->sessionSlots = t.sessionSlots; // Session slots (M5)
     nt->automation = t.automation;   // automation lanes (M9)
     nt->modulators = t.modulators;   // CV modulation sources (Phase 3)

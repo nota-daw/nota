@@ -14,6 +14,7 @@
 #include "AudioBackend.h"
 #include "AudioConfig.h"
 #include "AudioInput.h"
+#include "AudioThreadPool.h"
 #include "CommandQueue.h"
 #include "Graph.h"
 #include "MidiConfig.h"
@@ -1103,6 +1104,38 @@ private:
     // automation + solo + send buses + track pass + return pass. processBlock
     // splits a block at loop boundaries and calls this per segment.
     void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, bool playing, double spb);
+    struct LeafTrackJob {
+        Track* track = nullptr;
+        bool audible = false;
+        bool capturing = false;
+        bool feeding = false;
+        bool toMix = false;
+        int destSlot = -1;
+        float sends[kMaxReturns] = {};
+        bool anySend = false;
+        bool rendered = false;
+    };
+    struct LeafTaskArg {
+        Engine* engine = nullptr;
+        Graph* g = nullptr;
+        LeafTrackJob* job = nullptr;
+        int32_t frames = 0;
+        double blockStart = 0.0;
+        double spb = 0.0;
+        bool playing = false;
+        bool arrangementActive = false;
+        TransportInfo ti;
+        float stereoA = 0.0f;
+        float panLawStep = 0.0f;
+        int recSrc = -1;
+    };
+    static void executeLeafTask(void* ctx);
+    void renderLeafTrack(Graph* g, Track& t, float* scratch, int32_t frames,
+                         double blockStart, double spb, bool playing,
+                         bool arrangementActive, const TransportInfo& ti,
+                         float stereoA, float panLawStep,
+                         bool audible, bool capturing, bool toMix,
+                         int recSrc, float* route, bool& renderedOut);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames);   // live input monitoring
     void drainCommands();
     void drainLiveMidi(double blockStartBeat, bool playing);
@@ -1694,6 +1727,10 @@ private:
     // instrument render scratch (pre-allocated, big enough for any device block).
     static constexpr int32_t kMaxBlock = 16384;
     std::vector<float> scratch_;
+    AudioThreadPool threadPool_;
+    std::vector<LeafTrackJob> leafJobs_;
+    std::vector<AudioTask> leafTasks_;
+    std::vector<LeafTaskArg> leafTaskArgs_;
     // Freeze capture (M7): while armed, mixGraph stashes the target track's post-device
     // pre-fader signal into freezeCaptureBuf_. Filled sequentially from a seek(0) render;
     // only touched on the render thread, which is the message thread while capturing (the
