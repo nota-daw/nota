@@ -9324,6 +9324,36 @@ Console.WriteLine("-- M9-A1: parameter automation core --");
         Check(ok, "CV modulation round-trips through save/load (v18)");
         try { System.IO.Directory.Delete(pdir, true); } catch { }
     }
+
+    // A Math node's gain spans 0..2 (#92): above 1.0 it sticks, scales the input and survives
+    // save/load, while an LFO's depth stays clamped to 0..1.
+    {
+        using var me = new NotaEngine();
+        int mt = me.AddInstrumentTrack();
+        int mac = me.ModulatorAdd(mt, 4);            // Macro, value 0.4
+        me.ModulatorSet(mt, mac, 4, 0.4f);
+        int mth = me.ModulatorAdd(mt, 5);            // Math
+        me.ModulatorSet(mt, mth, 0, 4);              // op Scale: a × gain + offset
+        me.ModulatorSet(mt, mth, 10, mac);           // input A
+        me.ModulatorSet(mt, mth, 4, 1.5f);           // gain
+        int lfo = me.ModulatorAdd(mt, 0);
+        me.ModulatorSet(mt, lfo, 4, 1.5f);
+        Check(Math.Abs(me.ModulatorGet(mt, mth, 4) - 1.5f) < 1e-3, "Math gain keeps 1.5 (range 0..2)");
+        Check(Math.Abs(me.ModulatorGet(mt, lfo, 4) - 1.0f) < 1e-3, "LFO depth still clamps to 1.0");
+        me.ModulatorSet(mt, mth, 4, 3f);
+        Check(Math.Abs(me.ModulatorGet(mt, mth, 4) - 2.0f) < 1e-3, "Math gain clamps to 2.0");
+        me.ModulatorSet(mt, mth, 4, 1.5f);
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(me, new TransportState(120, 1, false, false), w);
+        string pdir = Path.Combine(Path.GetTempPath(), "nota-math-gain-" + Guid.NewGuid().ToString("N"));
+        ProjectService.Save(doc, pdir, me);
+        using var me2 = new NotaEngine();
+        ProjectService.Apply(ProjectService.Load(pdir), me2, pdir);
+        bool ok = me2.TryGetTrackInfo(0, out var t2) && me2.ModulatorCount(t2.Id) == 3
+                  && Math.Abs(me2.ModulatorGet(t2.Id, me2.ModulatorIdAt(t2.Id, 1), 4) - 1.5f) < 1e-3;
+        Check(ok, "Math gain 1.5 round-trips through save/load");
+        try { System.IO.Directory.Delete(pdir, true); } catch { }
+    }
 }
 
 // ===================== Instrument Rack: engine core =====================

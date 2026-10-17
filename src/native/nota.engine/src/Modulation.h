@@ -48,7 +48,7 @@ struct Modulator {
     std::atomic<int32_t> tempoSync{1};       // 1 = beats/cycle, 0 = free Hz
     std::atomic<float>   rateHz{1.0f};        // free-run rate
     std::atomic<float>   rateSyncBeats{0.5f}; // beats per cycle when synced (0.5 = 1/8)
-    std::atomic<float>   depth{1.0f};         // 0..1 output amplitude
+    std::atomic<float>   depth{1.0f};         // 0..1 output amplitude (Math: gain 0..2)
     std::atomic<float>   phase01{0.0f};       // 0..1 phase offset
     std::atomic<float>   attackMs{10.0f};     // env follower / ADSR rise time
     std::atomic<float>   releaseMs{120.0f};   // env follower / ADSR fall time
@@ -127,7 +127,8 @@ struct Modulator {
             case ModField::TempoSync:     tempoSync.store(v > 0.5f ? 1 : 0, std::memory_order_relaxed); break;
             case ModField::RateHz:        rateHz.store(v, std::memory_order_relaxed); break;
             case ModField::RateSyncBeats: rateSyncBeats.store(v, std::memory_order_relaxed); break;
-            case ModField::Depth:         depth.store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); break;
+            case ModField::Depth:         // a Math node's gain runs 0..2; every other depth 0..1 (#92)
+                depth.store(std::clamp(v, 0.0f, kind == ModulatorKind::Math ? 2.0f : 1.0f), std::memory_order_relaxed); break;
             case ModField::Phase:         phase01.store(v, std::memory_order_relaxed); break;
             case ModField::Attack:        attackMs.store(std::max(0.1f, v), std::memory_order_relaxed); break;
             case ModField::Release:       releaseMs.store(std::max(1.0f, v), std::memory_order_relaxed); break;

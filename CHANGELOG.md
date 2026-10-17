@@ -66,6 +66,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Settings → Shortcuts, `keyboard` now finds the whole "Play notes (computer keyboard)"
   group, and a query of several words (`play keyboard`, `loop record`) matches rows that
   contain every word, in any order.
+- **Modular: the Math node's Gain uses its whole range** (nota-daw/nota#92): Gain now goes
+  up to 2.00 as the knob shows. Before, anything above 1.00 was cut back to 1.00 and the
+  knob snapped back.
 
 ### Added
 - **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,

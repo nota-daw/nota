@@ -538,7 +538,12 @@ bool Engine::modulationSelfTest() {
     modulatorSet(tid, mth, static_cast<int32_t>(ModField::InputA), (float)ma);
     modulatorSet(tid, mth, static_cast<int32_t>(ModField::InputB), (float)mb);
     updateModulators(authoring_.get(), 0.0, 0.0, 0.01);
-    const bool mathOk = std::fabs(modulatorValue(tid, mth) - 0.7f) < 1e-3f;
+    bool mathOk = std::fabs(modulatorValue(tid, mth) - 0.7f) < 1e-3f;
+    // Scale with a gain above 1 (the Math gain runs 0..2, #92): 0.3 × 1.5 = 0.45.
+    modulatorSet(tid, mth, static_cast<int32_t>(ModField::Waveform), 4);          // op Scale
+    modulatorSet(tid, mth, static_cast<int32_t>(ModField::Depth), 1.5f);
+    updateModulators(authoring_.get(), 0.0, 0.0, 0.01);
+    mathOk = mathOk && std::fabs(modulatorValue(tid, mth) - 0.45f) < 1e-3f;
     envOk = envOk && mathOk;
 
     // Removing the modulator must drop all its remaining links.
