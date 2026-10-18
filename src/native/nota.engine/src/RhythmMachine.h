@@ -120,6 +120,7 @@ public:
 
     int32_t kind() const override { return 12; }
     const char* displayName() const override { return "Nota Rhythm"; }
+    bool handlesSustain() const override { return true; }   // drums ignore the pedal (#99)
 
     void setSampleRate(double sr) override {
         sampleRate_ = sr > 0 ? sr : 44100.0;

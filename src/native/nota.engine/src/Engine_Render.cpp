@@ -116,6 +116,38 @@ inline bool midiEvLess(const MidiEv& a, const MidiEv& b) {
     return a.off < b.off || (a.off == b.off && !a.on && b.on);
 }
 
+// The engine's sustain pedal (#99) for an instrument without a damper of its own: while the
+// pedal is down a released key's note-off waits in inst.pedalHeld; the pedal coming up sends
+// them all, and striking a held key again releases it right before the new note-on.
+inline bool pedalHolds(const Instrument& inst, int32_t pitch) {
+    return pitch >= 0 && pitch < 128 && ((inst.pedalHeld[pitch >> 6] >> (pitch & 63)) & 1u);
+}
+inline void sendNoteOn(Instrument& inst, int32_t pitch, float vel) {
+    if (pedalHolds(inst, pitch)) {
+        inst.pedalHeld[pitch >> 6] &= ~(uint64_t{1} << (pitch & 63));
+        inst.noteOff(pitch);
+    }
+    inst.noteOn(pitch, vel);
+}
+inline void sendNoteOff(Instrument& inst, int32_t pitch) {
+    if (inst.pedalDown && pitch >= 0 && pitch < 128 && !inst.handlesSustain()) {
+        inst.pedalHeld[pitch >> 6] |= uint64_t{1} << (pitch & 63);
+        return;
+    }
+    inst.noteOff(pitch);
+}
+inline void sendController(Instrument& inst, int32_t ctl, float value) {
+    if (ctl == kCtlSustain && !inst.handlesSustain()) {
+        inst.pedalDown = value >= 0.5f;
+        if (!inst.pedalDown) {
+            for (int32_t p = 0; p < 128; ++p)
+                if (pedalHolds(inst, p)) inst.noteOff(p);
+            inst.pedalHeld[0] = inst.pedalHeld[1] = 0;
+        }
+    }
+    inst.controller(ctl, value);
+}
+
 // Stop / jump: pedals left down and a bent wheel go back to rest (the chase that follows a jump
 // sets them again where the clip has them).
 inline void releaseHeldControllers(Instrument& inst) {
@@ -123,7 +155,7 @@ inline void releaseHeldControllers(Instrument& inst) {
         const float v = inst.deliveredCtl[ctl].load(std::memory_order_relaxed);
         if (std::isnan(v) || v == kCtlRest) continue;
         inst.deliveredCtl[ctl].store(kCtlRest, std::memory_order_relaxed);
-        inst.controller(ctl, kCtlRest);
+        sendController(inst, ctl, kCtlRest);
     }
 }
 
@@ -135,7 +167,7 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
         const int32_t ctl = dim - kCtlDimBase;
         if (ctl < 0 || ctl >= kCtlCount) return;
         inst.deliveredCtl[ctl].store(value, std::memory_order_relaxed);
-        inst.controller(ctl, value);
+        sendController(inst, ctl, value);
     } else {
         inst.noteExpression(pitch, dim, value);
     }
@@ -170,8 +202,8 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         const int32_t xOff = x < xn ? std::clamp(xev[x].off, 0, frames) : INT32_MAX;
         if (nOff <= xOff) {
             renderTo(nOff);
-            if (evs[k].on) inst.noteOn(evs[k].pitch, evs[k].vel);
-            else           inst.noteOff(evs[k].pitch);
+            if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
+            else           sendNoteOff(inst, evs[k].pitch);
             ++k;
         } else {
             renderTo(xOff);

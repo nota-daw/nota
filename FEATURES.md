@@ -297,9 +297,11 @@ track count and closes with Escape.
   Controllers move, copy, split, trim and consolidate with the clip and are saved with the
   project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's pressure.
   Live and from clips, hosted plug-ins get every controller (the pedal with its real value, for
-  half-pedalling); built-ins act on those they know — the pedal (Keys, Mosaic), the wheel,
-  pressure, CC74, and the mod wheel on synths with a *Mod Wheel* control (Bass, Monolith, Volt,
-  Aurora, Operator, Pentad, Consort). MCP `get_clip_controllers` / `set_clip_controller`.
+  half-pedalling); built-ins act on those they know — the pedal, the wheel, pressure, CC74,
+  and the mod wheel on synths with a *Mod Wheel* control (Bass, Monolith, Volt, Aurora,
+  Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
+  (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
+  MCP `get_clip_controllers` / `set_clip_controller`.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1

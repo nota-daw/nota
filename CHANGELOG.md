@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **The sustain pedal on every built-in instrument** (nota-daw/nota#99): with the pedal down,
+  released keys keep sounding on Synth, Sampler, Volt, Bass, Flux, Grain, Operator,
+  Wavetable, Physical, Pentad, Consort, Monolith and Pendulum (and on an Instrument Rack's
+  chains) until the pedal comes up; striking a held key again restarts it. It works for a
+  keyboard's pedal and for a pedal recorded or drawn in a clip. Keys, Mosaic and plug-ins keep
+  their own pedal handling, and drums (Drum Rack, Rhythm) ignore it.
 - **Release notes from the status bar** (nota-daw/nota#127): the version number at the
   bottom right of the main window, next to the sample rate, is now a button: click it to
   open What's New for the installed version (it never starts an update). Escape closes What's

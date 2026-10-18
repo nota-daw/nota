@@ -369,6 +369,7 @@ public:
     const char* displayName() const override { return "Nota Mosaic"; }
     void setSampleRate(double sr) override { sr_ = sr > 0 ? sr : 44100.0; }
     bool supportsMpe() const override { return true; }
+    bool handlesSustain() const override { return true; }   // holds released keys itself (CC64)
 
     // ---- the program (message thread) ---------------------------------------------------
     // Parses and starts loading `text`. A program whose files are all loaded already (a zone

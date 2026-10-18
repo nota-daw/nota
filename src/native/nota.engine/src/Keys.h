@@ -186,6 +186,7 @@ public:
 
     // MPE: bend → pitch, pressure → drive into the pickup (+ a little level), slide → pickup symmetry.
     bool supportsMpe() const override { return true; }
+    bool handlesSustain() const override { return true; }   // its own damper model (CC64)
     void noteExpression(int32_t pitch, int32_t dim, float value) override {
         if (pitch < 0) {
             if (dim == ExprSustain) cc64_ = value >= 0.5f;

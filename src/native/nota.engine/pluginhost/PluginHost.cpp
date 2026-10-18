@@ -692,6 +692,7 @@ public:
         editor_.onNoteOff = [this](int32_t pitch)            { guiNotes_.push({false, pitch, 0.0f}); };
     }
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
+    bool handlesSustain() const override { return true; }   // the plug-in gets CC64 itself
     ~PluginInstrument() override { if (plugin_) plugin_->removeListener(this); }
 
     void setSampleRate(double sr) override { prepare(sr); }

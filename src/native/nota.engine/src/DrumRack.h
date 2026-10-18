@@ -28,6 +28,7 @@ class DrumRack final : public RackInstrument {
 public:
     int32_t kind() const override { return 4; }   // built-in Drum Rack (project compat)
     const char* displayName() const override { return "Nota Drum Rack"; }
+    bool handlesSustain() const override { return true; }   // pads ignore the pedal (#99)
 
     // Route a note only to the pad(s) assigned to it, applying choke + tune and
     // arming the pad's decay envelope.
