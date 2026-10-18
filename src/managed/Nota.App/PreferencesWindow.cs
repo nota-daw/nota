@@ -1173,6 +1173,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
             ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
+            ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),

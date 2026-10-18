@@ -221,6 +221,10 @@ track count and closes with Escape.
 - **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
   its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
   editor; transposing the selection.
+  - **Note audition** (the speaker switch in the header, on by default): a note sounds while
+    it is placed, clicked or dragged, re-sounding at each new pitch.
+  - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
+    of that pitch; a vertical drag on the keys zooms the rows.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,

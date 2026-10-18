@@ -143,6 +143,9 @@ public sealed class Settings
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
+    /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
+    public bool PianoRollAudition { get; set; } = true;
 }
 
 public interface ISettingsService

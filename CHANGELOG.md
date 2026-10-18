@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Hear notes while you edit them in the piano roll** (nota-daw/nota#46): with the new
+  speaker switch in the clip editor's header on (it is by default), a note sounds on the
+  track's instrument while you place it, click it or drag it, and re-sounds at each new pitch
+  as you drag. The switch is remembered. Nothing is auditioned while a take is recording.
+- **Play the piano roll's keys** (nota-daw/nota#47): click a key on the left of the piano roll
+  to play it on the track's instrument, ⇧-drag down the keys to glide through them, and
+  ⌘-click (Ctrl-click) a key to select every note of that pitch (⇧ adds to the selection).
+  Dragging up or down on the keys still zooms the rows.
 - **The sustain pedal on every built-in instrument** (nota-daw/nota#99): with the pedal down,
   released keys keep sounding on Synth, Sampler, Volt, Bass, Flux, Grain, Operator,
   Wavetable, Physical, Pentad, Consort, Monolith and Pendulum (and on an Instrument Rack's
