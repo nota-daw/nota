@@ -9,6 +9,10 @@
 #   sudo apt install build-essential cmake ninja-build libasound2-dev \
 #     libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev \
 #     libfreetype6-dev libfontconfig1-dev
+# on EL8 (e.g. the manylinux_2_28 container the release builds in):
+#   dnf install gcc-toolset-14-gcc-c++ ninja-build alsa-lib-devel libX11-devel \
+#     libXext-devel libXrandr-devel libXinerama-devel libXcursor-devel \
+#     freetype-devel fontconfig-devel
 # (miniaudio runtime-links PulseAudio/ALSA via dlopen, so libpulse/libasound are
 # not needed at link time — only libasound2-dev for RtMidi.)
 #

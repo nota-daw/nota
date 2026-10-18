@@ -120,6 +120,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Linux: the AppImage runs on RHEL-class distros** (nota-daw/nota#82): Linux releases are
+  now built against a glibc 2.28 baseline (AlmaLinux 8 container) instead of the build
+  machine's glibc 2.39, so the AppImage starts on RHEL/Alma/Rocky 8 and 9, Debian 10+ and
+  every distro with glibc ≥ 2.28. CI now rejects any shipped binary that would need a newer
+  glibc or libstdc++.
 - **Drum Rack crash while loading a kit** (nota-daw/nota#177): building a Drum Rack kit (or
   any burst of rack edits) while audio was running could crash the audio engine with a
   use-after-free in the rack's render (seen on macOS). A rack keeps every replaced chain

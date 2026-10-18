@@ -33,7 +33,8 @@ Contents
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
-  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`). Settings live in
+  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
+  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
   `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
