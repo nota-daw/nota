@@ -70,7 +70,11 @@ JUCE module; the engine core is JUCE-free.
   the arrangement can be transposed to it.
 - **Transport**: play / stop / record, playhead position.
   - **Stop returns to the launch point** (a seek sets the start anchor).
-  - **Follow** — the arrangement follows the cursor (playhead stays centred).
+  - **Pause** (⇧Space) — the playhead stays where it stopped and Play carries on from there.
+  - **Follow** — the arrangement follows the cursor (playhead stays centred); scrolling away
+    during playback pauses it until **Show playhead** (P), the button or the next Play.
+  - **Show playhead** (P, View menu, or the arrow the ruler shows when it is off screen) —
+    scrolls the arrangement to the playhead without moving it.
   - **Launch quantize** (Q): None … 1/16 … 4 Bars — applied when launching slots and
     scenes in Session.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
@@ -80,7 +84,8 @@ JUCE module; the engine core is JUCE-free.
   power of two), grid and quantization.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
-- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection). Notes held across the
+- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
+  to resize it, the brace to move it; right-click the ruler to clear it). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).

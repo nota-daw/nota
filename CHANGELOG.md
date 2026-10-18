@@ -23,6 +23,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Pause** (nota-daw/nota#51): ⇧Space (and *Play / pause* in the Transport menu and the
+  command palette) stops with the playhead left where it is, and the next Play carries on from
+  there. Space still stops and goes back to where playback started.
+- **Show playhead** (nota-daw/nota#105): P (and View ▸ Show playhead) scrolls the Arrangement to
+  the playhead without moving it, the zoom or the selection — only when it is off screen, and
+  with what comes next in view. When the playhead is off screen an arrow at that end of the
+  ruler points to it; a click on the arrow does the same. Follow now pauses when you scroll
+  away during playback, instead of snapping back: the Follow button turns to an outline, and
+  P, a click on the button or the next Play picks it up again. Follow no longer scrolls the
+  lanes under a clip drag, trim or selection in progress.
+- **Resize, move and clear the loop region** (nota-daw/nota#125): drag either end of the loop
+  brace in the ruler to move just that end (a sideways cursor and a brighter edge show where
+  to grab), drag the brace itself to move the whole region, with ⌥ to leave the grid. The
+  start, end and length show while you drag. Right-click the ruler to turn the loop on or off,
+  loop the selection or **Clear loop region**, which forgets the region (turning the loop off
+  keeps it). Clips, notes and automation are never touched.
 - **The sustain pedal on every built-in instrument** (nota-daw/nota#99): with the pedal down,
   released keys keep sounding on Synth, Sampler, Volt, Bass, Flux, Grain, Operator,
   Wavetable, Physical, Pentad, Consort, Monolith and Pendulum (and on an Instrument Rack's

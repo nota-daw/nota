@@ -58,7 +58,8 @@ public partial class MainWindow
 
         if (e.Key == Key.Space)
         {
-            _commands.Run("transport.playStop");
+            // ⇧Space pauses instead: the playhead stays where it stopped (#51).
+            _commands.Run((e.KeyModifiers & KeyModifiers.Shift) != 0 ? "transport.playPause" : "transport.playStop");
             e.Handled = true;
         }
         else if (e.Key == Key.Return)
@@ -310,6 +311,14 @@ public partial class MainWindow
             && _editorRoll is not { GridFocused: true } && _heldKeys.Add(e.Key))
         {
             if (Timeline.ToggleSelectedClipsActive()) { _session?.Refresh(); _vm.StatusText = "Toggled clip(s)"; }
+            e.Handled = true;
+            return;
+        }
+
+        // P: Show playhead (#105) — scroll the arrangement to it, without moving it.
+        if (!mod && e.Key == Key.P && (e.KeyModifiers & KeyModifiers.Shift) == 0 && _heldKeys.Add(e.Key))
+        {
+            _commands.Run("view.showPlayhead");
             e.Handled = true;
             return;
         }

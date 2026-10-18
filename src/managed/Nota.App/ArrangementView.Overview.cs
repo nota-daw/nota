@@ -93,6 +93,7 @@ public sealed partial class ArrangementView
     internal void ApplyOverviewView(double pixelsPerBeat, double startBeat)
     {
         _pixelsPerBeat = Math.Clamp(pixelsPerBeat, 4, 240);
+        if (Math.Abs(Math.Max(0, startBeat) - _scrollBeats) > 1e-9) NoteManualScroll();
         _scrollBeats = Math.Max(0, startBeat);
         SyncScroll(_lanes.Bounds.Width);   // clamps the scroll to range + syncs the scrollbar
         Redraw();

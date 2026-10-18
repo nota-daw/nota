@@ -296,7 +296,7 @@ public sealed partial class ArrangementView : UserControl
         _headerColumnParts.Add(_headerDropRing);
         _headerColumnParts.Add(_footerDropRing);
         _hScroll = new ThinScrollBar();
-        _hScroll.Scroll += (_, _) => { _scrollBeats = _hScroll.Value; Redraw(); };
+        _hScroll.Scroll += (_, _) => { _scrollBeats = _hScroll.Value; NoteManualScroll(); Redraw(); };
         // Keep the scroll range in sync with the visible width — outside the
         // render pass (mutating controls during Render() is illegal / crashes).
         _lanes.SizeChanged += (_, _) => SyncScroll(_lanes.Bounds.Width);
@@ -530,8 +530,66 @@ public sealed partial class ArrangementView : UserControl
     internal IReadOnlyList<TrackVM> Tracks => _tracks;
 
     /// <summary>When on, the grid scrolls to keep the playhead centred during playback
-    /// ("Follow"); the transport-bar Follow toggle drives this.</summary>
-    public bool FollowPlayhead { get; set; }
+    /// ("Follow"); the transport-bar Follow toggle drives this. Setting it (either way)
+    /// clears a suspension.</summary>
+    public bool FollowPlayhead
+    {
+        get => _followPlayhead;
+        set { _followPlayhead = value; SetFollowSuspended(false); }
+    }
+    private bool _followPlayhead;
+
+    /// <summary>Follow is on but paused because the user scrolled the lanes away during
+    /// playback (#105): the view stays where they took it until Show playhead, the Follow
+    /// toggle or the next Play picks it up again.</summary>
+    public bool FollowSuspended { get; private set; }
+    /// <summary>Raised when <see cref="FollowSuspended"/> flips, for the transport button and status.</summary>
+    public event Action? FollowSuspendedChanged;
+    private void SetFollowSuspended(bool on)
+    {
+        if (FollowSuspended == on) return;
+        FollowSuspended = on;
+        FollowSuspendedChanged?.Invoke();
+    }
+    private bool _wasPlaying;
+
+    // A scroll the user asked for (wheel, scrollbar, overview strip, drag auto-scroll):
+    // while Follow is driving the view during playback, it pauses Follow instead of being
+    // undone on the next tick.
+    private void NoteManualScroll()
+    {
+        if (!_followPlayhead || _engine is not { IsPlaying: true }) return;
+        _wasPlaying = true;   // this run is under way: the next tick must not read it as a new Play
+        SetFollowSuspended(true);
+    }
+
+    /// <summary>Show playhead (#105): bring the playhead into view without moving it, the
+    /// zoom, the tracks' vertical position or the selection. Does nothing when it is already
+    /// comfortably on screen; otherwise it lands a quarter of the way in, with what comes
+    /// next in view. Also resumes a suspended Follow. False when there was nothing to do.</summary>
+    public bool RevealPlayhead()
+    {
+        SetFollowSuspended(false);
+        double laneWidth = _lanes.Bounds.Width;
+        if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
+        double viewportBeats = laneWidth / _pixelsPerBeat;
+        double rel = _playheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
+        if (rel >= margin && rel <= viewportBeats - margin) return false;
+        double target = Math.Clamp(_playheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
+        if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
+        _scrollBeats = target;
+        _hScroll.Value = target;
+        Redraw();
+        return true;
+    }
+
+    /// <summary>Where the playhead sits relative to the lanes: −1 left of the view, +1 right
+    /// of it, 0 on screen (the ruler draws an arrow at that edge, #105).</summary>
+    internal int PlayheadOffscreen()
+    {
+        double x = BeatToX(_playheadBeats), w = _lanes.Bounds.Width;
+        return w <= 0 ? 0 : x < 0 ? -1 : x > w ? 1 : 0;
+    }
 
     /// <summary>Snap the view to the playhead now (called when Follow is switched on so the
     /// grid jumps to the cursor immediately, without waiting for the next playback tick).</summary>
@@ -570,7 +628,11 @@ public sealed partial class ArrangementView : UserControl
         _playheadBeats = beats;
         // While following, the view scrolls under the playhead — the lane surface (clips /
         // waveforms) must repaint along with the ruler+overlay, not just the overlay.
-        bool scrolled = FollowPlayhead && _engine is { IsPlaying: true } && CenterOnPlayhead();
+        // Every Play starts Follow afresh, even when the last run left it paused.
+        bool playing = _engine is { IsPlaying: true };
+        if (playing && !_wasPlaying) SetFollowSuspended(false);
+        _wasPlaying = playing;
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
@@ -631,7 +693,81 @@ public sealed partial class ArrangementView : UserControl
         SetLoopRegion(_loopS, _loopE);
     }
 
-    private void CancelLoopPreview() { _loopDragging = false; }
+    private void CancelLoopPreview() { _loopDragging = false; Redraw(); }
+
+    /// <summary>Live preview of one loop edge dragged on the ruler (#125): the other edge
+    /// stays exactly where it was; the dragged one snaps (unless <paramref name="free"/>)
+    /// and stops a grid step short of the other.</summary>
+    private void SetLoopEdgePreview(bool start, double beat, bool free)
+    {
+        _loopDragging = true;
+        double b = Math.Max(0, free ? beat : Snap(beat));
+        double min = free ? 1.0 / 64 : SnapStepBeats;
+        if (start) _loopS = Math.Min(b, _loopE - min);
+        else _loopE = Math.Max(b, _loopS + min);
+        _loopS = Math.Max(0, _loopS);
+        Redraw();
+    }
+
+    /// <summary>Live preview of the loop region dragged by its brace (#125): same length,
+    /// start moved by <paramref name="delta"/> beats, snapped unless free, never before 0.</summary>
+    private void SetLoopMovePreview(double origStart, double origEnd, double delta, bool free)
+    {
+        _loopDragging = true;
+        double len = origEnd - origStart;
+        double s = Math.Max(0, free ? origStart + delta : origStart + Snap(delta));
+        _loopS = s; _loopE = s + len;
+        Redraw();
+    }
+
+    /// <summary>Commit a moved / resized region as previewed (no re-snap: the edge that was
+    /// not dragged keeps its exact position). Keeps the loop's on/off state.</summary>
+    private void CommitLoopEdit()
+    {
+        _loopDragging = false;
+        if (_engine is null || !(_loopE > _loopS)) return;
+        _engine.SetLoop(_loopActive, _loopS, _loopE);
+        Redraw();
+        LoopChanged?.Invoke();
+    }
+
+    /// <summary>"5.1 – 9.1 · 4 bars": the loop region while it is dragged on the ruler.</summary>
+    private string LoopReadout()
+    {
+        string Pos(double b)   // bar.beat, as the transport's loop cell writes it
+        {
+            int bar = (int)Math.Floor(b / _beatsPerBar + 1e-9);
+            int beat = (int)Math.Floor(b - bar * _beatsPerBar + 1e-9);
+            return $"{bar + 1}.{beat + 1}";
+        }
+        double len = _loopE - _loopS, bars = len / _beatsPerBar;
+        string l = Math.Abs(bars - Math.Round(bars)) < 1e-6
+            ? (Math.Round(bars) == 1 ? "1 bar" : $"{Math.Round(bars)} bars")
+            : $"{len:0.##} beats";
+        return $"{Pos(_loopS)} – {Pos(_loopE)} · {l}";
+    }
+
+    /// <summary>Turn looping on / off over the current region (the ruler's menu).</summary>
+    private void SetLoopOn(bool on)
+    {
+        if (_engine is null) return;
+        if (on && !(_loopE > _loopS)) { _loopS = 0; _loopE = 4 * _beatsPerBar; }   // as the transport's Loop does
+        _loopActive = on;
+        _engine.SetLoop(on, _loopS, _loopE);
+        Redraw();
+        LoopChanged?.Invoke();
+    }
+
+    /// <summary>Clear loop region (#125): loop off and the region forgotten, where turning
+    /// the loop off keeps it. Clips, notes and automation are not touched.</summary>
+    internal void ClearLoopRegion()
+    {
+        if (_engine is null) return;
+        _engine.SetLoop(false, 0, 0);
+        _loopActive = false; _loopS = 0; _loopE = 0; _loopDragging = false;
+        Redraw();
+        LoopChanged?.Invoke();
+    }
 
     /// <summary>Enable looping over [start,end] (snapped). Notifies the transport bar.</summary>
     internal void SetLoopRegion(double startBeat, double endBeat)
@@ -945,6 +1081,7 @@ public sealed partial class ArrangementView : UserControl
 
     internal void ScrollByBeats(double delta)
     {
+        NoteManualScroll();
         _scrollBeats = Math.Clamp(_scrollBeats + delta, 0, _hScroll.Maximum);
         _hScroll.Value = _scrollBeats;
         Redraw();
@@ -2739,6 +2876,8 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush LoopBrace = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     private static readonly IBrush LoopBand = NotaPalette.Wash(NotaPalette.AccentBright, 0x14);
     private static readonly IPen   LoopEdge = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1);
+    private static readonly IPen   LoopEdgeHot = new Pen(NotaPalette.AccentBright, 2);
+    private static readonly IBrush ReadoutText = NotaPalette.TextPrimary;
     // A switched-off loop keeps its brace on the ruler, in neutral grey (the accent is for what's live).
     private static readonly IBrush LoopBraceOff = NotaPalette.Wash(NotaPalette.TextTertiary, 0x38);
     private static readonly IPen   LoopEdgeOff = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x80), 1);

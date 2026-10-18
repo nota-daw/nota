@@ -23,37 +23,120 @@ public sealed partial class ArrangementView
     private sealed class RulerControl : Control
     {
         private readonly ArrangementView _o;
-        public RulerControl(ArrangementView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
+        public RulerControl(ArrangementView o) { _o = o; Cursor = HandCursor; }
 
-        private double _pressBeat;
-        private bool _dragging;   // a click scrubs the playhead; a drag defines a loop region
-        private bool _toggled;    // this press double-clicked the loop brace: no seek, no drag
+        private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+        private static readonly Cursor EdgeCursor = new(StandardCursorType.SizeWestEast);
+        private const double EdgeGrab = 5;      // px either side of a loop edge that grabs it
+        private const double ArrowZone = 14;    // px at the end of the ruler the off-screen arrow owns
+
+        // A click scrubs the playhead; a drag draws a loop region. On the loop brace a drag
+        // moves the region, on either edge it resizes that edge alone (#125).
+        private enum Gesture { None, Pending, Draw, Move, ResizeStart, ResizeEnd, Done }
+        private Gesture _gesture;
+        private Gesture _onRelease;             // what this press becomes once it drags
+        private double _pressBeat, _pressX;
+        private double _origS, _origE;
 
         private double BeatAt(PointerEventArgs e) => _o._scrollBeats + e.GetPosition(this).X / _o._pixelsPerBeat;
 
+        // Which loop edge (−1 start, +1 end, 0 none) is under x; the closer one on a short loop.
+        private int EdgeAt(double x)
+        {
+            if (!(_o._loopE > _o._loopS)) return 0;
+            double ds = Math.Abs(x - _o.BeatToX(_o._loopS)), de = Math.Abs(x - _o.BeatToX(_o._loopE));
+            if (Math.Min(ds, de) > EdgeGrab) return 0;
+            return ds <= de ? -1 : 1;
+        }
+        private bool OnBrace(double beat) => _o._loopE > _o._loopS && beat > _o._loopS && beat < _o._loopE;
+        private bool OnArrow(double x)
+        {
+            int side = _o.PlayheadOffscreen();
+            return side < 0 ? x < ArrowZone : side > 0 && x > Bounds.Width - ArrowZone;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
-            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-            _pressBeat = BeatAt(e);
-            _dragging = false;
+            var pt = e.GetCurrentPoint(this);
+            if (pt.Properties.IsRightButtonPressed) { ShowMenu(); e.Handled = true; return; }
+            if (!pt.Properties.IsLeftButtonPressed) return;
+            double x = e.GetPosition(this).X;
+            _pressBeat = BeatAt(e); _pressX = x;
+            _origS = _o._loopS; _origE = _o._loopE;
+            _gesture = Gesture.Pending;
+            int edge = EdgeAt(x);
+            if (OnArrow(x)) { _o.RevealPlayhead(); _gesture = Gesture.Done; }   // the off-screen arrow (#105)
             // Double-click on the loop brace turns the loop off / on; the region stays (#59).
-            _toggled = e.ClickCount == 2 && _o.ToggleLoopAt(_pressBeat);
+            else if (e.ClickCount == 2 && _o.ToggleLoopAt(_pressBeat)) _gesture = Gesture.Done;
+            // A click still seeks; only a drag past a few pixels becomes one of these.
+            _onRelease = edge < 0 ? Gesture.ResizeStart : edge > 0 ? Gesture.ResizeEnd
+                       : OnBrace(_pressBeat) ? Gesture.Move : Gesture.Draw;
             e.Pointer.Capture(this); e.Handled = true;
         }
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            if (_toggled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            double x = e.GetPosition(this).X;
+            if (_gesture == Gesture.None)
+            {
+                // Hover: a sideways arrow over a loop edge says it can be dragged.
+                int edge = EdgeAt(x);
+                var want = edge != 0 ? EdgeCursor : HandCursor;
+                if (Cursor != want) Cursor = want;
+                if (edge != _hotEdge) { _hotEdge = edge; InvalidateVisual(); }
+                return;
+            }
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _gesture == Gesture.Done) return;
             double cur = BeatAt(e);
-            if (!_dragging && Math.Abs(cur - _pressBeat) * _o._pixelsPerBeat > 4) _dragging = true;
-            if (_dragging) _o.SetLoopPreview(_pressBeat, cur);
+            if (_gesture == Gesture.Pending && Math.Abs(x - _pressX) > 4) _gesture = _onRelease;
+            bool free = (e.KeyModifiers & KeyModifiers.Alt) != 0;   // ⌥ = off the grid
+            switch (_gesture)
+            {
+                case Gesture.Draw: _o.SetLoopPreview(_pressBeat, cur); break;
+                case Gesture.Move: _o.SetLoopMovePreview(_origS, _origE, cur - _pressBeat, free); break;
+                case Gesture.ResizeStart: _o.SetLoopEdgePreview(start: true, cur, free); break;
+                case Gesture.ResizeEnd: _o.SetLoopEdgePreview(start: false, cur, free); break;
+            }
         }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (_toggled) { }                           // the double-click already toggled the loop
-            else if (_dragging) _o.CommitLoopPreview(); // drag → loop region
-            else _o.SeekTo(_pressBeat);                 // plain click → scrub playhead
-            _dragging = false; _toggled = false;
+            switch (_gesture)
+            {
+                case Gesture.Pending: _o.SeekTo(_pressBeat); break;   // plain click → scrub playhead
+                case Gesture.Draw: _o.CommitLoopPreview(); break;      // drag → loop region
+                case Gesture.Move or Gesture.ResizeStart or Gesture.ResizeEnd: _o.CommitLoopEdit(); break;
+            }
+            _gesture = Gesture.None;
+            Cursor = EdgeAt(e.GetPosition(this).X) != 0 ? EdgeCursor : HandCursor;
             e.Pointer.Capture(null);
+        }
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            if (_gesture is Gesture.Draw or Gesture.Move or Gesture.ResizeStart or Gesture.ResizeEnd) _o.CancelLoopPreview();
+            _gesture = Gesture.None;
+        }
+        protected override void OnPointerExited(PointerEventArgs e)
+        {
+            if (_hotEdge != 0) { _hotEdge = 0; InvalidateVisual(); }
+        }
+        private int _hotEdge;   // the loop edge under the pointer, drawn brighter
+
+        // Right-click: the loop region's commands (#125). Clearing forgets the region — unlike
+        // turning the loop off, which keeps it for a double-click to bring back.
+        private void ShowMenu()
+        {
+            var flyout = new MenuFlyout();
+            bool has = _o._loopE > _o._loopS;
+            var toggle = new MenuItem { Header = _o._loopActive ? "Turn loop off" : "Turn loop on", Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
+            toggle.Click += (_, _) => _o.SetLoopOn(!_o._loopActive);
+            var sel = new MenuItem { Header = "Loop selection", Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
+            sel.Click += (_, _) => { if (_o.SelectionLoopRange() is { } r) _o.SetLoopRegion(r.Start, r.End); };
+            var clear = new MenuItem { Header = "Clear loop region", Icon = MenuKit.Icon(GlyphKind.Trash), IsEnabled = has };
+            clear.Click += (_, _) => _o.ClearLoopRegion();
+            flyout.Items.Add(toggle);
+            flyout.Items.Add(sel);
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(clear);
+            flyout.ShowAt(this, showAtPointer: true);
         }
 
         public override void Render(DrawingContext ctx)
@@ -73,6 +156,13 @@ public sealed partial class ArrangementView
                     ctx.FillRectangle(fill, new Rect(cx0, 0, cx1 - cx0, h));
                     if (lx0 >= 0) ctx.DrawLine(edge, new Point(lx0, 0), new Point(lx0, h));
                     if (lx1 <= w) ctx.DrawLine(edge, new Point(lx1, 0), new Point(lx1, h));
+                    // The edge under the pointer (or being dragged) brightens: it can be grabbed.
+                    int hot = _gesture == Gesture.ResizeStart ? -1 : _gesture == Gesture.ResizeEnd ? 1 : _gesture is Gesture.None or Gesture.Pending ? _hotEdge : 0;
+                    if (hot != 0)
+                    {
+                        double hx = hot < 0 ? lx0 : lx1;
+                        if (hx >= 0 && hx <= w) ctx.DrawLine(LoopEdgeHot, new Point(hx, 0), new Point(hx, h));
+                    }
                 }
             }
 
@@ -107,6 +197,35 @@ public sealed partial class ArrangementView
                     g.EndFigure(true);
                 }
                 ctx.DrawGeometry(PlayheadBrush, null, tri);
+            }
+
+            // Playhead off screen (#105): a small arrow at that end of the ruler; a click on
+            // it brings the playhead into view.
+            int side = _o.PlayheadOffscreen();
+            if (side != 0)
+            {
+                double ax = side < 0 ? 4 : w - 4, cy = h / 2, d = side < 0 ? 1 : -1;
+                ctx.FillRectangle(ChromeBg, new Rect(side < 0 ? 0 : w - ArrowZone, 0, ArrowZone, h));   // over a bar label
+                var arrow = new StreamGeometry();
+                using (var g = arrow.Open())
+                {
+                    g.BeginFigure(new Point(ax, cy), true);
+                    g.LineTo(new Point(ax + d * 6, cy - 4.5));
+                    g.LineTo(new Point(ax + d * 6, cy + 4.5));
+                    g.EndFigure(true);
+                }
+                ctx.DrawGeometry(PlayheadBrush, null, arrow);
+            }
+
+            // While a loop region is drawn, moved or resized: its start, end and length.
+            if (_o._loopDragging && _o._loopE > _o._loopS)
+            {
+                var ft = new FormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, ReadoutText);
+                double tx = Math.Clamp(_o.BeatToX(_o._loopE) + 6, 2, Math.Max(2, w - ft.Width - 6));
+                var box = new Rect(tx - 3, 2, ft.Width + 6, h - 4);
+                ctx.FillRectangle(ChromeBg, box);
+                ctx.DrawText(ft, new Point(tx, (h - ft.Height) / 2));
             }
         }
     }

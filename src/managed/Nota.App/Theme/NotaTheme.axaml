@@ -280,6 +280,13 @@
   <Style Selector="ToggleButton.tp-icon.rec:checked">
     <Setter Property="Foreground" Value="{DynamicResource Brush.RecordInk}"/>
   </Style>
+  <!-- Follow, paused because the view was scrolled away (#105): still on, no longer live —
+       an accent outline and glyph on the resting key instead of the solid accent key. -->
+  <Style Selector="ToggleButton.tp-icon.paused:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Accent}"/>
+  </Style>
   <!-- Play: a raised key like its neighbours at rest, wider; while the transport runs it is
        a solid accent key (live). -->
   <Style Selector="Button.tp-play">

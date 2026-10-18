@@ -353,6 +353,8 @@ public partial class MainWindow : Window
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
         vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
+        Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
+        Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
         Browser.CollapsedChanged += OnBrowserCollapsedChanged;
@@ -795,7 +797,12 @@ public partial class MainWindow : Window
 
     // Follow: keep the arrangement scrolling with the playhead during playback. The bar
     // button and View ▸ Follow playhead are two faces of one state, so both land here.
-    private void OnToggleFollow(object? sender, RoutedEventArgs e) => SetFollowPlayhead(FollowBtn.IsChecked == true);
+    // A click on a paused Follow picks it up again rather than turning it off.
+    private void OnToggleFollow(object? sender, RoutedEventArgs e)
+    {
+        if (Timeline.FollowSuspended && FollowBtn.IsChecked != true) FollowBtn.IsChecked = true;
+        SetFollowPlayhead(FollowBtn.IsChecked == true);
+    }
 
     internal void SetFollowPlayhead(bool on)
     {
@@ -810,6 +817,27 @@ public partial class MainWindow : Window
     }
 
     private NativeMenuItem? _followMenuItem;
+
+    // Show playhead (#105, P / View menu / the ruler's off-screen arrow): a one-shot scroll
+    // to the playhead that also picks up a paused Follow.
+    private void ShowPlayhead()
+    {
+        bool resumed = Timeline.FollowPlayhead && Timeline.FollowSuspended;
+        Timeline.RevealPlayhead();
+        if (_vm is not null && resumed) _vm.StatusText = "Following the playhead";
+    }
+
+    // Follow pauses when the lanes are scrolled away during playback (#105); the Follow
+    // button dims to say so and the status bar says how to pick it up again.
+    private void OnFollowSuspendedChanged()
+    {
+        bool paused = Timeline.FollowSuspended;
+        FollowBtn.Classes.Set("paused", paused);
+        ToolTip.SetTip(FollowBtn, paused
+            ? "Follow is paused while you look elsewhere · P or a click here picks it up again"
+            : "Scroll the arrangement to keep the playhead in view");
+        if (paused && _vm is not null) _vm.StatusText = "Follow paused · press P to go back to the playhead";
+    }
 
     private static NativeMenuItem? FindMenuItem(NativeMenu? menu, string header)
     {

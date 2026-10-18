@@ -115,7 +115,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _syncingLoop = true;
         LoopOn = _engine.LoopEnabled;
         _syncingLoop = false;
-        LoopRangeText = FormatRange(_engine.LoopStart, _engine.LoopEnd);
+        double s = _engine.LoopStart, e = _engine.LoopEnd;
+        if (e <= s) { s = 0; e = 4 * BeatsPerBar; }   // a cleared region: what Loop would use (#125)
+        LoopRangeText = FormatRange(s, e);
     }
 
     private static string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
@@ -164,6 +166,23 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
 
     [RelayCommand]
     private void Play() => _engine.PlayWithCountIn();
+
+    /// <summary>⇧Space (#51): Play / pause. Stop rewinds to where playback started (the
+    /// engine's start anchor); pause leaves the playhead where it is, and the next Play
+    /// carries on from there. Seeking there is what moves the anchor.</summary>
+    [RelayCommand]
+    private void PlayPause()
+    {
+        if (_engine.IsPlaying || _engine.CountInBeats > 0 || RecordOn)
+        {
+            bool counting = !_engine.IsPlaying;
+            double here = _engine.PositionBeats;
+            StopAll();
+            if (!counting) _engine.Seek(here);   // a count-in hasn't moved anything yet
+            Message?.Invoke("Paused · Play carries on from here");
+        }
+        else _engine.PlayWithCountIn();
+    }
 
     [RelayCommand]
     private void Stop()

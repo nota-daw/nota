@@ -60,6 +60,7 @@ public static class CommandCatalog
         C("view.toggleOverview", "Toggle overview", "View", "", "minimap", view: "Arrangement"),
         C("view.toggleSections", "Toggle sections", "View", "", "markers locators", view: "Arrangement"),
         C("view.follow", "Follow playhead", "View", "", "scroll"),
+        C("view.showPlayhead", "Show playhead", "View", Shortcut.None('P'), "find locate scroll reveal cursor position", view: "Arrangement"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
         C("view.automation", "Toggle automation mode", "View", Shortcut.CmdShift('A'), "envelopes lanes", view: "Arrangement"),
         C("view.history", "Show version history", "View", "", "undo history versions snapshots"),
@@ -69,6 +70,7 @@ public static class CommandCatalog
 
         // ---- Transport --------------------------------------------------------------------
         C("transport.playStop", "Play / stop", "Transport", Shortcut.None("Space"), "start pause"),
+        C("transport.playPause", "Play / pause", "Transport", Shortcut.Shift("Space"), "resume continue hold"),
         C("transport.stop", "Stop", "Transport", Shortcut.None("Return"), "halt"),
         C("transport.record", "Record", "Transport", Shortcut.Cmd('R'), "arm capture"),
         C("transport.loop", "Toggle loop", "Transport", Shortcut.Cmd('L'), "cycle repeat"),

@@ -87,6 +87,7 @@
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
             <NativeMenuItem Header="Follow playhead" app:Commands.Id="view.follow" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="Show playhead" app:Commands.Id="view.showPlayhead"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Clip names" app:Commands.Id="view.clipNames"/>
           </NativeMenu>
@@ -96,6 +97,7 @@
         <NativeMenuItem.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
+            <NativeMenuItem Header="Play / pause" app:Commands.Id="transport.playPause"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>

@@ -77,6 +77,7 @@ public partial class MainWindow
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
         B("view.follow", () => OnMenuToggleFollow(this, e));
+        B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
         B("view.automation", () =>
         {
@@ -90,6 +91,7 @@ public partial class MainWindow
 
         // ---- Transport
         B("transport.playStop", () => _vm?.Transport.PlayStopCommand.Execute(null));
+        B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
         B("transport.loop", () => OnMenuLoop(this, e));

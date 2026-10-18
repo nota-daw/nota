@@ -140,6 +140,9 @@ public sealed partial class ArrangementView
         private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
         private double _rangeAnchor;
         public bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
+        /// <summary>A clip drag / trim, marquee, time-range or envelope edit is in progress:
+        /// Follow must not scroll the lanes out from under it (#105).</summary>
+        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _rangeTrack is not null || IsEditingPoint;
         private double RowTop(int i) => _o.RowTop(i);
         private double RowH(int i) => _o.RowHeightAt(i);
         // Target-selector pill: width fits its label so nothing clips.
