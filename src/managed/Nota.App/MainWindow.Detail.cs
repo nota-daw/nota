@@ -393,6 +393,15 @@ public partial class MainWindow
         ShowDetail(250, honorPersist: true);
     }
 
+    // Piano-roll audition (#46/#47) plays into the clip's own track, armed or not. Not while
+    // a take is recording: a track's live notes are recorded, and a tap on a key mid-take
+    // must not land in the clip.
+    private void AuditionNoteOn(int trackId, int pitch, float velocity)
+    {
+        if (Engine.IsRecording) return;
+        Engine.TrackNoteOn(trackId, pitch, velocity);
+    }
+
     // Build the piano-roll editor for a specific arrangement clip (no panel switch).
     private void BuildClipEditor(int trackId, int clipIndex)
     {
@@ -434,6 +443,8 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
             // The ruler moves the transport (#50): clip-local beat → arrangement beat.
             Seek = local =>
             {
@@ -641,6 +652,8 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
         };
         double slotLen = Engine.SessionSlotLength(trackId, scene);
         roll.SetTrackColor(TrackBrush(trackId));

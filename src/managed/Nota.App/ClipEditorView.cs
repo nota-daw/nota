@@ -61,11 +61,28 @@ public sealed class ClipEditorView : UserControl
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
+            Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
         var header = Header(roll.TrackBrush, clipName, "MIDI", tabs, null, right);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+    }
+
+    // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's
+    // chip follows a flip made in another.
+    private static Control AuditionControl()
+    {
+        var b = new ToggleButton
+        {
+            Content = new Glyph(GlyphKind.Speaker, 14), Padding = new Thickness(8, 0), Classes = { "chip" },
+            IsChecked = PianoRollView.AuditionEnabled,
+        };
+        ToolTip.SetTip(b, "Hear notes as you place, click or drag them");
+        b.Click += (_, _) => PianoRollView.SetAuditionEnabled(b.IsChecked == true);
+        void Sync() => b.IsChecked = PianoRollView.AuditionEnabled;
+        b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.AuditionToggled += Sync; };
+        b.DetachedFromVisualTree += (_, _) => PianoRollView.AuditionToggled -= Sync;
+        return b;
     }
 
     // Fit to notes (⇧F): rows zoom so every note of the clip is in view.

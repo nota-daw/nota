@@ -362,6 +362,10 @@ public partial class MainWindow : Window
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
+        // The piano roll's note audition (speaker chip) persists too.
+        PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
+        PianoRollView.AuditionToggled -= OnAuditionToggled;
+        PianoRollView.AuditionToggled += OnAuditionToggled;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
         vm.Transport.PropertyChanged += (_, e) =>
@@ -817,6 +821,14 @@ public partial class MainWindow : Window
     }
 
     private NativeMenuItem? _followMenuItem;
+
+    private void OnAuditionToggled()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollAudition = PianoRollView.AuditionEnabled;
+        _vm.Settings.Save();
+        _vm.StatusText = PianoRollView.AuditionEnabled ? "Note audition on" : "Note audition off";
+    }
 
     // Show playhead (#105, P / View menu / the ruler's off-screen arrow): a one-shot scroll
     // to the playhead that also picks up a paused Follow.
