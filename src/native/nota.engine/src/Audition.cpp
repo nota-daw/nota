@@ -456,6 +456,7 @@ public:
 
     int32_t kind() const override { return 4; }
     const char* displayName() const override { return "Kit"; }
+    bool handlesSustain() const override { return true; }
 
 private:
     static constexpr int64_t kIdle = 48000;   // ~1 s of silence ends a pad's tail

@@ -68,6 +68,16 @@ public:
         }
     }
 
+    // The sustain pedal for instruments without a damper of their own (#99): while CC64 is
+    // down the engine holds back their note-offs and sends them when it comes up, and a
+    // re-struck held key is released right before it sounds again (Engine_Render.cpp,
+    // playEvents / deliverExpr). An instrument that models the pedal itself (Keys, Mosaic, a
+    // hosted plug-in) or ignores it on purpose (drums) returns true and is left alone.
+    virtual bool handlesSustain() const { return false; }
+    // The engine's damper state for this instrument. Audio thread only.
+    bool     pedalDown = false;
+    uint64_t pedalHeld[2] = { 0, 0 };   // released keys the pedal is holding, one bit per pitch
+
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
 

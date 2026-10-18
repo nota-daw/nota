@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **The sustain pedal on every built-in instrument** (nota-daw/nota#99): with the pedal down,
+  released keys keep sounding on Synth, Sampler, Volt, Bass, Flux, Grain, Operator,
+  Wavetable, Physical, Pentad, Consort, Monolith and Pendulum (and on an Instrument Rack's
+  chains) until the pedal comes up; striking a held key again restarts it. It works for a
+  keyboard's pedal and for a pedal recorded or drawn in a clip. Keys, Mosaic and plug-ins keep
+  their own pedal handling, and drums (Drum Rack, Rhythm) ignore it.
 - **Move the playhead from the clip editor** (nota-daw/nota#50): click the piano roll's ruler
   to put the playhead there, or drag along it to scrub (snapped to the grid); while playing,
   playback carries on from the new spot. The piano roll now shows the playhead when stopped
@@ -90,6 +96,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Drum Rack crash while loading a kit** (nota-daw/nota#177): building a Drum Rack kit (or
+  any burst of rack edits) while audio was running could crash the audio engine with a
+  use-after-free in the rack's render (seen on macOS). A rack keeps every replaced chain
+  layout alive until the audio thread has finished two more blocks, instead of only the last
+  16 edits; the Instrument Rack, Audio Effect Rack and Rhythm's voice effects get the same fix.
 - **Horizontal sliders drag sideways** (nota-daw/nota#115): every horizontal slider on the
   devices (ADSR, mix, depth…) now follows a left/right drag, with the handle under the
   pointer, instead of only responding to an up/down drag. Vertical dragging still works,

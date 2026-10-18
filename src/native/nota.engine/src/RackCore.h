@@ -18,6 +18,7 @@
 #pragma once
 
 #include "Instrument.h"
+#include "SnapshotHistory.h"
 #include "Device.h"
 
 #include "Synth.h"
@@ -129,8 +130,9 @@ public:
     }
     virtual ~RackCore() = default;
 
-    // Audio-thread view of the current snapshot (raw pointer, retained by states_).
-    RackState* live() const { return live_.load(std::memory_order_acquire); }
+    // Audio-thread view of the current snapshot (raw pointer, retained by states_
+    // until the renders that could still hold it have finished).
+    RackState* live() const { return states_.live(); }
 
     // Fan the transport snapshot out to every chain child so hosted plugins nested
     // in a rack sync to the DAW clock too (the Instrument/Device overrides call this).
@@ -694,6 +696,10 @@ public:
 protected:
     static std::shared_ptr<Device> makeDevice(int32_t kind) { return makeChainDevice(kind); }
 
+    // Audio thread: hold one for the whole render/process call (it ends the render
+    // epoch that frees retired snapshots).
+    SnapshotHistory<RackState>::RenderScope renderScope() { return SnapshotHistory<RackState>::RenderScope(states_); }
+
     // Macro response curve applied to the 0..1 value before mapping to [min,max].
     static float applyCurve(float v, int32_t curve) {
         v = std::clamp(v, 0.0f, 1.0f);
@@ -751,9 +757,7 @@ private:
     }
     void commit(std::shared_ptr<RackState> ns) {
         authoring_ = ns;
-        states_.push_back(ns);
-        if (states_.size() > 16) states_.erase(states_.begin());   // keep short history alive for the audio thread
-        live_.store(ns.get(), std::memory_order_release);
+        states_.publish(std::move(ns));
     }
     static void pruneMappings(std::shared_ptr<RackState>& ns, int32_t removedChain) {
         auto& v = ns->mappings;
@@ -806,8 +810,7 @@ private:
     static constexpr uint32_t kBlobVersion = 8;           // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name
 
     std::shared_ptr<RackState>              authoring_;
-    std::vector<std::shared_ptr<RackState>> states_;
-    std::atomic<RackState*>                 live_{nullptr};
+    SnapshotHistory<RackState>              states_;
 };
 
 } // namespace nota

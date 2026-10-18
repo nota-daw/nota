@@ -401,6 +401,8 @@ if (args.Length >= 1 && args[0] == "--midi-ctl")
 {
     Console.WriteLine("-- midi controllers --");
     foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
+    Console.WriteLine("-- sustain pedal --");
+    foreach (var (ok, label) in SustainPedalTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "MIDI CTL PASSED" : $"MIDI CTL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -14794,6 +14796,8 @@ Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
+Console.WriteLine("-- sustain pedal --");
+foreach (var (ok, label) in SustainPedalTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
