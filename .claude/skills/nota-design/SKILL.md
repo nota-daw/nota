@@ -134,7 +134,8 @@ Reuse before writing: `Knob` (sizes snap to 34/36/44), `DeviceCardKit.KnobCell` 
 A new value control **must** match the interaction contract:
 
 - Vertical drag, up increases, full range over ~140 px; Shift/Ctrl/⌘ for fine steps;
-  `ns-resize`; a click never jumps the value; no horizontal drag
+  `ns-resize`; a click never jumps the value; no horizontal drag (except a horizontal
+  slider along its own axis, `SliderTrack`)
 - Double-click restores the default
 - Left button only — right-click must bubble to the CV-modulate / MIDI Learn menu
 - `GestureBegin` / `GestureEnd` bracket `BeginAutomationWrite` / `EndAutomationWrite`

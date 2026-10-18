@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Move the playhead from the clip editor** (nota-daw/nota#50): click the piano roll's ruler
+  to put the playhead there, or drag along it to scrub (snapped to the grid); while playing,
+  playback carries on from the new spot. The piano roll now shows the playhead when stopped
+  too, where playback will start.
+- **New notes take the last note's length and velocity** (nota-daw/nota#44): a note drawn in
+  the piano roll gets the length and velocity of the note you last clicked, moved, resized or
+  changed the velocity of, so a run of quarter notes on a 1/16 grid is one length change and
+  then double-clicks. Before you touch a note it is one grid step at velocity 0.8, as before.
 - **Release notes from the status bar** (nota-daw/nota#127): the version number at the
   bottom right of the main window, next to the sample rate, is now a button: click it to
   open What's New for the installed version (it never starts an update). Escape closes What's
@@ -82,6 +90,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Horizontal sliders drag sideways** (nota-daw/nota#115): every horizontal slider on the
+  devices (ADSR, mix, depth…) now follows a left/right drag, with the handle under the
+  pointer, instead of only responding to an up/down drag. Vertical dragging still works,
+  Shift is still fine, and a click still never jumps the value.
 - **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a
   scene) with the transport stopped now plays the metronome count-in first, with the slot
   blinking "Rec in…", and the take starts when it ends. A note you start during the count-in

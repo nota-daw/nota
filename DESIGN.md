@@ -448,7 +448,9 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 ### Interaction contract
 
 - **Vertical drag**, up increases, full range over ~140 px; Shift (or Ctrl/⌘) is fine.
-  Cursor `ns-resize`. A click never jumps the value. No horizontal drag anywhere.
+  Cursor `ns-resize`. A click never jumps the value. The one horizontal drag is a horizontal
+  slider (`SliderTrack`) along its own axis: right increases, the handle follows the pointer,
+  cursor `ew-resize`; a vertical drag still works on it as on a knob.
 - **Double-click** restores the default where one is supplied.
 - **Left button only** — right-click bubbles to the CV-modulate / MIDI Learn menu.
 - **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`.

@@ -296,14 +296,14 @@ public partial class MainWindow : Window
             if (_audioEditor is { IsEffectivelyVisible: true })
                 _audioEditor.OnPlayhead(beats, vm.Engine.IsPlaying);       // live clip playback cursor
             // Piano-roll playback cursor: map the global beat to clip-local time for the
-            // open arrangement MIDI clip; a session slot runs its own loop clock, so follow
-            // the slot's position instead (#137).
+            // open arrangement MIDI clip, shown stopped too, where play will start (#50); a
+            // session slot runs its own loop clock, so follow the slot's position instead (#137).
             if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null)
             {
                 if (_editorTrackId > 0)
                 {
                     if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                        _editorRoll.SetPlayhead(beats - pci.StartBeat, vm.Engine.IsPlaying);
+                        _editorRoll.SetPlayhead(beats - pci.StartBeat, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
                     _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);

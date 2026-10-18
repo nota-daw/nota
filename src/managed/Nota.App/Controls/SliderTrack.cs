@@ -9,10 +9,12 @@
 // arc of a modulation knob.
 //
 // It works in normalised 0..1; the caller maps to the parameter (linear, log, stepped).
-// Interaction follows the almanac (§ States · cursors): ns-resize, a vertical drag — up
-// increases, full range over ~140px, Shift (or Ctrl/⌘) for fine steps — so a slider and a
-// knob handle the same; a click never jumps the value. Double-click resets when a reset is
-// supplied; right-click bubbles to the CV-modulate / MIDI Learn menu.
+// Interaction follows the almanac (§ Interaction contract), with the one exception it allows:
+// a slider drags along its own axis (#115) — right increases and the handle follows the
+// pointer — and a vertical drag still works as on a knob (up increases, full range over
+// ~140px). Shift (or Ctrl/⌘) is fine on both; ew-resize; a click never jumps the value.
+// Double-click resets when a reset is supplied; right-click bubbles to the CV-modulate /
+// MIDI Learn menu.
 // GestureBegin / GestureEnd bracket the drag so automation writes are recorded, and the
 // row's live-follow refresher should skip while Dragging.
 
@@ -41,7 +43,7 @@ internal sealed class SliderTrack : Control
 
     private double _norm;
     private bool _dim, _drag;
-    private double _lastY;
+    private double _lastX, _lastY;
 
     public bool Bipolar { get; init; }
 
@@ -73,7 +75,7 @@ internal sealed class SliderTrack : Control
     {
         Height = Height0;
         MinWidth = 24;
-        Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
+        Cursor = new Cursor(StandardCursorType.SizeWestEast);
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
     }
 
@@ -88,7 +90,9 @@ internal sealed class SliderTrack : Control
             return;
         }
         _drag = true;
-        _lastY = e.GetPosition(this).Y;
+        var p = e.GetPosition(this);
+        _lastX = p.X;
+        _lastY = p.Y;
         e.Pointer.Capture(this);
         GestureBegin?.Invoke();
         e.Handled = true;
@@ -97,11 +101,14 @@ internal sealed class SliderTrack : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         if (!_drag) return;
-        double y = e.GetPosition(this).Y, dy = _lastY - y;   // up = increase
-        _lastY = y;
-        if (dy == 0) return;
+        var p = e.GetPosition(this);
+        double dx = p.X - _lastX, dy = _lastY - p.Y;   // right = increase, up = increase
+        _lastX = p.X;
+        _lastY = p.Y;
+        if (dx == 0 && dy == 0) return;
         bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        Nudge(dy / (fine ? 1400.0 : 140.0));
+        double span = Math.Max(Bounds.Width, 24);   // along the slider the handle tracks the pointer
+        Nudge((dx / span + dy / 140.0) / (fine ? 10.0 : 1.0));
     }
 
     // Under the pointer (or in the hand) the control is live and takes the accent; at rest

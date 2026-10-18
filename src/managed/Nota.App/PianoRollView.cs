@@ -37,6 +37,9 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Polls the engine for currently-pressed live-input pitches (keyboard + MIDI) into
     /// the buffer, returning the count — used to light up the played key. Set by the host.</summary>
     public Func<int[], int>? PollHeldNotes { get; set; }
+    /// <summary>Moves the transport to a clip-local beat (#50): a click or drag on the ruler.
+    /// Null (a session slot, which runs its own clock) leaves the ruler inert.</summary>
+    public Action<double>? Seek { get; set; }
 
     // The recording take shown in this roll (#56): its held notes grow on the grid and new
     // notes settle in. Null when the roll shows any other clip.
@@ -142,6 +145,23 @@ public sealed partial class PianoRollView : UserControl
     // normalized so the earliest note starts at beat 0; s_clipAnchor is its origin.
     private static readonly List<NotaNote> s_clipboard = new();
     private static double s_clipAnchor;
+
+    // The last note touched — clicked, moved, resized or its velocity drawn — in any clip (#44):
+    // a new note takes its length and velocity. Before any is touched, a new note is one grid
+    // step at 0.8.
+    private static double s_lastLen = double.NaN;
+    private static float s_lastVel = 0.8f;
+    private void Remember(int i)
+    {
+        if (i < 0 || i >= _notes.Count) return;
+        s_lastLen = _notes[i].LengthBeats;
+        s_lastVel = _notes[i].Velocity;
+    }
+    private double NewNoteLen(double start)
+    {
+        double len = double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
+        return Math.Max(MinNoteLen, Math.Min(len, _lengthBeats - start));
+    }
 
     private readonly RulerLane _ruler;
     private readonly KeysColumn _keys;
@@ -1018,7 +1038,49 @@ public sealed partial class PianoRollView : UserControl
     private sealed class RulerLane : Control
     {
         private readonly PianoRollView _o;
+        private bool _scrub;
         public RulerLane(PianoRollView o) { _o = o; }
+
+        // Click places the playhead, a drag scrubs it (snapped to the grid), as on the
+        // arrangement ruler (#50).
+        protected override void OnPointerEntered(PointerEventArgs e)
+        {
+            base.OnPointerEntered(e);
+            Cursor = _o.Seek is null ? Cursor.Default : new Cursor(StandardCursorType.Hand);
+        }
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
+        {
+            base.OnPointerPressed(e);
+            if (_o.Seek is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _scrub = true;
+            e.Pointer.Capture(this);
+            SeekAt(e.GetPosition(this).X);
+            e.Handled = true;
+        }
+        protected override void OnPointerMoved(PointerEventArgs e)
+        {
+            base.OnPointerMoved(e);
+            if (_scrub) SeekAt(e.GetPosition(this).X);
+        }
+        protected override void OnPointerReleased(PointerReleasedEventArgs e)
+        {
+            base.OnPointerReleased(e);
+            if (!_scrub) return;
+            _scrub = false;
+            e.Pointer.Capture(null);
+        }
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            _scrub = false;
+            base.OnPointerCaptureLost(e);
+        }
+        private void SeekAt(double x)
+        {
+            double b = Math.Clamp(_o.SnapBeat(_o.XToBeat(x)), 0, _o._lengthBeats);
+            if (Math.Abs(b - _o._playheadBeat) < 1e-9) return;
+            _o.Seek?.Invoke(b);
+            _o.SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
+        }
         // Beats only: a bar reads "3" in Ink 2, a beat "3.2" in Ink 5, set on the baseline in
         // mono 9 just right of its tick. The loop is a 3px brass strip along the top.
         public override void Render(DrawingContext ctx)
@@ -1440,7 +1502,8 @@ public sealed partial class PianoRollView : UserControl
                 if (hit >= 0) { _o._notes.RemoveAt(hit); _o._selection.Clear(); }
                 else
                 {
-                    var nt = new NotaNote(YToPitch(p.Y), Math.Max(0, Snap(XToBeat(p.X))), _o.MinNoteLen, 0.8f);
+                    double at = Math.Max(0, Snap(XToBeat(p.X)));
+                    var nt = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at), s_lastVel);
                     _o._notes.Add(nt);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
                     _o._placementPending = true;   // a drawn note overwrites what it lands on
@@ -1462,6 +1525,7 @@ public sealed partial class PianoRollView : UserControl
                 if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
                 e.Pointer.Capture(this);
                 _primary = hit;
+                _o.Remember(hit);
                 _dragMoved = false;
                 _orig.Clear();
                 foreach (int i in _o._selection)
@@ -1617,6 +1681,7 @@ public sealed partial class PianoRollView : UserControl
             _drag = Mode.None;
             e.Pointer.Capture(null);
             _orig.Clear();
+            if ((was == Mode.Resize || was == Mode.ResizeLeft) && _dragMoved) _o.Remember(_primary);
             if (was != Mode.Marquee && _dragMoved)
             {
                 _o._placementPending = true;   // overwrites once the selection is let go
@@ -1870,6 +1935,7 @@ public sealed partial class PianoRollView : UserControl
         {
             if (!_drag) return;
             _drag = false; _grabbed.Clear(); e.Pointer.Capture(null);
+            _o.Remember(_velNote);
             _o.CommitNotes(); _o.Changed?.Invoke();
         }
 

@@ -434,6 +434,14 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            // The ruler moves the transport (#50): clip-local beat → arrangement beat.
+            Seek = local =>
+            {
+                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) return;
+                double beat = Math.Max(0, live.StartBeat + local);
+                Engine.Seek(beat);
+                Timeline.SetPlayhead(beat);
+            },
         };
         double length = Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
         double start = ci.StartBeat;
