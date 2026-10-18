@@ -1278,7 +1278,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
     }
 
-    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab" };
+    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab", "⇧Space" };
 
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);
