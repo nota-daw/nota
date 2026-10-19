@@ -493,8 +493,8 @@ public sealed class ProjectService
                         : engine.AddSamplerTrack(ResolveInBundle(bundleDir, sd.Sample), sd.RootNote, sd.Loop);
                     if (id <= 0)
                     {
-                        warnings.Add($"Couldn't reload sampler \"{sd.Sample}\" — using an empty Synth track.");
-                        id = engine.AddInstrumentTrack();
+                        warnings.Add($"Couldn't reload sampler \"{sd.Sample}\" — using an empty Volt track.");
+                        id = engine.AddVoltSynthTrack();
                     }
                     else
                     {
@@ -525,8 +525,8 @@ public sealed class ProjectService
                     id = idx >= 0 ? engine.AddPluginInstrumentTrack(idx) : 0;
                     if (id <= 0)
                     {
-                        warnings.Add($"Plugin instrument \"{pid}\" isn't installed — using an empty Synth track.");
-                        id = engine.AddInstrumentTrack();
+                        warnings.Add($"Plugin instrument \"{pid}\" isn't installed — using an empty Volt track.");
+                        id = engine.AddVoltSynthTrack();
                     }
                     else if (t.Instrument.State is { } stateRel)
                     {

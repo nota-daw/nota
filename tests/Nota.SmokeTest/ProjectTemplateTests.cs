@@ -65,7 +65,7 @@ internal static class ProjectTemplateTests
         if (tracks.Count != 2 || returns.Count != 2) yield break;
         var inst = tracks[0];
         var audio = tracks[1];
-        yield return (inst.IsInstrument && eng.TrackInstrumentKind(inst.Id) == 0, $"{tag}: track 1 is an instrument with Nota Synth");
+        yield return (inst.IsInstrument && eng.TrackInstrumentKind(inst.Id) == 6, $"{tag}: track 1 is an instrument with Nota Volt");
         yield return (inst.ClipCount == 1 && eng.TryGetClipInfo(inst.Id, 0, out var c)
                       && c.IsMidi && c.StartBeat == 0.0 && c.LengthBeats == 4.0,
             $"{tag}: the instrument has the seed 1-bar MIDI clip");

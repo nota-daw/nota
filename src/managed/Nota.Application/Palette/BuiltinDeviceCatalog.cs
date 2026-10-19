@@ -43,21 +43,17 @@ public static class BuiltinDeviceCatalog
     public static IReadOnlyList<BuiltinDevice> All { get; } = new BuiltinDevice[]
     {
         // ---- instruments ----------------------------------------------------------------------
-        new("Nota Synth", I, 0, "subtractive synth", D("synth.subtractive", "poly va init basic",
-            "clean bright", "pad bass lead keys pluck", "", "", "",
-            "A straightforward subtractive polysynth: oscillators, a filter and envelopes.")),
         new("Nota Physical", I, 2, "physical synth", D("synth.physical", "modal karplus string mallet",
             "metallic glassy", "pluck bell keys strings perc", "", "", "cinematic",
             "Physical modelling of struck, plucked and blown bodies.")),
         new("Nota Aurora", I, 5, "wavetable synth", D("synth.wavetable", "wt serum",
             "bright airy evolving lush", "pad lead texture", "", "", "edm cinematic",
             "Wavetable synth with warping oscillators — evolving pads and modern leads.")),
-        new("Nota Volt", I, 6, "analog synth", D("synth.subtractive", "moog analog poly",
-            "warm vintage", "pad bass lead keys", "", "", "synthwave",
-            "Warm analog-style polysynth for pads, basses and leads.")),
-        new("Nota Bass", I, 7, "bass synth", D("synth.subtractive", "303 acid tb",
-            "gritty", "bass", "", "", "techno acid house",
-            "Mono bass synth with a squelchy filter — acid lines and techno basses.")),
+        // Nota Synth (kind 0) and Nota Bass (kind 7) folded into Volt (specs/026): their engines
+        // still load saved tracks, but new ones are Volts, so they are not offered here.
+        new("Nota Volt", I, 6, "analog synth", D("synth.subtractive", "moog analog poly va init basic supersaw 303 acid tb",
+            "warm vintage clean bright gritty", "pad bass lead keys pluck", "", "", "synthwave techno acid house",
+            "Two-oscillator analog-style synth with drive and a unison stack — pads, basses, acid lines and leads.")),
         new("Nota Pendulum", I, 8, "arp synth", D("synth", "arpsynth sequencer",
             "evolving bright", "seq pluck", "", "", "synthwave techno",
             "A synth with a built-in pattern engine for arpeggios and sequences.")),

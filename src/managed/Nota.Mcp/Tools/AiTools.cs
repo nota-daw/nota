@@ -56,7 +56,7 @@ public sealed class AiTools(
     public sealed record ConvertResult(int TrackId, int ClipIndex, int Notes);
 
     [McpServerTool(Name = "convert_audio_to_midi"), Description(
-        "Transcribe an audio clip into a MIDI clip on a new Nota Synth track, lined up with it, using the basic-pitch model. "
+        "Transcribe an audio clip into a MIDI clip on a new Nota Volt track, lined up with it, using the basic-pitch model. "
         + "'harmony' keeps every note (chords, polyphony); 'melody' keeps one line, the strongest note wherever notes overlap. "
         + "Velocities follow how loud each note is.")]
     public async Task<ConvertResult> ConvertAudioToMidi(
@@ -86,7 +86,7 @@ public sealed class AiTools(
         if (notes.Length == 0) throw new InvalidOperationException($"No {(melody ? "melody" : "notes")} found in that clip.");
         return await Mutate(() =>
         {
-            int t = E.AddInstrumentTrack();
+            int t = E.AddVoltSynthTrack();
             int mc = E.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
             E.SetClipNotes(t, mc, notes);
             return new ConvertResult(t, mc, notes.Length);

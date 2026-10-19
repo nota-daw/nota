@@ -407,8 +407,9 @@ internal static partial class DesignTokenCheck
         // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.) The
         // generic instrument card is an "Open GUI" stub, 170 wide since before it joined the
         // shared shell (spec 012).
+        // Volt grew to 790 when it absorbed Nota Synth and Nota Bass (specs/026).
         var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs", "GenericInstrumentCard.cs" };
+            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs", "GenericInstrumentCard.cs", "VoltInstrumentCard.cs" };
         var off = Files(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")

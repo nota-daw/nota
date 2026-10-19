@@ -26,6 +26,14 @@
 // (1..12 semitones) and a mod wheel that is both a matrix source and, when the patch
 // asks for it, the hand on the vibrato.
 //
+// Appended in v6 so Volt covers what Nota Bass and Nota Synth did (specs/026): a Shape knob
+// per oscillator that morphs the chosen wave toward the next one (sine → triangle → saw →
+// square), pulse width for the square, a drive before the filters and one on the output,
+// a unison stack of 2 / 4 / 7 copies per oscillator spread across the stereo field (the
+// filters then run per channel), a Poly / Mono / Legato voice mode with a held-note stack,
+// and Wheel → LFO, which lets the mod wheel open each filter's LFO onto its cutoff. All of
+// them default to neutral, so a patch saved before renders exactly as it did.
+//
 // All parameters ride the Instrument plugin-param interface (normalized 0..1, stable
 // ids) → automation / persist / clone for free. Header-only; allocation-free after
 // construction. A per-sample loop keeps modulation smooth; filter coefficients update
@@ -85,8 +93,12 @@ public:
         // ---- appended (v5, almanac rework): the two performance wheels ----
         ExtraBase = MacroBase + kMacros * 3,                         // 130
         Bend = ExtraBase, BendRange, VibWheel,                       // 130,131,132
-        kNumParams                                                   // 133
+        // ---- appended (v6, specs/026: what Nota Bass and Nota Synth had) ----
+        Osc1Shape, Osc2Shape, Osc1Pw, Osc2Pw,                        // 133..136
+        FilDrive, Drive, UniVoices, UniSpread, Legato, WheelLfo,     // 137..142
+        kNumParams                                                   // 143
     };
+    static constexpr int kV6Base = Osc1Shape;
 
     static int matrixIdx(int s, int d) { return MatrixBase + s * kDests + d; }
     static int macroIdx(int m, int field) { return MacroBase + m * 3 + field; }  // field: 0 val, 1 dest, 2 amt
@@ -115,6 +127,13 @@ public:
         set(Bend, 0.5f);                  // centred
         set(BendRange, 1.0f / 11.0f);     // ±2 semitones
         set(VibWheel, 0.0f);              // vibrato at its own depth, not the wheel's
+        set(Osc1Shape, 0.0f); set(Osc2Shape, 0.0f);   // the wave chip as it is
+        set(Osc1Pw, 0.5f);    set(Osc2Pw, 0.5f);      // a plain square
+        set(FilDrive, 0.0f);  set(Drive, 0.0f);       // clean
+        set(UniVoices, 0.0f);                         // 1: one detuned partner (the Unison knob)
+        set(UniSpread, 0.35f);
+        set(Legato, 1.0f);                            // Mono slides, as Volt's mono always did
+        set(WheelLfo, 0.0f);
     }
 
     int32_t kind() const override { return 6; }
@@ -167,7 +186,12 @@ public:
             return std::string(ids[i]);
         }
         if (i < MacroBase) { int j = i - MatrixBase; return "mtx" + std::to_string(j / kDests) + "_" + std::to_string(j % kDests); }
-        if (i >= ExtraBase) { static const char* ex[] = { "bend", "bendrange", "vibwheel" }; return std::string(ex[i - ExtraBase]); }
+        if (i >= ExtraBase) {
+            static const char* ex[] = { "bend", "bendrange", "vibwheel",
+                "osc1shape", "osc2shape", "osc1pw", "osc2pw",
+                "fildrive", "drive", "univoices", "unispread", "legato", "wheellfo" };
+            return std::string(ex[i - ExtraBase]);
+        }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "mac" + std::to_string(m) + (f == 0 ? "val" : f == 1 ? "dest" : "amt");
     }
@@ -195,7 +219,12 @@ public:
         static const char* srcNm[] = { "Amp Env", "Flt Env", "LFO 1", "LFO 2", "Velocity", "Key", "Mod Whl" };
         static const char* dstNm[] = { "Pitch", "Osc2 Pitch", "Cutoff", "Reso", "Level", "Pan" };
         if (i < MacroBase) { int j = i - MatrixBase; return std::string(srcNm[j / kDests]) + " → " + dstNm[j % kDests]; }
-        if (i >= ExtraBase) { static const char* exNm[] = { "Pitch Bend", "Bend Range", "Vibrato → Wheel" }; return std::string(exNm[i - ExtraBase]); }
+        if (i >= ExtraBase) {
+            static const char* exNm[] = { "Pitch Bend", "Bend Range", "Vibrato → Wheel",
+                "Osc1 Shape", "Osc2 Shape", "Osc1 Pulse Width", "Osc2 Pulse Width",
+                "Filter Drive", "Drive", "Unison Voices", "Unison Spread", "Legato", "Wheel → LFO" };
+            return std::string(exNm[i - ExtraBase]);
+        }
         int j = i - MacroBase, m = j / 3, f = j % 3;
         return "Macro " + std::to_string(m + 1) + (f == 0 ? "" : f == 1 ? " Dest" : " Amount");
     }
@@ -239,17 +268,22 @@ public:
         const bool mono = get(MonoMode) > 0.5f;
         const bool glideOn = pn_[Glide].load(std::memory_order_relaxed) > 0.001f;
 
+        const bool hadHeld = heldCount_ > 0;   // another key already down → an overlap
+        pushHeld(pitch);
         if (mono) {
             Voice* v = &voices_[0];
-            const bool legato = v->active && v->aStage != Stage::Off;
+            // Legato slides only over a key that is still held, on a voice still sounding; a
+            // note struck on a releasing voice is a fresh attack (before, it faded out).
+            const bool sounding = v->active && v->aStage != Stage::Release && v->aStage != Stage::Off;
+            const bool legato = get(Legato) >= 0.5f && hadHeld && sounding;
             v->pitch = pitch;
+            v->ktOct = (pitch - 60) / 12.0;
             v->freqTarget = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
             resetExpr(*v);
             if (!legato) { v->freqCur = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freqTarget; startVoice(*v, pitch, velocity); }
             else if (!glideOn) v->freqCur = v->freqTarget;   // legato, no glide: jump pitch, keep envelopes
             v->active = true;
             lastFreq_ = v->freqTarget;
-            heldPitch_ = pitch;
             return;
         }
 
@@ -263,12 +297,28 @@ public:
         lastFreq_ = v->freqTarget;
     }
     void noteOff(int32_t pitch) override {
+        const bool wasHeld = popHeld(pitch);
+        if (get(MonoMode) > 0.5f && wasHeld) {
+            Voice& v = voices_[0];
+            if (heldCount_ == 0) {
+                if (v.active && v.aStage != Stage::Release) { v.aStage = Stage::Release; v.fStage = Stage::Release; }
+                return;
+            }
+            // Back to the newest key still down — no new attack, it's one phrase.
+            const int32_t top = held_[heldCount_ - 1];
+            if (top != v.pitch) {
+                v.pitch = top; v.ktOct = (top - 60) / 12.0;
+                v.freqTarget = 440.0 * std::pow(2.0, (top - 69) / 12.0);
+                lastFreq_ = v.freqTarget;
+            }
+            return;
+        }
         for (auto& v : voices_)
             if (v.active && v.pitch == pitch && v.aStage != Stage::Release) {
                 v.aStage = Stage::Release; v.fStage = Stage::Release;
             }
     }
-    void allNotesOff() override { gexpr_.reset(); for (auto& v : voices_) v.active = false; }
+    void allNotesOff() override { heldCount_ = 0; gexpr_.reset(); for (auto& v : voices_) v.active = false; }
 
     void render(float* out, int32_t frames) override {
         // ---- macros first: six of the twelve destinations move the block snapshot
@@ -336,8 +386,30 @@ public:
         // "By the wheel": the vibrato depth the patch dials becomes the wheel's ceiling.
         const double vibCents = get(VibAmt) * 50.0 * (get(VibWheel) > 0.5f ? (double)modWheel : 1.0);
         const double uni = get(Unison);
+        const double wheelLfo = get(WheelLfo) * modWheel * 2.0;      // the mod wheel opens the LFOs onto the cutoffs
         const double uniDet = std::exp2(uni * 25.0 / 1200.0);   // side-osc detune (up to ~25 cents)
         const float  uniLvl = (float)(uni * 0.9);
+        // v6: per-oscillator shape morph and pulse width, the two drives, the unison stack.
+        const double shp1 = get(Osc1Shape), shp2 = get(Osc2Shape);
+        const double pw1 = pwOf(Osc1Pw), pw2 = pwOf(Osc2Pw);
+        const double fDrv = 1.0 + get(FilDrive) * 11.0;              // 1..12, before both filters
+        const bool   fDrive = fDrv > 1.001;
+        const double fDrvNorm = fDrive ? 1.0 / std::tanh(fDrv) : 1.0;
+        const double oDrv = 1.0 + get(Drive) * 7.0;                  // 1..8, on the output
+        const bool   oDrive = oDrv > 1.001;
+        const double oDrvNorm = oDrive ? 1.0 / std::tanh(oDrv) : 1.0;
+        const int    nUni = uniCount();
+        const double spread = get(UniSpread);
+        const bool   stereo = nUni > 1 && spread > 0.001;            // copies panned apart → a filter per side
+        double uDet[kMaxStack], uL[kMaxStack], uR[kMaxStack];
+        for (int u = 0; u < nUni; ++u) {
+            // The stack spreads across ±(Unison × 50) cents; a centred copy stays at unity gain.
+            const double t = nUni == 1 ? 0.0 : 2.0 * u / (nUni - 1) - 1.0;
+            uDet[u] = std::exp2(uni * 50.0 * t / 1200.0);
+            const double p = t * spread;
+            uL[u] = std::sqrt(1.0 - p); uR[u] = std::sqrt(1.0 + p);
+        }
+        const double uNorm = 1.0 / std::sqrt((double)nUni);
         const double glide = get(Glide);
         const double glideCoef = glide > 0.001 ? (1.0 - std::exp(-1.0 / (expMap(glide, 0.005, 0.6) * sampleRate_))) : 1.0;
         const float velAmp = get(VelAmp), velFilt = get(VelFilter);
@@ -406,18 +478,45 @@ public:
                     m1 *= pm; m2 *= pm * std::exp2(dst[1] * 2.0);
                 }
 
-                const double i1 = base * m1, i1u = i1 * uniDet;
-                const double i2 = base * m2, i2u = i2 * uniDet;
-                double s1 = (oscBlep(w1, v.ph1, i1) + oscBlep(w1, v.ph1u, i1u) * uniLvl);
-                double s2 = (oscBlep(w2, v.ph2, i2) + oscBlep(w2, v.ph2u, i2u) * uniLvl);
-                s1 *= lvl1 / (1.0 + uniLvl); s2 *= lvl2 / (1.0 + uniLvl);
-                v.ph1 += i1; if (v.ph1 >= 1.0) v.ph1 -= 1.0;
-                v.ph1u += i1u; if (v.ph1u >= 1.0) v.ph1u -= 1.0;
-                v.ph2 += i2; if (v.ph2 >= 1.0) v.ph2 -= 1.0;
-                v.ph2u += i2u; if (v.ph2u >= 1.0) v.ph2u -= 1.0;
+                const double i1 = base * m1, i2 = base * m2;
+                double s1, s2, s1r = 0.0, s2r = 0.0;   // left (or mono) and right
+                if (nUni == 1) {
+                    // One detuned partner per oscillator, scaled by the Unison knob.
+                    const double i1u = i1 * uniDet, i2u = i2 * uniDet;
+                    s1 = (osc(w1, shp1, pw1, v.ph1, i1) + osc(w1, shp1, pw1, v.ph1u, i1u) * uniLvl);
+                    s2 = (osc(w2, shp2, pw2, v.ph2, i2) + osc(w2, shp2, pw2, v.ph2u, i2u) * uniLvl);
+                    s1 *= lvl1 / (1.0 + uniLvl); s2 *= lvl2 / (1.0 + uniLvl);
+                    v.ph1 += i1; if (v.ph1 >= 1.0) v.ph1 -= 1.0;
+                    v.ph1u += i1u; if (v.ph1u >= 1.0) v.ph1u -= 1.0;
+                    v.ph2 += i2; if (v.ph2 >= 1.0) v.ph2 -= 1.0;
+                    v.ph2u += i2u; if (v.ph2u >= 1.0) v.ph2u -= 1.0;
+                } else {
+                    // A stack of nUni copies per oscillator, detuned across ±cents, panned by Spread.
+                    double aL = 0.0, aR = 0.0, bL = 0.0, bR = 0.0;
+                    for (int u = 0; u < nUni; ++u) {
+                        const double d1 = i1 * uDet[u], d2 = i2 * uDet[u];
+                        const double x1 = osc(w1, shp1, pw1, v.st1[u], d1);
+                        const double x2 = osc(w2, shp2, pw2, v.st2[u], d2);
+                        v.st1[u] += d1; if (v.st1[u] >= 1.0) v.st1[u] -= 1.0;
+                        v.st2[u] += d2; if (v.st2[u] >= 1.0) v.st2[u] -= 1.0;
+                        aL += x1 * uL[u]; aR += x1 * uR[u];
+                        bL += x2 * uL[u]; bR += x2 * uR[u];
+                    }
+                    s1 = aL * uNorm * lvl1; s1r = aR * uNorm * lvl1;
+                    s2 = bL * uNorm * lvl2; s2r = bR * uNorm * lvl2;
+                }
 
                 double in1 = s1 * (1.0 - r1) + s2 * (1.0 - r2) + nz * (1.0 - rn);
                 double in2 = s1 * r1 + s2 * r2 + nz * rn;
+                double in1r = 0.0, in2r = 0.0;
+                if (stereo) {
+                    in1r = s1r * (1.0 - r1) + s2r * (1.0 - r2) + nz * (1.0 - rn);
+                    in2r = s1r * r1 + s2r * r2 + nz * rn;
+                }
+                if (fDrive) {
+                    in1 = std::tanh(in1 * fDrv) * fDrvNorm; in2 = std::tanh(in2 * fDrv) * fDrvNorm;
+                    if (stereo) { in1r = std::tanh(in1r * fDrv) * fDrvNorm; in2r = std::tanh(in2r * fDrv) * fDrvNorm; }
+                }
 
                 // Control-rate filter coefficients (cutoff = base × 2^mod, incl. matrix).
                 if (v.modCount-- <= 0) {
@@ -425,8 +524,8 @@ public:
                     const double velF = 1.0f - velFilt + velFilt * v.vel;
                     const double cutMod = dst[2] * 4.0                // matrix Cutoff (±4 oct)
                                         + v.ex.slide() * 2.0 + v.ex.pressure() * 2.0;   // MPE
-                    double o1 = f1Env * 4.0 * v.fEnv * velF + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
-                    double o2 = f2Env * 4.0 * v.fEnv * velF + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
+                    double o1 = f1Env * 4.0 * v.fEnv * velF + f1Key * v.ktOct + (f1Lfo * 2.0 + wheelLfo) * lfo1 + cutMod;
+                    double o2 = f2Env * 4.0 * v.fEnv * velF + f2Key * v.ktOct + (f2Lfo * 2.0 + wheelLfo) * lfo2 + cutMod;
                     const double k1 = resoToK(reso1 + dst[3]);
                     const double k2 = resoToK(reso2 + dst[3]);
                     v.k1 = k1; v.k2 = k2;
@@ -438,19 +537,33 @@ public:
                 in2 += o1 * toF2;
                 double o2 = svf(v.s2, v.f2a1, v.f2a2, v.f2a3, v.k2, in2, t2);
                 if (slope2) o2 = svf(v.s2b, v.f2a1, v.f2a2, v.f2a3, v.k2, o2, t2);
+                double o1r = o1, o2r = o2;
+                if (stereo) {
+                    o1r = svf(v.s1R, v.f1a1, v.f1a2, v.f1a3, v.k1, in1r, t1);
+                    if (slope1) o1r = svf(v.s1bR, v.f1a1, v.f1a2, v.f1a3, v.k1, o1r, t1);
+                    in2r += o1r * toF2;
+                    o2r = svf(v.s2R, v.f2a1, v.f2a2, v.f2a3, v.k2, in2r, t2);
+                    if (slope2) o2r = svf(v.s2bR, v.f2a1, v.f2a2, v.f2a3, v.k2, o2r, t2);
+                }
 
                 float ampG = v.aEnv * (1.0f - velAmp + velAmp * v.vel) * (1.0f + 0.5f * v.ex.pressure());
                 if (lvlMod) ampG *= (float)std::clamp(1.0 + dst[4], 0.0, 4.0);
                 const float a1 = (float)o1 * l1 * ampG;
                 const float a2 = (float)o2 * l2 * ampG;
                 float vL = a1 * p1L + a2 * p2L;
-                float vR = a1 * p1R + a2 * p2R;
+                float vR = stereo ? (float)o1r * l1 * ampG * p1R + (float)o2r * l2 * ampG * p2R
+                                  : a1 * p1R + a2 * p2R;
                 if (panMod) {
                     const float pm = (float)std::clamp(dst[5], -1.0, 1.0);   // linear balance atop static pan
                     vL *= pm <= 0.0f ? 1.0f : 1.0f - pm;
                     vR *= pm >= 0.0f ? 1.0f : 1.0f + pm;
                 }
                 outL += vL; outR += vR;
+            }
+            if (oDrive) {
+                // Bass's output saturation, measured against a centred voice (amp pan −3 dB).
+                outL = (float)(std::tanh(outL * kSqrt2 * oDrv) * oDrvNorm / kSqrt2);
+                outR = (float)(std::tanh(outR * kSqrt2 * oDrv) * oDrvNorm / kSqrt2);
             }
             const float mL = outL * volume * 0.5f, mR = outR * volume * 0.5f;
             out[i * 2]     += mL * opL * kSqrt2;
@@ -464,6 +577,7 @@ private:
     static constexpr double kTwoPi = 6.283185307179586;
     static constexpr float  kSqrt2 = 1.41421356f;   // restore unity for centred out-pan
 
+    static constexpr int    kMaxStack = 7;          // unison voices: 1 / 2 / 4 / 7
     enum class Stage { Attack, Decay, Sustain, Release, Off };
     struct Voice {
         bool     active = false;
@@ -474,6 +588,9 @@ private:
         Stage    aStage = Stage::Attack, fStage = Stage::Attack;
         double   s1[2] = {0, 0}, s2[2] = {0, 0};          // SVF integrator state (ic1, ic2)
         double   s1b[2] = {0, 0}, s2b[2] = {0, 0};        // 2nd stage for 24 dB slope
+        double   s1R[2] = {0, 0}, s2R[2] = {0, 0};        // right-channel filters, for a spread stack
+        double   s1bR[2] = {0, 0}, s2bR[2] = {0, 0};
+        double   st1[kMaxStack] = {}, st2[kMaxStack] = {}; // unison stack phases
         double   f1a1 = 0, f1a2 = 0, f1a3 = 0, f2a1 = 0, f2a2 = 0, f2a3 = 0;
         double   k1 = 1.0, k2 = 1.0;
         int32_t  modCount = 0;
@@ -495,6 +612,9 @@ private:
     int    waveOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
     int    filtTypeOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
     int    shapeOf(Param p) const { return std::clamp((int)std::lround(get(p) * 3.0f), 0, 3); }
+    int    uniCount() const { static constexpr int n[4] = { 1, 2, 4, 7 }; return n[std::clamp((int)std::lround(get(UniVoices) * 3.0f), 0, 3)]; }
+    // Pulse width 5..95 %; the centre is exactly 50 % so a plain square renders as before.
+    double pwOf(Param p) const { const float v = get(p); return v == 0.5f ? 0.5 : 0.05 + 0.9 * v; }
     static int macroDestOf(float v) { return std::clamp((int)std::lround(v * (kMacroDests - 1)), 0, kMacroDests - 1); }
     static bool amActive(const int* d, int n, int dest) { for (int k = 0; k < n; ++k) if (d[k] == dest) return true; return false; }
     static double resoToK(double reso) { return std::clamp(2.0 - 1.9 * std::clamp(reso, 0.0, 1.0), 0.05, 2.0); }
@@ -511,6 +631,9 @@ private:
         v.f1a1 = v.f1a2 = 0.0; v.f2a1 = v.f2a2 = 0.0;
         for (double& z : v.s1) z = 0.0;  for (double& z : v.s2) z = 0.0;
         for (double& z : v.s1b) z = 0.0; for (double& z : v.s2b) z = 0.0;
+        for (double& z : v.s1R) z = 0.0; for (double& z : v.s2R) z = 0.0;
+        for (double& z : v.s1bR) z = 0.0; for (double& z : v.s2bR) z = 0.0;
+        for (int u = 0; u < kMaxStack; ++u) { v.st1[u] = wrap(v.ph1 + u * 0.13); v.st2[u] = wrap(v.ph2 + u * 0.13); }
         v.modCount = 0;
     }
     // 0 = free running (leave previous phase); >0 = retrigger to that start phase.
@@ -571,12 +694,23 @@ private:
         return (float)(1.0 / (expMap(t, 0.01, 5.0) * sampleRate_));
     }
 
-    static double oscBlep(int wave, double ph, double dt) {
+    // Wave chip (0 saw, 1 square, 2 tri, 3 sine) with Shape blending it toward the next wave
+    // in sine → triangle → saw → square order; Shape 0 is the chip itself.
+    static double osc(int wave, double shape, double pw, double ph, double dt) {
+        if (shape <= 0.0) return oscBlep(wave, ph, dt, pw);
+        static constexpr int kPos[4] = { 2, 3, 1, 0 };     // chip → morph position
+        static constexpr int kWave[4] = { 3, 2, 0, 1 };    // morph position → chip
+        const double s = std::min(3.0, kPos[wave] + shape);
+        const int a = std::min(2, (int)s);
+        const double f = s - a;
+        return oscBlep(kWave[a], ph, dt, pw) * (1.0 - f) + oscBlep(kWave[a + 1], ph, dt, pw) * f;
+    }
+    static double oscBlep(int wave, double ph, double dt, double pw) {
         switch (wave) {
-            case 1: {  // square
-                double s = ph < 0.5 ? 1.0 : -1.0;
+            case 1: {  // square, pulse width pw
+                double s = ph < pw ? 1.0 : -1.0;
                 s += polyBlep(ph, dt);
-                double p2 = ph + 0.5; if (p2 >= 1.0) p2 -= 1.0;
+                double p2 = ph + (1.0 - pw); if (p2 >= 1.0) p2 -= 1.0;
                 return s - polyBlep(p2, dt);
             }
             case 2:  return 4.0 * std::fabs(ph - 0.5) - 1.0;      // triangle
@@ -607,6 +741,20 @@ private:
         return std::exp2(o + s / 12.0 + c / 1200.0);
     }
 
+    void pushHeld(int32_t pitch) {
+        popHeld(pitch);
+        if (heldCount_ == 16) { std::memmove(held_, held_ + 1, 15 * sizeof(int32_t)); --heldCount_; }
+        held_[heldCount_++] = pitch;
+    }
+    bool popHeld(int32_t pitch) {
+        for (int k = heldCount_ - 1; k >= 0; --k)
+            if (held_[k] == pitch) {
+                std::memmove(held_ + k, held_ + k + 1, (heldCount_ - 1 - k) * sizeof(int32_t));
+                --heldCount_;
+                return true;
+            }
+        return false;
+    }
     Voice* findFreeVoice() {
         for (auto& v : voices_) if (!v.active) return &v;
         Voice* q = &voices_[0];
@@ -624,7 +772,8 @@ private:
     double lfoPhase1_ = 0.0, lfoPhase2_ = 0.0, vibPhase_ = 0.0;
     float  lfoSh1_ = 0.0f, lfoSh2_ = 0.0f;   // sample & hold values
     double lastFreq_ = 0.0;    // portamento reference
-    int32_t heldPitch_ = -1;   // mono last-note
+    int32_t held_[16] = {};    // keys down, oldest first (mono falls back through them)
+    int     heldCount_ = 0;
     float  nlp_ = 0.0f;        // noise color one-pole state
     uint32_t rng_ = 0x9E3779B9u;
     std::atomic<int32_t> activeVoices_{0};

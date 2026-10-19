@@ -20,8 +20,8 @@ public static class ProjectTemplate
     /// the undo baseline. Returns the instrument track id.</summary>
     public static int ApplyDefault(IAudioEngine engine)
     {
-        // Same as the toolbar's Add Instrument: Nota Synth with a seed one-bar clip.
-        int inst = engine.AddInstrumentTrack();
+        // Same as the toolbar's Add Instrument: Nota Volt with a seed one-bar clip.
+        int inst = engine.AddVoltSynthTrack();
         engine.AddMidiClip(inst, 0.0, 4.0);
         engine.AddAudioTrack();
 

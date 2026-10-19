@@ -2018,7 +2018,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 133, $"Nota Volt exposes 133 params (got {pc})");
+    Check(pc == 143, $"Nota Volt exposes 143 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2033,7 +2033,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 133 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 143 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");
@@ -2173,13 +2173,90 @@ Console.WriteLine("-- Nota Volt --");
         Check(louder > neutral * 1.1f, $"an old macro pointing at Level still lands there ({neutral:F3} → {louder:F3})");
     }
 
-    // Factory presets: 25 ship, every named param is a real Volt id, each applies in place.
+    // v6 (specs/026): what Nota Synth and Nota Bass had. Each control changes the sound and
+    // stays finite; a spread unison stack is stereo; Mono falls back to a held key; a note
+    // struck on a releasing mono voice retriggers.
+    Check(new[] { "osc1shape", "osc2shape", "osc1pw", "osc2pw", "fildrive", "drive", "univoices", "unispread", "legato", "wheellfo" }.All(id => IdOf(id) >= 0),
+        "v6 params present (shape / pw / drives / unison voices + spread / legato / wheel → LFO)");
+    {
+        float[] RenderV6(NotaNote[] notes, int frames, params (string Id, float Value)[] ps)
+        {
+            using var e6 = new NotaEngine();
+            e6.SetBpm(120); e6.SetTimeSignature(4, 4);
+            int t6 = e6.AddVoltSynthTrack();
+            foreach (var (id, value) in ps)
+                for (int i = 0; i < e6.PluginParamCount(t6, -1); i++)
+                    if (e6.PluginParamId(t6, -1, i) == id) e6.PluginParamSet(t6, -1, i, value);
+            e6.AddMidiClip(t6, 0.0, 4.0);
+            e6.SetClipNotes(t6, 0, notes);
+            var b = new float[frames * 2];
+            e6.Seek(0.0); e6.Play(); e6.RenderOffline(b, frames); e6.StopTransport();
+            return b;
+        }
+        var one = new[] { new NotaNote(48, 0.0, 2.0, 0.9f) };
+        float[] R6(params (string Id, float Value)[] ps) => RenderV6(one, 8192, ps);
+        bool Finite(float[] b) { foreach (var x in b) if (!float.IsFinite(x) || Math.Abs(x) > 8f) return false; return true; }
+        float D6(float[] a, float[] b) { float d = 0; for (int i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        var basis = R6();
+        Check(D6(basis, R6(("osc1shape", 0f), ("osc1pw", 0.5f), ("fildrive", 0f), ("drive", 0f), ("univoices", 0f), ("wheellfo", 0f))) < 1e-9f,
+            "v6 controls at their defaults leave a patch exactly as it was");
+        foreach (var (what, ps) in new (string, (string, float)[])[]
+        {
+            ("Shape", new[] { ("osc1shape", 0.5f) }),
+            ("Pulse Width", new[] { ("osc1wave", 1f / 3f), ("osc2wave", 1f / 3f), ("osc1pw", 0.15f), ("osc2pw", 0.15f) }),
+            ("Filter Drive", new[] { ("fildrive", 1f) }),
+            ("Drive", new[] { ("drive", 1f) }),
+            ("Unison 7", new[] { ("univoices", 1f), ("unison", 0.6f) }),
+            ("Wheel → LFO", new[] { ("wheellfo", 1f), ("modwheel", 1f), ("lfo1rate", 0.8f) }),
+        })
+        {
+            var b = R6(ps);
+            Check(Finite(b) && Rms(b, 8192) > 0.001f && D6(basis, b) > 1e-4f, $"Volt {what} changes the sound and stays finite (RMS {Rms(b, 8192):F3})");
+        }
+        float Side(float[] b) { double s2 = 0; for (int i = 0; i < b.Length; i += 2) { double d = b[i] - b[i + 1]; s2 += d * d; } return (float)Math.Sqrt(s2 / (b.Length / 2)); }
+        Check(Side(basis) < 1e-6f && Side(R6(("univoices", 1f), ("unison", 0.6f), ("unispread", 1f))) > 1e-3f,
+            "a spread unison stack is stereo (filters per side); one voice stays mono");
+        Check(Side(R6(("univoices", 1f), ("unison", 0.6f), ("unispread", 0f))) < 1e-6f, "a stack with no spread stays mono");
+
+        // Mono note stack: C3 held, G3 pressed then released → back to C3, still sounding.
+        int Cross(float[] b, int from, int to) { int c = 0; for (int i = from * 2 + 2; i < to * 2; i += 2) if ((b[i - 2] < 0) != (b[i] < 0)) c++; return c; }
+        var mono = new (string, float)[] { ("mono", 1f), ("legato", 1f), ("osc2level", 0f), ("osc1wave", 1f), ("fil1freq", 1f), ("sustain", 1f), ("unison", 0f) };
+        var held = RenderV6(new[] { new NotaNote(48, 0.0, 3.0, 0.9f), new NotaNote(55, 0.5, 0.5, 0.9f) }, 44100, mono);
+        var alone = RenderV6(new[] { new NotaNote(48, 0.0, 3.0, 0.9f) }, 44100, mono);
+        int heldX = Cross(held, 30000, 44000), aloneX = Cross(alone, 30000, 44000);
+        Check(Math.Abs(heldX - aloneX) <= 2 && Rms(held, 44100) > 0.01f, $"Mono falls back to the key still held ({heldX} vs {aloneX} crossings)");
+        // A note struck while the voice is only releasing comes back to full level.
+        var rel = RenderV6(new[] { new NotaNote(48, 0.0, 0.5, 0.9f), new NotaNote(50, 0.75, 1.5, 0.9f) }, 44100,
+            ("mono", 1f), ("legato", 1f), ("attack", 0f), ("sustain", 1f), ("release", 0.7f));
+        float late = 0; for (int i = 36000; i < 44100; i++) late += rel[i * 2] * rel[i * 2];
+        late = MathF.Sqrt(late / 8100);
+        Check(late > 0.01f, $"a mono note on a releasing voice retriggers (late RMS {late:F3})");
+    }
+
+    // Factory presets: Volt's own 25 plus the 49 Nota Synth and Nota Bass patches ported into it;
+    // every named param is a real Volt id, each applies in place, and every port plays.
     {
         var voltIds = new System.Collections.Generic.HashSet<string>();
         for (int i = 0; i < pc; i++) voltIds.Add(ve.PluginParamId(t, -1, i));
         var cat = new FactoryPresetCatalog();
         var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 6).ToList();
-        Check(mine.Count == 25, $"Nota Volt ships 25 factory presets (got {mine.Count})");
+        Check(mine.Count == 25 + 24 + 25, $"Nota Volt ships 74 factory presets (got {mine.Count})");
+        int ported = cat.All().Count(p => p.IsInstrument && p.BuiltinKind is 0 or 7 && p.Category.Length > 0);
+        Check(ported == 24 + 25, $"every filed Synth / Bass preset has a Volt port ({ported})");
+        var silent = new List<string>();
+        foreach (var p in mine.Skip(25))
+        {
+            using var pe = new NotaEngine();
+            pe.SetBpm(120); pe.SetTimeSignature(4, 4);
+            int tp6 = pe.AddVoltSynthTrack();
+            cat.ApplyInPlace(pe, p.Id, tp6, -1);
+            pe.AddMidiClip(tp6, 0.0, 4.0);
+            pe.SetClipNotes(tp6, 0, new[] { new NotaNote(48, 0.0, 3.0, 0.9f), new NotaNote(55, 0.0, 3.0, 0.9f) });
+            var pb = new float[22050 * 2];
+            pe.Seek(0.0); pe.Play(); pe.RenderOffline(pb, 22050); pe.StopTransport();
+            if (pb.Any(x => !float.IsFinite(x) || Math.Abs(x) > 8f) || Rms(pb, 22050) < 0.002f) silent.Add($"{p.DisplayName} ({Rms(pb, 22050):F4})");
+        }
+        Check(silent.Count == 0, $"every ported preset plays{(silent.Count > 0 ? " — silent or clipping: " + string.Join(", ", silent) : "")}");
         var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !voltIds.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
         Check(bad.Count == 0, $"every Volt preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
         int tp = ve.AddVoltSynthTrack();
@@ -9463,7 +9540,7 @@ Console.WriteLine("-- Instrument Rack: C ABI + persistence --");
     int rt = re.AddInstrumentRackTrack();
     Check(rt > 0, "rack track created");
     Check(re.RackChainCount(rt) == 1, "rack starts with one chain");
-    Check(re.RackChainInstrumentKind(rt, 0) == 0, "default chain hosts Nota Synth");
+    Check(re.RackChainInstrumentKind(rt, 0) == 6, "default chain hosts Nota Volt");
 
     int c2 = re.RackAddChain(rt, 2);   // Nota Physical
     Check(c2 == 1 && re.RackChainCount(rt) == 2, "second chain added");
@@ -14737,12 +14814,12 @@ Console.WriteLine("-- background audio import --");
           "instrument, effect and MIDI presets carry their category; Init stays unfiled");
 
     var bvm = new Nota.Presentation.BrowserViewModel(new EmptyPluginCatalog(), new EmptyPresetLibrary(), fcat);
-    var synth = bvm.Instruments.First(i => i.Name == "Nota Synth");
-    Check(synth.Children[0] is { Name: "Init Saw", Kind: Nota.Presentation.BrowserItemKind.Preset, Depth: 1 }
+    var synth = bvm.Instruments.First(i => i.Name == "Nota Sampler");
+    Check(synth.Children[0] is { Name: "Init", Kind: Nota.Presentation.BrowserItemKind.Preset, Depth: 1 }
           && synth.Children.Skip(1).All(c => c.Kind == Nota.Presentation.BrowserItemKind.Folder && c.Depth == 1),
           "a device holds its Init loose on top, then category folders");
     var pads = synth.Children.First(c => c.Name == "Pads");
-    Check(pads.Children.Any(p => p.Name == "Warm Pad" && p.Depth == 2 && p.Path == "factory:synth/Warm Pad"),
+    Check(pads.Children.Any(p => p.Name == "Warm Pad" && p.Depth == 2 && p.Path == "factory:sampler/Warm Pad"),
           "a folder holds its presets one level deeper, still applying by factory id");
 
     bvm.ToggleExpand(synth);
@@ -14750,10 +14827,10 @@ Console.WriteLine("-- background audio import --");
     Check(bvm.Instruments.Contains(pads) && !bvm.Instruments.Any(i => i.Name == "Warm Pad"),
           "expanding a device shows its folders, not the presets inside them");
     bvm.ToggleExpand(pads);
-    Check(bvm.Instruments.Any(i => i.Path == "factory:synth/Warm Pad") && bvm.Instruments.IndexOf(pads) > at,
+    Check(bvm.Instruments.Any(i => i.Path == "factory:sampler/Warm Pad") && bvm.Instruments.IndexOf(pads) > at,
           "expanding a folder reveals its presets");
     bvm.ToggleExpand(pads);
-    Check(!bvm.Instruments.Any(i => i.Path == "factory:synth/Warm Pad"), "…and collapsing hides them again");
+    Check(!bvm.Instruments.Any(i => i.Path == "factory:sampler/Warm Pad"), "…and collapsing hides them again");
 
     bvm.FilterTree(0, "Glacier");
     Check(bvm.Instruments.Select(i => i.Name).SequenceEqual(new[] { "BUILT-IN", "Nota Aurora", "Pads", "Glacier Pad" }),

@@ -557,6 +557,9 @@ All live in one **graph window** (`Controls/NotaGraph.cs`):
 Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width from
 `IDeviceBody.Width`): panel body, radius 3, a 1 px seam frame. A selected card carries a
 1.5 px accent ring outside its frame.
+Width exceptions: the parameter stubs and the generic "Open GUI" card are narrow; Nota Bass and
+Nota Physical keep their wider layouts; **Nota Volt is 790** since it took over Nota Synth and
+Nota Bass (specs/026) and its Osc rows carry Shape and Pulse Width.
 
 - **Header 22** (`HeaderH`, built by `DeviceChainView.Shell.cs` `BuildCardShell`): a
   raised strip with the `Shadow.Raised` bevel and a seam under it, in **fixed slots, left to
