@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Single source of truth for Nota's per-user data directory, shared by the
-// settings, recovery and logging services (and mirrored by the native engine's
-// audio.json / midi.json writers). Platform conventions:
+// settings, recovery and logging services. Pushed to native at startup via
+// NotaEngine.SetDataDir (nota_set_data_dir); the engine itself never infers
+// platform paths — besides this value only NOTA_DATA_DIR (tests) is honoured.
+// Platform conventions:
 //   macOS   -> ~/Library/Application Support/Nota   (unchanged from the mac-only era)
 //   Windows -> %APPDATA%\Nota                       (Roaming AppData)
 //   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota (lowercase, XDG style)
-// The native side resolves the same locations (cfgfile::dataDir, the plugin host)
-// so config written by C++ and C# lands in one place.
 
 namespace Nota.Infrastructure;
 

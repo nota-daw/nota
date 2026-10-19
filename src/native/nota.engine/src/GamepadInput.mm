@@ -8,6 +8,8 @@
 #include "GamepadInput.h"
 #include "CommandQueue.h" // SpscRingBuffer
 
+#if defined(__APPLE__)
+
 #import <GameController/GameController.h>
 #import <Foundation/Foundation.h>
 
@@ -246,3 +248,5 @@ int32_t GamepadInput::pollEvents(ButtonEvent* out, int32_t max) {
 }
 
 } // namespace nota
+
+#endif // defined(__APPLE__)

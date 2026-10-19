@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Non-Apple implementation of AudioConfig.h (device enumeration + persisted config)
-// for Windows + Linux, mirroring the macOS AudioConfig.mm but backed by miniaudio
-// (WASAPI on Windows; PulseAudio/ALSA on Linux). Devices are keyed by a UID string
-// derived from the miniaudio ma_device_id (stable for a given endpoint within a
-// session). Config persists to <config-dir>/audio.json (NotaConfigFile::dataDir).
+// Non-Apple device enumeration for AudioConfig.h (Windows + Linux, miniaudio
+// WASAPI / PulseAudio / ALSA). Persistence (audio.json) lives in the shared
+// ConfigJson.cpp. Devices are keyed by a UID string derived from the miniaudio
+// ma_device_id (stable for a given endpoint within a session).
 
 #include "AudioConfig.h"
 #include "MiniaudioDevices.h"
-#include "NotaConfigFile.h"
 #include "nota_miniaudio.h"
 
 #include <cstdio>
-#include <cstring>
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -86,35 +82,6 @@ bool notaMiniaudioDeviceIdForIndex(bool inputScope, uint32_t oneBasedIndex, ma_d
     if (oneBasedIndex > infos.size()) return false;
     out = infos[oneBasedIndex - 1].id;
     return true;
-}
-
-AudioConfig loadAudioConfig() {
-    AudioConfig cfg;
-    std::string dir = cfgfile::dataDir();
-    if (dir.empty()) return cfg;
-    std::string path = (std::filesystem::path(dir) / "audio.json").string();
-    std::string json = cfgfile::readFile(path);
-    if (json.empty()) return cfg;
-    cfgfile::jsonGetString(json, "outputDeviceUid", cfg.outputDeviceUid);
-    cfgfile::jsonGetString(json, "inputDeviceUid",  cfg.inputDeviceUid);
-    double sr = 0.0; if (cfgfile::jsonGetNumber(json, "sampleRate", sr))     cfg.sampleRate   = sr;
-    double bf = 0.0; if (cfgfile::jsonGetNumber(json, "bufferFrames", bf))   cfg.bufferFrames = static_cast<int32_t>(bf);
-    double we = 0.0; if (cfgfile::jsonGetNumber(json, "wasapiExclusive", we) && we != 0.0) cfg.wasapiExclusive = true;
-    return cfg;
-}
-
-void saveAudioConfig(const AudioConfig& cfg) {
-    std::string dir = cfgfile::dataDir();
-    if (dir.empty()) return;
-    std::string json = "{\n";
-    json += "  \"outputDeviceUid\": \"" + cfgfile::jsonEscape(cfg.outputDeviceUid) + "\",\n";
-    json += "  \"inputDeviceUid\": \""  + cfgfile::jsonEscape(cfg.inputDeviceUid)  + "\",\n";
-    json += "  \"sampleRate\": "   + std::to_string(cfg.sampleRate)   + ",\n";
-    json += "  \"bufferFrames\": " + std::to_string(cfg.bufferFrames) + ",\n";
-    json += "  \"wasapiExclusive\": " + std::string(cfg.wasapiExclusive ? "true" : "false") + "\n";
-    json += "}\n";
-    std::string path = (std::filesystem::path(dir) / "audio.json").string();
-    cfgfile::writeFileAtomic(path, json);
 }
 
 } // namespace nota

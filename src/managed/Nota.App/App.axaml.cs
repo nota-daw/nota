@@ -30,6 +30,9 @@ public partial class App : Avalonia.Application
     {
         var services = new ServiceCollection();
         // Engine: one native handle, exposed to the layers through its port.
+        // Tell native code where its data lives first, so it never has to guess:
+        // audio.json / midi.json and the plugin catalog land next to C# settings.
+        NotaEngine.SetDataDir(NotaPaths.DataDir);
         services.AddSingleton<NotaEngine>();
         services.AddSingleton<IAudioEngine>(sp => sp.GetRequiredService<NotaEngine>());
         services.AddSingleton(new EngineBuildInfo(NotaEngine.Version));

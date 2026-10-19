@@ -3,6 +3,8 @@
 
 #include "CoreAudioInput.h"
 
+#if defined(__APPLE__)
+
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudio/CoreAudio.h>
 
@@ -138,3 +140,5 @@ void CoreAudioInput::stop() {
 }
 
 } // namespace nota
+
+#endif // defined(__APPLE__)

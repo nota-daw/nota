@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// macOS device enumeration for AudioConfig.h (CoreAudio). Persistence
+// (audio.json) lives in the shared ConfigJson.cpp.
 
 #include "AudioConfig.h"
 
+#if defined(__APPLE__)
+
 #import <CoreAudio/CoreAudio.h>
-#import <Foundation/Foundation.h>
+#import <CoreFoundation/CoreFoundation.h>
+
+#include <vector>
 
 namespace nota {
 namespace {
@@ -79,19 +86,6 @@ AudioDeviceID defaultDeviceId(bool inputScope) {
     return dev;
 }
 
-// ~/Library/Application Support/Nota/audio.json
-NSString* configPath() {
-    NSArray* dirs = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    if (dirs.count == 0) return nil;
-    NSString* dir = [dirs[0] stringByAppendingPathComponent:@"Nota"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:nil];
-    return [dir stringByAppendingPathComponent:@"audio.json"];
-}
-
 } // namespace
 
 std::vector<AudioDeviceInfo> enumerateAudioDevices(bool inputScope) {
@@ -140,41 +134,6 @@ uint32_t resolveAudioDeviceId(const std::string& uid, bool inputScope) {
     return defaultDeviceId(inputScope); // empty or unknown UID -> current default
 }
 
-AudioConfig loadAudioConfig() {
-    AudioConfig cfg;
-    NSString* path = configPath();
-    if (!path) return cfg;
-    NSData* data = [NSData dataWithContentsOfFile:path];
-    if (!data) return cfg;
-    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    if (![json isKindOfClass:[NSDictionary class]]) return cfg;
-    NSDictionary* d = (NSDictionary*)json;
-    if (NSString* s = d[@"outputDeviceUid"]; [s isKindOfClass:[NSString class]])
-        cfg.outputDeviceUid = s.UTF8String;
-    if (NSString* s = d[@"inputDeviceUid"]; [s isKindOfClass:[NSString class]])
-        cfg.inputDeviceUid = s.UTF8String;
-    if (NSNumber* n = d[@"sampleRate"]; [n isKindOfClass:[NSNumber class]])
-        cfg.sampleRate = n.doubleValue;
-    if (NSNumber* n = d[@"bufferFrames"]; [n isKindOfClass:[NSNumber class]])
-        cfg.bufferFrames = n.intValue;
-    return cfg;
-}
-
-void saveAudioConfig(const AudioConfig& cfg) {
-    NSString* path = configPath();
-    if (!path) return;
-    NSDictionary* d = @{
-        @"outputDeviceUid": [NSString stringWithUTF8String:cfg.outputDeviceUid.c_str()],
-        @"inputDeviceUid":  [NSString stringWithUTF8String:cfg.inputDeviceUid.c_str()],
-        @"sampleRate":      @(cfg.sampleRate),
-        @"bufferFrames":    @(cfg.bufferFrames),
-    };
-    NSData* data = [NSJSONSerialization dataWithJSONObject:d
-                                                  options:NSJSONWritingPrettyPrinted
-                                                    error:nil];
-    if (!data) return;
-    // Atomic write (temp + rename), like ProjectService.Save.
-    [data writeToFile:path atomically:YES];
-}
-
 } // namespace nota
+
+#endif // defined(__APPLE__)

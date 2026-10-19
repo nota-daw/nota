@@ -4,134 +4,48 @@
 #include "NotaConfigFile.h"
 
 #include <cstdlib>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 
 namespace nota::cfgfile {
 namespace {
 
-// Skip whitespace starting at pos; returns index of first non-ws (or npos-safe end).
-size_t skipWs(const std::string& s, size_t pos) {
-    while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t' || s[pos] == '\n' || s[pos] == '\r'))
-        ++pos;
-    return pos;
-}
-
-// Parse a JSON string literal whose opening quote is at s[pos] == '"'.
-// On success sets out to the unescaped value and pos to just past the closing quote.
-bool parseString(const std::string& s, size_t& pos, std::string& out) {
-    if (pos >= s.size() || s[pos] != '"') return false;
-    ++pos;
-    out.clear();
-    while (pos < s.size()) {
-        char c = s[pos++];
-        if (c == '"') return true;
-        if (c == '\\' && pos < s.size()) {
-            char e = s[pos++];
-            switch (e) {
-                case '"':  out.push_back('"');  break;
-                case '\\': out.push_back('\\'); break;
-                case '/':  out.push_back('/');  break;
-                case 'b':  out.push_back('\b'); break;
-                case 'f':  out.push_back('\f'); break;
-                case 'n':  out.push_back('\n'); break;
-                case 'r':  out.push_back('\r'); break;
-                case 't':  out.push_back('\t'); break;
-                case 'u': {
-                    if (pos + 4 > s.size()) return false;
-                    unsigned code = 0;
-                    for (int i = 0; i < 4; ++i) {
-                        char h = s[pos++];
-                        code <<= 4;
-                        if (h >= '0' && h <= '9')      code |= unsigned(h - '0');
-                        else if (h >= 'a' && h <= 'f') code |= unsigned(h - 'a' + 10);
-                        else if (h >= 'A' && h <= 'F') code |= unsigned(h - 'A' + 10);
-                        else return false;
-                    }
-                    // Minimal UTF-8 encode of the BMP code point (config ids are ASCII/BMP).
-                    if (code < 0x80) out.push_back(char(code));
-                    else if (code < 0x800) {
-                        out.push_back(char(0xC0 | (code >> 6)));
-                        out.push_back(char(0x80 | (code & 0x3F)));
-                    } else {
-                        out.push_back(char(0xE0 | (code >> 12)));
-                        out.push_back(char(0x80 | ((code >> 6) & 0x3F)));
-                        out.push_back(char(0x80 | (code & 0x3F)));
-                    }
-                    break;
-                }
-                default: out.push_back(e); break;
-            }
-        } else {
-            out.push_back(c);
-        }
-    }
-    return false; // unterminated
-}
-
-// Find the value position just after `"key" :` at the top level. Returns npos if
-// not found. (Sufficient for our flat one-object config files.)
-size_t findValue(const std::string& json, const std::string& key) {
-    std::string needle = "\"" + key + "\"";
-    size_t k = json.find(needle);
-    if (k == std::string::npos) return std::string::npos;
-    size_t p = skipWs(json, k + needle.size());
-    if (p >= json.size() || json[p] != ':') return std::string::npos;
-    return skipWs(json, p + 1);
-}
-
-#if !defined(_WIN32)
-// Earlier engine builds wrote audio.json / midi.json / plugins.xml / scanpaths.txt to
-// <root>/Nota while the managed side used <root>/nota. Move what is there into the one
-// folder, never overwriting, and drop the old folder once it is empty. Best-effort.
-void migrateLegacyDir(const std::filesystem::path& legacy, const std::filesystem::path& dir) {
-    std::error_code ec;
-    if (!std::filesystem::is_directory(legacy, ec)) return;
-    if (std::filesystem::equivalent(legacy, dir, ec)) return; // case-insensitive filesystem
-    for (const auto& entry : std::filesystem::directory_iterator(legacy, ec)) {
-        auto target = dir / entry.path().filename();
-        if (!std::filesystem::exists(target, ec))
-            std::filesystem::rename(entry.path(), target, ec);
-    }
-    std::filesystem::remove(legacy, ec); // only succeeds if empty
-}
-#endif
+std::mutex g_dataDirMutex;
+std::string g_dataDirOverride;
 
 } // namespace
 
+void setDataDirOverride(const std::string& dir) {
+    std::lock_guard<std::mutex> lock(g_dataDirMutex);
+    g_dataDirOverride = dir;
+}
+
+std::string dataDirOverride() {
+    std::lock_guard<std::mutex> lock(g_dataDirMutex);
+    return g_dataDirOverride;
+}
+
 std::string dataDir() {
-    // NOTA_DATA_DIR (tests) relocates the data root, like NotaPaths.DataDir.
-    if (const char* over = std::getenv("NOTA_DATA_DIR"); over && *over) {
-        std::error_code ec;
-        std::filesystem::create_directories(over, ec);
-        return over;
+    // The engine never guesses platform paths: the app tells it once via
+    // nota_set_data_dir (NotaPaths.DataDir), tests via NOTA_DATA_DIR.
+    // Unset (empty) means config persistence is off: loads return defaults,
+    // saves and the plugin catalog are skipped.
+    {
+        std::lock_guard<std::mutex> lock(g_dataDirMutex);
+        if (!g_dataDirOverride.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(g_dataDirOverride, ec);
+            return g_dataDirOverride;
+        }
     }
-    // Resolve the per-user config root, then append the app folder — mirrors
-    // NotaPaths.DataDir on the managed side. Windows: %APPDATA%\Nota.
-    // Linux: $XDG_CONFIG_HOME, else $HOME/.config (XDG Base Directory spec), + "nota".
-    std::filesystem::path root;
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"); appdata && *appdata)
-        root = appdata;
-    if (root.empty()) return {};
-    std::filesystem::path dir = root / "Nota";
-#else
-    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
-        root = xdg;
-    else if (const char* home = std::getenv("HOME"); home && *home)
-        root = std::filesystem::path(home) / ".config";
-    if (root.empty()) return {};
-    std::filesystem::path dir = root / "nota";
-#endif
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-#if !defined(_WIN32)
-    static const bool migrated = (migrateLegacyDir(root / "Nota", dir), true);
-    (void)migrated;
-#endif
-    return dir.string();
+    if (const char* env = std::getenv("NOTA_DATA_DIR"); env && *env) {
+        std::error_code ec;
+        std::filesystem::create_directories(env, ec);
+        return env;
+    }
+    return {};
 }
 
 std::string readFile(const std::string& path) {
@@ -158,68 +72,6 @@ bool writeFileAtomic(const std::string& path, const std::string& content) {
         std::filesystem::rename(tmp, path, ec);
     }
     return !ec;
-}
-
-std::string jsonEscape(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (char c : s) {
-        switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\b': out += "\\b";  break;
-            case '\f': out += "\\f";  break;
-            case '\n': out += "\\n";  break;
-            case '\r': out += "\\r";  break;
-            case '\t': out += "\\t";  break;
-            default:
-                if (static_cast<unsigned char>(c) < 0x20) {
-                    char buf[8];
-                    std::snprintf(buf, sizeof(buf), "\\u%04x", c & 0xFF);
-                    out += buf;
-                } else {
-                    out.push_back(c);
-                }
-        }
-    }
-    return out;
-}
-
-bool jsonGetString(const std::string& json, const std::string& key, std::string& out) {
-    size_t p = findValue(json, key);
-    if (p == std::string::npos) return false;
-    return parseString(json, p, out);
-}
-
-bool jsonGetNumber(const std::string& json, const std::string& key, double& out) {
-    size_t p = findValue(json, key);
-    if (p == std::string::npos) return false;
-    try {
-        size_t consumed = 0;
-        out = std::stod(json.substr(p), &consumed);
-        return consumed > 0;
-    } catch (...) {
-        return false;
-    }
-}
-
-bool jsonGetStringArray(const std::string& json, const std::string& key,
-                        std::vector<std::string>& out) {
-    size_t p = findValue(json, key);
-    if (p == std::string::npos) return false;
-    if (p >= json.size() || json[p] != '[') return false;
-    p = skipWs(json, p + 1);
-    if (p < json.size() && json[p] == ']') return true; // empty array
-    while (p < json.size()) {
-        std::string v;
-        if (!parseString(json, p, v)) return false;
-        out.push_back(std::move(v));
-        p = skipWs(json, p);
-        if (p < json.size() && json[p] == ',') { p = skipWs(json, p + 1); continue; }
-        if (p < json.size() && json[p] == ']') return true;
-        return false;
-    }
-    return false;
 }
 
 } // namespace nota::cfgfile

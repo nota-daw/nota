@@ -17,9 +17,7 @@
 #include "Instrument.h"
 #include "PluginHostBridge.h"
 #include "CommandQueue.h"   // SpscRingBuffer: message-thread -> audio-thread note injection
-#if !defined(__APPLE__) // JUCE_MAC is not defined yet: the JUCE headers come below
-#include "NotaConfigFile.h" // cfgfile::dataDir: the Windows/Linux per-user data dir
-#endif
+#include "NotaConfigFile.h" // cfgfile::dataDir/dataDirOverride: the per-user data dir
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -126,15 +124,22 @@ juce::KnownPluginList& catalog() {
     return list;
 }
 
-// Per-user Nota data dir (mirrors NotaPaths.DataDir / cfgfile::dataDir):
-//   macOS   -> ~/Library/Application Support/Nota
-//   Windows -> %APPDATA%\Nota
-//   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota
+// Per-user Nota data dir: the explicit override (nota_set_data_dir, i.e.
+// NotaPaths.DataDir) or NOTA_DATA_DIR (tests). Unset on Windows/Linux means
+// cfgfile::dataDir() is empty and catalog IO becomes a silent no-op — the app
+// always sets the override at startup, so this only bites standalone use.
 juce::File notaSupportDir() {
+    // Explicit override from nota_set_data_dir (managed startup) wins everywhere,
+    // so the host never diverges from audio.json / midi.json.
+    if (std::string over = nota::cfgfile::dataDirOverride(); !over.empty()) {
+        juce::File dir{juce::CharPointer_UTF8(over.c_str())};
+        dir.createDirectory();
+        return dir;
+    }
     // NOTA_DATA_DIR (tests) relocates the catalog + scan paths, like NotaPaths.DataDir.
     // Needed because on macOS JUCE resolves the home folder via NSHomeDirectory(), not $HOME.
-    if (const char* over = std::getenv("NOTA_DATA_DIR"); over != nullptr && *over != '\0') {
-        juce::File dir{juce::CharPointer_UTF8(over)};
+    if (const char* env = std::getenv("NOTA_DATA_DIR"); env != nullptr && *env != '\0') {
+        juce::File dir{juce::CharPointer_UTF8(env)};
         dir.createDirectory();
         return dir;
     }

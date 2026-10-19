@@ -26,6 +26,13 @@ existing checkout (and again after a pull that moves it):
 git submodule update --init --recursive
 ```
 
+## CMake dependencies (CPM)
+
+Small header-only libs are fetched by [CPM](https://github.com/cpm-cmake/CPM.cmake) into the build dir (`_deps`)
+from pinned URLs — never vendored. A fresh configure needs network. To reuse downloads
+across builds, export `CPM_SOURCE_CACHE=~/.cache/CPM`; for an air-gapped build, override
+a package with `-DFETCHCONTENT_SOURCE_DIR_<NAME>=<dir>`.
+
 ## Quick start
 
 ```bash

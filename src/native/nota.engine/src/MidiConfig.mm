@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// macOS device enumeration for MidiConfig.h (CoreMIDI). Persistence
+// (midi.json) lives in the shared ConfigJson.cpp.
 
 #include "MidiConfig.h"
 
 #include <algorithm>
+#include <string>
+
+#if defined(__APPLE__)
 
 #import <CoreMIDI/CoreMIDI.h>
-#import <Foundation/Foundation.h>
+#import <CoreFoundation/CoreFoundation.h>
 
 namespace nota {
 namespace {
@@ -32,19 +38,6 @@ std::string endpointDisplayName(MIDIEndpointRef ep) {
     std::string out = cfToString(name);
     CFRelease(name);
     return out;
-}
-
-// ~/Library/Application Support/Nota/midi.json
-NSString* configPath() {
-    NSArray* dirs = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    if (dirs.count == 0) return nil;
-    NSString* dir = [dirs[0] stringByAppendingPathComponent:@"Nota"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:nil];
-    return [dir stringByAppendingPathComponent:@"midi.json"];
 }
 
 } // namespace
@@ -73,40 +66,6 @@ std::vector<MidiDeviceInfo> enumerateMidiInputs() {
     return out;
 }
 
-MidiConfig loadMidiConfig() {
-    MidiConfig cfg;
-    NSString* path = configPath();
-    if (!path) return cfg;
-    NSData* data = [NSData dataWithContentsOfFile:path];
-    if (!data) return cfg;
-    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    if (![json isKindOfClass:[NSDictionary class]]) return cfg;
-    NSDictionary* d = (NSDictionary*)json;
-    if (NSArray* arr = d[@"disabledInputUids"]; [arr isKindOfClass:[NSArray class]]) {
-        for (id item in arr)
-            if ([item isKindOfClass:[NSString class]])
-                cfg.disabledInputUids.push_back(((NSString*)item).UTF8String);
-    }
-    if (NSNumber* m = d[@"mpe"]; [m isKindOfClass:[NSNumber class]]) cfg.mpe = m.boolValue;
-    if (NSNumber* r = d[@"mpeBendRange"]; [r isKindOfClass:[NSNumber class]])
-        cfg.mpeBendRange = std::clamp(r.intValue, 1, 96);
-    return cfg;
-}
-
-void saveMidiConfig(const MidiConfig& cfg) {
-    NSString* path = configPath();
-    if (!path) return;
-    NSMutableArray* arr = [NSMutableArray arrayWithCapacity:cfg.disabledInputUids.size()];
-    for (const auto& uid : cfg.disabledInputUids)
-        [arr addObject:[NSString stringWithUTF8String:uid.c_str()]];
-    NSDictionary* d = @{ @"disabledInputUids": arr,
-                         @"mpe": @(cfg.mpe),
-                         @"mpeBendRange": @(cfg.mpeBendRange) };
-    NSData* data = [NSJSONSerialization dataWithJSONObject:d
-                                                  options:NSJSONWritingPrettyPrinted
-                                                    error:nil];
-    if (!data) return;
-    [data writeToFile:path atomically:YES];
-}
-
 } // namespace nota
+
+#endif // defined(__APPLE__)

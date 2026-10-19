@@ -14,6 +14,8 @@
 #include <new>
 #include <string>
 
+#include "NotaConfigFile.h"
+
 // Injected by CMake from src/native/nota.engine/VERSION.
 #ifndef NOTA_VERSION_STRING
 #error "NOTA_VERSION_STRING must be defined by the build (see CMakeLists.txt)"
@@ -29,6 +31,24 @@ NotaEngine* nota_engine_create(void) {
 
 void nota_engine_destroy(NotaEngine* engine) {
     delete reinterpret_cast<Engine*>(engine);
+}
+
+NotaResult nota_set_data_dir(const char* path_utf8) {
+    // NULL / "" clears the override (persistence off unless NOTA_DATA_DIR is set).
+    // Called once at startup from the managed side; never on
+    // the audio thread (AR-6: create_directories does file I/O).
+    if (!path_utf8 || !*path_utf8) {
+        nota::cfgfile::setDataDirOverride({});
+        return NOTA_OK;
+    }
+    nota::cfgfile::setDataDirOverride(std::string(path_utf8));
+    return NOTA_OK;
+}
+
+const char* nota_get_data_dir(void) {
+    static std::string s; // owned by the engine, valid until the next call
+    s = nota::cfgfile::dataDir();
+    return s.c_str();
 }
 
 NotaResult nota_engine_start(NotaEngine* engine) {

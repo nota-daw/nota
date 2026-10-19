@@ -21,6 +21,8 @@ public domain, or AGPL-compatible copyleft.
 | LAME | 3.100 | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
 | signalsmith-stretch | vendored | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use |
 | signalsmith-linear | vendored | FFT / linear DSP primitives | MIT | ✅ in use |
+| nlohmann/json | 3.12.0 | `audio.json` / `midi.json` device config (engine) | MIT | ✅ in use — CPM release tarball, fetched to build dir |
+| CPM.cmake | v0.43.2 | CMake package manager (build-time only, not linked) | MIT | ✅ in use — downloaded at configure time, never vendored |
 | HIIR (Laurent de Soras) | 1.40 | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — see note 4 |
 | Apple CoreAudio / CoreMIDI / AudioToolbox | system | Audio + MIDI I/O (macOS) | system SDK | ✅ in use |
 | Geist / Geist Mono (Vercel) | 1.7.2 | UI and numeric typefaces (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |

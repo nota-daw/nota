@@ -10,6 +10,27 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_
 # OBJC/OBJCXX only exist on Apple; enable them conditionally so the Windows
 # (MSVC/clang-cl) configure doesn't fail looking for an Objective-C compiler.
 project(nota_engine LANGUAGES C CXX VERSION ${NOTA_ENGINE_VERSION})
+
+
+set(CPM_VERSION "v0.43.2")
+set(CPM_SHA256 "49a3bef91ceb65bb66d57255e12d1ffd22abc2f6408fa9fe4534c544a2f232aa")
+set(CPM_FILE "${CMAKE_BINARY_DIR}/_cpm/CPM.cmake")
+if(NOT EXISTS "${CPM_FILE}")
+    file(DOWNLOAD
+        "https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_VERSION}/CPM.cmake"
+        "${CPM_FILE}"
+        EXPECTED_HASH SHA256=${CPM_SHA256}
+        STATUS _cpm_status)
+    list(GET _cpm_status 0 _cpm_code)
+    if(NOT _cpm_code EQUAL 0)
+        message(FATAL_ERROR
+            "CPM download failed (network needed on fresh configure). "
+            "Set CPM_SOURCE_CACHE or -DFETCHCONTENT_SOURCE_DIR_<NAME>=<dir>. "
+            "Status: ${_cpm_status}")
+    endif()
+endif()
+include("${CPM_FILE}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependencies.cmake")
 if(APPLE)
     enable_language(OBJC)
     enable_language(OBJCXX)
@@ -70,6 +91,8 @@ set(NOTA_ENGINE_SOURCES
     src/nota_engine_audition.cpp
     src/Audition.cpp
     src/AudioBackendFactory.cpp   # platform-selected backend construction
+    src/NotaConfigFile.cpp        # per-user data dir + atomic file IO (all platforms)
+    src/ConfigJson.cpp            # audio.json / midi.json via vendored nlohmann/json
 )
 
 # Platform device layer: macOS (CoreAudio/CoreMIDI) vs the shared non-Apple layer
@@ -91,7 +114,6 @@ elseif(WIN32 OR (UNIX AND NOT APPLE))
         src/AudioConfig_miniaudio.cpp
         src/MidiInput_rtmidi.cpp
         src/MidiConfig_rtmidi.cpp
-        src/NotaConfigFile.cpp
         src/GamepadInput_stub.cpp     # v1: macOS-only; reports zero pads
         vendor/rtmidi/RtMidi.cpp
     )
@@ -161,7 +183,7 @@ add_subdirectory(vendor/flac)
 # our thin CMakeLists (upstream ships none). Pure C, no nasm/SSE.
 add_subdirectory(vendor/lame)
 
-target_link_libraries(nota_engine PRIVATE FLAC lame)
+target_link_libraries(nota_engine PRIVATE FLAC lame nlohmann_json::nlohmann_json)
 
 # --- Plugin hosting (M3) via JUCE -------------------------------------------
 # JUCE lives ONLY in the pluginhost module; the core engine above stays

@@ -3,6 +3,9 @@
 
 #include "CoreAudioBackend.h"
 
+
+#if defined(__APPLE__)
+
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudio/CoreAudio.h>
 
@@ -236,3 +239,5 @@ void CoreAudioBackend::stop() {
 }
 
 } // namespace nota
+
+#endif // defined(__APPLE__)

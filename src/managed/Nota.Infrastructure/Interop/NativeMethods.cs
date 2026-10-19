@@ -36,6 +36,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_destroy")]
     internal static partial void Destroy(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_set_data_dir", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult SetDataDir(string path);
+
+    [LibraryImport(Lib, EntryPoint = "nota_get_data_dir")]
+    internal static partial IntPtr GetDataDir();
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_start")]
     internal static partial NotaResult Start(IntPtr engine);
 

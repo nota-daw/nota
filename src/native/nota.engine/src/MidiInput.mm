@@ -4,6 +4,8 @@
 #include "MidiInput.h"
 #include "MidiConfig.h"
 
+#if defined(__APPLE__)
+
 #import <CoreMIDI/CoreMIDI.h>
 
 #include <algorithm>
@@ -90,3 +92,5 @@ void MidiInput::close() {
 } // namespace nota
 
 #pragma clang diagnostic pop
+
+#endif // defined(__APPLE__)

@@ -26,6 +26,16 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Engine library version, e.g. "0.2.5" (src/native/nota.engine/VERSION).</summary>
     public static string Version => Marshal.PtrToStringUTF8(NativeMethods.Version()) ?? "?";
 
+    /// <summary>
+    /// Tells the native engine where its per-user data lives (audio.json, midi.json,
+    /// plugin catalog). Call once at startup with <c>NotaPaths.DataDir</c>, before
+    /// creating the engine handle; <c>null</c>/empty resets to auto-detect.
+    /// </summary>
+    public static void SetDataDir(string? path) => Check(NativeMethods.SetDataDir(path ?? ""));
+
+    /// <summary>Effective native data dir (the override, or what auto-detect resolved).</summary>
+    public static string DataDir => Marshal.PtrToStringUTF8(NativeMethods.GetDataDir()) ?? "";
+
     /// <summary>Negotiated output sample rate, or 0 if not started.</summary>
     public double SampleRate
     {

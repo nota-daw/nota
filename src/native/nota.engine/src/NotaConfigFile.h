@@ -1,36 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Small helpers shared by the non-Apple config layer (AudioConfig_miniaudio.cpp and
-// MidiConfig_rtmidi.cpp, on Windows + Linux): the per-user data directory and a minimal
-// JSON read/write for the tiny audio.json / midi.json config files. These files are
-// engine-internal (the managed layer reads them only through C ABI getters), so a
-// hand-rolled parser is sufficient — but string values (WASAPI endpoint ids can contain
-// backslashes/braces) are properly escaped. The directory mirrors NotaPaths.DataDir on
-// the managed side: %APPDATA%\Nota on Windows, $XDG_CONFIG_HOME/nota (or ~/.config/nota)
-// on Linux, or NOTA_DATA_DIR when set (tests). The plugin host's catalog lives here too.
+// Small helpers shared by the config layer on all platforms (AudioConfig and
+// MidiConfig persistence): the per-user data directory plus atomic file read/write.
+// JSON itself is handled by nlohmann/json (fetched via CPM, see cmake/dependencies.cmake)
+// in ConfigJson.cpp — this header stays JSON-free. The engine never infers platform
+// paths: the directory is set once at startup from the managed side
+// (nota_set_data_dir <- NotaPaths.DataDir); tests use NOTA_DATA_DIR instead.
+// Unset (empty) means persistence is off. The plugin host's catalog lives here too.
 
 #pragma once
 
 #include <string>
-#include <vector>
 
 namespace nota::cfgfile {
 
-// Per-user config dir, created on first use. Empty string if it can't be resolved.
+// Explicit override set once at startup via nota_set_data_dir (C ABI), fed from
+// NotaPaths.DataDir on the managed side. Empty = unset (persistence off).
+// Thread-safe; never called on the audio thread (config IO is message-thread).
+void setDataDirOverride(const std::string& dir);
+std::string dataDirOverride();
+
+// Per-user config dir, created on first use. Empty when unset (no override and
+// no NOTA_DATA_DIR): loads return defaults, saves are skipped.
 std::string dataDir();
 
 std::string readFile(const std::string& path);
 bool        writeFileAtomic(const std::string& path, const std::string& content);
-
-std::string jsonEscape(const std::string& s);
-
-// Extract "key":"value" (JSON-unescaped). False if the key is absent.
-bool jsonGetString(const std::string& json, const std::string& key, std::string& out);
-// Extract "key": <number>. False if the key is absent / unparseable.
-bool jsonGetNumber(const std::string& json, const std::string& key, double& out);
-// Extract "key":["a","b",...]; appends unescaped elements. False if key absent.
-bool jsonGetStringArray(const std::string& json, const std::string& key,
-                        std::vector<std::string>& out);
 
 } // namespace nota::cfgfile

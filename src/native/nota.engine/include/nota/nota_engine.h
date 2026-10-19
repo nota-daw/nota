@@ -207,6 +207,18 @@ NOTA_API const char* nota_engine_version(void);
 NOTA_API NotaEngine* nota_engine_create(void);
 NOTA_API void        nota_engine_destroy(NotaEngine* engine);
 
+/* --- Per-user data directory --------------------------------------------
+ * Where audio.json / midi.json, the plugin catalog (plugins.xml) and scan
+ * paths live. Set once at startup from the managed side (NotaPaths.DataDir)
+ * before creating the engine or touching device config; NULL or "" clears the
+ * override. The engine never infers platform paths itself — besides the
+ * override only NOTA_DATA_DIR (tests) is honoured; unset means persistence is
+ * off (loads return defaults, saves are skipped). The directory is created
+ * best-effort. get returns the effective directory ("" when unset), UTF-8,
+ * owned by the engine, valid until the next call. */
+NOTA_API NotaResult  nota_set_data_dir(const char* path_utf8);
+NOTA_API const char* nota_get_data_dir(void);
+
 /* Open the default CoreAudio output device and start the audio thread. */
 NOTA_API NotaResult nota_engine_start(NotaEngine* engine);
 
