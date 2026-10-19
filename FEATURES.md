@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.55.1** (plus changes in development on `main`). This document describes what is
+**0.56.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -64,7 +64,8 @@ JUCE module; the engine core is JUCE-free.
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
-  their dates — click to select, double-click (or the arrow keys and Return) to open.
+  their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
+  or a click outside closes it, keeping the current project.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
@@ -86,7 +87,8 @@ JUCE module; the engine core is JUCE-free.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
-  to resize it, the brace to move it; right-click the ruler to clear it). Notes held across the
+  to resize it, the brace to move it; double-click the brace to switch the loop off and on;
+  right-click the ruler to clear it). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
@@ -227,10 +229,15 @@ track count and closes with Escape.
 - **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
   its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
   editor; transposing the selection.
+  - A note drawn takes the length and velocity of the note last touched (clicked, moved,
+    resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
   - **Note audition** (the speaker switch in the header, on by default): a note sounds while
-    it is placed, clicked or dragged, re-sounding at each new pitch.
+    it is placed, clicked or dragged, re-sounding at each new pitch. Nothing is auditioned
+    while a take is recording.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
+  - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
+    the grid); the roll shows the playhead while stopped too, where playback will start.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,

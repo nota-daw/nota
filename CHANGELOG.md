@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.56.1] — 2026-10-19
+
 ### Added
 - **Nota Volt does what Nota Bass and Nota Synth did** (nota-daw/nota#195): each oscillator
   has a **Shape** knob that morphs its wave toward the next one (sine → triangle → saw →
