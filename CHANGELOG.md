@@ -22,6 +22,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
+  they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens
+  with About Nota, then Settings… (⌘,), then Services, Hide and Quit, as in other Mac apps.
+
 ## [0.56.1] — 2026-10-19
 
 ### Added

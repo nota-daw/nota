@@ -7,19 +7,15 @@
                   real choice (Preferences → Appearance) to NotaThemeService before the
                   first window paints. See .claude/skills/nota-design. -->
 
-    <!-- macOS application menu (the bold "Nota" menu). Its first item is merged into
-         the app menu, so About/Settings live there instead of a duplicate "Nota". -->
+    <!-- macOS application menu (the bold "Nota" menu). Avalonia puts every item of the
+         Application's NativeMenu straight into the app menu, above Services / Hide / Quit,
+         so About and Settings are listed directly — wrapping them in a "Nota" item would
+         nest them in a submenu (#160). Windows/Linux don't show this menu. -->
     <NativeMenu.Menu>
         <NativeMenu>
-            <NativeMenuItem Header="Nota">
-                <NativeMenuItem.Menu>
-                    <NativeMenu>
-                        <NativeMenuItem Header="About Nota" Click="OnAppAbout"/>
-                        <NativeMenuItemSeparator/>
-                        <NativeMenuItem Header="Settings…" Click="OnAppPreferences" Gesture="Cmd+,"/>
-                    </NativeMenu>
-                </NativeMenuItem.Menu>
-            </NativeMenuItem>
+            <NativeMenuItem Header="About Nota" Click="OnAppAbout"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Settings…" Click="OnAppPreferences" Gesture="Cmd+,"/>
         </NativeMenu>
     </NativeMenu.Menu>
 
