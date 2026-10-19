@@ -22,6 +22,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Nota tells you about updates wherever you are** (nota-daw/nota#58). It used to look for a
+  new version only on the start screen, so it was easy to miss. Now:
+  - It checks on every launch and once a day while it runs, and shows a new version in the
+    status bar beside the version number: click it to **Update** or read the release notes.
+    The download's progress and **Restart to update** show there too.
+  - **Help → Check for updates…** (on macOS also in the **Nota** menu) checks right away and
+    says so when you're up to date or GitHub can't be reached.
+  - **Settings → Updates** can turn the automatic checks off, and shows the last check with a
+    **Check now** button. Nothing downloads until you click Update.
+
 ### Fixed
 - **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
   they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens

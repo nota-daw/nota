@@ -18,8 +18,12 @@ public sealed record AppReleaseAsset(string Name, string Url, long Size, string?
 public interface IAppUpdater
 {
     /// <summary>The latest published release if it's newer than the running version, else null.
-    /// Best-effort: network / parse failures return null.</summary>
+    /// Best-effort: network / parse failures return null and set <see cref="LastCheckFailed"/>.</summary>
     Task<AppRelease?> CheckAsync(CancellationToken ct = default);
+
+    /// <summary>True when the last <see cref="CheckAsync"/> couldn't reach or read the release
+    /// feed, so its null means "don't know" rather than "up to date".</summary>
+    bool LastCheckFailed { get; }
 
     /// <summary>True when this install can be replaced in place (a packaged app in a writable
     /// location). Otherwise the user downloads the release by hand.</summary>

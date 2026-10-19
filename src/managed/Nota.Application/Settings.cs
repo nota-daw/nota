@@ -47,6 +47,10 @@ public sealed class Settings
     /// <summary>Show the welcome screen (recent projects launcher) on startup. On by default;
     /// toggled from the welcome screen's "Show on startup" checkbox.</summary>
     public bool ShowWelcomeOnStartup { get; set; } = true;
+    /// <summary>Look for a newer Nota release on launch and once a day while running (#58).
+    /// On by default; Settings → Updates. Help → Check for updates… works either way, and
+    /// nothing downloads until the user clicks Update.</summary>
+    public bool CheckForUpdates { get; set; } = true;
     /// <summary>The Mixer window's view: "strips" or "map" (the Stereo Map, specs/008).
     /// A per-user preference, remembered between openings.</summary>
     public string MixerView { get; set; } = "strips";

@@ -51,18 +51,11 @@ public partial class MainWindow
         if (PendingRecovery is not null)
             win.Closed += (_, _) => { try { _recovery.ClearRecovery(); } catch { } };
 
-        // Look for a newer release in the background; the banner appears if one turns up
-        // while the launcher is still open. "Restart now" quits through the normal close path
-        // (the installer runs on exit — see App's Exit hook) and relaunches the new version.
-        var updater = App.Services.GetRequiredService<IAppUpdater>();
-        _ = updater.CheckAsync().ContinueWith(t =>
-        {
-            if (t.Result is { } release)
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    if (win.IsVisible) win.ShowUpdateAvailable(release, updater, restart: () => { win.Close(); Close(); });
-                });
-        }, TaskScheduler.Default);
+        // A newer release (AppUpdates: checked on launch, and by Help → Check for updates…)
+        // shows as a banner, now or when the check comes back while the launcher is open.
+        // "Restart now" quits through the normal close path (the installer runs on exit — see
+        // App's Exit hook) and relaunches the new version.
+        win.ShowUpdates(AppUpdates.Shared, restart: () => { win.Close(); Close(); });
 
         // Shown owned rather than modal, so a click on the main window behind it can close it
         // like the close button does (#67) — not while the launcher has its own dialog open

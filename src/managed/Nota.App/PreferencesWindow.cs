@@ -77,6 +77,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             new Page("Library", "Content folders and version history", GlyphKind.Library),
             new Page("Appearance", "Theme, waveforms and AI control", GlyphKind.Appearance),
             new Page("Shortcuts", "Keyboard reference", GlyphKind.Shortcuts),
+            new Page("Updates", "New versions of Nota", GlyphKind.Update),
         }),
     };
 
@@ -265,6 +266,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         4 => PluginsPane(),
         6 => LibraryPane(),
         7 => AppearancePane(),
+        UpdatesIndex => UpdatesPane(),
         _ => ShortcutsPane(),
     };
 

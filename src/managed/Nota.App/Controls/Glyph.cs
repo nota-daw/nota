@@ -35,7 +35,7 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (16-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
 }
 
 internal sealed class Glyph : Control
@@ -471,6 +471,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Appearance] = ("M8 2.667 A5.333 5.333 0 1 0 8 13.333 ZM8 2.667 A5.333 5.333 0 0 1 8 13.333", null),
         // A keycap row on a keyboard (shortcuts).
         [GlyphKind.Shortcuts] = ("M2 4.667 H14 V11.333 H2 ZM4.667 7.333 H4.673 M7.333 7.333 H7.34 M10 7.333 H10.007 M5.333 9.333 H10.667", null),
+        // A circular arrow (a new version: Settings → Updates).
+        [GlyphKind.Update] = ("M13 8 A5 5 0 1 1 11.536 4.464 M11.6 1.6 V4.5 H8.7", null),
         // A controller with keys (MIDI devices).
         [GlyphKind.MidiPort] = ("M2.667 3.333 H13.333 V12.667 H2.667 ZM5.333 3.333 V8.667 M8 3.333 V8.667 M10.667 3.333 V8.667", null),
         // A prompt: chevron and cursor (a command).

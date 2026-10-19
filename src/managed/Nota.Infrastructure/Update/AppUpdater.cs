@@ -74,11 +74,14 @@ public sealed partial class AppUpdater : IAppUpdater
 
     public bool RelaunchAfterInstall { get; set; }
 
+    public bool LastCheckFailed { get; private set; }
+
     // ---- check ------------------------------------------------------------------------------
 
     public async Task<AppRelease?> CheckAsync(CancellationToken ct = default)
     {
         if (_pending is null) CleanUpdatesDir();
+        LastCheckFailed = true;
         try
         {
             string json;
@@ -94,7 +97,9 @@ public sealed partial class AppUpdater : IAppUpdater
                 if (!resp.IsSuccessStatusCode) return null;
                 json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
             }
-            return ParseRelease(json, _running, _os, _arch);
+            var release = ParseRelease(json, _running, _os, _arch);
+            LastCheckFailed = false;
+            return release;
         }
         catch
         {

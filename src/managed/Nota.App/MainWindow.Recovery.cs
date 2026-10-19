@@ -100,6 +100,10 @@ public partial class MainWindow
         RefreshAfterLoad();
         MarkProjectClean();   // the fresh startup project counts as unmodified
 
+        // Look for a newer release now and once a day (unless Settings → Updates says not to);
+        // the start screen and the status bar show what it finds.
+        AppUpdates.Shared.Start();
+
         // What's New shows once per new app version, ahead of the launcher.
         await ShowWhatsNewIfNeeded();
 

@@ -13,7 +13,8 @@ namespace Nota.App;
 
 public sealed class ConfirmWindow : NotaWindow
 {
-    public ConfirmWindow(string title, string message, string affirmative, string negative)
+    /// <param name="negative">The other button; null for a notice with just one.</param>
+    public ConfirmWindow(string title, string message, string affirmative, string? negative)
     {
         Title = title;
         Width = 400;
@@ -24,7 +25,7 @@ public sealed class ConfirmWindow : NotaWindow
 
         var yes = new Button { Content = affirmative, Classes = { "primary" } };
         yes.Click += (_, _) => Close(true);
-        var no = new Button { Content = negative, Classes = { "ghost" } };
+        var no = new Button { Content = negative, Classes = { "ghost" }, IsVisible = negative is not null };
         no.Click += (_, _) => Close(false);
 
         SetBody(new StackPanel

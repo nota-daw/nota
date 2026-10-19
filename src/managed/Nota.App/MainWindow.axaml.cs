@@ -104,6 +104,7 @@ public partial class MainWindow : Window
         }
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
+        BuildUpdateIndicator();
         InitTransportFit();
         // Platform-specific window icon: Windows/Linux get the .ico bundle from
         // assets/icons/windows so the taskbar / alt-tab shows the brand mark. macOS

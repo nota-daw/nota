@@ -1057,11 +1057,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
   number in the status bar.
-- **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
-  downloads the build for this platform (with progress, checked against the release's
-  sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.
-  This covers the macOS .app, the Windows installer (run silently) and the Linux AppImage.
-  Other copies fall back to a link to the release page.
+- **Self-update** — Nota looks for a newer GitHub release on every launch and once a day while
+  it runs (Settings ▸ Updates turns that off), and on demand from Help ▸ Check for updates…
+  (also in the macOS app menu), which also says when you're up to date or couldn't check. A
+  newer release shows in the start screen's banner and in the status bar beside the version.
+  **Update** downloads the build for this platform (with progress, checked against the
+  release's sha256). **Restart now** installs it and relaunches, and **Later** installs it on
+  quit. This covers the macOS .app, the Windows installer (run silently) and the Linux
+  AppImage. Other copies fall back to a link to the release page.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General

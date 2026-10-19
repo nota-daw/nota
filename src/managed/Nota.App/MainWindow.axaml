@@ -110,6 +110,7 @@
           <NativeMenu>
             <NativeMenuItem Header="Documentation" app:Commands.Id="help.docs"/>
             <NativeMenuItem Header="What's new" app:Commands.Id="help.whatsNew"/>
+            <NativeMenuItem Header="Check for updates…" app:Commands.Id="help.checkUpdates"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="About Nota" app:Commands.Id="help.about"/>
           </NativeMenu>
@@ -398,10 +399,10 @@
     </Border>
 
     <!-- Status line (22): caption text on the ground, a seam above it. -->
-    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
+    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
         <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
@@ -417,10 +418,12 @@
                        Foreground="{DynamicResource Brush.Accent}"
                        Background="{DynamicResource Brush.BgSunken}"/>
         </StackPanel>
-        <TextBlock Grid.Column="3" Classes="Caption Mono"
+        <!-- A newer Nota release: available / downloading / ready to install (MainWindow.Updates.cs). -->
+        <Panel x:Name="UpdateHost" Grid.Column="3" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="4" Classes="Caption Mono"
                    VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
         <!-- The installed version: opens its release notes (What's New), never an update (#127). -->
-        <Button x:Name="VersionButton" Grid.Column="4" Classes="ghost"
+        <Button x:Name="VersionButton" Grid.Column="5" Classes="ghost"
                 VerticalAlignment="Center" Margin="6,0,-6,0" Padding="6,1" MinHeight="0"
                 Cursor="Hand" ToolTip.Tip="View release notes">
           <TextBlock x:Name="VersionText" Classes="Caption Mono"/>

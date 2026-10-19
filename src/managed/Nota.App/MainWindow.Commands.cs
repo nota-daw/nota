@@ -137,13 +137,14 @@ public partial class MainWindow
         {
             ("prefs.audio", "Audio"), ("prefs.midi", "MIDI"), ("prefs.gamepads", "Gamepads"), ("prefs.remote", "Remote"),
             ("prefs.plugins", "Plug-ins"), ("prefs.downloads", "Downloads"), ("prefs.library", "Library"),
-            ("prefs.appearance", "Appearance"), ("prefs.shortcuts", "Shortcuts"),
+            ("prefs.appearance", "Appearance"), ("prefs.shortcuts", "Shortcuts"), ("prefs.updates", "Updates"),
         })
             B(id, () => ShowPreferencesPage(page));
 
         // ---- Help
         B("help.docs", () => OnDocumentation(this, e));
         B("help.whatsNew", ShowWhatsNew);
+        B("help.checkUpdates", () => _ = CheckForUpdatesAsync());
         B("help.about", ShowAbout);
 
         // Every catalog command must have a handler — a missing one is a bug, not a quiet no-op.

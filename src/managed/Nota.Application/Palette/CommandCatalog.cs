@@ -116,10 +116,12 @@ public static class CommandCatalog
         C("prefs.library", "Settings: Library", "Settings", "", "preferences folders"),
         C("prefs.appearance", "Settings: Appearance", "Settings", "", "preferences theme dark light"),
         C("prefs.shortcuts", "Settings: Shortcuts", "Settings", "", "preferences hotkeys keys keyboard"),
+        C("prefs.updates", "Settings: Updates", "Settings", "", "preferences update automatic check version"),
 
         // ---- Help -------------------------------------------------------------------------
         C("help.docs", "Documentation", "Help", "", "manual guide"),
         C("help.whatsNew", "What's new", "Help", "", "changelog release notes"),
+        C("help.checkUpdates", "Check for updates…", "Help", "", "update upgrade new version download install"),
         C("help.about", "About Nota", "Help", "", "version"),
     };
 

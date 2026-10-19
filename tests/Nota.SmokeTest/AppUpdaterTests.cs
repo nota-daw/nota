@@ -58,9 +58,19 @@ internal static class AppUpdaterTests
         yield return (AppUpdater.ParseRelease(json, "1.2.0", OSPlatform.Linux, Architecture.X64) is { Asset: null },
             "a release without this platform's build still reports the version (manual download)");
 
+        // ---- when to check (#58) ------------------------------------------------------------
+        var now = new DateTime(2026, 10, 20, 12, 0, 0);
+        yield return (UpdateSchedule.IsDue(true, null, now) && UpdateSchedule.IsDue(true, now.AddHours(-24), now),
+            "an automatic check is due on launch and a day after the last one");
+        yield return (!UpdateSchedule.IsDue(true, now.AddHours(-23), now) && !UpdateSchedule.IsDue(false, null, now),
+            "…not sooner, and never with automatic checks off");
+        yield return (UpdateSchedule.IsDue(true, now.AddHours(2), now),
+            "a last check in the future (the clock was moved back) doesn't block checking");
+
         var tmp = Directory.CreateTempSubdirectory("nota-updater-test-").FullName;
         try
         {
+            foreach (var r in CheckOutcomes(tmp)) yield return r;
             foreach (var r in Targets(tmp)) yield return r;
             foreach (var r in LinuxFlow(tmp)) yield return r;
             if (!OperatingSystem.IsWindows())
@@ -72,6 +82,24 @@ internal static class AppUpdaterTests
         {
             try { Directory.Delete(tmp, recursive: true); } catch { }
         }
+    }
+
+    // ---- up to date vs couldn't check ------------------------------------------------------
+    private static IEnumerable<(bool, string)> CheckOutcomes(string tmp)
+    {
+        var api = Path.Combine(tmp, "outcome.json");
+        File.WriteAllText(api, ReleaseJson("v1.2.0", []));
+        var updater = new AppUpdater("1.2.0", api, Path.Combine(tmp, "outcome-updates"), OSPlatform.Linux, Architecture.X64, null, null);
+        var none = updater.CheckAsync().GetAwaiter().GetResult();
+        yield return (none is null && !updater.LastCheckFailed, "the latest release is the running one: up to date, not a failed check");
+
+        var missing = new AppUpdater("1.2.0", Path.Combine(tmp, "no-such-feed.json"), Path.Combine(tmp, "outcome-updates"), OSPlatform.Linux, Architecture.X64, null, null);
+        var failed = missing.CheckAsync().GetAwaiter().GetResult();
+        yield return (failed is null && missing.LastCheckFailed, "an unreachable release feed reports a failed check, not \"up to date\"");
+
+        File.WriteAllText(api, "{ not json");
+        updater.CheckAsync().GetAwaiter().GetResult();
+        yield return (updater.LastCheckFailed, "an unreadable release feed is a failed check too");
     }
 
     // ---- what is updatable ---------------------------------------------------------------

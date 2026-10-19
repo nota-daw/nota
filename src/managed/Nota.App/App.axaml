@@ -9,11 +9,12 @@
 
     <!-- macOS application menu (the bold "Nota" menu). Avalonia puts every item of the
          Application's NativeMenu straight into the app menu, above Services / Hide / Quit,
-         so About and Settings are listed directly — wrapping them in a "Nota" item would
+         so About, Check for updates and Settings are listed directly — wrapping them in a "Nota" item would
          nest them in a submenu (#160). Windows/Linux don't show this menu. -->
     <NativeMenu.Menu>
         <NativeMenu>
             <NativeMenuItem Header="About Nota" Click="OnAppAbout"/>
+            <NativeMenuItem Header="Check for updates…" Click="OnAppCheckUpdates"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" Click="OnAppPreferences" Gesture="Cmd+,"/>
         </NativeMenu>

@@ -5,7 +5,7 @@
 // drawn in nota-design/Nota Start.html. Brand header, New / Open actions, a list of
 // recent projects (click selects, double-click / Return opens, ↑ ↓ move), and shortcuts to
 // Settings and What's New, plus banners for crash recovery and a newer release on
-// GitHub (which downloads and installs it in place — see IAppUpdater). New / Open / a recent project close the launcher and hand
+// GitHub (which downloads and installs it in place — see AppUpdates). New / Open / a recent project close the launcher and hand
 // off to the main window; Settings and What's New open as child dialogs so the user
 // stays on the launcher.
 
@@ -315,121 +315,118 @@ public sealed class WelcomeWindow : NotaWindow
 
     private readonly StackPanel _banners;
 
-    /// <summary>Show the "new version available" banner. When this install can update itself
-    /// it downloads in place (progress in the banner), then offers Restart now / Later — Later
-    /// installs on quit. Otherwise Download opens the release page. Called once the background
-    /// update check resolves.</summary>
-    public void ShowUpdateAvailable(AppRelease release, IAppUpdater updater, Action restart)
+    /// <summary>Show the "new version available" banner whenever the app's update state
+    /// (AppUpdates) has a release the user hasn't waved off — now, or when the launch check
+    /// finds one while the launcher is still open. When this install can update itself it
+    /// downloads in place (progress in the banner), then offers Restart now / Later — Later
+    /// installs on quit. Otherwise Download opens the release page.</summary>
+    internal void ShowUpdates(AppUpdates updates, Action restart)
     {
-        new UpdateBanner(release, updater, restart, _banners).Attach();
+        var banner = new UpdateBanner(updates, restart, _banners);
+        Closed += (_, _) => banner.Detach();
     }
 
-    // The update banner's states: offer → downloading → ready (or failed → try again).
+    // The update banner follows the shared state: offer → downloading → ready (or failed →
+    // try again). Dismiss / Later wave the release off everywhere (the status bar too).
     private sealed class UpdateBanner
     {
-        private readonly AppRelease _release;
-        private readonly IAppUpdater _updater;
+        private readonly AppUpdates _updates;
         private readonly Action _restart;
         private readonly StackPanel _host;
         private readonly Border _card;
-        private CancellationTokenSource? _cts;
+        private AppUpdates.Stage _shown = (AppUpdates.Stage)(-1);
+        private ProgressBar? _bar;
+        private TextBlock? _message;
 
-        public UpdateBanner(AppRelease release, IAppUpdater updater, Action restart, StackPanel host)
+        public UpdateBanner(AppUpdates updates, Action restart, StackPanel host)
         {
-            _release = release;
-            _updater = updater;
+            _updates = updates;
             _restart = restart;
             _host = host;
             _card = BannerCard();
+            updates.Changed += Render;
+            updates.ProgressChanged += ShowProgress;
+            Render();
         }
 
-        public void Attach()
+        public void Detach()
         {
-            if (_updater.PendingVersion == _release.Version) ShowReady();
-            else ShowOffer();
-            _host.Children.Add(_card);
+            _updates.Changed -= Render;
+            _updates.ProgressChanged -= ShowProgress;
         }
 
-        private bool CanUpdate => _release.Asset is not null && _updater.CanInstallInPlace;
-
-        private void ShowOffer()
+        private void Render()
         {
-            var openPage = () => { _ = Launcher(_card)?.LaunchUriAsync(new Uri(_release.PageUrl)); };
-            _card.Child = CanUpdate
-                ? BannerContent("A new version of Nota is available",
-                    $"Nota {_release.Version} is out — you have {AppInfo.Version}.",
+            var u = _updates;
+            bool show = u.Release is not null && u.State != AppUpdates.Stage.None && !u.Dismissed;
+            if (!show)
+            {
+                _host.Children.Remove(_card);
+                _shown = (AppUpdates.Stage)(-1);
+                return;
+            }
+            if (!_host.Children.Contains(_card)) _host.Children.Add(_card);
+            if (u.State == _shown) return;
+            _shown = u.State;
+            var release = u.Release!;
+            var top = TopLevel.GetTopLevel(_host);
+            _bar = null;
+            _message = null;
+            _card.Child = u.State switch
+            {
+                AppUpdates.Stage.Downloading => Downloading(release),
+                AppUpdates.Stage.Ready => BannerContent($"Nota {release.Version} is ready to install",
+                    "Restart Nota to finish updating — or it installs the next time you quit.",
                     progress: null,
-                    ("Update", true, () => _ = DownloadAsync()),
-                    ("Release notes", false, openPage),
-                    ("Dismiss", false, Remove))
-                : BannerContent("A new version of Nota is available",
-                    $"Nota {_release.Version} is out — you have {AppInfo.Version}.",
+                    ("Restart now", true, () => u.Restart(_restart)),
+                    ("Later", false, u.Dismiss)),
+                AppUpdates.Stage.Failed => BannerContent("The update didn't download", u.Error ?? "",
                     progress: null,
-                    ("Download", true, openPage),
-                    ("Dismiss", false, Remove));
+                    ("Try again", true, () => u.Download(top)),
+                    ("Dismiss", false, u.Dismiss)),
+                _ when u.CanInstall => BannerContent("A new version of Nota is available",
+                    $"Nota {release.Version} is out — you have {AppInfo.Version}.",
+                    progress: null,
+                    ("Update", true, () => u.Download(top)),
+                    ("Release notes", false, () => u.OpenReleasePage(top)),
+                    ("Dismiss", false, u.Dismiss)),
+                _ => BannerContent("A new version of Nota is available",
+                    $"Nota {release.Version} is out — you have {AppInfo.Version}.",
+                    progress: null,
+                    ("Download", true, () => u.Download(top)),
+                    ("Dismiss", false, u.Dismiss)),
+            };
         }
 
-        private async Task DownloadAsync()
+        private Grid Downloading(AppRelease release)
         {
-            _cts = new CancellationTokenSource();
-            var bar = new ProgressBar
+            _bar = new ProgressBar
             {
                 Minimum = 0, Maximum = 1, Height = 4, Margin = new Thickness(0, 6, 0, 0),
                 Foreground = NotaPalette.Accent, Background = NotaPalette.BorderDefault,
             };
-            var size = _release.Asset!.Size / 1048576.0;
-            var content = BannerContent($"Downloading Nota {_release.Version}…",
-                $"0.0 / {NotaNum.Unit(size, "0.0", "MB")}", bar,
-                ("Cancel", false, () => _cts?.Cancel()));
-            _card.Child = content;
-            var message = (TextBlock)((StackPanel)content.Children[0]).Children[1];   // BannerContent's message line
+            var content = BannerContent($"Downloading Nota {release.Version}…", "", _bar,
+                ("Cancel", false, _updates.CancelDownload));
+            _message = (TextBlock)((StackPanel)content.Children[0]).Children[1];   // BannerContent's message line
+            ShowProgress();
+            return content;
+        }
 
-            var progress = new Progress<StoreProgress>(p =>
+        private void ShowProgress()
+        {
+            if (_bar is null || _message is null || _updates.Release?.Asset is not { } asset) return;
+            var p = _updates.Progress;
+            if (p.Fraction < 0)
             {
-                if (p.Fraction < 0)
-                {
-                    bar.IsIndeterminate = true;
-                    message.Text = p.Message;
-                    return;
-                }
-                bar.Value = p.Fraction;
-                message.Text = $"{(p.Fraction * size).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(size, "0.0", "MB")}"
-                               + $"  ·  {NotaNum.Unit(p.Fraction * 100, "0", "%")}";
-            });
-            try
-            {
-                await _updater.DownloadAsync(_release, progress, _cts.Token);
-                ShowReady();
+                _bar.IsIndeterminate = true;
+                _message.Text = p.Message;
+                return;
             }
-            catch (OperationCanceledException) { ShowOffer(); }
-            catch (Exception e) { ShowFailed(e is StoreException ? e.Message : $"Couldn't download the update: {e.Message}"); }
-            finally { _cts.Dispose(); _cts = null; }
+            var size = asset.Size / 1048576.0;
+            _bar.Value = p.Fraction;
+            _message.Text = $"{(p.Fraction * size).ToString("0.0", NotaNum.Culture)} / {NotaNum.Unit(size, "0.0", "MB")}"
+                            + $"  ·  {NotaNum.Unit(p.Fraction * 100, "0", "%")}";
         }
-
-        private void ShowReady()
-        {
-            _card.Child = BannerContent($"Nota {_release.Version} is ready to install",
-                "Restart Nota to finish updating — or it installs the next time you quit.",
-                progress: null,
-                ("Restart now", true, () => { _updater.RelaunchAfterInstall = true; _restart(); }),
-                ("Later", false, Remove));
-        }
-
-        private void ShowFailed(string error)
-        {
-            _card.Child = BannerContent("The update didn't download", error,
-                progress: null,
-                ("Try again", true, () => _ = DownloadAsync()),
-                ("Dismiss", false, Remove));
-        }
-
-        private void Remove()
-        {
-            _cts?.Cancel();
-            _host.Children.Remove(_card);
-        }
-
-        private static Avalonia.Platform.Storage.ILauncher? Launcher(Visual v) => TopLevel.GetTopLevel(v)?.Launcher;
     }
 
     // Offer to restore a crashed session.
