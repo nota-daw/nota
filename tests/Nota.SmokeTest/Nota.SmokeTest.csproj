@@ -43,6 +43,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <Compile Include="..\..\src\managed\Nota.App\Input\ShortcutAvaloniaExtensions.cs" Link="ShortcutAvaloniaExtensions.cs" />
+    <!-- What's New's changelog / release-notes parsers (no Avalonia inside). -->
+    <Compile Include="..\..\src\managed\Nota.App\Changelog.cs" Link="Changelog.cs" />
   </ItemGroup>
 
 </Project>

@@ -36,6 +36,10 @@
     <!-- Ship the changelog inside the app so the "What's New" window can parse the
          entries for the current version at runtime (avares://Nota.App/Assets/CHANGELOG.md). -->
     <AvaloniaResource Include="..\..\..\CHANGELOG.md" Link="Assets/CHANGELOG.md" />
+    <!-- The curated release notes (the GitHub release text): What's New shows a released
+         version's notes from here and falls back to its CHANGELOG.md section without them.
+         English only, like the rest of the UI. -->
+    <AvaloniaResource Include="..\..\..\release-notes\*.en.md" Link="Assets/ReleaseNotes/%(Filename)%(Extension)" />
     <!-- Geist + Geist Mono (SIL OFL 1.1, LICENSES/OFL-1.1-Geist.txt): the UI and numeric
          typefaces, served as avares://Nota.App/Assets/Fonts#Geist and #Geist Mono. -->
     <AvaloniaResource Include="..\..\..\assets\fonts\*.ttf" Link="Assets/Fonts/%(Filename)%(Extension)" />

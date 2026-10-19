@@ -4,8 +4,10 @@
 // App-level version + changelog access. The version's single source of truth is
 // the repo-root VERSION file, baked into the assembly at build time by
 // Directory.Build.props (InformationalVersion). Here we read it back at runtime
-// and parse the embedded CHANGELOG.md so the About / What's New windows can show
-// the human-readable notes. Distinct from the native engine version
+// and parse the embedded notes so the About / What's New windows can show them: a
+// released version shows its curated release notes (release-notes/X.Y.Z.en.md, the
+// same text as the GitHub release), and a version without them falls back to its
+// CHANGELOG.md section. Distinct from the native engine version
 // (NotaEngine.Version) — see the About window, which shows both.
 
 using System;
@@ -15,13 +17,6 @@ using System.Reflection;
 using Avalonia.Platform;
 
 namespace Nota.App;
-
-/// <summary>One version's changelog: its number, date and grouped notes.</summary>
-public sealed record ChangelogEntry(string Version, string Date,
-                                    IReadOnlyList<ChangelogSection> Sections);
-
-/// <summary>A category within a changelog entry (Added / Changed / Fixed / Removed).</summary>
-public sealed record ChangelogSection(string Title, IReadOnlyList<string> Items);
 
 public static class AppInfo
 {
@@ -40,19 +35,50 @@ public static class AppInfo
         }
     }
 
-    /// <summary>Parsed changelog entries, newest first. Empty if the resource is missing.</summary>
+    /// <summary>Parsed changelog entries, newest first. Empty if the resource is missing.
+    /// A version that shipped curated release notes gets those in place of its raw
+    /// changelog section (the date still comes from the changelog).</summary>
     public static IReadOnlyList<ChangelogEntry> Changelog()
     {
+        IReadOnlyList<ChangelogEntry> raw;
         try
         {
-            using var s = AssetLoader.Open(new Uri("avares://Nota.App/Assets/CHANGELOG.md"));
-            using var r = new StreamReader(s);
-            return ChangelogParser.Parse(r.ReadToEnd());
+            raw = ChangelogParser.Parse(ReadAsset("avares://Nota.App/Assets/CHANGELOG.md"));
         }
         catch
         {
             return Array.Empty<ChangelogEntry>();
         }
+
+        var entries = new List<ChangelogEntry>(raw.Count);
+        foreach (var e in raw)
+            entries.Add(ReleaseNotes(e) ?? e);
+        return entries;
+    }
+
+    // The curated notes for a changelog entry's version, or null when that version
+    // has none (unreleased work, versions from before release-notes/ existed).
+    private static ChangelogEntry? ReleaseNotes(ChangelogEntry e)
+    {
+        if (!SemVer.TryParse(e.Version, out _)) return null;
+        var uri = new Uri($"avares://Nota.App/Assets/ReleaseNotes/{e.Version}.en.md");
+        try
+        {
+            if (!AssetLoader.Exists(uri)) return null;
+            var notes = ReleaseNotesParser.Parse(e.Version, e.Date, ReadAsset(uri.ToString()));
+            return notes.Sections.Count > 0 || notes.Lede.Length > 0 ? notes : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string ReadAsset(string uri)
+    {
+        using var s = AssetLoader.Open(new Uri(uri));
+        using var r = new StreamReader(s);
+        return r.ReadToEnd();
     }
 
     /// <summary>Changelog entries strictly newer than <paramref name="sinceVersion"/>

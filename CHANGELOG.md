@@ -119,6 +119,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track, or a rack selected, it starts a new track as before; ⌥ + double-click (Alt on
   Windows and Linux) always starts a new track.
 
+### Changed
+- **What's New shows the release notes**: the window now shows each version's curated release
+  notes, the same text as its GitHub release, instead of the raw working log from this file.
+  A version without release notes (older ones, and builds between releases) still shows its
+  changelog section.
+
 ### Fixed
 - **Aurora: every unison voice goes through the filters** (nota-daw/nota#193): with two or
   more unison voices and any Spread, the stereo part of the stack used to skip the source

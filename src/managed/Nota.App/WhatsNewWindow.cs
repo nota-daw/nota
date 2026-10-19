@@ -2,8 +2,9 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // "What's new" — shown once after the first launch on a newer app version (see
-// MainWindow.OnOpenedWhatsNew). Lists the changelog entries the user hasn't seen
-// yet, newest first. Reachable any time from the Help menu too.
+// MainWindow.OnOpenedWhatsNew). Lists the versions the user hasn't seen yet, newest
+// first: a release's curated notes (the GitHub release text) where it has them,
+// otherwise its changelog section. Reachable any time from the Help menu too.
 
 using System;
 using System.Collections.Generic;
@@ -104,18 +105,43 @@ public sealed class WhatsNewWindow : NotaWindow
             });
         panel.Children.Add(title);
 
+        if (entry.IsReleaseNotes)
+            panel.Children.Add(Paragraph(entry.Lede, "Brush.TextPrimary"));
+
         foreach (var section in entry.Sections)
         {
-            panel.Children.Add(new TextBlock
-            {
-                Classes = { "SectionLabel" },
-                Text = section.Title,
-                Margin = new Thickness(0, 4, 0, 0),
-            });
+            panel.Children.Add(entry.IsReleaseNotes
+                ? new TextBlock
+                {
+                    Text = section.Title,
+                    FontSize = 13,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brush("Brush.TextPrimary"),
+                    Margin = new Thickness(0, 6, 0, 0),
+                }
+                : new TextBlock
+                {
+                    Classes = { "SectionLabel" },
+                    Text = section.Title,
+                    Margin = new Thickness(0, 4, 0, 0),
+                });
+            if (section.Text.Length > 0)
+                panel.Children.Add(Paragraph(section.Text, "Brush.TextSecondary"));
             foreach (var item in section.Items)
                 panel.Children.Add(Bullet(item));
         }
         return panel;
+    }
+
+    private Control Paragraph(string text, string brush)
+    {
+        var block = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush(brush),
+        };
+        AppendInlineMarkdown(block, text);
+        return block;
     }
 
     private Control Bullet(string text)
@@ -140,7 +166,7 @@ public sealed class WhatsNewWindow : NotaWindow
         return row;
     }
 
-    // Renders the inline Markdown the changelog uses: **bold**, *italic*,
+    // Renders the inline Markdown the changelog and release notes use: **bold**, *italic*,
     // `code` and [links](url) (link text only). Underscores are left alone —
     // they show up inside identifiers like `get_rhythm_macros`.
     private void AppendInlineMarkdown(TextBlock block, string text)

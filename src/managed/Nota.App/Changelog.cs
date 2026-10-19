@@ -7,11 +7,31 @@
 // The "## [Unreleased]" header (where changes accumulate before a release) parses
 // into an entry too, but its version isn't a SemVer, so version filtering in
 // AppInfo.UnseenSince skips it — unreleased notes never reach the What's New window.
+//
+// ReleaseNotesParser reads the curated notes a release ships (release-notes/X.Y.Z.en.md,
+// format in .claude/skills/release/SKILL.md § P4): a lede, "**N. Title**" sections with
+// a paragraph each, and "**Also**" with "•" bullets. What's New prefers them over the
+// raw changelog section. No Avalonia here: the smoke test compiles this file directly.
 
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace Nota.App;
+
+/// <summary>One version's notes: its number, date and grouped notes. <see cref="Lede"/>
+/// is set only for curated release notes (the changelog has no lede).</summary>
+public sealed record ChangelogEntry(string Version, string Date,
+                                    IReadOnlyList<ChangelogSection> Sections,
+                                    string Lede = "")
+{
+    public bool IsReleaseNotes => Lede.Length > 0;
+}
+
+/// <summary>A category within a changelog entry (Added / Changed / Fixed / Removed), or a
+/// feature of curated release notes: its title, a paragraph (<see cref="Text"/>) and/or
+/// bullets.</summary>
+public sealed record ChangelogSection(string Title, IReadOnlyList<string> Items, string Text = "");
 
 /// <summary>A comparable semantic version (MAJOR.MINOR.PATCH). Pre-release/build
 /// metadata is ignored — the app only ships plain X.Y.Z versions.</summary>
@@ -120,5 +140,50 @@ public static class ChangelogParser
             date = rest.TrimStart('—', '-', '–', ' ').Trim();
         }
         return (version, date);
+    }
+}
+
+public static class ReleaseNotesParser
+{
+    // "**1. Studio, a new look**" or "**Also**" alone on a line. The number is the
+    // order in a news post; the window keeps the order and drops the number.
+    private static readonly Regex Heading = new(@"^\*\*(?:\d+\.\s*)?(?<title>(?:(?!\*\*).)+)\*\*$");
+
+    public static ChangelogEntry Parse(string version, string date, string markdown)
+    {
+        var lede = new List<string>();
+        var sections = new List<ChangelogSection>();
+        string? title = null;
+        var text = new List<string>();
+        var items = new List<string>();
+
+        void FlushSection()
+        {
+            if (title != null && (text.Count > 0 || items.Count > 0))
+                sections.Add(new ChangelogSection(title, items.ToArray(), string.Join("\n", text)));
+            title = null;
+            text.Clear();
+            items.Clear();
+        }
+
+        foreach (var raw in markdown.Split('\n'))
+        {
+            var t = raw.Trim();
+            if (t.Length == 0 || t.StartsWith("<!--", StringComparison.Ordinal)) continue;
+
+            if (Heading.Match(t) is { Success: true } m)
+            {
+                FlushSection();
+                title = m.Groups["title"].Value.Trim();
+            }
+            else if (t.StartsWith('•') || t.StartsWith("- ", StringComparison.Ordinal))
+            {
+                if (title != null) items.Add(t[1..].Trim());
+            }
+            else if (title == null) lede.Add(t);
+            else text.Add(t);
+        }
+        FlushSection();
+        return new ChangelogEntry(version, date, sections, string.Join("\n", lede));
     }
 }

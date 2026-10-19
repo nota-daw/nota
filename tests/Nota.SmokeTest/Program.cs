@@ -228,6 +228,15 @@ if (args.Length >= 1 && args[0] == "--audition")
     return failures == 0 ? 0 : 1;
 }
 
+// What's New release notes alone: `--release-notes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--release-notes")
+{
+    Console.WriteLine("-- app: What's New release notes --");
+    foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RELEASE NOTES PASSED" : $"RELEASE NOTES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Content-addressed bundle alone (fast iteration): `--bundle`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--bundle")
 {
@@ -14787,6 +14796,10 @@ foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
+
+// --- app: What's New shows the curated release notes ---
+Console.WriteLine("-- app: What's New release notes --");
+foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
 
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");

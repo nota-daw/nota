@@ -1040,7 +1040,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
   on Windows and Linux — hides the title bar and its separator so the workspace fills the
   screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
-- **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
+- **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
+  release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
   number in the status bar.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**

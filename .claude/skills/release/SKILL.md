@@ -11,10 +11,12 @@ Two files describe a release, for two readers:
 - **`CHANGELOG.md`** is the raw working log. Entries land under `## [Unreleased]` as work
   merges ("what we did, we write"), so it can repeat itself or hold changes that a later
   entry undid. At release time it is only promoted to `## [X.Y.Z] — date` and is never
-  rewritten. The app's What's New window reads it, and the CI guard requires the section.
+  rewritten. The CI guard requires the section, and What's New falls back to it for a
+  version without curated notes.
 - **`release-notes/X.Y.Z.en.md`** and **`release-notes/X.Y.Z.ru.md`** are the curated
   text: summarised, deduplicated, checked against the code. **Everything published comes
-  from them.** `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
+  from them**, and the app bundles the EN file for its What's New window, so the notes must
+  be committed on the release branch before the tag is built. `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
 
   | target    | where it goes                                   |
   |-----------|-------------------------------------------------|
