@@ -243,6 +243,7 @@ public:
             v->env2 = 0.0f; v->stage2 = Stage::Attack;
             v->ic1L[0] = v->ic2L[0] = v->ic1R[0] = v->ic2R[0] = 0.0;
             v->ic1L[1] = v->ic2L[1] = v->ic1R[1] = v->ic2R[1] = 0.0;
+            v->clearSide();
             for (int u = 0; u < kUnison; ++u) { rng_ = rng_ * 1664525u + 1013904223u; v->ph1[u] = (rng_ >> 8) / 16777216.0; rng_ = rng_ * 1664525u + 1013904223u; v->ph2[u] = (rng_ >> 8) / 16777216.0; }
             v->subPh = 0.0;
         }
@@ -294,6 +295,10 @@ public:
         const int uniN = std::clamp(1 + (int)std::lround(get(Unison) * 6.0f), 1, kUnison);
         const double uniDet = std::clamp(get(UniDetune) + macroBlk[3], 0.0, 1.0) * 50.0;   // ± cents
         const float uniSpread = get(UniSpread);
+        // Only a spread stack has a side; without one its filter state is parked at zero so
+        // it starts clean the moment the spread opens.
+        const bool stereoUni = uniN > 1 && uniSpread > 1e-6f;
+        if (!stereoUni) for (auto& v : voices_) v.clearSide();
 
         const float atk = rateOf(Attack, 0.001, 2.0), dec = rateOf(Decay, 0.002, 3.0), rel = rateOf(Release, 0.002, 4.0), sus = get(Sustain);
         const float atk2 = rateOf(Env2Attack, 0.001, 2.0), dec2 = rateOf(Env2Decay, 0.002, 3.0), rel2 = rateOf(Env2Release, 0.002, 4.0), sus2 = get(Env2Sustain);
@@ -369,11 +374,12 @@ public:
                 const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
 
                 // --- oscillators (unison stack on Osc1/Osc2, mono sub) ---
-                // A spread unison stack is stereo: the mid goes through the filters, the
-                // side rides around them, so spread widens without doubling filter state.
-                float o1 = 0.0f, o2 = 0.0f, side = 0.0f;
-                if (lvl1 > 1e-5f) { float sd; o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDet, uniSpread, sd); side += sd * lvl1; }
-                if (lvl2 > 1e-5f) { float sd; o2 = oscStack(v.ph2, base * m2 * std::exp2(dst[1] * 2.0), b2, pos2, wm2, warp2, uniN, uniDet, uniSpread, sd); side += sd * lvl2; }
+                // A spread unison stack is stereo: mid and side each go through the same
+                // routing and the same filters (own state, shared coefficients), so every
+                // unison voice gets the cutoff, the envelope and the modulation (#193).
+                float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
+                if (lvl1 > 1e-5f) o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDet, uniSpread, sd1);
+                if (lvl2 > 1e-5f) o2 = oscStack(v.ph2, base * m2 * std::exp2(dst[1] * 2.0), b2, pos2, wm2, warp2, uniN, uniDet, uniSpread, sd2);
                 float sub = 0.0f;
                 if (subLvl > 1e-5f) { sub = subOsc(subWave, v.subPh); v.subPh += base * m1 * subMul; if (v.subPh >= 1.0) v.subPh -= 1.0; }
                 o1 *= lvl1; o2 *= lvl2; sub *= subLvl;
@@ -391,10 +397,13 @@ public:
                     setSvf(v.f[0], std::clamp(f1base * std::exp2(c1), 20.0, sampleRate_ * 0.49), resoToK(reso1 + resoMod));
                     setSvf(v.f[1], std::clamp(f2base * std::exp2(c2), 20.0, sampleRate_ * 0.49), resoToK(reso2 + resoMod));
                 }
-                double wet;
-                if (series) { double a = svf(v.f[0], v.ic1L[0], v.ic2L[0], in1 + in2, t1type); if (slope1) a = svf(v.f[0], v.ic1R[0], v.ic2R[0], a, t1type); double b = svf(v.f[1], v.ic1L[1], v.ic2L[1], a, t2type); if (slope2) b = svf(v.f[1], v.ic1R[1], v.ic2R[1], b, t2type); wet = b; }
-                else { double a = svf(v.f[0], v.ic1L[0], v.ic2L[0], in1, t1type); if (slope1) a = svf(v.f[0], v.ic1R[0], v.ic2R[0], a, t1type); double b = svf(v.f[1], v.ic1L[1], v.ic2L[1], in2, t2type); if (slope2) b = svf(v.f[1], v.ic1R[1], v.ic2R[1], b, t2type); wet = a + b; }
-                double s = wet + dryS;
+                double s = filterPair(v.f, v.ic1L, v.ic2L, v.ic1R, v.ic2R, in1, in2, series, t1type, t2type, slope1, slope2) + dryS;
+                double side = 0.0;
+                if (stereoUni) {
+                    double sIn1 = 0, sIn2 = 0, sDry = 0;
+                    routeAdd(r1, sd1 * lvl1, sIn1, sIn2, sDry); routeAdd(r2, sd2 * lvl2, sIn1, sIn2, sDry);
+                    side = filterPair(v.f, v.sc1L, v.sc2L, v.sc1R, v.sc2R, sIn1, sIn2, series, t1type, t2type, slope1, slope2) + sDry;
+                }
 
                 float amp = v.env * v.velocity * (1.0f + (float)dst[5]) * (1.0f + 0.5f * v.ex.pressure());
                 float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
@@ -429,7 +438,9 @@ private:
         float velocity = 0, env = 0, env2 = 0;
         Stage stage = Stage::Attack, stage2 = Stage::Attack;
         SvfCoef f[2];
-        double ic1L[2] = {}, ic2L[2] = {}, ic1R[2] = {}, ic2R[2] = {};   // [0]=stage1, [1]=2nd slope stage per filter
+        double ic1L[2] = {}, ic2L[2] = {}, ic1R[2] = {}, ic2R[2] = {};   // L = 1st stage, R = 2nd slope stage; [i] = filter i
+        double sc1L[2] = {}, sc2L[2] = {}, sc1R[2] = {}, sc2R[2] = {};   // the same filters' state for the unison side
+        void clearSide() { for (int i = 0; i < 2; ++i) sc1L[i] = sc2L[i] = sc1R[i] = sc2R[i] = 0.0; }
         int32_t modCount = 0;
         VoiceExpr ex;                    // MPE bend / pressure / slide
         float exBendAt = 0.0f; double exBendMul = 1.0;
@@ -462,6 +473,20 @@ private:
         double v3 = in - ic2, v1 = c.a1 * ic1 + c.a2 * v3, v2 = ic2 + c.a2 * ic1 + c.a3 * v3;
         ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
         switch (type) { case 1: return in - c.k * v1 - v2; case 2: return v1; case 3: return in - c.k * v1; case 4: return in + (c.k > 0 ? v1 * (2.0 - c.k) : v1); default: return v2; }
+    }
+
+    // Filter 1 and 2 on one signal, in parallel or series, through one set of integrator
+    // state (a = first stage, b = the second slope stage; [i] = filter i).
+    static double filterPair(const SvfCoef* f, double* ic1a, double* ic2a, double* ic1b, double* ic2b,
+                             double in1, double in2, bool series, int t1, int t2, bool slope1, bool slope2) {
+        if (series) {
+            double a = svf(f[0], ic1a[0], ic2a[0], in1 + in2, t1); if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
+            double b = svf(f[1], ic1a[1], ic2a[1], a, t2); if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
+            return b;
+        }
+        double a = svf(f[0], ic1a[0], ic2a[0], in1, t1); if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
+        double b = svf(f[1], ic1a[1], ic2a[1], in2, t2); if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
+        return a + b;
     }
 
     // Warp mode applied to the read phase (Off/Sync/Bend/PWM/Fold — Fold post-processes output).

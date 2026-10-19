@@ -120,6 +120,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Aurora: every unison voice goes through the filters** (nota-daw/nota#193): with two or
+  more unison voices and any Spread, the stereo part of the stack used to skip the source
+  routing and both filters, so a plucked or filtered patch kept a bright, unfiltered layer
+  that ignored the cutoff, the filter envelope and its modulation. Now the whole stack is
+  routed and filtered the same way, so a pluck closes down with unison just as it does with
+  one voice.
 - **Linux: the AppImage runs on RHEL-class distros** (nota-daw/nota#82): Linux releases are
   now built against a glibc 2.28 baseline (AlmaLinux 8 container) instead of the build
   machine's glibc 2.39, so the AppImage starts on RHEL/Alma/Rocky 8 and 9, Debian 10+ and

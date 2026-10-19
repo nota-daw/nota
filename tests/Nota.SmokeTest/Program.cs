@@ -1933,6 +1933,17 @@ Console.WriteLine("-- Nota Aurora --");
         Check(Side(narrow, 8192) < 1e-6f, "Aurora unison at zero spread stays mono");
         Check(Side(wide, 8192) > 1e-3f, $"Aurora unison spread opens the stereo field ({Side(wide, 8192):F4})");
 
+        // Every unison voice goes through the filter (#193): with Filter 1 shut, a wide
+        // five-voice stack is as quiet as one voice, and an open one is not.
+        var shutOne = RenderWith(("position", 1f), ("cutoff", 0f), ("fil1key", 0f), ("unison", 0f));
+        var shutWide = RenderWith(("position", 1f), ("cutoff", 0f), ("fil1key", 0f), ("unison", 0.67f), ("unispread", 1f));
+        var openWide = RenderWith(("position", 1f), ("cutoff", 1f), ("fil1key", 0f), ("unison", 0.67f), ("unispread", 1f));
+        float rShutOne = Rms(shutOne, 8192), rShutWide = Rms(shutWide, 8192), rOpenWide = Rms(openWide, 8192);
+        Check(rShutWide < rShutOne * 2f + 1e-4f && rShutWide < rOpenWide * 0.1f,
+            $"Aurora closed filter shuts every unison voice (1 voice {rShutOne:F4} / 5 wide {rShutWide:F4} / open {rOpenWide:F4})");
+        Check(Side(shutWide, 8192) < Side(openWide, 8192) * 0.05f,
+            $"Aurora unison side is filtered too ({Side(shutWide, 8192):F5} vs open {Side(openWide, 8192):F4})");
+
         // Each FX block answers its switch, and each character is its own sound.
         var dryFx = RenderWith(("fxdrive", 0.7f), ("fxdriveon", 0f));
         var clean = RenderWith();
