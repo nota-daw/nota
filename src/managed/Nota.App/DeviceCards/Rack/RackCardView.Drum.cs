@@ -800,11 +800,9 @@ internal sealed partial class RackCardView
         }
         Add("Nota Sampler", 1);
         f.Items.Add(new Separator());
-        Add("Nota Synth", 0);
+        Add("Nota Volt", 6);
         Add("Nota Physical", 2);
         Add("Nota Aurora", 5);
-        Add("Nota Volt", 6);
-        Add("Nota Bass", 7);
         Add("Nota Pendulum", 8);
         Add("Nota Operator", 9);
         Add("Nota Grain", 10);

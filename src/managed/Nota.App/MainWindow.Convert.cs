@@ -144,7 +144,7 @@ public partial class MainWindow
     }
 
     // Convert Melody: YIN pitch per frame → median-smoothed MIDI pitch → note segmentation, onto a
-    // new Nota Synth track. Monophonic MVP — best on clean single-note lines / vocals.
+    // new Nota Volt track. Monophonic MVP — best on clean single-note lines / vocals.
     private async Task ConvertMelodyAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
         const double minHz = 65, maxHz = 1100;
@@ -199,7 +199,7 @@ public partial class MainWindow
         Flush(frames);
 
         if (notes.Count == 0) { Status("No melody found."); return; }
-        int t = Engine.AddInstrumentTrack();        // Nota Synth
+        int t = Engine.AddVoltSynthTrack();         // Nota Volt
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes.ToArray());
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
@@ -220,7 +220,7 @@ public partial class MainWindow
         if (melody) heard = Transcription.Monophonic(heard);
         var notes = Transcription.ToClipNotes(heard, mono.Length / sr, clipBeats);
         if (notes.Length == 0) { Status($"No {what} found."); return; }
-        int t = Engine.AddInstrumentTrack();        // Nota Synth
+        int t = Engine.AddVoltSynthTrack();         // Nota Volt
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes);
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
@@ -228,7 +228,7 @@ public partial class MainWindow
     }
 
     // Convert Harmony: harmonic-sum pitch estimation (AudioHarmony) → polyphonic note spans on a new
-    // Nota Synth track. Approximate — best on sustained chords / pads.
+    // Nota Volt track. Approximate — best on sustained chords / pads.
     private async Task ConvertHarmonyAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
         prog.Report(ProgressReport.Indeterminate("Detecting harmony…"));
@@ -240,7 +240,7 @@ public partial class MainWindow
         var notes = new List<NotaNote>(spans.Count);
         foreach (var s in spans)
             notes.Add(new NotaNote(s.Pitch, s.StartSample * toBeat, Math.Max(0.05, (s.EndSample - s.StartSample) * toBeat), s.Velocity));
-        int t = Engine.AddInstrumentTrack();        // Nota Synth (polyphonic)
+        int t = Engine.AddVoltSynthTrack();         // Nota Volt (polyphonic)
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes.ToArray());
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();

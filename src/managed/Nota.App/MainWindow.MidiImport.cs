@@ -84,7 +84,7 @@ public partial class MainWindow
             t = Engine.AddRhythmTrack();
             _kits.LoadInto(Engine, t, _kits.DefaultRhythmKit, out _);
         }
-        else t = Engine.AddInstrumentTrack();
+        else t = Engine.AddVoltSynthTrack();
         if (t > 0 && name.Length > 0) Engine.SetTrackName(t, name);
         return t;
     }

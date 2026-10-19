@@ -84,7 +84,7 @@ internal static class PaletteTests
         // aliases / slang
         ("verb", "Nota Reverb"), ("ott", "Nota Prism"), ("echo", "Nota Delay"), ("autotune", "Nota Auto Shift"),
         ("de-esser", "De-Esser"), ("deesser", "Nota Dynamic EQ-8"), ("limiter", "Nota Ceiling"), ("bitcrusher", "Nota Crush"),
-        ("arpeggiator", "Nota Arp"), ("303", "Nota Bass"), ("wavetable", "Nota Aurora"), ("fm", "Nota Operator"), ("granular", "Nota Grain"),
+        ("arpeggiator", "Nota Arp"), ("303", "Nota Volt"), ("wavetable", "Nota Aurora"), ("fm", "Nota Operator"), ("granular", "Nota Grain"),
         // typos (CP-10)
         ("reverv", "Nota Reverb"), ("compresor", "Nota Compressor"), ("dealy", "Nota Delay"), ("chorsu", "Nota Chorus"),
         // wrong layout (CP-10)

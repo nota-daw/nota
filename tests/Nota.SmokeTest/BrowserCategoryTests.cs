@@ -52,7 +52,7 @@ internal static class BrowserCategoryTests
 
         // Picks are per tab, and a pick keeps "Group by source"'s header.
         vm.SetCategoryFilter(1, "Reverb & delay");
-        yield return (vm.CategoryFilter(1) == "Reverb & delay" && vm.CategoryFilter(0) == "" && Devices(vm.Instruments).Count == 18,
+        yield return (vm.CategoryFilter(1) == "Reverb & delay" && vm.CategoryFilter(0) == "" && Devices(vm.Instruments).Count == 16,
             "a pick narrows only its own tab");
         yield return (vm.Effects.Select(r => r.Name).SequenceEqual(new[] { "BUILT-IN", "Nota Chamber", "Nota Delay", "Nota Reverb" }),
             $"Reverb & delay lists Chamber, Delay, Reverb ({string.Join(", ", vm.Effects.Select(r => r.Name))})");
@@ -75,7 +75,7 @@ internal static class BrowserCategoryTests
         // Expanding a device while a chip is picked shows its presets beneath it (FR-007).
         vm.SetCategoryFilter(1, "");
         vm.SetCategoryFilter(0, "Synths");
-        var synth = vm.Instruments.First(r => r.Name == "Nota Synth");
+        var synth = vm.Instruments.First(r => r.Name == "Nota Volt");
         vm.ToggleExpand(synth);
         int si = vm.Instruments.IndexOf(synth);
         yield return (si >= 0 && si + 1 < vm.Instruments.Count && vm.Instruments[si + 1].Depth > 0, "expanding a device under a chip lists its presets");

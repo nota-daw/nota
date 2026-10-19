@@ -1480,7 +1480,7 @@ NOTA_API int32_t     nota_fx_selftest(void);
  * plus 8 macros. It lives on an instrument track; the calls below address into
  * it by (track_id, chain, dev, param). Rack-internal edits publish the rack's own
  * snapshot (thread-safe) and are outside engine undo in v1. Chain instruments are
- * built-in (kind 0=Synth, 2=Physical); chain devices are built-in (0..4). Chain
+ * built-in (kind 6=Volt by default, 2=Physical, …); chain devices are built-in (0..4). Chain
  * instrument params ride the normalized 0..1 plugin-param surface; chain device
  * params are native floats in [min,max]. Boolean queries return 1/0. */
 NOTA_API int32_t     nota_engine_add_instrument_rack_track(NotaEngine* engine);

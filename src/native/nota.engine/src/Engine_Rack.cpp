@@ -70,7 +70,7 @@ int32_t Engine::addInstrumentRackTrack() {
     auto track = std::make_shared<Track>(id, TrackType::Instrument);
     auto rack = std::make_shared<RackInstrument>();
     rack->setSampleRate(transport_.sampleRate());
-    rack->addChain(0);                 // one default Nota Synth chain
+    rack->addChain(6);                 // one default Nota Volt chain (specs/026)
     track->instrument = rack;
     g->tracks.push_back(track);
     publish(g);

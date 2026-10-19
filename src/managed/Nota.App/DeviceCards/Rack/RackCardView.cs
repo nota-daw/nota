@@ -609,8 +609,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         var f = new MenuFlyout();
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { int c = a.AddChain(k); if (c >= 0) Sel = c; _ctx.RequestRebuild(); }; f.Items.Add(mi); }
-        Add("Nota Synth", 0); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
-        Add("Nota Volt", 6); Add("Nota Bass", 7); Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Volt", 6); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
+        Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -1460,16 +1460,12 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         {
             if (!a.HasInstrumentChains) { a.AddChain(-1); _ctx.RequestRebuild(); return; }   // effect chain (no instrument)
             var f = new MenuFlyout();
-            var s = new MenuItem { Header = "Nota Synth" };
-            s.Click += (_, _) => { a.AddChain(0); _ctx.RequestRebuild(); };
             var p = new MenuItem { Header = "Nota Physical" };
             p.Click += (_, _) => { a.AddChain(2); _ctx.RequestRebuild(); };
             var w = new MenuItem { Header = "Nota Aurora" };
             w.Click += (_, _) => { a.AddChain(5); _ctx.RequestRebuild(); };
             var vo = new MenuItem { Header = "Nota Volt" };
             vo.Click += (_, _) => { a.AddChain(6); _ctx.RequestRebuild(); };
-            var ba = new MenuItem { Header = "Nota Bass" };
-            ba.Click += (_, _) => { a.AddChain(7); _ctx.RequestRebuild(); };
             var pe = new MenuItem { Header = "Nota Pendulum" };
             pe.Click += (_, _) => { a.AddChain(8); _ctx.RequestRebuild(); };
             var op = new MenuItem { Header = "Nota Operator" };
@@ -1486,7 +1482,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             co.Click += (_, _) => { a.AddChain(15); _ctx.RequestRebuild(); };
             var ke = new MenuItem { Header = "Nota Keys" };
             ke.Click += (_, _) => { a.AddChain(16); _ctx.RequestRebuild(); };
-            f.Items.Add(s); f.Items.Add(p); f.Items.Add(w); f.Items.Add(vo); f.Items.Add(ba); f.Items.Add(pe); f.Items.Add(op); f.Items.Add(gr); f.Items.Add(fl); f.Items.Add(mo); f.Items.Add(pd); f.Items.Add(co); f.Items.Add(ke);
+            f.Items.Add(vo); f.Items.Add(p); f.Items.Add(w); f.Items.Add(pe); f.Items.Add(op); f.Items.Add(gr); f.Items.Add(fl); f.Items.Add(mo); f.Items.Add(pd); f.Items.Add(co); f.Items.Add(ke);
             f.ShowAt(b, showAtPointer: true);
         };
         return b;

@@ -563,6 +563,11 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                                        ("decay", 0.35f), ("sustain", 0.35f), ("release", 0.12f),
                                        ("velamp", 0.7f), ("velfilter", 0.8f), ("glide", 0.0f), ("volume", 0.8f));
 
+        // ---- Nota Synth and Nota Bass live on in Volt (specs/026): every patch above, converted
+        //      by VoltPort, filed into Volt's folders. The originals stay for the in-card picker of
+        //      tracks saved with those instruments.
+        PortToVolt();
+
         // ---- Nota Pendulum (kind 8) — generative keys, 28 patches. Balls 0 2 … 1 6 (quarter
         //      steps); Sync Free 0 / Sync 1; Division 0 1/1 · .25 1/2 · .5 1/4 · .75 1/8 · 1 1/16;
         //      Rate 0.5 = stop, <0.5 reverse; Motion 0 Linear/.33 Pendulum/.67 Ease/1 Bounce;
@@ -2829,6 +2834,39 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
     /// <summary>Files the presets that follow into a browser folder inside their device.</summary>
     private void Section(string name) { _section = name; _sectionPending = true; }
+
+    // Volt folders for the ported patches, and new names where Volt already has one.
+    private static readonly Dictionary<string, string> PortFolder = new()
+    {
+        ["synth/Pads"] = "Pads", ["synth/Bass"] = "Bass", ["synth/Leads"] = "Leads",
+        ["synth/Keys & Plucks"] = "Keys & Plucks", ["synth/Bells & Mallets"] = "Bells & Mallets",
+        ["synth/Textures & FX"] = "Textures & FX",
+        ["bass/Sub"] = "Sub Bass", ["bass/Analog"] = "Analog Bass", ["bass/Acid"] = "Acid",
+        ["bass/Growl & Wobble"] = "Growl & Wobble", ["bass/Electric"] = "Electric Bass",
+    };
+    private static readonly Dictionary<string, string> PortName = new()
+    {
+        ["synth/Warm Pad"] = "Velvet Pad", ["synth/Glass Pad"] = "Crystal Pad", ["synth/Choir Pad"] = "Vox Pad",
+        ["synth/Rubber Bass"] = "Bouncy Bass", ["synth/Acid Bass"] = "Saw Acid", ["synth/Growl Bass"] = "Unison Growl",
+        ["synth/Bright Lead"] = "Bright Saw Lead", ["synth/Super Saw"] = "Super Saw 7", ["synth/Solo Lead"] = "Mono Lead",
+        ["synth/Soft Pluck"] = "Tri Pluck",
+        ["bass/Reese Bass"] = "Deep Reese", ["bass/Growl Bass"] = "Pulse Growl", ["bass/Wobble Bass"] = "LFO Wobble",
+    };
+
+    private void PortToVolt()
+    {
+        var sources = _all.Where(e => e.Info.IsInstrument && (e.Info.BuiltinKind == 0 || e.Info.BuiltinKind == 7)).ToList();
+        foreach (var (info, doc) in sources)
+        {
+            if (info.Category.Length == 0) continue;                 // Init: Volt has its own
+            string group = info.BuiltinKind == 0 ? "synth" : "bass";
+            string name = PortName.TryGetValue(group + "/" + info.DisplayName, out var n) ? n : info.DisplayName;
+            if (_byId.ContainsKey("volt/" + name))
+                throw new System.InvalidOperationException($"Ported preset name '{name}' is already a Volt preset.");
+            Section(PortFolder[group + "/" + info.Category]);
+            Inst("volt", 6, name, info.BuiltinKind == 0 ? VoltPort.FromSynth(doc.NamedParams!) : VoltPort.FromBass(doc.NamedParams!));
+        }
+    }
 
     private void Add(string group, string name, string type, int kind, bool isInstrument, bool isMidi, (string Key, float Value)[] ps)
     {

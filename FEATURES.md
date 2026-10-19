@@ -53,7 +53,7 @@ JUCE module; the engine core is JUCE-free.
   Mute, solo, sends and devices inside racks are not in the history; automation playback,
   opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
-  instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
+  instrument track (Nota Volt), an audio track and two returns — **Reverb** (Nota Reverb)
   and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
   nothing to undo.
 - **Version history**: every save records a version inside the project. The browser's
@@ -367,7 +367,7 @@ track count and closes with Escape.
   installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
   chords included, with velocities from the playing; Melody keeps the strongest note where notes
   overlap. Without it they use the DSP below, and the Convert menu offers the model.
-  - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
+  - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Volt track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
     notes start on the audio's attacks.
@@ -474,7 +474,8 @@ and hosted plug-ins) have the same on/off switch as effects: off silences the in
 audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
-- **Nota Synth** — subtractive synthesizer (the basic one): one oscillator
+- **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
+  presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
   stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
   Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
@@ -498,12 +499,16 @@ audio effects after it keep running and keep their settings; saved with the proj
   presets in nine folders; every preset outside Basics brings its own source (29 synthesized
   on first use — choir, strings, bells, kalimba, a drum break, an arpeggio, ocean, radio …),
   while Basics shape whatever sample is loaded.
-- **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
-  one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
-  its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a
-  dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix, 8 macros over 12
-  destinations, unison, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
-  modulation wheels, VEL→AMP, VEL→FILTER, Mono/Poly. 25 factory presets.
+- **Nota Volt** — the default instrument. Subtractive synth, two paths: two oscillators
+  (saw/square/triangle/sine, a Shape knob that morphs toward the next wave, pulse width) and
+  noise, each routed to one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to
+  feed Filter 2, a drive in front of both) and its own amp; amp and filter envelopes, two
+  LFOs (shapes, depth, fade-in, tempo sync) that the mod wheel can open onto the cutoffs
+  (Wheel → LFO), a dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix,
+  8 macros over 12 destinations, unison (one detuned partner, or a 2/4/7-voice stack with
+  stereo spread), output drive, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
+  modulation wheels, VEL→AMP, VEL→FILTER, Poly/Mono/Legato (Mono falls back to a held key).
+  74 factory presets: its own 25 plus the Nota Synth and Nota Bass libraries.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
   in cents, spread), two filters (LP/HP/BP/Notch/Morph, 12/24 dB) with per-source routing,
@@ -520,7 +525,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   Note, Reset, Humanize and Pan Spread. The card draws one lane per ball from the engine's
   telemetry (direction, the wall it strikes, the time to the next one) over a bar strip of
   the generated notes; 28 factory presets; MCP `read_pendulum` / `set_pendulum`.
-- **Nota Bass** — mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
+- **Nota Bass** — *no longer offered for new tracks: Nota Volt covers it and carries its
+  presets (specs/026); saved tracks still load and play.* Mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
   pulse width), a sub oscillator (sine/square/tri, −1/−2 oct), a filter (LP/HP/BP/Notch,
   12/24 dB) with pre-drive, its own envelope, key tracking and LFO, amp envelope, LFO to
   cutoff and pitch, unison, output drive and pan, glide, Legato, pitch-bend (±2/±5/±12)

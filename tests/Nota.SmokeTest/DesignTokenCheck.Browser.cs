@@ -16,7 +16,7 @@ internal static partial class DesignTokenCheck
         var types = new[] { BuiltinDeviceType.Instrument, BuiltinDeviceType.AudioEffect, BuiltinDeviceType.MidiEffect };
         var expected = new Dictionary<BuiltinDeviceType, int>
         {
-            [BuiltinDeviceType.Instrument] = 18, [BuiltinDeviceType.AudioEffect] = 26, [BuiltinDeviceType.MidiEffect] = 6,
+            [BuiltinDeviceType.Instrument] = 16, [BuiltinDeviceType.AudioEffect] = 26, [BuiltinDeviceType.MidiEffect] = 6,
         };
         foreach (var type in types)
         {

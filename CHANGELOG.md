@@ -23,6 +23,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Volt does what Nota Bass and Nota Synth did** (nota-daw/nota#195): each oscillator
+  has a **Shape** knob that morphs its wave toward the next one (sine → triangle → saw →
+  square) and a **Pulse Width** for the square; a **Drive** in front of both filters and one on
+  the output; a **Unison** choice of 1 / 2 / 4 / 7 voices, where 2 to 7 stack detuned copies of
+  each oscillator and **Spread** pans them across the stereo field; **Poly / Mono / Legato**,
+  where Mono falls back to the key you are still holding when you let go of the top one; and
+  **Wheel → LFO**, which opens each filter's LFO onto its cutoff as you raise the mod wheel.
+  The 49 Nota Synth and Nota Bass factory presets are now Volt presets too, in Volt's folders
+  (Bass's in Sub Bass, Analog Bass, Acid, Growl & Wobble and Electric Bass). A Volt patch you
+  already have sounds the same, except that in Mono a note played while the last one is
+  fading out now starts afresh instead of fading with it.
 - **Hear notes while you edit them in the piano roll** (nota-daw/nota#46): with the new
   speaker switch in the clip editor's header on (it is by default), a note sounds on the
   track's instrument while you place it, click it or drag it, and re-sounds at each new pitch
@@ -254,6 +265,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   take, for keyboard and MIDI input and for MIDI routed in from another track.
 
 ### Changed
+- **Nota Volt is the default instrument; Nota Bass and Nota Synth leave the browser**
+  (nota-daw/nota#195): a new instrument track, a new project, an imported MIDI file, an
+  audio-to-MIDI conversion and a new Instrument Rack now start on Nota Volt. Nota Bass and
+  Nota Synth are no longer offered in the browser, the command palette, the rack and Drum Rack
+  menus or MCP's `list_instrument_kinds`, since Volt now covers both. Projects and presets that
+  use them still open, play and show their own card.
 - **Hosted plug-ins get every MIDI controller** (nota-daw/nota#69): the mod wheel and any
   other CC from your keyboard now reach a plug-in instrument (before, only the wheel, pressure,
   CC74 and the sustain pedal did), and the sustain pedal arrives with its real value, so a

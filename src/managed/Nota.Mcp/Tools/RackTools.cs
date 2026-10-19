@@ -45,7 +45,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     // ---- chains -----------------------------------------------------------
 
     [McpServerTool(Name = "add_rack_chain"), Description("Add a parallel chain to the rack with the given built-in instrument kind. Returns the chain index.")]
-    public Task<int> AddRackChain(int trackId, [Description("Instrument kind id, e.g. 0=Synth, 2=Physical, 6=Volt")] int instrumentKind)
+    public Task<int> AddRackChain(int trackId, [Description("Instrument kind id, e.g. 6=Volt, 2=Physical, 5=Aurora")] int instrumentKind)
         => Mutate(() => E.RackAddChain(trackId, instrumentKind));
 
     [McpServerTool(Name = "remove_rack_chain"), Description("Remove a chain from the rack by index.")]

@@ -608,7 +608,7 @@ public partial class MainWindow : Window
         Engine.BeginUndoGroup();
         try
         {
-            trackId = kind == NewTrackKind.Instrument ? Engine.AddInstrumentTrack() : Engine.AddAudioTrack();
+            trackId = kind == NewTrackKind.Instrument ? Engine.AddVoltSynthTrack() : Engine.AddAudioTrack();
             if (kind == NewTrackKind.Instrument) Engine.AddMidiClip(trackId, 0.0, 4.0);
             Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
