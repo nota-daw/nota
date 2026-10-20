@@ -1,6 +1,6 @@
 # Feature Specification: Update checks outside the start screen
 
-**Feature Branch**: `027-update-checks`
+**Feature Branch**: `033-update-checks`
 
 **Created**: 2026-10-20
 
