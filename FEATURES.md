@@ -1206,6 +1206,9 @@ Coverage:
 - **Release CI**: a GitHub Actions workflow builds and packages every target (x64 + arm64
   across macOS, Windows and Linux) on a `vX.Y.Z` release tag, and drafts the GitHub release
   with the matching `CHANGELOG.md` section as its body.
-- **Tests**: an engine smoke test after every build.
+- **Tests**: an engine smoke test after every build, and a performance gate on engine
+  pull requests: instruction counts (fails above 1%) and timing (above 15%) per scenario
+  against the base branch, plus an idle-CPU check on all three OSes
+  (`scripts/perf-gate.sh`).
 - **Third-party notices**: bundled/linked dependencies and their copyrights are recorded in
   [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md).
