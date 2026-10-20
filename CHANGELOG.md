@@ -39,6 +39,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   small to read on a laptop screen, or 75 % to fit more tracks on a small one.
 
 ### Fixed
+- **New project and Open ask before discarding unsaved changes** (nota-daw/nota#215): File →
+  New, File → Open and opening a project from the browser now offer Save / Don't save /
+  Cancel, like quitting does; Cancel keeps the current project. The detail panel also closes
+  cleanly on the switch instead of leaving an empty band, and a popped-out detail window
+  shows the new project's devices.
 - Duplicating a track keeps each effect's sidechain source and tap; the compressor's key
   was dropped on the copy.
 - A sidechain source keeps feeding its key when it is muted or another track is soloed (the

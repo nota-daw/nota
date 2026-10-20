@@ -606,7 +606,9 @@ public partial class MainWindow
         if (_vm is not null) _vm.StatusText = message;
     }
 
-    private void OnCloseDetail(object? sender, RoutedEventArgs e)
+    private void OnCloseDetail(object? sender, RoutedEventArgs e) => CloseDetail();
+
+    private void CloseDetail()
     {
         DetailPanel.IsVisible = false;
         DetailSplitter.IsVisible = false;

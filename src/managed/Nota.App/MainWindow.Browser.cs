@@ -102,7 +102,7 @@ public partial class MainWindow
                     Timeline.Refresh();
                     break;
                 case BrowserItemKind.Project:
-                    OpenProject(item.Path);
+                    _ = OpenProjectConfirmedAsync(item.Path);
                     return; // OpenProject rebuilds everything itself
                 case BrowserItemKind.Preset:
                     ApplyInsertResult(Insertion.ApplyPreset(item, new InsertTarget(Timeline.SelectedTrackId)));
