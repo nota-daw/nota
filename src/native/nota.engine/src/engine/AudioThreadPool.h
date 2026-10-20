@@ -5,8 +5,11 @@
 // render passes . The audio thread publishes a job (count +
 // type-erased callable, no allocation) by bumping a generation counter;
 // dedicated workers plus the calling thread itself claim tickets from a
-// shared monotonic counter. Workers spin (pause hint, then yield — never
-// block on a mutex), hold FTZ/DAZ for their whole lifetime, and own
+// shared monotonic counter. Workers spin briefly (pause hint) for
+// low-latency wake on back-to-back dispatches, then park on
+// std::atomic::wait — never on a mutex. The audio thread only ever
+// store-releases + notify_all (wait-free, no lock/alloc), so the wake is
+// AR-6 safe. Workers hold FTZ/DAZ for their whole lifetime, and own
 // pre-allocated scratch buffers sized once on the message thread (AR-6: the
 // audio path never allocates, locks, or blocks).
 //
@@ -89,6 +92,7 @@ class AudioThreadPool {
         s.base = claimed_.load(std::memory_order_relaxed);
         doneBase_ = done_.load(std::memory_order_relaxed);
         epoch_.store(g, std::memory_order_release); // publish: workers wake
+        epoch_.notify_all(); // AR-6 safe: wakes parked workers, never blocks
         // Claim loop: validate against the live slot, claim by CAS, run.
         // The caller needs no stop checks (single audio thread: no
         // concurrent publish can invalidate its own job mid-flight).

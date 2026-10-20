@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // AudioThreadPool implementation . Thread management,
-// worker spin loop, and scratch sizing live here; dispatch() is a header
+// worker spin-then-park loop, and scratch sizing live here; dispatch() is a header
 // template (type-erased via a non-owning trampoline — no std::function,
 // no allocation on the audio path).
 
@@ -30,6 +30,7 @@ AudioThreadPool::AudioThreadPool(int workers) {
 AudioThreadPool::~AudioThreadPool() {
     stop_.store(true, std::memory_order_relaxed);
     epoch_.fetch_add(1, std::memory_order_release); // wake sleepers so they observe stop_
+    epoch_.notify_all(); // parked workers wait on epoch_: wake them to exit
     for (auto& t : workers_)
         if (t.joinable()) t.join();
 }
@@ -43,21 +44,24 @@ void AudioThreadPool::reserveScratch(size_t floats) {
 void AudioThreadPool::workerLoop(int id) {
     dsp::ScopedNoDenormals ftz; // whole thread lifetime: FTZ + DAZ
     uint64_t seen = 0;
-    int spins = 0;
     for (;;) {
-        const uint64_t e = epoch_.load(std::memory_order_acquire);
-        if (e == seen) { // parked: brief pause-spin, then yield (no mutex, no block)
-            if (++spins < 256) {
+        uint64_t e = epoch_.load(std::memory_order_acquire);
+        if (e == seen) { // parked: brief pause-spin for low-latency wake,
+            // then block in the kernel so idle costs ~0 CPU (issue #223).
+            for (int i = 0; i < 256; ++i) {
                 NOTA_CPU_PAUSE();
-            } else {
-                std::this_thread::yield();
-                spins = 0;
+                e = epoch_.load(std::memory_order_acquire);
+                if (e != seen) break;
             }
-            if (stop_.load(std::memory_order_relaxed)) return;
-            continue;
+            if (e == seen) {
+                if (stop_.load(std::memory_order_relaxed)) return;
+                // wait() returns immediately if epoch_ != seen (no lost
+                // wakeup); spurious wakeups re-loop and re-wait.
+                epoch_.wait(seen, std::memory_order_acquire);
+                continue;
+            }
         }
         seen = e;
-        spins = 0;
         if (stop_.load(std::memory_order_relaxed)) return;
         // Same check-then-CAS claim loop as the caller (see header
         // comment): overshoot probes never consume, so a lagging probe
