@@ -1101,7 +1101,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
+  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
+  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and

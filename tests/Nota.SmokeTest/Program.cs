@@ -81,6 +81,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: interface scale --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");

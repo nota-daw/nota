@@ -22,6 +22,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Make the whole interface larger or smaller** (nota-daw/nota#38): **Settings → Appearance
+  → Interface scale** offers 75, 100, 125, 150 and 200 %. The change applies at once to every
+  window, menu, tooltip and dialog — text, buttons, knobs, track headers, device cards — and
+  is kept for the next launch. Text stays sharp at every size. The timeline, piano roll and
+  audio editor zoom as before, on top of the scale. Pick 125 % or more when the text is too
+  small to read on a laptop screen, or 75 % to fit more tracks on a small one.
+
 ### Fixed
 - **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
   they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens

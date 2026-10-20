@@ -25,8 +25,6 @@ internal sealed class MixerWindow : NotaWindow
     private readonly Action<int> _setViewSegment;
 
     private const double BarH = 36;
-    private static readonly double LeftInset = !NativeFrame && OperatingSystem.IsMacOS() ? 76 : 12;
-    private static readonly double RightInset = !NativeFrame && OperatingSystem.IsWindows() ? 8 + 138 : 8;
 
     private readonly MainWindow _owner;
 
@@ -72,8 +70,9 @@ internal sealed class MixerWindow : NotaWindow
         var bar = new Border
         {
             Height = BarH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.GraphBorder,
-            BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(LeftInset, 0, RightInset, 0), Child = grid,
+            BorderThickness = new Thickness(0, 0, 0, 1), Child = grid,
         };
+        NotaUiScale.Track(bar, s => bar.Padding = CaptionPadding(s));
         if (!NativeFrame) bar.PointerPressed += OnChromePressed;
 
         var dock = new DockPanel();
@@ -92,8 +91,12 @@ internal sealed class MixerWindow : NotaWindow
     public void FitWidth(double stripsWidth)
     {
         var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
-        double max = screen is null ? double.PositiveInfinity : screen.WorkingArea.Width / screen.Scaling;
-        double w = Math.Clamp(Math.Ceiling(stripsWidth), MinWidth, Math.Max(MinWidth, max));
+        // The strips are measured inside the interface scale (spec 027). Once shown the frame
+        // is in screen units; before that it still holds design units, which the first show
+        // scales — so the factor applies only to a visible window.
+        double s = IsVisible ? NotaUiScale.Factor : 1;
+        double max = screen is null ? double.PositiveInfinity : screen.WorkingArea.Width / screen.Scaling / (IsVisible ? 1 : NotaUiScale.Factor);
+        double w = Math.Clamp(Math.Ceiling(stripsWidth * s), MinWidth, Math.Max(MinWidth, max));
         if (Math.Abs(w - Width) < 0.5) return;
         Width = w;
         if (screen is not null && IsVisible)

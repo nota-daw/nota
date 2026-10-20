@@ -45,10 +45,6 @@ internal sealed class DeviceWindow : NotaWindow
 {
     public const double BarH = 32, RowH = 30, StatusH = 22, PickerW = 188, PickerH = 22;
     private const double Gap = 10, NameMin = 90;   // the least the name · track keeps in the title row
-    // Room the OS window buttons take in the title row: the macOS traffic lights (left) and
-    // the Windows caption buttons (3 × 46, right). Linux draws its frame above the window.
-    private static readonly double LeftInset = !NativeFrame && OperatingSystem.IsMacOS() ? 76 : 12;
-    private static readonly double RightInset = !NativeFrame && OperatingSystem.IsWindows() ? 8 + 138 : 8;
 
     /// <summary>The track whose chain this device sits in — the command palette's target (CP-3).</summary>
     public int ContextTrackId { get; set; } = -1;
@@ -82,8 +78,10 @@ internal sealed class DeviceWindow : NotaWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _timer.Tick += (_, _) => Tick();
-        Opened += (_, _) => _timer.Start();
-        Closed += (_, _) => _timer.Stop();
+        Opened += (_, _) => { _timer.Start(); NotaUiScale.Changed += Refill; };
+        Closed += (_, _) => { _timer.Stop(); NotaUiScale.Changed -= Refill; };
+        // (Refill on a scale change: whether the preset picker fits in the title row depends
+        // on the room the OS window buttons take, which is fixed on screen — spec 027.)
         Refill();
     }
 
@@ -128,7 +126,8 @@ internal sealed class DeviceWindow : NotaWindow
         double w = double.IsNaN(page.BodyWidth) ? 0 : page.BodyWidth;
         double presetW = page.Presets is null ? 0 : PickerW + Gap;
         double togglesW = (page.Size is null ? 0 : 34 + Gap) + (_bypass is null ? 0 : 26 + Gap);
-        double free = Math.Max(w, 260) - LeftInset - RightInset;
+        var inset = CaptionPadding(NotaUiScale.Factor);   // the OS window buttons' room
+        double free = Math.Max(w, 260) - inset.Left - inset.Right;
         // Mini bodies (under 400) always drop the picker to its own row, as does a title
         // row the window buttons leave too little of.
         bool presetInBar = page.Presets is null || (w >= 400 && free - presetW - togglesW >= NameMin);
@@ -188,8 +187,9 @@ internal sealed class DeviceWindow : NotaWindow
         var bar = new Border
         {
             Height = BarH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.GraphBorder,
-            BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(LeftInset, 0, RightInset, 0), Child = grid,
+            BorderThickness = new Thickness(0, 0, 0, 1), Child = grid,
         };
+        NotaUiScale.Track(bar, s => bar.Padding = CaptionPadding(s));
         if (!NativeFrame) bar.PointerPressed += OnChromePressed;
         return bar;
     }
