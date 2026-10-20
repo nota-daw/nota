@@ -183,13 +183,17 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
     }
 
     // Save / Don't Save / Cancel when leaving a project with unsaved edits. True to go on.
+    // A named project saves in place with the prompt up ("Saving…"); an untitled one needs
+    // the file panel, so the prompt closes first. A Save that is cancelled or fails stays put.
     private async Task<bool> ConfirmLeaveChangesAsync(string title, string message)
     {
         if (!HasUnsavedChanges()) return true;
+        bool named = _projectPath is not null;
         var choice = await new SaveChangesWindow(title, message, ProjectDisplayName(), UnsavedAgeText(),
-                () => DoSaveAsync(saveAs: false))
+                named ? () => DoSaveAsync(saveAs: false) : null)
             .ShowDialog<SaveChoice>(this);
-        return choice != SaveChoice.Cancel;
+        if (choice == SaveChoice.Cancel) return false;
+        return choice != SaveChoice.Save || named || await DoSaveAsync(saveAs: false);
     }
 
     // "the version “With bass” (12 Oct, 14:32)" / "the version of 12 Oct, 14:32".

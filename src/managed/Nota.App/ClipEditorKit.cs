@@ -26,6 +26,12 @@ internal static class ClipEditorKit
 
     /// <summary>The 38px header: clip cell | modes | (flex) | right-hand controls.</summary>
     public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right)
+        => Header(trackColor, name, kind, modes, afterModes, right, out _, out _);
+
+    /// <summary>As above, handing back the name and the colour bar so a header can follow the
+    /// clip it names (the multi-clip editor's active clip).</summary>
+    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
+                                out TextBlock nameOut, out Border colorBar)
     {
         var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 9 };
         var nameText = new TextBlock
@@ -39,6 +45,7 @@ internal static class ClipEditorKit
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         cell.Children.Add(nameText);
+        nameOut = nameText;
         Grid.SetColumn(badge, 1); cell.Children.Add(badge);
         var cellHost = new Border
         {
@@ -47,7 +54,7 @@ internal static class ClipEditorKit
             {
                 Children =
                 {
-                    new Border { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Background = trackColor },
+                    (colorBar = new Border { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Background = trackColor }),
                     new Border { Padding = new Thickness(14, 0), Child = cell },
                 },
             },

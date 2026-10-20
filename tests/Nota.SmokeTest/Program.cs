@@ -81,6 +81,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: interface scale --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
@@ -286,6 +288,14 @@ if (args.Length >= 1 && args[0] == "--notes")
     Console.WriteLine(failures == 0 ? "NOTES PASSED" : $"NOTES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Several clips in one Clip editor alone: `--multiclip`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--multiclip")
+{
+    Console.WriteLine("-- multi-clip editing --");
+    foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MULTICLIP PASSED" : $"MULTICLIP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Default project template alone: `--template`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--template")
 {
@@ -391,6 +401,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine("-- nota keys --");
     foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--vocoder")
+{
+    Console.WriteLine("-- nota vocoder --");
+    foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -14774,10 +14792,21 @@ Console.WriteLine("-- background audio import --");
             while (ie.WarpBuildPoll() > 0 && ++guard3 < 100000) Thread.Sleep(1);
             Check(ie.WarpBuildRemaining == 0, $"bg warp: worker build installed ({bgw.ElapsedMilliseconds} ms, {guard3} polls)");
             se.SetClipWarpMarkers(st2, sc2, src2, beats2);   // synchronous reference
-            ie.Stop(); ie.Seek(0); ie.Play(); se.Stop(); se.Seek(0); se.Play();
+            se.Stop(); se.Seek(0); se.Play();
             var ba = new float[8192 * 2]; var bb = new float[8192 * 2];
-            ie.RenderOffline(ba, 8192); se.RenderOffline(bb, 8192);
-            double bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+            se.RenderOffline(bb, 8192);
+            // The worker install lands via republish; give the fresh cache a moment
+            // to become audible instead of racing a still-installing build.
+            double bd = double.MaxValue;
+            for (int retry = 0; retry < 50; retry++)
+            {
+                ie.WarpBuildPoll();
+                ie.Stop(); ie.Seek(0); ie.Play();
+                ie.RenderOffline(ba, 8192);
+                bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+                if (Rms(ba, 8192) > 0.001f && bd < 1e-5) break;
+                Thread.Sleep(20);
+            }
             Check(Rms(ba, 8192) > 0.001f && bd < 1e-5, $"bg warp: plays identically to the synchronous rebuild (max diff {bd:E1})");
             // An edit while a build runs supersedes it: the stale result is dropped, not installed.
             ie.SetDeferWarpBuild(true);
@@ -14907,12 +14936,18 @@ Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota vocoder --");
+foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- preset init --");
 foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");
 foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
+Console.WriteLine("-- dsp optimization --");
+foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
+Console.WriteLine("-- dsp silence bypass --");
+foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
@@ -14925,6 +14960,9 @@ foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- note editing --");
 foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- multi-clip editing --");
+foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);

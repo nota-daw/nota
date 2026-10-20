@@ -228,6 +228,28 @@ public sealed partial class ArrangementView : UserControl
 
     /// <summary>Raised when a MIDI clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? MidiClipActivated;
+    /// <summary>"Edit selected clips together" from a clip's context menu (specs/029).</summary>
+    public event Action? EditSelectedClipsRequested;
+    /// <summary>The set of selected clips changed (click, ⌘-click, ⇧-click, marquee, select
+    /// all, delete). Raised once per change, after the arrangement has settled its own state;
+    /// the Clip editor follows it (specs/029).</summary>
+    public event Action? ClipSelectionChanged;
+    private (int, int)[] _notifiedSel = Array.Empty<(int, int)>();
+    private bool _selNotifyQueued;
+
+    private void QueueSelectionNotify()
+    {
+        if (_selNotifyQueued) return;
+        _selNotifyQueued = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _selNotifyQueued = false;
+            var now = _sel.OrderBy(s => s.track).ThenBy(s => s.clip).ToArray();
+            if (now.SequenceEqual(_notifiedSel)) return;
+            _notifiedSel = now;
+            ClipSelectionChanged?.Invoke();
+        });
+    }
     /// <summary>Raised when an audio clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
@@ -1124,6 +1146,35 @@ public sealed partial class ArrangementView : UserControl
         // vertically (don't handle, so the event bubbles up to it).
     }
 
+    // The multi-selection a click just narrowed down to one clip, kept for the double-click
+    // that click may be the first half of (specs/029).
+    private (int Track, int Clip, (int, int)[] Before)? _narrowed;
+
+    internal void RememberNarrowed(int trackId, int clipIndex, bool wasSelected)
+        => _narrowed = wasSelected && _sel.Count > 1 ? (trackId, clipIndex, _sel.ToArray()) : null;
+
+    /// <summary>A double-click on the clip a click just narrowed the selection to: put the
+    /// selection back, so the clips open together.</summary>
+    internal void RestoreNarrowed(int trackId, int clipIndex)
+    {
+        if (_narrowed is { } n && n.Track == trackId && n.Clip == clipIndex && _sel.Count == 1 && _sel.Contains((trackId, clipIndex)))
+        {
+            SetSelection(n.Before);
+            SelTrackId = trackId; SelClipIndex = clipIndex;
+        }
+        _narrowed = null;
+    }
+
+    /// <summary>The selected MIDI clips, ordered by start then track order (specs/029).</summary>
+    public IReadOnlyList<(int TrackId, int ClipIndex)> SelectedMidiClips()
+    {
+        var list = new List<(int, int, double, int)>();
+        for (int r = 0; r < _tracks.Count; r++)
+            foreach (var c in _tracks[r].Clips)
+                if (c.IsMidi && _sel.Contains((_tracks[r].Id, c.ClipIndex))) list.Add((_tracks[r].Id, c.ClipIndex, c.StartBeat, r));
+        return list.OrderBy(x => x.Item3).ThenBy(x => x.Item4).Select(x => (x.Item1, x.Item2)).ToList();
+    }
+
     internal void OnClipDoubleClicked(int trackId, int clipIndex, bool isMidi)
     {
         if (isMidi) MidiClipActivated?.Invoke(trackId, clipIndex);
@@ -1844,6 +1895,7 @@ public sealed partial class ArrangementView : UserControl
     // instead of rebuilding the whole header column (faders, meters, combos) on every click.
     private void UpdateHeaderSelection()
     {
+        QueueSelectionNotify();   // every clip-selection change repaints the headers
         foreach (var (id, h) in _headerCards)
         {
             // Selected row (almanac § States): brass wash, the left stripe turns brass, name in Ink 1.

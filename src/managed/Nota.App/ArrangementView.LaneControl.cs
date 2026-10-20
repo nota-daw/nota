@@ -281,6 +281,7 @@ public sealed partial class ArrangementView
                 // the select→Devices path), so the Clip tab targets this clip.
                 _o.SelTrackId = hh.track.Id;
                 _o.SelClipIndex = hh.clip.ClipIndex;
+                _o.RestoreNarrowed(hh.track.Id, hh.clip.ClipIndex);
                 _o.OnClipDoubleClicked(hh.track.Id, hh.clip.ClipIndex, hh.clip.IsMidi);
                 return;
             }
@@ -554,7 +555,12 @@ public sealed partial class ArrangementView
                 _pending = false;
                 e.Pointer.Capture(null);
                 if (!_pendingWasSelected || _o.SelectionCount > 1)
+                {
+                    // The first click of a double-click narrows too; keep what it narrowed so the
+                    // double-click can open the whole selection together (specs/029).
+                    _o.RememberNarrowed(_pendingTrackId, _pendingClipIndex, _pendingWasSelected);
                     _o.Select(_pendingTrackId, _pendingClipIndex);
+                }
                 // Also drop the playhead where the user clicked (same as clicking empty lane) —
                 // but not during playback: scrubbing off the grid is disruptive, use the ruler.
                 if (_o._engine is not { IsPlaying: true })
@@ -1224,6 +1230,14 @@ public sealed partial class ArrangementView
             };
             flyout.Items.Add(new Separator());
             flyout.Items.Add(loop);
+
+            // Several MIDI clips selected: open them together in the Clip editor (specs/029).
+            if (clip.IsMidi && inGroup && _o.SelectedMidiClips().Count >= 2)
+            {
+                var together = new MenuItem { Header = "Edit selected clips together", Icon = MenuKit.Icon(GlyphKind.Edit) };
+                together.Click += (_, _) => _o.EditSelectedClipsRequested?.Invoke();
+                flyout.Items.Add(together);
+            }
 
             // Audio clip → stems (AI model) and → MIDI: Convert / Slice to New MIDI Track.
             if (!clip.IsMidi)

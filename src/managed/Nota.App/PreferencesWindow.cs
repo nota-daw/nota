@@ -75,7 +75,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("General", new[]
         {
             new Page("Library", "Content folders and version history", GlyphKind.Library),
-            new Page("Appearance", "Theme, waveforms and AI control", GlyphKind.Appearance),
+            new Page("Appearance", "Theme, scale, waveforms and AI control", GlyphKind.Appearance),
             new Page("Shortcuts", "Keyboard reference", GlyphKind.Shortcuts),
             new Page("Updates", "New versions of Nota", GlyphKind.Update),
         }),
@@ -125,6 +125,11 @@ public sealed partial class PreferencesWindow : NotaWindow
         Title = "Settings";
         Width = 880;
         Height = 640;
+        // The widest page (Appearance: two theme cards beside the labels) still fits; the
+        // interface scale multiplies this, so a live switch to 150 / 200 % grows the window
+        // instead of clipping it (spec 027).
+        MinWidth = 800;
+        MinHeight = 480;
         Background = Ground;
 
         var nav = new StackPanel { Spacing = 2, Margin = new Thickness(10, 12) };
@@ -970,6 +975,32 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
+    // under the pointer too — and is saved for the next launch.
+    private static Control ScalePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Percent, ToggleButton Btn)>();
+        int current = InterfaceScale.Normalize(settings.Current.InterfaceScale);
+        foreach (var percent in InterfaceScale.Presets)
+        {
+            var p = percent;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = $"{p}\u2009%", IsChecked = current == p };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bp, bb) in buttons) bb.IsChecked = bp == p;
+                if (settings.Current.InterfaceScale == p) return;
+                settings.Current.InterfaceScale = p;
+                settings.Save();
+                NotaUiScale.Set(p);
+            };
+            buttons.Add((p, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     private Control AppearancePane()
     {
         var settings = App.Services.GetService<ISettingsService>();
@@ -1057,7 +1088,9 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
+                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("Interface scale", ScalePicker()),
+                Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));
     }
 
@@ -1178,6 +1211,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("Click a clip in the clip strip", "Make it the active clip (several clips open) · its lock keeps it as a read-only reference"),
             ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
             ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
@@ -1211,7 +1245,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Mouse", new[]
         {
-            ("Double-click clip", "Open in the clip editor"),
+            ("Double-click clip", "Open in the clip editor · on one of several selected MIDI clips, open them all together"),
             ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
             ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),

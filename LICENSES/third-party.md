@@ -12,18 +12,18 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
-| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — see note 1 |
+| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM tag, shallow fetch — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
-| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use |
-| RtMidi | vendored | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use |
-| dr_libs (dr_wav / dr_flac / dr_mp3) | vendored | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — see note 3 |
-| libFLAC (xiph) | 1.5.x | FLAC encoding (export) | BSD-3-Clause | ✅ in use — git submodule `vendor/flac` |
-| LAME | 3.100 | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
-| signalsmith-stretch | vendored | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use |
-| signalsmith-linear | vendored | FFT / linear DSP primitives | MIT | ✅ in use |
+| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM tag, fetched to build dir |
+| RtMidi | 6.0.0 (pinned commit, byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned commit, fetched to build dir |
+| dr_libs (dr_wav / dr_flac / dr_mp3) | pinned commit `cd99e2c` (headers: wav 0.14.6 / flac 0.13.4 / mp3 0.7.4, byte-identical to former snapshot) | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — CPM pinned commit, fetched to build dir — see note 3 |
+| libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM tag, fetched to build dir |
+| LAME | 3.100 (sources byte-identical to former snapshot; wrapper moved to `cmake/lame/`) | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
+| signalsmith-stretch | pinned commit `57b93f4` (header v1.3.2, byte-identical to former snapshot) | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
+| signalsmith-linear | pinned commit `7f53cdd` (fft.h byte-identical to former snapshot) | FFT / linear DSP primitives | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
 | nlohmann/json | 3.12.0 | `audio.json` / `midi.json` device config (engine) | MIT | ✅ in use — CPM release tarball, fetched to build dir |
 | CPM.cmake | v0.43.2 | CMake package manager (build-time only, not linked) | MIT | ✅ in use — downloaded at configure time, never vendored |
-| HIIR (Laurent de Soras) | 1.40 | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — see note 4 |
+| HIIR (Laurent de Soras) | 1.50 (bump ex 1.40; snapshot unavailable upstream — null-gated, see note 4) | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — CPM URL+HASH zip, fetched to build dir — see note 4 |
 | Apple CoreAudio / CoreMIDI / AudioToolbox | system | Audio + MIDI I/O (macOS) | system SDK | ✅ in use |
 | Geist / Geist Mono (Vercel) | 1.7.2 | UI and numeric typefaces (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |
 | ONNX Runtime — managed API (`Microsoft.ML.OnnxRuntime.Managed`) | 1.23.2 | Runs the AI models (Separate Stems, Convert to MIDI) | MIT | ✅ in use — see note 6 |
@@ -76,12 +76,13 @@ use and redistribution with AGPL software. Nota's STFT, segmenting and note-deco
 around the models are its own ports of the reference Python (`src/managed/Nota.Infrastructure/Ai`).
 
 **7 — LAME is LGPL-2.0-or-later, statically compiled into the engine.**
-LAME 3.100 (`vendor/lame`, encoder-only source snapshot) is the MP3 encoder for export.
+LAME 3.100 (upstream tarball pinned by URL+HASH, encoder-only sources identical
+to the former snapshot) is the MP3 encoder for export.
 LGPL-2.0+ is one-way compatible with AGPL-3.0-only via the "or later" upgrade clause, so it
 qualifies as AGPL-compatible copyleft under this register's rule — the maintainer accepted
 it as an *accounted* copyleft dependency (specs/001-mp3-flac-export). Conditions: the
-complete corresponding source ships in-tree (`vendor/lame` carries LAME's own `COPYING*`
-files verbatim, unmodified sources), the register carries this row and note, and the
+complete corresponding source is pinned and fetchable (upstream tarball URL+HASH),
+the LGPL text ships in LICENSES/, the register carries this row and note, and the
 combined work stays AGPL-3.0-only. No LAME symbol leaves the dylib (the `nota_*` export
 lists hide it, same as JUCE in note 1).
 

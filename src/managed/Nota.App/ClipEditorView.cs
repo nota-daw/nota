@@ -6,7 +6,8 @@
 // scale", and the Tools toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
 // the 272px clip-tools panel (MidiToolsView). Envelopes is a mode of the same canvas: the
 // notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
-// brass, on the roll's own beat axis so zoom and scroll carry over.
+// brass, on the roll's own beat axis so zoom and scroll carry over. With several clips open
+// (specs/029) the header, inspector and envelopes follow the roll's active clip.
 
 using System;
 using Avalonia;
@@ -24,7 +25,10 @@ public sealed class ClipEditorView : UserControl
 {
     public PianoRollView Roll { get; }
 
-    private readonly EnvOverlay? _envOverlay;
+    private EnvOverlay? _envOverlay;
+    private readonly IAudioEngine? _engine;
+    private readonly TextBlock _nameText;
+    private readonly Border _colorBar;
     private readonly ClipPropsView _props;
     private readonly MidiToolsView _tools;
     private readonly ToggleButton _toolsToggle;
@@ -35,11 +39,11 @@ public sealed class ClipEditorView : UserControl
                           IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4)
     {
         Roll = roll;
+        _engine = engine;
         if (engine is not null && trackId > 0 && clipIndex >= 0)
         {
             _envOverlay = new EnvOverlay(roll, engine, trackId, clipIndex, lengthBeats);
-            var named = engine.GetClipName(trackId, clipIndex);
-            if (!string.IsNullOrWhiteSpace(named)) clipName = named;
+            clipName = ClipName(trackId, clipIndex, clipName);
         }
 
         // Inspector | roll | clip-tools panel. The tools panel is a toggle rather than a
@@ -63,9 +67,37 @@ public sealed class ClipEditorView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 12,
             Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
-        var header = Header(roll.TrackBrush, clipName, "MIDI", tabs, null, right);
+        var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+        roll.ActiveClipChanged += OnActiveClipChanged;
+        if (roll.Clips.IsMulti) OnActiveClipChanged();   // envelopes on the active clip's place on the axis
+    }
+
+    private string ClipName(int trackId, int clipIndex, string fallback)
+    {
+        var named = _engine?.GetClipName(trackId, clipIndex);
+        return string.IsNullOrWhiteSpace(named) ? fallback : named;
+    }
+
+    // "Bass 2 · +2 clips" while several clips are open.
+    private string HeaderName(string name)
+        => Roll.Clips.IsMulti ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
+
+    // Another clip became active: name, colour, start and the envelope target follow it.
+    private void OnActiveClipChanged()
+    {
+        if (_engine is null) return;
+        var a = Roll.ActiveClip;
+        if (a.TrackId <= 0) return;
+        _nameText.Text = HeaderName(ClipName(a.TrackId, a.ClipIndex, $"Track {a.TrackId} clip"));
+        _colorBar.Background = Roll.TrackBrush;
+        _props.SetStart(a.StartBeat);
+        _envOverlay = new EnvOverlay(Roll, _engine, a.TrackId, a.ClipIndex, a.LengthBeats)
+        {
+            Offset = Roll.Clips.EditorStart(Roll.Clips.Active),
+        };
+        if (_envMode) Roll.SetOverlay(_envOverlay);
     }
 
     // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's
@@ -226,6 +258,9 @@ public sealed class ClipEditorView : UserControl
 
         public void SetLength(double lengthBeats) => _canvas.SetLength(lengthBeats);
 
+        /// <summary>Editor beat where this clip starts (several clips open; 0 for one).</summary>
+        public double Offset { get => _canvas.Offset; init => _canvas.Offset = value; }
+
         private void Load()
         {
             var pts = _engine.GetMidiClipEnvelope(_trackId, _clipIndex, _target);
@@ -289,8 +324,10 @@ public sealed class ClipEditorView : UserControl
             InvalidateVisual();
         }
 
-        private double BeatToX(double beat, double w) => _roll.BeatToX(beat);
-        private double XToBeat(double x, double w) => Math.Clamp(_roll.XToBeat(x), 0, _clipBeats);
+        /// <summary>Editor beat of the clip's beat 0 (specs/029).</summary>
+        public double Offset { get; set; }
+        private double BeatToX(double beat, double w) => _roll.BeatToX(beat + Offset);
+        private double XToBeat(double x, double w) => Math.Clamp(_roll.XToBeat(x) - Offset, 0, _clipBeats);
         private static double ValToY(double v, double h) { double pad = 6; return pad + (1 - Math.Clamp(v, 0, 1)) * (h - 2 * pad); }
         private static double YToVal(double y, double h) { double pad = 6; return Math.Clamp((h - pad - y) / Math.Max(1, h - 2 * pad), 0, 1); }
         private static double Shape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));

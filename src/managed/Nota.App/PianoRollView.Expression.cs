@@ -263,7 +263,7 @@ public sealed partial class PianoRollView
                 for (int i = 0; i < notes.Count; i++)
                 {
                     bool sel = _o._selection.Contains(i);
-                    if (sel != selPass || _o.IsGhost(i)) continue;
+                    if (sel != selPass || _o.IsGhost(i) || _o.IsLocked(i)) continue;
                     var n = notes[i];
                     double x0 = _o.BeatToX(n.StartBeat), x1 = _o.BeatToX(n.StartBeat + n.LengthBeats);
                     if (x1 < 0 || x0 > w) continue;
@@ -287,7 +287,7 @@ public sealed partial class PianoRollView
                         g.LineTo(new Point(x1, ValueToY(c[^1].Value)));
                         g.EndFigure(false);
                     }
-                    IPen pen = sel ? CurvePen : TrackPen(n);
+                    IPen pen = sel ? CurvePen : TrackPen(i);
                     using (ctx.PushClip(new Rect(x0, 0, Math.Max(1, x1 - x0), h))) ctx.DrawGeometry(null, pen, line);
                     if (!sel) continue;
                     for (int k = 0; k < c.Count; k++)
@@ -308,9 +308,9 @@ public sealed partial class PianoRollView
             _o.DrawOutsideClip(ctx, w, h);
         }
 
-        private IPen TrackPen(NotaNote n)
+        private IPen TrackPen(int i)
         {
-            var c = _o._trackColor;
+            var c = _o.ColorOf(i);
             return new Pen(new SolidColorBrush(Color.FromArgb(0x99, c.R, c.G, c.B)), 1.25);
         }
 
@@ -347,7 +347,7 @@ public sealed partial class PianoRollView
             _o.SettlePlacement();   // the selection changes below, and this lane never takes focus
             int pick = -1;
             for (int i = 0; i < _o._notes.Count; i++)
-                if (Spans(i, beat) && (pick < 0 || _o._notes[i].Pitch > _o._notes[pick].Pitch)) pick = i;
+                if (!_o.IsLocked(i) && Spans(i, beat) && (pick < 0 || _o._notes[i].Pitch > _o._notes[pick].Pitch)) pick = i;
             if (pick < 0) return sel;
             if (!shift) _o._selection.Clear();
             _o._selection.Add(pick);

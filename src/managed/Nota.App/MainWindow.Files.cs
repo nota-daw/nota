@@ -170,9 +170,13 @@ public partial class MainWindow
     /// <summary>A crash-recovery snapshot to offer on open (set by App at launch). M7-7.</summary>
     public RecoveryInfo? PendingRecovery { get; init; }
 
-    private void OnMenuNew(object? sender, EventArgs e)
+    private void OnMenuNew(object? sender, EventArgs e) => _ = DoNewAsync();
+
+    private async Task DoNewAsync()
     {
         if (_vm is null) return;
+        if (!await ConfirmLeaveChangesAsync("New project",
+                "Save your changes before starting a new project?")) return;
         _links.Clear();    // no live-freeze links (cleared first: stale ids must not hit the new graph)
         Engine.Reset();
         // Reset transport to defaults (these setters drive the engine + UI).
@@ -212,6 +216,16 @@ public partial class MainWindow
         if (folders.Count == 0) return;
         var dir = folders[0].TryGetLocalPath();
         if (dir is null) { _vm.StatusText = "Unsupported project location."; return; }
+        if (!await ConfirmLeaveChangesAsync("Open project",
+                "Save your changes before opening another project?")) return;
+        OpenProject(dir);
+    }
+
+    // Open another project from the browser, after the unsaved-changes prompt.
+    private async Task OpenProjectConfirmedAsync(string dir)
+    {
+        if (!await ConfirmLeaveChangesAsync("Open project",
+                "Save your changes before opening another project?")) return;
         OpenProject(dir);
     }
 
@@ -415,13 +429,12 @@ public partial class MainWindow
         _importEpoch++;                  // imports still running belong to the old graph
         Timeline.ClearPendingImports();
         Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices
-        _editorRoll = null;
-        _clipEditor = null;
-        _editorTrackId = -1;
-        _editorClipIndex = -1;
-        DetailPanel.IsVisible = false;
+        ResetClipEditor();               // every clip editor points into the old graph
+        CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
         Timeline.Refresh();
         _session?.Refresh();
+        // Popped out, the window stays up: show the new project's chain, not the old one's.
+        if (DetailFloating) ShowDevices(Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : TrackIdAt(0));
     }
 }

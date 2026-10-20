@@ -19,6 +19,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Midi;
 using static Nota.App.ClipEditorKit;
 
@@ -46,8 +47,12 @@ public sealed class MidiToolsView : UserControl
     private int _seed = 1;
 
     // The clip as it stood before the preview, plus the selection the tool is scoped to.
-    private List<NotaNote> _source = new();
-    private HashSet<int> _scope = new();
+    // The working set: each clip the tool runs on — its notes (clip-local beats), the selected
+    // ones among them, and its length. One clip normally; with several clips open (specs/029)
+    // every clip that has selected notes, or the active clip when none is selected, each run
+    // on its own so what a tool adds stays in that clip.
+    private List<(ClipNotes Clip, HashSet<int> Scope, double Length)> _work = new();
+    private int SourceCount => _work.Sum(w => w.Clip.Notes.Count);
     private bool _suppressResync;
 
     public MidiToolsView(PianoRollView roll)
@@ -157,16 +162,22 @@ public sealed class MidiToolsView : UserControl
     /// <summary>Re-reads the clip and the selection as the working set for the next run.</summary>
     private void Resync()
     {
-        _source = new List<NotaNote>(_roll.SourceNotes);
-        _scope = new HashSet<int>(_roll.SelectionIndices.Where(i => i >= 0 && i < _source.Count));
-        _scopeText.Text = _scope.Count > 0
-            ? $"{_scope.Count} selected"
-            : $"clip · {_source.Count}";
+        var (clips, selected) = _roll.SourceByClip();
+        var set = _roll.Clips;
+        _work = new();
+        for (int k = 0; k < clips.Count; k++)
+            if (selected[k].Count > 0) _work.Add((clips[k], selected[k], set.Clips[k].LengthBeats));
+        if (_work.Count == 0 && set.Active < clips.Count)
+            _work.Add((clips[set.Active], new HashSet<int>(), set.ActiveClip.LengthBeats));
+        int scoped = _work.Sum(w => w.Scope.Count);
+        _scopeText.Text = scoped > 0
+            ? $"{scoped} selected"
+            : $"clip · {SourceCount}";
     }
 
-    private MidiToolContext Context() => new()
+    private MidiToolContext Context(double lengthBeats) => new()
     {
-        LengthBeats = _roll.LengthBeats,
+        LengthBeats = lengthBeats,
         Grid = _roll.Grids.Quantize.Beats(_roll.BeatsPerBar),   // like Quantize: never the zoom's step
         ScaleOn = _roll.ScaleOn,
         ScaleRoot = _roll.ScaleRoot,
@@ -186,11 +197,12 @@ public sealed class MidiToolsView : UserControl
         // A tool must not build on notes still stacked under a pending placement: let it go
         // first (its Changed re-reads the working set through OnRollChanged).
         if (!_roll.Previewing) _roll.SettlePlacement();
-        var result = MidiToolRunner.Apply(_tool, _source, _scope, SettingsFor(_tool), Context(), _blend);
+        var results = _work.Select(w => new ClipNotes(w.Clip.TrackId, w.Clip.ClipIndex,
+            MidiToolRunner.Apply(_tool, w.Clip.Notes, w.Scope, SettingsFor(_tool), Context(w.Length), _blend))).ToList();
         _suppressResync = true;
-        _roll.ShowPreview(result);
+        _roll.ShowPreview(results);
         _suppressResync = false;
-        PaintResult(result.Count);
+        PaintResult(results.Sum(r => r.Notes.Count));
     }
 
     private void Apply()
@@ -203,7 +215,7 @@ public sealed class MidiToolsView : UserControl
         // Deliberately no re-preview: the applied result is the new source, so running the
         // tool again here would show it applied twice before the user asked for anything.
         // The next knob move (or Reroll) arms a fresh preview from the new source.
-        _resultText.Text = $"{_source.Count} notes · applied";
+        _resultText.Text = $"{SourceCount} notes · applied";
         _resultText.Foreground = NotaPalette.TextMuted;
         PaintApply();
     }
@@ -232,10 +244,10 @@ public sealed class MidiToolsView : UserControl
             _resultText.Text = _tool is null ? "Pick a tool" : "—";
         else
         {
-            int delta = count - _source.Count;
+            int delta = count - SourceCount;
             _resultText.Text = _blend == MidiToolBlend.Add
                 ? $"{delta:+0;−0;\u00b10} notes"
-                : $"{count} notes, was {_source.Count}";
+                : $"{count} notes, was {SourceCount}";
         }
         _resultText.Foreground = NotaPalette.TextMuted;
         PaintApply();

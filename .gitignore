@@ -31,3 +31,5 @@ dist/
 
 # Nota Remote phone page: Vite output of src/web/remote, rebuilt by the Nota.Remote build
 src/managed/Nota.Remote/wwwroot/
+
+.netcoredbg_hist

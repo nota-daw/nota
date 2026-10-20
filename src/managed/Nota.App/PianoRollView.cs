@@ -65,12 +65,14 @@ public sealed partial class PianoRollView : UserControl
     private int _auditionPitch = -1;
     /// <summary>Sound <paramref name="pitch"/> until <see cref="StopAudition"/>. The note grid
     /// asks only while audition is on; the keys column always plays (force).</summary>
-    internal void Audition(int pitch, float velocity, bool force = false)
+    internal void Audition(int pitch, float velocity, bool force = false, int slot = -1)
     {
-        if (AuditionOn is null || (!force && !AuditionEnabled) || pitch == _auditionPitch) return;
+        int track = TrackOfSlot(slot >= 0 ? slot : _set.Active);
+        if (AuditionOn is null || (!force && !AuditionEnabled) || (pitch == _auditionPitch && track == _auditionTrack)) return;
         StopAudition();
         if (pitch < MinPitch || pitch > MaxPitch) return;
         _auditionPitch = pitch;
+        _auditionTrack = track;
         AuditionOn(pitch, Math.Clamp(velocity, 0.05f, 1f));
         _keys.InvalidateVisual();
     }
@@ -80,6 +82,7 @@ public sealed partial class PianoRollView : UserControl
         int p = _auditionPitch;
         _auditionPitch = -1;
         AuditionOff?.Invoke(p);
+        _auditionTrack = -1;
         _keys.InvalidateVisual();
     }
 
@@ -90,7 +93,7 @@ public sealed partial class PianoRollView : UserControl
         SettlePlacement();   // a pending placement lands first: it can cut or remove notes
         if (!add) _selection.Clear();
         for (int i = 0; i < _notes.Count; i++)
-            if (_notes[i].Pitch == pitch) _selection.Add(i);
+            if (_notes[i].Pitch == pitch && !IsLocked(i)) _selection.Add(i);
         Invalidate();
         Changed?.Invoke();
     }
@@ -148,8 +151,14 @@ public sealed partial class PianoRollView : UserControl
     private double _rowH = DefaultRowH;
     internal double RowH => _rowH;
 
+    // The notes on screen, in editor beats (specs/029): beats from the open clip set's origin —
+    // the clip's own beats when one clip is open. _owner[i] is note i's clip (its ClipSet slot);
+    // the two lists change together, only through AddNote / RemoveNoteAt / ReplaceAll.
     private readonly List<NotaNote> _notes = new();
-    private double _lengthBeats = 4;
+    private readonly List<int> _owner = new();
+    private ClipSet _set = ClipSet.Single(-1, -1, 0, 4);
+    private readonly List<ISolidColorBrush> _slotBrushes = new();
+    private double _lengthBeats = 4;   // the set's span: the scrollable range
     private readonly HashSet<int> _selection = new();   // indices into _notes
     private ISolidColorBrush _trackBrush = NotaPalette.TrackBrushes[3];   // read .Color at draw time: it follows the theme
     private Color _trackColor => _trackBrush.Color;
@@ -195,10 +204,10 @@ public sealed partial class PianoRollView : UserControl
     // Live playback cursor in clip-local beats; < 0 = hidden. Set by the host each tick.
     private double _playheadBeat = -1;
 
-    // Note clipboard, shared across clips (copy here, paste into another clip). Stored
-    // normalized so the earliest note starts at beat 0; s_clipAnchor is its origin.
-    private static readonly List<NotaNote> s_clipboard = new();
-    private static double s_clipAnchor;
+    // Note clipboard, shared across clips (copy here, paste into another clip): each note at
+    // its beat in the clip it was copied from, with that clip (specs/029 pastes it back there).
+    private readonly record struct ClipboardNote(NotaNote Note, int TrackId, int ClipIndex);
+    private static readonly List<ClipboardNote> s_clipboard = new();
 
     // The last note touched — clicked, moved, resized or its velocity drawn — in any clip (#44):
     // a new note takes its length and velocity. Before any is touched, a new note is one grid
@@ -211,13 +220,28 @@ public sealed partial class PianoRollView : UserControl
         s_lastLen = _notes[i].LengthBeats;
         s_lastVel = _notes[i].Velocity;
     }
-    private double NewNoteLen(double start)
+    private double NewNoteLen(double start, int slot)
     {
         double len = double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
-        return Math.Max(MinNoteLen, Math.Min(len, _lengthBeats - start));
+        return Math.Max(MinNoteLen, Math.Min(len, _set.EditorEnd(slot) - start));
+    }
+
+    /// <summary>The clip a note drawn at <paramref name="beat"/> goes into (specs/029 FR-007):
+    /// the active clip when it holds the beat, else another open, editable clip of the active
+    /// clip's track that does; −1 when none does (nothing is drawn).</summary>
+    private int DrawTarget(double beat)
+    {
+        if (_set.Contains(_set.Active, beat)) return _set.Active;
+        int track = _set.ActiveClip.TrackId;
+        for (int k = 0; k < _set.Count; k++)
+            if (k != _set.Active && _set.Clips[k].TrackId == track && _set.IsEditable(k) && _set.Contains(k, beat)) return k;
+        return -1;
     }
 
     private readonly RulerLane _ruler;
+    private readonly ClipStrip _strip;
+    /// <summary>A clip's name for the clip strip (null → "Track N"). Set by the host.</summary>
+    public Func<int, int, string?>? ClipNameOf { get; set; }
     private readonly KeysColumn _keys;
     private readonly NoteGrid _gridControl;
     private readonly VelocityLane _vel;
@@ -244,6 +268,14 @@ public sealed partial class PianoRollView : UserControl
             _pixelsPerBeat = Math.Clamp(viewportW / _lengthBeats, MinPpb, MaxPpb);
             // The fit happens mid-render: tell the snap chip after it, not during.
             Dispatcher.UIThread.Post(NotifyGrid);
+        }
+        // A newly opened multi-clip set too long to fit: start at the active clip.
+        if (_pendingScrollTo is { } to && _pixelsPerBeat > 0 && viewportW > 0)
+        {
+            _pendingScrollTo = null;
+            double vpBeats = viewportW / _pixelsPerBeat;
+            _scrollBeats = Math.Clamp(to, 0, Math.Max(0, _lengthBeats - vpBeats));
+            Dispatcher.UIThread.Post(SyncScroll);
         }
     }
 
@@ -300,6 +332,9 @@ public sealed partial class PianoRollView : UserControl
     // Past the clip's end (seen once you zoom out): a dark wash and an Ink 2 end line, so the
     // clip's edge reads at a glance.
     private static readonly IBrush OutsideClip = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xC8);
+    // Several clips open (specs/029): the active clip's notes at full strength, the other
+    // clips' quieter, and reference (locked) clips' quieter still — present, but out of the way.
+    private const double OtherClipAlpha = 0.6, ReferenceClipAlpha = 0.28;
     private static readonly IPen ClipEndPen = new Pen(NotaPalette.TextStrong, 1);
     // Scale overlay: out-of-scale rows/keys get a translucent dark wash (they read
     // dimmed / semi-transparent), in-scale rows a faint accent, the root a stronger one.
@@ -342,6 +377,7 @@ public sealed partial class PianoRollView : UserControl
         // Clip the horizontally-scrolling lanes to their own column so notes / beat marks
         // scrolled past the left edge don't bleed over the fixed keyboard + label gutter.
         _ruler = new RulerLane(this) { ClipToBounds = true };
+        _strip = new ClipStrip(this) { ClipToBounds = true, IsVisible = false, Height = ClipStrip.RowH };
         _keys = new KeysColumn(this) { Height = RangeH };
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
@@ -369,6 +405,13 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetColumn(_ruler, 1);
         rulerRow.Children.Add(_ruler);
 
+        // The clip strip (several clips open): corner + strip, under the ruler.
+        var stripRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
+        stripRow.Children.Add(new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) });
+        Avalonia.Controls.Grid.SetColumn(_strip, 1);
+        stripRow.Children.Add(_strip);
+        stripRow.Bind(IsVisibleProperty, _strip.GetObservable(IsVisibleProperty));
+
         var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
         _laneRow = velRow;
         // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
@@ -386,17 +429,19 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
         scrollRow.Children.Add(_hScroll);
 
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
         root.Children.Add(rulerRow);
-        Avalonia.Controls.Grid.SetRow(_bodyScroll, 1);
+        Avalonia.Controls.Grid.SetRow(stripRow, 1);
+        root.Children.Add(stripRow);
+        Avalonia.Controls.Grid.SetRow(_bodyScroll, 2);
         root.Children.Add(_bodyScroll);
         // Overlay slot over the note grid (the clip editor's Envelopes mode draws there).
-        Avalonia.Controls.Grid.SetRow(_overlayHost, 1);
+        Avalonia.Controls.Grid.SetRow(_overlayHost, 2);
         _overlayHost.Margin = new Thickness(KeysW, 0, 0, 0);
         root.Children.Add(_overlayHost);
-        Avalonia.Controls.Grid.SetRow(velRow, 2);
+        Avalonia.Controls.Grid.SetRow(velRow, 3);
         root.Children.Add(velRow);
-        Avalonia.Controls.Grid.SetRow(scrollRow, 3);
+        Avalonia.Controls.Grid.SetRow(scrollRow, 4);
         root.Children.Add(scrollRow);
         Content = root;
 
@@ -543,14 +588,121 @@ public sealed partial class PianoRollView : UserControl
     public void SetTrackColor(ISolidColorBrush b) { _trackBrush = b; Invalidate(); }
     public ISolidColorBrush TrackBrush => _trackBrush;
 
+    // ---- the open clip set (specs/029-multi-clip-editing) ------------------------
+    /// <summary>The clips this roll edits; a set of one for the single-clip editor.</summary>
+    public ClipSet Clips => _set;
+    public OpenClip ActiveClip => _set.ActiveClip;
+    /// <summary>Raised when another clip becomes active (strip click, a note of it clicked or
+    /// drawn into) or a clip is locked / unlocked; the header, inspector and envelopes follow.</summary>
+    public event Action? ActiveClipChanged;
+    /// <summary>Arrangement beat of editor beat 0 — the host converts playhead and seek with it.</summary>
+    public double Origin => _set.Origin;
+    /// <summary>Length of the active clip (the inspector's LENGTH / LOOP).</summary>
+    public double ActiveLengthBeats => _set.ActiveClip.LengthBeats;
+
+    /// <summary>Track colour of note i's clip; the active colour for a one-clip set.</summary>
+    private Color ColorOf(int i)
+    {
+        int s = i >= 0 && i < _owner.Count ? _owner[i] : 0;
+        return s < _slotBrushes.Count && _set.IsMulti ? _slotBrushes[s].Color : _trackColor;
+    }
+    internal Color SlotColor(int slot) => slot < _slotBrushes.Count && _set.IsMulti ? _slotBrushes[slot].Color : _trackColor;
+    /// <summary>Whether note i belongs to a reference (read-only) clip.</summary>
+    internal bool IsLocked(int i) => i >= 0 && i < _owner.Count && !_set.IsEditable(_owner[i]);
+    /// <summary>How strongly note i reads: its own clip is full strength when active (or the
+    /// only clip), quieter otherwise, and a reference clip quieter still.</summary>
+    internal double ClipEmphasis(int i)
+    {
+        if (!_set.IsMulti || i < 0 || i >= _owner.Count || _owner[i] == _set.Active) return 1;
+        return _set.IsEditable(_owner[i]) ? OtherClipAlpha : ReferenceClipAlpha;
+    }
+
+    private void AddNote(NotaNote n, int owner) { _notes.Add(n); _owner.Add(owner); }
+    private void RemoveNoteAt(int i) { _notes.RemoveAt(i); _owner.RemoveAt(i); }
+    private void ReplaceAll(IEnumerable<NotaNote> notes, IEnumerable<int> owners)
+    {
+        var n = notes.ToList(); var o = owners.ToList();   // either may alias the lists being replaced
+        _notes.Clear(); _notes.AddRange(n);
+        _owner.Clear(); _owner.AddRange(o);
+        System.Diagnostics.Debug.Assert(_notes.Count == _owner.Count);
+    }
+    private void RemoveWhere(Func<int, bool> drop)
+    {
+        for (int i = _notes.Count - 1; i >= 0; i--) if (drop(i)) RemoveNoteAt(i);
+    }
+
+    /// <summary>Loads one clip's notes (clip-local beats); the Session slot editor and anything
+    /// that edits a single clip without a <see cref="ClipSet"/>.</summary>
     public void SetNotes(IEnumerable<NotaNote> notes, double lengthBeats)
+    {
+        var list = notes.ToList();
+        _set = ClipSet.Single(-1, -1, 0, Math.Max(1, lengthBeats));
+        _slotBrushes.Clear();
+        Load(list, Enumerable.Repeat(0, list.Count), Math.Max(1, lengthBeats));
+    }
+
+    /// <summary>Loads a set of clips (specs/029): <paramref name="perClip"/> holds each clip's
+    /// notes in its own beats; <paramref name="brushOf"/> gives a track's colour. A set of one is
+    /// exactly the single-clip editor.</summary>
+    public void SetClips(ClipSet set, IReadOnlyList<ClipNotes> perClip, Func<int, ISolidColorBrush> brushOf)
+    {
+        bool rescroll = !ReferenceEquals(set, _set) && set.IsMulti;
+        _set = set;
+        _slotBrushes.Clear();
+        foreach (var c in set.Clips) _slotBrushes.Add(brushOf(c.TrackId));
+        _trackBrush = _slotBrushes[set.Active];
+        var notes = new List<NotaNote>(); var owners = new List<int>();
+        set.Merge(perClip, notes, owners);
+        // Multi-clip view state is not remembered per clip: fit the span, then show the active clip.
+        if (set.IsMulti) _clipKey = (int.MinValue, int.MinValue);
+        Load(notes, owners, Math.Max(1, set.SpanBeats));
+        if (rescroll) _pendingScrollTo = set.EditorStart(set.Active);
+        ActiveClipChanged?.Invoke();
+    }
+
+    private double? _pendingScrollTo;   // editor beat to bring into view once the zoom is fitted
+
+    /// <summary>Makes clip <paramref name="slot"/> the active one (a locked clip is unlocked).
+    /// A pending placement lands first.</summary>
+    public void SetActiveClip(int slot)
+    {
+        if (slot == _set.Active && _set.IsEditable(slot)) return;
+        SettlePlacement();
+        if (!_set.SetActive(slot)) return;
+        _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
+        Invalidate();
+        ActiveClipChanged?.Invoke();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Locks (<paramref name="on"/>) or unlocks clip <paramref name="slot"/> as a
+    /// read-only reference. Refused for the active clip. Its notes leave the selection.</summary>
+    public bool SetReference(int slot, bool on)
+    {
+        SettlePlacement();
+        if (!_set.SetReference(slot, on)) return false;
+        if (on) _selection.RemoveWhere(i => i < _owner.Count && _owner[i] == slot);
+        Invalidate();
+        ActiveClipChanged?.Invoke();
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>The track a note being heard plays on (its own clip's track); −1 for the host's
+    /// own track. Read by the host's <see cref="AuditionOn"/> / <see cref="AuditionOff"/>.</summary>
+    public int AuditionTrackId => _auditionTrack;
+    private int _auditionTrack = -1;
+    private int TrackOfSlot(int slot) => slot >= 0 && slot < _set.Count ? _set.Clips[slot].TrackId : -1;
+
+    private void Load(IEnumerable<NotaNote> notes, IEnumerable<int> owners, double lengthBeats)
     {
         _previewBackup = null;
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
-        _notes.Clear();
-        _notes.AddRange(notes);
-        _lengthBeats = Math.Max(1, lengthBeats);
+        ReplaceAll(notes, owners);
+        _lengthBeats = lengthBeats;
         _selection.Clear();
+        _strip.Relayout();
+        RememberCommitted();
         _saveAfterApply = false;   // a zoom queued on the previous clip must not save onto this one
 
         // Restore this clip's saved scroll/zoom if we've edited it before; otherwise fit the
@@ -615,7 +767,8 @@ public sealed partial class PianoRollView : UserControl
     public bool GridFocused => _gridControl.IsFocused;
 
     /// <summary>Duplicates the selected notes, shifted right by the selection span, and
-    /// selects the copies. Returns false if nothing was selected. Undoable (one Commit).</summary>
+    /// selects the copies. Returns false if nothing was selected (or nothing fits). Undoable
+    /// (one Commit). Copies follow the same reach as moved notes (specs/029).</summary>
     public bool DuplicateSelection()
     {
         SettlePlacement();
@@ -624,19 +777,33 @@ public sealed partial class PianoRollView : UserControl
         double minStart = double.MaxValue, maxEnd = double.MinValue;
         foreach (int i in sel) { var n = _notes[i]; minStart = Math.Min(minStart, n.StartBeat); maxEnd = Math.Max(maxEnd, n.StartBeat + n.LengthBeats); }
         double shift = Math.Max(SnapStep, maxEnd - minStart);
-        double cap = Math.Max(0, _lengthBeats - SnapStep);
         var copies = new List<NotaNote>(sel.Count);
-        foreach (int i in sel) { var n = _notes[i]; n.StartBeat = Math.Min(n.StartBeat + shift, cap); copies.Add(n); }
+        var copyOwners = new List<int>(sel.Count);
+        foreach (int i in sel)
+        {
+            // Each copy lands where the shift puts it: in its own clip, or — past the seam — in
+            // the next open clip of its track (as a moved note would). Past every open clip it is
+            // dropped, as a paste past the clip's end is, instead of piling up at the edge.
+            var n = _notes[i];
+            n.StartBeat += shift;
+            int slot = _set.ShiftTarget(_owner[i], n.StartBeat);
+            if (slot < 0) continue;
+            double end = _set.EditorEnd(slot);
+            if (n.StartBeat + n.LengthBeats > end) n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
+            copies.Add(n);
+            copyOwners.Add(slot);
+        }
+        if (copies.Count == 0) return false;
         // Like a duplicated clip in the arrangement, the copies overwrite what they land on
         // straight away, with the same rule a settled placement uses (NoteOverwrite).
         int baseIdx = _notes.Count;
-        _notes.AddRange(copies);
+        for (int k = 0; k < copies.Count; k++) AddNote(copies[k], copyOwners[k]);
         var placed = Enumerable.Range(baseIdx, copies.Count).ToList();
         var settled = new List<NotaNote>(_notes.Count);
         var placedOut = new List<int>(copies.Count);
-        NoteOverwrite.Settle(_notes, placed, settled, placedOut);
-        _notes.Clear();
-        _notes.AddRange(settled);
+        var ownersOut = new List<int>(_notes.Count);
+        NoteOverwrite.Settle(_notes, placed, settled, placedOut, _owner, ownersOut);
+        ReplaceAll(settled, ownersOut);
         _selection.Clear();
         _selection.UnionWith(placedOut);
         Invalidate();
@@ -651,7 +818,7 @@ public sealed partial class PianoRollView : UserControl
         if (_selection.Count == 0) return false;
         _placementPending = false;   // the placed notes are what goes
         foreach (int i in _selection.OrderByDescending(x => x))
-            if (i >= 0 && i < _notes.Count) _notes.RemoveAt(i);
+            if (i >= 0 && i < _notes.Count) RemoveNoteAt(i);
         _selection.Clear();
         Invalidate();
         CommitNotes();
@@ -659,16 +826,24 @@ public sealed partial class PianoRollView : UserControl
         return true;
     }
 
-    /// <summary>True when the scale overlay is on and some note falls outside it.</summary>
-    public bool HasOutOfScaleNotes => _scaleOn && _notes.Exists(n => !InScale(n.Pitch));
+    /// <summary>True when the scale overlay is on and some editable note falls outside it.</summary>
+    public bool HasOutOfScaleNotes
+    {
+        get
+        {
+            if (!_scaleOn) return false;
+            for (int i = 0; i < _notes.Count; i++) if (!IsLocked(i) && !InScale(_notes[i].Pitch)) return true;
+            return false;
+        }
+    }
 
-    /// <summary>Removes every note outside the scale overlay. No-op with the scale off.
+    /// <summary>Removes every editable note outside the scale overlay. No-op with the scale off.
     /// Undoable (one Commit).</summary>
     public bool RemoveOutOfScaleNotes()
     {
         if (!HasOutOfScaleNotes) return false;
         SettlePlacement();
-        _notes.RemoveAll(n => !InScale(n.Pitch));
+        RemoveWhere(i => !IsLocked(i) && !InScale(_notes[i].Pitch));
         _selection.Clear();
         Invalidate();
         CommitNotes();
@@ -679,8 +854,9 @@ public sealed partial class PianoRollView : UserControl
     // --- clip-tool preview -------------------------------------------------------
     // A tool's result is shown in the roll and streamed to the engine with no undo
     // checkpoint, exactly like a note drag, so the knobs are audible while they move.
-    // The clip's own notes are held here until the preview is applied or dropped.
+    // The clips' own notes are held here until the preview is applied or dropped.
     private List<NotaNote>? _previewBackup;
+    private List<int>? _previewOwners;
 
     public bool Previewing => _previewBackup is not null;
 
@@ -697,24 +873,62 @@ public sealed partial class PianoRollView : UserControl
     /// while no preview is running, which is when a tool captures its working set.</summary>
     public IReadOnlyCollection<int> SelectionIndices => _selection;
 
+    /// <summary>Every open clip's notes (clip-local beats) ignoring a preview in flight, and
+    /// each clip's selected notes as indices into its own list — a tool's per-clip working set
+    /// (specs/029: a tool runs once per clip, so what it adds stays in that clip).</summary>
+    public (List<ClipNotes> Clips, List<HashSet<int>> Selected) SourceByClip()
+    {
+        var notes = _previewBackup ?? _notes;
+        var owners = _previewOwners ?? _owner;
+        var clips = _set.Split(notes, owners);
+        var selected = new List<HashSet<int>>(clips.Count);
+        var local = new int[clips.Count];
+        for (int k = 0; k < clips.Count; k++) selected.Add(new HashSet<int>());
+        for (int i = 0; i < notes.Count; i++)
+        {
+            int o = owners[i];
+            if (o < 0 || o >= clips.Count) continue;
+            if (_previewBackup is null && _selection.Contains(i)) selected[o].Add(local[o]);
+            local[o]++;
+        }
+        return (clips, selected);
+    }
+
     /// <summary>Puts a tool's result on screen and in the engine without touching undo.</summary>
     public void ShowPreview(IReadOnlyList<NotaNote> notes)
+        => ShowPreview(new[] { new ClipNotes(_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex, notes) });
+
+    /// <summary>As <see cref="ShowPreview(IReadOnlyList{NotaNote})"/> for several clips: each
+    /// entry replaces its clip's notes (clip-local beats); clips without an entry keep theirs.</summary>
+    public void ShowPreview(IReadOnlyList<ClipNotes> perClip)
     {
         // The tool computed its result from the notes as they stand, so a pending placement
         // is part of what it replaces; settling now would only reshuffle stale indices.
         _placementPending = false;
         _previewBackup ??= new List<NotaNote>(_notes);
-        _notes.Clear();
-        _notes.AddRange(notes);
+        _previewOwners ??= new List<int>(_owner);
+        var merged = _set.Split(_previewBackup, _previewOwners);
+        foreach (var cn in perClip)
+        {
+            int slot = _set.IndexOf(cn.TrackId, cn.ClipIndex);
+            if (_set.Count == 1) slot = 0;   // a one-clip set: whatever its ids, the result is its
+            if (slot >= 0) merged[slot] = new ClipNotes(merged[slot].TrackId, merged[slot].ClipIndex, cn.Notes);
+        }
+        var notes = new List<NotaNote>(); var owners = new List<int>();
+        _set.Merge(merged, notes, owners);
+        ReplaceAll(notes, owners);
         // What the tool added (not in the clip before) draws as a brass outline over the notes.
-        var before = new HashSet<(int, long, long, int)>(_previewBackup.Select(NoteKey));
+        var before = new HashSet<(int, int, long, long, int)>(Enumerable.Range(0, _previewBackup.Count)
+            .Select(i => Keyed(_previewBackup[i], _previewOwners[i])));
         _ghosts.Clear();
-        for (int i = 0; i < _notes.Count; i++) if (!before.Contains(NoteKey(_notes[i]))) _ghosts.Add(i);
+        for (int i = 0; i < _notes.Count; i++) if (!before.Contains(Keyed(_notes[i], _owner[i]))) _ghosts.Add(i);
         _selection.Clear();
         EnsureNotesVisible();
         Invalidate();
-        CommitLive?.Invoke(_notes);
+        PushLive(_notes, _owner);
         Changed?.Invoke();
+
+        static (int, int, long, long, int) Keyed(NotaNote n, int o) { var k = NoteKey(n); return (o, k.Item1, k.Item2, k.Item3, k.Item4); }
     }
 
     /// <summary>Centres the pitch range when not one note is on screen — which is what a
@@ -741,12 +955,12 @@ public sealed partial class PianoRollView : UserControl
     public void CancelPreview()
     {
         if (_previewBackup is null) return;
-        _notes.Clear();
-        _notes.AddRange(_previewBackup);
+        ReplaceAll(_previewBackup, _previewOwners!);
         _previewBackup = null;
+        _previewOwners = null;
         _selection.Clear();
         Invalidate();
-        CommitLive?.Invoke(_notes);
+        PushLive(_notes, _owner);
         Changed?.Invoke();
     }
 
@@ -756,35 +970,103 @@ public sealed partial class PianoRollView : UserControl
         if (_previewBackup is null) return;
         _placementPending = false;
         var original = _previewBackup;
+        var originalOwners = _previewOwners!;
         _selection.Clear();
         Invalidate();
         // A commit checkpoints whatever the engine currently holds — and the live stream
         // has already put the preview there, so committing straight away would make undo
         // land on the preview. Rewind the engine to the clip's own notes first (no undo
         // step of its own), then commit, so the one entry points at the original.
-        CommitLive?.Invoke(original);
+        PushLive(original, originalOwners);
         CommitNotes();
         Changed?.Invoke();
+    }
+
+    // ---- pushing notes to the engine -------------------------------------------------
+    /// <summary>Several-clip commit (specs/029): the clips whose notes changed, each in its own
+    /// beats. The host makes one undo step of the whole list. When set, it replaces
+    /// <see cref="Commit"/>.</summary>
+    public Action<IReadOnlyList<ClipNotes>>? CommitClips { get; set; }
+    /// <summary>Live, no-undo variant of <see cref="CommitClips"/> (drags, tool previews).</summary>
+    public Action<IReadOnlyList<ClipNotes>>? CommitClipsLive { get; set; }
+
+    private bool HasLivePath => CommitClipsLive is not null || CommitLive is not null;
+
+    // What each clip holds in the engine as far as this roll knows: what it loaded or last pushed.
+    private NotaNote[][] _pushed = Array.Empty<NotaNote[]>();
+
+    private void RememberCommitted()
+        => _pushed = _set.Split(_notes, _owner).Select(c => c.Notes.ToArray()).ToArray();
+
+    private static bool SameNotes(IReadOnlyList<NotaNote> a, NotaNote[] b)
+    {
+        if (a.Count != b.Length) return false;
+        for (int i = 0; i < b.Length; i++)
+        {
+            var x = a[i]; var y = b[i];
+            if (x.Pitch != y.Pitch || x.StartBeat != y.StartBeat || x.LengthBeats != y.LengthBeats
+                || x.Velocity != y.Velocity || x.ExprId != y.ExprId) return false;
+        }
+        return true;
+    }
+
+    // The clips whose notes differ from what was last pushed — or, for the undo seed of a
+    // drag, every editable clip (a drag may carry notes into any of them).
+    private List<ClipNotes> DirtyClips(IReadOnlyList<NotaNote> notes, IReadOnlyList<int> owners, bool all)
+    {
+        var split = _set.Split(notes, owners);
+        if (_pushed.Length != split.Count) _pushed = new NotaNote[split.Count][];
+        var dirty = new List<ClipNotes>();
+        for (int k = 0; k < split.Count; k++)
+        {
+            bool changed = _pushed[k] is null || !SameNotes(split[k].Notes, _pushed[k]);
+            if (!changed && !(all && _set.IsEditable(k))) continue;
+            _pushed[k] = split[k].Notes.ToArray();
+            dirty.Add(split[k]);
+        }
+        return dirty;
     }
 
     /// <summary>Pushes a note set as one undoable edit. Any clip-tool preview in flight is
     /// superseded — the notes on screen become the clip's own and the tools rail re-reads
     /// them on the next <see cref="Changed"/>. Without this, quantizing (or drawing a note)
     /// while a generator previewed would leave the rail holding a baseline it could later
-    /// revert the clip to.</summary>
-    private void CommitNotes(IReadOnlyList<NotaNote>? notes = null)
+    /// revert the clip to. <paramref name="seed"/>: the pre-drag state that seeds a drag's
+    /// undo step — every editable clip goes.</summary>
+    private void CommitNotes(IReadOnlyList<NotaNote>? notes = null, IReadOnlyList<int>? owners = null, bool seed = false)
     {
         _previewBackup = null;
-        Commit?.Invoke(notes ?? _notes);
+        _previewOwners = null;
+        notes ??= _notes;
+        owners ??= _owner;
+        if (CommitClips is not null)
+        {
+            var dirty = DirtyClips(notes, owners, seed);
+            if (dirty.Count > 0) CommitClips(dirty);
+        }
+        else Commit?.Invoke(notes);
     }
 
-    /// <summary>Moves note starts toward the Quantize step (its own value, never the zoom's).</summary>
+    /// <summary>Streams notes to the engine with no undo checkpoint.</summary>
+    private void PushLive(IReadOnlyList<NotaNote> notes, IReadOnlyList<int> owners)
+    {
+        if (CommitClipsLive is not null)
+        {
+            var dirty = DirtyClips(notes, owners, false);
+            if (dirty.Count > 0) CommitClipsLive(dirty);
+        }
+        else CommitLive?.Invoke(notes);
+    }
+
+    /// <summary>Moves note starts toward the Quantize step (its own value, never the zoom's).
+    /// Notes of reference clips stay put.</summary>
     public void Quantize(double strength)
     {
         SettlePlacement();
         double qStep = Grids.Quantize.Beats(_beatsPerBar);
         for (int i = 0; i < _notes.Count; i++)
         {
+            if (IsLocked(i)) continue;
             var n = _notes[i];
             double q = SnapGrid.SnapBeat(n.StartBeat, qStep, _beatsPerBar);
             n.StartBeat += (q - n.StartBeat) * Math.Clamp(strength, 0, 1);
@@ -800,6 +1082,7 @@ public sealed partial class PianoRollView : UserControl
         SettlePlacement();
         for (int i = 0; i < _notes.Count; i++)
         {
+            if (IsLocked(i)) continue;
             var n = _notes[i];
             n.Pitch = Math.Clamp(n.Pitch + semis, 0, 127);
             _notes[i] = n;
@@ -809,8 +1092,8 @@ public sealed partial class PianoRollView : UserControl
         Changed?.Invoke();
     }
 
-    /// <summary>Live playback cursor in clip-local beats; playing=false or an out-of-range
-    /// beat hides it. Cheap: repaints only the grid + ruler, not the whole roll.</summary>
+    /// <summary>Live playback cursor in editor beats (clip-local for one clip); playing=false
+    /// or an out-of-range beat hides it. Cheap: repaints only the grid + ruler, not the whole roll.</summary>
     public void SetPlayhead(double clipLocalBeat, bool playing)
     {
         double b = (playing && clipLocalBeat >= 0 && clipLocalBeat <= _lengthBeats) ? clipLocalBeat : -1;
@@ -821,15 +1104,20 @@ public sealed partial class PianoRollView : UserControl
         _ruler.InvalidateVisual();
     }
 
-    /// <summary>Copies the selected notes to the shared clipboard (normalized to beat 0).</summary>
+    /// <summary>Copies the selected notes to the shared clipboard, each with the clip it came
+    /// from and its beat in that clip (specs/029).</summary>
     public bool CopySelection()
     {
-        var sel = _selection.Where(i => i >= 0 && i < _notes.Count).Select(i => _notes[i]).ToList();
+        var sel = _selection.Where(i => i >= 0 && i < _notes.Count).OrderBy(i => i).ToList();
         if (sel.Count == 0) return false;
-        double min = sel.Min(n => n.StartBeat);
         s_clipboard.Clear();
-        s_clipAnchor = min;
-        foreach (var n in sel) { var c = n; c.StartBeat -= min; s_clipboard.Add(c); }
+        foreach (int i in sel)
+        {
+            var c = _notes[i];
+            var clip = _set.Clips[_owner[i]];
+            c.StartBeat = _set.ToLocal(_owner[i], c.StartBeat);
+            s_clipboard.Add(new ClipboardNote(c, clip.TrackId, clip.ClipIndex));
+        }
         return true;
     }
 
@@ -838,21 +1126,24 @@ public sealed partial class PianoRollView : UserControl
 
     /// <summary>Pastes the clipboard on top of the copied notes' original position (whatever
     /// the transport is doing) and selects the copies, ready to be moved off with the arrows or
-    /// the mouse. The copies overwrite nothing until they are let go (SettlePlacement). Undoable.</summary>
+    /// the mouse: back into the clip they came from when it is open, else into the active clip
+    /// at the same clip-relative beats. The copies overwrite nothing until they are let go
+    /// (SettlePlacement). Undoable.</summary>
     public bool PasteClipboard()
     {
         if (s_clipboard.Count == 0) return false;
         SettlePlacement();
-        double anchor = s_clipAnchor;
         int baseIdx = _notes.Count;
         foreach (var c in s_clipboard)
         {
-            var n = c;
-            n.StartBeat = anchor + c.StartBeat;
-            if (n.StartBeat >= _lengthBeats) continue;                    // past the clip end → skip
-            if (n.StartBeat + n.LengthBeats > _lengthBeats)               // trim a note that overruns
-                n.LengthBeats = Math.Max(MinNoteLen, _lengthBeats - n.StartBeat);
-            _notes.Add(n);
+            var n = c.Note;
+            var (slot, at) = _set.PasteTarget(c.TrackId, c.ClipIndex, c.Note.StartBeat);
+            double end = _set.EditorEnd(slot);
+            n.StartBeat = at;
+            if (n.StartBeat >= end - 1e-9) continue;                     // past the clip end → skip
+            if (n.StartBeat + n.LengthBeats > end)                         // trim a note that overruns
+                n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
+            AddNote(n, slot);
         }
         if (_notes.Count == baseIdx) return false;
         _selection.Clear();
@@ -862,31 +1153,47 @@ public sealed partial class PianoRollView : UserControl
         return true;
     }
 
+    /// <summary>The allowed shift of the selected notes, in beats, so that every note still
+    /// starts within its reach (its clip, joined with neighbouring open clips of its track) and
+    /// — for a nudge — still ends within it; the selection moves as a block.</summary>
+    private (double Lo, double Hi) ShiftRange(IEnumerable<int> sel, Func<int, (double start, double len, int owner)> at, bool endsInside)
+    {
+        double lo = double.MinValue, hi = double.MaxValue;
+        foreach (int i in sel)
+        {
+            var (start, len, owner) = at(i);
+            var (rs, re) = _set.Reach(owner);
+            lo = Math.Max(lo, rs - start);
+            hi = Math.Min(hi, endsInside ? re - (start + len) : Math.Max(0, re - MinNoteLen - start));
+        }
+        return (Math.Min(lo, 0), Math.Max(hi, 0));
+    }
+
     /// <summary>Nudges the selection by dPitch semitones and/or dBeat beats, clamped to the
-    /// pitch range and clip bounds (moves as a block, stopping at the edge). Undoable.
+    /// pitch range and clip bounds (moves as a block, stopping at the edge). A note whose start
+    /// crosses into a neighbouring open clip of its track moves into that clip. Undoable.
     /// Scrolls vertically to keep pitch-moved notes in view.</summary>
     public bool MoveSelection(int dPitch, double dBeat)
     {
         var sel = _selection.Where(i => i >= 0 && i < _notes.Count).ToList();
         if (sel.Count == 0) return false;
-        double minStart = double.MaxValue, maxEnd = double.MinValue;
         int minP = 128, maxP = -1;
         foreach (int i in sel)
         {
-            var n = _notes[i];
-            minStart = Math.Min(minStart, n.StartBeat);
-            maxEnd = Math.Max(maxEnd, n.StartBeat + n.LengthBeats);
-            minP = Math.Min(minP, n.Pitch);
-            maxP = Math.Max(maxP, n.Pitch);
+            minP = Math.Min(minP, _notes[i].Pitch);
+            maxP = Math.Max(maxP, _notes[i].Pitch);
         }
-        double db = dBeat;
-        if (minStart + db < 0) db = -minStart;
-        if (maxEnd + db > _lengthBeats) db = _lengthBeats - maxEnd;
+        var (lo, hi) = ShiftRange(sel, i => (_notes[i].StartBeat, _notes[i].LengthBeats, _owner[i]), endsInside: true);
+        double db = Math.Clamp(dBeat, lo, hi);
         int dp = dPitch;
         if (minP + dp < MinPitch) dp = MinPitch - minP;
         if (maxP + dp > MaxPitch) dp = MaxPitch - maxP;
         if (Math.Abs(db) < 1e-9 && dp == 0) return false;
-        foreach (int i in sel) { var n = _notes[i]; n.StartBeat += db; n.Pitch += dp; _notes[i] = n; }
+        foreach (int i in sel)
+        {
+            var n = _notes[i]; n.StartBeat += db; n.Pitch += dp; _notes[i] = n;
+            _owner[i] = _set.OwnerAfterMove(_owner[i], n.StartBeat);
+        }
         _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         if (dp != 0) EnsurePitchVisible(dp > 0 ? maxP + dp : minP + dp);
@@ -894,12 +1201,12 @@ public sealed partial class PianoRollView : UserControl
     }
 
     /// <summary>Lengthens (dir +1) or shortens (dir −1) every selected note by one grid step,
-    /// keeping starts; never below the minimum length or past the clip end. Undoable.</summary>
+    /// keeping starts; never below the minimum length or past its clip's end. Undoable.</summary>
     public bool ResizeSelection(int dir)
     {
         if (_selection.Count == 0) return false;
         double step = SnapGridState.SnapOn ? SnapStep : MinNoteLen;
-        if (!NoteOverwrite.ResizeBy(_notes, _selection, dir * step, MinNoteLen, _lengthBeats)) return false;
+        if (!NoteOverwrite.ResizeBy(_notes, _selection, dir * step, MinNoteLen, i => _set.EditorEnd(_owner[i]))) return false;
         _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
@@ -928,7 +1235,8 @@ public sealed partial class PianoRollView : UserControl
     // ---- pending placement (specs/007-midi-note-editing) -------------------------
     // Notes moved, stretched, drawn or pasted overwrite same-pitch notes they land on, but
     // only once the selection is let go: until then the notes underneath stay whole and are
-    // drawn marked, so a pasted copy can be walked off its original with the arrows.
+    // drawn marked, so a pasted copy can be walked off its original with the arrows. Only
+    // notes of the same clip overwrite each other (specs/029).
     private bool _placementPending;
 
     // The selection as a list for the per-frame overwrite marks (Fate is allocation-free over a
@@ -945,9 +1253,9 @@ public sealed partial class PianoRollView : UserControl
     }
 
     /// <summary>Applies a pending placement: the selected notes overwrite the same-pitch notes
-    /// they cover (NoteOverwrite). Its own undo step. Called whenever the selection is let go —
-    /// selection change, focus loss, whole-clip edits, and by the host before save/export.
-    /// Returns true when notes were cut or removed (indices may have shifted).</summary>
+    /// of their own clip they cover (NoteOverwrite). Its own undo step. Called whenever the
+    /// selection is let go — selection change, focus loss, whole-clip edits, and by the host
+    /// before save/export. Returns true when notes were cut or removed (indices may have shifted).</summary>
     public bool SettlePlacement()
     {
         if (!_placementPending) return false;
@@ -956,13 +1264,13 @@ public sealed partial class PianoRollView : UserControl
         var placed = _selection.Where(i => i >= 0 && i < _notes.Count).ToList();
         var settled = new List<NotaNote>(_notes.Count);
         var placedOut = new List<int>(placed.Count);
-        NoteOverwrite.Settle(_notes, placed, settled, placedOut);
+        var ownersOut = new List<int>(_notes.Count);
+        NoteOverwrite.Settle(_notes, placed, settled, placedOut, _owner, ownersOut);
         bool changed = settled.Count != _notes.Count;
         for (int i = 0; !changed && i < settled.Count; i++)
             changed = settled[i].LengthBeats != _notes[i].LengthBeats;
         if (!changed) return false;
-        _notes.Clear();
-        _notes.AddRange(settled);
+        ReplaceAll(settled, ownersOut);
         _selection.Clear();
         _selection.UnionWith(placedOut);
         Invalidate(); CommitNotes(); Changed?.Invoke();
@@ -989,9 +1297,14 @@ public sealed partial class PianoRollView : UserControl
         _overlayHost.IsVisible = overlay is not null;
     }
 
-    /// <summary>The selected notes, in clip order.</summary>
+    /// <summary>The selected notes, in list order, each at its beat in its own clip.</summary>
     public IReadOnlyList<NotaNote> SelectedNotes()
-        => _selection.Where(i => i >= 0 && i < _notes.Count).OrderBy(i => i).Select(i => _notes[i]).ToList();
+        => _selection.Where(i => i >= 0 && i < _notes.Count).OrderBy(i => i).Select(i =>
+        {
+            var n = _notes[i];
+            n.StartBeat = _set.ToLocal(_owner[i], n.StartBeat);
+            return n;
+        }).ToList();
 
     /// <summary>The ⌘/Ctrl-wheel zoom and Shift/horizontal-wheel scroll of the note grid, for an
     /// overlay that sits on top of it.</summary>
@@ -1008,20 +1321,47 @@ public sealed partial class PianoRollView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>Darkens everything right of the clip's end and marks the edge with a line.</summary>
+    /// <summary>Darkens everything outside the open clips and marks each covered stretch's
+    /// edges with a line; with one clip, everything right of its end.</summary>
     private void DrawOutsideClip(DrawingContext ctx, double w, double h)
     {
-        double x = BeatToX(_lengthBeats);
-        if (x >= w) return;
-        x = Math.Max(0, x);
-        ctx.FillRectangle(OutsideClip, new Rect(x, 0, w - x, h));
-        ctx.DrawLine(ClipEndPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
+        double from = 0;   // editor beat where the current uncovered stretch starts
+        foreach (var (s, e) in CoveredSpans())
+        {
+            Wash(from, s, edgeAtEnd: true);
+            from = e;
+        }
+        Wash(from, double.PositiveInfinity, edgeAtEnd: false);
+
+        void Wash(double b0, double b1, bool edgeAtEnd)
+        {
+            double x0 = Math.Max(0, BeatToX(b0)), x1 = double.IsPositiveInfinity(b1) ? w : Math.Min(w, BeatToX(b1));
+            if (x1 > x0) ctx.FillRectangle(OutsideClip, new Rect(x0, 0, x1 - x0, h));
+            // The edge line where a clip ends (b0) and, between clips, where the next begins.
+            double xe = BeatToX(b0);
+            if (b0 > 0 && xe >= 0 && xe < w) ctx.DrawLine(ClipEndPen, new Point(xe + 0.5, 0), new Point(xe + 0.5, h));
+            double xs = BeatToX(b1);
+            if (edgeAtEnd && b1 > b0 && xs >= 0 && xs < w) ctx.DrawLine(ClipEndPen, new Point(xs + 0.5, 0), new Point(xs + 0.5, h));
+        }
+    }
+
+    // The editor-beat stretches covered by at least one open clip, merged, in order.
+    private List<(double Start, double End)> CoveredSpans()
+    {
+        var spans = new List<(double, double)>();
+        foreach (var (s, e) in Enumerable.Range(0, _set.Count).Select(k => (_set.EditorStart(k), _set.EditorEnd(k))).OrderBy(t => t.Item1))
+        {
+            if (spans.Count > 0 && s <= spans[^1].Item2 + 1e-9) spans[^1] = (spans[^1].Item1, Math.Max(spans[^1].Item2, e));
+            else spans.Add((s, e));
+        }
+        return spans;
     }
 
     private void Invalidate()
     {
         _overlayHost.Child?.InvalidateVisual();
         _ruler.InvalidateVisual();
+        _strip.InvalidateVisual();
         _keys.InvalidateVisual();
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
@@ -1080,13 +1420,17 @@ public sealed partial class PianoRollView : UserControl
     // Ruler label at beat b: "bar.beat", plus a 1/16 index when mid-beat (e.g. 3.2.3).
     internal string GridLabel(double b)
     {
-        int bar = (int)Math.Floor(b / _beatsPerBar) + 1;
+        int bar = (int)Math.Floor(b / _beatsPerBar) + 1 + RulerBarOffset;
         double inBar = b - Math.Floor(b / _beatsPerBar) * _beatsPerBar;
         int beat = (int)Math.Floor(inBar) + 1;
         double frac = inBar - Math.Floor(inBar);
         if (frac < 1e-6) return $"{bar}.{beat}";
         return $"{bar}.{beat}.{(int)Math.Round(frac * 4) + 1}";
     }
+
+    // Ruler bar numbers: the clip's own bars for one clip, the arrangement's when several are
+    // open (their origin sits on a bar line, see ClipSet).
+    private int RulerBarOffset => _set.IsMulti ? (int)Math.Round(_set.Origin / Math.Max(1, _beatsPerBar)) : 0;
 
     // ---- ruler -----------------------------------------------------------
     private sealed class RulerLane : Control
@@ -1145,9 +1489,12 @@ public sealed partial class PianoRollView : UserControl
             _o.EnsurePpb(w);
             double ppb = _o.PixelsPerBeat;
             double viewEnd = Math.Min(_o._lengthBeats, _o.ScrollBeats + w / Math.Max(1e-6, ppb));
-            double loopEnd = Math.Min(w, _o.BeatToX(_o._lengthBeats));
-            double loopStart = Math.Max(0, _o.BeatToX(0));
-            if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
+            foreach (var (cs, ce) in _o.CoveredSpans())
+            {
+                double loopEnd = Math.Min(w, _o.BeatToX(ce));
+                double loopStart = Math.Max(0, _o.BeatToX(cs));
+                if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
+            }
             // Label every beat while there is room for "12.4", else bars only.
             double step = ppb >= 30 ? 1 : _o._beatsPerBar;
             double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
@@ -1160,7 +1507,7 @@ public sealed partial class PianoRollView : UserControl
                 bool bar = Math.Abs(b / bpb - Math.Round(b / bpb)) < 1e-6;
                 ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                 if (b >= _o._lengthBeats - 1e-9) continue;
-                int barNo = (int)Math.Floor(b / bpb) + 1, beatNo = (int)Math.Round(b - Math.Floor(b / bpb) * bpb) + 1;
+                int barNo = (int)Math.Floor(b / bpb) + 1 + _o.RulerBarOffset, beatNo = (int)Math.Round(b - Math.Floor(b / bpb) * bpb) + 1;
                 string label = bar ? barNo.ToString(NotaNum.Culture) : $"{barNo}.{beatNo}";
                 var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
                 ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
@@ -1324,7 +1671,7 @@ public sealed partial class PianoRollView : UserControl
         private bool _dragMoved;
 
         // Move/resize: each selected note's state at grab time + the primary grabbed.
-        private readonly Dictionary<int, (double start, int pitch, double len)> _orig = new();
+        private readonly Dictionary<int, (double start, int pitch, double len, int owner)> _orig = new();
         private int _primary = -1;
         private double _grabBeat;       // pointer-beat minus primary start, at grab (Move)
         private double _edgeGrab;       // pointer beat minus the grabbed edge at press (Resize / ResizeLeft)
@@ -1347,6 +1694,7 @@ public sealed partial class PianoRollView : UserControl
         // Live drag (feature): the pre-drag note list (to seed one undo entry) + whether the
         // live stream has started this gesture.
         private readonly List<NotaNote> _preDrag = new();
+        private readonly List<int> _preDragOwners = new();
         private bool _liveStarted;
 
         // Vertical auto-scroll while a drag runs past the viewport edges.
@@ -1354,7 +1702,7 @@ public sealed partial class PianoRollView : UserControl
         private double _autoVelY;
         private Point _lastGrid;
 
-        private readonly List<Rect> _doomed = new();   // per-frame scratch for the overwrite marks
+        private readonly List<(Rect, Color)> _doomed = new();   // per-frame scratch for the overwrite marks
 
         public NoteGrid(PianoRollView o)
         {
@@ -1407,10 +1755,14 @@ public sealed partial class PianoRollView : UserControl
             double ppb = Ppb;
             _o.DrawGridLines(ctx, w, h);
             var notes = _o._notes;
+            // Other clips' notes first, so the active clip's draw on top where they overlap.
+            bool multi = _o._set.IsMulti;
+            for (int pass = multi ? 0 : 1; pass < 2; pass++)
             for (int i = 0; i < notes.Count; i++)
             {
                 var n = notes[i];
                 if (n.Pitch < MinPitch || n.Pitch > MaxPitch) continue;
+                if (multi && (_o._owner[i] == _o._set.Active) != (pass == 1)) continue;
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch);
                 double nw = Math.Max(3, n.LengthBeats * ppb);
                 bool sel = _o._selection.Contains(i);
@@ -1423,14 +1775,15 @@ public sealed partial class PianoRollView : UserControl
                 if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), 2, 2);
                 else
                 {
-                    // Track colour, quieter the softer the note.
-                    var c = _o._trackColor;
-                    double a = 0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1);
+                    // Track colour, quieter the softer the note — and, with several clips open,
+                    // quieter for clips other than the active one.
+                    var c = _o.ColorOf(i);
+                    double a = (0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1)) * _o.ClipEmphasis(i);
                     if (!_o.InScale(n.Pitch)) a *= 0.4;   // out-of-scale notes read faint
                     // A pending placement covers part of this note: the part settling will cut
                     // (or all of it, when it goes) reads faint behind a dashed track-colour edge.
                     var fate = _o._placementPending && _o._selection.Count > 0
-                        ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender()) : default;
+                        ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender(), _o._owner) : default;
                     double appear = _o._recPreview?.Progress(n.Pitch, _o._recClipStart + n.StartBeat) ?? 1;
                     if (fate.Kind == NoteFateKind.Kept && appear < 1)
                         ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, 2);
@@ -1443,12 +1796,12 @@ public sealed partial class PianoRollView : UserControl
                             ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), 2);
                         var doomed = new Rect(r.X + keepW, r.Y, Math.Max(1, r.Width - keepW), r.Height);
                         ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, 2);
-                        _doomed.Add(doomed);   // its dashed edge goes on top of the notes covering it
+                        _doomed.Add((doomed, c));   // its dashed edge goes on top of the notes covering it
                     }
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
-                bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft) && sel) || (_drag == Mode.None && _hoverNote == i);
+                bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft) && sel) || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
                 if (edgeHi)
                 {
                     bool left = _drag == Mode.ResizeLeft || (_drag == Mode.None && _hoverLeft);
@@ -1459,8 +1812,8 @@ public sealed partial class PianoRollView : UserControl
             // so a note hidden under a pasted copy still shows that it is there and will go.
             if (_doomed.Count > 0)
             {
-                var pen = new Pen(new SolidColorBrush(_o._trackColor), 1, DashStyle.Dash);
-                foreach (var d in _doomed) ctx.DrawRectangle(null, pen, d.Deflate(0.5), 2, 2);
+                foreach (var (d, dc) in _doomed)
+                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(dc), 1, DashStyle.Dash), d.Deflate(0.5), 2, 2);
                 _doomed.Clear();
             }
             // Keys held into the recording take (#56): from the key-down to the capture clock,
@@ -1553,17 +1906,25 @@ public sealed partial class PianoRollView : UserControl
         {
             edge = 0;
             var notes = _o._notes;
+            // The active clip's notes are on top, so they win a click where clips overlap.
+            int best = -1, bestEdge = 0;
             for (int i = notes.Count - 1; i >= 0; i--)
             {
                 var n = notes[i];
-                if (n.Pitch < MinPitch || n.Pitch > MaxPitch) continue;
+                if (n.Pitch < MinPitch || n.Pitch > MaxPitch || _o.IsLocked(i)) continue;
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch), nw = Math.Max(3, n.LengthBeats * Ppb);
                 if (!new Rect(x, y, nw, RowH).Contains(p)) continue;
+                if (_o._owner[i] != _o._set.Active)
+                {
+                    if (best < 0) { best = i; double z = Math.Min(EdgePx, nw / 3); bestEdge = p.X >= x + nw - z ? 1 : p.X <= x + z ? -1 : 0; }
+                    continue;
+                }
                 double zone = Math.Min(EdgePx, nw / 3);
                 edge = p.X >= x + nw - zone ? 1 : p.X <= x + zone ? -1 : 0;
                 return i;
             }
-            return -1;
+            edge = bestEdge;
+            return best;
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -1582,15 +1943,18 @@ public sealed partial class PianoRollView : UserControl
             // Double-click: add a note on empty space, delete one under the cursor.
             if (e.ClickCount == 2)
             {
-                if (hit >= 0) { _o._notes.RemoveAt(hit); _o._selection.Clear(); }
+                if (hit >= 0) { _o.RemoveNoteAt(hit); _o._selection.Clear(); }
                 else
                 {
                     double at = Math.Max(0, Snap(XToBeat(p.X)));
-                    var nt = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at), s_lastVel);
-                    _o._notes.Add(nt);
+                    int slot = _o.DrawTarget(at);
+                    if (slot < 0) { e.Handled = true; return; }   // no open clip of the active track here
+                    if (slot != _o._set.Active) _o.SetActiveClip(slot);
+                    var nt = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at, slot), s_lastVel);
+                    _o.AddNote(nt, slot);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
                     _o._placementPending = true;   // a drawn note overwrites what it lands on
-                    _o.Audition(nt.Pitch, nt.Velocity);   // heard until the button comes up
+                    _o.Audition(nt.Pitch, nt.Velocity, slot: slot);   // heard until the button comes up
                     e.Pointer.Capture(this);
                 }
                 _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
@@ -1608,15 +1972,19 @@ public sealed partial class PianoRollView : UserControl
                     return;
                 }
                 if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
+                // A note of another clip makes that clip active (header, inspector, envelopes).
+                if (_o._selection.Count == 1 && _o._owner[hit] != _o._set.Active) _o.SetActiveClip(_o._owner[hit]);
                 e.Pointer.Capture(this);
-                _o.Audition(_o._notes[hit].Pitch, _o._notes[hit].Velocity);
+                _o.Audition(_o._notes[hit].Pitch, _o._notes[hit].Velocity, slot: _o._owner[hit]);
                 _primary = hit;
                 _o.Remember(hit);
                 _dragMoved = false;
                 _orig.Clear();
                 foreach (int i in _o._selection)
-                    if (i >= 0 && i < _o._notes.Count) { var nn = _o._notes[i]; _orig[i] = (nn.StartBeat, nn.Pitch, nn.LengthBeats); }
-                _preDrag.Clear(); _preDrag.AddRange(_o._notes); _liveStarted = false;
+                    if (i >= 0 && i < _o._notes.Count) { var nn = _o._notes[i]; _orig[i] = (nn.StartBeat, nn.Pitch, nn.LengthBeats, _o._owner[i]); }
+                _preDrag.Clear(); _preDrag.AddRange(_o._notes);
+                _preDragOwners.Clear(); _preDragOwners.AddRange(_o._owner);
+                _liveStarted = false;
                 if (edge != 0)
                 {
                     _drag = edge > 0 ? Mode.Resize : Mode.ResizeLeft;
@@ -1659,11 +2027,12 @@ public sealed partial class PianoRollView : UserControl
                 var pr = _orig[_primary];
                 double dBeat = targetStart - pr.start;
                 int dPitch = YToPitch(p.Y) - pr.pitch;
-                // Clamp the shared delta so the whole group stays in-bounds (keeps shape).
-                double minStart = double.MaxValue; int minP = int.MaxValue, maxP = int.MinValue;
-                foreach (var v in _orig.Values) { minStart = Math.Min(minStart, v.start); minP = Math.Min(minP, v.pitch); maxP = Math.Max(maxP, v.pitch); }
-                double cap = Math.Max(0, _o._lengthBeats - _o.MinNoteLen);
-                dBeat = Math.Clamp(dBeat, -minStart, Math.Max(0, cap - MaxStart()));
+                // Clamp the shared delta so the whole group stays in-bounds (keeps shape): every
+                // start within its reach — its clip and the open clips of its track it touches.
+                int minP = int.MaxValue, maxP = int.MinValue;
+                foreach (var v in _orig.Values) { minP = Math.Min(minP, v.pitch); maxP = Math.Max(maxP, v.pitch); }
+                var (lo, hi) = _o.ShiftRange(_orig.Keys, i => (_orig[i].start, _orig[i].len, _orig[i].owner), endsInside: false);
+                dBeat = Math.Clamp(dBeat, lo, hi);
                 dPitch = Math.Clamp(dPitch, MinPitch - minP, MaxPitch - maxP);
                 foreach (var kv in _orig)
                 {
@@ -1671,11 +2040,12 @@ public sealed partial class PianoRollView : UserControl
                     n.StartBeat = kv.Value.start + dBeat;
                     n.Pitch = kv.Value.pitch + dPitch;
                     _o._notes[kv.Key] = n;
+                    _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
                 }
                 _dragMoved = true;
                 PushLive();
                 // A drag to a new pitch re-triggers the grabbed note there (#46).
-                _o.Audition(_o._notes[_primary].Pitch, _o._notes[_primary].Velocity);
+                _o.Audition(_o._notes[_primary].Pitch, _o._notes[_primary].Velocity, slot: _o._owner[_primary]);
             }
             else if (_drag == Mode.Resize)
             {
@@ -1699,7 +2069,10 @@ public sealed partial class PianoRollView : UserControl
                 var pr = _orig[_primary];
                 double dStart = Snap(XToBeat(p.X) - _edgeGrab) - pr.start;
                 foreach (var v in _orig.Values)
-                    dStart = Math.Clamp(dStart, -v.start, Math.Max(-v.start, v.len - _o.MinNoteLen));
+                {
+                    double floor = _o._set.EditorStart(v.owner) - v.start;
+                    dStart = Math.Clamp(dStart, floor, Math.Max(floor, v.len - _o.MinNoteLen));
+                }
                 foreach (var kv in _orig)
                 {
                     var n = _o._notes[kv.Key];
@@ -1724,12 +2097,10 @@ public sealed partial class PianoRollView : UserControl
         // the normal Commit; every subsequent frame uses the no-undo live path.
         private void PushLive()
         {
-            if (_o.CommitLive is null) return;   // no live path wired (e.g. session) → commit on release
-            if (!_liveStarted) { _liveStarted = true; _o.CommitNotes(_preDrag); }
-            _o.CommitLive(_o._notes);
+            if (!_o.HasLivePath) return;   // no live path wired → commit on release
+            if (!_liveStarted) { _liveStarted = true; _o.CommitNotes(_preDrag, _preDragOwners, seed: true); }
+            _o.PushLive(_o._notes, _o._owner);
         }
-
-        private double MaxStart() { double m = double.MinValue; foreach (var v in _orig.Values) m = Math.Max(m, v.start); return m; }
 
         private void RecomputeMarquee()
         {
@@ -1740,7 +2111,7 @@ public sealed partial class PianoRollView : UserControl
             {
                 var n = _o._notes[i];
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch), nw = Math.Max(3, n.LengthBeats * Ppb);
-                if (r.Intersects(new Rect(x, y, nw, RowH))) _o._selection.Add(i);
+                if (!_o.IsLocked(i) && r.Intersects(new Rect(x, y, nw, RowH))) _o._selection.Add(i);
             }
         }
 
@@ -1783,7 +2154,7 @@ public sealed partial class PianoRollView : UserControl
                 _o._placementPending = true;   // overwrites once the selection is let go
                 // Live path: undo was seeded on the first move; push the final state (no undo).
                 // No live path (session): fall back to a single committing push.
-                if (_o.CommitLive is not null && _liveStarted) _o.CommitLive(_o._notes);
+                if (_o.HasLivePath && _liveStarted) _o.PushLive(_o._notes, _o._owner);
                 else _o.CommitNotes();
             }
             _liveStarted = false;
@@ -1899,7 +2270,7 @@ public sealed partial class PianoRollView : UserControl
             {
                 _o.SettlePlacement();
                 _o._selection.Clear();
-                for (int i = 0; i < _o._notes.Count; i++) _o._selection.Add(i);
+                for (int i = 0; i < _o._notes.Count; i++) if (!_o.IsLocked(i)) _o._selection.Add(i);
                 _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
             if (meta && e.Key == Key.D)   // cross-platform fallback (macOS uses the native menu)
@@ -1938,6 +2309,7 @@ public sealed partial class PianoRollView : UserControl
             var notes = _o._notes;
             for (int i = 0; i < notes.Count; i++)
             {
+                if (_o.IsLocked(i)) continue;   // a reference clip's velocities are not on offer
                 var n = notes[i];
                 double x = _o.BeatToX(n.StartBeat) + 3;
                 double bh = Math.Clamp(n.Velocity, 0, 1) * (h - 8);
@@ -1948,8 +2320,8 @@ public sealed partial class PianoRollView : UserControl
                 else if (sel) b = NoteSel;
                 else
                 {
-                    var c = hov ? Brighten(_o._trackColor) : _o._trackColor;
-                    double a = 0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1);
+                    var c = hov ? Brighten(_o.ColorOf(i)) : _o.ColorOf(i);
+                    double a = (0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1)) * _o.ClipEmphasis(i);
                     b = new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B));
                 }
                 ctx.FillRectangle(b, new Rect(x, h - bh, 2, bh));
@@ -1972,6 +2344,7 @@ public sealed partial class PianoRollView : UserControl
             int best = -1; double bx = 14, by = double.MaxValue;
             for (int i = 0; i < _o._notes.Count; i++)
             {
+                if (_o.IsLocked(i)) continue;
                 double dx = Math.Abs(_o.BeatToX(_o._notes[i].StartBeat) + 4 - p.X);
                 if (dx > 14) continue;
                 double dy = Math.Abs(CapY(i) - p.Y);

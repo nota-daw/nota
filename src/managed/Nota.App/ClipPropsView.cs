@@ -105,7 +105,7 @@ public sealed class ClipPropsView : UserControl
 
     private void OnRollChanged()
     {
-        double len = _roll.LengthBeats;
+        double len = _roll.ActiveLengthBeats;   // the active clip's own length, several clips open or one
         _lengthText.Text = Duration(len);
         _loopText.Text = string.Format(NotaNum.Culture, "{0:0.##} {1}", len, Math.Abs(len - 1) < 1e-9 ? "beat" : "beats");
         PaintSelection();

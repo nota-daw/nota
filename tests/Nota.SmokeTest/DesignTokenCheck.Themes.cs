@@ -190,6 +190,18 @@ internal static partial class DesignTokenCheck
         return Math.Sqrt((l1 - l2) * (l1 - l2) + (a1 - a2) * (a1 - a2) + (b1 - b2) * (b1 - b2));
     }
 
+    // ---- Interface scale (spec 027): presets and fallbacks --------------------------------
+
+    public static IEnumerable<(bool Ok, string Label)> RunInterfaceScale()
+    {
+        yield return (InterfaceScale.Presets.SequenceEqual(new[] { 75, 100, 125, 150, 200 }), "scale presets are 75 / 100 / 125 / 150 / 200 %");
+        yield return (InterfaceScale.Presets.All(p => InterfaceScale.Normalize(p) == p), "every preset is kept");
+        var bad = new[] { 0, -100, 130, 300, int.MaxValue, int.MinValue };
+        yield return (bad.All(v => InterfaceScale.Normalize(v) == 100), "an unknown scale reads as 100 %");
+        yield return (InterfaceScale.Factor(125) == 1.25 && InterfaceScale.Factor(75) == 0.75 && InterfaceScale.Factor(130) == 1.0, "scale factor follows the normalised percent");
+        yield return (new Settings().InterfaceScale == 100, "no setting → 100 %");
+    }
+
     // ---- Appearance: migration and fallbacks (data-model.md § Resolution) ----------------
 
     public static IEnumerable<(bool Ok, string Label)> RunAppearance()

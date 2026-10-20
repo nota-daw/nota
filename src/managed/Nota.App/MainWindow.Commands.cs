@@ -128,6 +128,8 @@ public partial class MainWindow
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
         B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);
+        B("roll.editSelected", () => EditSelectedClips(),
+            _ => Need(Timeline.SelectedMidiClips().Count >= 2, "Select two or more MIDI clips"));
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
             c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
 

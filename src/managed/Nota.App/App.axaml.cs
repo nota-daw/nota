@@ -97,6 +97,10 @@ public partial class App : Avalonia.Application
         // settings resolve onto the Studio themes (Appearance.Resolve).
         foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
         NotaThemeService.Set(Appearance.Resolve(Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes));
+        // Interface scale (spec 027), likewise before the first window: windows and every
+        // popup they open take it from here.
+        NotaUiScale.InitPopups();
+        NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).

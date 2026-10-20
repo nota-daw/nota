@@ -262,6 +262,16 @@ track count and closes with Escape.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
+  - **Several clips at once**: double-click one of two or more selected MIDI clips (one
+    track or several), or right-click → **Edit selected clips together** (also in the
+    command palette), to open them together on the arrangement's bars. Selecting, moving,
+    transposing, quantizing, deleting and clip tools work across clips, one undo for the
+    whole edit; a note moved past the seam into the next open clip of its track moves into
+    that clip. A **clip strip** under the ruler shows the open clips: click one to make it
+    the active clip (header, inspector and envelopes follow it; new notes go into it), or
+    click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
+    open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
+    into the next open clip; past the last one they are left out.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -273,7 +283,9 @@ track count and closes with Escape.
     before deciding — and **Apply** keeps it as a single undo step. Backing out leaves no
     trace in the history.
   - A selection scopes the tool to those notes; with nothing selected it works the whole
-    clip. Output can **replace** what it was given or be **added** on top.
+    clip. Output can **replace** what it was given or be **added** on top. With several
+    clips open, the tool runs on each clip that has selected notes (or the active clip),
+    and what it writes stays in that clip.
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
@@ -794,6 +806,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
   delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
   ranges, and a status strip; 34 factory presets; MCP `read_chorus` / `set_chorus`.
+- **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
+  key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
+  or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
+  with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
+  for consonants, Hold, Mix, Gain. A live graph of each band's voice level and the carrier, with
+  draggable range edges; 7 factory presets; a carrier track is routed over MCP with
+  `set_device_sidechain`.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 
@@ -1104,7 +1123,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
+  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
+  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and

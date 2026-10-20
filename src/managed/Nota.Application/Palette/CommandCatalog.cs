@@ -97,6 +97,7 @@ public static class CommandCatalog
         C("roll.octaveDown", "Transpose notes down an octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove out-of-scale notes", "Piano roll", "", "key fix"),
         C("roll.fitNotes", "Fit to notes", "Piano roll", Shortcut.Shift('F'), "zoom vertical rows height"),
+        C("roll.editSelected", "Edit selected clips together", "Piano roll", "", "multi clip several open piano roll", view: "Arrangement"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
         C("grid.narrower", "Narrow grid", "Grid", Shortcut.Cmd('1'), "finer smaller snap"),

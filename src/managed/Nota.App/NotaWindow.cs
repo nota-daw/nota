@@ -81,6 +81,13 @@ public abstract class NotaWindow : Window
             };
             Grid.SetColumn(titleText, 1);
             row.Children.Add(titleText);
+            // The OS draws its window buttons at system size: keep their room fixed on
+            // screen whatever the interface scale (spec 027).
+            NotaUiScale.Track(row, s =>
+            {
+                if (OperatingSystem.IsMacOS()) row.ColumnDefinitions[0].Width = new GridLength(78 / s);
+                else row.Margin = new Thickness(0, 0, 180 / s, 0);
+            });
 
             var bar = _chromeBar = new Border
             {
@@ -98,7 +105,9 @@ public abstract class NotaWindow : Window
         }
 
         dock.Children.Add(bodyLayer);   // fills the remaining space
-        base.Content = dock;
+        // Everything, title bar included, sits under the interface scale (spec 027).
+        double titleBar = OperatingSystem.IsLinux() ? 0 : ownTitleBarHeight > 0 ? ownTitleBarHeight : 32;
+        base.Content = NotaUiScale.Wrap(this, dock, titleBar);
     }
 
     /// <summary>A layer over the body for overlays that open in this window (the command palette).</summary>
@@ -128,6 +137,14 @@ public abstract class NotaWindow : Window
     /// <summary>True when the OS draws the window frame and title (Linux): a subclass's own
     /// title bar then needs no inset for window buttons and does not drag the window.</summary>
     protected static bool NativeFrame => OperatingSystem.IsLinux();
+
+    /// <summary>Padding for a subclass's own title row at interface scale <paramref name="s"/>:
+    /// room for the OS window buttons — the macOS traffic lights (left), the Windows caption
+    /// buttons (3 × 46, right) — which the OS draws at system size, so it stays fixed on
+    /// screen (spec 027). Linux draws its frame above the window: plain padding.</summary>
+    protected static Thickness CaptionPadding(double s) => new(
+        !NativeFrame && OperatingSystem.IsMacOS() ? 76 / s : 12, 0,
+        !NativeFrame && OperatingSystem.IsWindows() ? 8 + 138 / s : 8, 0);
 
     // Drag the window by its title bar; a double-click toggles maximise when resizable.
     protected void OnChromePressed(object? sender, PointerPressedEventArgs e)

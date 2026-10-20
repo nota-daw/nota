@@ -23,6 +23,31 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Edit several MIDI clips at once** (nota-daw/nota#48): select two or more MIDI clips — on
+  one track or several — and double-click one of them (or right-click → **Edit selected
+  clips together**). The Clip editor shows all their notes on the arrangement's bars: fix a
+  bass line split over several clips in one go, or write a melody while you see the chords
+  of another clip. Select, move, transpose, quantize, delete or run a clip tool across
+  clips; one undo reverts the whole edit. A note dragged across the seam into the next open
+  clip of its track moves into that clip. A strip under the ruler shows the open clips:
+  click one to make it the active clip (its name, start, length and envelopes in the
+  editor), or lock it as a dimmed reference that cannot be changed by accident. New notes go
+  into the active clip. While the Clip tab is open it follows the selection in the
+  arrangement.
+- **Nota Vocoder** (nota-daw/nota#113): a new audio effect with two inputs. The track it
+  sits on is the voice; drop it on a vocal and you hear a robot voice straight away, from an
+  internal **Saw** (at a chosen **Pitch**). Switch the carrier to **Noise** for a whisper, or
+  to **Track** and pick another track — a pad, a synth — to make it speak the words; mute
+  that track and it keeps feeding the vocoder. 8–32 bands, **Formant** to make the voice
+  smaller or larger, **Unvoiced** to keep consonants clear, **Hold** to freeze the bands, and
+  a live graph of each band whose edges you drag to set the range. Seven presets (Robot
+  choir, Talk box, Whisper…). Agents route a carrier track with `set_device_sidechain`.
+- **Make the whole interface larger or smaller** (nota-daw/nota#38): **Settings → Appearance
+  → Interface scale** offers 75, 100, 125, 150 and 200 %. The change applies at once to every
+  window, menu, tooltip and dialog — text, buttons, knobs, track headers, device cards — and
+  is kept for the next launch. Text stays sharp at every size. The timeline, piano roll and
+  audio editor zoom as before, on top of the scale. Pick 125 % or more when the text is too
+  small to read on a laptop screen, or 75 % to fit more tracks on a small one.
 - **Nota tells you about updates wherever you are** (nota-daw/nota#58). It used to look for a
   new version only on the start screen, so it was easy to miss. Now:
   - It checks on every launch and once a day while it runs, and shows a new version in the
@@ -34,9 +59,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     **Check now** button. Nothing downloads until you click Update.
 
 ### Fixed
+- **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
+  longer than the room left after it: copies continue into the next open clip of the track,
+  and those with no clip to land in are left out.
+- **New project and Open ask before discarding unsaved changes** (nota-daw/nota#215): File →
+  New, File → Open and opening a project from the browser now offer Save / Don't save /
+  Cancel, like quitting does; Cancel keeps the current project. The detail panel also closes
+  cleanly on the switch instead of leaving an empty band, and a popped-out detail window
+  shows the new project's devices.
+- Duplicating a track keeps each effect's sidechain source and tap; the compressor's key
+  was dropped on the copy.
+- A sidechain source keeps feeding its key when it is muted or another track is soloed (the
+  pre tap, like a console's pre-fader send): ducking against a muted kick, or a vocoder under
+  a muted vocal, no longer goes quiet. A deleted source now counts as no key at all.
 - **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
   they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens
   with About Nota, then Settings… (⌘,), then Services, Hide and Quit, as in other Mac apps.
+- **macOS: Audio Unit plug-ins no longer waste work on every audio block**: since 0.52.1 Nota
+  handed each AU 31 audio channels instead of the two it was set up for, so the plug-in
+  copied the extra channels every block and grabbed memory on the audio thread on the first
+  one. In debug builds this printed a JUCE assertion per block and caused dropouts. AUs now get
+  exactly their own channels; VST3 plug-ins keep the extra headroom that stops them crashing
+  when they change their inputs or outputs.
 
 ## [0.56.1] — 2026-10-19
 
@@ -149,6 +193,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Changed
+- **Engine internals rebuilt as modular C++20 DSP (no audible change):** every
+  built-in device is now a `.h`/`.cpp` pair in its family folder —
+  `devices/effects/` (25 audio effects), `devices/instruments/` (18 instruments),
+  `devices/midi_fx/` (6 MIDI effects), `devices/racks/` (4 racks) — on top of
+  shared `dsp/{core,math,primitives,poly}/` blocks (filters, delay, oscillators,
+  envelopes, oversampling, convolution, voices) and engine model classes moved
+  to `src/engine/`. Plugin scanning is separated from hosting
+  (`pluginhost/scanner/` + `nota_pluginscanner`, out-of-process
+  `nota-scanworker`). Rendering dispatches Pass 1 leaf tracks across cores via a
+  lock-free thread pool with SIMD mixer summing, and each device sleeps its own
+  silent blocks via `hasTail`/`isIdle`/`wake`. Sounds identical; a single device
+  edit now recompiles one translation unit.
 - **What's New shows the release notes**: the window now shows each version's curated release
   notes, the same text as its GitHub release, instead of the raw working log from this file.
   A version without release notes (older ones, and builds between releases) still shows its

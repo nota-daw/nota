@@ -102,6 +102,18 @@ public partial class MainWindow : Window
             ExtendClientAreaToDecorationsHint = true;
             ExtendClientAreaTitleBarHeightHint = 32;
         }
+        // The whole window sits under the interface scale (spec 027); the OS window buttons
+        // stay system-size, so the room kept for them is fixed on screen: the macOS traffic
+        // lights' 78px corner, and on Windows the caption buttons over the right edge
+        // (3 × ~46px ≈ 142px, rounded up a touch). Linux hides the bar.
+        var root = (Control)Content!;
+        Content = null;
+        Content = NotaUiScale.Wrap(this, root, OperatingSystem.IsLinux() ? 0 : 32);
+        NotaUiScale.Track(TitleBarRow, s =>
+        {
+            if (OperatingSystem.IsMacOS()) TitleBarRow.ColumnDefinitions[0].Width = new GridLength(78 / s);
+            else if (OperatingSystem.IsWindows()) TitleBarRow.Margin = new Thickness(0, 0, 180 / s, 0);
+        });
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
         BuildUpdateIndicator();
@@ -112,13 +124,6 @@ public partial class MainWindow : Window
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             Icon = new WindowIcon(Avalonia.Platform.AssetLoader.Open(new Uri("avares://Nota.App/Assets/nota.ico")));
-            // On Windows the native caption buttons (minimise/maximise/close) overlay
-            // the right edge of the extended title bar. Reserve room so the centred doc
-            // title (and anything else in that corner) never sits under them.
-            // 3 buttons × ~46px wide ≈ 142px; round up a touch. (Linux hides the bar,
-            // so this only applies to Windows.)
-            if (OperatingSystem.IsWindows())
-                TitleBarRow.Margin = new Thickness(0, 0, 180, 0);
         }
     }
 
@@ -197,6 +202,8 @@ public partial class MainWindow : Window
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
+        Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
+        Timeline.ClipSelectionChanged += FollowClipSelection;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)
@@ -303,8 +310,9 @@ public partial class MainWindow : Window
             {
                 if (_editorTrackId > 0)
                 {
+                    // Editor beats count from the open clips' origin (the clip's start for one).
                     if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                        _editorRoll.SetPlayhead(beats - pci.StartBeat, true);
+                        _editorRoll.SetPlayhead(beats - _editorRoll.Origin, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
                     _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);

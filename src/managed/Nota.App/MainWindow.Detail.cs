@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -14,7 +15,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -354,10 +357,56 @@ public partial class MainWindow
         ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false);
     }
 
+    // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
+    // clips, all of them together with it active (specs/029-multi-clip-editing).
     private void OpenClipEditor(int trackId, int clipIndex)
     {
-        BuildClipEditor(trackId, clipIndex);
+        var sel = Timeline.SelectedMidiClips();
+        if (sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
+        else BuildClipEditor(trackId, clipIndex);
         ShowClipPanel();
+    }
+
+    /// <summary>"Edit selected clips": every selected MIDI clip in one editor, the first in time
+    /// active. False with fewer than two selected.</summary>
+    internal bool EditSelectedClips()
+    {
+        var sel = Timeline.SelectedMidiClips();
+        if (sel.Count < 2) return false;
+        BuildClipEditor(sel, sel[0].TrackId, sel[0].ClipIndex);
+        ShowClipPanel();
+        return true;
+    }
+
+    /// <summary>A Clip editor with several arrangement clips open.</summary>
+    private bool MultiClipEditorOpen => _editorRoll is { Clips.IsMulti: true } && _clipEditor is not null && _editorTrackId > 0;
+
+    // The Clip editor follows the arrangement selection while it is on screen (specs/029
+    // FR-001a): two or more selected MIDI clips open together — the clicked clip active when
+    // it is one of them — and narrowing back to one clip returns to the single-clip editor.
+    // Selecting a lone clip on another track is already followed through OnTrackSelected.
+    private void FollowClipSelection()
+    {
+        if (_session?.IsVisible == true || _vm is null) return;
+        bool shown = DetailFloating
+            ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
+            : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
+        if (!shown) return;
+        var midi = Timeline.SelectedMidiClips();
+        if (midi.Count >= 2)
+        {
+            var open = _editorRoll?.Clips.Clips.Select(c => (c.TrackId, c.ClipIndex)).OrderBy(x => x).ToList();
+            if (open is not null && open.SequenceEqual(midi.OrderBy(x => x))) return;   // already showing these
+            var primary = (Timeline.SelectedTrackId, Timeline.SelectedClipIndex);
+            var active = midi.Contains(primary) ? primary : midi[0];
+            BuildClipEditor(midi, active.Item1, active.Item2);
+            ShowClipPanel();
+        }
+        else if (midi.Count == 1 && MultiClipEditorOpen)
+        {
+            BuildClipEditor(midi[0].TrackId, midi[0].ClipIndex);
+            ShowClipPanel();
+        }
     }
 
     // --- audio clip editor (M-audio-editor) --------------------------------
@@ -404,66 +453,123 @@ public partial class MainWindow
 
     // Build the piano-roll editor for a specific arrangement clip (no panel switch).
     private void BuildClipEditor(int trackId, int clipIndex)
+        => BuildClipEditor(new[] { (trackId, clipIndex) }, trackId, clipIndex);
+
+    // Build the piano-roll editor for a set of arrangement MIDI clips, (activeTrack, activeClip)
+    // active (no panel switch). One clip is the classic single-clip editor.
+    private void BuildClipEditor(IReadOnlyList<(int TrackId, int ClipIndex)> clips, int activeTrack, int activeClip)
     {
         if (_vm is null) return;
-        // The editor being replaced lets its pending placement go into its own clip first (it
+        var open = new List<OpenClip>();
+        foreach (var (t, c) in clips)
+            if (Engine.TryGetClipInfo(t, c, out var info) && info.IsMidi)
+                open.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
+        if (open.Count == 0) return;
+        // The editor being replaced lets its pending placement go into its own clips first (it
         // may never have had focus to lose, e.g. after a menu paste).
         _editorRoll?.SettlePlacement();
-        var roll = new PianoRollView
+        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar);
+        PianoRollView roll = null!;
+        roll = new PianoRollView
         {
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
-            Commit = notes =>
+            // Each clip whose notes changed, as one undo step. The roll can outlive a clip: the
+            // track/clip may have been removed, shifted by a lower-index delete, undone, or
+            // replaced by a project load while this editor stayed on screen. Pushing a stale
+            // (trackId, clipIndex) throws InvalidArg — verify each is still a live MIDI clip
+            // first, drop the dead ones, and drop the editor when none is left.
+            CommitClips = changed =>
             {
-                // The roll can outlive its clip: the target track/clip may have been
-                // removed, shifted by a lower-index delete, undone, or replaced by a
-                // project load while this editor stayed on screen. Pushing a stale
-                // (trackId, clipIndex) throws InvalidArg — verify it's still a live
-                // MIDI clip first, otherwise drop the dead editor.
-                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi)
+                var live = LiveClips(roll, changed);
+                if (live is null) return;
+                Engine.BeginUndoGroup();
+                try
                 {
-                    InvalidateClipEditor();
-                    return;
+                    foreach (var cn in live) Engine.SetClipNotes(cn.TrackId, cn.ClipIndex, cn.Notes.ToArray());
                 }
-                var arr = new NotaNote[notes.Count];
-                for (int i = 0; i < notes.Count; i++) arr[i] = notes[i];
-                Engine.SetClipNotes(trackId, clipIndex, arr);
+                finally { Engine.EndUndoGroup(); }
                 Timeline.Refresh();
             },
             // Live drag stream: push every frame with no undo checkpoint so playback follows the
-            // note instantly (the grid seeds one undo entry at the gesture start).
-            CommitLive = notes =>
+            // note instantly (the roll seeds one undo step at the gesture start).
+            CommitClipsLive = changed =>
             {
-                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) { InvalidateClipEditor(); return; }
-                var arr = new NotaNote[notes.Count];
-                for (int i = 0; i < notes.Count; i++) arr[i] = notes[i];
-                Engine.SetClipNotesLive(trackId, clipIndex, arr);
+                var live = LiveClips(roll, changed);
+                if (live is null) return;
+                foreach (var cn in live) Engine.SetClipNotesLive(cn.TrackId, cn.ClipIndex, cn.Notes.ToArray());
                 Timeline.Refresh(rebuildHeaders: false);
             },
             // Light up the key being played (computer keyboard S–K / MIDI), regardless of routing.
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
-            AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
-            AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
-            // The ruler moves the transport (#50): clip-local beat → arrangement beat.
+            // A note sounds on its own clip's track; the keys column on the active clip's.
+            AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
+            ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : $"Track {t} clip",
+            // The ruler moves the transport (#50): editor beat → arrangement beat.
             Seek = local =>
             {
-                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) return;
-                double beat = Math.Max(0, live.StartBeat + local);
+                double beat = Math.Max(0, roll.Origin + local);
                 Engine.Seek(beat);
                 Timeline.SetPlayhead(beat);
             },
         };
-        double length = Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
-        double start = ci.StartBeat;
-        roll.SetTrackColor(TrackBrush(trackId));
-        roll.SetClipIdentity(trackId, clipIndex);
-        roll.SetNotes(Engine.GetClipNotes(trackId, clipIndex), length);
+        roll.SetTrackColor(TrackBrush(set.ActiveClip.TrackId));
+        if (!set.IsMulti) roll.SetClipIdentity(set.ActiveClip.TrackId, set.ActiveClip.ClipIndex);
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
 
-        _editorTrackId = trackId;
-        _editorClipIndex = clipIndex;
+        _editorTrackId = set.ActiveClip.TrackId;
+        _editorClipIndex = set.ActiveClip.ClipIndex;
         _editorRoll = roll;
-        _clipEditor = new ClipEditorView(roll, $"Track {trackId} clip", start, Engine, trackId, clipIndex, length);
+        _clipEditor = new ClipEditorView(roll, $"Track {_editorTrackId} clip", set.ActiveClip.StartBeat, Engine,
+                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats);
+        // The active clip drives the detail chip, the playhead's live check and the envelopes.
+        roll.ActiveClipChanged += () =>
+        {
+            if (!ReferenceEquals(_editorRoll, roll)) return;
+            _editorTrackId = roll.ActiveClip.TrackId;
+            _editorClipIndex = roll.ActiveClip.ClipIndex;
+            SetDetailChip(_editorTrackId);
+        };
+    }
+
+    // Every open clip's notes, as the engine holds them.
+    private List<ClipNotes> ClipNotesOf(ClipSet set)
+        => set.Clips.Select(c => new ClipNotes(c.TrackId, c.ClipIndex, Engine.GetClipNotes(c.TrackId, c.ClipIndex))).ToList();
+
+    // The entries whose clip is still a live MIDI clip; dead clips leave the editor (reloaded
+    // without them), and null — after dropping the editor — when none of its clips is left.
+    private List<ClipNotes>? LiveClips(PianoRollView roll, IReadOnlyList<ClipNotes> changed)
+    {
+        var live = new List<ClipNotes>(changed.Count);
+        bool lost = false;
+        foreach (var cn in changed)
+        {
+            if (Engine.TryGetClipInfo(cn.TrackId, cn.ClipIndex, out var info) && info.IsMidi) live.Add(cn);
+            else lost = true;
+        }
+        if (lost && !PruneDeadClips(roll)) return null;
+        return live;
+    }
+
+    // Removes clips that no longer exist from the open set. False (and the editor dropped)
+    // when none is left.
+    private bool PruneDeadClips(PianoRollView roll)
+    {
+        var set = roll.Clips;
+        bool removed = false;
+        foreach (var c in set.Clips.ToList())
+            if (!Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info) || !info.IsMidi)
+            { set.Remove(c.TrackId, c.ClipIndex); removed = true; }
+        if (set.IsEmpty)
+        {
+            if (ReferenceEquals(roll, _editorRoll)) InvalidateClipEditor();
+            return false;
+        }
+        if (removed && ReferenceEquals(roll, _editorRoll))
+            Dispatcher.UIThread.Post(() => { if (ReferenceEquals(roll, _editorRoll)) roll.SetClips(set, ClipNotesOf(set), TrackBrush); });
+        return true;
     }
 
     // Drop a clip editor whose target no longer exists (removed/undone/reloaded) and
@@ -505,14 +611,19 @@ public partial class MainWindow
         if (_patternView is not null && _patternTrackId == trackId && _patternClipIndex == clipIndex && _patternScene < 0)
             _patternView.Reload();
 
-        if (_editorRoll is not null && _editorTrackId == trackId && _editorClipIndex == clipIndex)
+        if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
         {
-            double len = ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
-            // SetNotes resets the roll's selection, so only re-seed it when the span really moved;
-            // a pure move leaves the notes (clip-local) untouched.
-            if (Math.Abs(len - _editorRoll.LengthBeats) > 1e-9)
-                _editorRoll.SetNotes(Engine.GetClipNotes(trackId, clipIndex), len);
-            _clipEditor?.SetClipBounds(ci.StartBeat, len);
+            double len = ci.LengthBeats > 0 ? ci.LengthBeats : 4;
+            var set = roll.Clips;
+            var before = set.Clips[set.IndexOf(trackId, clipIndex)];
+            set.UpdateGeometry(trackId, clipIndex, ci.StartBeat, len);
+            // A reload resets the roll's selection, so only re-seed it when the clips really
+            // moved on the editor's axis; a lone clip's pure move leaves its notes untouched.
+            bool lengthChanged = Math.Abs(len - before.LengthBeats) > 1e-9;
+            bool axisMoved = set.IsMulti && Math.Abs(ci.StartBeat - before.StartBeat) > 1e-9;
+            if (lengthChanged || axisMoved) roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+            if (set.ActiveClip.TrackId == trackId && set.ActiveClip.ClipIndex == clipIndex)
+                _clipEditor?.SetClipBounds(ci.StartBeat, len);
         }
         else if (_audioEditor is not null && _audioEditorTrackId == trackId && _audioEditorClipIndex == clipIndex)
         {
@@ -533,13 +644,19 @@ public partial class MainWindow
                 slotLen > 0 ? slotLen : _editorRoll.LengthBeats);
             return;
         }
-        bool hasInfo = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci);
-        double len = hasInfo && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
-        _editorRoll.SetNotes(Engine.GetClipNotes(_editorTrackId, _editorClipIndex), len);
+        // Every open clip, as the engine now holds it (undo/redo, recording); clips that are
+        // gone leave the set, and their lengths/starts are re-read.
+        var roll = _editorRoll;
+        if (!PruneDeadClips(roll)) return;
+        var set = roll.Clips;
+        foreach (var c in set.Clips.ToList())
+            if (Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info))
+                set.UpdateGeometry(c.TrackId, c.ClipIndex, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : c.LengthBeats);
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
         // The roll shows the recording take: draw its held notes too (#56).
         bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
-                    && rp.TrackId == _editorTrackId && rp.TakeClipIndex == _editorClipIndex;
-        _editorRoll.SetRecordTake(take ? _recordPreview : null, hasInfo ? ci.StartBeat : 0);
+                    && set.IndexOf(rp.TrackId, rp.TakeClipIndex) >= 0;
+        roll.SetRecordTake(take ? _recordPreview : null, roll.Origin);
     }
 
     // Tab (when the detail panel was last used) flips between Devices and Clip.
@@ -606,7 +723,9 @@ public partial class MainWindow
         if (_vm is not null) _vm.StatusText = message;
     }
 
-    private void OnCloseDetail(object? sender, RoutedEventArgs e)
+    private void OnCloseDetail(object? sender, RoutedEventArgs e) => CloseDetail();
+
+    private void CloseDetail()
     {
         DetailPanel.IsVisible = false;
         DetailSplitter.IsVisible = false;

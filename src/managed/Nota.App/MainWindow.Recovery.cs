@@ -65,16 +65,8 @@ public partial class MainWindow
         _closePromptOpen = true;
         try
         {
-            // A named project saves in place with the prompt up ("Saving…"); an untitled one
-            // needs the file panel, so the prompt closes first.
-            bool named = _projectPath is not null;
-            var choice = await new SaveChangesWindow("Unsaved changes",
-                "Do you really want to quit without saving your changes?",
-                ProjectDisplayName(), UnsavedAgeText(),
-                named ? () => DoSaveAsync(saveAs: false) : null)
-                .ShowDialog<SaveChoice>(this);
-            if (choice == SaveChoice.Cancel) return;
-            if (choice == SaveChoice.Save && !named && !await DoSaveAsync(saveAs: false)) return;
+            if (!await ConfirmLeaveChangesAsync("Unsaved changes",
+                    "Do you really want to quit without saving your changes?")) return;
             _closeConfirmed = true;
         }
         finally { _closePromptOpen = false; }
