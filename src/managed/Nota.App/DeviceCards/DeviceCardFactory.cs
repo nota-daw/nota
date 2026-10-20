@@ -43,6 +43,7 @@ internal sealed class DeviceCardFactory
         [23] = new FlangerDeviceBody(),
         [24] = new PhaserDeviceBody(),
         [25] = new ChorusDeviceBody(),
+        [26] = new VocoderDeviceBody(),
     };
 
     /// <summary>Resolve the body for a built-in device: its mapped body, or the generic

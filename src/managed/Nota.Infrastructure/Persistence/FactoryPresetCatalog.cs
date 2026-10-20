@@ -1988,6 +1988,22 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Ch("Bar Swell",          CEnsemble, 0.60f,  0.10f, 140, 0.55f, 180, div: "1/1");
         Ch("Triplet Shiver",     CClassic,  0.30f,  0.00f, 120, 0.45f, 180, div: "1/8T");
         Ch("Four-Bar Drift",     CClassic,  0.90f,  0.00f, 130, 0.50f, 180, div: "4/1");
+
+        // ---- Nota Vocoder (kind 26) — channel vocoder. Written in units through Vo(): bands
+        //      8..32, Low Hz 20..1000, High Hz 2000..20000, Q 1..10, Formant −12..+12 st, Attack
+        //      ms 0.5..100, Release ms 5..1000, carrier (VSaw / VNoise / VTrack), Tilt dB ±12, Pitch
+        //      (semitones above C0, 36 = C3), Unvoiced 0..1, Mix 0..1. The track the vocoder sits on is
+        //      the voice; a VTrack preset takes its carrier from a track the project picks (until then
+        //      the voice passes through), so presets never name one.
+        Section("Voice");
+        Vo("Init");
+        Vo("Robot choir",    bands: 20, q: 6.0f, pitch: 36, release: 50, unvoiced: 0.40f);
+        Vo("Talk box",       bands: 24, lowHz: 120, highHz: 6000, q: 7.0f, attack: 1.5f, release: 30, tilt: 6, unvoiced: 0.25f, carrier: VTrack);
+        Vo("Whisper",        bands: 24, q: 4.0f, carrier: VNoise, release: 35, unvoiced: 0.70f);
+        Vo("Lo-fi robot",    bands: 8, lowHz: 150, highHz: 4000, q: 3.0f, pitch: 31, release: 25, unvoiced: 0.10f);
+        Section("Pads");
+        Vo("Strings choir",  bands: 32, q: 8.0f, attack: 12, release: 300, tilt: 4, unvoiced: 0.15f, mix: 0.85f, carrier: VTrack);
+        Vo("Deep giant",     bands: 20, formant: -7, q: 5.0f, pitch: 24, release: 60, unvoiced: 0.20f);
         Section("By Source");
         Ch("Vocal Double",       CClassic,  0.15f,  0.00f, 140, 0.35f, 180, hz: 0.40f, hpHz: 200);
         Ch("Bass Chorus",        CClassic,  0.45f,  0.00f, 110, 0.45f, 180, hz: 0.50f, hpHz: 250);
@@ -2692,6 +2708,22 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
             ("HPF", hpHz <= 0 ? 0f : (float)(Math.Log(Math.Clamp(hpHz, 20f, 2000f) / 20.0) / Math.Log(100))),
             ("Amount", amount), ("Feedback", 0.5f + Math.Clamp(fb, -0.9f, 0.9f) / 1.8f), ("Width", widthPct / 200f),
             ("Warmth", warmth), ("Mix", mix));
+    }
+
+    // Nota Vocoder carriers (Vocoder::CarrierInput / Saw / Noise) and its presets in units.
+    private const int VSaw = 0, VNoise = 1, VTrack = 2;
+
+    private void Vo(string name, int bands = 16, float lowHz = 80, float highHz = 8000, float q = 5f, int formant = 0,
+        float attack = 2f, float release = 40f, int carrier = VSaw, float tilt = 3f, int pitch = 36,
+        float unvoiced = 0.35f, float mix = 1f)
+    {
+        static float Exp(float v, double lo, double hi) => (float)(Math.Log(Math.Clamp(v, lo, hi) / lo) / Math.Log(hi / lo));
+        Fx("vocoder", 26, name,
+            ("Bands", (Math.Clamp(bands, 8, 32) - 8) / 24f), ("Low", Exp(lowHz, 20, 1000)), ("High", Exp(highHz, 2000, 20000)),
+            ("Q", (Math.Clamp(q, 1f, 10f) - 1f) / 9f), ("Formant", 0.5f + Math.Clamp(formant, -12, 12) / 24f),
+            ("Attack", Exp(attack, 0.5, 100)), ("Release", Exp(release, 5, 1000)), ("Mod gain", 0.5f),
+            ("Carrier", carrier / 2f), ("Tilt", 0.5f + Math.Clamp(tilt, -12f, 12f) / 24f), ("Pitch", Math.Clamp(pitch, 0, 84) / 84f),
+            ("Unvoiced", unvoiced), ("Mix", mix), ("Gain", 0.5f), ("Hold", 0f));
     }
 
     // Nota Forge stage types (the S* Type step, × 1/5).

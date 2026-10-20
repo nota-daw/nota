@@ -29,7 +29,7 @@ internal static class NotaDocs
     {
         "eq-8", "compressor", "reverb", "delay", "utility", "", "valve", "auto-filter", "vintage",
         "orbit", "auto-shift", "beat-repeat", "crush", "dynamic-eq", "ceiling", "strata", "eq-3",
-        "forge", "level", "shutter", "chamber", "prism", "lens", "flanger", "phaser", "chorus",
+        "forge", "level", "shutter", "chamber", "prism", "lens", "flanger", "phaser", "chorus", "vocoder",
     };
     private static readonly string[] MidiEffects = { "arp", "chord", "scale", "length", "velocity", "random" };
 

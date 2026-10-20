@@ -195,7 +195,7 @@ int64_t AuditionRig::render(const AuditionNote* notes, int32_t count, double bpm
 
     std::vector<float> out;
     out.reserve(static_cast<size_t>(maxFrames * 2));
-    float buf[kBlock * 2];
+    float buf[kBlock * 2], key[kBlock * 2];
     MidiEv evA[kMaxEvents], evB[kMaxEvents];
     size_t next = 0;
     int64_t quiet = 0, lastLoud = 0;
@@ -259,7 +259,10 @@ int64_t AuditionRig::render(const AuditionNote* notes, int32_t count, double bpm
         ti.timeInSeconds = pos / sr_;
         ti.timeInSamples = pos;
         ti.isPlaying = true;
+        // A preview has no other tracks: a device that is silent without a key hears the phrase itself.
+        std::memcpy(key, buf, sizeof(float) * static_cast<size_t>(n) * 2);
         for (auto& d : devices_) {
+            d->setPreviewKey(key, n);
             d->setTransport(beat, spb, true);
             d->setTransportInfo(ti);
             d->process(buf, n);

@@ -114,7 +114,7 @@ internal static class BrowserCategoryTests
         pvm.SetCategoryFilter(1, DeviceCategories.Other);
         plugins.Set("Ambience | VST3 | fx | Smart | Fx/Reverb", "Ana | VST3 | inst | Sonic | Instrument/Synth");
         pvm.Rebuild();
-        yield return (pvm.CategoryFilter(1) == "" && !pvm.CategoriesOn(1).Contains(DeviceCategories.Other) && Devices(pvm.Effects).Count == 27
+        yield return (pvm.CategoryFilter(1) == "" && !pvm.CategoriesOn(1).Contains(DeviceCategories.Other) && Devices(pvm.Effects).Count == 28
                       && pvm.CategoryFilter(0) == "Synths",
             "a rescan that empties the picked category clears the pick; other picks stay");
 

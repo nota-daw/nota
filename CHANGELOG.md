@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Vocoder** (nota-daw/nota#113): a new audio effect with two inputs. The track it
+  sits on is the voice; drop it on a vocal and you hear a robot voice straight away, from an
+  internal **Saw** (at a chosen **Pitch**). Switch the carrier to **Noise** for a whisper, or
+  to **Track** and pick another track — a pad, a synth — to make it speak the words; mute
+  that track and it keeps feeding the vocoder. 8–32 bands, **Formant** to make the voice
+  smaller or larger, **Unvoiced** to keep consonants clear, **Hold** to freeze the bands, and
+  a live graph of each band whose edges you drag to set the range. Seven presets (Robot
+  choir, Talk box, Whisper…). Agents route a carrier track with `set_device_sidechain`.
 - **Make the whole interface larger or smaller** (nota-daw/nota#38): **Settings → Appearance
   → Interface scale** offers 75, 100, 125, 150 and 200 %. The change applies at once to every
   window, menu, tooltip and dialog — text, buttons, knobs, track headers, device cards — and
@@ -31,6 +39,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   small to read on a laptop screen, or 75 % to fit more tracks on a small one.
 
 ### Fixed
+- Duplicating a track keeps each effect's sidechain source and tap; the compressor's key
+  was dropped on the copy.
+- A sidechain source keeps feeding its key when it is muted or another track is soloed (the
+  pre tap, like a console's pre-fader send): ducking against a muted kick, or a vocoder under
+  a muted vocal, no longer goes quiet. A deleted source now counts as no key at all.
 - **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
   they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens
   with About Nota, then Settings… (⌘,), then Services, Hide and Quit, as in other Mac apps.

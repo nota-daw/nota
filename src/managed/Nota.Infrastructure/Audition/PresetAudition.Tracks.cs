@@ -143,7 +143,7 @@ public sealed partial class PresetAudition
         // Dynamics and rhythm effects want transients.
         1 or 11 or 19 or 21 => "drums",
         // Time, modulation and pitch effects want sustained, spaced notes (tails heard alone).
-        2 or 3 or 9 or 10 or 15 or 20 or 23 or 24 or 25 => "keys",
+        2 or 3 or 9 or 10 or 15 or 20 or 23 or 24 or 25 or 26 => "keys",
         // Tone shaping (EQ, drive, filters, limiting, level) wants a full mix.
         _ => "pop",
     };

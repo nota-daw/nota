@@ -1467,8 +1467,9 @@ NOTA_API int32_t     nota_device_text(const NotaEngine* engine, int32_t track_id
  * source_track_id -1 clears it; get returns the current source (-1 = none). */
 NOTA_API void        nota_device_set_sidechain_source(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t source_track_id);
 NOTA_API int32_t     nota_device_sidechain_source(const NotaEngine* engine, int32_t track_id, int32_t device_index);
-/* Whether a device can key off a sidechain source: 1 for the built-in Compressor and
- * for hosted plugins that expose a sidechain input bus (Phase C); 0 otherwise. */
+/* Whether a device can key off a sidechain source: 1 for the built-in Compressor (and the
+ * other keyed built-ins, e.g. Nota Vocoder's modulator) and for hosted plugins that expose
+ * a sidechain input bus (Phase C); 0 otherwise. */
 NOTA_API int32_t     nota_device_accepts_sidechain(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Instrument sidechain ("React", Nota Flux): route a listening instrument to a source
  * track. source_track_id -1 clears it; get returns the current source (-1 = none);

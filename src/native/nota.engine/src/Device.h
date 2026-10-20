@@ -137,6 +137,12 @@ public:
     virtual void    setSidechainSourceTrackId(int32_t /*trackId*/) {}
     virtual void    setSidechain(const float* /*interleaved*/, int32_t /*frames*/) {}
 
+    // Preview key (the browser's preset audition): the audition rig has no other tracks, so it
+    // hands every device the phrase it is about to process, right before process(). A device
+    // that is silent without a key (Nota Vocoder's modulator) uses it for that one block when no
+    // sidechain source is routed; everything else ignores it. Never called by the engine.
+    virtual void setPreviewKey(const float* /*interleaved*/, int32_t /*frames*/) {}
+
     // Whether this device can key off a sidechain source at all: true for the
     // built-in Compressor and for hosted plugins that expose a sidechain input
     // bus (Phase C). The UI only offers a source picker when this is true.

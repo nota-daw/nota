@@ -194,7 +194,7 @@ public sealed partial class PresetAudition : IPresetAudition
         [11] = "Nota Beat Repeat", [12] = "Nota Crush", [13] = "Nota Dynamic EQ-8", [14] = "Nota Ceiling",
         [15] = "Nota Strata", [16] = "Nota EQ-3", [17] = "Nota Forge", [18] = "Nota Level", [19] = "Nota Shutter",
         [20] = "Nota Chamber", [21] = "Nota Prism", [22] = "Nota Lens", [23] = "Nota Flanger", [24] = "Nota Phaser",
-        [25] = "Nota Chorus",
+        [25] = "Nota Chorus", [26] = "Nota Vocoder",
     };
 
     private static string DeviceName(PresetDocument doc, int kind, bool instrument = false, bool midi = false)

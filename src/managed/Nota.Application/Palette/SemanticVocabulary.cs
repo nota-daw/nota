@@ -56,6 +56,7 @@ public static class SemanticVocabulary
         T_("chorus", R, "chorus", "ensemble", "хорус");
         T_("flanger", R, "flanger", "фленджер", "флэнджер");
         T_("phaser", R, "phaser", "фэйзер", "фейзер", "фазер");
+        T_("vocoder", R, "vocoder", "talkbox", "robotvoice", "вокодер", "токбокс");
         T_("autopan", R, "autopan", "panner", "tremolo", "автопан", "тремоло", "панорамирование");
         T_("pitch", R, "pitch", "autotune", "tune", "tuning", "pitchshift", "автотюн", "тюн", "тон");
         T_("glitch", R, "glitch", "stutter", "repeat", "beatrepeat", "глитч", "заикание");

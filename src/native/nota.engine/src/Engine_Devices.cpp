@@ -26,6 +26,7 @@
 #include "Flanger.h"
 #include "Phaser.h"
 #include "Chorus.h"
+#include "Vocoder.h"
 #include "Prism.h"
 #include "Ceiling.h"
 #include "Strata.h"
@@ -531,6 +532,7 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
     else if (kind == 23) dev = std::make_shared<Flanger>();
     else if (kind == 24) dev = std::make_shared<Phaser>();
     else if (kind == 25) dev = std::make_shared<Chorus>();
+    else if (kind == 26) dev = std::make_shared<Vocoder>();
     else return -1;
     dev->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0, kMaxBlock);
     if (kind == 5) if (auto* rk = dynamic_cast<RackDevice*>(dev.get())) rk->addChain(-1);  // one pass-through chain
@@ -600,6 +602,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
         case 23: d = std::make_shared<Flanger>(); break;
         case 24: d = std::make_shared<Phaser>(); break;
         case 25: d = std::make_shared<Chorus>(); break;
+        case 26: d = std::make_shared<Vocoder>(); break;
         default: d = src.clone(); break;                                       // hosted plugin
     }
     if (!d) return nullptr;
@@ -611,6 +614,10 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
         if (!st.empty()) d->setState(st.data(), (int32_t)st.size());
     }
     d->setBypassed(src.bypassed());
+    d->setSidechainSourceTrackId(src.sidechainSourceTrackId());   // a keyed device keeps its key
+    d->setSidechainTapPre(src.sidechainTapPre());
+    d->setSidechainGainDb(src.sidechainGainDb());
+    d->setSidechainMix(src.sidechainMix());
     return d;
 }
 
@@ -682,6 +689,7 @@ std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
         case 23: return std::make_shared<Flanger>();
         case 24: return std::make_shared<Phaser>();
         case 25: return std::make_shared<Chorus>();
+        case 26: return std::make_shared<Vocoder>();
         default: return nullptr;   // Rack / plugin: no simple per-param default
     }
 }
@@ -990,8 +998,14 @@ bool Engine::instrumentAcceptsSidechain(int32_t trackId) const {
 void Engine::recomputeRouting() {
     for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
     int32_t next = 0;
+    // A source that is not in the graph (its track was deleted; undo brings it back) gets no
+    // slot, so its consumers see no key at all rather than a silent one.
+    auto exists = [&](int32_t id) {
+        for (auto& t : authoring_->tracks) if (t->id() == id) return true;
+        return false;
+    };
     auto claim = [&](int32_t src) {
-        if (src < 0 || routeSlotForTrack(src) >= 0) return;   // none / already assigned
+        if (src < 0 || routeSlotForTrack(src) >= 0 || !exists(src)) return;   // none / already assigned / gone
         if (next < kMaxRoutes) routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
     };
     for (auto& t : authoring_->tracks) {

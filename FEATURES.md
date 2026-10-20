@@ -794,6 +794,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
   delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
   ranges, and a status strip; 34 factory presets; MCP `read_chorus` / `set_chorus`.
+- **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
+  key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
+  or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
+  with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
+  for consonants, Hold, Mix, Gain. A live graph of each band's voice level and the carrier, with
+  draggable range edges; 7 factory presets; a carrier track is routed over MCP with
+  `set_device_sidechain`.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 

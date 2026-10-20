@@ -31,7 +31,7 @@ public static class DeviceCategories
         new("EQ & filter", ["Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Auto Filter"]),
         new("Dynamics", ["Nota Compressor", "Nota Prism", "Nota Ceiling", "Nota Shutter"]),
         new("Reverb & delay", ["Nota Reverb", "Nota Chamber", "Nota Delay"]),
-        new("Modulation", ["Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit"]),
+        new("Modulation", ["Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit", "Nota Vocoder"]),
         new("Distortion", ["Nota Valve", "Nota Vintage", "Nota Forge", "Nota Crush"]),
         new("Pitch & time", ["Nota Auto Shift", "Nota Beat Repeat", "Nota Strata"]),
         new("Utility", ["Nota Utility", "Nota Level", "Nota Lens"]),

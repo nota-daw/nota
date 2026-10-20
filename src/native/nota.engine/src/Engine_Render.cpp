@@ -1848,7 +1848,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             const bool audible = !leafMute(t) && (!anySolo || leafSolo(t));
             // Soloing a monitoring (or recording) track must not silence what it listens to.
             const bool feeding = !audible && !leafMute(t) && feedsMonitor(t.id());
-            if (!audible && !capturing && !feeding) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
+            // A sidechain source keeps rendering for its taps when muted or solo-gated, the way a
+            // console's pre-fader send outlives the channel mute: a vocoder's voice track can be
+            // muted (or the pad soloed) and still drive the bands. Its post-fader tap is silent
+            // while it is muted.
+            const bool keying = !audible && routeSlotForTrack(t.id()) >= 0;
+            const bool postTapMuted = keying && leafMute(t);
+            if (!audible && !capturing && !feeding && !keying) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
             const bool toMix = audible || capturing;   // false: render only for the taps
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
@@ -1963,7 +1969,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 float l, r;
                 ps.apply(i, scratch_[i * 2], scratch_[i * 2 + 1], l, r);
                 if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;   // record this track's output
-                if (route) { route[i * 2] += l; route[i * 2 + 1] += r; }   // tap post-fader → route bus
+                if (route && !postTapMuted) { route[i * 2] += l; route[i * 2 + 1] += r; }   // tap post-fader → route bus
                 if (!toMix) continue;                                         // solo-gated feeder: taps only
                 dest[i * 2]     += l;
                 dest[i * 2 + 1] += r;
