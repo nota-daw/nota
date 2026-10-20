@@ -303,7 +303,6 @@ target_link_libraries(nota_engine PRIVATE FLAC lame nlohmann_json::nlohmann_json
 # --- Plugin hosting (M3) via JUCE -------------------------------------------
 # JUCE lives ONLY in the pluginhost module; the core engine above stays
 # JUCE-free (ARCHITECTURE.md § Plugin hosting). JUCE is used here under the AGPLv3.
-# (Fetched juce-framework/JUCE 8.0.14 shallow via CPM — see cmake/dependencies.cmake.)
 
 # One source, two languages: ObjC++ on macOS (AU hosting + NSEvent key monitor,
 # guarded by #if JUCE_MAC), plain C++ elsewhere (VST3-only).

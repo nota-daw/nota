@@ -12,7 +12,7 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
-| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM tag, shallow fetch — see note 1 |
+| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM release tarball — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
 | miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM tag, fetched to build dir |
 | RtMidi | 6.0.0 (pinned commit, byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned commit, fetched to build dir |
