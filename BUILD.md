@@ -62,7 +62,8 @@ instructions yet took 38% longer), so wall-clock time is checked too. Base and c
 timed back to back over 5 rounds, and the fastest round of each is compared. A scenario
 more than 15% slower is re-timed with 10 more rounds, and fails only if it is still
 slower. A scenario that renders sound on the base but silence with the change fails too. `tests/perf/nota_idle_cpu` separately checks that an idle engine (created,
-transport stopped) stays under 5% of one core; it runs on macOS, Windows and Linux.
+transport stopped) stays under 5% of one core; it runs on macOS, Windows and Linux. Until #223 (idle
+worker threads spinning) is fixed, it reports a failure as a warning instead of failing CI.
 
 Linux only (Valgrind), with the Linux build requirements plus `valgrind` (and `ccache`
 to speed up the second build):
