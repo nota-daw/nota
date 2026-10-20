@@ -22,7 +22,6 @@ Engine::Engine()
     authoring_->masterTrack = std::make_shared<Track>(kMasterTrackId, TrackType::Audio);
     scratch_.assign(kMaxBlock * 2, 0.0f);
     mixTmp_.assign(kMaxBlock * 2, 0.0f);
-    pool_.reserveScratch((size_t)kMaxBlock * 4); // two halves per worker (dry + post)
     monitorHwBuf_.assign(kMaxBlock * 2, 0.0f);
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
@@ -32,6 +31,7 @@ Engine::Engine()
     for (auto& b : routeBusPre_) b.assign(kMaxBlock * 2, 0.0f); // Phase D pre-FX tap
     for (auto& b : routeBusPreNext_) b.assign(kMaxBlock * 2, 0.0f);
     for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
+    ensureRenderScratch(authoring_->tracks.size());
     liveGraph_.store(authoring_.get(), std::memory_order_release);
     retired_.push_back(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
@@ -86,9 +86,7 @@ void Engine::propagateSampleRate(double sr) {
     for (auto& t : authoring_->tracks)
         if (t) rate(*t);
     if (authoring_->masterTrack) rate(*authoring_->masterTrack);
-    if (authoring_) ensureMidiScratch(authoring_->tracks.size());
-    if (authoring_) ensureTrackScratch(authoring_->tracks.size());
-    for (auto& det : stageSilence_) det.setSampleRate(sr);
+    if (authoring_) ensureRenderScratch(authoring_->tracks.size());
     preparedSR_ = sr; // the offline render re-prepares only when this changes
 }
 
@@ -578,29 +576,28 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     return nt;
 }
 
-// Message thread: pre-size the per-track MIDI pre-pass scratch so the audio
-// thread never resizes (AR-6). Runs inside publishRaw (before the live-graph
-// swap, sized for the incoming graph) and propagateSampleRate.
-void Engine::ensureMidiScratch(size_t tracks) {
-    if (blockMidi_.size() < tracks) blockMidi_.resize(tracks);
-    if (blockMidiN_.size() < tracks) blockMidiN_.resize(tracks, 0);
-    if (blockExpr_.size() < tracks) blockExpr_.resize(tracks);
-    if (blockExprN_.size() < tracks) blockExprN_.resize(tracks, 0);
-    for (size_t i = 0; i < tracks; ++i) {
-        if (blockMidi_[i].size() < 1024) blockMidi_[i].resize(1024);
-        if (blockExpr_[i].size() < static_cast<size_t>(kMaxBlockExpr)) blockExpr_[i].resize(kMaxBlockExpr);
-    }
+// Message thread: make sure the published render scratch holds `tracks` tracks. Never
+// grows the live one (the audio thread may be inside a block using it): builds a new one
+// with headroom and publishes it. Runs inside publishRaw (before the live-graph swap, so a
+// block that sees the new graph sees its scratch too) and propagateSampleRate.
+void Engine::ensureRenderScratch(size_t tracks) {
+    if (const RenderScratch* cur = scratchHist_.live(); cur && cur->tracks >= tracks) return;
+    const size_t cap = std::max<size_t>(8, (tracks + 7) / 8 * 8); // grow in steps of 8 tracks
+    auto s = std::make_shared<RenderScratch>();
+    s->tracks = cap;
+    s->leafWork.resize(cap);
+    s->leafBuf.assign(cap * (size_t)kMaxBlock * 4, 0.0f); // two halves (dry + post) per track
+    s->blockMidi.assign(cap, std::vector<MidiEv>(1024));
+    s->blockMidiN.assign(cap, 0);
+    s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));
+    s->blockExprN.assign(cap, 0);
+    scratchHist_.publish(std::move(s));
 }
 
-// Message thread: size per-track Pass 1 scratch + pool scratch (AR-6: the
-// audio thread never grows these).
-void Engine::ensureTrackScratch(size_t tracks) {
-    if (leafWork_.size() < tracks) leafWork_.resize(tracks);
-    // Two halves (dry + post) of kMaxBlock stereo frames per track.
-    const size_t need = tracks * (size_t)kMaxBlock * 4;
-    if (leafBuf_.size() < need) leafBuf_.assign(need, 0.0f);
-    pool_.reserveScratch((size_t)kMaxBlock * 4); // retained for future parallel passes
-    if (mixTmp_.size() < (size_t)kMaxBlock * 2) mixTmp_.assign((size_t)kMaxBlock * 2, 0.0f);
+bool Engine::setRenderThreads(int n) {
+    if (isRunning()) return false; // the audio thread may be inside dispatch()
+    pool_ = std::make_unique<AudioThreadPool>(n < 0 ? -1 : n);
+    return true;
 }
 
 void Engine::publishRaw(std::shared_ptr<Graph> g) {
@@ -610,8 +607,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
         if (static_cast<int32_t>(t->sessionSlots.size()) < g->sceneCount) t->sessionSlots.resize(g->sceneCount);
     authoring_ = g;
     retired_.push_back(g);
-    if (g) ensureMidiScratch(g->tracks.size());
-    if (g) ensureTrackScratch(g->tracks.size());
+    if (g) ensureRenderScratch(g->tracks.size());
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)

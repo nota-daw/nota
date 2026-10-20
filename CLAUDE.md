@@ -19,6 +19,6 @@ restrictions).
   the change.
 - Bug reports go through `/speckit-bug-assess` → `/speckit-bug-fix` → `/speckit-bug-test`.
 - The `nota-*` skills in `.claude/skills/` (design, docs, features, instrument,
-  shortcuts, release) encode project-specific workflows — prefer them over improvising.
+  shortcuts, release, pr) encode project-specific workflows — prefer them over improvising.
 - Before any pull request: `scripts/build.sh` (or the Linux/Windows siblings) must pass;
   it runs the smoke test that drives the engine end-to-end.

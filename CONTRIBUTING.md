@@ -156,6 +156,12 @@ git -C ../nota-assets add my-change && git -C ../nota-assets commit -m "Images f
 git -C ../nota-assets push origin HEAD:pr-assets
 ```
 
+A user-visible UI change carries before/after screenshots there; a performance change
+carries a before/after benchmark — `scripts/bench-engine.sh` measures engine builds through
+the C ABI and `scripts/bench-chart.py` turns the results into charts and a table. The
+smoke test's render-pool guards (`RenderPoolTests`, `-- --perf` alone) catch the
+regressions automatically; a performance fix adds a guard there.
+
 You can also drag images straight into the GitHub description box when you write it by
 hand. The branch is for images added by scripts or tools, and for anything you want to
 keep alongside the repository.

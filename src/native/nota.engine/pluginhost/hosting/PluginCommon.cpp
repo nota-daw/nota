@@ -112,28 +112,20 @@ int32_t paramIndexOfIdImpl(juce::AudioPluginInstance* p, const std::string& id) 
     return -1;
 }
 
-juce::AudioPluginFormatManager& sharedFormatManager() {
-    static juce::AudioPluginFormatManager fm;
-    static const bool once = [] {
-        juce::addDefaultFormatsToManager(fm);
-        return true;
-    }();
-    juce::ignoreUnused(once);
-    return fm;
-}
-
 std::unique_ptr<juce::AudioPluginInstance> createInstance(
     const juce::PluginDescription& desc, double sr, int maxBlock) {
     juce::String err;
-    return sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
+    return scanner::sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
 }
 
-std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(int catalogIndex, double sr, int maxBlock) {
+std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
+    int catalogIndex, double sr, int maxBlock, bool instrumentOnly) {
     auto& catalog = scanner::PluginCatalog::instance();
     catalog.loadOnce();
-    auto types = catalog.types();
-    if (catalogIndex < 0 || catalogIndex >= static_cast<int>(types.size())) return nullptr;
-    return createInstance(*types[static_cast<size_t>(catalogIndex)], sr, maxBlock);
+    juce::PluginDescription desc; // one entry, copied under one lock
+    if (!catalog.typeAt(catalogIndex, desc)) return nullptr;
+    if (instrumentOnly && !desc.isInstrument) return nullptr;
+    return createInstance(desc, sr, maxBlock);
 }
 
 } // namespace hosting

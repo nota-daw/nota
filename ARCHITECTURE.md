@@ -47,7 +47,7 @@ engine embeddable and the UI replaceable.
 | `src/native/nota.engine/src/engine/` | Engine model classes (`Graph`, `Track`, `Transport`, `SessionPlayer`, `Automation`, `Modulation`, `MidiClip`, `MidiController`, `NoteExpression`, `CommandQueue`, `SnapshotHistory`, `Audition`) plus the multi-core `AudioThreadPool` — each as a `.h`/`.cpp` pair. |
 | `src/native/nota.engine/src/dsp/` | Shared C++20 DSP building blocks: `core/` (spans, params, silence detection, RT attributes), `math/` (`FastMath`, SIMD, PRNG), `primitives/` (filters, delay, oscillators, envelopes, oversampler, convolution), `poly/` (voices, voice manager). |
 | `src/native/nota.engine/src/abi/` | C ABI translation units (`nota_engine_*.cpp`) and `media/` (samples, warp, analysis) and `audio_io/` (platform backends). |
-| `src/native/nota.engine/pluginhost` | JUCE-based VST3/AU hosting: `hosting/` (play-head, editors, plugin devices), `scanner/` (thread-safe `PluginCatalog`, out-of-process scan, `nota_pluginscanner` INTERFACE target), `scanner/worker/` (`nota-scanworker`), `bridge/` (the two bridge headers). |
+| `src/native/nota.engine/pluginhost` | JUCE-based VST3/AU hosting: `hosting/` (play-head, editors, plugin devices), `scanner/` (thread-safe `PluginCatalog`, out-of-process scan, `nota_pluginscanner` INTERFACE target), `scanner/worker/` (`nota-scanworker`), `bridge/` (`PluginHostBridge.h`, the engine's only door into hosting). |
 | `src/native/nota.engine/vendor` | Vendored third-party sources (see `LICENSES/third-party.md`). |
 | `tests/Nota.SmokeTest` | End-to-end smoke test driven through the C ABI. |
 | `scripts` | Per-platform build and packaging scripts. |

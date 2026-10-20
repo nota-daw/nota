@@ -37,6 +37,17 @@ void RackCore::forwardTransport(const TransportInfo& ti) {
     }
 }
 
+bool RackCore::chainsHostPlugin() const {
+    const RackState* st = live();
+    if (!st) return false;
+    for (const auto& c : st->chains) {
+        if (c.instrument && c.instrument->hostsPlugin()) return true;
+        for (const auto& d : c.devices)
+            if (d && d->hostsPlugin()) return true;
+    }
+    return false;
+}
+
 void RackCore::forwardTempo(double beatStart, double spb, bool playing) {
     RackState* st = live();
     if (!st) return;

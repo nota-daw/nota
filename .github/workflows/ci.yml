@@ -29,10 +29,16 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-26
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache   # fetched deps, cached across runs
     steps:
       - uses: actions/checkout@v5
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive   # JUCE, flac
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -47,10 +53,16 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2022
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache   # fetched deps, cached across runs
     steps:
       - uses: actions/checkout@v5
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -68,10 +80,16 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache   # fetched deps, cached across runs
     steps:
       - uses: actions/checkout@v5
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'

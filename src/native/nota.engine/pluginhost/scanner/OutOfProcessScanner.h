@@ -15,8 +15,6 @@
 #include <string>
 #include <vector>
 
-#include "bridge/PluginCatalogBridge.h"
-
 namespace juce {
 class PluginDescription;
 } // namespace juce
@@ -24,25 +22,15 @@ class PluginDescription;
 namespace nota {
 namespace scanner {
 
-struct ScanResult {
-    std::vector<catalog::PluginEntry> found;
-    int32_t scanned = 0;
-    int32_t failed = 0;
-};
-
 class OutOfProcessScanner {
   public:
     static constexpr int kDefaultTimeoutMs = 30000;
 
     explicit OutOfProcessScanner(std::string workerPath, int timeoutMs = kDefaultTimeoutMs) noexcept;
 
-    // Scan one plugin id (format + fileOrIdentifier) via the worker.
-    // Never throws; failures increment result.failed.
-    void scanOne(const std::string& formatName, const std::string& fileOrId,
-        std::vector<catalog::PluginEntry>& out) const noexcept;
-
-    // Lossless variant: full JUCE descriptions (uid, path hash) for catalog
-    // storage. Never throws; returns empty on any failure.
+    // Scan one plugin id (format + fileOrIdentifier) via the worker: full JUCE
+    // descriptions (uid, path hash) for catalog storage. Never throws; returns
+    // empty on any failure.
     std::vector<std::unique_ptr<juce::PluginDescription>> scanDescriptions(
         const std::string& formatName, const std::string& fileOrId) const noexcept;
 

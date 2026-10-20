@@ -248,6 +248,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Render pool performance guards alone: `--perf`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--perf")
+{
+    Console.WriteLine("-- render pool --");
+    foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PERF PASSED" : $"PERF FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Process CPU readout alone: `--cpu`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--cpu")
 {
@@ -14948,6 +14956,8 @@ Console.WriteLine("-- dsp optimization --");
 foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
 Console.WriteLine("-- dsp silence bypass --");
 foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
+Console.WriteLine("-- render pool --");
+foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);

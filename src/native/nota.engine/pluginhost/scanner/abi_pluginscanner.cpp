@@ -24,18 +24,8 @@ namespace {
 // AU first (macOS priority), then VST3 — see ARCHITECTURE.md § Plugin hosting.
 const char* const kFormatOrder[] = {"AudioUnit", "VST3"};
 
-juce::AudioPluginFormatManager& formatManager() {
-    static juce::AudioPluginFormatManager fm;
-    static const bool once = [] {
-        juce::addDefaultFormatsToManager(fm);
-        return true;
-    }();
-    juce::ignoreUnused(once);
-    return fm;
-}
-
 juce::AudioPluginFormat* findFormat(const juce::String& name) {
-    for (auto* f : formatManager().getFormats())
+    for (auto* f : nota::scanner::sharedFormatManager().getFormats())
         if (f->getName() == name) return f;
     return nullptr;
 }

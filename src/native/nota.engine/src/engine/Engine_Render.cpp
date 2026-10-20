@@ -1221,7 +1221,7 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
 }
 
 // MIDI pre-pass: compute each non-session instrument track's post-FX MIDI output into its
-// per-position buffer (blockMidi_). Runs once per block so each track's MIDI FX advance once;
+// per-position buffer (rs_->blockMidi). Runs once per block so each track's MIDI FX advance once;
 // the render pass then feeds instruments from these buffers (own + routed sources').
 void Engine::computeBlockMidi(
     Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive) {
@@ -1230,46 +1230,46 @@ void Engine::computeBlockMidi(
     // every inner buffer) for each graph swap before it goes live. The guard
     // below is unreachable in practice; it neutralizes counts so no stale
     // MIDI can replay instead of growing.
-    const size_t have = std::min({blockMidi_.size(), blockMidiN_.size(), blockExpr_.size(), blockExprN_.size()});
+    const size_t have = std::min({rs_->blockMidi.size(), rs_->blockMidiN.size(), rs_->blockExpr.size(), rs_->blockExprN.size()});
     if (have < nt) {
         for (size_t i = 0; i < have; ++i) {
-            blockMidiN_[i] = 0;
-            blockExprN_[i] = 0;
+            rs_->blockMidiN[i] = 0;
+            rs_->blockExprN[i] = 0;
         }
         return;
     }
     for (size_t i = 0; i < nt; ++i) {
-        blockMidiN_[i] = 0;
-        blockExprN_[i] = 0;
+        rs_->blockMidiN[i] = 0;
+        rs_->blockExprN[i] = 0;
         Track& t = *g->tracks[i];
         // Session-active tracks feed via renderSessionSlotRaw (their own clock), so skip here.
         const bool sessionActive = t.sessionPlayer && t.sessionPlayer->playing.load(std::memory_order_relaxed) >= 0;
         if (t.type() != TrackType::Instrument || !t.instrument || sessionActive) continue;
-        auto& buf = blockMidi_[i];
+        auto& buf = rs_->blockMidi[i];
         if (buf.size() < 1024) {
-            blockMidiN_[i] = 0;
-            blockExprN_[i] = 0;
+            rs_->blockMidiN[i] = 0;
+            rs_->blockExprN[i] = 0;
             continue;
         } // unreachable: pre-sized
-        auto& xbuf = blockExpr_[i];
+        auto& xbuf = rs_->blockExpr[i];
         if (xbuf.size() < static_cast<size_t>(kMaxBlockExpr)) {
-            blockMidiN_[i] = 0;
-            blockExprN_[i] = 0;
+            rs_->blockMidiN[i] = 0;
+            rs_->blockExprN[i] = 0;
             continue;
         }
-        blockMidiN_[i] = computeInstrumentMidi(
-            t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &blockExprN_[i]);
+        rs_->blockMidiN[i] = computeInstrumentMidi(
+            t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &rs_->blockExprN[i]);
     }
 }
 
 // A device that takes a MIDI key (Nota Auto Shift's MIDI target) gets its source track's
-// post-FX notes for this block, from the pre-pass (blockMidi_). Audio thread.
+// post-FX notes for this block, from the pre-pass (rs_->blockMidi). Audio thread.
 void Engine::feedMidiKey(Graph* g, Device& d, int32_t srcTrackId) {
     if (!g) return;
-    const size_t nt = std::min(g->tracks.size(), blockMidiN_.size());
+    const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
     for (size_t j = 0; j < nt; ++j)
         if (g->tracks[j] && g->tracks[j]->id() == srcTrackId) {
-            d.setMidiKey(blockMidi_[j].data(), blockMidiN_[j]);
+            d.setMidiKey(rs_->blockMidi[j].data(), rs_->blockMidiN[j]);
             return;
         }
 }
@@ -1294,7 +1294,7 @@ void Engine::renderInstrumentRaw(
         // Recording the destination prints the routed MIDI into its take (arm the destination).
         const bool captureRouted = srcId >= 0 && t.id() == recordTrackId_ && (playing || countInActive_) &&
                                    recording_.load(std::memory_order_relaxed) && spb > 0.0;
-        const size_t nt = std::min(g->tracks.size(), blockMidiN_.size());
+        const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
         for (size_t j = 0; j < nt; ++j) {
             Track* p = g->tracks[j].get();
             if (!p) continue;
@@ -1303,18 +1303,18 @@ void Engine::renderInstrumentRaw(
             // its own render is skipped, but its buffer was computed in the pre-pass.
             const bool routed = !self && srcId >= 0 && p->type() == TrackType::Instrument && p->id() == srcId;
             if (!self && !routed) continue;
-            const int m = blockMidiN_[j];
-            const MidiEv* srcEvs = blockMidi_[j].data();
+            const int m = rs_->blockMidiN[j];
+            const MidiEv* srcEvs = rs_->blockMidi[j].data();
             for (int k = 0; k < m && n < 1024; ++k) evs[n++] = srcEvs[k];
-            if (j < blockExprN_.size())
-                for (int k = 0; k < blockExprN_[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = blockExpr_[j][k];
+            if (j < rs_->blockExprN.size())
+                for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
             if (routed && captureRouted) {
                 captureRoutedNotes(srcEvs, m, blockStart, spb, countInClockOffset());
                 // The source's controllers (its clips' curves) print into the take too.
-                if (j < blockExprN_.size())
-                    for (int k = 0; k < blockExprN_[j]; ++k) {
-                        const ExprEv& x = blockExpr_[j][k];
+                if (j < rs_->blockExprN.size())
+                    for (int k = 0; k < rs_->blockExprN[j]; ++k) {
+                        const ExprEv& x = rs_->blockExpr[j][k];
                         if (x.dim < kCtlDimBase) continue;
                         recordedCtl_.push(RecordedCtl{x.dim - kCtlDimBase,
                             (blockStart + x.off) / spb + countInClockOffset(), x.value, recordPass_});
@@ -1675,6 +1675,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
     Graph* g = liveGraph_.load(std::memory_order_acquire);
+    // This block's scratch, read after the graph: publishRaw publishes the scratch first, so
+    // it always fits the graph seen here. Held until the scope ends the render epoch.
+    const SnapshotHistory<RenderScratch>::RenderScope scratchScope(scratchHist_);
+    rs_ = scratchHist_.live();
 
     auto flushArrangementVoices = [&] {
         if (g)
@@ -1772,9 +1776,6 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     renderTone(out, numFrames);
     renderPreview(out, numFrames); // audition voice (M7-4a), pre-master
-
-    // master-stage silence (pre-master-chain mix).
-    stageSilent_[ST_MASTER] = stageSilence_[ST_MASTER].process(out, numFrames) == dsp::SignalState::Silent;
 
     // Master effect chain (post-mix, pre-fader): run the whole mix through the master
     // track's devices, in kMaxBlock chunks so each device sees at most a full block.
@@ -2062,13 +2063,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // Per-track render storage (two halves: dry + post). Falls back to
         // all-serial when undersized (unreachable: sized per graph swap).
         const size_t stride = (size_t)frames * 2;
-        const bool parallelOk = leafBuf_.size() >= ntracks * stride * 2 && (uint64_t)frames * 2 <= mixTmp_.size() &&
-                                leafWork_.size() >= ntracks;
+        const bool parallelOk = rs_->leafBuf.size() >= ntracks * stride * 2 && (uint64_t)frames * 2 <= mixTmp_.size() &&
+                                rs_->leafWork.size() >= ntracks;
         const int32_t capTrackId = freezeCaptureTrackId_.load(std::memory_order_relaxed);
         const bool recArmed = recording_.load(std::memory_order_relaxed);
         for (size_t li = 0; li < ntracks; ++li) {
             Track& t = *g->tracks[li];
-            LeafWork& w = leafWork_[li];
+            LeafWork& w = rs_->leafWork[li];
             w = LeafWork{};
             if (t.type() == TrackType::Return) continue; // return buses run in pass 2
             if (t.type() == TrackType::Group) continue;  // group submixes run in pass 1.5
@@ -2161,17 +2162,18 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             w.tapRec = (recSrc > 0 && t.id() == recSrc); // internal resampling source
 
             // Parallel eligibility: built-in DSP only (hosted plugin instances
-            // are not thread-safe across threads), no shared-queue writers
-            // (record queues are SPSC), no hardware monitoring.
+            // are not thread-safe across threads — also when nested in a rack),
+            // no shared-queue writers (record queues are SPSC), no hardware
+            // monitoring.
             bool eligible = parallelOk;
             const int32_t srcId = t.midiFromTrackId();
             if (srcId >= 0 && t.id() == recordTrackId_ && (playing || countInActive_) && recArmed && spb > 0.0)
                 eligible = false;                          // captureRouted destination prints into shared takes
             if (srcId >= 0 && t.armed()) eligible = false; // routed source prints while armed
-            if (eligible && t.instrument && t.instrument->kind() < 0) eligible = false;
+            if (eligible && t.instrument && t.instrument->hostsPlugin()) eligible = false;
             if (eligible)
                 for (auto& d : t.devices)
-                    if (d && !d->bypassed() && d->builtinKind() < 0) {
+                    if (d && !d->bypassed() && d->hostsPlugin()) {
                         eligible = false;
                         break;
                     }
@@ -2179,12 +2181,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         }
 
         // Parallel DSP phase: eligible leaves render dry into their own
-        // leafBuf_ region, copy to the post half, run devices in place
+        // rs_->leafBuf region, copy to the post half, run devices in place
         // there. Regions are per-track (never shared), so completion order
         // cannot mix signals; the serial accumulate below fixes mix order.
         if (parallelOk)
-            pool_.dispatch((int)ntracks, [&](int wid, int i) {
-                LeafWork& w = leafWork_[(size_t)i];
+            pool_->dispatch((int)ntracks, [&](int wid, int i) {
+                LeafWork& w = rs_->leafWork[(size_t)i];
                 if (!w.t || w.path == LeafPath::Skip || !w.eligible) return;
                 w.wid = wid;
                 float* base = leafBase((size_t)i, stride);
@@ -2196,12 +2198,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // Serial accumulate in track order (bit-identical: same elementwise
         // ops in the same order; SIMD adds/scales are exact per element).
         for (size_t li = 0; li < ntracks; ++li) {
-            LeafWork& w = leafWork_[li];
+            LeafWork& w = rs_->leafWork[li];
             if (!w.t || w.path == LeafPath::Skip) continue;
             Track& t = *w.t;
             // pre = dry pre-device (pre-FX tap source), post = post-device
             // (fader/capture source). Parallel tracks read both halves of
-            // their own leafBuf_ region; serial tracks render dry, tap, then
+            // their own rs_->leafBuf region; serial tracks render dry, tap, then
             // run devices in place — the original per-track order.
             float* pre = nullptr;
             float* post = nullptr;
@@ -2306,9 +2308,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
 
-        // leaf-stage silence (post-leaf `out`, zeroed on entry).
-        stageSilent_[ST_LEAF] = stageSilence_[ST_LEAF].process(out, frames) == dsp::SignalState::Silent;
-
         // Pass 1.5: group submixes. Process deepest-first so a nested group folds into its
         // parent's bus before the parent reads it; top-level groups fold into the master.
         for (int depth = maxDepth; depth >= 1; --depth)
@@ -2380,9 +2379,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 t.setMeter(
                     pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
             }
-
-        // group-stage silence (leaf + group folds).
-        stageSilent_[ST_GROUP] = stageSilence_[ST_GROUP].process(out, frames) == dsp::SignalState::Silent;
 
         // Pass 2: return buses -> device chain -> master (M6-1). Exempt from the
         // solo gate (a soloed track's reverb/delay still sounds); a return only
@@ -2471,9 +2467,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
-
-        // return-stage silence (full pre-master mix).
-        stageSilent_[ST_RETURN] = stageSilence_[ST_RETURN].process(out, frames) == dsp::SignalState::Silent;
 
         // Internal resampling from the master bus: capture the fully-mixed output.
         if (recSrc == -1) {

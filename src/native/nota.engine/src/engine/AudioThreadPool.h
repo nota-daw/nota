@@ -5,10 +5,11 @@
 // render passes . The audio thread publishes a job (count +
 // type-erased callable, no allocation) by bumping a generation counter;
 // dedicated workers plus the calling thread itself claim tickets from a
-// shared monotonic counter. Workers spin (pause hint, then yield — never
-// block on a mutex), hold FTZ/DAZ for their whole lifetime, and own
-// pre-allocated scratch buffers sized once on the message thread (AR-6: the
-// audio path never allocates, locks, or blocks).
+// shared monotonic counter. Workers spin briefly after each job (pause
+// hint), then park on a futex word (std::atomic::wait) so an idle engine
+// costs no CPU; they hold FTZ/DAZ for their whole lifetime (AR-6: the
+// audio path never allocates, locks, or blocks — waking parked workers is a
+// non-blocking futex notify, skipped while none are parked).
 //
 // Race discipline (three measured crash/hang bugs killed two earlier
 // designs — fetch_add claim + counter resets, then fetch_add + monotonic
@@ -31,12 +32,20 @@
 //  - job descriptors live in generation-indexed slots; a publish writes its
 //    slot before the epoch bump (release) and is gated on the previous
 //    job's completion, so a live ticket's slot is stable while held.
+//  - parking is Dekker-style (all seq_cst): a worker bumps sleepers_, then
+//    re-checks epoch_ before waiting on wake_; dispatch() stores epoch_,
+//    then reads sleepers_. Either the worker sees the new epoch or the
+//    dispatcher sees the sleeper and bumps wake_, so no wake-up is lost.
+//    Even a missed wake could never hang: the caller claims every ticket
+//    nobody else took.
 
 #pragma once
 
 #include "dsp/core/RtAttributes.h"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <thread>
@@ -47,7 +56,8 @@ namespace nota {
 class AudioThreadPool {
   public:
     // Dedicated worker threads (the caller always helps as an extra worker).
-    // <= 0 selects a default (hardware threads minus one for the caller).
+    // < 0 selects a default (hardware threads minus one for the caller); 0 runs
+    // every job on the caller alone.
     explicit AudioThreadPool(int workers = -1);
     ~AudioThreadPool();
 
@@ -59,16 +69,10 @@ class AudioThreadPool {
     // Dedicated threads (excludes the caller-helper slot).
     int workerCount() const noexcept { return (int)workers_.size(); }
 
-    // Scratch management. Message thread only: grows each worker's buffer
-    // (plus one caller slot) to at least `floats` floats.
-    void reserveScratch(size_t floats);
-    size_t scratchCapacity() const noexcept { return scratchFloats_; }
-
-    // Worker-private scratch. Audio thread safe (no allocation, no locks).
-    // id in [0, workerCount()], where workerCount() is the CALLER slot.
-    // Caller must have reserved enough via reserveScratch().
-    float* workerScratchBuffer(int worker) NOTA_RT_SAFE { return scratch_[(size_t)worker].data(); }
-    const float* workerScratchBuffer(int worker) const NOTA_RT_SAFE { return scratch_[(size_t)worker].data(); }
+    // CPU time the dedicated workers have used since they started, summed, in
+    // seconds (per-thread OS clocks: unaffected by other threads in the process).
+    // Any thread. Lets tests tell parked workers (~0) from spinning ones.
+    double workersCpuSeconds() const;
 
     // Run fn(workerId, index) for index in [0, n). The caller participates
     // with worker id == workerCount(). Returns when all n are done.
@@ -79,6 +83,17 @@ class AudioThreadPool {
             for (int i = 0; i < n; ++i) fn(workerCount(), i);
             return;
         }
+        // Linger: how long idle workers keep spinning before they park, from the gap
+        // since the previous job ended. A device callback dispatches a buffer period
+        // apart (ms): park at once, spinning would only burn CPU. An offline render
+        // (export, freeze) dispatches back-to-back (us): a parked worker's wake-up
+        // would cost more than the spin, so linger about twice the gap.
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const int64_t gapNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastEnd_).count();
+            lingerNs_.store(gapNs < kLingerGapNs ? std::min<int64_t>(2 * gapNs, kMaxLingerNs) : 0,
+                std::memory_order_relaxed);
+        }
         // Publish into this generation's slot BEFORE the bump (release):
         // workers observe the slot through the epoch's acquire chain.
         const uint64_t g = epoch_.load(std::memory_order_relaxed) + 1;
@@ -88,7 +103,13 @@ class AudioThreadPool {
         s.n = n;
         s.base = claimed_.load(std::memory_order_relaxed);
         doneBase_ = done_.load(std::memory_order_relaxed);
-        epoch_.store(g, std::memory_order_release); // publish: workers wake
+        epoch_.store(g, std::memory_order_seq_cst); // publish (seq_cst: pairs with park())
+        // Wake parked workers — only when there is a ticket for them beyond
+        // the one the caller takes itself.
+        if (n > 1 && sleepers_.load(std::memory_order_seq_cst) > 0) {
+            wake_.fetch_add(1, std::memory_order_release);
+            wake_.notify_all(); // non-blocking futex wake
+        }
         // Claim loop: validate against the live slot, claim by CAS, run.
         // The caller needs no stop checks (single audio thread: no
         // concurrent publish can invalidate its own job mid-flight).
@@ -103,15 +124,20 @@ class AudioThreadPool {
             }
             if (claimed_.compare_exchange_weak(t, t + 1, std::memory_order_relaxed)) {
                 fn(self, (int)(t - ls.base));
-                done_.fetch_add(1, std::memory_order_relaxed);
+                done_.fetch_add(1, std::memory_order_release); // publishes this task's writes
             }
         }
+        // Acquire pairs with every task's release increment (a release sequence through
+        // the RMWs), so all workers' buffer writes are visible once the count is reached.
         const uint64_t need = doneBase_ + (uint64_t)n;
         while (done_.load(std::memory_order_acquire) < need) NOTA_CPU_PAUSE();
+        lastEnd_ = std::chrono::steady_clock::now();
     }
 
   private:
     static constexpr uint64_t kSlots = 8;
+    static constexpr int64_t kLingerGapNs = 200'000; // gaps below this count as back-to-back
+    static constexpr int64_t kMaxLingerNs = 100'000;
 
     template <typename F> static void callTrampoline(void* ctx, int worker, int index) {
         (*static_cast<F*>(ctx))(worker, index);
@@ -126,18 +152,21 @@ class AudioThreadPool {
     };
 
     void workerLoop(int id);
+    void park(uint64_t seen);
 
     std::vector<std::thread> workers_;
-    std::vector<std::vector<float>> scratch_; // [workerCount()+1], message-thread sized
-    size_t scratchFloats_ = 0;
 
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> epoch_{0};
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> claimed_{0};
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> done_{0};
     std::atomic<bool> stop_{false};
+    NOTA_CACHE_ALIGNED std::atomic<int> sleepers_{0}; // workers inside park()
+    std::atomic<uint32_t> wake_{0};                   // futex word (native 32-bit wait everywhere)
+    std::atomic<int64_t> lingerNs_{0};                // set per dispatch (see dispatch())
 
     JobSlot slots_[kSlots]; // gen-indexed descriptors (see header comment)
     uint64_t doneBase_ = 0; // caller-thread only (single audio thread)
+    std::chrono::steady_clock::time_point lastEnd_{}; // caller-thread only: previous job's end
 };
 
 } // namespace nota

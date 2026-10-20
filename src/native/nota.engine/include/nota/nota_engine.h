@@ -461,6 +461,16 @@ NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
  * 0 when no live device is running. */
 NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 
+/* ---- Render threads -------------------------------------------------------
+ * Dedicated threads that render tracks in parallel (the audio thread helps too).
+ * set: count < 0 = the default (hardware threads - 1, capped), 0 = render on the audio
+ * thread alone. Only while the audio device is stopped: NOTA_ERR_ALREADY_RUNNING
+ * otherwise. cpu_seconds: CPU time those threads have used, summed (per-thread OS
+ * clocks) - near zero while nothing renders. Diagnostics and performance tests. */
+NOTA_API NotaResult nota_engine_set_render_threads(NotaEngine* engine, int32_t count);
+NOTA_API int32_t    nota_engine_render_threads(const NotaEngine* engine);
+NOTA_API double     nota_engine_render_threads_cpu_seconds(const NotaEngine* engine);
+
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);

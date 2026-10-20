@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// OutOfProcessScanner implementation. Mirrors scanOne() in PluginHost.cpp so
-// the ABI move is behavior-preserving; adds workerAvailable() and a
-// value-semantics ScanResult for the future batched-session mode.
+// OutOfProcessScanner implementation. Mirrors scanOne() in the former
+// PluginHost.cpp so the ABI move is behavior-preserving; adds workerAvailable().
 
 #include "OutOfProcessScanner.h"
 
@@ -70,23 +69,6 @@ std::vector<std::unique_ptr<juce::PluginDescription>> OutOfProcessScanner::scanD
         out.clear();
     }
     return out;
-}
-
-void OutOfProcessScanner::scanOne(
-    const std::string& formatName, const std::string& fileOrId, std::vector<catalog::PluginEntry>& out) const noexcept {
-    try {
-        for (auto& desc : scanDescriptions(formatName, fileOrId)) {
-            catalog::PluginEntry entry;
-            entry.identifier = desc->createIdentifierString().toStdString();
-            entry.name = desc->name.toStdString();
-            entry.format = desc->pluginFormatName.toStdString();
-            entry.manufacturer = desc->manufacturerName.toStdString();
-            entry.category = desc->category.toStdString();
-            entry.fileOrIdentifier = desc->fileOrIdentifier.toStdString();
-            entry.isInstrument = desc->isInstrument;
-            out.push_back(std::move(entry));
-        }
-    } catch (...) { out.clear(); }
 }
 
 } // namespace scanner

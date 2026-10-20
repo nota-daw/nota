@@ -61,14 +61,14 @@ float paramGetImpl(juce::AudioPluginInstance* p, int32_t i);
 void paramSetImpl(juce::AudioPluginInstance* p, int32_t i, float v);
 int32_t paramIndexOfIdImpl(juce::AudioPluginInstance* p, const std::string& id);
 
-// Shared plugin format manager (VST3 everywhere, AU on macOS). Message thread.
-juce::AudioPluginFormatManager& sharedFormatManager();
-
 // Instantiate a full description in-process (message thread). Null on failure.
 std::unique_ptr<juce::AudioPluginInstance> createInstance(const juce::PluginDescription& desc, double sr, int maxBlock);
 
-// Instantiate catalog entry `catalogIndex` in-process (message thread).
-std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(int catalogIndex, double sr, int maxBlock);
+// Instantiate catalog entry `catalogIndex` in-process (message thread). With
+// `instrumentOnly`, an entry that isn't an instrument yields null — checked on the
+// same entry that is instantiated, so a scan landing in between can't swap it.
+std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
+    int catalogIndex, double sr, int maxBlock, bool instrumentOnly);
 
 } // namespace hosting
 } // namespace nota

@@ -15,8 +15,8 @@
 #include "audio_io/AudioConfig.h"
 #include "audio_io/AudioInput.h"
 #include "CommandQueue.h"
-#include "dsp/core/SilenceDetector.h"
 #include "engine/AudioThreadPool.h"
+#include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
 #include "Graph.h"
 #include "audio_io/MidiConfig.h"
@@ -131,6 +131,11 @@ class Engine {
 
     // --- DSP load (Phase 11): RT render time / block budget, smoothed 0..1 ---
     float cpuLoad() const { return cpuLoad_.load(std::memory_order_relaxed); }
+    // Parallel render threads (the audio thread helps too): n < 0 = default, 0 = none.
+    // Device stopped only (message thread); false while it runs.
+    bool setRenderThreads(int n);
+    int renderThreads() const { return pool_->workerCount(); }
+    double renderThreadsCpuSeconds() const { return pool_->workersCpuSeconds(); }
 
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
@@ -1107,10 +1112,10 @@ class Engine {
     // A track's own post-MIDI-FX events (gather + drum swing + its MIDI FX chain), run once.
     int computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double blockStart, double spb, bool playing,
         bool arrangementActive, ExprEv* xev = nullptr, int* xn = nullptr);
-    // Pre-pass: fill blockMidi_/blockMidiN_ for every non-session instrument track.
+    // Pre-pass: fill rs_->blockMidi/blockMidiN for every non-session instrument track.
     void computeBlockMidi(
         Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
-    // Hand a MIDI-keyed device its source track's notes for this block (from blockMidi_).
+    // Hand a MIDI-keyed device its source track's notes for this block (from rs_->blockMidi).
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
     // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch
@@ -1173,7 +1178,6 @@ class Engine {
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
     void publishRaw(std::shared_ptr<Graph> g);                            // swap live/authoring only, no undo entry
-    void ensureMidiScratch(size_t tracks); // message thread: pre-size blockMidi_/blockExpr_ (AR-6)
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
     void reconfigureAllWarpStreams();                         // rebuild warp caches for the current tempo + device SR
@@ -1621,8 +1625,7 @@ class Engine {
     double captureNow_ = 0.0; // capture clock at this block's start (drainLiveMidi)
     void publishHeldSnapshot(double nowBeat);
 
-    // Clip-note expression replayed per block (computeBlockMidi fills, the render pass merges),
-    // per track position like blockMidi_.
+    // Clip-note expression replayed per block: capacity of each RenderScratch::blockExpr row.
     static constexpr int kMaxBlockExpr = 1024;
     // A clip's controller curves on the playback wire for one block (specs/020): the value at the
     // clip's start or at a jump into it (chase), every point inside the block, and a value every
@@ -1633,8 +1636,6 @@ class Engine {
     // held by a clip that is over.
     static void clipCtlEndResets(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
         int32_t frames, ExprEv* out, int& n, int cap);
-    std::vector<std::vector<ExprEv>> blockExpr_;
-    std::vector<int> blockExprN_;
     // Appends a clip note's recorded expression for the block: the note sounds over
     // [onS, offS) in samples relative to the block start; one value per dim at the note's
     // start (or the block's) and then every kExprStep samples while its curve moves.
@@ -1744,15 +1745,36 @@ class Engine {
         bool anySend = false;
         bool tapRec = false;
     };
-    std::vector<LeafWork> leafWork_;
-    // Per-track Pass 1 render storage (two halves per track: dry pre-device
-    // + post; message-thread sized). NOTE: pool worker slots can NOT back
-    // per-track renders — tracks outnumber workers, so a shared slot would
-    // hold only the last writer's signal (measured cross-talk). Each task
-    // owns leafBuf_ + li*stride exclusively for the block.
-    std::vector<float> leafBuf_;
-    float* leafBase(size_t li, size_t stride) { return leafBuf_.data() + li * stride * 2; }
-    void ensureTrackScratch(size_t tracks); // message thread: leafWork_ + pool scratch (AR-6)
+    // Per-block render scratch, by position in the live graph's track list: Pass 1 leaf
+    // work + render storage and the MIDI/expression pre-pass buffers. The audio thread
+    // fills and reads it during a block, so it is never resized in place (growing the
+    // vectors under a block in flight freed the memory the audio thread and pool workers
+    // were writing): the message thread builds a bigger one and publishes it through
+    // scratchHist_ before the graph that needs it, and the old one is freed once no
+    // render can still hold it (AR-6).
+    struct RenderScratch {
+        size_t tracks = 0; // capacity in tracks (every vector below is sized for it)
+        std::vector<LeafWork> leafWork;
+        // Pass 1 render storage (two halves per track: dry pre-device + post).
+        // NOTE: pool worker slots can NOT back per-track renders — tracks outnumber
+        // workers, so a shared slot would hold only the last writer's signal (measured
+        // cross-talk). Each task owns leafBase(li) exclusively for the block.
+        std::vector<float> leafBuf;
+        // Per-block MIDI output of each instrument track (post its own MIDI FX). Filled
+        // once per block by computeBlockMidi; the render pass feeds each instrument its
+        // own buffer plus the buffers of any tracks routing MIDI to it, so a source's
+        // MIDI FX (arp) drive the destination too.
+        std::vector<std::vector<MidiEv>> blockMidi;
+        std::vector<int> blockMidiN;
+        // Clip-note expression replayed per block (computeBlockMidi fills, the render pass
+        // merges).
+        std::vector<std::vector<ExprEv>> blockExpr;
+        std::vector<int> blockExprN;
+    };
+    SnapshotHistory<RenderScratch> scratchHist_;
+    RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
+    float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }
+    void ensureRenderScratch(size_t tracks); // message thread: publish scratch for `tracks` (AR-6)
     // Per-leaf DSP (Pass 1 steps 1/2/2b): render dry + device chain + PDC.
     // Split in two so the serial accumulate can tap the pre-device signal
     // (Phase D) while the fader reads the post-device one: parallel tasks
@@ -1766,15 +1788,9 @@ class Engine {
         double spb, bool playing, const TransportInfo& ti);
     // Fork-join pool for parallel Pass 1 leaf renders (constructed on the
     // message thread; workers park when idle).
-    AudioThreadPool pool_;
-    // Stage silence propagation : hysteresis detectors over each
-    // stage's output bus + sticky flags. Consumers: PDC structural skips
-    // and instrument playEvents skips read device-level idle state; device
-    // process() calls are never engine-skipped (free-running LFO/mod
-    // phases would jump — each device's own skip advances them instead).
-    enum StageIdx : uint8_t { ST_LEAF = 0, ST_GROUP, ST_RETURN, ST_MASTER };
-    dsp::SilenceDetector stageSilence_[4];
-    bool stageSilent_[4] = {true, true, true, true};
+    // Replaced only while the device is stopped (setRenderThreads), so the audio
+    // thread never sees it change.
+    std::unique_ptr<AudioThreadPool> pool_ = std::make_unique<AudioThreadPool>();
     // Freeze capture (M7): while armed, mixGraph stashes the target track's post-device
     // pre-fader signal into freezeCaptureBuf_. Filled sequentially from a seek(0) render;
     // only touched on the render thread, which is the message thread while capturing (the
@@ -1784,12 +1800,6 @@ class Engine {
     int64_t freezeCapFrames_ = 0;         // capacity in frames
     int64_t freezeCursor_ = 0;            // frames written so far
     double freezeCaptureSpb_ = 0.0;       // samples-per-beat at capture
-    // Per-block MIDI output of each instrument track (post its own MIDI FX), keyed by
-    // position in the live graph's track list. Filled once per block by computeBlockMidi;
-    // the render pass feeds each instrument its own buffer plus the buffers of any tracks
-    // routing MIDI to it, so a source's MIDI FX (arp) drive the destination too.
-    std::vector<std::vector<MidiEv>> blockMidi_;
-    std::vector<int> blockMidiN_;
     // Sample rate every node was last prepared at (propagateSampleRate). The offline render
     // re-prepares only when it changes, so a chunked export doesn't reset DSP state per block.
     double preparedSR_ = 0.0;

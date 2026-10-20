@@ -348,9 +348,9 @@ target_link_libraries(nota_pluginhost
 # linking juce_audio_processors would compile a second copy of JUCE (~11k
 # duplicate symbols at the nota_engine link). The scanner therefore builds its
 # two translation units as part of nota_pluginhost — the single JUCE owner —
-# while keeping its own INTERFACE target, bridge headers, and directory.
+# while keeping its own INTERFACE target and directory.
 # Enforcement is by construction, verified by grep (see below):
-#   pluginhost/scanner/* includes only bridge/, NotaConfigFile.h and JUCE —
+#   pluginhost/scanner/* includes only NotaConfigFile.h and JUCE —
 #   never Engine.h, Track.h, Graph.h, Device.h or Instrument.h.
 # Full CMake STATIC split either keeps this
 # model or makes the scanner JUCE-free (stdlib XML + fork/exec).

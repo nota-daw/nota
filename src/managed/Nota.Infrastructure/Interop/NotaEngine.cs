@@ -298,6 +298,20 @@ public sealed partial class NotaEngine : IAudioEngine
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }
 
+    /// <summary>
+    /// Dedicated parallel render threads (the audio thread helps too). Set while the device
+    /// is stopped: a negative count restores the default, 0 renders on the audio thread alone.
+    /// </summary>
+    public int RenderThreads
+    {
+        get { ThrowIfDisposed(); return NativeMethods.RenderThreads(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetRenderThreads(_handle, value)); }
+    }
+
+    /// <summary>CPU time the render threads have used, summed, in seconds (≈ constant while idle).</summary>
+    public double RenderThreadsCpuSeconds
+    { get { ThrowIfDisposed(); return NativeMethods.RenderThreadsCpuSeconds(_handle); } }
+
     public void Dispose()
     {
         if (_handle != IntPtr.Zero)

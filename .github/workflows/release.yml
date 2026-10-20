@@ -105,10 +105,16 @@ jobs:
       fail-fast: false
       matrix:
         arch: [arm64, x86_64]
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache   # fetched deps, cached across runs
     steps:
       - uses: actions/checkout@v5
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive   # JUCE
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -138,10 +144,16 @@ jobs:
     needs: guard
     if: github.event_name == 'push' || contains(fromJSON('["windows","all"]'), inputs.platforms)
     runs-on: windows-2022
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache   # fetched deps, cached across runs
     steps:
       - uses: actions/checkout@v5
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive   # JUCE
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -186,8 +198,14 @@ jobs:
     container: ${{ matrix.image }}
     steps:
       - uses: actions/checkout@v5
+      - name: Point CPM at the cache   # $GITHUB_WORKSPACE is the container path (github.workspace isn't)
+        run: echo "CPM_SOURCE_CACHE=$GITHUB_WORKSPACE/.cpm-cache" >> "$GITHUB_ENV"
+      - name: Cache CPM dependency sources   # JUCE, flac, … (cmake/dependencies.cmake)
+        uses: actions/cache@v6
         with:
-          submodules: recursive   # JUCE
+          path: .cpm-cache
+          key: cpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/nota.engine/cmake/dependencies.cmake', 'src/native/nota.engine/CMakeLists.txt') }}
+          restore-keys: cpm-${{ runner.os }}-${{ runner.arch }}-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'

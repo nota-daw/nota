@@ -3,8 +3,10 @@
 #
 # CMake dependencies via CPM (general infra, not per-library vendoring).
 # Nothing here lands in the repo: CPM fetches each package into the build dir
-# (_deps) from a pinned URL + URL_HASH below. To add a dependency, append one
-# CPMAddPackage block and its row in LICENSES/third-party.md.
+# (_deps) — or CPM_SOURCE_CACHE when set (CI caches it) — from a pinned
+# URL + URL_HASH or a commit SHA below (never a movable tag; the release it
+# matches is in the comment). To add a dependency, append one CPMAddPackage
+# block and its row in LICENSES/third-party.md.
 
 CPMAddPackage(
     NAME nlohmann_json
@@ -26,7 +28,7 @@ CPMAddPackage(
 )
 CPMAddPackage(
     NAME miniaudio
-    GIT_TAG 0.11.25
+    GIT_TAG 9634bedb5b5a2ca38c1ee7108a9358a4e233f14d # 0.11.25
     GITHUB_REPOSITORY mackron/miniaudio
     DOWNLOAD_ONLY YES
 )
@@ -50,7 +52,7 @@ CPMAddPackage(
 )
 CPMAddPackage(
     NAME flac
-    GIT_TAG 1.5.0
+    GIT_TAG 1507800de4b70e21be71f38caa0d9079d0bc6e45 # 1.5.0
     GITHUB_REPOSITORY xiph/flac
     OPTIONS
         "WITH_OGG OFF"
@@ -75,7 +77,7 @@ CPMAddPackage(
 )
 CPMAddPackage(
     NAME JUCE
-    GIT_TAG 8.0.14
+    GIT_TAG 2cdfca8feb300fb424002ba2c2751569e5bacb64 # 8.0.14
     GITHUB_REPOSITORY juce-framework/JUCE
     GIT_SHALLOW TRUE
 )

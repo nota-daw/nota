@@ -288,4 +288,13 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_cpu_load")]
     internal static partial float CpuLoad(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_render_threads")]
+    internal static partial NotaResult SetRenderThreads(IntPtr engine, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_threads")]
+    internal static partial int RenderThreads(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_threads_cpu_seconds")]
+    internal static partial double RenderThreadsCpuSeconds(IntPtr engine);
 }

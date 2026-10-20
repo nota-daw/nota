@@ -192,7 +192,7 @@ plugin hosting runs through JUCE, isolated in its own module so the engine core 
 JUCE-free.
 
 ```bash
-git clone --recurse-submodules https://github.com/nota-daw/nota.git
+git clone https://github.com/nota-daw/nota.git
 cd nota
 scripts/build.sh            # Build on macOS.
 scripts/build-linux.sh      # Build on Linux.

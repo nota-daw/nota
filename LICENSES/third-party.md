@@ -12,12 +12,12 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
-| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM tag, shallow fetch — see note 1 |
+| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM pinned commit `2cdfca8`, shallow fetch — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
-| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM tag, fetched to build dir |
+| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM pinned commit `9634bed`, fetched to build dir |
 | RtMidi | 6.0.0 (pinned commit, byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned commit, fetched to build dir |
 | dr_libs (dr_wav / dr_flac / dr_mp3) | pinned commit `cd99e2c` (headers: wav 0.14.6 / flac 0.13.4 / mp3 0.7.4, byte-identical to former snapshot) | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — CPM pinned commit, fetched to build dir — see note 3 |
-| libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM tag, fetched to build dir |
+| libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM pinned commit `1507800`, fetched to build dir |
 | LAME | 3.100 (sources byte-identical to former snapshot; wrapper moved to `cmake/lame/`) | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
 | signalsmith-stretch | pinned commit `57b93f4` (header v1.3.2, byte-identical to former snapshot) | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
 | signalsmith-linear | pinned commit `7f53cdd` (fft.h byte-identical to former snapshot) | FFT / linear DSP primitives | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
@@ -88,6 +88,6 @@ lists hide it, same as JUCE in note 1).
 
 ## Not shipped
 
-The JUCE submodule (`src/native/nota.engine/vendor/JUCE`) is fetched at build time and
+JUCE is fetched at build time by CPM (into the build dir) and
 is **not** redistributed in this repository's own source tree. Binary releases that
 statically link it do redistribute it, under AGPLv3.

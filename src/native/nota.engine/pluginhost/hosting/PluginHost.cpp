@@ -12,7 +12,6 @@
 #include "PluginCommon.h"
 #include "PluginEffect.h"
 #include "PluginInstrument.h"
-#include "scanner/PluginCatalog.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -95,18 +94,14 @@ namespace nota {
 
 std::shared_ptr<Instrument> createPluginInstrument(int32_t catalogIndex, double sr, int32_t maxBlock) {
     ensureJuceGui();
-    auto& catalog = scanner::PluginCatalog::instance();
-    catalog.loadOnce();
-    catalog::PluginEntry entry;
-    if (catalog.entryAt(catalogIndex, entry) && !entry.isInstrument) return nullptr; // not an instrument
-    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock);
+    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock, /*instrumentOnly*/ true);
     if (!inst) return nullptr;
     return std::make_shared<hosting::PluginInstrument>(std::move(inst), sr, maxBlock);
 }
 
 std::shared_ptr<Device> createPluginEffect(int32_t catalogIndex, double sr, int32_t maxBlock) {
     ensureJuceGui();
-    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock);
+    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock, /*instrumentOnly*/ false);
     if (!inst) return nullptr;
     return std::make_shared<hosting::PluginEffect>(std::move(inst), sr, maxBlock);
 }

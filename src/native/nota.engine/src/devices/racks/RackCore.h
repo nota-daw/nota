@@ -130,6 +130,10 @@ class RackCore {
     // without it they ran on their free times inside a rack. Audio thread, once per block.
     void forwardTempo(double beatStart, double spb, bool playing);
 
+    // Whether any chain child (instrument or insert, at any nesting depth) is a hosted
+    // plugin. Walks the live snapshot: reads only. Audio thread safe.
+    bool chainsHostPlugin() const;
+
     // Sample rate + max block; forwarded to every child. Message thread.
     void setRates(double sr, int32_t maxBlock);
 

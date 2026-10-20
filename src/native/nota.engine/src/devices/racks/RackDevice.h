@@ -25,6 +25,7 @@ class RackDevice final : public Device, public RackCore {
   public:
     int32_t builtinKind() const override { return 5; } // Audio Effect Rack (project compat)
     const char* displayName() const override { return "Nota Audio Effect Rack"; }
+    bool hostsPlugin() const override { return chainsHostPlugin(); }
 
     void setSampleRate(double sr, int32_t maxBlock) override { setRates(sr, maxBlock); }
 

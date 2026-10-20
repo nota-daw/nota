@@ -3,6 +3,7 @@
 [Oo]bj/
 build/
 build-*/
+.cpm-cache/
 out/
 *.user
 

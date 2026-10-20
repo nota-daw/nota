@@ -25,6 +25,7 @@ class RackInstrument : public Instrument, public RackCore {
   public:
     int32_t kind() const override { return 3; } // built-in Instrument Rack (project compat)
     const char* displayName() const override { return "Nota Instrument Rack"; }
+    bool hostsPlugin() const override { return chainsHostPlugin(); } // Drum Rack too
 
     void setSampleRate(double sr) override { setRates(sr, kMaxBlock); }
 
