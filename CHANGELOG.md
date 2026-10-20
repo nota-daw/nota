@@ -26,6 +26,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
   they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens
   with About Nota, then Settings… (⌘,), then Services, Hide and Quit, as in other Mac apps.
+- **macOS: Audio Unit plug-ins no longer waste work on every audio block**: since 0.52.1 Nota
+  handed each AU 31 audio channels instead of the two it was set up for, so the plug-in
+  copied the extra channels every block and grabbed memory on the audio thread on the first
+  one. In debug builds this printed a JUCE assertion per block and caused dropouts. AUs now get
+  exactly their own channels; VST3 plug-ins keep the extra headroom that stops them crashing
+  when they change their inputs or outputs.
 
 ## [0.56.1] — 2026-10-19
 

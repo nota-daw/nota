@@ -405,15 +405,23 @@ constexpr int kNoAllocChans = 31;
 // VST3 plugin can widen its layout at any moment (restartComponent kIoChanged → JUCE
 // re-prepares it on the message thread, e.g. Reaktor switching Play/Patch/Build) — so the
 // buffer is never narrower than the plugin's current layout, with headroom for a change that
-// lands between this read and processBlock. Returns the channel count. Audio thread.
+// lands between this read and processBlock. That headroom is VST3-only (`minChans` from
+// minProcessChannels): the AU wrapper copies the buffer into one sized for the layout it was
+// prepared with, so a wider buffer asserts and reallocates there — an AU gets exactly its
+// layout. Returns the channel count. Audio thread.
 int pluginChannelPtrs(const juce::AudioProcessor& p, juce::AudioBuffer<float>& storage,
-                      float* spare, int frames, float* (&ptrs)[kMaxChans]) {
+                      float* spare, int frames, int minChans, float* (&ptrs)[kMaxChans]) {
     const int have = juce::jmin(storage.getNumChannels(), kMaxChans);
-    const int want = juce::jmin(kMaxChans, juce::jmax(kNoAllocChans, have,
+    const int want = juce::jmin(kMaxChans, juce::jmax(minChans > 0 ? juce::jmax(minChans, have) : 1,
                                                       p.getTotalNumInputChannels(), p.getTotalNumOutputChannels()));
     if (want > have) juce::FloatVectorOperations::clear(spare, frames);
     for (int c = 0; c < want; ++c) ptrs[c] = c < have ? storage.getWritePointer(c) : spare;
     return want;
+}
+
+// The floor pluginChannelPtrs gets for this plugin. Message thread, at prepare.
+int minProcessChannels(const juce::AudioPluginInstance& p) {
+    return p.getPluginDescription().pluginFormatName == "VST3" ? kNoAllocChans : 0;
 }
 
 // Turn on every bus the plugin has, keeping the main buses as the caller set them. JUCE hands
@@ -739,7 +747,7 @@ public:
                                    : juce::MidiMessage::noteOff(1, g.pitch), 0);
         storage_.clear();
         float* ptrs[kMaxChans];
-        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, ptrs), frames);
+        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
         plugin_->processBlock(block, pending_);
         pending_.clear();
         const float* l = block.getReadPointer(0);
@@ -813,12 +821,14 @@ private:
         storage_.setSize(juce::jmax(2, plugin_->getTotalNumInputChannels(), plugin_->getTotalNumOutputChannels()), maxBlock_);
         stereoOut_ = plugin_->getBusCount(false) > 0 && plugin_->getChannelCountOfBus(false, 0) > 1;
         spare_.assign((size_t)maxBlock_, 0.0f);
+        chanFloor_ = minProcessChannels(*plugin_);
     }
 
     NotaPlayHead playHead_;   // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_;
     juce::AudioBuffer<float> storage_;
     std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
+    int chanFloor_ = 0;          // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer pending_;
     int maxBlock_;
     bool stereoOut_ = true;   // main output bus has a channel 1 (see prepare)
@@ -872,6 +882,7 @@ public:
         stereoIn_  = plugin_->getBusCount(true)  > 0 && plugin_->getChannelCountOfBus(true,  0) > 1;
         stereoOut_ = plugin_->getBusCount(false) > 0 && plugin_->getChannelCountOfBus(false, 0) > 1;
         spare_.assign((size_t)maxBlock_, 0.0f);
+        chanFloor_ = minProcessChannels(*plugin_);
         if (hasSidechain_ && plugin_->getBus(true, 1) != nullptr) {
             scChanOffset_ = plugin_->getChannelIndexInProcessBlockBuffer(true, 1, 0);
             scNumChans_   = plugin_->getBus(true, 1)->getNumberOfChannels();
@@ -905,7 +916,7 @@ public:
         scBuf_ = nullptr;   // consume once; the engine re-hands it each block if a source is set
 
         float* ptrs[kMaxChans];
-        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, ptrs), frames);
+        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
         empty_.clear();
         plugin_->processBlock(block, empty_);
 
@@ -990,6 +1001,7 @@ private:
     int  scChanOffset_ = -1, scNumChans_ = 0; // where its channels sit in the process buffer
     juce::AudioBuffer<float> storage_;
     std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
+    int chanFloor_ = 0;          // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer empty_;
     int maxBlock_ = 0;
     bool stereoIn_ = true, stereoOut_ = true;   // main buses have a channel 1 (see setSampleRate)
