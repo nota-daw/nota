@@ -12,15 +12,15 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
-| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM pinned commit `2cdfca8`, shallow fetch — see note 1 |
+| JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM release tarball — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
-| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM pinned commit `9634bed`, fetched to build dir |
-| RtMidi | 6.0.0 (pinned commit, byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned commit, fetched to build dir |
-| dr_libs (dr_wav / dr_flac / dr_mp3) | pinned commit `cd99e2c` (headers: wav 0.14.6 / flac 0.13.4 / mp3 0.7.4, byte-identical to former snapshot) | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — CPM pinned commit, fetched to build dir — see note 3 |
-| libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM pinned commit `1507800`, fetched to build dir |
+| miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM release tarball, fetched to build dir |
+| RtMidi | 6.0.0 (byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned tarball, fetched to build dir |
+| dr_libs (dr_wav / dr_flac / dr_mp3) | headers wav 0.14.6 / flac 0.13.4 / mp3 0.7.4 (byte-identical to former snapshot) | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — CPM pinned tarball, fetched to build dir — see note 3 |
+| libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM release tarball, fetched to build dir |
 | LAME | 3.100 (sources byte-identical to former snapshot; wrapper moved to `cmake/lame/`) | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
-| signalsmith-stretch | pinned commit `57b93f4` (header v1.3.2, byte-identical to former snapshot) | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
-| signalsmith-linear | pinned commit `7f53cdd` (fft.h byte-identical to former snapshot) | FFT / linear DSP primitives | MIT | ✅ in use — CPM pinned commit, fetched to build dir |
+| signalsmith-stretch | header v1.3.2 (byte-identical to former snapshot) | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use — CPM pinned tarball, fetched to build dir |
+| signalsmith-linear | fft.h (byte-identical to former snapshot) | FFT / linear DSP primitives | MIT | ✅ in use — CPM pinned tarball, fetched to build dir |
 | nlohmann/json | 3.12.0 | `audio.json` / `midi.json` device config (engine) | MIT | ✅ in use — CPM release tarball, fetched to build dir |
 | CPM.cmake | v0.43.2 | CMake package manager (build-time only, not linked) | MIT | ✅ in use — downloaded at configure time, never vendored |
 | HIIR (Laurent de Soras) | 1.50 (bump ex 1.40; snapshot unavailable upstream — null-gated, see note 4) | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — CPM URL+HASH zip, fetched to build dir — see note 4 |
