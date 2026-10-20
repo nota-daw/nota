@@ -51,6 +51,21 @@ Copyright © David Reid (mackron@gmail.com).
 Dual licensed — choice of **public domain (Unlicense)** or **MIT-0**. Used for WAV / FLAC
 / MP3 decoding. <https://github.com/mackron/dr_libs>
 
+## FLAC (libFLAC)
+Copyright © 2000–2009 Josh Coalson, 2011–2025 Xiph.Org Foundation.
+Licensed under the **BSD 3-Clause License**. Used for FLAC encoding (export).
+<https://xiph.org/flac/>
+
+## LAME
+Copyright © 1999–2011 the LAME Project.
+Licensed under the **LGPL-2.0-or-later** (see [`LGPL-2.0-or-later.txt`](LGPL-2.0-or-later.txt)).
+Used for MP3 encoding (export). <https://lame.sourceforge.io>
+
+## nlohmann/json
+Copyright © 2013 Niels Lohmann.
+Licensed under the **MIT License**. Used for the `audio.json` / `midi.json` device
+configuration files. <https://github.com/nlohmann/json>
+
 ## Signalsmith Stretch
 Copyright © 2022 Geraint Luff / Signalsmith Audio Ltd.
 Licensed under the **MIT License**. Used for time-stretch / pitch-shift (clip warping).

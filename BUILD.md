@@ -16,15 +16,11 @@ Nota? Grab a ready build from [Releases](https://github.com/nota-daw/nota/releas
 - Avalonia templates, only if you are scaffolding new projects —
   `dotnet new install Avalonia.Templates`.
 
-## Submodules
+## Source dependencies (CPM)
 
-JUCE (plugin hosting) is a git submodule at `src/native/nota.engine/vendor/JUCE`; the native
-build fails without it. Clone with `git clone --recurse-submodules`, or initialize it in an
-existing checkout (and again after a pull that moves it):
-
-```bash
-git submodule update --init --recursive
-```
+All native third-party code (JUCE included) is fetched by CPM into the build
+dir — nothing is vendored or submoduled, so a plain `git clone` is enough.
+See "CMake dependencies (CPM)" below for the cache story.
 
 ## CMake dependencies (CPM)
 
@@ -71,8 +67,15 @@ before measuring, so a full run takes several minutes.
 ```
 src/native/nota.engine/        # C++ engine + C ABI (libnota_engine.dylib)
   include/nota/nota_engine.h   # the public boundary (C ABI)
-  src/                         # Engine, audio/MIDI backends, SPSC queue, DSP
+  src/                         # Engine core (Engine*.cpp), abi/, media/, audio_io/
+    devices/                   # base interfaces + effects/ instruments/ midi_fx/ racks/
+    engine/                    # Graph/Track/Transport/… + AudioThreadPool (.h/.cpp pairs)
+    dsp/core,math,primitives,poly/  # shared DSP building blocks
   pluginhost/                  # JUCE-based VST3/AU hosting (the only JUCE-aware module)
+    hosting/                   # play-head, editors, plugin devices (in nota_pluginhost)
+    scanner/                   # catalog, out-of-process scan (nota_pluginscanner INTERFACE)
+    scanner/worker/            # nota-scanworker sources
+    bridge/                    # the two bridge headers
 src/managed/Nota.Domain/       # pure domain types
 src/managed/Nota.Application/  # ports (interfaces) and use cases
 src/managed/Nota.Infrastructure/  # P/Invoke interop, .nota persistence, services
@@ -83,7 +86,12 @@ tests/Nota.SmokeTest/          # end-to-end check: C# -> C ABI -> engine -> audi
 ```
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how these fit together and the rules that
-govern the boundary between them.
+govern the boundary between them. Native convention: every device, engine model
+class, and DSP block is a `.h`/`.cpp` pair (declaration header + implementation
+TU, AGPL SPDX header on each), so editing one `.cpp` recompiles one TU.
+`nota_pluginscanner` is an INTERFACE target whose translation units compile
+inside `nota_pluginhost` — a second STATIC JUCE library would duplicate ~11k
+symbols at link time.
 
 ## Building the parts by hand
 
@@ -108,7 +116,7 @@ translation units are not OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
 
 ### Nota Pentad as a standalone VST3 (optional)
 
-For checking the Pentad synth in another host, the same DSP (`src/Pentad.h`) also builds
+For checking the Pentad synth in another host, the same DSP (`src/devices/instruments/Pentad.h`/`.cpp`) also builds
 as a VST3 with JUCE's generic editor. It is off by default and not part of the app:
 
 ```bash
@@ -147,9 +155,9 @@ a single x64 host. An ARM64 build cannot be run on x64 — the smoke test is x64
 
 ### Platform details
 
-- Audio is **WASAPI** through vendored miniaudio (`vendor/miniaudio`); ASIO is not
+- Audio is **WASAPI** through miniaudio (fetched by CPM); ASIO is not
   supported yet.
-- MIDI input is **WinMM** through vendored RtMidi (`vendor/rtmidi`).
+- MIDI input is **WinMM** through RtMidi (fetched by CPM).
 - Plugin hosting is **VST3** (AU is macOS-only).
 - Settings, logs and projects are written to `%APPDATA%\Nota` (the counterpart of
   `~/Library/Application Support/Nota`).

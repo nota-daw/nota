@@ -1,3 +1,0 @@
-[submodule "cmd/util"]
-	path = cmd/util
-	url = https://github.com/geraintluff/util.git

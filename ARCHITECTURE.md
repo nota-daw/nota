@@ -42,8 +42,12 @@ engine embeddable and the UI replaceable.
 | `src/managed/Nota.App` | Avalonia views, windows, device cards, input handling. Composition root. |
 | `src/managed/Nota.Mcp` | MCP server so an AI agent can drive the app. Off unless enabled in Preferences. |
 | `src/native/nota.engine/include/nota` | The public C ABI header — the whole contract. |
-| `src/native/nota.engine/src` | Engine core, DSP, devices, instruments, backends. JUCE-free. |
-| `src/native/nota.engine/pluginhost` | JUCE-based VST3/AU hosting, built as a separate static library. |
+| `src/native/nota.engine/src` | Engine core (`Engine*.cpp`, `Engine.h`), DSP, devices, backends. JUCE-free. |
+| `src/native/nota.engine/src/devices/` | Base interfaces (`Device`, `Instrument`, `MidiDevice`, factories) plus `effects/` (25 audio effects), `instruments/` (18 instruments), `midi_fx/` (6 MIDI effects), `racks/` (4 rack containers) — every device as a `.h`/`.cpp` pair (see below). |
+| `src/native/nota.engine/src/engine/` | Engine model classes (`Graph`, `Track`, `Transport`, `SessionPlayer`, `Automation`, `Modulation`, `MidiClip`, `MidiController`, `NoteExpression`, `CommandQueue`, `SnapshotHistory`, `Audition`) plus the multi-core `AudioThreadPool` — each as a `.h`/`.cpp` pair. |
+| `src/native/nota.engine/src/dsp/` | Shared C++20 DSP building blocks: `core/` (spans, params, silence detection, RT attributes), `math/` (`FastMath`, SIMD, PRNG), `primitives/` (filters, delay, oscillators, envelopes, oversampler, convolution), `poly/` (voices, voice manager). |
+| `src/native/nota.engine/src/abi/` | C ABI translation units (`nota_engine_*.cpp`) and `media/` (samples, warp, analysis) and `audio_io/` (platform backends). |
+| `src/native/nota.engine/pluginhost` | JUCE-based VST3/AU hosting: `hosting/` (play-head, editors, plugin devices), `scanner/` (thread-safe `PluginCatalog`, out-of-process scan, `nota_pluginscanner` INTERFACE target), `scanner/worker/` (`nota-scanworker`), `bridge/` (the two bridge headers). |
 | `src/native/nota.engine/vendor` | Vendored third-party sources (see `LICENSES/third-party.md`). |
 | `tests/Nota.SmokeTest` | End-to-end smoke test driven through the C ABI. |
 | `scripts` | Per-platform build and packaging scripts. |
@@ -86,10 +90,15 @@ mixer, sends and return buses, the metronome, file playback, recording, and
 sample-accurate MIDI. Its implementation is split by concern across
 `Engine_Tracks.cpp`, `Engine_Render.cpp`, `Engine_Session.cpp`, `Engine_Rack.cpp`,
 `Engine_Devices.cpp`, `Engine_Automation.cpp`, `Engine_Modulation.cpp`,
-`Engine_Recording.cpp`.
+`Engine_Recording.cpp`, while the engine model classes (`Graph`, `Track`,
+`Transport`, `SessionPlayer`, `Automation`, `Modulation`, `MidiClip`,
+`MidiController`, `NoteExpression`, `CommandQueue`, `SnapshotHistory`, `Audition`)
+live as `.h`/`.cpp` pairs in `src/engine/`. Rendering dispatches Pass 1 leaf
+tracks in parallel over the lock-free `AudioThreadPool` (per-worker scratch
+buffers) and sums leaves/groups/returns with the SIMD mixer; per-device silence
+is propagated down every chain (see the auto-sleep convention below).
 
 Device I/O sits behind `AudioBackend` so the platform layer stays swappable:
-
 | Platform | Audio | MIDI |
 |---|---|---|
 | macOS | CoreAudio (`CoreAudioBackend.mm`) | CoreMIDI |
@@ -131,16 +140,44 @@ Built-in instruments, audio effects, and MIDI effects are registered by an integ
 **kind**. Adding one means touching the C++ class, the kind registration, the ABI, the
 interop layer, and the device-card UI — the chain is deliberately explicit.
 
-Racks (`RackCore.h`, `RackInstrument.h`, `RackDevice.h`, `DrumRack.h`) are container
+Racks (`devices/racks/RackCore.h`, `RackInstrument.h`, `RackDevice.h`, `DrumRack.h`) are container
 devices holding N parallel chains plus 8 macros with parameter mappings. A Drum Rack is
 an Instrument Rack whose chains are pads gated by a trigger note.
+
+### Native DSP file conventions
+
+Every built-in device is a `.h`/`.cpp` pair in its family folder —
+`devices/effects/` (25 audio effects + the `ChamberIrSynth` IR helper),
+`devices/instruments/` (18 pairs, including the extracted `RhythmVoiceDsp` and
+`MosaicProgram` helpers), `devices/midi_fx/` (6 MIDI effects),
+`devices/racks/` (4 rack containers). Shared DSP lives in `dsp/{core,math,
+primitives,poly}/` and the engine model in `src/engine/`. Conventions:
+
+- Every new file carries the AGPL SPDX two-line header; Device/Instrument
+  subclasses split into a declaration header plus an implementation TU, so
+  touching one device's `.cpp` recompiles only that TU.
+- Control-rate math stays `std`-exact; `FastMath` approximations apply only to
+  downstream/published sample values.
+- Auto-sleep via `hasTail()` / `isIdle()` / `wake()` (`Device.h`): a tail-less
+  device sleeps while its input is silent; frozen loops never sleep; the engine
+  never skips a device's `process()` — each device's own skip advances its
+  phases so it resumes phase-continuously.
 
 ## Plugin hosting
 
 JUCE is confined to `pluginhost/`, built as a separate static library and reached through
-`PluginHostBridge.h`. **No JUCE type crosses that line** — the core engine has no JUCE
+`pluginhost/bridge/PluginHostBridge.h`. **No JUCE type crosses that line** — the core engine has no JUCE
 dependency at all. VST3 is hosted everywhere; AU is macOS-only. Plugin scanning runs
 out-of-process in `nota-scanworker` so a crashing plugin cannot take the app down.
+
+Scanning is separated from hosting: `pluginhost/scanner/` holds the thread-safe
+`PluginCatalog`, the `OutOfProcessScanner` coordinator, and the `nota_pluginhost_*`
+scan ABI, while `pluginhost/hosting/` holds the play-head, editor window, and
+plugin device classes. `nota_pluginscanner` is an INTERFACE target — its
+translation units compile once inside `nota_pluginhost`, the single JUCE owner
+(a second STATIC JUCE lib would duplicate ~11k symbols at the `nota_engine`
+link). Scanner code includes only bridge headers and JUCE, never engine
+internals (`Engine.h`, `Track.h`, `Graph.h`, `Device.h`).
 
 A plugin is found by its JUCE identifier, `<format>-<name>-<path hash>-<uid>`. When no
 catalog entry matches exactly, the lookup falls back to format + name + uid, so a project

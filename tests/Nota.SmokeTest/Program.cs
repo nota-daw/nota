@@ -14792,10 +14792,21 @@ Console.WriteLine("-- background audio import --");
             while (ie.WarpBuildPoll() > 0 && ++guard3 < 100000) Thread.Sleep(1);
             Check(ie.WarpBuildRemaining == 0, $"bg warp: worker build installed ({bgw.ElapsedMilliseconds} ms, {guard3} polls)");
             se.SetClipWarpMarkers(st2, sc2, src2, beats2);   // synchronous reference
-            ie.Stop(); ie.Seek(0); ie.Play(); se.Stop(); se.Seek(0); se.Play();
+            se.Stop(); se.Seek(0); se.Play();
             var ba = new float[8192 * 2]; var bb = new float[8192 * 2];
-            ie.RenderOffline(ba, 8192); se.RenderOffline(bb, 8192);
-            double bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+            se.RenderOffline(bb, 8192);
+            // The worker install lands via republish; give the fresh cache a moment
+            // to become audible instead of racing a still-installing build.
+            double bd = double.MaxValue;
+            for (int retry = 0; retry < 50; retry++)
+            {
+                ie.WarpBuildPoll();
+                ie.Stop(); ie.Seek(0); ie.Play();
+                ie.RenderOffline(ba, 8192);
+                bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+                if (Rms(ba, 8192) > 0.001f && bd < 1e-5) break;
+                Thread.Sleep(20);
+            }
             Check(Rms(ba, 8192) > 0.001f && bd < 1e-5, $"bg warp: plays identically to the synchronous rebuild (max diff {bd:E1})");
             // An edit while a build runs supersedes it: the stale result is dropped, not installed.
             ie.SetDeferWarpBuild(true);
@@ -14933,6 +14944,10 @@ Console.WriteLine("-- preset init --");
 foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");
 foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
+Console.WriteLine("-- dsp optimization --");
+foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
+Console.WriteLine("-- dsp silence bypass --");
+foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);

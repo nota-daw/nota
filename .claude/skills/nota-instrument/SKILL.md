@@ -14,7 +14,7 @@ the **registration path (§2)** and the **card interface (§3)** differ — effe
 and MIDI effects register through a much lighter path than instruments.
 
 The canonical example is **Nota Volt** (virtual-analog synth, kind 6):
-`src/native/nota.engine/src/VoltSynth.h` (DSP) + `DeviceCards/Instruments/VoltInstrumentCard.cs` (UI).
+`src/native/nota.engine/src/devices/instruments/VoltSynth.h` + `.cpp` (DSP) + `DeviceCards/Instruments/VoltInstrumentCard.cs` (UI).
 Its editor is the reference build of the card layout — **read it first when designing
 a synth UI, together with `DESIGN.md` § Device cards and the rendered specimens in
 `DESIGN.html`.** Good
@@ -28,12 +28,15 @@ effects** (`builtinKind()`): 0 EQ, 1 Compressor, 2 Reverb, 3 Delay, 4 Utility,
 0 Arp, + Chord / Scale / Note Length / Velocity / Random. **Grep the current
 registration for the next free kind before picking one** — this list drifts.
 
-## 1. DSP class (header-only)
+## 1. DSP class (`.h` + `.cpp` pair)
 
-Put the whole device in one header `src/native/nota.engine/src/<Name>.h` —
-`final : public Instrument`, `: public Device` (audio effect, in-place stereo
-`process(buf, frames)`), or `: public MidiDevice` (MIDI effect). No new .cpp, no
-CMakeLists change. **Allocation-free after construction** (pre-size buffers). Rules:
+Put the device in its family folder — `src/native/nota.engine/src/devices/
+instruments/<Name>.h` + `.cpp` (`final : public Instrument`), `devices/effects/`
+(audio effect, `: public Device`, in-place stereo `process(buf, frames)`), or
+`devices/midi_fx/` (`: public MidiDevice`, MIDI effect) — and add both files to
+`src/native/nota.engine/CMakeLists.txt`. The header declares, the TU implements;
+**every new file carries the AGPL SPDX two-line header. Allocation-free after
+construction** (pre-size buffers). Rules:
 
 - **Parameters via the plugin-param interface** (`pluginParamCount/Id/Name/Get/Set/
   IndexOfId`). Values are **normalized 0..1** in `std::atomic<float> pn_[N]`
@@ -46,9 +49,15 @@ CMakeLists change. **Allocation-free after construction** (pre-size buffers). Ru
   `clone()` copies `pn_` + sample rate. Ids are stable strings; names are display.
 - **DSP conventions:** 16 voices, per-sample outer loop when modulation must stay
   smooth; recompute expensive filter coefficients at control rate (every ~16
-  samples), not per sample. Steal the quietest voice. polyBLEP saw/square if you
+  samples), not per sample — control-rate math stays `std`-exact, `FastMath`
+  applies only to downstream/published sample values. Steal the quietest voice. polyBLEP saw/square if you
   care about aliasing (Volt/Aurora do); a TPT/Cytomic SVF gives LP/HP/BP/Notch
-  from one filter. `kind()` returns the new integer; `displayName()` the label.
+  from one filter (`dsp/primitives/` has the shared SVF, ladder, biquad, delay,
+  oscillator, envelope, oversampler and convolution blocks — reuse them, don't
+  re-implement). `kind()` returns the new integer; `displayName()` the label.
+  Support auto-sleep (`hasTail()`/`isIdle()`/`wake()`): sleep only fully decayed
+  blocks, never a frozen loop; the engine never skips `process()` — your own
+  skip must advance phases so the device resumes seamlessly.
 
 ## 2. Registration checklist (mirror an existing kind)
 
@@ -60,8 +69,8 @@ lighter path — see the end of this section.**
 
 **Native:** `Engine.h` decl `add<Name>Track`; `Engine_Devices.cpp` (the method +
 `#include` + `cloneInstrument` switch + `makeBuiltinInstrument` switch);
-`RackCore.h` `makeInstrument` switch + include; C ABI
-`nota_engine_add_<name>_track` in `nota_engine_track.cpp` **and** the decl in
+`devices/racks/RackCore.h` `makeInstrument` switch + include; C ABI
+`nota_engine_add_<name>_track` in `src/abi/nota_engine_track.cpp` **and** the decl in
 `include/nota/nota_engine.h` (the `_nota_*` export list is a wildcard — no change).
 
 **Managed:** `NativeMethods.Tracks.cs` (`[LibraryImport]`), `NotaEngine.Tracks.cs`
@@ -86,7 +95,7 @@ picker (that path made empty-id lanes → "drew a curve, no effect").
 
 No track, no C ABI, no `Engine.h` method: effects are added generically by
 `addTrackBuiltinDevice(trackId, kind)`. Only:
-- **Native:** the header `: public Device` with `builtinKind()` returning the kind,
+- **Native:** the `.h`/`.cpp` pair in `devices/effects/` with `: public Device` and `builtinKind()` returning the kind,
   then register that kind in the **three switches** in `Engine_Devices.cpp` —
   `addTrackBuiltinDevice` **+** `cloneDevice` **+** `makeBuiltinDevice` — plus the
   `#include`. Params use the plain `Device` interface (`paramCount/paramName/
@@ -102,7 +111,7 @@ No track, no C ABI, no `Engine.h` method: effects are added generically by
 
 ### MIDI effects (`grep -rn Arpeggiator` / `grep -rn MidiScale`)
 
-Mirror an existing `MidiDevice` (e.g. `Arpeggiator.h`) with `midiKind()`; register
+Mirror an existing `MidiDevice` (e.g. `devices/midi_fx/Arpeggiator.h`) with `midiKind()`; register
 in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + a `MidiEffect`
 entry with its descriptor in `BuiltinDeviceCatalog.cs` (and its category in `DeviceCategories.cs`). Params/persist/clone are generic like audio effects. Cards sit
 **before** the instrument in the chain.

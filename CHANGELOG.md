@@ -180,6 +180,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Changed
+- **Engine internals rebuilt as modular C++20 DSP (no audible change):** every
+  built-in device is now a `.h`/`.cpp` pair in its family folder —
+  `devices/effects/` (25 audio effects), `devices/instruments/` (18 instruments),
+  `devices/midi_fx/` (6 MIDI effects), `devices/racks/` (4 racks) — on top of
+  shared `dsp/{core,math,primitives,poly}/` blocks (filters, delay, oscillators,
+  envelopes, oversampling, convolution, voices) and engine model classes moved
+  to `src/engine/`. Plugin scanning is separated from hosting
+  (`pluginhost/scanner/` + `nota_pluginscanner`, out-of-process
+  `nota-scanworker`). Rendering dispatches Pass 1 leaf tracks across cores via a
+  lock-free thread pool with SIMD mixer summing, and each device sleeps its own
+  silent blocks via `hasTail`/`isIdle`/`wake`. Sounds identical; a single device
+  edit now recompiles one translation unit.
 - **What's New shows the release notes**: the window now shows each version's curated release
   notes, the same text as its GitHub release, instead of the raw working log from this file.
   A version without release notes (older ones, and builds between releases) still shows its
