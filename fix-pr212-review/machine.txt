@@ -5,4 +5,4 @@ macos: 26.6.2
 runs: 3
 build: Before #212 = 82babfe (develop before the engine rebuild)
 build: After #212 = 64250a5 (engine identical on develop 2d26c78)
-build: This PR = e04af2d (fix/pr212-review)
+build: This PR = e04af2d (fix/pr212-review; render path unchanged in 99eb975, which only adds test ABI)
