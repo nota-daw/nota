@@ -171,6 +171,13 @@ own result, Apply is one undo step.
 
 ---
 
+## Phase 9: Review fixes (bug06.nota, 2026-10-20)
+
+- [X] T048 [US1] Follow the arrangement selection while the Clip editor is on screen (FR-001a revised): `ClipSelectionChanged` in `src/managed/Nota.App/ArrangementView.cs` (posted, deduplicated, from `UpdateHeaderSelection`), `FollowClipSelection` in `src/managed/Nota.App/MainWindow.Detail.cs`; drop the fixed-set guards in `OnTrackSelected` / `OnDetailClip`
+- [X] T049 [US2] ⌘D places each copy by the move rule (FR-005a): `ClipSet.ShiftTarget` in `src/managed/Nota.Application/Editing/ClipSet.cs`, used by `DuplicateSelection` in `src/managed/Nota.App/PianoRollView.cs`; copies past the reach are dropped instead of clamped; checks in `tests/Nota.SmokeTest/MultiClipTests.cs`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

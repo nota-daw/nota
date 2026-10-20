@@ -7,7 +7,7 @@
 | Double-click a MIDI clip that is in a selection of ≥2 MIDI clips | All selected MIDI clips open; clicked clip active |
 | Double-click a clip outside the selection / single selection | Single-clip editor (unchanged) |
 | Command palette / arrangement clip context menu: **Edit selected clips** | All selected MIDI clips open; first in time active. Disabled with <2 MIDI clips selected |
-| Change arrangement selection while a multi-clip editor is open | Editor unchanged |
+| Change the arrangement selection while the Clip editor is on screen | Editor follows: ≥2 MIDI clips together, 1 clip alone, no MIDI clip → unchanged |
 
 No new keyboard shortcut is bound by default (the command is available to the shortcut
 builder). If one is added, run `nota-shortcuts`.

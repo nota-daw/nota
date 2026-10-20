@@ -143,8 +143,7 @@ public partial class MainWindow
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.
-        // A multi-clip editor keeps its clips until it is opened again (specs/029 FR-001a).
-        if (_editorTrackId != trackId && _audioEditorTrackId != trackId && !MultiClipEditorOpen)
+        if (_editorTrackId != trackId && _audioEditorTrackId != trackId)
             ResetClipEditor();
 
         // Selecting a clip in the arrangement also selects its track — including the select
@@ -379,9 +378,36 @@ public partial class MainWindow
         return true;
     }
 
-    /// <summary>A Clip editor with several clips open — its set stays put while the
-    /// arrangement selection changes (specs/029 FR-001a).</summary>
+    /// <summary>A Clip editor with several arrangement clips open.</summary>
     private bool MultiClipEditorOpen => _editorRoll is { Clips.IsMulti: true } && _clipEditor is not null && _editorTrackId > 0;
+
+    // The Clip editor follows the arrangement selection while it is on screen (specs/029
+    // FR-001a): two or more selected MIDI clips open together — the clicked clip active when
+    // it is one of them — and narrowing back to one clip returns to the single-clip editor.
+    // Selecting a lone clip on another track is already followed through OnTrackSelected.
+    private void FollowClipSelection()
+    {
+        if (_session?.IsVisible == true || _vm is null) return;
+        bool shown = DetailFloating
+            ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
+            : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
+        if (!shown) return;
+        var midi = Timeline.SelectedMidiClips();
+        if (midi.Count >= 2)
+        {
+            var open = _editorRoll?.Clips.Clips.Select(c => (c.TrackId, c.ClipIndex)).OrderBy(x => x).ToList();
+            if (open is not null && open.SequenceEqual(midi.OrderBy(x => x))) return;   // already showing these
+            var primary = (Timeline.SelectedTrackId, Timeline.SelectedClipIndex);
+            var active = midi.Contains(primary) ? primary : midi[0];
+            BuildClipEditor(midi, active.Item1, active.Item2);
+            ShowClipPanel();
+        }
+        else if (midi.Count == 1 && MultiClipEditorOpen)
+        {
+            BuildClipEditor(midi[0].TrackId, midi[0].ClipIndex);
+            ShowClipPanel();
+        }
+    }
 
     // --- audio clip editor (M-audio-editor) --------------------------------
     private void OpenAudioClipEditor(int trackId, int clipIndex)
@@ -679,7 +705,7 @@ public partial class MainWindow
         }
         if (isMidi)
         {
-            if (_clipEditor is null || (!MultiClipEditorOpen && (_editorTrackId != tid || _editorClipIndex != ci)))
+            if (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci)
                 BuildClipEditor(tid, ci);
             ShowClipPanel();
         }

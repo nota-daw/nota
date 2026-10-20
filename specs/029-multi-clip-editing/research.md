@@ -81,9 +81,12 @@ also keep each clip's own length as the tool's boundary.
 **Finding**: Today `OnTrackSelected` resets the editor on a track switch and
 `OnDetailClip` re-points the Clip tab at the newly selected clip.
 
-**Decision**: When the open set has more than one clip, both skip the reset/re-point; the
-set only changes through `OpenClipEditor` (double-click / "Edit selected clips"). With one
-clip, today's follow-the-selection behaviour stays (FR-002).
+**Decision** (revised after review, bug06): the editor follows the selection. The
+arrangement raises `ClipSelectionChanged` once per change (posted, deduplicated, from
+`UpdateHeaderSelection`, which every selection path calls); while the Clip editor is on
+screen the host opens the selected MIDI clips together, or the single clip when the
+selection narrows to one. The first click of a double-click still narrows the selection;
+`RestoreNarrowed` puts it back on the second click.
 
 ## R8 — Following arrangement changes (FR-013)
 

@@ -108,6 +108,14 @@ internal static class MultiClipTests
         yield return (s.OwnerAfterMove(0, 30) == 2 && s.OwnerAfterMove(2, 9) == 0,
             "multiclip: notes never move to another track's clip");
 
+        // Duplicate (bug06): a copy shifted past A's end lands in B; past B, in a gap or behind
+        // a reference clip it is dropped (−1), never piled up at the edge.
+        yield return (s.ShiftTarget(0, 15) == 0 && s.ShiftTarget(0, 17) == 2 && s.ShiftTarget(0, 33) == -1,
+            "multiclip: a duplicated note lands in the clip its shift reaches, past the reach nowhere");
+        var lone = ClipSet.Single(1, 0, 0, 4);
+        yield return (lone.ShiftTarget(0, 3.25) == 0 && lone.ShiftTarget(0, 4.125) == -1,
+            "multiclip: in one clip a copy past its end is dropped");
+
         var gap = new ClipSet(new[] { new OpenClip(1, 0, 0, 16), new OpenClip(1, 1, 20, 16) }, 1, 0);
         var g = gap.Reach(0);
         yield return (Near(g.Start, 0) && Near(g.End, 16), "multiclip: a gap between clips is a wall");

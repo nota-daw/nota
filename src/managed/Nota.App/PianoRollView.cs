@@ -767,8 +767,8 @@ public sealed partial class PianoRollView : UserControl
     public bool GridFocused => _gridControl.IsFocused;
 
     /// <summary>Duplicates the selected notes, shifted right by the selection span, and
-    /// selects the copies. Returns false if nothing was selected. Undoable (one Commit).
-    /// Each copy stays in its original's clip, never past that clip's end.</summary>
+    /// selects the copies. Returns false if nothing was selected (or nothing fits). Undoable
+    /// (one Commit). Copies follow the same reach as moved notes (specs/029).</summary>
     public bool DuplicateSelection()
     {
         SettlePlacement();
@@ -781,12 +781,19 @@ public sealed partial class PianoRollView : UserControl
         var copyOwners = new List<int>(sel.Count);
         foreach (int i in sel)
         {
+            // Each copy lands where the shift puts it: in its own clip, or — past the seam — in
+            // the next open clip of its track (as a moved note would). Past every open clip it is
+            // dropped, as a paste past the clip's end is, instead of piling up at the edge.
             var n = _notes[i];
-            double cap = Math.Max(_set.EditorStart(_owner[i]), _set.EditorEnd(_owner[i]) - SnapStep);
-            n.StartBeat = Math.Min(n.StartBeat + shift, cap);
+            n.StartBeat += shift;
+            int slot = _set.ShiftTarget(_owner[i], n.StartBeat);
+            if (slot < 0) continue;
+            double end = _set.EditorEnd(slot);
+            if (n.StartBeat + n.LengthBeats > end) n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
             copies.Add(n);
-            copyOwners.Add(_owner[i]);
+            copyOwners.Add(slot);
         }
+        if (copies.Count == 0) return false;
         // Like a duplicated clip in the arrangement, the copies overwrite what they land on
         // straight away, with the same rule a settled placement uses (NoteOverwrite).
         int baseIdx = _notes.Count;

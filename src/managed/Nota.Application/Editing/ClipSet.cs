@@ -167,6 +167,17 @@ public sealed class ClipSet
         return best >= 0 ? best : slot;
     }
 
+    /// <summary>Where a copy of a note of <paramref name="slot"/> lands when shifted to
+    /// <paramref name="editorStart"/> (Duplicate): the clip that holds it within the note's
+    /// reach — its own clip or the next open one of its track — or −1 past the reach, where
+    /// the copy is dropped rather than piled up at the edge.</summary>
+    public int ShiftTarget(int slot, double editorStart)
+    {
+        var (lo, hi) = Reach(slot);
+        if (editorStart < lo - Eps || editorStart >= hi - Eps) return -1;
+        return OwnerAfterMove(slot, editorStart);
+    }
+
     /// <summary>Where a pasted note goes (specs/029 FR-012): back into the clip it was copied
     /// from when that clip is open, else into the active clip — at its clip-relative beat
     /// <paramref name="localStart"/> either way. Returns the slot and the editor-beat start.</summary>

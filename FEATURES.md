@@ -269,8 +269,9 @@ track count and closes with Escape.
     whole edit; a note moved past the seam into the next open clip of its track moves into
     that clip. A **clip strip** under the ruler shows the open clips: click one to make it
     the active clip (header, inspector and envelopes follow it; new notes go into it), or
-    click its lock to keep it as a dimmed, read-only reference. The set stays as opened
-    while the arrangement selection changes.
+    click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
+    open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
+    into the next open clip; past the last one they are left out.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then

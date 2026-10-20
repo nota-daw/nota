@@ -202,6 +202,7 @@ public partial class MainWindow : Window
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
+        Timeline.ClipSelectionChanged += FollowClipSelection;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)

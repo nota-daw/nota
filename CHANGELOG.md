@@ -32,7 +32,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   clip of its track moves into that clip. A strip under the ruler shows the open clips:
   click one to make it the active clip (its name, start, length and envelopes in the
   editor), or lock it as a dimmed reference that cannot be changed by accident. New notes go
-  into the active clip.
+  into the active clip. While the Clip tab is open it follows the selection in the
+  arrangement.
 - **Nota Vocoder** (nota-daw/nota#113): a new audio effect with two inputs. The track it
   sits on is the voice; drop it on a vocal and you hear a robot voice straight away, from an
   internal **Saw** (at a chosen **Pitch**). Switch the carrier to **Noise** for a whisper, or
@@ -49,6 +50,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   small to read on a laptop screen, or 75 % to fit more tracks on a small one.
 
 ### Fixed
+- **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
+  longer than the room left after it: copies continue into the next open clip of the track,
+  and those with no clip to land in are left out.
 - **New project and Open ask before discarding unsaved changes** (nota-daw/nota#215): File →
   New, File → Open and opening a project from the browser now offer Save / Don't save /
   Cancel, like quitting does; Cancel keeps the current project. The detail panel also closes

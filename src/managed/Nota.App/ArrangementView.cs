@@ -230,6 +230,26 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int>? MidiClipActivated;
     /// <summary>"Edit selected clips together" from a clip's context menu (specs/029).</summary>
     public event Action? EditSelectedClipsRequested;
+    /// <summary>The set of selected clips changed (click, ⌘-click, ⇧-click, marquee, select
+    /// all, delete). Raised once per change, after the arrangement has settled its own state;
+    /// the Clip editor follows it (specs/029).</summary>
+    public event Action? ClipSelectionChanged;
+    private (int, int)[] _notifiedSel = Array.Empty<(int, int)>();
+    private bool _selNotifyQueued;
+
+    private void QueueSelectionNotify()
+    {
+        if (_selNotifyQueued) return;
+        _selNotifyQueued = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _selNotifyQueued = false;
+            var now = _sel.OrderBy(s => s.track).ThenBy(s => s.clip).ToArray();
+            if (now.SequenceEqual(_notifiedSel)) return;
+            _notifiedSel = now;
+            ClipSelectionChanged?.Invoke();
+        });
+    }
     /// <summary>Raised when an audio clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
@@ -1875,6 +1895,7 @@ public sealed partial class ArrangementView : UserControl
     // instead of rebuilding the whole header column (faders, meters, combos) on every click.
     private void UpdateHeaderSelection()
     {
+        QueueSelectionNotify();   // every clip-selection change repaints the headers
         foreach (var (id, h) in _headerCards)
         {
             // Selected row (almanac § States): brass wash, the left stripe turns brass, name in Ink 1.

@@ -54,10 +54,20 @@ expectations), [`BUILD.md`](../../BUILD.md), [`DESIGN.md`](../../DESIGN.md),
 - Q: How does a set of clips get into the editor, and does it follow later arrangement
   selection changes? → A: Fixed at opening (double-click on a selected clip, or "Edit
   selected clips"); later selection changes leave the editor as it is until it is opened
-  again.
+  again. *(Reversed after review on 2026-10-20 — see below.)*
 - Q: Where does the user see the open clips and switch the active clip or reference
   mode? → A: A clip strip above the note grid (under the ruler): one bar per clip in its
   track colour over its time span; click makes it active, a lock icon toggles reference.
+
+### Review 2026-10-20 (bug06.nota)
+
+- Q: Should the editor follow the arrangement selection after all? → A: Yes. While the
+  Clip editor is on screen, selecting two or more MIDI clips shows them together at once
+  (the clicked clip active when it is one of them); narrowing to one clip shows it alone.
+  This replaces the "fixed at opening" answer above.
+- Q: Where do ⌘D copies go when the selection's span runs past its clip's end? → A: Where
+  the shift puts them: copies that start in the next open clip of the track land in it (the
+  move rule, FR-006); copies past every open clip are dropped, never piled up at the edge.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -89,9 +99,10 @@ arrangement bars, and the double-clicked clip is the active one.
 4. **Given** one clip is selected, or the user double-clicks a clip that is not part of
    the selection, **When** the editor opens, **Then** it behaves exactly as today
    (single clip) — no change for users who never select several clips.
-5. **Given** a multi-clip editor is open, **When** the user selects other clips in the
-   arrangement with a single click, **Then** the editor keeps its clips; it changes only
-   when the user opens clips again.
+5. **Given** the Clip editor is on screen, **When** the user selects two or more MIDI
+   clips in the arrangement (⇧-click, ⌘-click, rubber band, select all), **Then** the editor
+   shows them together at once; **When** the selection narrows to one clip, **Then** it
+   shows that clip alone.
 6. **Given** a multi-clip editor is open, **When** the editor header is read, **Then** it
    names the active clip and shows how many clips are open (e.g. "Bass 2 · +2 clips").
 
@@ -227,9 +238,14 @@ velocity lane for notes of both clips.
   clips MUST open all selected MIDI clips together in the Clip editor, with the
   double-clicked clip active. A menu/command "Edit selected clips" MUST do the same, with
   the first selected clip in time active.
-- **FR-001a**: The open clip set MUST be fixed when the editor opens. Changing the
-  arrangement selection afterwards MUST NOT add, remove or re-activate clips in the
-  editor; only opening the editor again (FR-001) replaces the set.
+- **FR-001a**: While the Clip editor is on screen, it MUST follow the arrangement
+  selection: two or more selected MIDI clips open together (the clicked clip active when
+  it is one of them, else the first in time); a selection of one MIDI clip shows that clip
+  alone; a selection without MIDI clips leaves the editor as it is.
+- **FR-005a**: Duplicate (⌘D) MUST shift the copies by the selection's span and place each
+  where the shift lands it — in its own clip or, past the seam, in the next open clip of
+  its track (as FR-006); a copy beyond every open clip MUST be dropped, never clamped to
+  the clip's edge. This also applies to the single-clip editor.
 - **FR-002**: Opening a single clip, or a clip outside the selection, MUST behave exactly
   as the current single-clip editor.
 - **FR-003**: In a multi-clip editor the roll's horizontal axis MUST be arrangement time:

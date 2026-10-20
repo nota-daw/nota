@@ -29,7 +29,8 @@ second track with a chord clip C (bars 1–8). Use `NOTA_DATA_DIR` to isolate da
 
 1. Select A, B, C; double-click B → three clips open, strip shows three bars, B active,
    ruler reads arrangement bars 1–8. (Story 1)
-2. Click one clip only in the arrangement → editor unchanged. (FR-001a)
+2. Click one clip only in the arrangement → editor shows that clip alone; ⇧-click a second
+   → both at once. (FR-001a)
 3. Rubber-band notes over A and B, press ↑ → both clips change; ⌘Z once → both restored.
    (Story 2, FR-011)
 4. Drag a note of A so it starts in bar 5 → it lands in B; ⌘Z → back in A. (FR-006)
