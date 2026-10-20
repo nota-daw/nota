@@ -12,5 +12,5 @@
 - [x] T008 [US3] Docs: BUILD.md "Performance gate", CONTRIBUTING.md CI note, CHANGELOG, FEATURES
 - [x] T008b [US1] Timing check alongside instructions (EQ-8 in #212: −35% instructions, +38% time): interleaved rounds, fastest, confirmation pass
 - [x] T009 Verify SC-003: `scripts/perf-gate.sh 82babfe 64250a5` fails on EQ-8, Prism, Auto Filter; idle check fails on 64250a5
-- [ ] T010 Verify SC-001: the same commit against itself passes, twice, with identical counts
+- [x] T010 Verify SC-001: the same commit against itself passes, twice, with identical counts
 - [ ] T011 Verify in CI: the workflow runs on the PR and posts its summary
