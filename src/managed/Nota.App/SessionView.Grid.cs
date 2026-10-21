@@ -862,31 +862,31 @@ public sealed partial class SessionView
         var f = new MenuFlyout();
         if (filled)
         {
-            f.Items.Add(MenuKit.Item("Launch", GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)));
-            f.Items.Add(MenuKit.Item("Edit", GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)));
-            f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)));
-            f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Item("Copy", GlyphKind.Copy, () => CopySelection(), MenuKit.CopyKey));
-            f.Items.Add(MenuKit.Item("Cut", GlyphKind.Cut, () => CutSelection(), MenuKit.CutKey));
-        }
-        f.Items.Add(MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste));
-        if (filled)
-        {
-            f.Items.Add(MenuKit.Item("Duplicate", GlyphKind.Duplicate, () => DuplicateSelection(), MenuKit.DuplicateKey));
-            f.Items.Add(MenuKit.Item("Copy to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey));
-            f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Item("Delete", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey));
+            string name = _engine.GetSessionClipName(c.TrackId, scene);
+            MenuKit.AddGroups(f.Items,
+                new Control[] { MenuKit.Header(name.Length > 0 ? name : "Clip", c.Brush, $"{c.Name} · scene {scene + 1}") },
+                new Control[]
+                {
+                    MenuKit.Item("Launch", GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)),
+                    MenuKit.Item("Edit", GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
+                    MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
+                },
+                new Control[] { MenuKit.Item("Copy to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
+                new Control[] { AddTrackSubmenu(c.TrackId) },
+                MenuKit.ClipboardGroup(() => CopySelection(), () => CutSelection(), () => PasteSelection(), () => DuplicateSelection(), CanPaste),
+                new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey) });
         }
         else
         {
-            f.Items.Add(new Separator());
-            if (c.IsInstrument) f.Items.Add(MenuKit.Item("Insert MIDI clip", GlyphKind.Plus, () => InsertMidiClip(c.TrackId, scene)));
-            f.Items.Add(MenuKit.Item("Record here", GlyphKind.Record, () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
+            var create = new List<Control>();
+            if (c.IsInstrument) create.Add(MenuKit.Item("Insert MIDI clip", GlyphKind.Plus, () => InsertMidiClip(c.TrackId, scene)));
+            create.Add(MenuKit.Item("Record here", GlyphKind.Record, () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
             bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
-            f.Items.Add(MenuKit.Item(stop ? "Remove stop button" : "Add stop button", GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
+            create.Add(MenuKit.Item(stop ? "Remove stop button" : "Add stop button", GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
+            MenuKit.AddGroups(f.Items, create,
+                new Control[] { MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste) },
+                new Control[] { AddTrackSubmenu(c.TrackId) });
         }
-        f.Items.Add(new Separator());
-        foreach (var mi in AddTrackItems(c.TrackId)) f.Items.Add(mi);
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -898,29 +898,69 @@ public sealed partial class SessionView
         yield return MenuKit.Item("Add return track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId));
     }
 
+    // "Add track ▸ Instrument / Audio / Return · Recent" — the same submenu the arrangement
+    // track menu has.
+    public Func<int, IReadOnlyList<MenuItem>>? RecentInstrumentItems;
+
+    private MenuItem AddTrackSubmenu(int anchorTrackId)
+    {
+        var add = MenuKit.Item("Add track", GlyphKind.Plus);
+        add.Items.Add(MenuKit.Item("Instrument", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId)));
+        add.Items.Add(MenuKit.Item("Audio", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId)));
+        add.Items.Add(MenuKit.Item("Return", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId)));
+        MenuKit.AddRecent(add, RecentInstrumentItems?.Invoke(anchorTrackId));
+        return add;
+    }
+
     private void ShowAddTrackMenu(Control anchor, int anchorTrackId)
     {
         var f = new MenuFlyout();
         foreach (var mi in AddTrackItems(anchorTrackId)) f.Items.Add(mi);
+        if (RecentInstrumentItems?.Invoke(anchorTrackId) is { Count: > 0 } recent)
+        {
+            f.Items.Add(new Separator());
+            f.Items.Add(MenuKit.Caption("Recent"));
+            foreach (var mi in recent) f.Items.Add(mi);
+        }
         f.ShowAt(anchor, showAtPointer: true);
     }
 
-    // Column header menu: rename / delete the track, or add one next to it.
+    // Column header menu (spec 034): the track named at the top, its colour, rename, add a
+    // track next to it, delete.
     private void ShowHeaderMenu(Control anchor, Column c)
     {
         var f = new MenuFlyout();
-        if (c.Kind != ColKind.Master)
+        if (c.Kind == ColKind.Master)
         {
-            f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)));
-            f.Items.Add(MenuKit.Item(c.Kind == ColKind.Group ? "Delete group and its tracks" : "Delete track", GlyphKind.Trash, () =>
-            {
-                _engine.RemoveTracks(new[] { c.TrackId });   // a group takes its tracks along, one undo step
-                Refresh();
-                ArrangementChanged?.Invoke();
-            }));
-            f.Items.Add(new Separator());
+            MenuKit.AddGroups(f.Items,
+                new Control[] { MenuKit.Header("Master", NotaPalette.Master, "Master") },
+                new Control[] { AddTrackSubmenu(-1) });
+            f.ShowAt(anchor, showAtPointer: true);
+            return;
         }
-        foreach (var mi in AddTrackItems(c.Kind == ColKind.Master ? -1 : c.TrackId)) f.Items.Add(mi);
+        int pos = NavCols.FindIndex(x => x.TrackId == c.TrackId);
+        f.FlyoutPresenterClasses.Add("rows");
+        int stored = _engine.GetTrackColorIndex(c.TrackId);
+        var colour = MenuKit.ColourGrid(stored, ci =>
+        {
+            _engine.SetTrackColorIndex(c.TrackId, ci);
+            Refresh();
+            ArrangementChanged?.Invoke();
+        });
+        MenuKit.AddGroups(f.Items,
+            new Control[] { MenuKit.Header(c.Name, c.Brush, pos >= 0 ? $"{c.KindLabel} · {pos + 1}" : c.KindLabel) },
+            new Control[] { colour },
+            new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)) },
+            new Control[] { AddTrackSubmenu(c.TrackId) },
+            new Control[]
+            {
+                MenuKit.Danger(c.Kind == ColKind.Group ? "Delete group and its tracks" : "Delete", GlyphKind.Trash, () =>
+                {
+                    _engine.RemoveTracks(new[] { c.TrackId });   // a group takes its tracks along, one undo step
+                    Refresh();
+                    ArrangementChanged?.Invoke();
+                }),
+            });
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -935,17 +975,23 @@ public sealed partial class SessionView
     private void ShowSceneMenu(Control anchor, int scene)
     {
         var f = new MenuFlyout();
-        f.Items.Add(MenuKit.Item("Launch scene", GlyphKind.Play, () => LaunchSceneRow(scene)));
-        f.Items.Add(MenuKit.Item("Stop scene", GlyphKind.Stop, () => _engine.StopScene(scene)));
-        f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)));
-        f.Items.Add(new Separator());
-        f.Items.Add(MenuKit.Item("Insert scene below", GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)));
-        f.Items.Add(MenuKit.Item("Duplicate scene", GlyphKind.Duplicate, () => DuplicateSelection(), MenuKit.DuplicateKey));
-        f.Items.Add(MenuKit.Item("Capture playing clips below", GlyphKind.Copy, CaptureScene));
-        f.Items.Add(MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, ClipTransfer.FromArrangement(_engine)));
-        f.Items.Add(MenuKit.Item("Copy scene to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey, SelectedSlots().Length > 0));
-        f.Items.Add(new Separator());
-        f.Items.Add(MenuKit.Item("Delete scene", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey, _sceneCount > 1));
+        string name = _engine.GetSceneName(scene);
+        MenuKit.AddGroups(f.Items,
+            new Control[] { MenuKit.Header(name.Length > 0 ? name : $"Scene {scene + 1}", null, $"Scene · {scene + 1}") },
+            new Control[]
+            {
+                MenuKit.Item("Launch scene", GlyphKind.Play, () => LaunchSceneRow(scene)),
+                MenuKit.Item("Stop scene", GlyphKind.Stop, () => _engine.StopScene(scene)),
+                MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
+            },
+            new Control[]
+            {
+                MenuKit.Item("Insert scene below", GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)),
+                MenuKit.Item("Capture playing clips below", GlyphKind.Copy, CaptureScene),
+                MenuKit.Item("Copy scene to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey, SelectedSlots().Length > 0),
+            },
+            MenuKit.ClipboardGroup(null, null, () => PasteSelection(), () => DuplicateSelection(), ClipTransfer.FromArrangement(_engine)),
+            new Control[] { MenuKit.Danger("Delete scene", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey, _sceneCount > 1) });
         f.ShowAt(anchor, showAtPointer: true);
     }
 }

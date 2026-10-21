@@ -269,19 +269,21 @@ public partial class MainWindow
         catch (Exception ex) { _vm.StatusText = $"{title} failed: {ex.Message}"; return null; }
     }
 
-    // --- context menu (Unfreeze / Flatten), shared by source + frozen tracks ---
+    // --- context menu (Live freeze switch / Flatten), shared by source + frozen tracks ---
 
     private bool _liveFreezeMenuBuilt;
     private void EnsureLiveFreezeMenu()
     {
         if (_liveFreezeMenuBuilt) return;
         _liveFreezeMenuBuilt = true;
-        var unfreeze = new MenuItem { Header = "Unfreeze (wake source)" };
-        unfreeze.Click += (_, _) => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) UnfreezeLink(s); };
-        var flatten = new MenuItem { Header = "Flatten (remove source)" };
-        flatten.Click += (_, _) => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) FlattenLinkAsync(s); };
+        // The same switch the track menu shows: on while linked; switching it off unfreezes.
+        var unfreeze = MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, true,
+            () => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) UnfreezeLink(s); });
+        var flatten = MenuKit.Danger("Flatten (remove source)", GlyphKind.Flatten,
+            () => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) FlattenLinkAsync(s); });
         var menu = new ContextMenu();
         menu.Items.Add(unfreeze);
+        menu.Items.Add(new Separator());
         menu.Items.Add(flatten);
         EditBtn.ContextMenu = menu;
         DoneBtn.ContextMenu = menu;

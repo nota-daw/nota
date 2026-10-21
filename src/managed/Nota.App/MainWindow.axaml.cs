@@ -435,6 +435,7 @@ public partial class MainWindow : Window
             if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
             else AddTrack(kind, anchor);
         };
+        HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         // Selecting a slot selects its track everywhere: devices below, arrangement header.
         _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
@@ -622,6 +623,7 @@ public partial class MainWindow : Window
             Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
         finally { Engine.EndUndoGroup(); }
+        if (kind == NewTrackKind.Instrument) RecordTrackInstrument(trackId);
         Timeline.Refresh();
         Timeline.RevealTrack(trackId);   // scrolled into view, not left below the pinned returns
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed

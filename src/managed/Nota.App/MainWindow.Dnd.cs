@@ -127,7 +127,15 @@ public partial class MainWindow
     }
 
     private DeviceInsertService? _insertion;
-    private DeviceInsertService Insertion => _insertion ??= new DeviceInsertService(Engine, _factory, _presets, _kits);
+    private DeviceInsertService Insertion => _insertion ??= NewInsertion();
+
+    private DeviceInsertService NewInsertion()
+    {
+        var s = new DeviceInsertService(Engine, _factory, _presets, _kits);
+        s.InstrumentAdded += OnInstrumentAdded;   // "Add track ▸ Recent" (MainWindow.Recent.cs)
+        s.InstrumentPresetApplied += RecordTrackInstrument;
+        return s;
+    }
 
     /// <summary>What the views do after the insert service changed a track: card state, the
     /// last-instrument fallback, refreshes, revealing the chain, the status line.</summary>

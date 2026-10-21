@@ -76,8 +76,8 @@ public partial class MainWindow
     {
         if (_freezeMenuBuilt) return;
         _freezeMenuBuilt = true;
-        _flattenItem = new MenuItem { Header = "Flatten to audio track" };
-        _flattenItem.Click += async (_, _) => { if (_freezeTrackId > 0) await FlattenTrackAsync(_freezeTrackId); };
+        _flattenItem = MenuKit.Danger("Flatten to audio track", GlyphKind.Flatten,
+            () => { if (_freezeTrackId > 0) _ = FlattenTrackAsync(_freezeTrackId); });
         var menu = new ContextMenu();
         menu.Items.Add(_flattenItem);
         // Flatten needs a frozen buffer to bounce, so gate it on the current state.
@@ -143,45 +143,47 @@ public partial class MainWindow
     // --- arrangement track context menu -----------------------------------
 
     // Freeze entries for a track header's right-click menu, mirroring the header button
-    // cluster: Freeze / Live Freeze on a live track; Unfreeze / Flatten when frozen in place;
-    // Edit (or Done / Discard mid-session) + Unfreeze / Flatten on either side of a live-freeze
-    // link. Each command first selects its track so the device panel and header buttons follow.
+    // cluster (spec 034). "Live freeze" is a switch, on for either side of a live-freeze link:
+    // switching it on live-freezes the track, switching it off unfreezes the link (wakes the
+    // source). While linked, Edit (or Done / Discard mid-session) and Flatten follow; a track
+    // frozen in place offers Unfreeze / Flatten instead. Each command first selects its track
+    // so the device panel and header buttons follow.
     private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
     {
         var items = new List<Control>();
         if ((LinkForSource(trackId) ?? LinkForFrozen(trackId)) is { } link)
         {
             int src = link.SourceId;
+            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, true, () => UnfreezeLink(src)));
             if (link.State == LinkState.Editing)
             {
-                items.Add(FreezeMenuItem("Done — re-freeze", GlyphIcon(GlyphKind.Check, accent: true),
-                    async () => { Timeline.Select(trackId, -1); await CommitEditSessionAsync(src); }));
-                items.Add(FreezeMenuItem("Discard edits", GlyphIcon(GlyphKind.Cross, accent: false),
+                items.Add(MenuKit.Item("Done — re-freeze", GlyphKind.Check,
+                    () => { Timeline.Select(trackId, -1); _ = CommitEditSessionAsync(src); }));
+                items.Add(MenuKit.Danger("Discard edits", GlyphKind.Cross,
                     () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }));
             }
             else
                 // Editing changes the source's notes/devices, so land on the source track.
-                items.Add(FreezeMenuItem("Edit source", GlyphIcon(GlyphKind.Edit, accent: true),
+                items.Add(MenuKit.Item("Edit source", GlyphKind.Edit,
                     () => { Timeline.Select(src, -1); BeginEditSession(src); }));
-            items.Add(FreezeMenuItem("Unfreeze (wake source)", MenuKit.Icon(GlyphKind.Freeze), () => UnfreezeLink(src)));
-            items.Add(FreezeMenuItem("Flatten (remove source)", MenuKit.Icon(GlyphKind.Flatten), () => FlattenLinkAsync(src)));
+            items.Add(MenuKit.Danger("Flatten (remove source)", GlyphKind.Flatten, () => FlattenLinkAsync(src)));
             return items;
         }
 
         if (!IsFreezable(trackId)) return items;
         if (Engine.IsTrackFrozen(trackId))
         {
-            items.Add(FreezeMenuItem("Unfreeze track", SnowflakeIcon(),
+            items.Add(MenuKit.Item("Unfreeze track", GlyphKind.Freeze,
                 () => { Timeline.Select(trackId, -1); UnfreezeTrack(trackId); }));
-            items.Add(FreezeMenuItem("Flatten to audio track", MenuKit.Icon(GlyphKind.Flatten),
-                async () => { Timeline.Select(trackId, -1); await FlattenTrackAsync(trackId); }));
+            items.Add(MenuKit.Danger("Flatten to audio track", GlyphKind.Flatten,
+                () => { Timeline.Select(trackId, -1); _ = FlattenTrackAsync(trackId); }));
         }
         else
         {
-            items.Add(FreezeMenuItem("Freeze track", SnowflakeIcon(),
-                async () => { Timeline.Select(trackId, -1); await FreezeTrackAsync(trackId); }));
-            items.Add(FreezeMenuItem("Live freeze", ChainLinkIcon(),
-                async () => { Timeline.Select(trackId, -1); await LiveFreezeAsync(trackId); }));
+            items.Add(MenuKit.Item("Freeze track", GlyphKind.Freeze,
+                () => { Timeline.Select(trackId, -1); _ = FreezeTrackAsync(trackId); }));
+            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, false,
+                () => { Timeline.Select(trackId, -1); _ = LiveFreezeAsync(trackId); }));
         }
         return items;
     }
@@ -196,10 +198,10 @@ public partial class MainWindow
         var live = plain.Where(id => !Engine.IsTrackFrozen(id)).ToList();
         var frozen = plain.Where(id => Engine.IsTrackFrozen(id)).ToList();
         if (live.Count > 0)
-            items.Add(FreezeMenuItem(live.Count == 1 ? "Freeze track" : $"Freeze {live.Count} tracks", SnowflakeIcon(),
-                () => FreezeTracksAsync(live)));
+            items.Add(MenuKit.Item(live.Count == 1 ? "Freeze track" : $"Freeze {live.Count} tracks", GlyphKind.Freeze,
+                () => _ = FreezeTracksAsync(live)));
         if (frozen.Count > 0)
-            items.Add(FreezeMenuItem(frozen.Count == 1 ? "Unfreeze track" : $"Unfreeze {frozen.Count} tracks", SnowflakeIcon(),
+            items.Add(MenuKit.Item(frozen.Count == 1 ? "Unfreeze track" : $"Unfreeze {frozen.Count} tracks", GlyphKind.Freeze,
                 () => UnfreezeTracks(frozen)));
         return items;
     }
@@ -247,32 +249,9 @@ public partial class MainWindow
         AfterFreezeChange();
     }
 
-    private static MenuItem FreezeMenuItem(string header, Control? icon, Action run)
-    {
-        var mi = new MenuItem { Header = header, Icon = icon };
-        mi.Click += (_, _) => run();
-        return mi;
-    }
-
-    private static MenuItem FreezeMenuItem(string header, Control? icon, Func<Task> run)
-    {
-        var mi = new MenuItem { Header = header, Icon = icon };
-        mi.Click += async (_, _) => await run();
-        return mi;
-    }
-
-    // Menu-icon glyphs matching the arrangement header badges (❄ / chain-link in ice blue)
-    // and the Edit / Done / Discard header buttons.
+    // The frozen state's ice tint on the header Freeze button (not used in menus: menu icons
+    // stay neutral — spec 034).
     private static readonly IBrush IceBrush = NotaPalette.Frozen;
-
-    private static Control SnowflakeIcon()
-        => new Glyph(GlyphKind.Freeze, 11) { Foreground = IceBrush };
-
-    private static Control ChainLinkIcon()
-        => new Glyph(GlyphKind.ChainLink, 14) { Foreground = IceBrush };
-
-    private Control GlyphIcon(GlyphKind glyph, bool accent)
-        => new Glyph(glyph, 11) { Foreground = accent ? NotaPalette.TextPrimary : NotaPalette.TextTertiary };
 
     // --- Flatten -----------------------------------------------------------
 

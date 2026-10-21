@@ -388,32 +388,6 @@ public sealed partial class ArrangementView
         return seam;
     }
 
-    // ---- presets (track context menu) -----------------------------------------
-
-    private MenuItem BuildTrackHeightSubmenu(IReadOnlyList<int> ids)
-    {
-        var menu = new MenuItem { Header = "Track height" };
-        (string name, double h)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
-        foreach (var (name, h) in presets)
-        {
-            var mi = new MenuItem
-            {
-                Header = name, ToggleType = MenuItemToggleType.Radio,
-                IsChecked = ids.Count > 0 && ids.All(id => Math.Abs(StoredRowHeight(id) - h) < 0.5),
-            };
-            mi.Click += (_, _) => SetTrackHeights(ids, h);
-            menu.Items.Add(mi);
-        }
-        menu.Items.Add(new Separator());
-        foreach (var (name, h) in presets)
-        {
-            var mi = new MenuItem { Header = $"All tracks: {name.ToLowerInvariant()}" };
-            mi.Click += (_, _) => SetAllTrackHeights(h);
-            menu.Items.Add(mi);
-        }
-        return menu;
-    }
-
     // ---- duplicate / copy / paste carry the height ----------------------------
 
     private bool CopyTracksToClipboard(IReadOnlyList<int> ids)

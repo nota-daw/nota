@@ -191,37 +191,69 @@ public sealed partial class ArrangementView
     }
 
     // ---- multi-track context menu ------------------------------------------
-    private void ShowTracksMenu(Control anchor, List<int> ids)
+    private void ShowTracksMenu(Control anchor, List<int> ids) => BuildTracksMenu(ids)?.ShowAt(anchor, showAtPointer: true);
+
+    internal MenuFlyout? BuildTracksMenu(List<int> ids)
     {
-        if (_engine is null) return;
+        if (_engine is null) return null;
         var flyout = new MenuFlyout();
-        string n = $"{ids.Count} tracks";
-
-        var group = MenuKit.Item($"Group {n}", GlyphKind.Folder, () => GroupTracks(-1), MenuKit.GroupKey);
-        var color = BuildColorSubmenu(ids);
-        var freeze = FreezeTracksMenuItems?.Invoke(ids) ?? Array.Empty<Control>();
-        var copy = MenuKit.Item($"Copy {n}", GlyphKind.Copy, () => CopyTracksToClipboard(ids), MenuKit.CopyKey);
-        var cut = MenuKit.Item($"Cut {n}", GlyphKind.Cut, () => CutTracks(ids), MenuKit.CutKey);
-        var paste = MenuKit.Item("Paste track", GlyphKind.Paste, () => PasteTracksAfter(ids[^1]), MenuKit.PasteKey,
-                                 enabled: _engine.HasTrackClipboard());
-        var dup = MenuKit.Item($"Duplicate {n}", GlyphKind.Duplicate, () => DuplicateTracks(ids), MenuKit.DuplicateKey);
-        var del = MenuKit.Item($"Delete {n}", GlyphKind.Trash, () => DeleteTracks(ids), MenuKit.DeleteKey);
-
-        flyout.Items.Add(group);
-        flyout.Items.Add(color);
-        flyout.Items.Add(BuildTrackHeightSubmenu(ids));
-        if (freeze.Count > 0)
-        {
-            flyout.Items.Add(new Separator());
-            foreach (var item in freeze) flyout.Items.Add(item);
-        }
-        flyout.Items.Add(new Separator());
-        flyout.Items.Add(copy);
-        flyout.Items.Add(cut);
-        flyout.Items.Add(paste);
-        flyout.Items.Add(dup);
-        flyout.Items.Add(new Separator());
-        flyout.Items.Add(del);
-        flyout.ShowAt(anchor, showAtPointer: true);
+        flyout.FlyoutPresenterClasses.Add("rows");
+        MenuKit.AddGroups(flyout.Items,
+            new Control[] { MenuKit.Header($"{ids.Count} tracks", null, "") },
+            new Control[] { TrackColourRow(ids), TrackHeightRow(ids) },
+            FreezeTracksMenuItems?.Invoke(ids),
+            new Control[] { MenuKit.Item("Group tracks", GlyphKind.Folder, () => GroupTracks(-1), MenuKit.GroupKey) },
+            MenuKit.ClipboardGroup(() => CopyTracksToClipboard(ids), () => CutTracks(ids),
+                () => PasteTracksAfter(ids[^1]), () => DuplicateTracks(ids), _engine.HasTrackClipboard()),
+            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteTracks(ids), MenuKit.DeleteKey) });
+        return flyout;
     }
+
+    // ---- shared track-menu rows (spec 034) ----------------------------------
+
+    // "Audio · 3": the track's kind and its position in the list, for the menu header.
+    private string TrackBadge(int trackId)
+    {
+        int pos = _tracks.FindIndex(v => v.Id == trackId);
+        var vm = pos >= 0 ? _tracks[pos] : null;
+        string kind = vm is null ? "Track" : vm.IsGroup ? "Group" : vm.IsReturn ? "Return" : vm.IsInstrument ? "Instrument" : "Audio";
+        return pos >= 0 ? $"{kind} · {pos + 1}" : kind;
+    }
+
+    // The colour grid for one or more tracks: the stored colour is ringed (Auto when none is
+    // stored; nothing when a selection disagrees). A pick is one undo step for all of them.
+    private MenuItem TrackColourRow(IReadOnlyList<int> ids)
+    {
+        var stored = ids.Select(id => _engine!.GetTrackColorIndex(id)).Distinct().ToList();
+        int current = stored.Count == 1 ? stored[0] : int.MinValue;
+        return MenuKit.ColourGrid(current, ci =>
+        {
+            if (_engine is null) return;
+            _engine.BeginUndoGroup();
+            try { foreach (var id in ids) _engine.SetTrackColorIndex(id, ci); }
+            finally { _engine.EndUndoGroup(); }
+            Refresh(); SessionChanged?.Invoke();
+        });
+    }
+
+    // Compact / Standard / Large for one or more tracks (the chosen key when they all sit on
+    // that preset); Option / Alt applies the height to every track.
+    private MenuItem TrackHeightRow(IReadOnlyList<int> ids)
+    {
+        (string, double)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
+        double? chosen = presets.Select(p => p.Item2)
+            .Where(h => ids.Count > 0 && ids.All(id => Math.Abs(StoredRowHeight(id) - h) < 0.5))
+            .Select(h => (double?)h).FirstOrDefault();
+        return MenuKit.Segments("Height", presets, chosen, (h, all) =>
+        {
+            if (all) SetAllTrackHeights(h); else SetTrackHeights(ids, h);
+        });
+    }
+
+    // "Recent" instruments under Add track (spec 034 US5): the host (MainWindow) builds the
+    // items from the recent-instruments list; each adds a track after the anchor.
+    public Func<int, IReadOnlyList<MenuItem>>? RecentInstrumentItems;
+
+    private void AddRecentInstruments(MenuItem addTrack, int anchorTrackId)
+        => MenuKit.AddRecent(addTrack, RecentInstrumentItems?.Invoke(anchorTrackId));
 }
