@@ -111,6 +111,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(map.N(P(p)), 1.0) { Accent = true, ArcColor = arc, Default = map.N(Def(p)), Width = 34, Height = 34 };
+            knob.Format = v => fmt(map.V(v));   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, map.V(v)); val.Text = fmt(P(p)); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);

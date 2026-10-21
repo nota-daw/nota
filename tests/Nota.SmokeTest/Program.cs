@@ -282,6 +282,14 @@ if (args.Length >= 1 && args[0] == "--glide")
     Console.WriteLine(failures == 0 ? "GLIDE PASSED" : $"GLIDE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Typed value entry alone: `--valueentry`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--valueentry")
+{
+    Console.WriteLine("-- typed value entry --");
+    foreach (var (ok, label) in ValueEntryTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VALUE ENTRY PASSED" : $"VALUE ENTRY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Snap grid alone: `--grid`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--grid")
 {
@@ -14916,6 +14924,10 @@ foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 // --- app: What's New shows the curated release notes ---
 Console.WriteLine("-- app: What's New release notes --");
 foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
+
+// --- app: typed value entry (parser + read-out search) ---
+Console.WriteLine("-- typed value entry --");
+foreach (var (ok, label) in ValueEntryTests.Run()) Check(ok, label);
 
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");

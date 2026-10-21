@@ -356,7 +356,7 @@ internal sealed class MosaicCurveView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || SetValue is null) return;
-        if (e.ClickCount == 2) { Begin?.Invoke(); SetValue(Default); End?.Invoke(); InvalidateVisual(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Begin?.Invoke(); SetValue(Default); End?.Invoke(); InvalidateVisual(); e.Handled = true; return; }
         _drag = true; _y0 = e.GetPosition(this).Y; _v0 = Get();
         Begin?.Invoke();
         e.Pointer.Capture(this);

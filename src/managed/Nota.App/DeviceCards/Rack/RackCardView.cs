@@ -376,6 +376,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var vol = new Knob(Math.Clamp(E.RackVolume(T) / 2.0, 0, 1), 1.0) { Accent = true, Width = 40, Height = 40, HorizontalAlignment = HorizontalAlignment.Center };
         string VolDb(double lin) => lin <= 0.001 ? "−∞\u2009dB" : $"{20 * Math.Log10(lin):+0.0;−0.0;0.0}\u2009dB";
         vol.ValueChanged += v => { E.RackSetVolume(T, (float)(v * 2.0)); volVal.Text = VolDb(v * 2.0); };
+        vol.Default = 0.5;   // unity gain
+        vol.Format = v => VolDb(v * 2.0);
+        ValueEntry.Attach(vol, "Rack volume", volVal);
         volVal.Text = VolDb(E.RackVolume(T));
         MidiLearn.Bind(vol, MidiTarget.RackVolume(T, a.AutomationDeviceIndex), "Rack Volume");
         var volCell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Children = { IrCap("VOLUME"), vol, volVal } };
@@ -940,6 +943,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var dwVal = IrMono("", IrTxt, 9); dwVal.HorizontalAlignment = HorizontalAlignment.Center;
         var dw = new Knob(Math.Clamp(E.RackDevDryWet(T, di), 0, 1), 1.0) { Accent = true, Width = 38, Height = 38, HorizontalAlignment = HorizontalAlignment.Center };
         dw.ValueChanged += v => { E.RackDevSetDryWet(T, di, (float)v); dwVal.Text = $"{v * 100:0}\u2009%"; };
+        dw.Format = v => $"{v * 100:0}\u2009%";
+        ValueEntry.Attach(dw, "Dry / wet", dwVal);
         dwVal.Text = $"{E.RackDevDryWet(T, di) * 100:0}\u2009%";
         var dwCell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Children = { IrCap("DRY / WET"), dw, dwVal } };
 
@@ -1112,10 +1117,12 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         head.Children.Add(nameTb);
         Grid.SetColumn(rm, 1); head.Children.Add(rm);
 
-        var gain = new MiniFader(a.ChainGain(c), 2.0) { Accent = true, Width = 58 };
+        var gain = new MiniFader(a.ChainGain(c), 2.0) { Accent = true, Width = 58, Default = 1.0 };
         gain.ValueChanged += v => a.SetChainGain(c, (float)v);
-        var pan = new MiniFader(a.ChainPan(c) * 0.5 + 0.5, 1.0) { Width = 40 };
+        var pan = new MiniFader(a.ChainPan(c) * 0.5 + 0.5, 1.0) { Width = 40, Default = 0.5 };
         pan.ValueChanged += v => a.SetChainPan(c, (float)(v * 2.0 - 1.0));
+        ValueEntry.Attach(gain, gain.EntryField("Chain gain", v => NotaNum.GainDb(v)));
+        ValueEntry.Attach(pan, pan.EntryField("Chain pan", v => NotaNum.Pan(v * 2 - 1)));
         var m = Toggle("M", a.ChainMute(c), NotaPalette.Mute, () => { a.SetChainMute(c, !a.ChainMute(c)); _ctx.RequestRebuild(); });
         var s = Toggle("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); _ctx.RequestRebuild(); });
         var ctrls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { gain, pan, m, s } };
@@ -1337,6 +1344,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         // plugin param — this is the in-model path for driving nested chain params over MIDI
         // (map a param to a macro, then learn the macro).
         MidiLearn.Bind(bar, MidiTarget.PluginParam(T, di, m), "Macro " + (m + 1));
+        bar.Format = x => Pct((float)x);
+        ValueEntry.Attach(bar, "Macro " + (m + 1), val);
         if (di < 0) _ctx.AddInstFader(m, bar, val);   // live-refresh follows the instrument-rack macros
 
         var host = new StackPanel { Width = 92, Spacing = 2, Children = { top, bar, MappingLabel(a, m) } };
@@ -1504,6 +1513,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var map = MapButton(a, c, d, p, min, max); Grid.SetColumn(map, 2); top.Children.Add(map);
         var bar = new Knob((val - min) / span, 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center };
         bar.ValueChanged += frac => { float v = (float)(min + frac * span); a.ChainDeviceParamSet(c, d, p, v); value.Text = DeviceParamControls.Fmt(v); };
+        bar.Format = frac => DeviceParamControls.Fmt((float)(min + frac * span));
+        ValueEntry.Attach(bar, name, value);
         _ctx.AddRackParamRefresher(() =>
         {
             if (bar.Dragging) return;
@@ -1526,6 +1537,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var map = MapButton(a, c, -1, p, 0f, 1f); Grid.SetColumn(map, 2); top.Children.Add(map);
         var bar = new Knob(val, 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center };
         bar.ValueChanged += v => { a.ChainInstrumentParamSet(c, p, (float)v); value.Text = Pct((float)v); };
+        bar.Format = v => Pct((float)v);
+        ValueEntry.Attach(bar, name, value);
         _ctx.AddRackParamRefresher(() =>
         {
             if (bar.Dragging) return;

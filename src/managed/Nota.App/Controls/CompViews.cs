@@ -82,7 +82,7 @@ internal sealed class CompFader : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && !double.IsNaN(Default))
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
         {
             GestureBegin?.Invoke(); _v = Default; Changed?.Invoke(_v); GestureEnd?.Invoke();
             InvalidateVisual(); e.Handled = true; return;
@@ -174,7 +174,7 @@ internal sealed class CompTransferView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2) { Reset?.Invoke(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(); e.Handled = true; return; }
         _drag = true; _startX = e.GetPosition(this).X; _startY = e.GetPosition(this).Y; _startRatio = _ratio; _startThr = _thr;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
     }
@@ -457,7 +457,7 @@ internal sealed class CompKeyView : Control
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int hnd = Nearest(e.GetPosition(this).X);
-        if (e.ClickCount == 2) { Reset?.Invoke(hnd - 1); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(hnd - 1); e.Handled = true; return; }
         _drag = hnd; _startY = e.GetPosition(this).Y; _startQ = _q;
         GestureBegin?.Invoke(hnd - 1); _qGesture = false;
         e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true;

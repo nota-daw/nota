@@ -236,7 +236,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var freeVal = Mono("", Txt); freeVal.Width = 40; freeVal.TextAlignment = TextAlignment.Right;
             ValueEntry.Attach(freeVal, () => (FreeMs(G(GFreeRate)) - FreeMsMin) / (FreeMsMax - FreeMsMin),
                 n => S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin))), () => $"{FreeMs(G(GFreeRate)):0}\u2009ms",
-                () => Begin(GFreeRate), () => End(GFreeRate), Refresh);
+                () => Begin(GFreeRate), () => End(GFreeRate), Refresh, control: freeTrack);
             var freeRow = new DockPanel { Children = { WithDock(freeVal, Dock.Right), freeTrack } };
             var rateHost = new Panel { Margin = new Thickness(4, 0, 0, 0), Children = { rateGrid, freeRow } };
             var rateStrip = new DockPanel { Height = 16, Margin = new Thickness(0, 4, 0, 0), Children = { WithDock(mode, Dock.Left), rateHost } };
@@ -408,7 +408,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             track.Changed += n => { S(p, fromNorm(n)); Refresh(); };
             track.GestureBegin += () => Begin(p); track.GestureEnd += () => End(p);
             Learn(track, p, label);
-            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Refresh);
+            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Refresh, control: track);
             readouts.Add(() =>
             {
                 double v = G(p);
@@ -440,7 +440,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             }
             var box = new Border { Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Child = new DockPanel { Children = { WithDock(Btn("−", -1), Dock.Left), WithDock(Btn("+", +1), Dock.Right), val } } };
-            box.PointerPressed += (_, ev) => { if (ev.ClickCount == 2) { S(p, Def(p)); Refresh(); } };
+            box.PointerPressed += (_, ev) => { if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { S(p, Def(p)); Refresh(); } };
             Learn(box, p, label);
             readouts.Add(() =>
             {
@@ -492,6 +492,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             knob.GestureBegin += () => Begin(LP()); knob.GestureEnd += () => End(LP());
             Learn(knob, p, label);
             var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(knob, label, val, text);
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
                 Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };

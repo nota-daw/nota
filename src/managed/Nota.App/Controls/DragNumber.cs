@@ -4,10 +4,11 @@
 // A numeric field that edits by vertical drag or double-click-to-type
 // (HANDOFF §4: "all numerics editable by drag (vertical) and double-click-type;
 // mono font keeps width stable"). Shows a mono read-out; drag up/down nudges the
-// value, double-click swaps in a flat text box that commits on Enter / blur.
+// value, double-click swaps in a flat text box that commits on Enter / blur. The typed text
+// goes through the shared value parser (ValueText: sign, decimal comma, fractions) and is
+// written as one gesture, so it is one undo step like a drag (specs/035).
 
 using System;
-using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -122,11 +123,16 @@ public sealed class DragNumber : UserControl
         _editing = false;
         _editor.IsVisible = false;
         _display.IsVisible = true;
-        if (double.TryParse(_editor.Text, NumberStyles.Any, NotaNum.Culture, out var v))
+        // The field's own unit: a number typed with a unit word ("12ms") keeps the number as written.
+        if (ValueText.Read(_editor.Text ?? "", out double mul, out _) is { } read && !double.IsNaN(read))
         {
-            _value = Math.Clamp(v, _min, _max);
+            double v = Math.Clamp(read / mul, _min, _max);
+            if (Math.Abs(v - _value) < 1e-12) return;
+            _value = v;
             Refresh();
+            GestureBegin?.Invoke();
             ValueChanged?.Invoke(_value);
+            GestureEnd?.Invoke();
         }
     }
 

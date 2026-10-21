@@ -78,6 +78,9 @@ internal static class DeviceCardKit
         }
         knob.ValueSet += Paint;
         Paint();
+        // Double-click the knob or its value to type one, ⌥-click to reset (specs/035). A knob
+        // without a Format is typed by reading its value line back after each probe.
+        ValueEntry.Attach(knob, name, value);
         return new StackPanel { Width = cellW, Spacing = 0, Children = { knob, lbl, value } };
     }
 
@@ -192,10 +195,13 @@ internal static class DeviceCardKit
     // parameter and does its own follow-up); `text` formats the value for display.
     // `trackWidth` fixes the track, otherwise it stretches. An empty label drops the
     // label column. `modulation` draws a modulation depth in teal. `sync` repaints from
-    // `norm` and skips while the hand is on the slider. Double-clicking the value types one in.
+    // `norm` and skips while the hand is on the slider. Double-clicking the slider or its
+    // value types one in, ⌥-click runs `reset`. `textAt` (the read-out at a position, pure)
+    // lets typing search without writing the parameter; without it the row probes `setNorm`.
     internal static Grid SliderRow(string label, Func<double> norm, Action<double> setNorm, Func<string> text, out Action sync,
         Action? begin = null, Action? end = null, Action? reset = null, bool bipolar = false, Func<bool>? dim = null,
-        double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42, bool modulation = false)
+        double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42, bool modulation = false,
+        Func<double, string>? textAt = null)
     {
         Action repaint = () => { };
         var track = new SliderTrack { Bipolar = bipolar, Modulation = modulation, Reset = reset is null ? null : () => { reset(); repaint(); } };
@@ -228,7 +234,12 @@ internal static class DeviceCardKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
-        ValueEntry.Attach(val, norm, setNorm, text, begin, end, Paint);
+        string name = label.Length > 0 ? label : "Value";
+        Action? rowReset = reset is null ? null : () => { reset(); Paint(); };
+        var field = textAt is null
+            ? ValueEntry.Probing(name, norm, setNorm, text, begin, end, Paint, rowReset)
+            : new ValueField(name, norm, textAt, setNorm, begin, end) { After = Paint, Reset = rowReset };
+        ValueEntry.Attach(track, field, val);
         if (begin is not null) track.GestureBegin += begin;
         if (end is not null) track.GestureEnd += end;
         track.SizeChanged += (_, _) => track.InvalidateVisual();

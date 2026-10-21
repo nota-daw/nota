@@ -128,7 +128,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             var val = Mono("", 8, TextPrimary);
             val.TextAlignment = TextAlignment.Right;
             val.HorizontalAlignment = HorizontalAlignment.Right;
-            ValueEntry.Attach(val, () => P(param()), v => Raw(param(), v), () => fmt(P(param())), () => Begin(param()), () => End(param()), Refresh);
+            ValueEntry.Attach(val, () => P(param()), v => Raw(param(), v), () => fmt(P(param())), () => Begin(param()), () => End(param()), Refresh, control: track);
             static ColumnDefinition Fixed(double w) => new(w > 0 ? new GridLength(w) : GridLength.Auto);
             var g = new Grid { ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
             g.ColumnDefinitions.Add(Fixed(labelW));
@@ -200,7 +200,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             {
                 if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
                 sel = s;
-                if (e.ClickCount == 2) { Reset(OutP(s)); Refresh(); e.Handled = true; return; }
+                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset(OutP(s)); Refresh(); e.Handled = true; return; }
                 od = true; oy = e.GetPosition(outBox).Y; ov = P(OutP(s)); Begin(OutP(s)); e.Pointer.Capture(outBox); e.Handled = true; Refresh();
             };
             outBox.PointerMoved += (_, e) =>
@@ -288,6 +288,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(param())), 7, TextPrimary);
             var knob = new Knob(P(param()), 1.0) { Accent = true, Default = Def(param()), Width = 30, Height = 30 };
+            knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(param(), v); val.Text = fmt(P(param())); Refresh(); };
             knob.GestureBegin += () => Begin(param());
             knob.GestureEnd += () => End(param());

@@ -198,6 +198,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
                 Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center,
             };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);

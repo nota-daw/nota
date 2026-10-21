@@ -99,6 +99,7 @@ public sealed partial class SessionView : UserControl
 
     public SessionView(IAudioEngine engine)
     {
+        ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
         _engine = engine;
         Focusable = true;
         FocusAdorner = null;

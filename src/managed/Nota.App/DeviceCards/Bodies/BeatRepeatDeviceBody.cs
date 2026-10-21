@@ -123,6 +123,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(steps > 1 ? Math.Round(v * (steps - 1)) / (steps - 1) : v);   // read-out at any value: typing searches it
             knob.ValueChanged += v =>
             {
                 if (steps > 1) v = Math.Round(v * (steps - 1)) / (steps - 1);

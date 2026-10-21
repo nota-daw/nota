@@ -32,6 +32,7 @@ internal static class InstrumentControls
         var value = new TextBlock { Text = f(engine.PluginParamGet(track, -1, i)), FontSize = 8, Foreground = TextPrimary };
         value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var knob = new Knob(engine.PluginParamGet(track, -1, i), 1.0) { Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, i), Inline = inline, Width = knobSize, Height = knobSize };
+        knob.Format = v => f((float)v);
         int pi = i; string pid = id;
         knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = f((float)v); sync(); };
         knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, pid);

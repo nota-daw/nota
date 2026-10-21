@@ -25,6 +25,22 @@ internal sealed class PanKnob : Control
 
     public PanKnob(double pan) { _pan = Math.Clamp(pan, -1, 1); Width = 26; Height = 26; }
 
+    /// <summary>The knob as a typeable value; <paramref name="fmt"/> is its read-out at a pan
+    /// (−1..1). ⌥-click centres it.</summary>
+    internal ValueField EntryField(string name, Func<double, string> fmt)
+        => new(name, () => (_pan + 1) / 2, n => fmt(n * 2 - 1), n => Set(n * 2 - 1),
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), 0.5);
+
+    /// <summary>Sets the pan without raising PanChanged (external sync).</summary>
+    public void SetPanExternal(double p) { _pan = Math.Clamp(p, -1, 1); InvalidateVisual(); }
+
+    private void Set(double p)
+    {
+        p = Math.Clamp(p, -1, 1);
+        if (Math.Abs(p - _pan) < 1e-9) return;
+        _pan = p; InvalidateVisual(); PanChanged?.Invoke(_pan);
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e) { _drag = true; _startY = e.GetPosition(this).Y; _startPan = _pan; e.Pointer.Capture(this); GestureBegin?.Invoke(); e.Handled = true; }
     protected override void OnPointerMoved(PointerEventArgs e)
     {

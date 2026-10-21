@@ -268,7 +268,8 @@ internal static class PluginCard
     }
 
     // One plug-in parameter as the shared gauge knob: the plug-in's own value text, its
-    // default on double-click, automation-write gestures, MIDI Learn and live follow.
+    // default on ⌥-click, typed values on double-click (KnobCell — probed, since a plug-in only
+    // tells its text at the current value), automation-write gestures, MIDI Learn and live follow.
     private static Control ParamKnob(DeviceCardContext ctx, int di, int p, string name, Func<bool> live)
     {
         var e = ctx.Engine; int t = ctx.TrackId;

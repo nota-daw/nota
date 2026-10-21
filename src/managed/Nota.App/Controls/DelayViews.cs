@@ -144,7 +144,7 @@ internal sealed class DelayFader : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && !double.IsNaN(Default))
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
         {
             GestureBegin?.Invoke(); _v = Default; Changed?.Invoke(_v); GestureEnd?.Invoke();
             InvalidateVisual(); e.Handled = true; return;
@@ -235,7 +235,7 @@ internal sealed class DelayFilterCurve : Control
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int h = NearestHandle(e.GetPosition(this).X, Bounds.Width);
-        if (e.ClickCount == 2) { Reset?.Invoke(h - 1); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(h - 1); e.Handled = true; return; }
         _drag = h; GestureBegin?.Invoke(h - 1); e.Pointer.Capture(this); Apply(e); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)

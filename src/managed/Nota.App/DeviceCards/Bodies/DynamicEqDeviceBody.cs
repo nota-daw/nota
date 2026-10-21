@@ -278,7 +278,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 var val = Mono(fmt(), 8, TextPrimary); val.TextAlignment = TextAlignment.Right; val.HorizontalAlignment = HorizontalAlignment.Right;
                 // Range's read-out sits in its flip arrow, which a click toggles — it stays click-only.
                 if (valueCtl is null)
-                    ValueEntry.Attach(val, getN, setN, fmt, () => Begin(p), () => End(p), () => { RefreshAll(); curve.InvalidateVisual(); });
+                    ValueEntry.Attach(val, getN, setN, fmt, () => Begin(p), () => End(p), () => { RefreshAll(); curve.InvalidateVisual(); }, control: trk);
                 var lbl = Caps(label);
                 bandReadouts.Add(() =>
                 {
@@ -450,7 +450,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         outBox.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
-            if (e.ClickCount == 2) { SetP(DynEq.OutputP, 0); RefreshAll(); e.Handled = true; return; }
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(DynEq.OutputP, 0); RefreshAll(); e.Handled = true; return; }
             outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(DynEq.OutputP); e.Handled = true;
         };
         outBox.PointerMoved += (_, e) =>

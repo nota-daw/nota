@@ -324,7 +324,7 @@ internal sealed class PrismTransfer : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int hdl = Hit(e.GetPosition(this));
         if (hdl == 0) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(hdl); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(hdl); e.Handled = true; return; }
         _drag = hdl; _start = e.GetPosition(this);
         DragStarted?.Invoke(hdl); e.Pointer.Capture(this); e.Handled = true;
     }

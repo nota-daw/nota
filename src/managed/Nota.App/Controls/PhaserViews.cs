@@ -127,7 +127,7 @@ internal sealed class PhaserResponseView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(); e.Handled = true; return; }
         var v = Value?.Invoke() ?? (0.602, 0.711);
         _c0 = v.Center; _f0 = v.Feedback; _start = e.GetPosition(this); _drag = true;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;

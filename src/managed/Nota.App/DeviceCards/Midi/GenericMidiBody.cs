@@ -42,6 +42,8 @@ internal sealed class GenericMidiBody : IMidiDeviceBody
             bar.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.MidiDeviceParam, index, pi, "");
             bar.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.MidiDeviceParam, index, pi, "");
             MidiLearn.Bind(bar, MidiTarget.MidiDeviceParam(track, index, pi), engine.MidiEffectParamName(track, index, pi));
+            bar.Format = nv => FmtParam((float)(min + nv * (max - min)), integral);
+            ValueEntry.Attach(bar, engine.MidiEffectParamName(track, index, pi), value);
             panel.Children.Add(new StackPanel { Spacing = 2, Children = { top, bar } });
         }
         return panel;

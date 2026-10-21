@@ -210,6 +210,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
                 Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center,
             };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Touch(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);
@@ -237,6 +238,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             ctx.AddInstFader(pi, knob, shadow, fmt);
             readouts.Add(() => ToolTip.SetTip(knob, learn + " · " + fmt(G(id))));
             MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, pi), learn);
+            knob.Format = v => fmt((float)v);
+            ValueEntry.Attach(knob, learn);   // no value line: the box sits on the knob
             return knob;
         }
 
@@ -378,6 +381,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             w.GestureEnd += () => End(id);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(w, MidiTarget.PluginParam(track, -1, pi), id);
             readouts.Add(() => { if (!w.Dragging) w.Norm = G(id); });
+            if (!spring) ValueEntry.Attach(w, w.EntryField(id == "modwheel" ? "Mod wheel" : id, NotaNum.Pct));   // the bend wheel springs back
             return w;
         }
         var bendWheel = Wheel("bend", 0.5, true);

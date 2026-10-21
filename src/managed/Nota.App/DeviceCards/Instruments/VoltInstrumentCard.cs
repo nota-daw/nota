@@ -187,6 +187,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
                 Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center,
             };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);
@@ -289,6 +290,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             w.GestureEnd += () => End(id);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(w, MidiTarget.PluginParam(track, -1, pi), id);
             readouts.Add(() => { if (!w.Dragging) w.Norm = G(id); });
+            if (!spring) ValueEntry.Attach(w, w.EntryField(id == "modwheel" ? "Mod wheel" : id, NotaNum.Pct));   // the bend wheel springs back
             return w;
         }
 

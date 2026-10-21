@@ -2005,6 +2005,7 @@ public sealed partial class ArrangementView : UserControl
         _headerCards[t.Id] = (card, name, true, spine, spineBrush);
         if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);
+        ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
     }
 
@@ -2122,6 +2123,7 @@ public sealed partial class ArrangementView : UserControl
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => volUndo?.End();
+        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), db);
         _volFaders[t.Id] = fader; _volDb[t.Id] = db;
 
         var volCell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -2138,6 +2140,7 @@ public sealed partial class ArrangementView : UserControl
         pan.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => panUndo?.End();
+        ValueEntry.Attach(pan, pan.EntryField("Pan"));
         _panBars[t.Id] = pan;
 
         var volRow = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,*"), ColumnSpacing = 6, Margin = new Thickness(0, 6, 0, 0) };
@@ -2207,6 +2210,7 @@ public sealed partial class ArrangementView : UserControl
         _headerCards[t.Id] = (card, name, t.IsGroup, spine, spineBrush);   // for in-place selection repaint
         if (selected) spine.Background = NotaPalette.Accent;
         AttachHeaderGestures(card, t);
+        ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
     }
 
@@ -2737,6 +2741,7 @@ public sealed partial class ArrangementView : UserControl
         fader.GestureBegin += () => undo?.Begin();
         fader.GestureEnd   += () => undo?.End();
         fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
+        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), dbText);
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("*,*") };
         Grid.SetColumn(name, 0);

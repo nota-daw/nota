@@ -451,8 +451,17 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
   Cursor `ns-resize`. A click never jumps the value. The one horizontal drag is a horizontal
   slider (`SliderTrack`) along its own axis: right increases, the handle follows the pointer,
   cursor `ew-resize`; a vertical drag still works on it as on a knob.
-- **Double-click** restores the default where one is supplied.
-- **Left button only** — right-click bubbles to the CV-modulate / MIDI Learn menu.
+- **Double-click** the control or its read-out types a value: the read-out itself turns
+  editable (`TextBox.value` — no well, no frame; its own font, size and alignment, a 1px
+  accent line under it, the number selected in `AccentSubtle` and its unit left alone; laid on
+  `SurfaceRaised` over a control without a read-out), read in the units shown —
+  `ValueEntry` / `ValueText`. Enter or a click away commits, Esc cancels, Tab / ⇧Tab move to
+  the next / previous value on the card. A commit is one `GestureBegin` / `GestureEnd`, so one
+  undo step and one automation gesture, like a drag. Return outside the box stays Stop.
+- **⌥/Alt-click** restores the default where one is supplied (clears a route or point).
+- **Right-click** opens the parameter menu — Type value…, Reset to default — merged into the
+  CV-modulate / macro menu where the control has one.
+- **Drag with the left button only.**
 - **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`.
 - **`MidiLearn.Bind`** registers the control with its display name.
 - **Live follow** re-reads engine state each tick and skips while dragging.
@@ -467,7 +476,7 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 | `DeviceCardKit.Segments` | Well strip with a rule edge; chosen = solid accent with derived ink, 600. 9 px in a device; in the shell `ToggleButton.seg` (24, raised, 12 px, the weight unchanged when chosen so auto-width keys never shift) inside `Border.segmented` — keys butted on 1px seams, only the group's outer corners round. |
 | `SliderTrack` / `DeviceCardKit.SliderRow` | Name 9/500 · 3 px well track · 6 × 7 handle · fixed-width mono value right. Fill `VizInk` and handle primary at rest, accent while hovered or dragged; teal under modulation. Bipolar fills from centre. Inactive drops to `Rule` and faint ink, keeps the number. |
 | `MiniFader`, `PanBar`, `ValueBar`, `MixBar`, `VFader` | Track-header gain and pan, value bars, mixer fader — same drag contract, same rule: neutral at rest, accent while live. |
-| `DragNumber` | Mono field: drag, or double-click to type. |
+| `DragNumber` | Mono field: drag, or double-click to type (the shared parser, one gesture per typed value). |
 | Buttons (`Button`, `.primary`, `.ghost`, `.cell`, `.chip`, `.tp-icon`, `.tp-play`) | 26 tall, radius 3, raised with a seam border and the bevel at rest. A context's primary action is set apart by weight (600) and one tone step (raised hover), **not by colour**. A toggled-on key is solid accent with derived ink. A destructive action is an ordinary raised key; its label says what it does. |
 | Readouts and fields (`Border.well`, `.cell`, `TextBox.field`, `ComboBox`, `.search`) | 26, well fill, 1 px rule edge, radius 3; a mono value with its muted unit on one line. Focus = the edge turns accent, no ring. |
 | Filter chips | 20, radius 3, 9 side pad, raised with a seam border; a category-colour dot instead of an icon; active = solid accent with derived ink. The Favorites / tags strip is one line and overflows into `+N`; the device tabs' category row wraps instead, so every category stays in sight. |
@@ -866,7 +875,8 @@ True today, not yet fixed:
 - **The user manual** (`../nota-docs`) screenshots still show Ember; they are not re-shot.
 - **Column order** choice → work → output is applied in Utility; the other cards have not
   been audited card by card.
-- **Slider reset** on double-click works only where the card passes a default.
+- **Graph controls** (curves, pads, envelope and matrix handles) still reset on double-click
+  and do not take typed values yet (specs/035, later PRs); ⌥-click already resets them.
 - **Names:** presets with emotional names (Screaming Lead, VHS Fever, Gentle Master,
   Transparent Safety, Dive Bomb, Laser Zap…) and multi-word device names (Auto Filter,
   Beat Repeat, Dynamic EQ-8, EQ-3, the "Nota " prefix — dropped only from browser rows and

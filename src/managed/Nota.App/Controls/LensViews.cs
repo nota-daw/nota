@@ -596,7 +596,7 @@ internal sealed class LensVSlider : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && Default >= 0) { Value = Default; ValueChanged?.Invoke(_value); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Default >= 0) { Value = Default; ValueChanged?.Invoke(_value); e.Handled = true; return; }
         _drag = true; _lastY = e.GetPosition(this).Y;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
     }

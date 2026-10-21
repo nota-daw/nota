@@ -257,7 +257,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             ToolTip.SetTip(dTrack, "Drag up / down, Shift for fine, double-click resets");
             Learn(dTrack, PDrive, "Drive");
             ValueEntry.Attach(dValue, DriveNorm, DriveSet, () => VelocityModel.DriveText(G),
-                () => { dGesture = DriveParam(); Begin(dGesture); }, () => { End(dGesture); dGesture = -1; }, Refresh);
+                () => { dGesture = DriveParam(); Begin(dGesture); }, () => { End(dGesture); dGesture = -1; }, Refresh, control: dTrack);
             var dHint = new TextBlock { FontSize = 7, Foreground = Cap, TextTrimming = TextTrimming.CharacterEllipsis };
             readouts.Add(() =>
             {
@@ -483,6 +483,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             Learn(knob, param(), label());
             var lbl = new TextBlock { FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 };
             var v = Mono("", Sub, 7); v.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(knob, label(), v, text);
             readouts.Add(() =>
             {
                 double n = norm();

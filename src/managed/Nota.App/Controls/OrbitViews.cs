@@ -99,7 +99,7 @@ internal sealed class OrbitGainView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(); e.Handled = true; return; }
         var v = Value?.Invoke() ?? (0.7, 0.5);
         _a0 = v.Amount; _p0 = v.Phase; _start = e.GetPosition(this); _drag = true;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;

@@ -88,7 +88,7 @@ internal sealed class ChorusVoicesView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(); e.Handled = true; return; }
         _a0 = Value?.Invoke() ?? 0.4; _y0 = e.GetPosition(this).Y; _drag = true;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
     }

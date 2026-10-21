@@ -153,6 +153,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
+            knob.Format = v => fmt(steps > 1 ? Math.Round(v * (steps - 1)) / (steps - 1) : v);   // read-out at any value: typing searches it
             knob.ValueChanged += v =>
             {
                 if (steps > 1) v = Math.Round(v * (steps - 1)) / (steps - 1);
@@ -541,7 +542,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             host.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2) { Reset(p); Paint(); RefreshAll(); e.Handled = true; return; }
+                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset(p); Paint(); RefreshAll(); e.Handled = true; return; }
                 drag = true; Begin(p); e.Pointer.Capture(host); SetX(e.GetPosition(grid).X); e.Handled = true;
             };
             host.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(grid).X); };

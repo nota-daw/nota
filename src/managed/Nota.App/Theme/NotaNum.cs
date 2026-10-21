@@ -52,6 +52,16 @@ public static class NotaNum
         return db.ToString(signed ? "+0.0;\u22120.0;0.0" : "0.0", Culture) + Thin + "dB";
     }
 
+    /// <summary>A linear gain as decibels: "−3.3 dB", "−∞ dB" at silence.</summary>
+    public static string GainDb(double lin, bool signed = false) => Db(lin <= 0 ? double.NegativeInfinity : 20 * Math.Log10(lin), signed);
+
+    /// <summary>Pan −1..1 as the mixer writes it: "C", "30L", "100R".</summary>
+    public static string Pan(double pan)
+    {
+        int amt = (int)Math.Round(Math.Abs(pan) * 100);
+        return amt == 0 ? "C" : amt.ToString(Culture) + (pan < 0 ? "L" : "R");
+    }
+
     /// <summary>Frequency: whole Hz up to 999, then "3.2 k" (one decimal below 10 k, whole above).</summary>
     public static string Hz(double hz)
     {

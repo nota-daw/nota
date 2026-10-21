@@ -146,7 +146,7 @@ internal static class MacroPanel
         bool assigned = Mappings(s, m).Count > 0;
         string pid = RhythmModel.MacroId(m);
 
-        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned };
+        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned, Format = v => Pct((float)v) };
         var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
         knob.ValueChanged += v =>
         {
@@ -162,6 +162,8 @@ internal static class MacroPanel
         };
         tick.Add(() => { if (!knob.Dragging) { float v = Value(e, s, m); if (Math.Abs(v - knob.Value) > 1e-4) { knob.Value = v; value.Text = Pct(v); } } });
         MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
+        // Double-click types, ⌥-click resets; right-click stays the macro's own menu (the cell's).
+        ValueEntry.Attach(knob, $"Macro {m + 1}", value, menu: false);
 
         string name = s.MacroName(m);
         bool custom = name != $"Macro {m + 1}";

@@ -6,7 +6,7 @@
 // neutral bar at the value (accent while dragged). Nota Operator's card keeps both on screen on every tab.
 //
 // Interaction matches the knob contract: vertical drag (up increases) over the wheel's own
-// height, Shift/Ctrl/⌘ for fine, a click never jumps the value, double-click restores the
+// height, Shift/Ctrl/⌘ for fine, a click never jumps the value, ⌥-click restores the
 // default, and a spring wheel (pitch bend) returns to its default when released.
 
 using System;
@@ -32,7 +32,7 @@ internal sealed class PerformWheel : Control
     private bool _drag;
     private double _startY, _startV;
 
-    /// <summary>Value restored on double-click, and sprung back to when <see cref="Spring"/>.</summary>
+    /// <summary>Value restored on ⌥-click, and sprung back to when <see cref="Spring"/>.</summary>
     public double Default { get; init; } = 0;
 
     /// <summary>True for a pitch wheel: it snaps back to <see cref="Default"/> on release.</summary>
@@ -62,7 +62,7 @@ internal sealed class PerformWheel : Control
     {
         var pt = e.GetCurrentPoint(this);
         if (!pt.Properties.IsLeftButtonPressed) return;   // right-click bubbles to the CV / learn menu
-        if (e.ClickCount >= 2) { Write(Default); e.Handled = true; return; }
+        if ((e.KeyModifiers & KeyModifiers.Alt) != 0) { GestureBegin?.Invoke(); Write(Default); GestureEnd?.Invoke(); e.Handled = true; return; }
         _drag = true; _startY = pt.Position.Y; _startV = _norm;
         GestureBegin?.Invoke();
         e.Pointer.Capture(this);
@@ -97,6 +97,10 @@ internal sealed class PerformWheel : Control
         }
         base.OnPointerCaptureLost(e);
     }
+
+    /// <summary>The wheel as a typeable value (a held wheel — not a spring one, which would not stay put).</summary>
+    internal ValueField EntryField(string name, Func<double, string> fmt)
+        => new(name, () => _norm, fmt, Write, () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), Default);
 
     private void Write(double v)
     {

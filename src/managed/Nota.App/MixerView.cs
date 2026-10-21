@@ -91,6 +91,7 @@ public sealed class MixerView : UserControl
 
     public MixerView(IAudioEngine engine)
     {
+        ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
         _engine = engine;
         _stripsScroller = new ScrollViewer
         {
@@ -453,6 +454,7 @@ public sealed class MixerView : UserControl
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
                 f.ValueChanged += v => _engine.SetTrackSend(id, b, (float)v);
+                ValueEntry.Attach(f, f.EntryField($"Send {(char)('A' + b)}", NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 Grid.SetColumn(f, 1); grid.Children.Add(f);
             }
@@ -475,6 +477,7 @@ public sealed class MixerView : UserControl
         knob.GestureBegin += undo.Begin;
         Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
         knob.PanChanged += p => undo.Change(p, setPan);
+        ValueEntry.Attach(knob, knob.EntryField("Pan", NotaNum.Pan));
         if (id > 0)   // M9-C: record pan moves (master pan isn't an automation target)
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
@@ -529,6 +532,7 @@ public sealed class MixerView : UserControl
         fader.GestureEnd += undo.End;
         dbNum.GestureEnd += undo.End;
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
+        ValueEntry.Attach(fader, fader.EntryField("Volume", v => NotaNum.GainDb(v, signed: true), 1.0));
         db = dbNum;
 
         meter = new MeterBar();   // the almanac stereo meter: 11 + 5 + 11

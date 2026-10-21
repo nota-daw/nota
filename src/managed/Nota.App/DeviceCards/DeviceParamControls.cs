@@ -44,6 +44,7 @@ internal static class DeviceParamControls
         var value = new TextBlock { Text = Fmt(val), FontSize = 8, Foreground = TextPrimary };
         value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var knob = new Knob((val - min) / span, 1.0) { Accent = true, Default = (engine.DeviceParamDefault(track, device, param) - min) / span };
+        knob.Format = frac => Fmt((float)(min + frac * span));
         int d = device, pp = param;
         knob.ValueChanged += frac =>
         {
@@ -128,6 +129,7 @@ internal static class DeviceParamControls
         var value = new TextBlock { Text = fmt(norm), FontSize = 8, Foreground = TextPrimary };
         value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var knob = new Knob(Math.Clamp(norm, 0, 1), 1.0) { Accent = true };
+        knob.Format = fmt;
         knob.ValueChanged += frac => { apply(frac); value.Text = fmt(frac); };
         return KnobCell(name, knob, value);
     }

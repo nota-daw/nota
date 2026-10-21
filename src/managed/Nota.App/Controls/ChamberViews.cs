@@ -77,7 +77,7 @@ internal sealed class ChamberFader : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && !double.IsNaN(Default))
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
         {
             DragStarted?.Invoke(); _v = Default; Changed?.Invoke(_v); DragEnded?.Invoke(); InvalidateVisual(); e.Handled = true; return;
         }

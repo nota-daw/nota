@@ -82,11 +82,13 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             var value = new TextBlock { Text = fmt(G(id)), FontSize = 8, Foreground = TxtC, Width = valW, VerticalAlignment = VerticalAlignment.Center };
             value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = mod ? TealC : null, Default = engine.InstrumentParamDefault(track, i) };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id);
             knob.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id);
             ctx.AddInstFader(i, knob, value, fmt);
             MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, i), id);
+            ValueEntry.Attach(knob, engine.PluginParamName(track, -1, i), value);
             return Row(4, knob, value);
         }
 

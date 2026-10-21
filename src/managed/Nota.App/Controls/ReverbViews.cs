@@ -75,7 +75,7 @@ internal sealed class ReverbTailView : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(this);
         int target = Math.Abs(p.X - PreX()) <= 8 ? 2 : 1;
-        if (e.ClickCount == 2) { Reset?.Invoke(target - 1); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(target - 1); e.Handled = true; return; }
         _drag = target; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
         GestureBegin?.Invoke(target - 1);
         e.Pointer.Capture(this);

@@ -102,6 +102,7 @@ public sealed partial class SessionView
                     var read = ReadoutText();
                     void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
                     f.ValueChanged += v => { _engine.SetTrackSend(id, bus, (float)v); Show(); };
+                    ValueEntry.Attach(f, f.EntryField("Send", v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
                     Show();
                     sendSyncs.Add(() =>
                     {
@@ -129,6 +130,7 @@ public sealed partial class SessionView
                 pan.GestureEnd += panUndo.End;
                 Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
                 pan.PanChanged += p => panUndo.Change(p, setPan);
+                ValueEntry.Attach(pan, pan.EntryField("Pan"));
                 panRow = FaderRow(pan, ReadoutText());
             }
             else panRow = new Border { Height = FaderRowH };
@@ -146,6 +148,7 @@ public sealed partial class SessionView
                 else SetMasterVolume?.Invoke((float)v);
             };
             vol.ValueChanged += v => { volUndo.Change(v, setVol); ShowDb(); };
+            ValueEntry.Attach(vol, vol.EntryField("Volume", v => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true)), db);
             ShowDb();
 
             var mL = new MeterLine(); var mR = new MeterLine();

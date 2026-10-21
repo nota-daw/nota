@@ -96,7 +96,7 @@ internal abstract class ShDragView : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int hdl = Hit(e.GetPosition(this));
         if (hdl < 0) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(hdl); InvalidateVisual(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(hdl); InvalidateVisual(); e.Handled = true; return; }
         _drag = hdl; _start = e.GetPosition(this); _v0 = Value?.Invoke(hdl) ?? 0;
         GestureBegin?.Invoke(hdl); e.Pointer.Capture(this); e.Handled = true;
         Move(e.GetPosition(this));

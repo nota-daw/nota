@@ -66,6 +66,7 @@ public sealed class AudioClipEditorView : UserControl
 
     public AudioClipEditorView(IAudioEngine engine, int trackId, int clipIndex, IBrush clipColor, Action onChanged)
     {
+        ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
         _engine = engine;
         TrackId = trackId;
         ClipIndex = clipIndex;

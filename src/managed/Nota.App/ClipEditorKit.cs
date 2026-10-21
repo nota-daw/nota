@@ -328,9 +328,11 @@ internal static class ClipEditorKit
         CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 0), Child = child,
     };
 
-    /// <summary>A shell slider row: label · 3px track · fixed-width mono value (double-click to type).</summary>
+    /// <summary>A shell slider row: label · 3px track · fixed-width mono value. Double-click the
+    /// slider or the value to type one, ⌥-click to reset; `textAt` (the read-out at a position,
+    /// pure) lets typing search without writing.</summary>
     public static Grid SliderRow(string label, double labelW, Func<double> norm, Action<double> setNorm, Func<string> text,
-        out Action sync, Action? reset = null, double valueW = 36, Func<bool>? dim = null)
+        out Action sync, Action? reset = null, double valueW = 36, Func<bool>? dim = null, Func<double, string>? textAt = null)
     {
         Action repaint = () => { };
         var track = new SliderTrack { Reset = reset is null ? null : () => { reset(); repaint(); } };
@@ -353,7 +355,11 @@ internal static class ClipEditorKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
-        ValueEntry.Attach(val, norm, setNorm, text, after: Paint);
+        Action? rowReset = reset is null ? null : () => { reset(); Paint(); };
+        var field = textAt is null
+            ? ValueEntry.Probing(label, norm, setNorm, text, after: Paint, reset: rowReset)
+            : new ValueField(label, norm, textAt, setNorm) { After = Paint, Reset = rowReset };
+        ValueEntry.Attach(track, field, val);
         var g = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10 };
         g.Children.Add(lbl);
         Grid.SetColumn(track, 1); g.Children.Add(track);

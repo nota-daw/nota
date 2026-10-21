@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Type an exact value into any knob, fader or slider** (#240): double-click the control
+  or its value and type it in the units shown — `1.2k`, `-6`, `12 ms`, `30L`, `1/4`, `off`.
+  Enter or a click away applies it, Esc cancels, Tab moves to the next value on the card.
+  A typed value is one undo step and records into automation like a drag. Device cards,
+  instruments, racks, the mixer, track headers and the preview volume all work this way;
+  right-click a parameter for **Type value…** and **Reset to default**.
 - **Recent instruments in Add track**: right-click a track (in Arrangement or Session) →
   **Add track** now lists the five instruments you added most recently under **Recent** —
   built-in or plug-in, from the browser, the menus or the AI tools. One click adds a track
@@ -64,6 +70,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     **Check now** button. Nothing downloads until you click Update.
 
 ### Changed
+- **Reset to default is now ⌥-click** (Alt-click on Windows and Linux) on knobs, faders,
+  sliders and value boxes — double-click types a value instead. The mixer fader no longer
+  jumps to where you click; drag it like any other control.
 - **Context menus, redesigned**: every right-click menu in the app now follows the Studio
   look and one order. A menu for a track, clip, device, scene, pad or version starts with
   its name, colour and type; commands come in the same groups everywhere, with Copy, Cut,

@@ -6,7 +6,8 @@
 // raised cap on a seam and a primary-ink pointer —
 // all laid out on a 52-unit grid (groove r 21 · stroke 5, cap r 14, pointer 2.4 wide
 // reaching the cap's edge) and scaled to the knob's size. Drag vertically to change
-// (up = increase; Ctrl/⌘/Shift = fine), double-click resets. Same public API as
+// (up = increase; Ctrl/⌘/Shift = fine). Double-click types a value and ⌥-click resets
+// (ValueEntry, attached by KnobCell once `Format` is set). Same public API as
 // MiniFader (Value / max / Accent / ValueChanged / GestureBegin / GestureEnd) so it
 // drops into the plugin editors.
 //
@@ -78,8 +79,12 @@ public sealed class Knob : Control
     public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }
     private bool _dim;
 
-    /// <summary>Value restored on double-click (NaN = no reset).</summary>
+    /// <summary>Value restored on ⌥-click (NaN = no reset).</summary>
     public double Default { get; set; } = double.NaN;
+
+    /// <summary>The read-out text at a value (0..max) — what the knob's value line shows. Pure:
+    /// it formats, it never writes. Set it and the knob takes typed values (ValueEntry).</summary>
+    public Func<double, string>? Format { get; set; }
 
     private readonly double _max;
     private double _value;
@@ -106,6 +111,30 @@ public sealed class Knob : Control
     /// <summary>The value differs from the parameter's default.</summary>
     public bool IsModified => !double.IsNaN(Default) && Math.Abs(_value - Math.Clamp(Default, 0, _max)) > 1e-4 * _max;
 
+    /// <summary>The knob as a typeable value: a typed value or a reset runs the same
+    /// GestureBegin / ValueChanged / GestureEnd a drag does. Null without a Format.</summary>
+    internal ValueField? EntryField(string name)
+        => Format is not { } fmt ? null : new ValueField(name, () => _value / _max, n => fmt(n * _max), n => SetByHand(n * _max),
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), double.IsNaN(Default) ? null : Math.Clamp(Default, 0, _max) / _max);
+
+    /// <summary>A probing field for a knob without a Format: each probe sets the knob (running its
+    /// ValueChanged handlers) and reads <paramref name="text"/> back.</summary>
+    internal ValueField ProbingField(string name, Func<string> text)
+        => ValueEntry.Probing(name, () => _value / _max, n => SetByHand(n * _max), text,
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke()) with
+        { Default = double.IsNaN(Default) ? null : Math.Clamp(Default, 0, _max) / _max };
+
+    // A value set by the user other than by dragging (typed, reset): repaint and notify.
+    private void SetByHand(double v)
+    {
+        v = Math.Clamp(v, 0, _max);
+        if (Math.Abs(v - _value) < 1e-9) return;
+        _value = v;
+        InvalidateVisual();
+        ValueChanged?.Invoke(_value);
+        ValueSet?.Invoke();
+    }
+
     public Knob(double value = 1.0, double max = 1.0)
     {
         _max = max <= 0 ? 1.0 : max;
@@ -119,19 +148,13 @@ public sealed class Knob : Control
     {
         // Left button only — let right-click bubble to a context menu (e.g. CV modulate).
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        // Double-click restores the parameter's default.
-        if (e.ClickCount == 2 && !double.IsNaN(Default))
+        // ⌥-click restores the default — ValueEntry handles it first on an attached knob; this
+        // keeps reset on a knob built without one.
+        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 && !double.IsNaN(Default))
         {
-            double d = Math.Clamp(Default, 0, _max);
-            if (Math.Abs(d - _value) > 1e-6)
-            {
-                GestureBegin?.Invoke();
-                _value = d;
-                InvalidateVisual();
-                ValueChanged?.Invoke(_value);
-                ValueSet?.Invoke();
-                GestureEnd?.Invoke();
-            }
+            GestureBegin?.Invoke();
+            SetByHand(Default);
+            GestureEnd?.Invoke();
             e.Handled = true;
             return;
         }

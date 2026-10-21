@@ -126,6 +126,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
                 Accent = true, ArcColor = arc, Width = size, Height = size,
                 Default = I(id) is var d and >= 0 ? engine.InstrumentParamDefault(track, d) : double.NaN,
             };
+            knob.Format = v => fmt((float)v);
             if (I(id) is var pi and >= 0)
             {
                 knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };

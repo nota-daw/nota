@@ -429,7 +429,9 @@ internal sealed partial class RackCardView
         var vol = new SliderTrack { Norm = VolNorm(a.ChainGain(c)), Reset = () => a.SetChainGain(c, 1f) };
         vol.Changed += v => a.SetChainGain(c, NormVol(v));
         _irTick.Add(() => { if (!vol.Dragging) vol.Norm = VolNorm(a.ChainGain(c)); });
-        ToolTip.SetTip(vol, "Pad volume · drag up or down, double-click for 0\u2009dB");
+        ToolTip.SetTip(vol, "Pad volume · drag up or down, double-click to type, ⌥-click for 0\u2009dB");
+        ValueEntry.Attach(vol, new ValueField("Pad volume", () => VolNorm(a.ChainGain(c)), n => VolText(NormVol(n)),
+            n => { vol.Norm = n; a.SetChainGain(c, NormVol(n)); }, Default: VolNorm(1f)));
         MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
         Grid.SetColumn(vol, 2); g.Children.Add(vol);
 
@@ -461,7 +463,7 @@ internal sealed partial class RackCardView
         {
             if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            if (e.ClickCount == 2) { a.SetChainPan(c, 0f); tb.Text = PanText(0f); return; }
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { a.SetChainPan(c, 0f); tb.Text = PanText(0f); return; }
             drag = true; lastY = e.GetPosition(host).Y; e.Pointer.Capture(host);
         };
         host.PointerMoved += (_, e) =>

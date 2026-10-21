@@ -273,7 +273,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 ToolTip.SetTip(trk, tip);
                 var val = Mono(fmt(), 8, TextPrimary); val.TextAlignment = TextAlignment.Right; val.HorizontalAlignment = HorizontalAlignment.Right;
                 ValueEntry.Attach(val, () => (P(p) - mn[p]) / (mx[p] - mn[p]), v => Raw(p, (float)(mn[p] + v * (mx[p] - mn[p]))), fmt,
-                    () => Begin(p), () => End(p), RefreshAll);
+                    () => Begin(p), () => End(p), RefreshAll, control: trk);
                 bandReadouts.Add(() =>
                 {
                     if (!trk.Dragging) trk.Norm = (P(p) - mn[p]) / (mx[p] - mn[p]);
@@ -348,7 +348,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         outBox.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
-            if (e.ClickCount == 2) { SetP(Eq8.OutputP, 0); RefreshAll(); e.Handled = true; return; }
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(Eq8.OutputP, 0); RefreshAll(); e.Handled = true; return; }
             outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(Eq8.OutputP); e.Handled = true;
         };
         outBox.PointerMoved += (_, e) =>

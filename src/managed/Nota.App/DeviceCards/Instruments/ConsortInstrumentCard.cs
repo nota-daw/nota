@@ -135,11 +135,13 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             if (I(id) is not (var i and >= 0)) return new Panel();
             var value = MonoText(fmt(G(id)), 8, valColor); value.Width = valW;
             var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, Default = engine.InstrumentParamDefault(track, i) };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);
             ctx.AddInstFader(i, knob, value, fmt);
             MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, i), id);
+            ValueEntry.Attach(knob, engine.PluginParamName(track, -1, i), value);
             return Row(4, knob, value);
         }
 
@@ -1004,7 +1006,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     depBox.PointerPressed += (_, e) =>
                     {
                         if (!e.GetCurrentPoint(depBox).Properties.IsLeftButtonPressed) return;
-                        if (e.ClickCount == 2) { SetP(AmtId(slot), 0.75f); Refresh(); e.Handled = true; return; }
+                        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(AmtId(slot), 0.75f); Refresh(); e.Handled = true; return; }
                         drag = true; y0 = e.GetPosition(depBox).Y; v0 = G(AmtId(slot)); Begin(AmtId(slot)); e.Pointer.Capture(depBox); e.Handled = true;
                     };
                     depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;−0;0}"; };

@@ -144,7 +144,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             MidiLearn.Bind(slider, MidiTarget.DeviceParam(track, di, p), name);
             ValueEntry.Attach(val, () => NormOf(P(p)), n => SetR(p, (float)ValOf(n)), () => fmt(P(p)),
                 () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
-                () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""), Vis);
+                () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""), Vis, control: slider);
             readouts.Add(() => { if (!slider.Dragging) Vis(); });
             Vis();
             var lbl = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center };

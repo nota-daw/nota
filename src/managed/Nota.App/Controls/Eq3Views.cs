@@ -112,7 +112,7 @@ internal sealed class Eq3Fader : Control
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click bubbles (MIDI learn)
         e.Handled = true;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(); return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(); return; }
         _drag = true; _startY = e.GetPosition(this).Y; _startDb = _db;
         e.Pointer.Capture(this);
         GestureBegin?.Invoke();

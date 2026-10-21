@@ -89,7 +89,7 @@ internal sealed class SamplerWaveView : Control
         double x = e.GetPosition(this).X / w;
         int h = Hit(x, w);
         if (h < 0) return;
-        if (e.ClickCount == 2) { ResetHandle?.Invoke(h); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetHandle?.Invoke(h); e.Handled = true; return; }
         _drag = h;
         DragBegin?.Invoke(h);
         e.Pointer.Capture(this);
@@ -318,7 +318,7 @@ internal sealed class SamplerEnvView : Control
         int best = -1; double bd = 10;
         for (int i = 0; i < 3; i++) { double dd = Math.Abs(p.X - pts[i].X) + Math.Abs(p.Y - pts[i].Y) * 0.5; if (dd < bd) { bd = dd; best = i; } }
         if (best < 0) return;
-        if (e.ClickCount == 2) { Reset?.Invoke(Ids[best]); if (best == 1) Reset?.Invoke("sustain"); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(Ids[best]); if (best == 1) Reset?.Invoke("sustain"); e.Handled = true; return; }
         _drag = best; _last = p;
         DragBegin?.Invoke(Ids[best]);
         if (best == 1) DragBegin?.Invoke("sustain");
@@ -469,7 +469,7 @@ internal sealed class SamplerFilterView : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2) { Reset?.Invoke(); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(); e.Handled = true; return; }
         _drag = true; _last = e.GetPosition(this);
         DragBegin?.Invoke();
         e.Pointer.Capture(this);

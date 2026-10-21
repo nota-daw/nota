@@ -445,6 +445,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             ruler.GestureBegin += () => { Begin(pSt); Begin(pOn); }; ruler.GestureEnd += () => { End(pSt); End(pOn); };
             Learn(ruler, pSt, $"Shift {s + 1}");
             var iv = Mono("", Sub); iv.Width = 22; iv.TextAlignment = TextAlignment.Center;
+            ValueEntry.Attach(ruler, ruler.EntryField($"Shift {s + 1}"));
             var vel = VelDrag(pVel, s);
             var g = new DockPanel { Children = { WithDock(dotHit, Dock.Left), WithDock(st, Dock.Left), WithDock(vel, Dock.Right), WithDock(iv, Dock.Right), ruler } };
             st.Margin = new Thickness(6, 0, 6, 0); iv.Margin = new Thickness(6, 0, 6, 0);
@@ -474,7 +475,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             {
                 if (!ev.GetCurrentPoint(hit).Properties.IsLeftButtonPressed) return;
                 ev.Handled = true;
-                if (ev.ClickCount == 2) { Begin(p); S(p, 0); End(p); Edited(); return; }
+                if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { Begin(p); S(p, 0); End(p); Edited(); return; }
                 drag = true; x0 = ev.GetPosition(hit).X; v0 = GI(p); ev.Pointer.Capture(hit); Begin(p);
             };
             hit.PointerMoved += (_, ev) =>
@@ -500,7 +501,8 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             bar.Changed += v => SetShift(s, v);
             bar.GestureBegin += () => { Begin(pSt); Begin(pOn); }; bar.GestureEnd += () => { End(pSt); End(pOn); };
             Learn(bar, pSt, $"Shift {s + 1}");
-            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones)");
+            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones) · double-click to type");
+            ValueEntry.Attach(bar, bar.EntryField($"Shift {s + 1}"));
             var lbl = Mono("", Txt); lbl.HorizontalAlignment = HorizontalAlignment.Center;
             var lblHit = new Border { Height = 11, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };
             bool hover = false;
@@ -533,7 +535,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             track.GestureBegin += () => Begin(p);
             track.GestureEnd += () => { End(p); Edited(); };
             Learn(track, p, label);
-            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Edited);
+            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Edited, control: track);
             readouts.Add(() =>
             {
                 double v = G(p);
@@ -556,6 +558,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             knob.GestureEnd += () => { End(p); Edited(); };
             Learn(knob, p, label);
             var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(knob, label, val, text);
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
                 Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };

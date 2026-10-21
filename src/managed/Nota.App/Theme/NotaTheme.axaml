@@ -829,6 +829,32 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
   </Style>
 
+  <!-- ===== Typed value (specs/035): the read-out itself turns editable =====
+       No well and no frame — the value keeps its own font, size and alignment, and a 1px
+       accent line under it says it is live. The number is selected in the accent wash;
+       `solid` lays the card surface under it where there is no read-out (over a fader). -->
+  <Style Selector="TextBox.value">
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource Brush.AccentSubtle}"/>
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource Brush.TextPrimary}"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="TextBox.value /template/ Border#PART_BorderElement, TextBox.value:pointerover /template/ Border#PART_BorderElement, TextBox.value:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+  </Style>
+  <Style Selector="TextBox.value.solid /template/ Border#PART_BorderElement, TextBox.value.solid:pointerover /template/ Border#PART_BorderElement, TextBox.value.solid:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+  </Style>
+
   <!-- ===== Keyboard focus: a 1px accent edge, no ring and no glow ===== -->
   <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>

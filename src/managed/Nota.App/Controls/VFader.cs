@@ -31,21 +31,40 @@ internal sealed class VFader : Control
     /// <summary>Sets the value without raising ValueChanged (external sync, e.g. dB field).</summary>
     public void SetValueExternal(double v) { _value = Math.Clamp(v, 0, Max); InvalidateVisual(); }
 
-    protected override void OnPointerPressed(PointerPressedEventArgs e) { _drag = true; e.Pointer.Capture(this); GestureBegin?.Invoke(); SetY(e.GetPosition(this).Y); e.Handled = true; }
-    protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) SetY(e.GetPosition(this).Y); }
+    /// <summary>The fader as a typeable value; <paramref name="fmt"/> is its read-out at a value
+    /// (0..1.5), <paramref name="def"/> the value ⌥-click restores.</summary>
+    internal ValueField EntryField(string name, Func<double, string> fmt, double? def)
+        => new(name, () => _value / Max, n => fmt(n * Max), n => Set(n * Max),
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), def is { } d ? Math.Clamp(d, 0, Max) / Max : null);
+
+    private void Set(double v)
+    {
+        v = Math.Clamp(v, 0, Max);
+        if (Math.Abs(v - _value) < 1e-9) return;
+        _value = v; InvalidateVisual(); ValueChanged?.Invoke(v);
+    }
+
+    // Relative, like every value control (DESIGN.md § Interaction contract): a click never
+    // jumps the value — so the first click of a double-click (type a value) moves nothing.
+    private double _startY, _startV;
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _drag = true; _startY = e.GetPosition(this).Y; _startV = _value;
+        e.Pointer.Capture(this); GestureBegin?.Invoke(); e.Handled = true;
+    }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        if (!_drag) return;
+        double h = Bounds.Height - CapH; if (h <= 0) return;
+        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        Set(_startV + (_startY - e.GetPosition(this).Y) / h * Max / (fine ? 10 : 1));
+    }
     protected override void OnPointerReleased(PointerReleasedEventArgs e) { if (_drag) GestureEnd?.Invoke(); _drag = false; e.Pointer.Capture(null); }
 
     // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); } base.OnPointerCaptureLost(e); }
 
-    private void SetY(double y)
-    {
-        double h = Bounds.Height; if (h <= CapH) return;
-        double frac = Math.Clamp(1 - (y - CapH / 2) / (h - CapH), 0, 1);
-        double v = frac * Max;
-        if (Math.Abs(v - _value) < 1e-4) return;
-        _value = v; InvalidateVisual(); ValueChanged?.Invoke(v);
-    }
 
     public override void Render(DrawingContext ctx)
     {

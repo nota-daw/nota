@@ -206,6 +206,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             w.GestureEnd += () => End(id);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(w, MidiTarget.PluginParam(track, -1, pi), id);
             readouts.Add(() => { if (!w.Dragging) w.Norm = G(id); });
+            if (!spring) ValueEntry.Attach(w, w.EntryField(id == "modwheel" ? "Mod wheel" : id, NotaNum.Pct));   // the bend wheel springs back
             dragging = () => w.Dragging;
             return w;
         }

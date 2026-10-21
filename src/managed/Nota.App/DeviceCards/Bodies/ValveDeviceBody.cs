@@ -124,6 +124,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(N(p), 1.0) { Accent = true, ArcColor = arc, Default = DefN(p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(v * mx[p]);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { RawN(p, v); val.Text = fmt(P(p)); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);

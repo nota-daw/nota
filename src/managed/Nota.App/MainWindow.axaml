@@ -390,7 +390,7 @@
               <Panel x:Name="MasterVolHost" Width="88" Height="10"/>
               <Panel x:Name="MasterMeterHost" Width="88" Height="4"/>
             </StackPanel>
-            <TextBlock Classes="Mono" FontSize="11" MinWidth="46" TextAlignment="Right"
+            <TextBlock x:Name="MasterDb" Classes="Mono" FontSize="11" MinWidth="46" TextAlignment="Right"
                        VerticalAlignment="Center" Text="{Binding Transport.MasterDbText}"
                        Foreground="{DynamicResource Brush.TextPrimary}"/>
           </StackPanel>

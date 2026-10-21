@@ -376,6 +376,7 @@ public sealed partial class DeviceChainView
             Width = s.Width, Height = CardH,
             Child = new Panel { Children = { shell, selRing } },
         };
+        ValueEntry.SetScope(card, true);   // Tab in a value box walks this card's parameters
         // Bypassed: the body takes the inactive look but stays playable (no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);
         // The whole header drags the card to a new slot within its domain (audio FX / MIDI FX).

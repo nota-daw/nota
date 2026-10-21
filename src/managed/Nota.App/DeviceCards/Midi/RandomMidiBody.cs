@@ -368,7 +368,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var trk = Slider(p, max);
             ToolTip.SetTip(trk, $"{tip} — drag up / down, double-click resets");
             ValueEntry.Attach(v, () => G(p) / max, n => S(p, max > 1 ? Math.Round(n * max) : Math.Round(n * max, 3)), () => fmt(G(p)),
-                () => Begin(p), () => End(p), Refresh);
+                () => Begin(p), () => End(p), Refresh, control: trk);
             readouts.Add(() =>
             {
                 double x = G(p);
@@ -462,6 +462,8 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             knob.GestureEnd += () => End(p);
             Learn(knob, p, label);
             var v = Mono("", Sub, 7); v.HorizontalAlignment = HorizontalAlignment.Center;
+            knob.Format = n => text(max > 1 ? Math.Round(n * max) : Math.Round(n * max, 3));
+            ValueEntry.Attach(knob, label, v);
             readouts.Add(() => { double n = G(p) / max; if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; v.Text = text(G(p)); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
                 Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };

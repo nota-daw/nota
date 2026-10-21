@@ -190,6 +190,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             if (pi < 0) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0) { Accent = true, ArcColor = arc, Default = Def(id), Width = size, Height = size };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { SetP(id, v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);
@@ -286,7 +287,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             b.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2 && reset is not null) { reset(); done?.Invoke(); tb.Text = text(); Refresh(); e.Handled = true; return; }
+                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && reset is not null) { reset(); done?.Invoke(); tb.Text = text(); Refresh(); e.Handled = true; return; }
                 drag = true; y0 = e.GetPosition(b).Y; acc = 0; e.Pointer.Capture(b); e.Handled = true;
             };
             b.PointerMoved += (_, e) =>

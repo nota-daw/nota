@@ -1,24 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Double-click-to-type for a slider's value read-out (HANDOFF §4: "all numerics editable
-// by drag (vertical) and double-click-type"). Double-clicking the read-out lays a flat
-// text box over it (an adorner, so it works whatever panel the read-out sits in); Enter
-// or a click away commits, Escape cancels.
+// Typing an exact value into any parameter control (HANDOFF §4: "all numerics editable by
+// drag (vertical) and double-click-type"; specs/035-typed-value-entry). One gesture scheme
+// for every knob, fader, slider, graph handle and matrix cell:
 //
-// A slider works in normalised 0..1 and each row formats its own value, so there is no
-// inverse mapping to call. Instead the typed text is read as a quantity (sign, number or
-// fraction, unit multiplier — k, ms, µs; L/R for pan; ∞) and the slider position whose
-// read-out shows that quantity is searched for: the read-out is sampled across the range,
-// the bracketing step is bisected, and on a match the middle of the run of positions that
-// display it is taken — so typing "0" lands on 0 dB, not on the edge of the "0.0" bucket.
-// A word the read-out shows (off, HOLD) is matched as text. The search probes through the
-// row's own setter, then the result is written inside one begin/end gesture.
+//   double-click   turns the read-out itself editable — a borderless text box in its place
+//                  (an adorner, so it works whatever panel the read-out sits in) with a 1px
+//                  accent line under it and the number selected; Enter or a click away commits, Escape
+//                  cancels, Tab / Shift+Tab commit and move to the next / previous value on
+//                  the same card (the nearest Scope), wrapping
+//   ⌥/Alt-click    restores the default (or clears a route)
+//   right-click    a parameter menu — Type value…, Reset to default / Clear — unless the
+//                  control has its own menu, which then adds MenuItems itself
+//
+// The pointer handlers run in the tunnel phase, so the control's own press handling (a drag)
+// never sees these clicks. A control hands over a ValueField (one value) or is an
+// IValueEntryHost (several handles, asked for the fields under the pointer; null lets the
+// event through). The typed text is read by ValueText against the field's own read-out,
+// and a commit is one Begin / Set / End — one undo step and one automation gesture, like a
+// drag. Return outside the box keeps its transport meaning (Stop), so a control does not
+// open entry on Enter.
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text.RegularExpressions;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -33,47 +40,245 @@ namespace Nota.App;
 
 internal static partial class ValueEntry
 {
-    /// <summary>Make <paramref name="readout"/> typeable. <paramref name="norm"/> / <paramref name="setNorm"/>
-    /// are the slider's 0..1 position, <paramref name="text"/> the read-out at the current position;
-    /// <paramref name="after"/> repaints the row once the typed value is in.</summary>
-    public static void Attach(TextBlock readout, Func<double> norm, Action<double> setNorm, Func<string> text,
-        Action? begin = null, Action? end = null, Action? after = null)
+    [System.Text.RegularExpressions.GeneratedRegex(@"[+\-−]?(?:\d+(?:[.,]\d*)?|[.,]\d+|∞)")]
+    private static partial System.Text.RegularExpressions.Regex Number();
+
+    // ---- attaching -----------------------------------------------------------------------
+
+    // What Tab needs to find a control's values again: the fields and where each one's box goes.
+    private sealed class Entry(Control owner, Func<IReadOnlyList<ValueField>> fields, Func<ValueField, Anchor> anchor)
     {
-        readout.Background ??= Brushes.Transparent;   // the whole column takes the double-click, not just the glyphs
-        readout.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
-        {
-            if (e.ClickCount != 2 || !e.GetCurrentPoint(readout).Properties.IsLeftButtonPressed) return;
-            e.Handled = true;
-            Open(readout, typed =>
-            {
-                double from = norm();
-                double? to = Solve(typed, text(), n => { setNorm(n); return text(); });
-                setNorm(from);   // the probes moved it: the gesture must open on the old value (undo, specs/016)
-                begin?.Invoke();
-                setNorm(to ?? from);
-                end?.Invoke();
-                after?.Invoke();
-            });
-        }, RoutingStrategies.Bubble, handledEventsToo: false);
+        public readonly WeakReference<Control> Owner = new(owner);
+        public readonly Func<IReadOnlyList<ValueField>> Fields = fields;
+        public readonly Func<ValueField, Anchor> AnchorOf = anchor;
     }
 
-    private static void Open(TextBlock readout, Action<string> commit)
+    /// <summary>Where a box sits: a rectangle in <c>Visual</c>'s coordinates; <c>Font</c> is the read-out
+    /// it replaces (its font and alignment), null over a control without one.</summary>
+    private readonly record struct Anchor(Visual Visual, Rect Rect, TextBlock? Font);
+
+    private static readonly ConditionalWeakTable<Control, Entry> Entries = new();
+
+    /// <summary>Marks a Tab-chain root: a device card, a mixer strip, an editor panel.</summary>
+    public static readonly AttachedProperty<bool> ScopeProperty =
+        AvaloniaProperty.RegisterAttached<Control, bool>("Scope", typeof(ValueEntry));
+    public static bool GetScope(Control c) => c.GetValue(ScopeProperty);
+    public static void SetScope(Control c, bool v) => c.SetValue(ScopeProperty, v);
+
+    /// <summary>Make <paramref name="control"/> typeable (and its <paramref name="readout"/>, where the
+    /// box then sits). <paramref name="menu"/> false: the control shows its own right-click menu
+    /// and adds <see cref="MenuItems"/> to it.</summary>
+    public static void Attach(Control control, ValueField field, TextBlock? readout = null, bool menu = true)
     {
-        if (AdornerLayer.GetAdornerLayer(readout) is null) return;
-        double w = readout.Bounds.Width, extra = Math.Max(0, 48 - w);
-        // The form field look (sunken well, brass edge while focused), shrunk to the read-out.
+        Anchor AnchorOf(ValueField _) => readout is { IsEffectivelyVisible: true }
+            ? new Anchor(readout, new Rect(readout.Bounds.Size), readout)
+            : new Anchor(control, new Rect(control.Bounds.Size), null);
+        var fields = new[] { field };
+        if (control is TextBlock tb) tb.Background ??= Brushes.Transparent;
+        Entries.AddOrUpdate(control, new Entry(control, () => fields, AnchorOf));
+        void Press(object? s, PointerPressedEventArgs e)
+        {
+            if (Pressed(e, s as Visual ?? control, field)) Open(control, field, AnchorOf(field));
+        }
+        control.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
+        if (readout is not null && !ReferenceEquals(readout, control))
+        {
+            readout.Background ??= Brushes.Transparent;   // the whole column takes the double-click, not just the glyphs
+            readout.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
+        }
+        if (!menu) return;
+        void Context(object? s, ContextRequestedEventArgs e)
+        {
+            if (e.Handled) return;
+            e.Handled = true;
+            ShowMenu(control, field, () => Open(control, field, AnchorOf(field)));
+        }
+        control.AddHandler(Control.ContextRequestedEvent, Context);
+        if (readout is not null && !ReferenceEquals(readout, control)) readout.AddHandler(Control.ContextRequestedEvent, Context);
+    }
+
+    /// <summary>A knob and its value line: typed through its Format, or — without one — by reading
+    /// <paramref name="readout"/> back after each probe. Nothing without either.</summary>
+    public static void Attach(Knob knob, string name, TextBlock? readout = null, bool menu = true)
+    {
+        if ((knob.EntryField(name) ?? (readout is null ? null : knob.ProbingField(name, () => readout.Text ?? ""))) is { } f)
+            Attach(knob, f, readout, menu);
+    }
+
+    /// <summary>A knob whose value line is refreshed elsewhere: <paramref name="text"/> formats the
+    /// current value (read back after each probe when the knob has no Format).</summary>
+    public static void Attach(Knob knob, string name, TextBlock readout, Func<string> text, bool menu = true)
+        => Attach(knob, knob.EntryField(name) ?? knob.ProbingField(name, text), readout, menu);
+
+    /// <summary>Make the handles of <paramref name="host"/> typeable.</summary>
+    public static void AttachHost<T>(T host, bool menu = true) where T : Control, IValueEntryHost
+    {
+        Anchor AnchorOf(ValueField f) => new(host, host.AnchorOf(f), null);
+        Entries.AddOrUpdate(host, new Entry(host, () => host.AllFields, AnchorOf));
+        host.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (host.FieldsAt(e.GetPosition(host)) is not { Count: > 0 } fs) return;
+            if (Pressed(e, host, fs[0], fs)) Open(host, fs[0], AnchorOf(fs[0]));
+        }, RoutingStrategies.Tunnel);
+        if (!menu) return;
+        host.AddHandler(Control.ContextRequestedEvent, (_, e) =>
+        {
+            if (e.Handled || !e.TryGetPosition(host, out var p) || host.FieldsAt(p) is not { Count: > 0 } fs) return;
+            e.Handled = true;
+            ShowMenu(host, fs[0], () => Open(host, fs[0], AnchorOf(fs[0])), fs);
+        });
+    }
+
+    /// <summary>A slider row's read-out, typed by probing the row's own setter (<paramref name="setNorm"/>
+    /// then <paramref name="text"/>). <paramref name="control"/> (its slider) takes the same gestures;
+    /// <paramref name="reset"/> — by default the slider's own Reset — is what ⌥-click and the menu run.</summary>
+    public static void Attach(TextBlock readout, Func<double> norm, Action<double> setNorm, Func<string> text,
+        Action? begin = null, Action? end = null, Action? after = null, Action? reset = null, Control? control = null, string name = "Value")
+        => Attach(control ?? readout, Probing(name, norm, setNorm, text, begin, end, after, reset ?? (control as SliderTrack)?.Reset), readout);
+
+    /// <summary>A field typed by probing <paramref name="setNorm"/> + <paramref name="text"/>.</summary>
+    public static ValueField Probing(string name, Func<double> norm, Action<double> setNorm, Func<string> text,
+        Action? begin = null, Action? end = null, Action? after = null, Action? reset = null)
+        => new(name, norm, n => { setNorm(n); return text(); }, setNorm, begin, end)
+        { Probes = true, After = after, Reset = reset };
+
+    // A left press: ⌥ resets (every field of the handle), a double-click opens the box.
+    private static bool Pressed(PointerPressedEventArgs e, Visual at, ValueField field, IReadOnlyList<ValueField>? all = null)
+    {
+        if (!e.GetCurrentPoint(at).Properties.IsLeftButtonPressed) return false;
+        if ((e.KeyModifiers & KeyModifiers.Alt) != 0)
+        {
+            if (field.Clear is null && !(all ?? [field]).Any(f => f.CanReset)) return false;   // ⌥ keeps the control's own meaning
+            e.Handled = true;
+            if (field.Clear is not null) Clear(field);
+            else foreach (var f in all ?? [field]) Reset(f);
+            return false;
+        }
+        if (e.ClickCount != 2) return false;
+        e.Handled = true;
+        return true;
+    }
+
+    // ---- reset / clear / commit ----------------------------------------------------------
+
+    /// <summary>Back to the default as one gesture; nothing without a default or when already there.</summary>
+    public static void Reset(ValueField f)
+    {
+        if (f.Reset is { } act) { f.Begin?.Invoke(); act(); f.End?.Invoke(); f.After?.Invoke(); return; }
+        if (f.Default is not { } d) return;
+        d = Math.Clamp(d, 0, 1);
+        if (Math.Abs(f.Get() - d) < 1e-9) return;
+        f.Begin?.Invoke(); f.Set(d); f.End?.Invoke(); f.After?.Invoke();
+    }
+
+    private static void Clear(ValueField f) { f.Clear?.Invoke(); f.After?.Invoke(); }
+
+    private static bool AtDefault(ValueField f) => f.Reset is null && f.Default is { } d && Math.Abs(f.Get() - Math.Clamp(d, 0, 1)) < 1e-9;
+
+    /// <summary>Apply typed text: the position whose read-out shows it, written as one gesture.
+    /// Unreadable text or a value the read-out already shows changes nothing.</summary>
+    internal static void Commit(ValueField f, string typed)
+    {
+        if (string.IsNullOrWhiteSpace(typed)) return;
+        double before = f.Get();
+        string was = f.TextAt(before);
+        double? to = ValueText.Solve(typed, was, f.TextAt);
+        string? now = to is { } n ? f.TextAt(n) : null;
+        if (f.Probes) f.Set(before);   // the probes moved it: the gesture must open on the old value (undo, specs/016)
+        if (to is null || now == was) { f.After?.Invoke(); return; }
+        f.Begin?.Invoke();
+        f.Set(to.Value);
+        f.End?.Invoke();
+        f.After?.Invoke();
+    }
+
+    // ---- the parameter menu --------------------------------------------------------------
+
+    /// <summary>Type value… and Reset to default (Clear for a route), for a control that builds
+    /// its own right-click menu.</summary>
+    public static IEnumerable<Control> MenuItems(Control control, ValueField field)
+    {
+        Anchor a = Entries.TryGetValue(control, out var en) ? en.AnchorOf(field) : new Anchor(control, new Rect(control.Bounds.Size), null);
+        return MenuItems(field, () => Open(control, field, a));
+    }
+
+    /// <summary>The same items for an attached control's (first) value; none when it is not attached.</summary>
+    public static IEnumerable<Control> MenuItems(Control control)
+        => Entries.TryGetValue(control, out var en) && en.Fields() is { Count: > 0 } fs ? MenuItems(control, fs[0]) : [];
+
+    private static IEnumerable<Control> MenuItems(ValueField field, Action open, IReadOnlyList<ValueField>? all = null)
+    {
+        yield return MenuKit.Item("Type value…", GlyphKind.Edit, open);
+        var fs = all ?? [field];
+        if (field.Clear is not null) yield return MenuKit.Danger("Clear", GlyphKind.Trash, () => Clear(field));
+        else yield return MenuKit.Item("Reset to default", GlyphKind.Cycle, () => { foreach (var f in fs) Reset(f); },
+            enabled: fs.Any(f => f.CanReset && !AtDefault(f)));
+    }
+
+    private static void ShowMenu(Control control, ValueField field, Action open, IReadOnlyList<ValueField>? all = null)
+    {
+        var fly = new MenuFlyout();
+        fly.Items.Add(MenuKit.Header(field.Name, null, "Parameter"));
+        fly.Items.Add(new Separator());
+        foreach (var c in MenuItems(field, open, all)) fly.Items.Add(c);
+        fly.ShowAt(control, showAtPointer: true);
+    }
+
+    // ---- the box -------------------------------------------------------------------------
+
+    private static Action<bool>? _close;   // the open box (one at a time): close it, committing or not
+
+    /// <summary>Open the box on <paramref name="field"/> of <paramref name="control"/> (the menu, Tab).</summary>
+    public static void Open(Control control, ValueField field)
+    {
+        if (Entries.TryGetValue(control, out var en)) Open(control, field, en.AnchorOf(field));
+    }
+
+    private static void Open(Control owner, ValueField field, Anchor at)
+    {
+        _close?.Invoke(true);
+        if (AdornerLayer.GetAdornerLayer(at.Visual) is null) return;
+        TopLevel? top = TopLevel.GetTopLevel(at.Visual);
+        var font = at.Font;
+        Rect r = at.Rect;
+        double fontSize = font is { FontSize: > 0 } ? font.FontSize : 9;
+        // The value line itself turns editable (TextBox.value): same font, size and alignment
+        // as the read-out, a 1px accent line under it, the read-out's own ink hidden meanwhile.
+        // Without a read-out (a fader, a bar) a value line is laid over the control instead.
+        var align = font is null ? HorizontalAlignment.Center
+            : font.TextAlignment == TextAlignment.Center || font.HorizontalAlignment == HorizontalAlignment.Center && double.IsNaN(font.Width)
+                ? HorizontalAlignment.Center
+            : font.TextAlignment is TextAlignment.Right or TextAlignment.End ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+        double w = Math.Max(r.Width, font is null ? 40 : 28) + 2, h = font is null ? fontSize + 6 : r.Height + 2;
+        double x = align switch
+        {
+            HorizontalAlignment.Right => r.Right + 1 - w,
+            HorizontalAlignment.Left => r.X - 1,
+            _ => r.X + (r.Width - w) / 2,
+        };
+        double y = font is null ? r.Y + (r.Height - h) / 2 : r.Y;
+        // Keep the box inside the window.
+        if (top is not null && at.Visual.TranslatePoint(new Point(x, y), top) is { } p)
+        {
+            var size = top.ClientSize;
+            if (p.X < 2) x += 2 - p.X; else if (p.X + w > size.Width - 2) x -= p.X + w - (size.Width - 2);
+            if (p.Y < 2) y += 2 - p.Y; else if (p.Y + h > size.Height - 2) y -= p.Y + h - (size.Height - 2);
+        }
+        string was = font?.Text is { Length: > 0 } t ? t : field.TextAt(field.Get());
         var box = new TextBox
         {
-            Classes = { "field" },
-            Text = readout.Text, FontFamily = readout.FontFamily, FontSize = readout.FontSize,
-            Height = readout.Bounds.Height + 6, Width = w + extra + 4, Padding = new Thickness(3, 0), MinWidth = 0,
-            CornerRadius = NotaRadius.Badge,
+            Classes = { "value" },
+            Text = was, FontFamily = font?.FontFamily ?? NotaFonts.MonoFamily, FontSize = fontSize,
+            FontWeight = font?.FontWeight ?? FontWeight.Normal,
+            Height = h, Width = w,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
-            HorizontalContentAlignment = HorizontalAlignment.Right,
-            // Grow to the left over the track when the read-out column is narrow, and a little taller than the text.
-            Margin = new Thickness(-extra - 2, -3, 0, 0),
+            HorizontalContentAlignment = align,
+            Margin = new Thickness(x, y, 0, 0),
         };
-        TopLevel? top = TopLevel.GetTopLevel(readout);
+        if (font is null) box.Classes.Add("solid");
+        IBrush? ink = font?.Foreground;
+        if (font is not null) font.Foreground = Brushes.Transparent;   // the box draws the value now
         bool done = false;
         EventHandler<PointerPressedEventArgs>? outside = null;
         EventHandler<VisualTreeAttachmentEventArgs>? gone = null;
@@ -81,192 +286,73 @@ internal static partial class ValueEntry
         {
             if (done) return;
             done = true;
+            if (_close == Close) _close = null;
             if (outside is not null) top?.RemoveHandler(InputElement.PointerPressedEvent, outside);
-            readout.DetachedFromVisualTree -= gone;
-            AdornerLayer.SetAdorner(readout, null);
-            if (apply && !string.IsNullOrWhiteSpace(box.Text)) commit(box.Text!);
+            at.Visual.DetachedFromVisualTree -= gone;
+            AdornerLayer.SetAdorner(at.Visual, null);
+            if (font is not null && ReferenceEquals(font.Foreground, Brushes.Transparent)) font.Foreground = ink;
+            if (apply) Commit(field, box.Text ?? "");
         }
-        box.KeyDown += (_, e) =>
+        _close = Close;
+        box.AddHandler(InputElement.KeyDownEvent, (_, e) =>
         {
             if (e.Key is Key.Enter or Key.Return) { Close(true); e.Handled = true; }
             else if (e.Key == Key.Escape) { Close(false); e.Handled = true; }
-        };
+            else if (e.Key == Key.Tab)
+            {
+                e.Handled = true;
+                Close(true);
+                Step(owner, field, (e.KeyModifiers & KeyModifiers.Shift) != 0 ? -1 : 1);
+            }
+        }, RoutingStrategies.Tunnel);
         box.LostFocus += (_, _) => Close(true);
         gone = (_, _) => Close(false);
-        readout.DetachedFromVisualTree += gone;
+        at.Visual.DetachedFromVisualTree += gone;
         // A click on something that doesn't take focus (a canvas, a slider track) still ends the edit.
         outside = (_, e) => { if (e.Source is not Visual v || !box.IsVisualAncestorOf(v) && v != box) Close(true); };
         top?.AddHandler(InputElement.PointerPressedEvent, outside, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         AdornerLayer.SetIsClipEnabled(box, false);   // it overhangs the read-out
-        AdornerLayer.SetAdorner(readout, box);
-        Dispatcher.UIThread.Post(() => { if (done) return; box.Focus(); box.SelectAll(); });
+        AdornerLayer.SetAdorner(at.Visual, box);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (done) return;
+            box.Focus();
+            // Select the number and leave its unit: typing "12" into "10.0 ms" reads 12 ms.
+            if (Number().Match(was) is { Success: true } m) { box.SelectionStart = m.Index; box.SelectionEnd = m.Index + m.Length; }
+            else box.SelectAll();
+        });
     }
 
-    // ---- reading the typed text against the read-out -------------------------------------
+    // ---- Tab -----------------------------------------------------------------------------
 
-    private const int Samples = 48, Steps = 22;
-
-    /// <summary>The 0..1 position whose read-out (<paramref name="at"/>) shows <paramref name="typed"/>
-    /// (<paramref name="current"/> is the read-out now, whose unit a bare number takes),
-    /// or null when the text says nothing the read-out can show. Assumes the read-out moves
-    /// monotonically with the position (or is stepped).</summary>
-    internal static double? Solve(string typed, string current, Func<double, string> at)
+    // Every typeable value under the nearest Scope, in reading order: rows by top edge (within
+    // half the smaller height), then left edge; a host's fields in its own order. Wraps.
+    private static void Step(Control owner, ValueField from, int dir)
     {
-        var n = new double[Samples + 1];
-        var txt = new string[Samples + 1];
-        var q = new double[Samples + 1];
-        for (int i = 0; i <= Samples; i++)
+        if (owner.GetVisualAncestors().OfType<Control>().FirstOrDefault(GetScope) is not { } scope) return;
+        var items = new List<(Control owner, ValueField field, Rect at, int sub)>();
+        foreach (var c in scope.GetVisualDescendants().OfType<Control>())
         {
-            n[i] = (double)i / Samples;
-            txt[i] = at(n[i]);
-            q[i] = Read(txt[i], out _, out _) ?? double.NaN;
+            if (!Entries.TryGetValue(c, out var en) || !c.IsEffectivelyVisible || !c.IsEffectivelyEnabled) continue;
+            if (c.TranslatePoint(default, scope) is not { } p) continue;
+            var at = new Rect(p, c.Bounds.Size);
+            var fs = en.Fields();
+            for (int i = 0; i < fs.Count; i++) items.Add((c, fs[i], at, i));
         }
-
-        string t = Clean(typed);
-        for (int i = 0; i <= Samples; i++)
-            if (string.Equals(Clean(txt[i]), t, StringComparison.OrdinalIgnoreCase))
-                return Plateau(at, n, q, txt, i);
-
-        double? parsed = Read(typed, out _, out bool typedHasUnit);
-        if (parsed is not { } raw || double.IsNaN(raw)) return null;
-        double target = Pick(raw, typedHasUnit, current, txt, q);
-
-        // A step of the sampled read-out that brackets the target: bisect it.
-        for (int i = 0; i < Samples; i++)
+        if (items.Count == 0) return;
+        var rows = new List<List<(Control owner, ValueField field, Rect at, int sub)>>();
+        foreach (var it in items.OrderBy(i => i.at.Top))
         {
-            double a = q[i], b = q[i + 1];
-            if (double.IsNaN(a) || double.IsNaN(b) || a == b) continue;
-            if (Math.Min(a, b) > target || Math.Max(a, b) < target) continue;
-            if (Same(a, target)) return Plateau(at, n, q, txt, i);
-            if (Same(b, target)) return Plateau(at, n, q, txt, i + 1);
-            double lo = n[i], hi = n[i + 1];
-            bool rising = b > a;
-            for (int s = 0; s < Steps; s++)
-            {
-                double mid = (lo + hi) / 2, qm = Read(at(mid), out _, out _) ?? double.NaN;
-                if (double.IsNaN(qm)) break;
-                if (Same(qm, target)) return Edges(at, lo, mid, hi, target);
-                if (qm < target == rising) lo = mid; else hi = mid;
-            }
-            double ql = Read(at(lo), out _, out _) ?? a, qh = Read(at(hi), out _, out _) ?? b;
-            return Math.Abs(ql - target) <= Math.Abs(qh - target) ? lo : hi;
+            var row = rows.LastOrDefault();
+            if (row is not null && it.at.Top - row[0].at.Top <= Math.Min(row[0].at.Height, it.at.Height) / 2) row.Add(it);
+            else rows.Add([it]);
         }
-
-        // Out of range (or no bracketing step): the nearest sample — usually an end of the slider.
-        int best = -1;
-        for (int i = 0; i <= Samples; i++)
-        {
-            if (double.IsNaN(q[i])) continue;
-            if (best < 0 || Distance(q[i], target) < Distance(q[best], target)) best = i;
-        }
-        return best < 0 ? null : Plateau(at, n, q, txt, best);
-    }
-
-    private static double Distance(double a, double b) => a == b ? 0 : Math.Abs(a - b);
-
-    private static bool Same(double a, double b) =>
-        a == b || Math.Abs(a - b) <= 1e-9 * Math.Max(1, Math.Max(Math.Abs(a), Math.Abs(b)));
-
-    // The middle of the run of positions around sample i that show the same text — a
-    // stepped or rounded read-out lands in the centre of its bucket, not on its edge. A run
-    // that reaches an end of the slider takes the end (100 %, −∞, off are the extremes).
-    private static double Plateau(Func<double, string> at, double[] n, double[] q, string[] txt, int i)
-    {
-        int a = i, b = i;
-        while (a > 0 && txt[a - 1] == txt[i]) a--;
-        while (b < Samples && txt[b + 1] == txt[i]) b++;
-        if (a == 0) return 0;
-        if (b == Samples) return 1;
-        string s = txt[i];
-        double lo = a == 0 ? 0 : Edge(at, n[a - 1], n[a], s, insideHigh: true);
-        double hi = b == Samples ? 1 : Edge(at, n[b], n[b + 1], s, insideHigh: false);
-        return (lo + hi) / 2;
-    }
-
-    // Bisect between an outside and an inside position for where the text `s` begins/ends.
-    private static double Edge(Func<double, string> at, double x0, double x1, string s, bool insideHigh)
-    {
-        double outP = insideHigh ? x0 : x1, inP = insideHigh ? x1 : x0;
-        for (int k = 0; k < Steps; k++)
-        {
-            double mid = (outP + inP) / 2;
-            if (at(mid) == s) inP = mid; else outP = mid;
-        }
-        return inP;
-    }
-
-    // A bisection hit at `mid` inside (lo, hi): widen to the bucket that shows the same text.
-    private static double Edges(Func<double, string> at, double lo, double mid, double hi, double target)
-    {
-        string s = at(mid);
-        return (Edge(at, lo, mid, s, insideHigh: true) + Edge(at, mid, hi, s, insideHigh: false)) / 2;
-    }
-
-    // A unitless typed number takes the read-out's own unit when that fits the range
-    // ("1.5" on a kHz read-out is 1.5 kHz), else whichever unit the read-out uses that
-    // fits ("500" on a seconds read-out that drops to ms is 500 ms).
-    private static double Pick(double raw, bool hasUnit, string current, string[] txt, double[] q)
-    {
-        if (hasUnit) return raw;   // already in base units
-        double min = double.PositiveInfinity, max = double.NegativeInfinity;
-        var muls = new List<double>();
-        foreach (var x in q) if (double.IsFinite(x)) { min = Math.Min(min, x); max = Math.Max(max, x); }
-        Read(current, out double curMul, out _);
-        muls.Add(curMul);
-        foreach (var s in txt) { Read(s, out double m, out bool u); if (u && !muls.Contains(m)) muls.Add(m); }
-        if (!muls.Contains(1)) muls.Add(1);
-        foreach (var m in muls)
-        {
-            double v = raw * m;
-            if (v >= min - 1e-9 && v <= max + 1e-9) return v;
-        }
-        return raw * curMul;
-    }
-
-    private static string Clean(string s) => s.Replace('\u2009', ' ').Replace('\u202F', ' ').Replace('\u00A0', ' ').Trim();
-
-    [GeneratedRegex(@"^(?<pan>[LRC](?=[\s\d]|$))?\s*(?<sign>[+\-])?\s*(?:(?<inf>∞|inf)|(?<num>\d+(?:\.\d*)?|\.\d+)(?:\s*/\s*(?<den>\d+(?:\.\d*)?))?)?\s*(?<unit>[A-Za-zµ%°]*)", RegexOptions.IgnoreCase)]
-    private static partial Regex Quantity();
-
-    /// <summary>A read-out or typed text as a number in base units (Hz, s, …), or null.
-    /// <paramref name="mul"/> is its unit's multiplier; <paramref name="hasUnit"/> whether it named one.</summary>
-    internal static double? Read(string text, out double mul, out bool hasUnit)
-    {
-        mul = 1; hasUnit = false;
-        string s = Clean(text).Replace('−', '-').Replace(',', '.').Replace("±", "");
-        var m = Quantity().Match(s);
-        if (!m.Success) return null;
-        string pan = m.Groups["pan"].Value.ToUpperInvariant();
-        string unit = m.Groups["unit"].Value;
-        double v;
-        if (m.Groups["inf"].Success) v = double.PositiveInfinity;
-        else if (m.Groups["num"].Success)
-        {
-            v = double.Parse(m.Groups["num"].Value, CultureInfo.InvariantCulture);
-            if (m.Groups["den"].Success)
-            {
-                double d = double.Parse(m.Groups["den"].Value, CultureInfo.InvariantCulture);
-                if (d == 0) return null;
-                v /= d;
-            }
-        }
-        else if (pan == "C") v = 0;
-        else return null;
-        // "30 L" / "30L" — a pan side written after the number.
-        if (pan.Length == 0 && unit.Length == 1 && char.ToUpperInvariant(unit[0]) is 'L' or 'R')
-        { pan = unit.ToUpperInvariant(); unit = ""; }
-        if (m.Groups["sign"].Value == "-" || pan == "L") v = -v;
-
-        string u = unit.ToLowerInvariant();
-        if (u.Length > 0)
-        {
-            hasUnit = true;
-            mul = u == "k" || (u.StartsWith('k') && u.Length > 1) ? 1e3
-                : u == "ms" ? 1e-3
-                : u is "µs" or "us" ? 1e-6
-                : 1;
-        }
-        return v * mul;
+        var order = rows.SelectMany(r => r.OrderBy(i => i.at.Left).ThenBy(i => i.sub)).ToList();
+        int k = order.FindIndex(i => i.owner == owner && ReferenceEquals(i.field, from));
+        if (k < 0) k = order.FindIndex(i => i.owner == owner);
+        var next = order[((k < 0 ? 0 : k) + dir + order.Count) % order.Count];
+        next.owner.BringIntoView();
+        Dispatcher.UIThread.Post(() => Open(next.owner, next.field), DispatcherPriority.Background);
     }
 }

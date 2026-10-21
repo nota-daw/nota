@@ -131,6 +131,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TxtC);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
+            knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -184,7 +185,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             host.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
-                if (e.ClickCount == 2) { SetP(p, Def(p)); e.Handled = true; return; }
+                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(p, Def(p)); e.Handled = true; return; }
                 drag = true; y0 = e.GetPosition(host).Y; v0 = P(p); Begin(p); e.Pointer.Capture(host); e.Handled = true;
             };
             host.PointerMoved += (_, e) => { if (drag) { Raw(p, (float)(v0 + (y0 - e.GetPosition(host).Y) / 140.0)); tb.Text = fmt(P(p)); } };

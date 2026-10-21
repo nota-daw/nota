@@ -105,6 +105,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             if (pi < 0) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0) { Accent = true, ArcColor = arc, Default = acc.ParamDefault(pi), Width = size, Height = size };
+            knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { acc.ParamSet(pi, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
             knob.GestureEnd += () => End(id);

@@ -180,7 +180,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             lenTrack.GestureEnd += () => { if (lenGesture >= 0) End(lenGesture); lenGesture = -1; };
             ToolTip.SetTip(lenTrack, "Length — drag up / down, double-click resets");
             ValueEntry.Attach(bigVal, () => LenNorm(G), n => S(LenParam(G), LenFromNorm(G, n)), () => LenValue(G),
-                () => { lenGesture = LenParam(G); Begin(lenGesture); }, () => { End(lenGesture); lenGesture = -1; }, Refresh);
+                () => { lenGesture = LenParam(G); Begin(lenGesture); }, () => { End(lenGesture); lenGesture = -1; }, Refresh, control: lenTrack);
             readouts.Add(() =>
             {
                 bigVal.Text = LenValue(G); bigSub.Text = LenSub(G, Bpm());
@@ -372,7 +372,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             Learn(trk, p, label);
             ToolTip.SetTip(trk, $"{label} — drag up / down, double-click resets");
             ValueEntry.Attach(v, toNorm, n => S(p, fromNorm(n)), () => bipolar ? Signed(G(p)) : $"±{Math.Round(G(p) * 100):0}\u2009%",
-                () => Begin(p), () => End(p), Refresh);
+                () => Begin(p), () => End(p), Refresh, control: trk);
             readouts.Add(() =>
             {
                 double x = G(p);
@@ -417,6 +417,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             knob.GestureEnd += () => { if (gesture >= 0) End(gesture); gesture = -1; };
             Learn(knob, param(), label);
             var v = Mono("", Sub, 7); v.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(knob, label, v, text);
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; v.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
                 Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };

@@ -81,7 +81,7 @@ internal sealed class VocoderGraph : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int edge = EdgeAt(e.GetPosition(this));
         if (edge < 0) return;
-        if (e.ClickCount == 2) { ResetRequested?.Invoke(edge); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(edge); e.Handled = true; return; }
         _drag = edge; GestureBegin?.Invoke(edge); e.Pointer.Capture(this); e.Handled = true; InvalidateVisual();
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)

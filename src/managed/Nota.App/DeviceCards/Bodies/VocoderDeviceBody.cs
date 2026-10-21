@@ -117,6 +117,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 8, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, Default = engine.DeviceParamDefault(track, di, p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(steps > 1 ? Math.Round(v * (steps - 1)) / (steps - 1) : v);   // read-out at any value: typing searches it
             knob.ValueChanged += v =>
             {
                 if (steps > 1) v = Math.Round(v * (steps - 1)) / (steps - 1);

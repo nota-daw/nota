@@ -197,7 +197,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;
-                if (e.ClickCount == 2) { SetP(Gain, 0.5); RefreshAll(); return; }
+                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(Gain, 0.5); RefreshAll(); return; }
                 drag = true; y0 = e.GetPosition(box).Y; v0 = P(Gain);
                 e.Pointer.Capture(box); Begin(Gain);
             };

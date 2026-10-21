@@ -120,6 +120,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TxtC);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
+            knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
