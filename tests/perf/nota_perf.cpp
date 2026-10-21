@@ -58,6 +58,38 @@ int instrumentTrack(NotaEngine* e, int kind) {
     return t;
 }
 
+// Super Saw factory preset (specs/036-aurora-perf/supersaw-params.md), applied by
+// param id so preset edits stay in sync without hardcoded indices.
+void applySuperSaw(NotaEngine* e, int track) {
+    static const char* const ids[] = {"table", "position", "osc2on", "osc2table", "osc2position", "osc2level",
+        "osc2detune", "unison", "unidetune", "unispread", "cutoff", "resonance", "fil1env", "attack", "decay",
+        "sustain", "release", "fxdrive", "fxchorus", "fxreverb", "gain"};
+    static const float values[] = {0, 0.9f, 1, 0, 0.9f, 0.8f, 0.62f, 1, 0.4f, 0.9f, 0.8f, 0.14f, 0.55f, 0, 0.4f,
+        0.85f, 0.28f, 0.2f, 0.26f, 0.24f, 0.72f};
+    const int n = nota_plugin_param_count(e, track, -1);
+    for (size_t p = 0; p < sizeof ids / sizeof ids[0]; ++p)
+        for (int i = 0; i < n; ++i) {
+            const char* pid = nota_plugin_param_id(e, track, -1, i);
+            if (pid && std::strcmp(pid, ids[p]) == 0) {
+                nota_plugin_param_set(e, track, -1, i, values[p]);
+                break;
+            }
+        }
+}
+
+// A 4-bar loop of 6-note chords: the reference load for aurora-supersaw-2x.
+void fillChords6(NotaEngine* e, int track, int transpose, double startBeat, double lengthBeats) {
+    const int clip = nota_track_add_midi_clip(e, track, startBeat, lengthBeats);
+    static const int chords[4][6] = {
+        {48, 55, 60, 64, 67, 72}, {45, 52, 57, 60, 64, 69}, {41, 48, 53, 57, 60, 65}, {43, 50, 55, 59, 62, 67}};
+    std::vector<NotaNoteData> notes;
+    for (int bar = 0; bar < (int)(lengthBeats / 4); ++bar) {
+        const int* c = chords[bar % 4];
+        for (int k = 0; k < 6; ++k) notes.push_back({c[k] + transpose, bar * 4.0, 4.0, 0.7f, 0});
+    }
+    nota_clip_set_notes(e, track, clip, notes.data(), (int)notes.size());
+}
+
 // Display names for the report; the scenario id (the kind number) is what is compared.
 std::string instrumentName(int kind) {
     switch (kind) {
@@ -112,6 +144,7 @@ std::vector<Scenario> scenarios() {
             s.push_back({id, instrumentName(k) + ", one track"});
         }
     s.push_back({"effect-base", "Synth alone (effect baseline)"});
+    s.push_back({"aurora-supersaw-2x", "Aurora Super Saw x2"});
     for (int k = 0; k < kMaxKind; ++k) {
         const std::string name = effectName(k);
         if (name.empty()) continue;
@@ -140,6 +173,15 @@ bool build(NotaEngine* e, const std::string& id) {
         if (id != "effect-base")
             for (int i = 0; i < kEffectCopies; ++i)
                 if (nota_track_add_builtin_device(e, t, kind) < 0) return false;
+        return true;
+    }
+    if (id == "aurora-supersaw-2x") {
+        for (int t = 0; t < 2; ++t) {
+            const int tr = instrumentTrack(e, 5);
+            if (tr < 0) return false;
+            applySuperSaw(e, tr);
+            fillChords6(e, tr, t == 0 ? 0 : 7, 0, 16);
+        }
         return true;
     }
     int n = 0;

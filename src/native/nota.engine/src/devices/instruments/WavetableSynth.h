@@ -265,8 +265,9 @@ class WavetableSynth final : public Instrument {
     // One oscillator: a unison stack of wavetable reads, detuned in cents and spread
     // across the stereo field with equal power. Returns the mid (which the filters see)
     // and, through `sideOut`, the half-difference the spread opens up.
-    float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN, double detCents,
-        float spread, float& sideOut);
+    // detF/panL/panR/norm are block-constant per-unison data prepared by render().
+    float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN,
+        const double* detF, const float* panL, const float* panR, float norm, float& sideOut);
     // Sub oscillator: the sine DEFINES pitch and stays std::-exact.
     static float subOsc(int wave, double ph) {
         switch (wave) {
@@ -313,7 +314,7 @@ class WavetableSynth final : public Instrument {
 
     // FX · a stereo chorus of 1, 2 or 4 modulated taps, and a compact Freeverb whose
     // feedback and damping the mode + size choose.
-    void chorus(float l, float r, float amt, int voices, float& outL, float& outR);
+    void chorus(float l, float r, float amt, int voices, double rateHz, float& outL, float& outR);
     void reverb(float l, float r, float fb, float damp, float& outL, float& outR);
 
     static double expMap(double v, double lo, double hi) { return lo * std::pow(hi / lo, std::clamp(v, 0.0, 1.0)); }

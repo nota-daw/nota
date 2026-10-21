@@ -385,6 +385,29 @@ if (args.Length >= 1 && args[0] == "--panlaw")
     Console.WriteLine(failures == 0 ? "PANLAW PASSED" : $"PANLAW FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Aurora sound gate alone: `--aurora-null`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--aurora-null")
+{
+    Console.WriteLine("-- aurora null --");
+    foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AURORA-NULL PASSED" : $"AURORA-NULL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Dump Aurora reference renders: `--aurora-null-dump <dir>`.
+if (args.Length >= 2 && args[0] == "--aurora-null-dump")
+{
+    Console.WriteLine("-- aurora null dump --");
+    return AuroraNullTests.Dump(args[1]);
+}
+// Null current renders against a dump: `--aurora-null-compare <dir> [gateDb]`.
+if (args.Length >= 2 && args[0] == "--aurora-null-compare")
+{
+    double gate = args.Length >= 3 && double.TryParse(args[2], out var g) ? g : -120.0;
+    Console.WriteLine("-- aurora null compare --");
+    foreach (var (ok, label) in AuroraNullTests.Compare(args[1], gate)) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AURORA-COMPARE PASSED" : $"AURORA-COMPARE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
 if (args.Length >= 2 && args[0] == "--mosaic-dump")
 {
@@ -15003,6 +15026,9 @@ foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- pan law --");
 foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- aurora null --");
+foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);

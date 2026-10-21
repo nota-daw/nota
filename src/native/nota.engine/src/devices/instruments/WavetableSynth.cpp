@@ -344,6 +344,24 @@ void WavetableSynth::render(float* out, int32_t frames) {
     const int uniN = std::clamp(1 + (int)std::lround(get(Unison) * 6.0f), 1, kUnison);
     const double uniDet = std::clamp(get(UniDetune) + macroBlk[3], 0.0, 1.0) * 50.0; // ± cents
     const float uniSpread = get(UniSpread);
+    // Block-constant unison stack data (036-aurora-perf Tier-1): the detune factor, the
+    // equal-power pan gains and the centre normalizer do not depend on the sample —
+    // detune is not audio-rate modulated — so they are computed once per block.
+    // Bit-identical to the per-sample evaluation (same expressions, same order).
+    double uniDetF[kUnison];
+    float uniPanL[kUnison], uniPanR[kUnison];
+    for (int u = 0; u < uniN; ++u) {
+        const double d = (uniN > 1) ? ((double)u / (uniN - 1) - 0.5) * 2.0 : 0.0;
+        uniDetF[u] = std::exp2(d * uniDet / 1200.0);
+        const float pan = (float)d * uniSpread;
+        const float pan01 = (pan + 1.0f) * 0.125f;
+        // Equal-power gains (amplitude only — the fast pair is transparent here).
+        uniPanL[u] = fast_math::cos(pan01);
+        uniPanR[u] = fast_math::sin(pan01);
+    }
+    // √2 undoes the equal-power law's 0.707 at centre, so a spread of 0 is bit-for-bit
+    // the mono stack this used to be.
+    const float uniNorm = 1.41421356f / std::sqrt((float)uniN);
     // Only a spread stack has a side; without one its filter state is parked at zero so
     // it starts clean the moment the spread opens.
     const bool stereoUni = uniN > 1 && uniSpread > 1e-6f;
@@ -389,6 +407,9 @@ void WavetableSynth::render(float* out, int32_t frames) {
     // Tone is a tilt: below the middle a one-pole darkens, above it lifts the top.
     const float toneCoef = (float)std::clamp((get(FxTone) - 0.5) * 2.0, -1.0, 1.0);
     const float chAmt = get(FxChorus);
+    // Chorus LFO rate is block-constant (036-aurora-perf Tier-1): the per-sample
+    // expMap (a pow) was pure waste. Bit-identical — same expression, computed once.
+    const double chRate = expMap(get(FxChorusRate), 0.1, 6.0);
     const int chVoices = 1 << std::clamp((int)std::lround(get(FxChorusVoices) * 2.0f), 0, 2); // 1 / 2 / 4
     const float rvAmt = get(FxReverb);
     const int revMode = std::clamp((int)std::lround(get(FxReverbMode) * 2.0f), 0, 2);
@@ -410,6 +431,15 @@ void WavetableSynth::render(float* out, int32_t frames) {
                 ++amN;
             }
         }
+
+    // Static-pitch early-outs (036-aurora-perf Tier-1): with no macro/matrix routing
+    // to pitch, dst[0]/dst[1] are exactly zero and exp2(0) == 1.0 — skip both
+    // transcendentals per voice per sample. Bit-identical in all cases.
+    bool pitchStatic = macroDst[0] == 0.0, osc2PitchStatic = macroDst[1] == 0.0;
+    for (int k = 0; k < amN; ++k) {
+        if (amD[k] == 0) pitchStatic = false;
+        if (amD[k] == 1) osc2PitchStatic = false;
+    }
 
     const double invSr = 1.0 / sampleRate_;
 
@@ -453,7 +483,7 @@ void WavetableSynth::render(float* out, int32_t frames) {
                 v.exBendMul = std::exp2(v.exBendAt / 12.0);
             }
             const float exPos = v.ex.slide() * 0.5f;
-            const double pMul = std::exp2(dst[0] * 2.0);
+            const double pMul = pitchStatic ? 1.0 : std::exp2(dst[0] * 2.0);
             const float pos1 = std::clamp(basePos1 + (float)dst[2] + exPos, 0.0f, 1.0f);
             const float pos2 = std::clamp(basePos2 + (float)dst[2] + exPos, 0.0f, 1.0f);
             const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
@@ -463,10 +493,12 @@ void WavetableSynth::render(float* out, int32_t frames) {
             // routing and the same filters (own state, shared coefficients), so every
             // unison voice gets the cutoff, the envelope and the modulation (#193).
             float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
-            if (lvl1 > 1e-5f) o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDet, uniSpread, sd1);
+            if (lvl1 > 1e-5f)
+                o1 = oscStack(
+                    v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
             if (lvl2 > 1e-5f)
-                o2 = oscStack(
-                    v.ph2, base * m2 * std::exp2(dst[1] * 2.0), b2, pos2, wm2, warp2, uniN, uniDet, uniSpread, sd2);
+                o2 = oscStack(v.ph2, base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0)), b2, pos2,
+                    wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
             float sub = 0.0f;
             if (subLvl > 1e-5f) {
                 sub = subOsc(subWave, v.subPh);
@@ -525,7 +557,7 @@ void WavetableSynth::render(float* out, int32_t frames) {
         }
         if (chorusOn && chAmt > 1e-4f) {
             float cl, cr;
-            chorus(l, r, chAmt, chVoices, cl, cr);
+            chorus(l, r, chAmt, chVoices, chRate, cl, cr);
             l = cl;
             r = cr;
         }
@@ -647,28 +679,21 @@ float WavetableSynth::foldOut(float s, double amt) {
 }
 
 float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN,
-    double detCents, float spread, float& sideOut) {
+    const double* detF, const float* panL, const float* panR, float norm, float& sideOut) {
     const float posF = pos * (kFrames - 1);
     const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1);
     const float ff = posF - f0;
     const float* t0 = frame(bank, f0);
     const float* t1 = frame(bank, f1);
     float accL = 0.0f, accR = 0.0f;
-    // √2 undoes the equal-power law's 0.707 at centre, so a spread of 0 is bit-for-bit
-    // the mono stack this used to be.
-    const float norm = 1.41421356f / std::sqrt((float)uniN);
     for (int u = 0; u < uniN; ++u) {
-        const double d = (uniN > 1) ? ((double)u / (uniN - 1) - 0.5) * 2.0 : 0.0;
-        const double det = std::exp2(d * detCents / 1200.0);
         double rp = warpRead(mode, ph[u], warpAmt);
         float s = readMorph(t0, t1, ff, rp);
         if (mode == 4) s = foldOut(s, warpAmt);
-        const float pan = (float)d * spread;
-        // Equal-power gains (amplitude only — the fast pair is transparent here).
-        const float pan01 = (pan + 1.0f) * 0.125f;
-        accL += s * fast_math::cos(pan01);
-        accR += s * fast_math::sin(pan01);
-        ph[u] += inc * det;
+        // Detune factors and equal-power gains are block-constant (see render()).
+        accL += s * panL[u];
+        accR += s * panR[u];
+        ph[u] += inc * detF[u];
         if (ph[u] >= 1.0) ph[u] -= 1.0;
     }
     accL *= norm;
@@ -757,7 +782,7 @@ float WavetableSynth::tone(float& z, float x, float coef) {
     return coef < 0 ? z + (x - z) * (1.0f + coef) : x + (x - z) * coef * 1.4f;
 }
 
-void WavetableSynth::chorus(float l, float r, float amt, int voices, float& outL, float& outR) {
+void WavetableSynth::chorus(float l, float r, float amt, int voices, double rateHz, float& outL, float& outR) {
     const int sz = (int)chorusBuf_.size();
     if (sz < 4) {
         outL = l;
@@ -765,8 +790,7 @@ void WavetableSynth::chorus(float l, float r, float amt, int voices, float& outL
         return;
     }
     chorusBuf_[chorusW_] = (l + r) * 0.5f;
-    const double rate = expMap(get(FxChorusRate), 0.1, 6.0);
-    chorusPh_ += rate / sampleRate_;
+    chorusPh_ += rateHz / sampleRate_;
     if (chorusPh_ >= 1.0) chorusPh_ -= 1.0;
     // Delay-time LFO — REVERTED to std:: (measured ≈ −51 dB with fast_math::sin: a
     // 0.2-sample tap error on full-band wavetable content is audible in the null).

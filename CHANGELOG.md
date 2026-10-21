@@ -153,6 +153,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   one. In debug builds this printed a JUCE assertion per block and caused dropouts. AUs now get
   exactly their own channels; VST3 plug-ins keep the extra headroom that stops them crashing
   when they change their inputs or outputs.
+- **Heavy Aurora arrangements no longer stutter**: dense presets like Super Saw render
+  about 2.5× faster with bit-identical sound — block-constant unison, chorus and pitch
+  math is hoisted out of the per-sample loop. The `aurora-supersaw-2x` benchmark scenario
+  and the Aurora null-test gate in the smoke test cover the change.
 
 ## [0.56.1] — 2026-10-19
 
