@@ -71,6 +71,35 @@ now measures the gap since the previous job: under 200 µs, idle workers linger 
 (≤ 100 µs) before parking; a device callback's gap is a whole buffer, so they park at once.
 Result: offline matches post-#212 (3.7 / 6.5 / 21.2 ms), real time stays low, idle 0 %.
 
+## Later change: real-time policy — one thread unless it can't keep up
+
+The three-way benchmark still showed the pool spending 2–2.7x the CPU of the single-threaded
+engine while playing (32 audio tracks: ~70 % vs ~31 % of a core). Measured, step by step:
+
+- Waking only as many workers as the job needs (`dispatch(n, fn, helpers)`, `notify_one` x k)
+  changed nothing: on a light block the woken threads cost the same either way.
+- On Apple Silicon the default worker count spilled onto efficiency cores (13 workers, 10
+  performance cores); capping at performance cores − 1 cut offline CPU by ~22 % at the same speed.
+  QoS classes made no difference.
+- The real cost: a block that fits the buffer, spread over parked threads, wakes idle cores at
+  low clocks. With small buffers parallel rendering also missed **more** deadlines than one
+  thread (128 tracks at 64 frames: 352 late blocks vs 2), because waking takes a good part of a
+  1.3 ms period.
+
+So with a device the audio thread renders alone; the pool joins only under sustained overload —
+when the single-thread cost of the parallel leaves (measured on blocks rendered alone, smoothed
+by 1/16) passes the buffer period — and leaves after 2 s to re-measure (while it runs, a block
+rendered alone reads 1.5–2x its real cost, so it can't tell when the overload ends). Offline
+renders (back-to-back `renderOffline` blocks) still use every thread. Two traps found on the way
+and closed: a slow device block looked "back-to-back" and switched to offline mode (now only
+`renderOffline` can be offline), and lingering workers stole the tickets of a job that woke no one
+(no linger without helpers). New ABI `nota_engine_render_device_block` renders one block through
+the callback's path without a device, so tests and the benchmark measure what a device does.
+
+Device path, same machine: 32 audio tracks at 512 — 30 % (= one thread, = before #212);
+128 tracks at 64 frames — 75 %, same late blocks as one thread; 192 tracks at 64 frames
+(overload) — 547 late blocks of 7500 vs 2970 on one thread.
+
 ## Regression guards (in the smoke test)
 
 `tests/Nota.SmokeTest/RenderPoolTests.cs` (full run and `-- --perf`), on top of two new ABI
@@ -80,7 +109,10 @@ threads' own CPU clocks):
 
 1. idle engine: render threads < 20 ms CPU over 1 s;
 2. after playback stops: the same;
-3. real-time playback of 16 tracks: parallel CPU <= 5x single-thread + 5 % of a core;
+3. real-time playback of 16 tracks (device path) that one thread keeps up with: render threads
+   < 2 % of a core, total CPU <= 1.5x single-thread + 3 %;
+3b. overload (256 tracks, 64-frame buffer, most blocks late on one thread): render threads join,
+   late blocks not more than on one thread (skipped when this machine keeps up alone);
 4. bounce of 16 tracks: parallel CPU work <= 3x single-thread; wall time <= 1.3x (timing budget,
    lenient under CI);
 5. 8 synth tracks render bit-identically on N threads and on one;

@@ -9,12 +9,15 @@ build and scenario; writes into <out-dir>:
   cpu-playing.svg  - CPU while idle and while playing in real time (% of one core)
   bounce-time.svg  - offline render time per second of audio (lower is faster)
   bounce-cpu.svg   - CPU work per second of audio during an offline render
+  small-buffer-late.svg / small-buffer-cpu.svg - late blocks and CPU for the rt runs
+                     at buffers other than 512 (heavy sessions), when there are any
   summary.md       - the same numbers as Markdown tables, plus the machine
 Each SVG is also rendered to a 2x PNG (rsvg-convert or headless Chrome) for PR descriptions.
 Builds keep the order given on the command line (else CSV order). Stdlib only.
 """
 
 import csv
+import math
 import os
 import shutil
 import statistics
@@ -30,11 +33,12 @@ FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-se
 SCEN_NAME = {"audio": "audio", "inst": "synth"}
 
 
-def group_name(scenario, tracks):
+def group_name(scenario, tracks, block="512"):
     if scenario == "idle":
         return "Idle"
     n = int(tracks)
-    return f"{n} {SCEN_NAME[scenario]} track{'s' if n != 1 else ''}"
+    name = f"{n} {SCEN_NAME[scenario]} track{'s' if n != 1 else ''}"
+    return name if block in ("", "512") else f"{name} · {block}-sample buffer"
 
 
 def load(out):
@@ -44,7 +48,11 @@ def load(out):
     for r in rows:
         if r["label"] not in labels:
             labels.append(r["label"])
-        data.setdefault((r["scenario"], r["tracks"], r["mode"]), {}).setdefault(r["label"], []).append(r)
+        block = r.get("block") or ("" if r["scenario"] == "idle" else "512")
+        r["block"] = block
+        if r.get("misses") not in (None, "") and block:  # late blocks, % of the run's blocks
+            r["late_pct"] = str(100.0 * float(r["misses"]) / (10 * 48000 / int(block)))
+        data.setdefault((r["scenario"], r["tracks"], r["mode"], block), {}).setdefault(r["label"], []).append(r)
     return data, labels
 
 
@@ -53,15 +61,12 @@ def med(rs, field):
     return statistics.median(vals) if vals else None
 
 
-def nice_max(v):
-    if v <= 0:
+def nice_step(raw):
+    # 1, 2, 2.5 or 5 times a power of ten: ticks read as round numbers.
+    if raw <= 0:
         return 1.0
-    for step in (1, 2, 2.5, 5, 10):
-        mag = 10 ** (len(str(int(v))) - 1)
-        top = step * mag
-        if top >= v:
-            return top
-    return v
+    mag = 10 ** math.floor(math.log10(raw))
+    return next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
 
 
 def fmt(v):
@@ -73,7 +78,10 @@ def bar_chart(path, title, subtitle, unit, groups, labels, names):
     W, H = 960, 440
     left, right, top, bottom = 64, 24, 96, 56
     pw, ph = W - left - right, H - top - bottom
-    vmax = nice_max(max((v for _, vals in groups for v in vals.values() if v is not None), default=1) * 1.08)
+    peak = max((v for _, vals in groups for v in vals.values() if v is not None), default=1) * 1.08
+    step = nice_step(peak / 4)
+    ticks = max(1, math.ceil(peak / step))
+    vmax = step * ticks
     gw = pw / len(groups)
     bw = min(40, (gw - 24) / len(labels) - 2)
     y = lambda v: top + ph - ph * v / vmax
@@ -88,11 +96,11 @@ def bar_chart(path, title, subtitle, unit, groups, labels, names):
         s.append(f'<text x="{lx + 18}" y="80" font-size="13" fill="{INK2}">{names.get(lab, lab)}</text>')
         lx += 30 + 7.5 * len(names.get(lab, lab))
     # grid + y axis
-    for k in range(5):
-        v = vmax * k / 4
+    for k in range(ticks + 1):
+        v = step * k
         yy = y(v)
         s.append(f'<line x1="{left}" x2="{W - right}" y1="{yy:.1f}" y2="{yy:.1f}" stroke="{GRID if k else AXIS}" stroke-width="1"/>')
-        tick = f"{v:,.0f}" if vmax >= 10 else f"{v:g}"
+        tick = f"{v:,.0f}" if step >= 1 else f"{v:g}"
         s.append(f'<text x="{left - 8}" y="{yy + 4:.1f}" font-size="12" fill="{MUTED}" text-anchor="end">{tick}</text>')
     s.append(f'<text x="14" y="{top + ph / 2:.0f}" font-size="12" fill="{MUTED}" transform="rotate(-90 14 {top + ph / 2:.0f})" text-anchor="middle">{unit}</text>')
     for gi, (gname, vals) in enumerate(groups):
@@ -139,17 +147,19 @@ def main():
     if names:
         labels = [l for l in names if l in labels] + [l for l in labels if l not in names]
 
-    def series(mode, field):
+    def series(mode, field, small=False):
         groups = []
-        for (scen, tracks, m), by in data.items():
-            if m != mode:
+        for (scen, tracks, m, block), by in data.items():
+            if m != mode or (block not in ("", "512")) != small:
                 continue
-            groups.append((group_name(scen, tracks), {l: med(by.get(l, []), field) for l in labels}))
+            groups.append((group_name(scen, tracks, block), {l: med(by.get(l, []), field) for l in labels}))
         return groups
 
     playing = series("idle", "cpu_pct") + series("rt", "cpu_pct")
     bounce_t = series("offline", "wall_ms_per_s")
     bounce_c = series("offline", "cpu_ms_per_s")
+    small_late = series("rt", "late_pct", small=True)
+    small_cpu = series("rt", "cpu_pct", small=True)
     charts = [
         ("cpu-playing.svg", "CPU while idle and while playing",
          "Process CPU, median of runs. Playing = blocks paced like a 512-sample buffer at 48 kHz. Lower is better.",
@@ -161,6 +171,15 @@ def main():
          "CPU time summed over all threads, per second of audio. Lower uses less energy.",
          "CPU ms per second of audio", bounce_c),
     ]
+    if small_late:
+        charts += [
+            ("small-buffer-late.svg", "Late blocks at small buffers (heavy sessions)",
+             "Blocks that took longer than their buffer period (a dropout with a device). Lower is better.",
+             "% of blocks late", small_late),
+            ("small-buffer-cpu.svg", "CPU at small buffers (heavy sessions)",
+             "Process CPU while playing in real time. Lower is better.",
+             "% of one core", small_cpu),
+        ]
     for fname, title, sub, unit, groups in charts:
         p = os.path.join(out, fname)
         bar_chart(p, title, sub, unit, groups, labels, names)

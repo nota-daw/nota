@@ -1755,6 +1755,13 @@ NOTA_API NotaResult nota_engine_render_offline(NotaEngine* engine, float* out, i
 NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out,
                                                   int32_t frames, double sampleRate);
 
+/* Renders one block exactly as the audio device callback does (a real-time deadline, not
+ * a bounce: the render threads join only when one thread can't keep up), without a
+ * device. For tests and benchmarks that pace blocks like a callback; call
+ * nota_engine_render_offline_at once first to prepare the nodes at a rate. The device
+ * must be stopped (NOTA_ERR_ALREADY_RUNNING otherwise). */
+NOTA_API NotaResult nota_engine_render_device_block(NotaEngine* engine, float* out, int32_t frames);
+
 /* ---- Audio file encoders (export) -----------------------------------------
  * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
  * the managed exporter pulls render chunks and streams them through one of

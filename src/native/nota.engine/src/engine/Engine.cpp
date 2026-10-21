@@ -591,6 +591,7 @@ void Engine::ensureRenderScratch(size_t tracks) {
     s->blockMidiN.assign(cap, 0);
     s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));
     s->blockExprN.assign(cap, 0);
+    s->parIdx.assign(cap, 0);
     scratchHist_.publish(std::move(s));
 }
 

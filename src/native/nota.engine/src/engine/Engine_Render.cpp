@@ -751,6 +751,7 @@ void Engine::render(float* out, int32_t numFrames) {
     }
     dsp::ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
+    deviceBlock_ = true; // a deadline, whatever the gap since the last block
     processBlock(out, numFrames);
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
@@ -789,6 +790,7 @@ void Engine::renderOffline(float* out, int32_t frames) {
         recomputePdc();
         preparedSR_ = sr;
     }
+    deviceBlock_ = false; // export/freeze: back-to-back blocks are offline
     processBlock(out, frames);
 }
 
@@ -2184,16 +2186,65 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // rs_->leafBuf region, copy to the post half, run devices in place
         // there. Regions are per-track (never shared), so completion order
         // cannot mix signals; the serial accumulate below fixes mix order.
-        if (parallelOk)
-            pool_->dispatch((int)ntracks, [&](int wid, int i) {
-                LeafWork& w = rs_->leafWork[(size_t)i];
-                if (!w.t || w.path == LeafPath::Skip || !w.eligible) return;
-                w.wid = wid;
-                float* base = leafBase((size_t)i, stride);
-                renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
-                std::copy_n(base, stride, base + stride);
-                processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
-            });
+        if (parallelOk) {
+            int m = 0;
+            for (size_t li = 0; li < ntracks; ++li) {
+                const LeafWork& w = rs_->leafWork[li];
+                if (w.t && w.path != LeafPath::Skip && w.eligible) rs_->parIdx[(size_t)m++] = (int)li;
+            }
+            // Offline (blocks back-to-back, no deadline): every thread, finish fast. With a
+            // device: this thread alone unless it can't keep up (see rtParallel_); then
+            // enough threads to finish within kRtSizeLoad of the buffer.
+            // Only renderOffline can be offline: a device block that follows the last one
+            // closely is an overloaded callback, not a bounce.
+            const bool offline = !deviceBlock_ && pool_->backToBack();
+            const double periodNs = 1e9 * frames / std::max(1.0, transport_.sampleRate());
+            int helpers = -1;
+            if (!offline) {
+                helpers = 0;
+                if (rtParallel_ && (rtParallelLeftNs_ -= periodNs) <= 0) {
+                    rtParallel_ = false;                                 // re-measure alone
+                    leafWorkNs_ = (int64_t)(kRtSizeLoad * periodNs); // back within a few blocks if still over
+                }
+                if (rtParallel_) {
+                    const int threads = (int)std::ceil((double)leafWorkNs_ / (kRtSizeLoad * periodNs));
+                    helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
+                }
+            }
+            pool_->dispatch(
+                m,
+                [&](int wid, int j) {
+                    const size_t i = (size_t)rs_->parIdx[(size_t)j];
+                    LeafWork& w = rs_->leafWork[i];
+                    const auto t0 = std::chrono::steady_clock::now();
+                    w.wid = wid;
+                    float* base = leafBase(i, stride);
+                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                    std::copy_n(base, stride, base + stride);
+                    processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
+                    w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - t0).count();
+                },
+                helpers);
+            // The single-thread cost, from blocks this thread rendered alone (see
+            // leafWorkNs_).
+            if (!offline && m > 0) {
+                int64_t work = 0;
+                bool alone = true;
+                for (int j = 0; j < m; ++j) {
+                    const LeafWork& w = rs_->leafWork[(size_t)rs_->parIdx[(size_t)j]];
+                    work += w.workNs;
+                    alone = alone && w.wid == pool_->workerCount();
+                }
+                if (alone && !rtParallel_) {
+                    leafWorkNs_ += (work - leafWorkNs_) / 16;
+                    if (leafWorkNs_ > periodNs) {
+                        rtParallel_ = true;
+                        rtParallelLeftNs_ = kRtHoldSeconds * 1e9;
+                    }
+                }
+            }
+        }
 
         // Serial accumulate in track order (bit-identical: same elementwise
         // ops in the same order; SIMD adds/scales are exact per element).

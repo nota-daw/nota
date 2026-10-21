@@ -69,6 +69,13 @@ class AudioThreadPool {
     // Dedicated threads (excludes the caller-helper slot).
     int workerCount() const noexcept { return (int)workers_.size(); }
 
+    // Caller thread: whether the next job follows the previous one back-to-back
+    // (an offline render: no deadline, finish fast) rather than a buffer period
+    // later (a device callback: finish in time, spend little CPU).
+    bool backToBack() const noexcept {
+        return std::chrono::steady_clock::now() - lastEnd_ < std::chrono::nanoseconds(kLingerGapNs);
+    }
+
     // CPU time the dedicated workers have used since they started, summed, in
     // seconds (per-thread OS clocks: unaffected by other threads in the process).
     // Any thread. Lets tests tell parked workers (~0) from spinning ones.
@@ -77,7 +84,11 @@ class AudioThreadPool {
     // Run fn(workerId, index) for index in [0, n). The caller participates
     // with worker id == workerCount(). Returns when all n are done.
     // fn must not throw, allocate, lock, or block (audio thread).
-    template <typename F> void dispatch(int n, F&& fn) {
+    // helpers: how many parked workers to wake (< 0 = as many as useful, 0 =
+    // none: the caller runs the job alone, joined only by workers that are
+    // still spinning from the previous job). Each wake costs the woken thread
+    // a context switch, so wake only as many as the job's work pays for.
+    template <typename F> void dispatch(int n, F&& fn, int helpers = -1) {
         if (n <= 0) return;
         if (workers_.empty()) {
             for (int i = 0; i < n; ++i) fn(workerCount(), i);
@@ -88,10 +99,12 @@ class AudioThreadPool {
         // apart (ms): park at once, spinning would only burn CPU. An offline render
         // (export, freeze) dispatches back-to-back (us): a parked worker's wake-up
         // would cost more than the spin, so linger about twice the gap.
+        // A job that wakes no one (helpers == 0) lets no one linger either: workers
+        // that keep spinning would take its tickets anyway.
         {
             const auto now = std::chrono::steady_clock::now();
             const int64_t gapNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastEnd_).count();
-            lingerNs_.store(gapNs < kLingerGapNs ? std::min<int64_t>(2 * gapNs, kMaxLingerNs) : 0,
+            lingerNs_.store(helpers != 0 && gapNs < kLingerGapNs ? std::min<int64_t>(2 * gapNs, kMaxLingerNs) : 0,
                 std::memory_order_relaxed);
         }
         // Publish into this generation's slot BEFORE the bump (release):
@@ -104,11 +117,19 @@ class AudioThreadPool {
         s.base = claimed_.load(std::memory_order_relaxed);
         doneBase_ = done_.load(std::memory_order_relaxed);
         epoch_.store(g, std::memory_order_seq_cst); // publish (seq_cst: pairs with park())
-        // Wake parked workers — only when there is a ticket for them beyond
-        // the one the caller takes itself.
-        if (n > 1 && sleepers_.load(std::memory_order_seq_cst) > 0) {
-            wake_.fetch_add(1, std::memory_order_release);
-            wake_.notify_all(); // non-blocking futex wake
+        // Wake parked workers — at most `helpers`, and never more than there are
+        // tickets beyond the one the caller takes itself. Workers left parked stay
+        // asleep (their wait sees the bumped word only when a later notify reaches
+        // them, and then the epoch tells them what is live).
+        if (n > 1 && helpers != 0) {
+            if (const int asleep = sleepers_.load(std::memory_order_seq_cst); asleep > 0) {
+                const int want = std::min(helpers < 0 ? workerCount() : helpers, n - 1);
+                wake_.fetch_add(1, std::memory_order_release);
+                if (want >= asleep)
+                    wake_.notify_all(); // one non-blocking futex wake for everyone
+                else
+                    for (int i = 0; i < want; ++i) wake_.notify_one();
+            }
         }
         // Claim loop: validate against the live slot, claim by CAS, run.
         // The caller needs no stop checks (single audio thread: no

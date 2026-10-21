@@ -238,6 +238,16 @@ public sealed partial class NotaEngine : IAudioEngine
     }
 
     /// <summary>
+    /// Renders one block the way the audio device callback does (real-time deadline), without
+    /// a device — for tests that pace blocks like a callback. Device must be stopped.
+    /// </summary>
+    public void RenderDeviceBlock(float[] outBuffer, int frames)
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.RenderDeviceBlock(_handle, outBuffer, frames));
+    }
+
+    /// <summary>
     /// Renders `frames` of interleaved stereo at <paramref name="sampleRate"/> (WAV export, M6-4).
     /// Stop the audio backend first — this mutates transport state the audio thread reads.
     /// </summary>

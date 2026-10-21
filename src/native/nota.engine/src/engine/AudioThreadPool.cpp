@@ -24,6 +24,7 @@
 #elif defined(__APPLE__)
 #include <mach/mach.h>
 #include <pthread.h>
+#include <sys/sysctl.h>
 #else
 #include <pthread.h>
 #include <time.h>
@@ -32,7 +33,15 @@
 namespace nota {
 
 int AudioThreadPool::defaultWorkers() {
-    const int hw = (int)std::thread::hardware_concurrency();
+    int hw = (int)std::thread::hardware_concurrency();
+#if defined(__APPLE__)
+    // Performance cores only: a job split onto efficiency cores waits for its
+    // slowest part, and the same work costs those cores more CPU time.
+    int perf = 0;
+    size_t size = sizeof perf;
+    if (sysctlbyname("hw.perflevel0.physicalcpu", &perf, &size, nullptr, 0) == 0 && perf > 0)
+        hw = std::min(hw, perf);
+#endif
     if (hw <= 2) return 0;       // tiny machines: render inline
     return std::min(hw - 1, 16); // cap: past this the fork-join overhead wins
 }

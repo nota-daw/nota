@@ -440,6 +440,13 @@ NotaResult nota_engine_render_offline(NotaEngine* e, float* out, int32_t frames)
     return NOTA_OK;
 }
 
+NotaResult nota_engine_render_device_block(NotaEngine* e, float* out, int32_t frames) {
+    if (!e || !out || frames <= 0) return NOTA_ERR_INVALID_ARG;
+    if (ENG(e)->isRunning()) return NOTA_ERR_ALREADY_RUNNING; // the device renders itself
+    ENG(e)->renderDeviceBlock(out, frames);
+    return NOTA_OK;
+}
+
 NotaResult nota_engine_render_offline_at(NotaEngine* e, float* out, int32_t frames, double sr) {
     if (!e || !out || frames <= 0 || sr <= 0.0) return NOTA_ERR_INVALID_ARG;
     ENG(e)->renderOffline(out, frames, sr);

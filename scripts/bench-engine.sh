@@ -56,6 +56,7 @@ scenarios=(
     "inst 8 offline" "inst 32 offline"
     "audio 1 rt" "audio 8 rt" "audio 32 rt"
     "inst 8 rt" "inst 32 rt"
+    "audio 64 rt 128" "audio 128 rt 64" "audio 192 rt 64"
 )
 
 {
@@ -72,12 +73,14 @@ scenarios=(
 } > "$out/machine.txt"
 
 csv="$out/results.csv"
-echo "label,run,scenario,tracks,mode,cpu_ms_per_s,wall_ms_per_s,cpu_pct" > "$csv"
+echo "label,run,scenario,tracks,mode,block,cpu_ms_per_s,wall_ms_per_s,cpu_pct,misses" > "$csv"
 for r in $(seq 1 "$runs"); do
     for s in "${scenarios[@]}"; do
         for label in "${labels[@]}"; do
             # shellcheck disable=SC2086 # the scenario is a word list on purpose
-            row="$("$out/engine-bench-$label" $s $([ "$s" = idle ] || echo "$clip") 2>/dev/null | tail -1)"
+            set -- $s
+            [ "$1" = idle ] || set -- "$1" "$2" "$3" "$clip" "${@:4}" # clip before the optional block
+            row="$("$out/engine-bench-$label" "$@" 2>/dev/null | tail -1)"
             echo "$label,$r,$row" >> "$csv"
             echo "run $r  $label  $row"
         done

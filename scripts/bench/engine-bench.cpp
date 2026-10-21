@@ -7,16 +7,19 @@
 // exports — keep it to long-standing ABI).
 //
 //   engine-bench idle
-//   engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav>
+//   engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav> [block]
 //
 // idle     — engine created, nothing playing: process CPU over 5 s (% of one core).
 // audio    — <tracks> audio tracks, each a WAV clip + Reverb.
 // inst     — <tracks> instrument tracks (Nota Synth), each a MIDI clip of chords.
-// offline  — 10 s rendered back-to-back in 512-frame blocks (a bounce/export).
-// rt       — the same blocks paced like a 512 @ 48 kHz device callback.
+// offline  — 10 s rendered back-to-back in <block>-frame blocks (default 512; a bounce).
+// rt       — the same blocks paced like a <block> @ 48 kHz device callback, through
+//            nota_engine_render_device_block when the build exports it (the callback's
+//            own path), else nota_engine_render_offline (builds before it existed).
 //
-// Row: scenario,tracks,mode,cpu_ms_per_s,wall_ms_per_s,cpu_pct
-// (per second of audio; idle reports cpu_pct only).
+// Row: scenario,tracks,mode,block,cpu_ms_per_s,wall_ms_per_s,cpu_pct,misses
+// (per second of audio; misses = rt blocks that took longer than their buffer period;
+// idle reports cpu_pct only).
 
 #include "nota/nota_engine.h"
 
@@ -28,6 +31,7 @@
 #include <thread>
 #include <vector>
 
+#include <dlfcn.h>
 #include <sys/resource.h>
 
 namespace {
@@ -39,7 +43,7 @@ double processCpuSeconds() {
 }
 
 int usage() {
-    std::fprintf(stderr, "usage: engine-bench idle | engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav>\n");
+    std::fprintf(stderr, "usage: engine-bench idle | engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav> [block]\n");
     return 2;
 }
 
@@ -59,7 +63,7 @@ int main(int argc, char** argv) {
         const auto t0 = Clock::now();
         std::this_thread::sleep_for(std::chrono::seconds(5));
         const double wall = std::chrono::duration<double>(Clock::now() - t0).count();
-        std::printf("idle,0,idle,,,%.1f\n", 100.0 * (processCpuSeconds() - c0) / wall);
+        std::printf("idle,0,idle,,,,%.1f,\n", 100.0 * (processCpuSeconds() - c0) / wall);
         nota_engine_destroy(e);
         return 0;
     }
@@ -94,17 +98,26 @@ int main(int argc, char** argv) {
         }
     }
 
-    const int block = 512, rate = 48000, seconds = 10;
+    const int block = argc > 5 ? std::atoi(argv[5]) : 512, rate = 48000, seconds = 10;
+    if (block <= 0) return usage();
     std::vector<float> buf((size_t)block * 2);
     nota_engine_render_offline_at(e, buf.data(), block, rate); // prepares every node at the rate
     nota_transport_play(e);
 
     const bool paced = mode == "rt";
+    using RenderFn = NotaResult (*)(NotaEngine*, float*, int32_t);
+    RenderFn render = nota_engine_render_offline;
+    if (paced)
+        if (void* f = dlsym(RTLD_DEFAULT, "nota_engine_render_device_block")) render = (RenderFn)f;
+    const double periodS = (double)block / rate;
+    int misses = 0;
     const double c0 = processCpuSeconds();
     const auto t0 = Clock::now();
     auto next = t0;
     for (int f = 0; f < seconds * rate; f += block) {
-        nota_engine_render_offline(e, buf.data(), block);
+        const auto b0 = Clock::now();
+        render(e, buf.data(), block);
+        if (std::chrono::duration<double>(Clock::now() - b0).count() > periodS) ++misses;
         if (paced) {
             next += std::chrono::microseconds((int64_t)block * 1000000 / rate);
             std::this_thread::sleep_until(next);
@@ -112,8 +125,8 @@ int main(int argc, char** argv) {
     }
     const double wall = std::chrono::duration<double>(Clock::now() - t0).count();
     const double cpu = processCpuSeconds() - c0;
-    std::printf("%s,%d,%s,%.1f,%.1f,%.1f\n", scenario.c_str(), tracks, mode.c_str(), 1000.0 * cpu / seconds,
-        1000.0 * wall / seconds, 100.0 * cpu / wall);
+    std::printf("%s,%d,%s,%d,%.1f,%.1f,%.1f,%d\n", scenario.c_str(), tracks, mode.c_str(), block,
+        1000.0 * cpu / seconds, 1000.0 * wall / seconds, 100.0 * cpu / wall, paced ? misses : 0);
     nota_engine_destroy(e);
     return 0;
 }

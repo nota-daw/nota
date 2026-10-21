@@ -55,6 +55,8 @@ class Engine {
     void stop();
     double sampleRate() const { return backend_ ? backend_->sampleRate() : 0.0; }
     bool isRunning() const { return backend_ && backend_->isRunning(); }
+    // One block through the device callback's path, without a device (tests/benchmarks).
+    void renderDeviceBlock(float* out, int32_t frames) { render(out, frames); }
 
     // --- audio device settings (M7-1) ---
     // The chosen device/rate/buffer live in config_ (persisted to audio.json)
@@ -1739,6 +1741,7 @@ class Engine {
         bool eligible = false;     // parallel DSP (built-ins only, no shared writers)
         LeafPath path = LeafPath::Skip;
         int wid = -1;           // pool worker that rendered this track (diagnostic)
+        int64_t workNs = 0;     // time its parallel DSP took (sizes the next block's helpers)
         float* dest = nullptr;  // group bus or master out (stable during block)
         float* route = nullptr; // post-fader route tap or nullptr
         float sends[kMaxReturns] = {};
@@ -1770,7 +1773,26 @@ class Engine {
         // merges).
         std::vector<std::vector<ExprEv>> blockExpr;
         std::vector<int> blockExprN;
+        // Pass 1: indices of the leaves rendered on the pool this block (dispatched alone,
+        // so the job's ticket count is its real work).
+        std::vector<int> parIdx;
     };
+    // Pass 1 with a device (audio thread state). Measured: spreading a block that fits the
+    // buffer over parked render threads costs 2-3x the CPU (cores wake from idle at low
+    // clocks) and misses MORE deadlines (waking takes a good part of a short buffer). So
+    // the pool joins only under sustained overload: when leafWorkNs_ — the single-thread
+    // cost of the parallel leaves, measured on blocks this thread renders alone, smoothed
+    // by 1/16 so a few slow blocks don't count — passes the buffer period. It leaves after
+    // kRtHoldSeconds and this thread re-measures alone: while the pool runs, a block this
+    // thread renders alone reads 1.5-2x its real cost (its core runs cold, the DSP state
+    // sits in other cores' caches), so it can't tell when the overload is over. A real
+    // overload brings it back within a few blocks.
+    int64_t leafWorkNs_ = 0;
+    bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
+    bool rtParallel_ = false;
+    double rtParallelLeftNs_ = 0;
+    static constexpr double kRtSizeLoad = 0.85; // helpers: finish within this much of the buffer
+    static constexpr double kRtHoldSeconds = 2.0;
     SnapshotHistory<RenderScratch> scratchHist_;
     RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
     float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }

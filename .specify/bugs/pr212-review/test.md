@@ -27,7 +27,7 @@ GitHub only).
 | Rack with hosted plugin stays serial | — | not-run | no VST3/AU in the test environment; code-reviewed |
 | Pinned deps from scratch | fresh configure with empty `CPM_SOURCE_CACHE` | pass | JUCE `2cdfca8`, flac `1507800`, miniaudio `9634bed` checked out |
 | Workflow syntax | YAML parse of `ci.yml`, `release.yml` | pass | the cache/env behaviour on runners can only be confirmed by a CI run |
-| Render-pool guards | `dotnet run --project tests/Nota.SmokeTest -c Release -- --perf` | pass | 7 checks; fail against the reintroduced #212 spin (3 checks) and in-place scratch growth (crash) |
+| Render-pool guards | `dotnet run --project tests/Nota.SmokeTest -c Release -- --perf` | pass | 10 checks; fail against the reintroduced #212 spin (idle/stop/real-time), against waking every thread each block (render threads at 19 % of a core while one thread keeps up), and against in-place scratch growth (crash) |
 | Regression suite | `scripts/build.sh` (engine + app + smoke test) | pass | `SMOKE TEST PASSED`, 3789 PASS, 0 FAIL |
 
 ## Output Excerpts

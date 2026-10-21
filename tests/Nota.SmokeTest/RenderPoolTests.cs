@@ -2,17 +2,20 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Parallel render pool: performance regression guards (issue #223, the #212 review). The
-// render threads must cost nothing while nothing renders, must not burn several times
-// the CPU of a single-threaded render while playing, must not make a bounce slower than
-// rendering on one thread, must render bit-identically to one thread, and must survive
-// tracks being added and removed while blocks render.
+// render threads must cost nothing while nothing renders, must stay parked while playing
+// when the audio thread keeps up alone, must join when it can't (an overloaded small
+// buffer), must not make a bounce slower than rendering on one thread, must render
+// bit-identically to one thread, and must survive tracks being added and removed while
+// blocks render. Real-time checks render through the device callback's own path
+// (RenderDeviceBlock), not the offline one.
 //
 // Hardware-independent by construction: every check compares the parallel engine with the
 // same session rendered on the audio thread alone (render threads = 0) in this process,
 // or measures the render threads' own CPU clocks (nota_engine_render_threads_cpu_seconds)
 // rather than the whole process, so the .NET runtime and earlier tests add no noise.
-// Render CPU = time spent inside RenderOffline (the calling thread renders or waits there)
-// + the render threads' CPU. Only the bounce wall-clock check is a timing budget.
+// Render CPU = time spent inside the render call (the calling thread renders or waits there)
+// + the render threads' CPU. Only the wall-clock and late-block comparisons are timing
+// budgets.
 // Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --perf`.
 
 using System.Diagnostics;
@@ -63,27 +66,34 @@ internal static class RenderPoolTests
         return Math.Max(probe.RenderThreads, 2);
     }
 
-    // Renders `seconds` of audio; paced = one block per buffer period like a device
-    // callback, else back-to-back like a bounce. Returns (render CPU s, wall s).
-    private static (double Cpu, double Wall) Measure(NotaEngine e, double seconds, bool paced)
+    // Renders `seconds` of audio in `block`-frame blocks; paced = one block per buffer period
+    // through the device callback's path (RenderDeviceBlock), else back-to-back like a bounce.
+    // Returns render CPU s, wall s, the render threads' share of the CPU, and blocks that took
+    // longer than their buffer period.
+    private static (double Cpu, double Wall, double Threads, int Late) Measure(
+        NotaEngine e, double seconds, bool paced, int block = Block)
     {
-        var b = new float[Block * 2];
-        int blocks = (int)(seconds / BlockSeconds);
+        var b = new float[block * 2];
+        double period = (double)block / Rate;
+        int blocks = (int)(seconds / period), late = 0;
         double inside = 0, workers0 = e.RenderThreadsCpuSeconds;
         var wall = Stopwatch.StartNew();
         var call = new Stopwatch();
         for (int i = 0; i < blocks; i++)
         {
             call.Restart();
-            e.RenderOffline(b, Block);
-            inside += call.Elapsed.TotalSeconds;
+            if (paced) e.RenderDeviceBlock(b, block); else e.RenderOffline(b, block);
+            double took = call.Elapsed.TotalSeconds;
+            inside += took;
+            if (took > period) late++;
             if (paced)
             {
-                double ahead = (i + 1) * BlockSeconds - wall.Elapsed.TotalSeconds;
-                if (ahead > 0.001) Thread.Sleep(TimeSpan.FromSeconds(ahead));
+                double ahead = (i + 1) * period - wall.Elapsed.TotalSeconds;
+                if (ahead > 0.0005) Thread.Sleep(TimeSpan.FromSeconds(ahead));
             }
         }
-        return (inside + (e.RenderThreadsCpuSeconds - workers0), wall.Elapsed.TotalSeconds);
+        double threads = e.RenderThreadsCpuSeconds - workers0;
+        return (inside + threads, wall.Elapsed.TotalSeconds, threads, late);
     }
 
     private static float[] RenderSynths(int renderThreads)
@@ -133,15 +143,33 @@ internal static class RenderPoolTests
                 $"after playback stops, render threads use {used * 1000:0.0} ms CPU over 1 s (parked, < 20 ms)");
         }
 
-        // 3. Playing in real time: parallel rendering may cost some wake-up overhead, never a
-        //    multiple of the work (the #212 pool spun between blocks: ~40x).
-        (double Cpu, double Wall) ser, prl;
+        // 3. Playing in real time when one thread keeps up: the render threads stay out of it
+        //    (spreading a block that fits the buffer over parked threads costs 2-3x the CPU and
+        //    misses more deadlines; the #212 pool spun between blocks: ~40x).
+        (double Cpu, double Wall, double Threads, int Late) ser, prl;
         using (var e = AudioSession(16, 0)) ser = Measure(e, 2.0, paced: true);
         using (var e = AudioSession(16, par)) prl = Measure(e, 2.0, paced: true);
         {
-            double s = ser.Cpu / ser.Wall * 100, p = prl.Cpu / prl.Wall * 100;
-            yield return (p <= 5 * s + 5,
-                $"playing 16 tracks in real time: parallel render CPU {p:0.0} % of a core vs {s:0.0} % on one thread (<= 5x + 5)");
+            double s = ser.Cpu / ser.Wall * 100, p = prl.Cpu / prl.Wall * 100, t = prl.Threads / prl.Wall * 100;
+            yield return (t < 2,
+                $"playing 16 tracks in real time, one thread keeps up: render threads stay parked ({t:0.0} % of a core, < 2)");
+            yield return (p <= 1.5 * s + 3,
+                $"playing 16 tracks in real time: render CPU {p:0.0} % of a core vs {s:0.0} % on one thread (<= 1.5x + 3)");
+        }
+
+        // 3b. Overloaded (one thread can't make a 64-frame deadline): the render threads join.
+        //     Skipped when this machine renders the load alone in time.
+        using (var e = AudioSession(256, 0)) ser = Measure(e, 1.5, paced: true, block: 64);
+        int smallBlocks = (int)(1.5 * Rate / 64);
+        if (ser.Late * 2 < smallBlocks)
+            yield return (true, $"overload check skipped: one thread renders 256 tracks at a 64-frame buffer in time ({ser.Late} of {smallBlocks} blocks late)");
+        else
+        {
+            using (var e = AudioSession(256, par)) prl = Measure(e, 1.5, paced: true, block: 64);
+            yield return (prl.Threads > 0.05,
+                $"overloaded (256 tracks, 64-frame buffer, {ser.Late} of {smallBlocks} blocks late on one thread): render threads join ({prl.Threads * 1000:0} ms CPU)");
+            yield return TimingBudget.Check(true, prl.Late <= ser.Late,
+                $"overloaded: late blocks {prl.Late} with render threads vs {ser.Late} on one thread (not more)");
         }
 
         // 4. Bounce (blocks back-to-back): CPU work bounded, and never slower than one thread.

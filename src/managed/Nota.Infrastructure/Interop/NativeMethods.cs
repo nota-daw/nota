@@ -253,6 +253,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_offline")]
     internal static partial NotaResult RenderOffline(IntPtr engine, [Out] float[] outBuffer, int frames);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_device_block")]
+    internal static partial NotaResult RenderDeviceBlock(IntPtr engine, [Out] float[] outBuffer, int frames);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_offline_at")]
     internal static partial NotaResult RenderOfflineAt(IntPtr engine, [Out] float[] outBuffer, int frames, double sampleRate);
 
