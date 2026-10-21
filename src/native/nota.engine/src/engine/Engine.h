@@ -1782,17 +1782,26 @@ class Engine {
     // clocks) and misses MORE deadlines (waking takes a good part of a short buffer). So
     // the pool joins only under sustained overload: when leafWorkNs_ — the single-thread
     // cost of the parallel leaves, measured on blocks this thread renders alone, smoothed
-    // by 1/16 so a few slow blocks don't count — passes the buffer period. It leaves after
-    // kRtHoldSeconds and this thread re-measures alone: while the pool runs, a block this
-    // thread renders alone reads 1.5-2x its real cost (its core runs cold, the DSP state
-    // sits in other cores' caches), so it can't tell when the overload is over. A real
-    // overload brings it back within a few blocks.
+    // by 1/16 so a few slow blocks don't count — passes the buffer period.
+    // Leaving needs care: while the pool runs, a block this thread renders alone reads
+    // 1.5-2x its real cost (its core runs cold, the DSP state sits in other cores' caches),
+    // and dropping to one thread blindly to re-measure made a burst of late blocks at every
+    // hold expiry. Instead parWorkNs_ tracks the pool's summed task time, which over-reads
+    // the single-thread cost the same way. Every rtHoldNs_ the pool leaves only if even that
+    // bound fits the buffer. For kRtProbeSeconds after leaving, one block over its period
+    // proves the bound wrong: the pool rejoins at once and the hold doubles (up to
+    // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
+    int64_t parWorkNs_ = 0;
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;
     double rtParallelLeftNs_ = 0;
+    double rtProbeLeftNs_ = 0;
     static constexpr double kRtSizeLoad = 0.85; // helpers: finish within this much of the buffer
     static constexpr double kRtHoldSeconds = 2.0;
+    static constexpr double kRtMaxHoldSeconds = 32.0;
+    static constexpr double kRtProbeSeconds = 0.5;
+    double rtHoldNs_ = kRtHoldSeconds * 1e9;
     SnapshotHistory<RenderScratch> scratchHist_;
     RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
     float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }

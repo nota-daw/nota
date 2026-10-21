@@ -7,7 +7,7 @@
 // exports — keep it to long-standing ABI).
 //
 //   engine-bench idle
-//   engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav> [block]
+//   engine-bench <audio|inst> <tracks> <offline|rt|export> <clip.wav> [block]
 //
 // idle     — engine created, nothing playing: process CPU over 5 s (% of one core).
 // audio    — <tracks> audio tracks, each a WAV clip + Reverb.
@@ -16,6 +16,9 @@
 // rt       — the same blocks paced like a <block> @ 48 kHz device callback, through
 //            nota_engine_render_device_block when the build exports it (the callback's
 //            own path), else nota_engine_render_offline (builds before it existed).
+// export   — offline in <block>-frame chunks (default 8192, the app's AudioExporter and
+//            TrackFreezer) with 2 ms between chunks, where the app encodes the last one.
+//            wall_ms_per_s counts the render calls only.
 //
 // Row: scenario,tracks,mode,block,cpu_ms_per_s,wall_ms_per_s,cpu_pct,misses
 // (per second of audio; misses = rt blocks that took longer than their buffer period;
@@ -72,7 +75,8 @@ int main(int argc, char** argv) {
     const int tracks = std::atoi(argv[2]);
     const std::string mode = argv[3];
     const char* clip = argv[4];
-    if ((scenario != "audio" && scenario != "inst") || (mode != "offline" && mode != "rt") || tracks <= 0)
+    if ((scenario != "audio" && scenario != "inst") || (mode != "offline" && mode != "rt" && mode != "export") ||
+        tracks <= 0)
         return usage();
 
     for (int i = 0; i < tracks; ++i) {
@@ -98,7 +102,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    const int block = argc > 5 ? std::atoi(argv[5]) : 512, rate = 48000, seconds = 10;
+    const bool chunked = mode == "export";
+    const int block = argc > 5 ? std::atoi(argv[5]) : chunked ? 8192 : 512, rate = 48000, seconds = 10;
     if (block <= 0) return usage();
     std::vector<float> buf((size_t)block * 2);
     nota_engine_render_offline_at(e, buf.data(), block, rate); // prepares every node at the rate
@@ -114,16 +119,20 @@ int main(int argc, char** argv) {
     const double c0 = processCpuSeconds();
     const auto t0 = Clock::now();
     auto next = t0;
+    double rendering = 0;
     for (int f = 0; f < seconds * rate; f += block) {
         const auto b0 = Clock::now();
         render(e, buf.data(), block);
-        if (std::chrono::duration<double>(Clock::now() - b0).count() > periodS) ++misses;
+        const double took = std::chrono::duration<double>(Clock::now() - b0).count();
+        rendering += took;
+        if (took > periodS) ++misses;
+        if (chunked) std::this_thread::sleep_for(std::chrono::milliseconds(2));
         if (paced) {
             next += std::chrono::microseconds((int64_t)block * 1000000 / rate);
             std::this_thread::sleep_until(next);
         }
     }
-    const double wall = std::chrono::duration<double>(Clock::now() - t0).count();
+    const double wall = chunked ? rendering : std::chrono::duration<double>(Clock::now() - t0).count();
     const double cpu = processCpuSeconds() - c0;
     std::printf("%s,%d,%s,%d,%.1f,%.1f,%.1f,%d\n", scenario.c_str(), tracks, mode.c_str(), block,
         1000.0 * cpu / seconds, 1000.0 * wall / seconds, 100.0 * cpu / wall, paced ? misses : 0);

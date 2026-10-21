@@ -92,6 +92,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **Export and freeze use every core again**: since the engine's idle-CPU fix they rendered
+  on one thread, up to 4x slower. On macOS the engine also no longer wakes every render
+  thread when a block needs only a few, and a session that overloads one core no longer
+  drops out every two seconds while it plays.
 - **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
   longer than the room left after it: copies continue into the next open clip of the track,
   and those with no clip to land in are left out.

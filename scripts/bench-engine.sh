@@ -54,6 +54,7 @@ scenarios=(
     "idle"
     "audio 1 offline" "audio 8 offline" "audio 32 offline"
     "inst 8 offline" "inst 32 offline"
+    "audio 16 export" "inst 16 export" "audio 64 export"
     "audio 1 rt" "audio 8 rt" "audio 32 rt"
     "inst 8 rt" "inst 32 rt"
     "audio 64 rt 128" "audio 128 rt 64" "audio 192 rt 64"

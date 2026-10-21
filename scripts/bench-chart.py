@@ -9,6 +9,8 @@ build and scenario; writes into <out-dir>:
   cpu-playing.svg  - CPU while idle and while playing in real time (% of one core)
   bounce-time.svg  - offline render time per second of audio (lower is faster)
   bounce-cpu.svg   - CPU work per second of audio during an offline render
+  export-time.svg / export-cpu.svg - the same for exports in 8192-frame chunks, when there
+                     are any
   small-buffer-late.svg / small-buffer-cpu.svg - late blocks and CPU for the rt runs
                      at buffers other than 512 (heavy sessions), when there are any
   summary.md       - the same numbers as Markdown tables, plus the machine
@@ -33,11 +35,13 @@ FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-se
 SCEN_NAME = {"audio": "audio", "inst": "synth"}
 
 
-def group_name(scenario, tracks, block="512"):
+def group_name(scenario, tracks, block="512", mode=""):
     if scenario == "idle":
         return "Idle"
     n = int(tracks)
     name = f"{n} {SCEN_NAME[scenario]} track{'s' if n != 1 else ''}"
+    if mode == "export":
+        return f"{name} · {block}-frame chunks"
     return name if block in ("", "512") else f"{name} · {block}-sample buffer"
 
 
@@ -150,14 +154,16 @@ def main():
     def series(mode, field, small=False):
         groups = []
         for (scen, tracks, m, block), by in data.items():
-            if m != mode or (block not in ("", "512")) != small:
+            if m != mode or (mode != "export" and (block not in ("", "512")) != small):
                 continue
-            groups.append((group_name(scen, tracks, block), {l: med(by.get(l, []), field) for l in labels}))
+            groups.append((group_name(scen, tracks, block, m), {l: med(by.get(l, []), field) for l in labels}))
         return groups
 
     playing = series("idle", "cpu_pct") + series("rt", "cpu_pct")
     bounce_t = series("offline", "wall_ms_per_s")
     bounce_c = series("offline", "cpu_ms_per_s")
+    export_t = series("export", "wall_ms_per_s")
+    export_c = series("export", "cpu_ms_per_s")
     small_late = series("rt", "late_pct", small=True)
     small_cpu = series("rt", "cpu_pct", small=True)
     charts = [
@@ -171,6 +177,15 @@ def main():
          "CPU time summed over all threads, per second of audio. Lower uses less energy.",
          "CPU ms per second of audio", bounce_c),
     ]
+    if export_t:
+        charts += [
+            ("export-time.svg", "Export and freeze render time",
+             "Render time per second of audio, 8192-frame chunks with 2 ms between them (the app's exporter). Lower is faster.",
+             "ms per second of audio", export_t),
+            ("export-cpu.svg", "CPU work during an export",
+             "CPU time summed over all threads, per second of audio. Lower uses less energy.",
+             "CPU ms per second of audio", export_c),
+        ]
     if small_late:
         charts += [
             ("small-buffer-late.svg", "Late blocks at small buffers (heavy sessions)",

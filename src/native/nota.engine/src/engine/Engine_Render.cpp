@@ -790,7 +790,7 @@ void Engine::renderOffline(float* out, int32_t frames) {
         recomputePdc();
         preparedSR_ = sr;
     }
-    deviceBlock_ = false; // export/freeze: back-to-back blocks are offline
+    deviceBlock_ = false; // export/freeze: no deadline, every render thread
     processBlock(out, frames);
 }
 
@@ -2192,22 +2192,29 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 const LeafWork& w = rs_->leafWork[li];
                 if (w.t && w.path != LeafPath::Skip && w.eligible) rs_->parIdx[(size_t)m++] = (int)li;
             }
-            // Offline (blocks back-to-back, no deadline): every thread, finish fast. With a
+            // Offline (export, freeze: no deadline): every thread, finish fast. With a
             // device: this thread alone unless it can't keep up (see rtParallel_); then
             // enough threads to finish within kRtSizeLoad of the buffer.
-            // Only renderOffline can be offline: a device block that follows the last one
-            // closely is an overloaded callback, not a bounce.
-            const bool offline = !deviceBlock_ && pool_->backToBack();
+            // renderOffline never runs beside a live device, so deviceBlock_ alone tells the
+            // two apart. (The gap between blocks can't: an export's 8192-frame chunks arrive
+            // with the encoder's work between them, and an overloaded callback arrives late.)
+            const bool offline = !deviceBlock_;
             const double periodNs = 1e9 * frames / std::max(1.0, transport_.sampleRate());
             int helpers = -1;
             if (!offline) {
                 helpers = 0;
                 if (rtParallel_ && (rtParallelLeftNs_ -= periodNs) <= 0) {
-                    rtParallel_ = false;                                 // re-measure alone
-                    leafWorkNs_ = (int64_t)(kRtSizeLoad * periodNs); // back within a few blocks if still over
+                    if (parWorkNs_ <= periodNs) {
+                        rtParallel_ = false; // even the over-reading bound fits: try alone
+                        leafWorkNs_ = parWorkNs_;
+                        rtProbeLeftNs_ = kRtProbeSeconds * 1e9;
+                    } else {
+                        rtParallelLeftNs_ = rtHoldNs_; // still over: stay, no blind drop
+                    }
                 }
                 if (rtParallel_) {
-                    const int threads = (int)std::ceil((double)leafWorkNs_ / (kRtSizeLoad * periodNs));
+                    const double work = (double)std::max(leafWorkNs_, parWorkNs_);
+                    const int threads = (int)std::ceil(work / (kRtSizeLoad * periodNs));
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
@@ -2226,8 +2233,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         std::chrono::steady_clock::now() - t0).count();
                 },
                 helpers);
-            // The single-thread cost, from blocks this thread rendered alone (see
-            // leafWorkNs_).
+            // The single-thread cost, from blocks this thread rendered alone, and the
+            // pool's summed task time while it runs (see leafWorkNs_).
             if (!offline && m > 0) {
                 int64_t work = 0;
                 bool alone = true;
@@ -2236,11 +2243,21 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     work += w.workNs;
                     alone = alone && w.wid == pool_->workerCount();
                 }
-                if (alone && !rtParallel_) {
-                    leafWorkNs_ += (work - leafWorkNs_) / 16;
-                    if (leafWorkNs_ > periodNs) {
+                if (rtParallel_) {
+                    parWorkNs_ += (work - parWorkNs_) / 16;
+                } else {
+                    // Just left the pool: one block over its period proves the bound wrong.
+                    // Rejoin at once and wait twice as long before the next try.
+                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > periodNs;
+                    if (alone) leafWorkNs_ += (work - leafWorkNs_) / 16;
+                    if (probeMissed || (alone && leafWorkNs_ > periodNs)) {
+                        if (probeMissed) rtHoldNs_ = std::min(2 * rtHoldNs_, kRtMaxHoldSeconds * 1e9);
                         rtParallel_ = true;
-                        rtParallelLeftNs_ = kRtHoldSeconds * 1e9;
+                        rtParallelLeftNs_ = rtHoldNs_;
+                        rtProbeLeftNs_ = 0;
+                        parWorkNs_ = std::max(leafWorkNs_, work);
+                    } else if (rtProbeLeftNs_ > 0 && (rtProbeLeftNs_ -= periodNs) <= 0) {
+                        rtHoldNs_ = kRtHoldSeconds * 1e9; // the probe held: back to the short hold
                     }
                 }
             }

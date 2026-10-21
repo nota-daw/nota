@@ -120,12 +120,14 @@ class AudioThreadPool {
         // Wake parked workers — at most `helpers`, and never more than there are
         // tickets beyond the one the caller takes itself. Workers left parked stay
         // asleep (their wait sees the bumped word only when a later notify reaches
-        // them, and then the epoch tells them what is live).
+        // them, and then the epoch tells them what is live). A job that wants every
+        // thread (helpers < 0: an offline render) wakes them with one notify_all rather
+        // than k notify_one calls, k syscalls on the caller's critical path.
         if (n > 1 && helpers != 0) {
             if (const int asleep = sleepers_.load(std::memory_order_seq_cst); asleep > 0) {
                 const int want = std::min(helpers < 0 ? workerCount() : helpers, n - 1);
                 wake_.fetch_add(1, std::memory_order_release);
-                if (want >= asleep)
+                if (helpers < 0 || want >= asleep)
                     wake_.notify_all(); // one non-blocking futex wake for everyone
                 else
                     for (int i = 0; i < want; ++i) wake_.notify_one();
@@ -182,7 +184,15 @@ class AudioThreadPool {
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> done_{0};
     std::atomic<bool> stop_{false};
     NOTA_CACHE_ALIGNED std::atomic<int> sleepers_{0}; // workers inside park()
-    std::atomic<uint32_t> wake_{0};                   // futex word (native 32-bit wait everywhere)
+    // Futex word, in the width libc++ waits on natively: int32 on Linux, int64 elsewhere
+    // (MSVC's WaitOnAddress takes either). Any other width waits on a shared table entry,
+    // and its notify_one wakes every waiter: on macOS, dispatch() woke the whole pool.
+#if defined(__linux__)
+    using WakeWord = int32_t;
+#else
+    using WakeWord = int64_t;
+#endif
+    std::atomic<WakeWord> wake_{0};
     std::atomic<int64_t> lingerNs_{0};                // set per dispatch (see dispatch())
 
     JobSlot slots_[kSlots]; // gen-indexed descriptors (see header comment)

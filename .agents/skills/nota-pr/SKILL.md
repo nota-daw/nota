@@ -1,6 +1,6 @@
 ---
 name: nota-pr
-description: Open a Nota pull request the project's way — branch off develop, commit in the repo's style under the maintainer's identity, push over HTTPS, and write the description from the PR template. Evidence is part of the PR, attached through the pr-assets branch: a user-visible UI change carries before/after screenshots; a performance change (engine, DSP, threading, render path, CPU/memory) carries a before/after benchmark with charts. Use whenever the user asks to open, create or prepare a PR, or to "push this for review".
+description: Open a Nota pull request the project's way — branch off develop, commit in the repo's style under the contributor's own git identity, push over HTTPS, and write the description from the PR template. Evidence is part of the PR, attached through the pr-assets branch: a user-visible UI change carries before/after screenshots; a performance change (engine, DSP, threading, render path, CPU/memory) carries a before/after benchmark with charts. Use whenever the user asks to open, create or prepare a PR, or to "push this for review".
 user-invocable: true
 ---
 
@@ -20,9 +20,8 @@ never go into `develop` — they live on the orphan **`pr-assets`** branch (see
 - Commit message: `(fix) Summary`, `(feat) …`, `(docs) …`, `(refactor) …`, `(style) …`; a body
   that says what and why in plain words. **No AI attribution** (no `Co-Authored-By`, no
   "Generated with" line) in commits or the PR body.
-- Author and committer: `Egor Khindikaynen <khek@ambertape.ru>`:
-  `git -c user.name="Egor Khindikaynen" -c user.email=khek@ambertape.ru commit …`
-  (and `--author` the same, if the local identity differs).
+- Author and committer: whoever makes the change, from their own git config. Never set
+  `user.name` / `user.email` / `--author` to someone else's identity.
 - Spec and bug artifacts (`specs/<slug>/`, `.specify/bugs/<slug>/`) ship with the change they
   describe. Never commit build dirs, `.cpm-cache/`, benchmark output or harness binaries.
 
@@ -99,7 +98,7 @@ git fetch origin pr-assets
 git worktree add /tmp/nota-assets origin/pr-assets -B pr-assets
 mkdir -p /tmp/nota-assets/<folder> && cp <pngs> <results.csv> <summary.md> /tmp/nota-assets/<folder>/
 git -C /tmp/nota-assets add <folder>
-git -C /tmp/nota-assets -c user.name="Egor Khindikaynen" -c user.email=khek@ambertape.ru commit -m "Images for <change>"
+git -C /tmp/nota-assets commit -m "Images for <change>"
 git -C /tmp/nota-assets -c credential.helper= -c credential.helper='!gh auth git-credential' \
     push https://github.com/nota-daw/nota.git HEAD:pr-assets
 git worktree remove /tmp/nota-assets

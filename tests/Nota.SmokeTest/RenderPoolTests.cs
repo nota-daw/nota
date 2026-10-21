@@ -67,11 +67,12 @@ internal static class RenderPoolTests
     }
 
     // Renders `seconds` of audio in `block`-frame blocks; paced = one block per buffer period
-    // through the device callback's path (RenderDeviceBlock), else back-to-back like a bounce.
+    // through the device callback's path (RenderDeviceBlock), else offline like a bounce, with
+    // `gapMs` of other work between blocks (an exporter encodes each chunk before the next).
     // Returns render CPU s, wall s, the render threads' share of the CPU, and blocks that took
-    // longer than their buffer period.
+    // longer than their buffer period (their indices into `lateAt`, if given).
     private static (double Cpu, double Wall, double Threads, int Late) Measure(
-        NotaEngine e, double seconds, bool paced, int block = Block)
+        NotaEngine e, double seconds, bool paced, int block = Block, double gapMs = 0, List<int>? lateAt = null)
     {
         var b = new float[block * 2];
         double period = (double)block / Rate;
@@ -85,7 +86,12 @@ internal static class RenderPoolTests
             if (paced) e.RenderDeviceBlock(b, block); else e.RenderOffline(b, block);
             double took = call.Elapsed.TotalSeconds;
             inside += took;
-            if (took > period) late++;
+            if (took > period) { late++; lateAt?.Add(i); }
+            if (gapMs > 0)
+            {
+                var gap = Stopwatch.StartNew();
+                while (gap.Elapsed.TotalMilliseconds < gapMs) Thread.SpinWait(50);
+            }
             if (paced)
             {
                 double ahead = (i + 1) * period - wall.Elapsed.TotalSeconds;
@@ -157,19 +163,44 @@ internal static class RenderPoolTests
                 $"playing 16 tracks in real time: render CPU {p:0.0} % of a core vs {s:0.0} % on one thread (<= 1.5x + 3)");
         }
 
-        // 3b. Overloaded (one thread can't make a 64-frame deadline): the render threads join.
-        //     Skipped when this machine renders the load alone in time.
-        using (var e = AudioSession(256, 0)) ser = Measure(e, 1.5, paced: true, block: 64);
-        int smallBlocks = (int)(1.5 * Rate / 64);
-        if (ser.Late * 2 < smallBlocks)
-            yield return (true, $"overload check skipped: one thread renders 256 tracks at a 64-frame buffer in time ({ser.Late} of {smallBlocks} blocks late)");
+        // 3b. Overloaded (one thread can't make a 64-frame deadline): the render threads join,
+        //     and stay joined while the overload lasts. The load is sized for this machine:
+        //     one thread needs ~1.3 buffer periods, which the pool covers with room to spare.
+        //     A mild overload is the hard case for leaving the pool: dropping to one thread to
+        //     re-measure (the #232 pool, every 2 s) made a run of late blocks each time.
+        //     6 s spans several of those hold expiries.
+        const int Small = 64;
+        double smallPeriod = (double)Small / Rate;
+        int overloadTracks;
+        using (var e = AudioSession(32, 0))
+        {
+            var cal = Measure(e, 0.5, paced: false, block: Small);
+            double perBlock = cal.Cpu / (int)(0.5 / smallPeriod);
+            overloadTracks = Math.Clamp((int)Math.Round(32 * 1.3 * smallPeriod / perBlock), 4, 2048);
+        }
+        using (var e = AudioSession(overloadTracks, 0)) ser = Measure(e, 1.0, paced: true, block: Small);
+        int serBlocks = (int)(1.0 / smallPeriod);
+        if (ser.Late * 2 < serBlocks)
+            yield return (true, $"overload check skipped: one thread renders {overloadTracks} tracks at a 64-frame buffer in time ({ser.Late} of {serBlocks} blocks late)");
         else
         {
-            using (var e = AudioSession(256, par)) prl = Measure(e, 1.5, paced: true, block: 64);
+            var lateAt = new List<int>();
+            using (var e = AudioSession(overloadTracks, par)) prl = Measure(e, 6.0, paced: true, block: Small, lateAt: lateAt);
+            int warm = (int)(0.5 / smallPeriod), blocks = (int)(6.0 / smallPeriod) - warm;
+            int lateWarm = lateAt.Count(i => i >= warm);
+            // A burst: late blocks crowded into 50 ms. Scheduler noise makes isolated ones.
+            int window = (int)(0.05 / smallPeriod), burst = 0;
+            for (int k = 0, j = 0; k < lateAt.Count; k++)
+            {
+                while (lateAt[k] - lateAt[j] >= window) j++;
+                if (lateAt[k] >= warm) burst = Math.Max(burst, k - j + 1);
+            }
             yield return (prl.Threads > 0.05,
-                $"overloaded (256 tracks, 64-frame buffer, {ser.Late} of {smallBlocks} blocks late on one thread): render threads join ({prl.Threads * 1000:0} ms CPU)");
-            yield return TimingBudget.Check(true, prl.Late <= ser.Late,
-                $"overloaded: late blocks {prl.Late} with render threads vs {ser.Late} on one thread (not more)");
+                $"overloaded ({overloadTracks} tracks, 64-frame buffer, {ser.Late} of {serBlocks} blocks late on one thread): render threads join ({prl.Threads * 1000:0} ms CPU)");
+            yield return TimingBudget.Check(true, lateWarm <= blocks / 100,
+                $"overloaded: {lateWarm} of {blocks} blocks late with render threads after warm-up (<= 1 %)");
+            yield return TimingBudget.Check(true, burst <= 4,
+                $"overloaded: at most {burst} late blocks within 50 ms (<= 4: no bursts when the pool re-checks the load)");
         }
 
         // 4. Bounce (blocks back-to-back): CPU work bounded, and never slower than one thread.
@@ -179,6 +210,17 @@ internal static class RenderPoolTests
             $"bouncing 16 tracks: parallel CPU work {prl.Cpu * 1000:0} ms vs {ser.Cpu * 1000:0} ms on one thread (<= 3x)");
         yield return TimingBudget.Check(true, prl.Wall <= 1.3 * ser.Wall + 0.01,
             $"bouncing 16 tracks: parallel {prl.Wall * 1000:0} ms vs {ser.Wall * 1000:0} ms on one thread (not slower, <= 1.3x)");
+
+        // 4b. Export and freeze: 8192-frame chunks with the encoder's work between them. The
+        //     render threads must take a real share (the #232 pool took the gap for a device
+        //     callback and rendered them on one thread: 3-4x slower than develop).
+        const int Chunk = 8192;
+        using (var e = AudioSession(16, 0)) ser = Measure(e, 6.0, paced: false, block: Chunk, gapMs: 2);
+        using (var e = AudioSession(16, par)) prl = Measure(e, 6.0, paced: false, block: Chunk, gapMs: 2);
+        yield return (prl.Threads >= 0.2 * prl.Cpu,
+            $"exporting 16 tracks in 8192-frame chunks: render threads do {prl.Threads / prl.Cpu * 100:0} % of the work (>= 20 %)");
+        yield return TimingBudget.Check(true, prl.Wall <= 1.3 * ser.Wall + 0.01,
+            $"exporting 16 tracks in 8192-frame chunks: parallel {prl.Wall * 1000:0} ms vs {ser.Wall * 1000:0} ms on one thread (not slower, <= 1.3x)");
 
         // 5. Parallel rendering is transparent: same samples as one thread.
         var one = RenderSynths(0);

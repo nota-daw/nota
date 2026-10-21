@@ -89,7 +89,7 @@ double AudioThreadPool::workersCpuSeconds() const {
 
 // Block until wake_ moves, unless a job (or stop) arrived since `seen`.
 void AudioThreadPool::park(uint64_t seen) {
-    const uint32_t w = wake_.load(std::memory_order_acquire);
+    const WakeWord w = wake_.load(std::memory_order_acquire);
     sleepers_.fetch_add(1, std::memory_order_seq_cst);
     if (epoch_.load(std::memory_order_seq_cst) == seen && !stop_.load(std::memory_order_seq_cst))
         wake_.wait(w, std::memory_order_acquire);
