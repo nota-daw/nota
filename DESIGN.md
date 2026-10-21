@@ -707,10 +707,39 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
 ### Menus, popovers, dialogs
 
 - **Menus, context menus, flyouts, drop-downs, tooltips:** raised, radius 3, a 1 px seam
-  ring. Menu items are 24 tall, radius 2; hover is a full accent fill with derived ink;
-  the shortcut on the right is muted ink (derived ink while highlighted); separators are
-  rules. **No blurred shadow:** Avalonia draws each popup in a window of its own, sized to
-  its content, so a blur would be clipped at the popup's edge.
+  ring, padding 4, at least 200 wide. **No blurred shadow:** Avalonia draws each popup in a
+  window of its own, sized to its content, so a blur would be clipped at the popup's edge.
+- **Menu items** (the Nota `MenuItem` theme in `NotaTheme.axaml`, spec 034) are 24 tall,
+  radius 2, in fixed columns that line up across a menu: icon (14, muted ink — never a
+  tinted icon) · label · value · shortcut · caret. Hover or keyboard focus is a full accent
+  fill with the derived ink on every part; disabled takes the disabled ink and no fill. A
+  chosen choice is ticked with an accent check in the icon column (radio and checkbox
+  items) — not a coloured dot. The **value** column shows a submenu's current choice in
+  muted ink ("Record input  Ext ›"), or a switch (18 × 10, accent while on — "Live
+  freeze"), or a data colour chip (a tag's colour). **Shortcuts** are Geist Mono 11, muted,
+  spelled the platform's way: `⌘G`, `⌘⇧G`, `⌫` on macOS (no "+"), `Ctrl+G` elsewhere
+  (`MenuKit.Spell`). The **submenu caret** is a small chevron glyph set in from the edge.
+- **Destructive items** (delete, remove, clear, discard, flatten) sit in the menu's last
+  group in the danger ink (label and icon) — `MenuKit.Danger`; their hover is the same
+  accent fill as every item. Danger is a semantic ink, not a second accent.
+- **The object header.** A menu for something with a name — track, clip, device, chain,
+  pad, macro, scene, Session slot, section, band, browser item, version — opens with a
+  non-interactive header row: its colour chip when it has one, the name in 600, and a
+  muted mono badge with its type and position or count ("Audio · 3", "3 tracks",
+  "MIDI clip"). Items below don't repeat the noun ("Copy", not "Copy track"). A menu on
+  empty space or a control (lane background, snap chip, metronome) has none.
+- **Inline rows** put the most common property edit in the menu itself, one click, no
+  submenu: the **colour grid** (the 9 track bases × base / light / dark, plus Auto; the
+  current colour ringed in primary ink, the pointer or keyboard cursor in muted ink) and
+  **segmented keys** (keys butted on seams, the chosen one in the accent — "Height:
+  Compact · Standard · Large", Option-click for every track). They never highlight as a
+  whole; arrows move inside them, Enter applies, and a pick closes the menu. Small muted
+  **captions** ("Recent") head a group inside a menu.
+- **Group order**, rules between groups: header → inline rows → naming and settings →
+  the object's own actions → create / group → clipboard (Copy ⌘C · Cut ⌘X · Paste ⌘V ·
+  Duplicate ⌘D, always in this order — `MenuKit.ClipboardGroup`) → destructive.
+  `DesignTokenCheck.RunMenus` keeps menus on `MenuKit`: icons through `MenuKit.Icon`,
+  destructive items through `MenuKit.Danger`, no Color / Track height submenus.
 - **Command palette** — the in-window modal: panel body, radius 4, seam ring and
   `Shadow.Modal`.
 - **Dialog windows** (`NotaWindow`): panel body; on macOS and Windows a 32 px raised header

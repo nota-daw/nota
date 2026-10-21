@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Recent instruments in Add track**: right-click a track (in Arrangement or Session) →
+  **Add track** now lists the five instruments you added most recently under **Recent** —
+  built-in or plug-in, from the browser, the menus or the AI tools. One click adds a track
+  with that instrument right after the one you clicked. The list is yours, not the
+  project's, and keeps a plug-in you uninstall out of sight until it is back.
 - **Edit several MIDI clips at once** (nota-daw/nota#48): select two or more MIDI clips — on
   one track or several — and double-click one of them (or right-click → **Edit selected
   clips together**). The Clip editor shows all their notes on the arrangement's bars: fix a
@@ -57,6 +62,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     says so when you're up to date or GitHub can't be reached.
   - **Settings → Updates** can turn the automatic checks off, and shows the last check with a
     **Check now** button. Nothing downloads until you click Update.
+
+### Changed
+- **Context menus, redesigned**: every right-click menu in the app now follows the Studio
+  look and one order. A menu for a track, clip, device, scene, pad or version starts with
+  its name, colour and type; commands come in the same groups everywhere, with Copy, Cut,
+  Paste and Duplicate always together and Delete last, in red. Icons are calm grey,
+  shortcuts read the Mac way (⌘G, not ⌘+G), a chosen option is ticked, and a submenu shows
+  its current value (Record input **Ext**, MIDI from **None**). The track menu sets the
+  **colour** (all 27 shades and Auto) and the **height** (Compact · Standard · Large;
+  Option-click for every track) in one click, without submenus. **Live freeze** is a switch
+  that shows whether the track is live-frozen; switch it off to unfreeze.
 
 ### Fixed
 - **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is

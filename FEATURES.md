@@ -124,7 +124,8 @@ track count and closes with Escape.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
-    The track menu's **Track height** sets a size for the selection or all tracks. Headers
+    The track menu's **Height** keys (Compact · Standard · Large) size the selection in one
+    click; ⌥-click sizes every track. Headers
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
     of their own when tall. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
@@ -183,7 +184,9 @@ track count and closes with Escape.
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
   `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
-  it when it is a group).
+  it when it is a group). `Add track ▸ Recent` (Arrangement and Session) lists the five
+  instruments added most recently — built-in or plug-in, however they were added — and
+  adds one in a click; the list is per user, and an uninstalled plug-in drops out of it.
 - **Several tracks at once**: ⇧-click headers to build a selection (or ⌘A with the headers
   focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
   selected tracks, and right-clicking the selection groups, colours or freezes them all —
@@ -1067,6 +1070,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Right-click menus, one system** — every context menu opens with the object it acts on
+  (name, colour, type and position: "Vocals · Audio · 3", "3 tracks", "MIDI clip") and lists
+  its commands in one order: properties → settings → actions → create / group → Copy · Cut ·
+  Paste · Duplicate → Delete, last and in red. Icons are neutral, a chosen option carries a
+  tick, a submenu shows its current value (Record input **Ext**, MIDI from **None**) and
+  shortcuts read ⌘G / ⌘⇧G on macOS, Ctrl+G elsewhere. The track menu sets the colour (27
+  shades and Auto) and the height in one click, and shows **Live freeze** as a switch —
+  on while the track is live-frozen, off to unfreeze.
 - **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)

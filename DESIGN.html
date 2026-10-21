@@ -500,6 +500,10 @@ td:first-child{color:var(--text-primary)}
 .menu span small{font-size:12px;color:var(--text-muted)}
 .menu span.hot{background:var(--accent);color:var(--text-on-accent)} .menu span.hot small{color:var(--text-on-accent)}
 .menu hr{border:0;height:1px;background:var(--rule);margin:4px}
+.menu span small.k{font-family:var(--font-mono);font-size:11px}
+.menu span.danger{color:var(--danger)} .menu span.danger.hot{color:var(--text-on-accent)}
+.menu span.head{font-weight:600;color:var(--text-heading)} .menu span.head small{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary)}
+.menu .sw{display:grid;grid-template-columns:repeat(9,16px);gap:2px;padding:4px 8px}.menu .sw i{width:12px;height:12px;margin:2px;border-radius:var(--r-badge)}.menu .sw i.on{outline:1px solid var(--text-primary);outline-offset:1px}
 /* transport */
 .transport{display:flex;align-items:center;gap:10px;height:44px;padding:0 8px;background:var(--panel);border-bottom:1px solid var(--seam);overflow-x:auto}
 .transport .name{flex:none;font:600 13px/1 var(--font-ui);color:var(--text-primary)}
@@ -756,7 +760,7 @@ ul.plain{margin:0;padding-left:18px;color:var(--text-secondary)} ul.plain li{mar
     <figure><span class="btn off">Disabled</span>Panel · faint ink, no opacity</figure>
     <figure><span class="listrow sel">Stone Vault</span>Selected row: 2 px accent tick</figure>
     <figure><span class="tabs"><span class="sel">Devices</span><span>Clip</span></span>Selected tab: 2 px underline</figure>
-    <figure><span class="menu"><span>Duplicate<small>⌘D</small></span><span class="hot">Rename<small>⌘R</small></span><hr><span>Delete</span></span>Menu: raised, seam ring, accent hover</figure>
+    <figure><span class="menu"><span class="head">Vocals<small>Audio · 3</small></span><hr><span class="sw"><i style="background:var(--track1)"></i><i style="background:var(--track2)"></i><i class="on" style="background:var(--track3)"></i><i style="background:var(--track4)"></i><i style="background:var(--track5)"></i><i style="background:var(--track6)"></i><i style="background:var(--track7)"></i><i style="background:var(--track8)"></i><i style="background:var(--track9)"></i></span><hr><span>Record input<small>Ext ›</small></span><hr><span>Copy<small class="k">⌘C</small></span><span class="hot">Duplicate<small class="k">⌘D</small></span><hr><span class="danger">Delete<small class="k">⌫</small></span></span>Menu: object header, inline colour row, value column, shortcuts ⌘C not ⌘+C, accent hover, danger last</figure>
   </div>
   <div class="row" style="margin-top:12px"><span class="field">Search</span><span class="field focus">Stone Vault</span></div>
   <p class="note">Fields and readouts are wells with a 1px rule edge; focus turns the edge accent, no ring. Empty state: one Ink 5 line, centred, no illustration, no call-to-action button.</p>
