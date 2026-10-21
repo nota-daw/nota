@@ -241,7 +241,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 {
                     int iv = i;
                     var mi = new MenuItem { Header = names[i] };
-                    if (i == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == cur;
                     mi.Click += (_, _) => { SetP(p, iv); RefreshAll(); };
                     fly.Items.Add(mi);
                 }

@@ -92,9 +92,7 @@ public sealed partial class DeviceChainView
 
         void Menu(MenuFlyout flyout)
         {
-            var unfold = new MenuItem { Header = "Unfold" };
-            unfold.Click += (_, _) => SetFolded(k, di, false);
-            flyout.Items.Add(unfold);
+            flyout.Items.Add(MenuKit.Item("Unfold", null, () => SetFolded(k, di, false)));
             flyout.Items.Add(new Separator());
         }
         strip.PointerPressed += (_, e) =>

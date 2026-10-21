@@ -87,6 +87,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunIcons()) Check(ok, label);
+    Console.WriteLine("-- design: menus --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunMenus()) Check(ok, label);
     Console.WriteLine("-- design: browser --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBrowser()) Check(ok, label);
     Console.WriteLine("-- design: remote --");
@@ -15014,6 +15016,10 @@ foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
 foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+
+// --- context menus: "Add track ▸ Recent" list rules (spec 034) ---
+Console.WriteLine("-- recent instruments --");
+foreach (var (ok, label) in RecentInstrumentsTests.Run()) Check(ok, label);
 
 // --- get plug-ins: registry index, install/uninstall from local archives ---
 Console.WriteLine("-- get plug-ins: registry store --");

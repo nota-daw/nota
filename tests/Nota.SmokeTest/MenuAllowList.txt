@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+#
+# Menu ratchet for DesignTokenCheck.RunMenus (spec 034).
+#
+# Menu items built outside the MenuKit conventions — an icon that is not MenuKit.Icon, a
+# destructive command (Delete / Remove / Clear / Discard / Flatten) without MenuKit.Danger,
+# or a Color / Track height submenu — counted per file. A count may only go down. Empty:
+# every menu follows the conventions; add a line only for a justified exception, with why.
+#

@@ -288,7 +288,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 {
                     bool cur = id < 0 ? !ExtOn() : ExtOn() && Src() == id;
                     var mi = new MenuItem { Header = label };
-                    if (cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = cur;
                     mi.Click += (_, _) =>
                     {
                         engine.SetDeviceSidechainSource(track, di, id);

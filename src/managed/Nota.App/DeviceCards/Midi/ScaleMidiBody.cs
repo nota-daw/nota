@@ -386,7 +386,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 {
                     int iv = sc;
                     var item = new MenuItem { Header = ScaleNames[sc] };
-                    if (Sc() == sc) item.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = NotaPalette.Accent };
+                    item.ToggleType = MenuItemToggleType.Radio; item.IsChecked = Sc() == sc;
                     item.Click += (_, _) => PickType(iv);
                     fly.Items.Add(item);
                 }

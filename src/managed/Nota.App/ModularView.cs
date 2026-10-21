@@ -1201,8 +1201,12 @@ public sealed class ModularView : UserControl
     {
         int t = _trackId; var e = _engine;
         var flyout = new MenuFlyout();
+        flyout.Items.Add(MenuKit.Header(paramName, null, "Parameter"));
+        flyout.Items.Add(new Separator());
 
-        // Already modulated? Offer edit + remove (the link may be owned by another track).
+        // Already modulated? Offer edit + remove (the link may be owned by another track);
+        // Remove goes last, in the destructive group.
+        MenuItem? remove = null;
         var (owner, li) = FindModulation(targetKind, device, param);
         if (owner >= 0)
         {
@@ -1212,10 +1216,9 @@ public sealed class ModularView : UserControl
                 : "LFO " + e.CvLinkSource(owner, li);
             var edit = new MenuItem { Header = $"Edit modulation · {srcLabel}{(cross ? " (" + TrackName(owner) + ")" : "")}…" };
             edit.Click += (_, _) => ShowLinkEditor(anchor, owner, li);
-            var rm = new MenuItem { Header = "Remove modulation" };
-            rm.Click += (_, _) => { e.CvLinkRemove(owner, li); Rebuild(); Changed?.Invoke(); };
             flyout.Items.Add(edit);
-            flyout.Items.Add(rm);
+            remove = MenuKit.Danger("Remove modulation", null,
+                () => { e.CvLinkRemove(owner, li); Rebuild(); Changed?.Invoke(); });
         }
         else
         {
@@ -1278,6 +1281,12 @@ public sealed class ModularView : UserControl
             var ex = new MenuItem { Header = exposed ? "Unexpose CV output" : "Expose as CV output" };
             ex.Click += (_, _) => { if (!_exposedParams.Remove((t, device, param))) _exposedParams.Add((t, device, param)); Rebuild(); };
             flyout.Items.Add(ex);
+        }
+
+        if (remove is not null)
+        {
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(remove);
         }
 
         flyout.ShowAt(anchor, showAtPointer: true);

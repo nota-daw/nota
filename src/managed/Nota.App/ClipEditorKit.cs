@@ -240,7 +240,7 @@ internal static class ClipEditorKit
         {
             int idx = i;
             var mi = new MenuItem { Header = items[i] };
-            if (i == current) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.TextPrimary };
+            mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == current;
             mi.Click += (_, _) => pick(idx);
             f.Items.Add(mi);
         }

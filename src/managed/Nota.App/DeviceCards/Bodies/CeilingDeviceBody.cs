@@ -239,7 +239,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 foreach (var (label, cur, pick) in items())
                 {
                     var mi = new MenuItem { Header = label };
-                    if (cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = cur;
                     var pk = pick;
                     mi.Click += (_, _) => { pk(); RefreshAll(); };
                     fly.Items.Add(mi);

@@ -522,7 +522,7 @@ public sealed class PreviewPlayer : UserControl
             if (t.Group != group)
             {
                 flyout.Items.Add(new Separator());
-                flyout.Items.Add(new MenuItem { Header = NotaText.Label(t.Group), IsEnabled = false, FontSize = 11 });
+                flyout.Items.Add(MenuKit.Caption(t.Group));
                 group = t.Group;
             }
             Add(t.Name, t.Id, t.Blurb);

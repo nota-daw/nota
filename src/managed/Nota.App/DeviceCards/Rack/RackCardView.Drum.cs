@@ -305,7 +305,9 @@ internal sealed partial class RackCardView
     {
         Sel = chain;
         var f = new MenuFlyout();
-        var rename = new MenuItem { Header = "Rename…" };
+        f.Items.Add(MenuKit.Header(PadName(a, chain), null, "Pad"));
+        f.Items.Add(new Separator());
+        var rename = MenuKit.Item("Rename…", GlyphKind.Edit);
         rename.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRenamePad(a, anchor, chain));
         f.Items.Add(rename);
 
@@ -324,9 +326,7 @@ internal sealed partial class RackCardView
         open.Click += (_, _) => _drumView = 2;
         f.Items.Add(open);
         f.Items.Add(new Separator());
-        var remove = new MenuItem { Header = "Remove pad" };
-        remove.Click += (_, _) => { a.RemoveChain(chain); _ctx.NotifyChanged(); };
-        f.Items.Add(remove);
+        f.Items.Add(MenuKit.Danger("Remove pad", GlyphKind.Trash, () => { a.RemoveChain(chain); _ctx.NotifyChanged(); }));
 
         bool renaming = false;
         rename.Click += (_, _) => renaming = true;

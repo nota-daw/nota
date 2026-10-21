@@ -1212,8 +1212,7 @@ public sealed class BrowserView : UserControl
         {
             var chip = item;
             var mi = new MenuItem { Header = chip.Label, ToggleType = MenuItemToggleType.CheckBox, IsChecked = chip.Active };
-            if (chip.ColorHex is not null)
-                mi.Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(chip.ColorHex) };
+            if (chip.ColorHex is not null) MenuKit.SetTrailing(mi, MenuKit.Swatch(BrushFromHex(chip.ColorHex)));
             mi.Click += (_, _) => chip.OnClick();
             flyout.Items.Add(mi);
         }
@@ -1477,7 +1476,30 @@ public sealed class BrowserView : UserControl
         e.Handled = true;
     }
 
+    // The row's menu with the item named at the top (spec 034).
     private MenuFlyout? BuildContextMenu(BrowserItem item)
+    {
+        var flyout = BuildContextMenuItems(item);
+        if (flyout is null || flyout.Items.Count == 0) return flyout;
+        flyout.Items.Insert(0, MenuKit.Header(item.Name, null, ItemKindLabel(item)));
+        flyout.Items.Insert(1, new Separator());
+        return flyout;
+    }
+
+    private static string ItemKindLabel(BrowserItem item) => item.Kind switch
+    {
+        BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument => "Instrument",
+        BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect => "Audio effect",
+        BrowserItemKind.BuiltinMidiEffect => "MIDI effect",
+        BrowserItemKind.Sample => "Sample",
+        BrowserItemKind.MidiFile => "MIDI file",
+        BrowserItemKind.Project => "Project",
+        BrowserItemKind.Preset => "Preset",
+        BrowserItemKind.Folder => "Folder",
+        _ => "",
+    };
+
+    private MenuFlyout? BuildContextMenuItems(BrowserItem item)
     {
         var flyout = new MenuFlyout();
 
@@ -1494,11 +1516,8 @@ public sealed class BrowserView : UserControl
             {
                 var tag = t;
                 bool assigned = _vm.IsTagAssigned(item, tag.Id);
-                var mi = new MenuItem
-                {
-                    Header = tag.Title, ToggleType = MenuItemToggleType.CheckBox, IsChecked = assigned,
-                    Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(tag.Color) },
-                };
+                var mi = new MenuItem { Header = tag.Title, ToggleType = MenuItemToggleType.CheckBox, IsChecked = assigned };
+                MenuKit.SetTrailing(mi, MenuKit.Swatch(BrushFromHex(tag.Color)));
                 mi.Click += (_, _) => _vm.AssignTag(item, tag.Id, !assigned);
                 tagsMenu.Items.Add(mi);
             }
@@ -1553,8 +1572,7 @@ public sealed class BrowserView : UserControl
                 open.Click += (_, _) => ItemActivated?.Invoke(item, KeyModifiers.None);
                 var reveal = new MenuItem { Header = "Reveal in Finder" };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
-                var del = new MenuItem { Header = "Delete…" };
-                del.Click += (_, _) => DeleteProjectRequested?.Invoke(item);
+                var del = MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeleteProjectRequested?.Invoke(item));
                 flyout.Items.Add(open);
                 flyout.Items.Add(reveal);
                 flyout.Items.Add(new Separator());

@@ -1079,19 +1079,11 @@ public sealed partial class ArrangementView
         {
             bool hasSel = _o.HasAutoSelection && ReferenceEquals(_o._autoSelTrack, t);
             var flyout = new MenuFlyout();
-            var copy = new MenuItem { Header = "Copy automation", IsEnabled = hasSel, Icon = MenuKit.Icon(GlyphKind.Copy), InputGesture = MenuKit.CopyKey };
-            copy.Click += (_, _) => _o.CopyAutoSelection();
-            var cut = new MenuItem { Header = "Cut automation", IsEnabled = hasSel, Icon = MenuKit.Icon(GlyphKind.Cut), InputGesture = MenuKit.CutKey };
-            cut.Click += (_, _) => _o.CutAutoSelection();
-            var del = new MenuItem { Header = "Delete automation", IsEnabled = hasSel, Icon = MenuKit.Icon(GlyphKind.Trash), InputGesture = MenuKit.DeleteKey };
-            del.Click += (_, _) => _o.DeleteAutoSelection();
-            var paste = new MenuItem { Header = "Paste automation", IsEnabled = _o.HasAutoClip, Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
-            paste.Click += (_, _) => _o.PasteAutoAt(t, _o.Snap(beat));
-            flyout.Items.Add(copy);
-            flyout.Items.Add(cut);
-            flyout.Items.Add(del);
-            flyout.Items.Add(new Separator());
-            flyout.Items.Add(paste);
+            var copy = MenuKit.Item("Copy automation", GlyphKind.Copy, () => _o.CopyAutoSelection(), MenuKit.CopyKey, hasSel);
+            var cut = MenuKit.Item("Cut automation", GlyphKind.Cut, () => _o.CutAutoSelection(), MenuKit.CutKey, hasSel);
+            var paste = MenuKit.Item("Paste automation", GlyphKind.Paste, () => _o.PasteAutoAt(t, _o.Snap(beat)), MenuKit.PasteKey, _o.HasAutoClip);
+            var del = MenuKit.Danger("Delete automation", GlyphKind.Trash, () => _o.DeleteAutoSelection(), MenuKit.DeleteKey, hasSel);
+            MenuKit.AddGroups(flyout.Items, new Control[] { copy, cut, paste }, new Control[] { del });
             flyout.ShowAt(this, showAtPointer: true);
         }
 
@@ -1145,6 +1137,11 @@ public sealed partial class ArrangementView
         }
 
         private void ShowClipMenu(int trackId, ClipVM clip, double beat)
+            => BuildClipMenu(trackId, clip, beat).ShowAt(this, showAtPointer: true);
+
+        // The clip menu (spec 034): header (the clip, or the count of a multi-selection) →
+        // rename → edits → audio conversions → Session → clipboard → delete.
+        internal MenuFlyout BuildClipMenu(int trackId, ClipVM clip, double beat)
         {
             double at = _o.Snap(beat);
             int idx = clip.ClipIndex;
@@ -1152,142 +1149,97 @@ public sealed partial class ArrangementView
             // part of a multi-selection; otherwise they collapse to just this clip.
             void EnsureSelected() { if (!_o.IsSelected(trackId, idx)) _o.Select(trackId, idx); }
             bool inGroup = _o.IsSelected(trackId, idx) && _o.Selection.Count > 1;
-
             var flyout = new MenuFlyout();
-            var split = new MenuItem { Header = "Split here", Icon = MenuKit.Icon(GlyphKind.Split), InputGesture = MenuKit.SplitKey };
-            split.Click += (_, _) => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); };
-            var dup = new MenuItem { Header = inGroup ? "Duplicate selection" : "Duplicate", Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateKey };
-            dup.Click += (_, _) => { EnsureSelected(); _o.DuplicateSelectedClip(); };
-            var del = new MenuItem { Header = inGroup ? "Delete selection" : "Delete", Icon = MenuKit.Icon(GlyphKind.Trash), InputGesture = MenuKit.DeleteKey };
-            del.Click += (_, _) =>
+
+            var track = _o._tracks.FirstOrDefault(v => v.Id == trackId);
+            var header = inGroup
+                ? MenuKit.Header($"{_o.Selection.Count} clips", null, "")
+                : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : "Clip",
+                                 track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? "MIDI clip" : "Audio clip");
+
+            var rename = MenuKit.Item("Rename…", GlyphKind.Edit,
+                () => PromptRename(clip.Name, s => { _o._engine?.SetClipName(trackId, idx, s); _o.Refresh(); }));
+
+            var edits = new List<Control>
             {
-                if (inGroup) _o.DeleteSelectedClips();
-                else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
+                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); }, MenuKit.SplitKey),
             };
-            // Clip deactivate (key 0): header reflects the clicked clip's current state.
-            var deact = new MenuItem
-            {
-                Header = clip.Active ? (inGroup ? "Deactivate selection" : "Deactivate clip")
-                                     : (inGroup ? "Activate selection" : "Activate clip"),
-                Icon = MenuKit.Icon(GlyphKind.Bypass),
-                InputGesture = MenuKit.ActivateKey,
-            };
-            deact.Click += (_, _) => { EnsureSelected(); _o.ToggleSelectedClipsActive(); };
-            // Reverse (audio only): non-destructive, so the header reflects the clicked clip.
-            MenuItem? reverse = null;
+            // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
-            {
-                bool on = rai.Reversed != 0;
-                reverse = new MenuItem
-                {
-                    Header = on ? (inGroup ? "Un-reverse selection" : "Un-reverse")
-                                : (inGroup ? "Reverse selection" : "Reverse"),
-                    Icon = MenuKit.Icon(GlyphKind.Reverse),
-                };
-                reverse.Click += (_, _) => { EnsureSelected(); _o.ToggleSelectedClipsReverse(); };
-            }
+                edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : "Reverse", GlyphKind.Reverse,
+                    () => { EnsureSelected(); _o.ToggleSelectedClipsReverse(); }));
             // Consolidate: a right-click inside the time selection acts on that range; otherwise
             // on the multi-selection's span, or just this clip (bakes its edits into one clip).
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
-            var consolidate = new MenuItem
-            {
-                Header = inRange || inGroup ? "Consolidate selection" : "Consolidate",
-                Icon = MenuKit.Icon(GlyphKind.Consolidate),
-                InputGesture = MenuKit.ConsolidateKey,
-            };
-            consolidate.Click += (_, _) =>
-            {
-                if (!inRange) EnsureSelected();
-                _o.ConsolidateSelection();
-            };
-            var copy = new MenuItem { Header = inGroup ? "Copy selection" : "Copy", Icon = MenuKit.Icon(GlyphKind.Copy), InputGesture = MenuKit.CopyKey };
-            copy.Click += (_, _) => { EnsureSelected(); _o.CopySelectedClip(); };
-            var cut = new MenuItem { Header = inGroup ? "Cut selection" : "Cut", Icon = MenuKit.Icon(GlyphKind.Cut), InputGesture = MenuKit.CutKey };
-            cut.Click += (_, _) => { EnsureSelected(); _o.CutSelectedClip(); };
-            var paste = new MenuItem { Header = "Paste", IsEnabled = _o.HasClipClipboard, Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
-            paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
-            var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
-            rename.Click += (_, _) => PromptRename(clip.Name, s => { _o._engine?.SetClipName(trackId, idx, s); _o.Refresh(); });
-            flyout.Items.Add(rename);
-            flyout.Items.Add(copy);
-            flyout.Items.Add(cut);
-            flyout.Items.Add(paste);
-            if (PasteBouncedItem(trackId, at) is { } bounced) flyout.Items.Add(bounced);
-            flyout.Items.Add(new Separator());
-            flyout.Items.Add(split);
-            flyout.Items.Add(dup);
-            if (reverse is not null) flyout.Items.Add(reverse);
-            flyout.Items.Add(consolidate);
-            flyout.Items.Add(deact);
-            flyout.Items.Add(del);
-
+            edits.Add(MenuKit.Item(inRange ? "Consolidate selection" : "Consolidate", GlyphKind.Consolidate,
+                () => { if (!inRange) EnsureSelected(); _o.ConsolidateSelection(); }, MenuKit.ConsolidateKey));
+            // Clip deactivate (key 0): the label reflects the clicked clip's current state.
+            edits.Add(MenuKit.Item(clip.Active ? "Deactivate" : "Activate", GlyphKind.Bypass,
+                () => { EnsureSelected(); _o.ToggleSelectedClipsActive(); }, MenuKit.ActivateKey));
             // Loop the current selection (or just this clip if nothing is selected).
-            var loop = new MenuItem { Header = "Loop selection", Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
-            loop.Click += (_, _) =>
+            edits.Add(MenuKit.Item("Loop selection", GlyphKind.Cycle, () =>
             {
                 if (!_o.LoopSelection())
                     _o.SetLoopRegion(clip.StartBeat, clip.StartBeat + clip.LengthBeats);
-            };
-            flyout.Items.Add(new Separator());
-            flyout.Items.Add(loop);
-
+            }, MenuKit.LoopKey));
             // Several MIDI clips selected: open them together in the Clip editor (specs/029).
             if (clip.IsMidi && inGroup && _o.SelectedMidiClips().Count >= 2)
-            {
-                var together = new MenuItem { Header = "Edit selected clips together", Icon = MenuKit.Icon(GlyphKind.Edit) };
-                together.Click += (_, _) => _o.EditSelectedClipsRequested?.Invoke();
-                flyout.Items.Add(together);
-            }
+                edits.Add(MenuKit.Item("Edit selected clips together", GlyphKind.Edit, () => _o.EditSelectedClipsRequested?.Invoke()));
 
-            // Audio clip → stems (AI model) and → MIDI: Convert / Slice to New MIDI Track.
+            // Audio clip → stems (AI model) and → MIDI: Convert / Slice to a new MIDI track.
+            var audio = new List<Control>();
             if (!clip.IsMidi)
             {
-                var stems = new MenuItem { Header = "Separate stems…", Icon = MenuKit.Icon(GlyphKind.Stems) };
-                stems.Click += (_, _) => _o.SeparateStemsRequested?.Invoke(trackId, idx);
-
-                var convert = new MenuItem { Header = "Convert", Icon = MenuKit.Icon(GlyphKind.Arrow) };
-                MenuItem ConvItem(string header, ClipConvertMode mode, bool enabled)
-                {
-                    var mi = new MenuItem { Header = header, IsEnabled = enabled };
-                    if (enabled) mi.Click += (_, _) => _o.ConvertClipRequested?.Invoke(trackId, idx, mode);
-                    return mi;
-                }
-                convert.Items.Add(ConvItem("Convert melody to new MIDI track", ClipConvertMode.Melody, true));
-                convert.Items.Add(ConvItem("Convert Harmony to New MIDI Track", ClipConvertMode.Harmony, true));
-                convert.Items.Add(ConvItem("Convert Drums to New MIDI Track", ClipConvertMode.Drums, true));
-                convert.Items.Add(ConvItem("Slice to new MIDI track", ClipConvertMode.Slice, true));
+                audio.Add(MenuKit.Item("Separate stems…", GlyphKind.Stems, () => _o.SeparateStemsRequested?.Invoke(trackId, idx)));
+                var convert = MenuKit.Item("Convert", GlyphKind.Arrow);
+                MenuItem ConvItem(string header, ClipConvertMode mode)
+                    => MenuKit.Item(header, null, () => _o.ConvertClipRequested?.Invoke(trackId, idx, mode));
+                convert.Items.Add(ConvItem("Melody to new MIDI track", ClipConvertMode.Melody));
+                convert.Items.Add(ConvItem("Harmony to new MIDI track", ClipConvertMode.Harmony));
+                convert.Items.Add(ConvItem("Drums to new MIDI track", ClipConvertMode.Drums));
+                convert.Items.Add(ConvItem("Slice to new MIDI track", ClipConvertMode.Slice));
                 if (_o.CanTranscribe?.Invoke() == false)
                 {
-                    var better = new MenuItem { Header = "Get the AI model for melody & harmony…" };
-                    better.Click += (_, _) => _o.TranscriptionModelRequested?.Invoke();
                     convert.Items.Add(new Separator());
-                    convert.Items.Add(better);
+                    convert.Items.Add(MenuKit.Item("Get the AI model for melody and harmony…", null, () => _o.TranscriptionModelRequested?.Invoke()));
                 }
-                flyout.Items.Add(new Separator());
-                flyout.Items.Add(stems);
-                flyout.Items.Add(convert);
+                audio.Add(convert);
             }
 
             // M5-6: copy the clip selection into session slots — the first scene row where it
             // fits (⌘⇧C), or from a chosen scene down.
+            var session = new List<Control>();
             if (_o._engine is { } eng)
             {
-                var toSession = new MenuItem { Header = inGroup ? "Copy selection to Session" : "Copy to Session", Icon = MenuKit.Icon(GlyphKind.Grid), InputGesture = MenuKit.CopyToOtherViewKey };
-                toSession.Click += (_, _) => { EnsureSelected(); _o.CopySelectionToSession(); };
-                var toScene = new MenuItem { Header = "Copy to scene", Icon = MenuKit.Icon(GlyphKind.Grid) };
+                session.Add(MenuKit.Item("Copy to Session", GlyphKind.Grid, () => { EnsureSelected(); _o.CopySelectionToSession(); }, MenuKit.CopyToOtherViewKey));
+                var toScene = MenuKit.Item("Copy to scene", GlyphKind.Grid);
                 for (int s = 0; s < eng.SceneCount; s++)
                 {
                     int sc = s;
                     string name = eng.GetSceneName(sc);
-                    var it = new MenuItem { Header = name.Length > 0 ? $"{sc + 1} · {name}" : $"Scene {sc + 1}" };
-                    it.Click += (_, _) => { EnsureSelected(); _o.CopySelectionToSession(sc); };
-                    toScene.Items.Add(it);
+                    toScene.Items.Add(MenuKit.Item(name.Length > 0 ? $"{sc + 1} · {name}" : $"Scene {sc + 1}", null,
+                        () => { EnsureSelected(); _o.CopySelectionToSession(sc); }));
                 }
-                flyout.Items.Add(new Separator());
-                flyout.Items.Add(toSession);
-                flyout.Items.Add(toScene);
+                session.Add(toScene);
             }
-            flyout.ShowAt(this, showAtPointer: true);
+
+            var clipboard = MenuKit.ClipboardGroup(
+                () => { EnsureSelected(); _o.CopySelectedClip(); },
+                () => { EnsureSelected(); _o.CutSelectedClip(); },
+                () => _o.PasteClipboardAt(trackId, at),
+                () => { EnsureSelected(); _o.DuplicateSelectedClip(); },
+                _o.HasClipClipboard).Cast<Control>().ToList();
+            if (PasteBouncedItem(trackId, at) is { } bounced) clipboard.Insert(3, bounced);
+
+            var del = MenuKit.Danger("Delete", GlyphKind.Trash, () =>
+            {
+                if (inGroup) _o.DeleteSelectedClips();
+                else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
+            }, MenuKit.DeleteKey);
+
+            MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { rename }, edits, audio, session,
+                              clipboard, new Control[] { del });
+            return flyout;
         }
 
         public override void Render(DrawingContext ctx)

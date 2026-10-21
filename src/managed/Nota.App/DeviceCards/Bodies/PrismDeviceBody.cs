@@ -533,7 +533,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 void Item(string name, int id)
                 {
                     var mi = new MenuItem { Header = name };
-                    if (id == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Amber };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = id == cur;
                     mi.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); foreach (var a in readouts) a(); };
                     fly.Items.Add(mi);
                 }

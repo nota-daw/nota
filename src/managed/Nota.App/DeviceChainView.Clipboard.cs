@@ -151,21 +151,37 @@ public sealed partial class DeviceChainView
     }
 
     // ---- context menu (header right-click) --------------------------------
-    // Adds Copy / Cut / Paste / Delete above the existing "Save preset" item.
+    // The device named at the top (spec 034), then what the card's header hands in (preset,
+    // compare, move, docs, fold), Save preset, the clipboard group, and Delete last.
     private void ShowDeviceContextMenu(Control anchor, ChainKind kind, int di, Action<MenuFlyout>? header = null)
     {
         SelectDevice(kind, di);
         var flyout = new MenuFlyout();
-        header?.Invoke(flyout);
-        void Add(string header, GlyphKind icon, bool enabled, Action act, KeyGesture? gesture = null)
-            => flyout.Items.Add(MenuKit.Item(header, icon, act, gesture, enabled));
-        bool selectable = SelectableKind(kind);
-        Add("Copy", GlyphKind.Copy, selectable, CopySelectedDevice, MenuKit.CopyKey);
-        Add("Cut", GlyphKind.Cut, selectable, CutSelectedDevice, MenuKit.CutKey);
-        Add("Paste", GlyphKind.Paste, _clip != null, PasteDevice, MenuKit.PasteKey);
-        Add("Delete", GlyphKind.Trash, selectable, DeleteSelectedDevice, MenuKit.DeleteKey);
+        string name = kind switch
+        {
+            ChainKind.Instrument => _engine.DeviceName(_trackId, -1),
+            ChainKind.Midi => _engine.MidiEffectName(_trackId, di),
+            _ => _engine.DeviceName(_trackId, di),
+        };
+        string badge = kind switch
+        {
+            ChainKind.Instrument => "Instrument",
+            ChainKind.Midi => $"MIDI effect · {di + 1}",
+            _ => $"Audio effect · {di + 1}",
+        };
+        flyout.Items.Add(MenuKit.Header(name.Length > 0 ? name : "Device", null, badge));
         flyout.Items.Add(new Separator());
-        Add("Save preset", GlyphKind.Save, true, () => PresetSaveRequested?.Invoke(di));
+        header?.Invoke(flyout);   // ends with its own separator
+        bool selectable = SelectableKind(kind);
+        MenuKit.AddGroups(flyout.Items,
+            new Control[] { MenuKit.Item("Save preset", GlyphKind.Save, () => PresetSaveRequested?.Invoke(di)) },
+            new Control[]
+            {
+                MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),
+                MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey, selectable),
+                MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, _clip != null),
+            },
+            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey, selectable) });
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 

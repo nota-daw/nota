@@ -455,7 +455,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             {
                 int mv = m;
                 var mi = new MenuItem { Header = PendulumModel.ModeNames[m] };
-                if (m == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = m == cur;
                 mi.Click += (_, _) => { Write("scalemode", mv / (float)(PendulumModel.ModeNames.Length - 1)); Refresh(); };
                 fly.Items.Add(mi);
             }
@@ -465,7 +465,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             {
                 int rv = r;
                 var ri = new MenuItem { Header = PendulumModel.RootNames[r] };
-                if (r == curRoot) ri.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                ri.ToggleType = MenuItemToggleType.Radio; ri.IsChecked = r == curRoot;
                 ri.Click += (_, _) => { Write("root", rv / 11f); Refresh(); };
                 rootMenu.Items.Add(ri);
             }

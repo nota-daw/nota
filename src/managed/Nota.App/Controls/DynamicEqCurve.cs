@@ -300,6 +300,8 @@ public sealed class DynamicEqCurve : Control
     {
         var fly = new MenuFlyout();
         int curT = BandType(b);
+        fly.Items.Add(MenuKit.Header($"Band {b + 1}", null, DynEq.TypeNames[curT]));
+        fly.Items.Add(new Separator());
         for (int t = 0; t < DynEq.TypeNames.Length; t++)
         {
             int tt = t;

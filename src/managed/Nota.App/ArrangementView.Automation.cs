@@ -358,7 +358,7 @@ public sealed partial class ArrangementView
     {
         var flyout = new MenuFlyout();
 
-        // Params that already carry automation (lane with points): pinned as a brass-dotted
+        // Params that already carry automation (lane with points): pinned (automation glyph)
         // quick-access section at the top, and their keys flag the same params in the tree.
         var automated = new HashSet<string>();
         if (_engine is { } eA)
@@ -391,7 +391,7 @@ public sealed partial class ArrangementView
             }
             foreach (var (label, apply) in top)
             {
-                var it = new MenuItem { Header = label, Icon = AutoDot() };
+                var it = new MenuItem { Header = label, Icon = MenuKit.Icon(GlyphKind.Automation) };
                 it.Click += (_, _) => apply();
                 flyout.Items.Add(it);
             }
@@ -611,17 +611,11 @@ public sealed partial class ArrangementView
 
     // A small dot dropped into a MenuItem.Icon slot to flag an already-automated param. Not the
     // accent: the hovered item fills with it, and the dot must stay visible there.
-    private static Control AutoDot() => new Avalonia.Controls.Shapes.Ellipse
-    {
-        Width = 7, Height = 7, Fill = NotaPalette.TextPrimary,
-        VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
-    };
-
-    // A leaf target item, dot-flagged + accent-tinted when its param already carries automation.
+    // A leaf target item, flagged with the automation glyph when its param already carries automation.
     private MenuItem Leaf(string header, string key, Action apply, HashSet<string> automated)
     {
         var it = new MenuItem { Header = header };
-        if (automated.Contains(key)) { it.Icon = AutoDot(); }
+        if (automated.Contains(key)) { it.Icon = MenuKit.Icon(GlyphKind.Automation); }
         it.Click += (_, _) => apply();
         return it;
     }

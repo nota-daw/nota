@@ -162,7 +162,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             {
                 if (it is not { } x) { fly.Items.Add(new Separator()); continue; }
                 var mi = new MenuItem { Header = x.Label };
-                if (x.Current) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = x.Current;
                 var pk = x.Pick;
                 mi.Click += (_, _) => { pk(); RefreshAll(); };
                 fly.Items.Add(mi);

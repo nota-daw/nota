@@ -333,39 +333,34 @@ public sealed partial class ArrangementView
             var flyout = new MenuFlyout();
             if (s is not null)
             {
-                var rename = new MenuItem { Header = "Rename…", Icon = MenuKit.Icon(GlyphKind.Edit) };
-                rename.Click += (_, _) => _o.RenameSection(this, s);
-                var loop = new MenuItem { Header = "Loop section", Icon = MenuKit.Icon(GlyphKind.Cycle) };
-                loop.Click += (_, _) => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats);   // raises LoopChanged itself
-                var select = new MenuItem { Header = "Select section", Icon = MenuKit.Icon(GlyphKind.Select) };
-                select.Click += (_, _) => _o.SelectSectionRange(s);
-                var dup = new MenuItem { Header = "Duplicate", Icon = MenuKit.Icon(GlyphKind.Duplicate) };
-                dup.Click += (_, _) =>
+                int bars = (int)Math.Round(s.LengthBeats / Math.Max(1, _o._beatsPerBar));
+                var dup = MenuKit.Item("Duplicate", GlyphKind.Duplicate, () =>
                 {
                     if (_o.Live(s) is null) return;
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
                     copy.Name = s.Name;
                     _o.SectionsEdited();   // one step: the copy arrives already named
-                };
-                var del = new MenuItem { Header = "Delete", Icon = MenuKit.Icon(GlyphKind.Trash) };
-                del.Click += (_, _) => _o.RemoveSection(s);
-                flyout.Items.Add(rename);
-                flyout.Items.Add(loop);
-                flyout.Items.Add(select);
-                flyout.Items.Add(new Separator());
-                flyout.Items.Add(dup);
-                flyout.Items.Add(del);
+                });
+                MenuKit.AddGroups(flyout.Items,
+                    new Control[] { MenuKit.Header(s.Name.Length > 0 ? s.Name : "Section", null, $"Section · {bars} bar{(bars == 1 ? "" : "s")}") },
+                    new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => _o.RenameSection(this, s)) },
+                    new Control[]
+                    {
+                        MenuKit.Item("Loop section", GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
+                        MenuKit.Item("Select section", GlyphKind.Select, () => _o.SelectSectionRange(s)),
+                    },
+                    new Control[] { dup },
+                    new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => _o.RemoveSection(s)) });
             }
             else
             {
-                var add = new MenuItem { Header = "Add section here", Icon = MenuKit.Icon(GlyphKind.Plus) };
-                add.Click += (_, _) => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); };
-                flyout.Items.Add(add);
+                flyout.Items.Add(MenuKit.Item("Add section here", GlyphKind.Plus,
+                    () => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); }));
                 if (_o._sections.Count > 0)
                 {
-                    var clear = new MenuItem { Header = "Delete all sections", Icon = MenuKit.Icon(GlyphKind.Trash) };
-                    clear.Click += (_, _) => { _o._sections.Clear(); _o.SectionsEdited(); };
-                    flyout.Items.Add(clear);
+                    flyout.Items.Add(new Separator());
+                    flyout.Items.Add(MenuKit.Danger("Delete all sections", GlyphKind.Trash,
+                        () => { _o._sections.Clear(); _o.SectionsEdited(); }));
                 }
             }
             flyout.ShowAt(this, showAtPointer: true);

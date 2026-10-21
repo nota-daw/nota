@@ -118,7 +118,7 @@ internal sealed class SnapChip
         void Item(string header, bool on, Func<GridSetting, GridSetting> apply, KeyGesture? gesture = null)
         {
             var mi = new MenuItem { Header = header, InputGesture = gesture };
-            if (on) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.TextPrimary };
+            mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = on;
             mi.Click += (_, _) => Grids.Set(_kind, apply(Grids.Get(_kind)));
             f.Items.Add(mi);
         }

@@ -319,7 +319,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         static MenuItem Item(string label, bool cur, Action pick)
         {
             var mi = new MenuItem { Header = label };
-            if (cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+            mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = cur;
             mi.Click += (_, _) => pick();
             return mi;
         }

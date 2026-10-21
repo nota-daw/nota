@@ -286,6 +286,8 @@ internal sealed class HistoryView : UserControl
             return mi;
         }
 
+        menu.Items.Add(MenuKit.Header(v.Label ?? LongTime(v.CreatedAt), null, row.IsHead ? "Current version" : "Version"));
+        menu.Items.Add(new Separator());
         Item("Switch to this version", () => _ = Switch(v), !row.IsHead && v.CanOpen, GlyphKind.Arrow);
         Item("Open as copy…", () => _ = _host.OpenVersionAsCopyAsync(v.Id), v.CanOpen, GlyphKind.Duplicate);
         menu.Items.Add(new Separator());
@@ -296,6 +298,7 @@ internal sealed class HistoryView : UserControl
         Item(v.Starred ? "Remove star" : "Star", () => Apply(() => _history.SetStarred(_dir!, v.Id, !v.Starred)));
         menu.Items.Add(new Separator());
         var del = Item("Delete version…", () => _ = Delete(v), !row.IsHead, GlyphKind.Trash);
+        del.Classes.Add("danger");
         if (row.IsHead) ToolTip.SetTip(del, "Switch to another version to delete this one");
         return menu;
     }
@@ -310,6 +313,7 @@ internal sealed class HistoryView : UserControl
             Icon = MenuKit.Icon(GlyphKind.Trash),
             IsEnabled = unnamed.Count > 0,
         };
+        clean.Classes.Add("danger");
         clean.Click += (_, _) => _ = DeleteUnnamed(unnamed);
         menu.Items.Add(clean);
         return menu;

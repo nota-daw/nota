@@ -314,14 +314,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         void JackMenu(ConsortJacks.Jack j, Control anchor)
         {
             var f = new MenuFlyout();
-            f.Items.Add(new MenuItem { Header = $"{j.Name} · {(j.Out ? "output" : "input")}{(ConsortJacks.Normalled.Contains(j.Index) && !j.Out ? " (normalled)" : "")}", IsEnabled = false });
-            var mine = CableList().Where(c => j.Out ? c.Src == j.Index : c.Dst == j.Index).ToList();
-            foreach (var c in mine)
-            {
-                var mi = new MenuItem { Header = $"Remove {CableName(c)}  {c.Depth * 100:+0;−0;0}" };
-                int slot = c.Slot; mi.Click += (_, _) => RemoveSlot(slot);
-                f.Items.Add(mi);
-            }
+            f.Items.Add(MenuKit.Header(j.Name, null, $"{(j.Out ? "Output" : "Input")}{(ConsortJacks.Normalled.Contains(j.Index) && !j.Out ? " · normalled" : "")}"));
+            f.Items.Add(new Separator());
             var sub = new MenuItem { Header = j.Out ? "Patch to" : "Patch from" };
             var list = j.Out ? ConsortJacks.Dests : ConsortJacks.Sources;
             for (int i = 1; i < list.Length; i++)
@@ -332,6 +326,14 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 sub.Items.Add(mi);
             }
             f.Items.Add(sub);
+            // Removing a cable is destructive: last, in danger ink.
+            var mine = CableList().Where(c => j.Out ? c.Src == j.Index : c.Dst == j.Index).ToList();
+            if (mine.Count > 0) f.Items.Add(new Separator());
+            foreach (var c in mine)
+            {
+                int slot = c.Slot;
+                f.Items.Add(MenuKit.Danger($"Remove {CableName(c)}  {c.Depth * 100:+0;−0;0}", GlyphKind.Trash, () => RemoveSlot(slot)));
+            }
             f.ShowAt(anchor, showAtPointer: true);
         }
 

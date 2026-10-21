@@ -130,8 +130,7 @@ public sealed partial class ArrangementView
             toggle.Click += (_, _) => _o.SetLoopOn(!_o._loopActive);
             var sel = new MenuItem { Header = "Loop selection", Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
             sel.Click += (_, _) => { if (_o.SelectionLoopRange() is { } r) _o.SetLoopRegion(r.Start, r.End); };
-            var clear = new MenuItem { Header = "Clear loop region", Icon = MenuKit.Icon(GlyphKind.Trash), IsEnabled = has };
-            clear.Click += (_, _) => _o.ClearLoopRegion();
+            var clear = MenuKit.Danger("Clear loop region", GlyphKind.Trash, () => _o.ClearLoopRegion(), enabled: has);
             flyout.Items.Add(toggle);
             flyout.Items.Add(sel);
             flyout.Items.Add(new Separator());

@@ -213,10 +213,10 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         {
             if (!e.GetCurrentPoint(picker).Properties.IsLeftButtonPressed) return;
             var fly = new MenuFlyout();
-            void Add(int id, string name, IBrush swatch)
+            void Add(int id, string name)
             {
-                var mi = new MenuItem { Header = name, Icon = new Rectangle { Width = 7, Height = 7, Fill = swatch, RadiusX = 1, RadiusY = 1 } };
-                if (id == (HasTrack() ? Source() : -1)) mi.FontWeight = FontWeight.SemiBold;
+                // The current source is ticked, like every choice menu (spec 034).
+                var mi = new MenuItem { Header = name, ToggleType = MenuItemToggleType.Radio, IsChecked = id == (HasTrack() ? Source() : -1) };
                 mi.Click += (_, _) =>
                 {
                     engine.SetDeviceSidechainSource(track, di, id);
@@ -225,9 +225,9 @@ internal sealed class VocoderDeviceBody : IDeviceBody
                 };
                 fly.Items.Add(mi);
             }
-            Add(-1, "None", NotaPalette.Rule);
+            Add(-1, "None");
             fly.Items.Add(new Separator());
-            foreach (var (id, name, color) in Candidates()) Add(id, name, ArrangementView.TrackBrush(color));
+            foreach (var (id, name, _) in Candidates()) Add(id, name);
             fly.ShowAt(picker);
             e.Handled = true;
         };

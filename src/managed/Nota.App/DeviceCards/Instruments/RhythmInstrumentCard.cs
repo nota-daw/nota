@@ -297,9 +297,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             src.Click += (_, _) => { Act(RM.A_SetSource, v, isSample[v] ? 0f : 1f); ctx.NotifyChanged(); ctx.RequestRebuild(); };
             fly.Items.Add(src);
             fly.Items.Add(new Separator());
-            var clear = new MenuItem { Header = $"Clear its steps in bank {RM.BankNames[bank]}" };
-            clear.Click += (_, _) => { Act(RM.A_ClearVoice, v); ctx.NotifyChanged(); ReloadPattern(); };
-            fly.Items.Add(clear);
+            fly.Items.Add(MenuKit.Danger($"Clear its steps in bank {RM.BankNames[bank]}", GlyphKind.Trash,
+                () => { Act(RM.A_ClearVoice, v); ctx.NotifyChanged(); ReloadPattern(); }));
             fly.ShowAt(anchor);
         }
         var kitHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(7, 0) };
@@ -556,7 +555,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             MenuItem Item(string h, Action a, bool check = false)
             {
                 var mi = new MenuItem { Header = h };
-                if (check) mi.Icon = new Ellipse { Width = 6, Height = 6, Fill = Brass };
+                mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = check;
                 mi.Click += (_, _) => a();
                 fly.Items.Add(mi);
                 return mi;
@@ -569,7 +568,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             foreach (var pv in new[] { 1f, 0.75f, 0.5f, 0.25f })
             {
                 var mi = new MenuItem { Header = RM.Pct(pv) };
-                if (on && Math.Abs(cur - pv) < 0.02f) mi.Icon = new Ellipse { Width = 6, Height = 6, Fill = Brass };
+                mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = on && Math.Abs(cur - pv) < 0.02f;
                 mi.Click += (_, _) => { strip.On[s] = true; strip.Vel[s] = pv; strip.Commit!(s); strip.Changed(); };
                 velMenu.Items.Add(mi);
             }
@@ -585,7 +584,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             Item("Shift right", () => { var a = Snap(); SetSteps(k => a[(k + RM.Steps - 1) % RM.Steps]); });
             Item("Reverse", () => { var a = Snap(); SetSteps(k => a[RM.Steps - 1 - k]); });
             fly.Items.Add(new Separator());
-            Item($"Clear {RM.VoiceNames[sel]}", () => SetSteps(k => (false, strip.Vel[k], false)));
+            fly.Items.Add(MenuKit.Danger($"Clear {RM.VoiceNames[sel]}", GlyphKind.Trash, () => SetSteps(k => (false, strip.Vel[k], false))));
             fly.ShowAt(strip);
         };
 
@@ -630,9 +629,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 copy.Items.Add(mi);
             }
             fly.Items.Add(copy);
-            var clear = new MenuItem { Header = $"Clear bank {RM.BankNames[b]}" };
-            clear.Click += (_, _) => { Act(RM.A_ClearBank, b); ctx.NotifyChanged(); ReloadPattern(); };
-            fly.Items.Add(clear);
+            fly.Items.Add(new Separator());
+            fly.Items.Add(MenuKit.Danger($"Clear bank {RM.BankNames[b]}", GlyphKind.Trash,
+                () => { Act(RM.A_ClearBank, b); ctx.NotifyChanged(); ReloadPattern(); }));
             fly.ShowAt(anchor);
         }
         var bankBox = new Border

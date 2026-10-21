@@ -307,6 +307,8 @@ public sealed class Eq8Curve : Control
     {
         var fly = new MenuFlyout();
         int curT = BandType(b);
+        fly.Items.Add(MenuKit.Header($"Band {b + 1}", null, Eq8.TypeNames[curT]));
+        fly.Items.Add(new Separator());
         for (int t = 0; t < Eq8.TypeNames.Length; t++)
         {
             int tt = t;

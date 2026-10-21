@@ -1372,6 +1372,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private void ShowMacroMenu(IRackAccess a, Control anchor, int m)
     {
         var f = new MenuFlyout();
+        f.Items.Add(MenuKit.Header(a.MacroName(m), null, $"Macro · {m + 1}"));
+        f.Items.Add(new Separator());
         var map = new MenuItem { Header = "Map to parameter" };
         int chains = a.ChainCount();
         for (int c = 0; c < chains; c++)
@@ -1413,9 +1415,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         for (int i = 0; i < n; i++) if (a.TryGetMapping(i, out var mm) && mm.Macro == m) mapped++;
         if (mapped > 0)
         {
-            var clr = new MenuItem { Header = $"Clear {mapped} mapping(s)" };
-            clr.Click += (_, _) => { ClearMacroMappings(a, m); _ctx.RequestRebuild(); };
-            f.Items.Add(clr);
+            f.Items.Add(new Separator());
+            f.Items.Add(MenuKit.Danger(mapped == 1 ? "Clear 1 mapping" : $"Clear {mapped} mappings", GlyphKind.Trash,
+                () => { ClearMacroMappings(a, m); _ctx.RequestRebuild(); }));
         }
         f.ShowAt(anchor, showAtPointer: true);
     }
