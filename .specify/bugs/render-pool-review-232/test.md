@@ -20,7 +20,7 @@ with a standalone program.
 | Reproduction, pre-fix code | `Engine_Render.cpp` temporarily reverted to `HEAD`, engine rebuilt, `dotnet run --project tests/Nota.SmokeTest -c Release -- --perf` | fail (expected) | export: render threads 0 % of the work; overload: 6 late blocks within 50 ms |
 | Reproduction, post-fix | same, fixed code | pass | export: 86 %, 141 ms vs 481 ms on one thread; overload: ≤ 3 late blocks within 50 ms |
 | Stability | `--perf` run 3 times | pass | late after warm-up: 15, 2, 16 of 4125; max burst 3, 1, 3 |
-| 8-track 512-frame bounce | `engine-bench audio 8 offline`, develop and branch in alternating orders | inconclusive | bimodal on both builds: 6.0 or 8.5–9.3 ms per s of audio, by run, not by build |
+| 8-track 512-frame bounce | develop vs branch, 20 interleaved runs each from a neutral host (Python ctypes), plus 15–25-run series from three C++ harness builds | pass | no regression: neutral host 8.7 (develop) vs 8.55 ms (branch) per s of audio, median. The 6.0 ms "fast mode" depends on the host binary, not the engine: byte-identical harness copies keep their mode, buffer offsets and environment size don't change it, and the same engine is fast under one harness build and slow under another, for develop and the branch alike |
 | futex wake width | standalone C++ (`/tmp/wake-test`), 8 waiters, one `notify_one` | pass | `atomic<int32_t>` woke 8 of 8, `atomic<int64_t>` 1 of 8 |
 | Regression suite | engine build (Release) + `dotnet build Nota.sln -c Release` + smoke test | pass | `SMOKE TEST PASSED` (the build.sh steps, run by hand in a worktree with the dependency sources reused) |
 | Bit-identity | smoke: 8 synth tracks on 9 render threads vs one | pass | maxdiff 0 |
