@@ -1,0 +1,8 @@
+date: 2026-10-21T09:02:47Z
+os: Darwin 25.6.0 arm64
+cpu: Apple M4 Max, 14 threads
+macos: 26.6.2
+runs: 3
+build: Before #212 = 82babfe (develop before the engine rebuild)
+build: After #212 = 64250a5 (engine identical on develop 2d26c78)
+build: This PR = 62f905a (fix/pr212-review)
