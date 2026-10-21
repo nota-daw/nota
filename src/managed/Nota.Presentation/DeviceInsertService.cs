@@ -71,6 +71,14 @@ public sealed class DeviceInsertService
 
     private const string FactoryPrefix = "factory:", KitPrefix = "kit:", RhythmKitPrefix = "rhythmkit:";
 
+    /// <summary>Raised when an instrument lands on a track — a new track or a replaced
+    /// instrument — so the host can record it under "Add track ▸ Recent" (spec 034).</summary>
+    public event Action<BrowserItem>? InstrumentAdded;
+
+    /// <summary>Raised when an instrument preset lands on a track (in place, or on a new
+    /// track), with that track's id: the host records the instrument the track now plays.</summary>
+    public event Action<int>? InstrumentPresetApplied;
+
     // ---- what a track is --------------------------------------------------------------------
 
     public bool TryTrackInfo(int trackId, out NotaTrackInfo info)
@@ -140,7 +148,7 @@ public sealed class DeviceInsertService
             };
             if (item.BuiltinKind == RhythmModel.Kind && _kits is not null) _kits.LoadInto(_engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
         }
-        if (t > 0) _engine.AddMidiClip(t, beat, 4.0);
+        if (t > 0) { _engine.AddMidiClip(t, beat, 4.0); InstrumentAdded?.Invoke(item); }
         return t;
     }
 
@@ -155,6 +163,7 @@ public sealed class DeviceInsertService
         }
         else if (item.Kind == BrowserItemKind.PluginInstrument) _engine.SetTrackInstrumentPlugin(trackId, item.CatalogIndex);
         else return false;
+        InstrumentAdded?.Invoke(item);
         return true;
     }
 
@@ -382,6 +391,7 @@ public sealed class DeviceInsertService
                 swapped = true;
             }
             string w = _factory.ApplyInPlace(_engine, factoryId, t, -1);
+            if (w.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = w.Length == 0, TrackId = t, InstrumentReplaced = swapped, ShowDevices = true,
@@ -392,12 +402,15 @@ public sealed class DeviceInsertService
         // …and a preset file (a user preset, a Mosaic pack preset) the same way.
         if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
             && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped) is { } fw)
+        {
+            if (fw.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
                 Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
             };
+        }
 
         // Apply doesn't say where the preset landed, so diff the chain around it: a new track
         // (instrument preset) or one more device / MIDI effect on the target (appended last).
@@ -409,6 +422,7 @@ public sealed class DeviceInsertService
         if (warn.Length > 0) return InsertResult.Fail(warn);
 
         int newTrack = TrackIds().FirstOrDefault(id => !before.Contains(id));
+        if (newTrack > 0) InstrumentPresetApplied?.Invoke(newTrack);
         if (newTrack > 0)
             return new InsertResult
             {

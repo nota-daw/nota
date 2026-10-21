@@ -13,10 +13,18 @@ using Nota.Application;
 namespace Nota.Mcp.Tools;
 
 [McpServerToolType]
-public sealed class PluginTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, IPluginCatalog catalog)
+public sealed class PluginTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh, IPluginCatalog catalog,
+                                ISettingsService? settings = null)
     : EngineTools(engine, dispatch, refresh)
 {
     private readonly IPluginCatalog _cat = catalog;
+
+    // Recorded for "Add track ▸ Recent" (spec 034), like an add from the browser.
+    private void RecordRecent(int catalogIndex, int trackId)
+    {
+        if (settings is null || _cat.Id(catalogIndex) is not { Length: > 0 } id) return;
+        RecentInstruments.RecordAndSave(settings, RecentInstrument.Plugin(id, E.DeviceName(trackId, -1)));
+    }
 
     public sealed record PluginEntry(int Index, string Id, string Description);
     public sealed record Param(int Index, string Id, string Name, float Value);
@@ -37,10 +45,19 @@ public sealed class PluginTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public Task<int> FindPlugin(string identifier) => Read(() => _cat.IndexOfId(identifier));
 
     [McpServerTool(Name = "add_plugin_instrument"), Description("Add a new track whose instrument is the hosted plugin at the given catalog index. Returns the track id (0 on failure).")]
-    public Task<int> AddPluginInstrument(int catalogIndex) => Mutate(() => E.AddPluginInstrumentTrack(catalogIndex));
+    public Task<int> AddPluginInstrument(int catalogIndex) => Mutate(() =>
+    {
+        int t = E.AddPluginInstrumentTrack(catalogIndex);
+        if (t > 0) RecordRecent(catalogIndex, t);
+        return t;
+    });
 
     [McpServerTool(Name = "set_track_instrument_plugin"), Description("Replace a track's instrument with the hosted plugin at the given catalog index.")]
-    public Task SetTrackInstrumentPlugin(int trackId, int catalogIndex) => Mutate(() => E.SetTrackInstrumentPlugin(trackId, catalogIndex));
+    public Task SetTrackInstrumentPlugin(int trackId, int catalogIndex) => Mutate(() =>
+    {
+        E.SetTrackInstrumentPlugin(trackId, catalogIndex);
+        RecordRecent(catalogIndex, trackId);
+    });
 
     [McpServerTool(Name = "add_plugin_effect"), Description("Add a hosted plugin as an insert effect on a track. Returns the new device index (-1 on failure).")]
     public Task<int> AddPluginEffect(int trackId, int catalogIndex) => Mutate(() => E.AddTrackEffectPlugin(trackId, catalogIndex));

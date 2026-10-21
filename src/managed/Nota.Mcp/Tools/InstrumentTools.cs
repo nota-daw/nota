@@ -10,7 +10,8 @@ using Nota.Application;
 namespace Nota.Mcp.Tools;
 
 [McpServerToolType]
-public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh)
+public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh,
+                                    ISettingsService? settings = null)
     : EngineTools(engine, dispatch, refresh)
 {
     // Built-in instrument kinds (matches the engine's kind() ids + browser mapping). Nota Synth (0)
@@ -31,28 +32,35 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     public InstrumentKind[] ListInstrumentKinds() => Array.ConvertAll(Kinds, k => new InstrumentKind(k.Kind, k.Name));
 
     [McpServerTool(Name = "add_instrument_track"), Description("Add an instrument track with the given built-in kind (see list_instrument_kinds). Returns the track id.")]
-    public Task<int> AddInstrumentTrack([Description("Instrument kind id from list_instrument_kinds")] int kind) => Mutate(() => kind switch
+    public Task<int> AddInstrumentTrack([Description("Instrument kind id from list_instrument_kinds")] int kind) => Mutate(() =>
     {
-        0 => E.AddInstrumentTrack(),   // legacy Nota Synth
-
-        1 => E.AddSamplerInstrumentTrack(),
-        2 => E.AddPhysicalSynthTrack(),
-        3 => E.AddInstrumentRackTrack(),
-        4 => E.AddDrumRackTrack(),
-        5 => E.AddWavetableSynthTrack(),
-        6 => E.AddVoltSynthTrack(),
-        7 => E.AddBassSynthTrack(),
-        8 => E.AddPendulumSynthTrack(),
-        9 => E.AddOperatorSynthTrack(),
-        10 => E.AddGrainSynthTrack(),
-        11 => E.AddFluxSynthTrack(),
-        12 => E.AddRhythmTrack(),
-        13 => E.AddMonolithTrack(),
-        14 => E.AddPentadTrack(),
-        15 => E.AddConsortTrack(),
-        16 => E.AddKeysTrack(),
-        17 => E.AddMosaicTrack(),
-        _ => E.AddVoltSynthTrack(),    // the default instrument
+        int t = kind switch
+        {
+            0 => E.AddInstrumentTrack(),   // legacy Nota Synth
+            1 => E.AddSamplerInstrumentTrack(),
+            2 => E.AddPhysicalSynthTrack(),
+            3 => E.AddInstrumentRackTrack(),
+            4 => E.AddDrumRackTrack(),
+            5 => E.AddWavetableSynthTrack(),
+            6 => E.AddVoltSynthTrack(),
+            7 => E.AddBassSynthTrack(),
+            8 => E.AddPendulumSynthTrack(),
+            9 => E.AddOperatorSynthTrack(),
+            10 => E.AddGrainSynthTrack(),
+            11 => E.AddFluxSynthTrack(),
+            12 => E.AddRhythmTrack(),
+            13 => E.AddMonolithTrack(),
+            14 => E.AddPentadTrack(),
+            15 => E.AddConsortTrack(),
+            16 => E.AddKeysTrack(),
+            17 => E.AddMosaicTrack(),
+            _ => E.AddVoltSynthTrack(),    // the default instrument
+        };
+        // Recorded for "Add track ▸ Recent" (spec 034), like an add from the browser: the
+        // instrument the track really got, under the name the engine gives it.
+        if (t > 0 && settings is not null)
+            RecentInstruments.RecordAndSave(settings, RecentInstrument.Builtin(E.TrackInstrumentKind(t), E.DeviceName(t, -1)));
+        return t;
     });
 
     [McpServerTool(Name = "get_instrument_params"), Description("List the track instrument's parameters (index, stable id, name, normalized value 0..1).")]

@@ -44,6 +44,9 @@ public sealed class Settings
     /// <summary>Recently opened/saved project bundle paths, most-recent first. Shown on the
     /// welcome screen; capped and pruned of missing folders when displayed.</summary>
     public List<string> RecentProjects { get; set; } = new();
+    /// <summary>Instruments added most recently, most-recent first (spec 034): "Add track ▸
+    /// Recent". Rules in <see cref="Nota.Application.RecentInstruments"/>.</summary>
+    public List<RecentInstrument> RecentInstruments { get; set; } = new();
     /// <summary>Show the welcome screen (recent projects launcher) on startup. On by default;
     /// toggled from the welcome screen's "Show on startup" checkbox.</summary>
     public bool ShowWelcomeOnStartup { get; set; } = true;
