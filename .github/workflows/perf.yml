@@ -1,0 +1,137 @@
+name: Performance
+
+# Engine performance regression gate (specs/034-engine-perf-gate). For every pull
+# request that touches the engine:
+#   - Work: builds the engine at the PR's base and with the PR applied, renders the
+#     same scenarios with both under Valgrind and fails if any scenario does more
+#     than 1% more CPU instructions than the base (scripts/perf-gate.sh). Instruction
+#     counts repeat exactly between runs, so the limit can be tight without flaky runs.
+#     Wall time is checked too (base and PR back to back, >15% and re-confirmed with
+#     more rounds) for slowdowns that add no instructions.
+#   - Idle CPU: an engine left idle must use (almost) no CPU, on all three OSes.
+# A regression a maintainer has decided to accept is approved by adding the
+# `perf-regression-accepted` label to the PR: the report still lists it.
+#
+# Runs on `pull_request`, never `pull_request_target` (see ci.yml).
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'src/native/**'
+      - 'tests/perf/**'
+      - 'scripts/perf-gate.*'
+      - '.github/workflows/perf.yml'
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Base ref to compare against'
+        default: 'develop'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
+
+jobs:
+  work:
+    name: Engine work (instructions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the base commit is built from a worktree
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build build-essential valgrind ccache \
+            libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libfreetype6-dev libfontconfig1-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            .cpm-cache
+          key: perf-${{ runner.os }}-${{ github.sha }}
+          restore-keys: perf-${{ runner.os }}-
+      - name: Compare against the base
+        env:
+          PERF_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'perf-regression-accepted') && '1' || '' }}
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base="origin/${{ inputs.base || 'develop' }}"
+          bash scripts/perf-gate.sh "$base"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-report
+          path: |
+            build/perf/report.md
+            build/perf/results-*.tsv
+            build/perf/*.log
+          if-no-files-found: ignore
+
+  idle:
+    name: Idle CPU (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-26 }
+          - { name: Windows, os: windows-2022 }
+          - { name: Linux, os: ubuntu-latest }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - name: Install build tools
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   brew install cmake ninja ;;
+            Windows) choco install ninja --no-progress -y ;;
+            Linux)   sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends \
+                       cmake ninja-build build-essential libasound2-dev libx11-dev libxext-dev \
+                       libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev ;;
+          esac
+      - uses: actions/cache@v4
+        with:
+          path: .cpm-cache
+          key: perf-cpm-${{ runner.os }}-${{ hashFiles('src/native/nota.engine/CMakeLists.txt', 'src/native/nota.engine/cmake/**') }}
+      - name: Build engine + tools
+        shell: bash
+        run: |
+          cmake -G Ninja -S src/native/nota.engine -B build/engine -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/engine --target nota_engine
+          cmake -G Ninja -S tests/perf -B build/perf-tools -DCMAKE_BUILD_TYPE=Release \
+            -DNOTA_ENGINE_DIR="$PWD/src/native/nota.engine" -DNOTA_ENGINE_BUILD_DIR="$PWD/build/engine"
+          cmake --build build/perf-tools --target nota_idle_cpu
+      - name: Idle CPU check
+        id: idle
+        # TEMPORARY: develop's engine spins its thread-pool workers while idle (#223), so
+        # this check fails on every PR until that is fixed. Until then it reports the
+        # failure as a warning instead of failing the job. Remove `continue-on-error`
+        # (and the warning step below) in the PR that fixes #223.
+        continue-on-error: true
+        shell: bash
+        # Windows finds the engine DLL next to the tool or on PATH.
+        run: PATH="$PWD/build/engine:$PATH" build/perf-tools/nota_idle_cpu 5 5
+      - name: Report idle CPU failure (allowed until #223 is fixed)
+        if: steps.idle.outcome == 'failure'
+        shell: bash
+        run: |
+          msg="Idle engine CPU is over the 5% limit (known issue #223). Allowed to fail until #223 is fixed."
+          echo "::warning title=Idle CPU (${{ matrix.name }})::$msg"
+          echo "**Idle CPU (${{ matrix.name }})**: $msg" >> "$GITHUB_STEP_SUMMARY"

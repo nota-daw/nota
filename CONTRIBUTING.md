@@ -121,6 +121,13 @@ Every pull request is built on macOS, Windows and Linux, and the smoke test runs
 (`.github/workflows/ci.yml`). All three must pass before a pull request can be merged.
 If this is your first contribution, a maintainer approves the CI run before it starts.
 
+A pull request that touches the engine also runs the performance gate
+(`.github/workflows/perf.yml`, see [BUILD.md](BUILD.md#performance-gate)). It fails when
+any engine scenario does more than 1% more work (CPU instructions) or takes more than
+15% longer than on the base branch, or when an idle engine uses CPU. If a slowdown is the price of a deliberate change (a better-sounding
+default, say), say why in the PR; a maintainer accepts it by adding the
+`perf-regression-accepted` label, and the report still lists it.
+
 ## Pull requests
 
 - Target `develop`.

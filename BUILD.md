@@ -44,6 +44,41 @@ and runs the smoke test.
 dotnet run --project src/managed/Nota.App
 ```
 
+## Performance gate
+
+`scripts/perf-gate.sh` checks that an engine change does not make Nota slower. It builds
+the engine at two commits, renders the same scenarios with both and compares the CPU
+instructions each render does, counted by Valgrind across every engine thread:
+
+- each built-in instrument on one track, and each built-in effect (its own share, eight
+  instances on a Synth track) — new devices are picked up automatically;
+- busy mixes of 1, 4, 8, 16 and 32 tracks (Volt + EQ-8 + Compressor + Auto Filter);
+- a sparse session (32 tracks, one in four playing) and a silent one (32 tracks, no clips).
+
+Instruction counts repeat exactly from run to run, unlike timings on shared CI machines,
+so any scenario more than 1% above the base fails. Some slowdowns add no instructions
+(denormals, cache misses, threads waiting on each other: EQ-8 in #212 ran 35% fewer
+instructions yet took 38% longer), so wall-clock time is checked too. Base and change are
+timed back to back over 5 rounds, and the fastest round of each is compared. A scenario
+more than 15% slower is re-timed with 10 more rounds, and fails only if it is still
+slower. A scenario that renders sound on the base but silence with the change fails too. `tests/perf/nota_idle_cpu` separately checks that an idle engine (created,
+transport stopped) stays under 5% of one core; it runs on macOS, Windows and Linux. Until #223 (idle
+worker threads spinning) is fixed, it reports a failure as a warning instead of failing CI.
+
+Linux only (Valgrind), with the Linux build requirements plus `valgrind` (and `ccache`
+to speed up the second build):
+
+```bash
+scripts/perf-gate.sh develop          # your working tree against develop
+scripts/perf-gate.sh 82babfe 64250a5  # any two commits
+```
+
+The report lands in `build/perf/report.md`. Knobs: `PERF_LIMIT_PCT` (default 1),
+`PERF_TIME_LIMIT_PCT` (default 15), `PERF_ROUNDS` (5), `PERF_CONFIRM_ROUNDS` (10),
+`PERF_SECONDS` (audio per scenario, default 1). The scenario harness is
+`tests/perf/nota_perf.cpp`; it uses only the public C ABI and is always taken from the
+newer commit, so both engines run the same scenarios.
+
 ## Stress test
 
 `scripts/stress-test.py` measures how much DSP headroom the engine has as a project

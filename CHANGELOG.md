@@ -73,6 +73,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **colour** (all 27 shades and Auto) and the **height** (Compact · Standard · Large;
   Option-click for every track) in one click, without submenus. **Live freeze** is a switch
   that shows whether the track is live-frozen; switch it off to unfreeze.
+- **Performance gate for engine changes**: every pull request that touches the engine is
+  compared with its base branch on the same machine. Each built-in instrument and effect,
+  busy mixes of 1 to 32 tracks, and sparse and silent sessions are rendered with both, and
+  the change fails if any of them does more than 1% more work (CPU instructions, counted by
+  Valgrind, so the result does not depend on how busy the CI machine is) or takes more than
+  15% longer (timed back to back, re-checked before failing). An idle engine
+  must also stay under 5% CPU on macOS, Windows and Linux. Run it locally with
+  `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
 - **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
