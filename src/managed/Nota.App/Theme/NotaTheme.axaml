@@ -64,6 +64,185 @@
            and sets the Shadow.* elevations and Fluent's SystemAccentColor ramp from the
            theme on every switch. Views reach them with {DynamicResource Brush.*} /
            {DynamicResource Shadow.*}; a StaticResource cannot follow a theme change. -->
+
+      <!-- ===== Menu item (spec 034) ============================================
+           Every item inside a context menu, flyout or submenu. One row of fixed columns so
+           every item of a menu lines up: icon (or the check of a chosen choice) · label ·
+           trailing (a current value or a switch, MenuKit.Trailing) · shortcut · caret.
+           Shortcuts are spelled the platform's way ("⌘G", "Ctrl+G") by MenuKit.Spell —
+           Avalonia's own converter writes "⌘+G". Icons are muted ink at rest; everything
+           takes the derived ink on the accent fill while highlighted. Menubar triggers keep
+           Fluent's top-level theme. -->
+      <ControlTheme x:Key="{x:Type MenuItem}" TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Clip}"/>
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Panel>
+              <Border Name="PART_LayoutRoot"
+                      Padding="{TemplateBinding Padding}"
+                      MinHeight="{TemplateBinding MinHeight}"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="{TemplateBinding CornerRadius}">
+                <Border.Transitions>
+                  <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+                  </Transitions>
+                </Border.Transitions>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="NotaMenuIcon"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="NotaMenuTrailing"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="NotaMenuGesture"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="NotaMenuCaret"/>
+                  </Grid.ColumnDefinitions>
+                  <Panel Name="PART_IconColumn" Grid.Column="0" Width="14" Margin="0,0,8,0" IsVisible="False">
+                    <ContentPresenter Name="PART_IconPresenter"
+                                      Content="{TemplateBinding Icon}"
+                                      Foreground="{DynamicResource Brush.TextMuted}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <app:Glyph Name="PART_Check" Kind="Check" Width="11" Height="11"
+                               Foreground="{DynamicResource Brush.Accent}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False"/>
+                  </Panel>
+                  <ContentPresenter Name="PART_HeaderPresenter" Grid.Column="1"
+                                    Content="{TemplateBinding Header}"
+                                    ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                    RecognizesAccessKey="True"
+                                    VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                  <ContentPresenter Name="PART_TrailingPresenter" Grid.Column="2"
+                                    Content="{Binding (app:MenuKit.Trailing), RelativeSource={RelativeSource TemplatedParent}}"
+                                    Foreground="{DynamicResource Brush.TextMuted}"
+                                    Margin="16,0,0,0"
+                                    VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                  <TextBlock Name="PART_InputGestureText" Grid.Column="3"
+                             Text="{Binding InputGesture, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static app:MenuGestureConverter.Instance}}"
+                             FontFamily="{StaticResource Font.Mono}" FontSize="11"
+                             Foreground="{DynamicResource Brush.TextMuted}"
+                             Margin="16,0,0,0"
+                             VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                  <app:Glyph Name="PART_Caret" Grid.Column="4" Kind="ChevronRight" Width="8" Height="8"
+                             Foreground="{DynamicResource Brush.TextMuted}"
+                             Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+              <Popup Name="PART_Popup"
+                     WindowManagerAddShadowHint="False"
+                     Placement="RightEdgeAlignedTop"
+                     HorizontalOffset="2" VerticalOffset="-5"
+                     IsLightDismissEnabled="False"
+                     IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}">
+                <Border Background="{DynamicResource Brush.SurfaceRaised}"
+                        BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="1"
+                        CornerRadius="{StaticResource Radius.Control}"
+                        Padding="4" MinWidth="200" MaxHeight="560">
+                  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <ItemsPresenter Name="PART_ItemsPresenter"
+                                    ItemsPanel="{TemplateBinding ItemsPanel}"
+                                    Grid.IsSharedSizeScope="True"/>
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Panel>
+          </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^:icon /template/ Panel#PART_IconColumn">
+          <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="^:checked /template/ Panel#PART_IconColumn">
+          <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="^:checked /template/ app|Glyph#PART_Check">
+          <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="^:checked /template/ ContentPresenter#PART_IconPresenter">
+          <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="^:empty /template/ app|Glyph#PART_Caret">
+          <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
+        <!-- Destructive: danger ink on label and icon at rest. -->
+        <Style Selector="^.danger">
+          <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+          <Style Selector="^ /template/ ContentPresenter#PART_IconPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+          </Style>
+        </Style>
+
+        <!-- Highlight (pointer or keyboard; Avalonia marks it :selected): the accent fill,
+             every part in the derived ink. -->
+        <Style Selector="^:selected">
+          <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          <Style Selector="^ /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+          </Style>
+          <Style Selector="^ /template/ ContentPresenter#PART_IconPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          </Style>
+          <Style Selector="^ /template/ app|Glyph#PART_Check">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          </Style>
+          <Style Selector="^ /template/ ContentPresenter#PART_TrailingPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          </Style>
+          <Style Selector="^ /template/ TextBlock#PART_InputGestureText">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          </Style>
+          <Style Selector="^ /template/ app|Glyph#PART_Caret">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
+          </Style>
+        </Style>
+
+        <!-- Disabled: the disabled ink step on every part, never a fill (wins over danger). -->
+        <Style Selector="^:disabled">
+          <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+          <Style Selector="^ /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="Transparent"/>
+          </Style>
+          <Style Selector="^ /template/ ContentPresenter#PART_IconPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+          </Style>
+          <Style Selector="^ /template/ ContentPresenter#PART_TrailingPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+          </Style>
+          <Style Selector="^ /template/ TextBlock#PART_InputGestureText">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+          </Style>
+          <Style Selector="^ /template/ app|Glyph#PART_Caret">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+          </Style>
+        </Style>
+
+        <!-- An inline row (header, colour grid, segments, caption) takes a template of its
+             own: one presenter, no column grid. On the item grid it spanned the menu's
+             shared-size columns, so its width hung on the other items (a long current value
+             such as "Nota Pentad") and, a few pixels short in the native popup, it was
+             centred and clipped on both sides. Now it simply asks for its width. -->
+        <Style Selector="^.inline">
+          <Setter Property="Padding" Value="8,0"/>
+          <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Name="PART_LayoutRoot"
+                      Padding="{TemplateBinding Padding}"
+                      MinHeight="{TemplateBinding MinHeight}"
+                      Background="Transparent">
+                <ContentPresenter Name="PART_HeaderPresenter"
+                                  Content="{TemplateBinding Header}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+      </ControlTheme>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -984,6 +1163,12 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="Padding" Value="4"/>
+    <Setter Property="MinWidth" Value="200"/>
+  </Style>
+  <!-- A menu carrying inline rows (colour grid, height keys): wide enough that they never
+       wrap, whatever the track's name (spec 034). -->
+  <Style Selector="MenuFlyoutPresenter.rows">
+    <Setter Property="MinWidth" Value="248"/>
   </Style>
   <!-- A plain flyout (a popover with its own content). -->
   <Style Selector="FlyoutPresenter">
@@ -1006,50 +1191,18 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="Padding" Value="4"/>
+    <Setter Property="MinWidth" Value="200"/>
   </Style>
 
-  <Style Selector="MenuItem">
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="12"/>
-    <Setter Property="MinHeight" Value="24"/>
-    <Setter Property="Padding" Value="8,0"/>
-  </Style>
-  <!-- Root Border of the MenuItem template: transparent by default, a full accent fill on
-       highlight (Avalonia marks the hovered flyout item :selected). -->
-  <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="CornerRadius" Value="{StaticResource Radius.Clip}"/>
-    <Setter Property="Margin" Value="0"/>
-  </Style>
-  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot,
-                   MenuItem:pointerover /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
-  </Style>
-  <Style Selector="MenuItem:selected, MenuItem:pointerover">
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
-  </Style>
-  <Style Selector="MenuItem:disabled">
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
-  </Style>
-  <Style Selector="MenuItem:disabled /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="Transparent"/>
-  </Style>
-  <!-- Shortcut on the right of an item (MenuItem.InputGesture): muted ink — the next ink
-       step, not opacity — and the derived ink while the item is highlighted. -->
-  <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
-    <Setter Property="Margin" Value="20,0,0,0"/>
-  </Style>
-  <Style Selector="MenuItem:selected /template/ TextBlock#PART_InputGestureText,
-                   MenuItem:pointerover /template/ TextBlock#PART_InputGestureText">
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextOnAccent}"/>
-  </Style>
+  <!-- Menu items take the Nota MenuItem theme (ControlTheme above); the danger and inline
+       classes, hover and disabled states live there with it. -->
 
   <!-- The menubar's own triggers (File, Edit…): secondary ink that lifts to the raised tone
        on hover or while open — only the items inside a menu fill with the accent. -->
   <Style Selector="Menu > MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="MinHeight" Value="22"/>
   </Style>
