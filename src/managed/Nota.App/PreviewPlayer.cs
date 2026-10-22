@@ -6,8 +6,8 @@
 // the name and format, the real waveform in a well (click = seek, hover = time tag, a brass
 // playhead while it plays) or — WAVE / SPEC in the well's corner — a live spectrum of what
 // the preview voice is playing, then Play/Stop, the time readout, the effect source (FX
-// presets only), Loop, Auto (selecting plays it) and a preview-volume fader (double-click
-// types a level, ⌥-click = 0 dB). A sample's waveform is decoded off the UI thread through the engine's background
+// presets only), Loop, Auto (selecting plays it) and a preview-volume fader (⌥-click
+// types a level, double-click = 0 dB). A sample's waveform is decoded off the UI thread through the engine's background
 // import. A preset is rendered OFFLINE: IPresetAudition plans a phrase that suits it, a
 // worker builds and renders a standalone rig (see IAuditionRig), and the engine keeps the
 // result in its audition cache; the row below the selection is then pre-rendered, so
@@ -483,8 +483,8 @@ public sealed class PreviewPlayer : UserControl
         try { _engine?.SetPreviewGain((float)(v * v)); } catch { }
         _volWaves.Kind = v <= 0.001 ? GlyphKind.SpeakerMute : v < 0.5 ? GlyphKind.SpeakerLow : GlyphKind.SpeakerHigh;
         var db = NotaNum.Db(v <= 0.001 ? double.NegativeInfinity : 40 * Math.Log10(v));
-        ToolTip.SetTip(_volumeBox, $"Preview volume {db} · double-click to type · ⌥-click for 0{NotaNum.Thin}dB");
-        ToolTip.SetTip(_volumePop, $"Preview volume {db} · double-click to type · ⌥-click for 0{NotaNum.Thin}dB");
+        ToolTip.SetTip(_volumeBox, $"Preview volume {db} · ⌥-click to type · double-click for 0{NotaNum.Thin}dB");
+        ToolTip.SetTip(_volumePop, $"Preview volume {db} · ⌥-click to type · double-click for 0{NotaNum.Thin}dB");
         if (persist && _settings is not null) { _settings.Current.BrowserPreviewVolume = v; _settings.Save(); }
     }
 
@@ -1115,7 +1115,7 @@ public sealed class PreviewWaveform : Control
 }
 
 /// <summary>The preview-volume fader: a thin track, a fill to the value and a small bar
-/// thumb. Drag anywhere to set; double-click types a level, ⌥-click resets to 0 dB (1.0).</summary>
+/// thumb. Drag anywhere to set; ⌥-click types a level, double-click resets to 0 dB (1.0).</summary>
 public sealed class PreviewVolume : Control
 {
     private double _value = 0.7;

@@ -6,7 +6,7 @@
 // raised cap on a seam and a primary-ink pointer —
 // all laid out on a 52-unit grid (groove r 21 · stroke 5, cap r 14, pointer 2.4 wide
 // reaching the cap's edge) and scaled to the knob's size. Drag vertically to change
-// (up = increase; Ctrl/⌘/Shift = fine). Double-click types a value and ⌥-click resets
+// (up = increase; Ctrl/⌘/Shift = fine). Double-click resets and ⌥-click types a value
 // (ValueEntry, attached by KnobCell once `Format` is set). Same public API as
 // MiniFader (Value / max / Accent / ValueChanged / GestureBegin / GestureEnd) so it
 // drops into the plugin editors.
@@ -79,7 +79,7 @@ public sealed class Knob : Control
     public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }
     private bool _dim;
 
-    /// <summary>Value restored on ⌥-click (NaN = no reset).</summary>
+    /// <summary>Value restored on double-click (NaN = no reset).</summary>
     public double Default { get; set; } = double.NaN;
 
     /// <summary>The read-out text at a value (0..max) — what the knob's value line shows. Pure:
@@ -148,9 +148,9 @@ public sealed class Knob : Control
     {
         // Left button only — let right-click bubble to a context menu (e.g. CV modulate).
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        // ⌥-click restores the default — ValueEntry handles it first on an attached knob; this
-        // keeps reset on a knob built without one.
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 && !double.IsNaN(Default))
+        // Double-click (or ⌥-click) restores the default — ValueEntry handles it first on an
+        // attached knob (⌥ types there); this keeps reset on a knob built without one.
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
         {
             GestureBegin?.Invoke();
             SetByHand(Default);

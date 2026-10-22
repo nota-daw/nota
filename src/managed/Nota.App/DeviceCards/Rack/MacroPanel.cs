@@ -162,7 +162,7 @@ internal static class MacroPanel
         };
         tick.Add(() => { if (!knob.Dragging) { float v = Value(e, s, m); if (Math.Abs(v - knob.Value) > 1e-4) { knob.Value = v; value.Text = Pct(v); } } });
         MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
-        // Double-click types, ⌥-click resets; right-click stays the macro's own menu (the cell's).
+        // ⌥-click types, double-click resets; right-click stays the macro's own menu (the cell's).
         ValueEntry.Attach(knob, $"Macro {m + 1}", value, menu: false);
 
         string name = s.MacroName(m);

@@ -429,7 +429,7 @@ internal sealed partial class RackCardView
         var vol = new SliderTrack { Norm = VolNorm(a.ChainGain(c)), Reset = () => a.SetChainGain(c, 1f) };
         vol.Changed += v => a.SetChainGain(c, NormVol(v));
         _irTick.Add(() => { if (!vol.Dragging) vol.Norm = VolNorm(a.ChainGain(c)); });
-        ToolTip.SetTip(vol, "Pad volume · drag up or down, double-click to type, ⌥-click for 0\u2009dB");
+        ToolTip.SetTip(vol, "Pad volume · drag up or down, ⌥-click to type, double-click for 0\u2009dB");
         ValueEntry.Attach(vol, new ValueField("Pad volume", () => VolNorm(a.ChainGain(c)), n => VolText(NormVol(n)),
             n => { vol.Norm = n; a.SetChainGain(c, NormVol(n)); }, Default: VolNorm(1f)));
         MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");

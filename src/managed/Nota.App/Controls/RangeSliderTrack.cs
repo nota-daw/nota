@@ -5,7 +5,7 @@
 // track, a brass fill between the handles and two 6×7 Brass Light handles. Works in
 // normalised 0..1 (the caller maps to its units and keeps a minimum gap). A press picks the
 // nearer handle and a horizontal drag moves it by the pointer's travel — a click never jumps
-// a value; Shift (or Ctrl/⌘) drags fine. ⌥-click resets. GestureBegin / GestureEnd
+// a value; Shift (or Ctrl/⌘) drags fine. Double-click resets. GestureBegin / GestureEnd
 // (with the handle: 0 = low, 1 = high) bracket the drag for automation writes.
 
 using System;
@@ -59,7 +59,7 @@ internal sealed class RangeSliderTrack : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 && Reset is not null)
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Reset is not null)
         {
             Reset();
             e.Handled = true;

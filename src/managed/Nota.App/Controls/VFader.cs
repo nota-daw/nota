@@ -32,7 +32,7 @@ internal sealed class VFader : Control
     public void SetValueExternal(double v) { _value = Math.Clamp(v, 0, Max); InvalidateVisual(); }
 
     /// <summary>The fader as a typeable value; <paramref name="fmt"/> is its read-out at a value
-    /// (0..1.5), <paramref name="def"/> the value ⌥-click restores.</summary>
+    /// (0..1.5), <paramref name="def"/> the value a double-click restores.</summary>
     internal ValueField EntryField(string name, Func<double, string> fmt, double? def)
         => new(name, () => _value / Max, n => fmt(n * Max), n => Set(n * Max),
             () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), def is { } d ? Math.Clamp(d, 0, Max) / Max : null);
@@ -45,7 +45,7 @@ internal sealed class VFader : Control
     }
 
     // Relative, like every value control (DESIGN.md § Interaction contract): a click never
-    // jumps the value — so the first click of a double-click (type a value) moves nothing.
+    // jumps the value — so the first click of a double-click (reset) moves nothing.
     private double _startY, _startV;
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

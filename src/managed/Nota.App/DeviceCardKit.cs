@@ -78,7 +78,7 @@ internal static class DeviceCardKit
         }
         knob.ValueSet += Paint;
         Paint();
-        // Double-click the knob or its value to type one, ⌥-click to reset (specs/035). A knob
+        // ⌥-click the knob, or double-click its value, to type one; double-click the knob to reset (specs/035). A knob
         // without a Format is typed by reading its value line back after each probe.
         ValueEntry.Attach(knob, name, value);
         return new StackPanel { Width = cellW, Spacing = 0, Children = { knob, lbl, value } };
@@ -195,8 +195,8 @@ internal static class DeviceCardKit
     // parameter and does its own follow-up); `text` formats the value for display.
     // `trackWidth` fixes the track, otherwise it stretches. An empty label drops the
     // label column. `modulation` draws a modulation depth in teal. `sync` repaints from
-    // `norm` and skips while the hand is on the slider. Double-clicking the slider or its
-    // value types one in, ⌥-click runs `reset`. `textAt` (the read-out at a position, pure)
+    // `norm` and skips while the hand is on the slider. ⌥-clicking the slider or double-clicking
+    // its value types one in, a double-click on the slider runs `reset`. `textAt` (the read-out at a position, pure)
     // lets typing search without writing the parameter; without it the row probes `setNorm`.
     internal static Grid SliderRow(string label, Func<double> norm, Action<double> setNorm, Func<string> text, out Action sync,
         Action? begin = null, Action? end = null, Action? reset = null, bool bipolar = false, Func<bool>? dim = null,

@@ -5,12 +5,13 @@
 // drag (vertical) and double-click-type"; specs/035-typed-value-entry). One gesture scheme
 // for every knob, fader, slider, graph handle and matrix cell:
 //
-//   double-click   turns the read-out itself editable — a borderless text box in its place
-//                  (an adorner, so it works whatever panel the read-out sits in) with a 1px
-//                  accent line under it and the number selected; Enter or a click away commits, Escape
-//                  cancels, Tab / Shift+Tab commit and move to the next / previous value on
-//                  the same card (the nearest Scope), wrapping
-//   ⌥/Alt-click    restores the default (or clears a route)
+//   double-click   on the control restores the default (or clears a route)
+//   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable —
+//                  a borderless text box in its place (an adorner, so it works whatever panel
+//                  the read-out sits in) with a 1px accent line under it and the number
+//                  selected; Enter or a click away commits, Escape cancels, Tab / Shift+Tab
+//                  commit and move to the next / previous value on the same card (the nearest
+//                  Scope), wrapping
 //   right-click    a parameter menu — Type value…, Reset to default / Clear — unless the
 //                  control has its own menu, which then adds MenuItems itself
 //
@@ -78,12 +79,13 @@ internal static partial class ValueEntry
         Entries.AddOrUpdate(control, new Entry(control, () => fields, AnchorOf));
         void Press(object? s, PointerPressedEventArgs e)
         {
-            if (Pressed(e, s as Visual ?? control, field)) Open(control, field, AnchorOf(field));
+            bool onReadout = control is TextBlock || readout is not null && ReferenceEquals(s, readout);
+            if (Pressed(e, s as Visual ?? control, field, onReadout: onReadout)) Open(control, field, AnchorOf(field));
         }
         control.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
         if (readout is not null && !ReferenceEquals(readout, control))
         {
-            readout.Background ??= Brushes.Transparent;   // the whole column takes the double-click, not just the glyphs
+            readout.Background ??= Brushes.Transparent;   // the whole column takes the click, not just the glyphs
             readout.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
         }
         if (!menu) return;
@@ -131,7 +133,7 @@ internal static partial class ValueEntry
 
     /// <summary>A slider row's read-out, typed by probing the row's own setter (<paramref name="setNorm"/>
     /// then <paramref name="text"/>). <paramref name="control"/> (its slider) takes the same gestures;
-    /// <paramref name="reset"/> — by default the slider's own Reset — is what ⌥-click and the menu run.</summary>
+    /// <paramref name="reset"/> — by default the slider's own Reset — is what a double-click and the menu run.</summary>
     public static void Attach(TextBlock readout, Func<double> norm, Action<double> setNorm, Func<string> text,
         Action? begin = null, Action? end = null, Action? after = null, Action? reset = null, Control? control = null, string name = "Value")
         => Attach(control ?? readout, Probing(name, norm, setNorm, text, begin, end, after, reset ?? (control as SliderTrack)?.Reset), readout);
@@ -142,21 +144,23 @@ internal static partial class ValueEntry
         => new(name, norm, n => { setNorm(n); return text(); }, setNorm, begin, end)
         { Probes = true, After = after, Reset = reset };
 
-    // A left press: ⌥ resets (every field of the handle), a double-click opens the box.
-    private static bool Pressed(PointerPressedEventArgs e, Visual at, ValueField field, IReadOnlyList<ValueField>? all = null)
+    // A left press: ⌥ opens the box; a double-click resets (every field of the handle) — or,
+    // on the read-out, opens the box too.
+    private static bool Pressed(PointerPressedEventArgs e, Visual at, ValueField field, IReadOnlyList<ValueField>? all = null,
+        bool onReadout = false)
     {
         if (!e.GetCurrentPoint(at).Properties.IsLeftButtonPressed) return false;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0)
+        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 || onReadout && e.ClickCount == 2)
         {
-            if (field.Clear is null && !(all ?? [field]).Any(f => f.CanReset)) return false;   // ⌥ keeps the control's own meaning
             e.Handled = true;
-            if (field.Clear is not null) Clear(field);
-            else foreach (var f in all ?? [field]) Reset(f);
-            return false;
+            return true;
         }
         if (e.ClickCount != 2) return false;
+        if (field.Clear is null && !(all ?? [field]).Any(f => f.CanReset)) return false;   // the control keeps its own double-click
         e.Handled = true;
-        return true;
+        if (field.Clear is not null) Clear(field);
+        else foreach (var f in all ?? [field]) Reset(f);
+        return false;
     }
 
     // ---- reset / clear / commit ----------------------------------------------------------

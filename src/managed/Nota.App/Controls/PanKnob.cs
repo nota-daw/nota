@@ -26,7 +26,7 @@ internal sealed class PanKnob : Control
     public PanKnob(double pan) { _pan = Math.Clamp(pan, -1, 1); Width = 26; Height = 26; }
 
     /// <summary>The knob as a typeable value; <paramref name="fmt"/> is its read-out at a pan
-    /// (−1..1). ⌥-click centres it.</summary>
+    /// (−1..1). Double-click centres it.</summary>
     internal ValueField EntryField(string name, Func<double, string> fmt)
         => new(name, () => (_pan + 1) / 2, n => fmt(n * 2 - 1), n => Set(n * 2 - 1),
             () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), 0.5);

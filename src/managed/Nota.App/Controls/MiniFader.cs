@@ -25,7 +25,7 @@ public sealed class MiniFader : Control
 
     /// <summary>On the audio path: neutral ink fill + cap instead of the quieter rule grey.</summary>
     public bool Accent { get; init; }
-    /// <summary>⌥-click target value, or negative to disable reset.</summary>
+    /// <summary>Double-click target value, or negative to disable reset.</summary>
     public double Default { get; init; } = -1;
 
     private readonly double _max;
@@ -60,9 +60,9 @@ public sealed class MiniFader : Control
     {
         // Left button only — right-click bubbles to the CV-modulate / MIDI Learn menu.
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        // ⌥-click resets to the default value (e.g. 0 dB for a track volume) — ValueEntry
-        // handles it first once attached; double-click types a value there.
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 && Default >= 0)
+        // Double-click resets to the default value (e.g. 0 dB for a track volume) — ValueEntry
+        // handles it first once attached; ⌥-click types a value there.
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Default >= 0)
         {
             GestureBegin?.Invoke();
             SetValue(Default);

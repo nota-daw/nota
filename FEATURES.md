@@ -1122,8 +1122,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
 - **Popup rack editors** (full UI / Params).
-- **Typed values** — double-click the number next to a slider in a device card, the clip
-  editor or a rack macro and type it: "−6", "1.5k", "250 ms", "L 30", "1/16".
+- **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
+  it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
+  itself resets it to the default.
 - **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the system language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.

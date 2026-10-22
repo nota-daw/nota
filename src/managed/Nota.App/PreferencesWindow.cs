@@ -1246,7 +1246,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Click waveform", "Play from that point"),
             ("Click WAVE / SPEC", "Switch the well between the waveform and a live spectrum"),
             ("Scroll on the track button", "Step through the demo tracks an effect preset is heard through"),
-            ("Double-click volume", "Type the preview volume · ⌥-click resets it to 0\u2009dB"),
+            ("⌥-click volume", "Type the preview volume · double-click resets it to 0\u2009dB"),
         }),
         ("Gamepad (macOS)", new[]
         {
@@ -1286,9 +1286,9 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Drag slider", "Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps"),
-            ("Double-click a knob, fader or slider", "Type a value — on the control or its value (units like k, ms, dB, L / R work)"),
+            ("⌥-click a knob, fader or slider", "Type a value (units like k, ms, dB, L / R work) · double-click its value does the same"),
             ("Return · Esc · Tab / ⇧Tab (typing a value)", "Set it · cancel · set it and type the next / previous value on the card"),
-            ("⌥-click a knob, fader or slider", "Reset the value to its default"),
+            ("Double-click a knob, fader or slider", "Reset the value to its default"),
             ("Right-click a knob, fader or slider", "Type value… · Reset to default"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
             ("Click · ⇧ · ⌥ a Rhythm step", "Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity"),

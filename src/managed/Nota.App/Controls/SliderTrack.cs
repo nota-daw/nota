@@ -13,7 +13,7 @@
 // a slider drags along its own axis (#115) — right increases and the handle follows the
 // pointer — and a vertical drag still works as on a knob (up increases, full range over
 // ~140px). Shift (or Ctrl/⌘) is fine on both; ew-resize; a click never jumps the value.
-// ⌥-click resets when a reset is supplied; double-click types a value (ValueEntry, attached
+// Double-click resets when a reset is supplied; ⌥-click types a value (ValueEntry, attached
 // by the row); right-click opens the parameter menu.
 // GestureBegin / GestureEnd bracket the drag so automation writes are recorded, and the
 // row's live-follow refresher should skip while Dragging.
@@ -59,7 +59,7 @@ internal sealed class SliderTrack : Control
     public double Marker { get => _marker; set { if (value.Equals(_marker)) return; _marker = value; InvalidateVisual(); } }
     private double _marker = double.NaN;
 
-    /// <summary>⌥-click handler (restore the default). Null disables reset. Double-click types a
+    /// <summary>Double-click handler (restore the default). Null disables reset. ⌥-click types a
     /// value once the row attaches ValueEntry (DeviceCardKit.SliderRow does).</summary>
     public Action? Reset { get; init; }
 
@@ -83,7 +83,7 @@ internal sealed class SliderTrack : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 && Reset is not null)
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Reset is not null)
         {
             GestureBegin?.Invoke();
             Reset();

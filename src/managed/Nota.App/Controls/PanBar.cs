@@ -3,8 +3,8 @@
 //
 // A compact bipolar pan bar for the arrangement track header: a
 // rounded field with a centre tick and a brass fill that grows from the centre
-// toward the panned side, "50L … C … 50R" text over it. Drag to set; double-click types
-// a value, ⌥-click centres it. Fires GestureBegin/End so callers can bracket an
+// toward the panned side, "50L … C … 50R" text over it. Drag to set; double-click centres
+// it, ⌥-click types a value. Fires GestureBegin/End so callers can bracket an
 // automation write, like MiniFader / the gauge Knob.
 
 using System;
@@ -55,7 +55,7 @@ public sealed class PanBar : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click bubbles
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0) { GestureBegin?.Invoke(); Apply(0); GestureEnd?.Invoke(); e.Handled = true; return; }   // centre
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { GestureBegin?.Invoke(); Apply(0); GestureEnd?.Invoke(); e.Handled = true; return; }   // centre
         _drag = true;
         _lastY = e.GetPosition(this).Y;
         _raw = _pan;
@@ -95,7 +95,7 @@ public sealed class PanBar : Control
         base.OnPointerCaptureLost(e);
     }
 
-    /// <summary>The bar as a typeable value ("30L", "C", "12R" on its own 50 scale); ⌥-click centres.</summary>
+    /// <summary>The bar as a typeable value ("30L", "C", "12R" on its own 50 scale); double-click centres.</summary>
     internal ValueField EntryField(string name)
         => new(name, () => (_pan + 1) / 2, n => Label(Detent(n * 2 - 1)), n => Apply(n * 2 - 1),
             () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), 0.5);

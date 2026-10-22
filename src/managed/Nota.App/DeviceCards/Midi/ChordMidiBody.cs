@@ -501,7 +501,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             bar.Changed += v => SetShift(s, v);
             bar.GestureBegin += () => { Begin(pSt); Begin(pOn); }; bar.GestureEnd += () => { End(pSt); End(pOn); };
             Learn(bar, pSt, $"Shift {s + 1}");
-            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones) · double-click to type");
+            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones) · ⌥-click to type · double-click resets");
             ValueEntry.Attach(bar, bar.EntryField($"Shift {s + 1}"));
             var lbl = Mono("", Txt); lbl.HorizontalAlignment = HorizontalAlignment.Center;
             var lblHit = new Border { Height = 11, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };

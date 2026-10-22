@@ -25,7 +25,7 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
 {
     /// <summary>Resets by action instead of by position (a slider row's own reset).</summary>
     public Action? Reset { get; init; }
-    /// <summary>Removes instead of resetting (a matrix route, a cable): ⌥-click and the menu's Clear.</summary>
+    /// <summary>Removes instead of resetting (a matrix route, a cable): double-click and the menu's Clear.</summary>
     public Action? Clear { get; init; }
     /// <summary>Repaints the owner after a commit or a reset.</summary>
     public Action? After { get; init; }

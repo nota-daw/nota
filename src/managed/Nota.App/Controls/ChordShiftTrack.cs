@@ -7,8 +7,8 @@
 // growing up (positive) or down (negative). Unlike the generic SliderTrack the value is
 // positional — press or drag anywhere sets the semitone under the pointer — because the
 // track is a pitch ruler. A switched-off slot draws its fill in Border strong.
-// GestureBegin / GestureEnd bracket the drag for automation writes; double-click types a
-// shift, ⌥-click resets to 0; right-click opens the parameter menu.
+// GestureBegin / GestureEnd bracket the drag for automation writes; double-click resets
+// to 0, ⌥-click types a shift; right-click opens the parameter menu.
 
 using System;
 using Avalonia;
@@ -41,7 +41,7 @@ internal sealed class ChordShiftTrack : Control
 
     public event Action<int>? Changed;
 
-    /// <summary>The track as a typeable value: semitones −12…+12 ("+3", "−5"), ⌥-click 0.</summary>
+    /// <summary>The track as a typeable value: semitones −12…+12 ("+3", "−5"), double-click 0.</summary>
     internal ValueField EntryField(string name)
         => new(name, () => (_value + Range) / (2.0 * Range), n => Semis(Steps(n)), n => { int v = Steps(n); _value = v; InvalidateVisual(); Changed?.Invoke(v); },
             () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), 0.5);
@@ -75,7 +75,7 @@ internal sealed class ChordShiftTrack : Control
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         e.Handled = true;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0) { _value = 0; InvalidateVisual(); GestureBegin?.Invoke(); Changed?.Invoke(0); GestureEnd?.Invoke(); return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { _value = 0; InvalidateVisual(); GestureBegin?.Invoke(); Changed?.Invoke(0); GestureEnd?.Invoke(); return; }
         _drag = true;
         e.Pointer.Capture(this);
         GestureBegin?.Invoke();
