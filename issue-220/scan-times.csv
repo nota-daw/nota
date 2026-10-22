@@ -1,0 +1,7 @@
+label,run,seconds,known,load1
+base,1,104.9,70,7.17
+new-final,1,99.4,72,5.15
+base,2,102.6,70,4.05
+new-final,2,100.1,72,3.50
+base,3,102.1,70,4.65
+new-final,3,101.6,72,4.37
