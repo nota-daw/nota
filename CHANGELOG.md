@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Starred versions only** (nota-daw/nota#226): a star button in the History tab's header
+  lists just the versions you starred, newest first. Click it again to see the whole tree.
+- **Fold the browser's Built-in and Plug-ins sections** (nota-daw/nota#230): click a
+  **BUILT-IN** or **PLUG-INS** header in the Instruments, Effects or MIDI tab to collapse
+  it and click again to open it.
 - **Type an exact value into any knob, fader or slider** (#240): double-click the control
   or its value and type it in the units shown — `1.2k`, `-6`, `12 ms`, `30L`, `1/4`, `off`.
   Enter or a click away applies it, Esc cancels, Tab moves to the next value on the card.
@@ -70,6 +75,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     **Check now** button. Nothing downloads until you click Update.
 
 ### Changed
+- **Detail panel tabs fit the track** (nota-daw/nota#247, nota-daw/nota#246): the **Pattern**
+  tab shows only on a track with a Drum Rack instead of sitting greyed out everywhere else,
+  and the panel can't be resized while **Devices** is shown, because the cards don't grow.
+  **Clip** and **Pattern** stay resizable and keep the height you gave them.
+- **Plug-in card: Open editor toggles** (nota-daw/nota#258): the button reads **Close
+  editor** while the plug-in's window is open and closes it on click. If the window can't
+  be opened, the status bar says so instead of nothing happening.
+- **Convert melody and harmony need the AI model** (nota-daw/nota#233): without the model the
+  clip's **Convert** menu no longer offers them (they used to fall back to a much worse
+  converter without saying so). It offers to download the model instead. Drums and Slice
+  are unchanged.
+- **Platform names for "Reveal in Finder"** (nota-daw/nota#235): the browser menus say **Show
+  in Explorer** on Windows and **Show in file manager** on Linux.
+- **The audio clip editor says why nothing snaps with Warp off** (nota-daw/nota#269): an
+  unwarped clip has no beat grid, and the hint line under the wave now says to turn on Warp.
 - **Reset to default is now ⌥-click** (Alt-click on Windows and Linux) on knobs, faders,
   sliders and value boxes — double-click types a value instead. The mixer fader no longer
   jumps to where you click; drag it like any other control.
@@ -92,6 +112,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **Resizing a track no longer re-arms it** (nota-daw/nota#255): after you disarmed a track (or
+  changed its mute or solo), changing its height brought the old state back.
+- **Buttons no longer have a lighter top edge** (nota-daw/nota#231): the raised highlight sits
+  inside the border instead of over its top line, most visible in Studio Light.
 - **Export and freeze use every core again**: since the engine's idle-CPU fix they rendered
   on one thread, up to 4x slower. On macOS the engine also no longer wakes every render
   thread when a block needs only a few, and a session that overloads one core no longer

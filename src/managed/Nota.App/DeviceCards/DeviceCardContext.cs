@@ -28,7 +28,8 @@ internal sealed class DeviceCardContext(
     Action requestRebuild,
     Action<int> requestRackPresetSave,
     Action hideDropGlow,
-    IFactoryPresets? factory = null)
+    IFactoryPresets? factory = null,
+    Action<string>? status = null)
 {
     public IAudioEngine Engine => engine;
     public int TrackId => trackId;
@@ -74,4 +75,8 @@ internal sealed class DeviceCardContext(
 
     /// <summary>Hide the panel-wide drag glow (a per-chain / per-pad target owns the highlight).</summary>
     public void HideDropGlow() => hideDropGlow();
+
+    /// <summary>Show a one-line message in the app's status bar (e.g. a plug-in window that
+    /// failed to open). A no-op where the card isn't hosted by the chain view.</summary>
+    public void Status(string message) => status?.Invoke(message);
 }

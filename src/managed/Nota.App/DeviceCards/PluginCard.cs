@@ -98,9 +98,33 @@ internal static class PluginCard
         Fact(facts, 0, "Params", pc.ToString(NotaNum.Culture));
         Fact(facts, 1, "Latency", $"{ms.ToString("0.0", NotaNum.Culture)}\u2009ms");
 
+        // Open editor toggles the plug-in's own window. Its close button only hides the
+        // window behind our back, so the label re-reads the state whenever the pointer comes
+        // back to the card instead of trusting the last click.
         var open = ActionButton("Open editor", GlyphKind.PopOut, primary: true);
-        ToolTip.SetTip(open, "Open the plug-in's own window");
-        open.Click += (_, _) => { try { e.OpenPluginEditor(t, di); } catch { /* no editor */ } };
+        var openLabel = (TextBlock)((StackPanel)open.Content!).Children[1];
+        void SyncOpen()
+        {
+            bool shown = EditorOpen(e, t, di);
+            openLabel.Text = shown ? "Close editor" : "Open editor";
+            ToolTip.SetTip(open, shown ? "Close the plug-in's own window" : "Open the plug-in's own window");
+        }
+        SyncOpen();
+        open.PointerEntered += (_, _) => SyncOpen();
+        open.Click += (_, _) =>
+        {
+            try
+            {
+                if (EditorOpen(e, t, di)) e.ClosePluginEditor(t, di);
+                else
+                {
+                    e.OpenPluginEditor(t, di);
+                    if (!EditorOpen(e, t, di)) ctx.Status($"Couldn't open the {info.Name} window.");
+                }
+            }
+            catch (Exception ex) { ctx.Status($"Couldn't open the {info.Name} window: {ex.Message}"); }
+            SyncOpen();
+        };
         var save = ActionButton("Save preset", GlyphKind.Save, primary: false);
         ToolTip.SetTip(save, "Save the plug-in's state as a preset");
         save.Click += (_, _) => ctx.RequestPresetSave(di);
@@ -154,6 +178,12 @@ internal static class PluginCard
             FontWeight = FontWeight.Medium, Foreground = TextSecondary,
         },
     };
+
+    private static bool EditorOpen(IAudioEngine e, int t, int di)
+    {
+        try { return e.PluginEditorIsOpen(t, di); }
+        catch { return false; }   // the device is gone (the card is about to rebuild)
+    }
 
     private static Button ActionButton(string text, GlyphKind glyph, bool primary)
     {

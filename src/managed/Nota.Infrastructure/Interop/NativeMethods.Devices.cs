@@ -187,6 +187,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_close_editor")]
     internal static partial NotaResult PluginCloseEditor(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_editor_is_open")]
+    internal static partial int PluginEditorIsOpen(IntPtr engine, int trackId, int deviceIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_get_state")]
     internal static partial int PluginGetState(IntPtr engine, int trackId, int deviceIndex,
                                                [Out] byte[]? outBuffer, int capacity);

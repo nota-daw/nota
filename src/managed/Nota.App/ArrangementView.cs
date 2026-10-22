@@ -1966,8 +1966,8 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                ChipToggle("M", t.Muted, NotaPalette.Mute, v => _engine?.SetTrackMute(t.Id, v)),
-                ChipToggle("S", t.Soloed, NotaPalette.Solo, v => _engine?.SetTrackSolo(t.Id, v)),
+                ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }),
+                ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }),
             },
         };
 
@@ -2062,12 +2062,14 @@ public sealed partial class ArrangementView : UserControl
 
         // Row 2: M / S / ● (record-arm) — 18×16 chips.
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 5, 0, 0) };
-        btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => _engine?.SetTrackMute(t.Id, v)));
-        btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => _engine?.SetTrackSolo(t.Id, v)));
+        // Each toggle also writes the TrackVM: resizing a row rebuilds its card from the VM
+        // without re-reading the engine, and a stale VM put the old state back (#255).
+        btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
+        btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }));
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
-            btnRow.Children.Add(ArmToggle(t.Armed, v => _engine?.SetTrackArmed(t.Id, v)));
+            btnRow.Children.Add(ArmToggle(t.Armed, v => { t.Armed = v; _engine?.SetTrackArmed(t.Id, v); }));
 
         // A compact routing selector sits with the arm button (the standard row leaves no
         // room for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".

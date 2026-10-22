@@ -1119,6 +1119,15 @@ void Engine::closeTrackEditor(int32_t trackId, int32_t deviceIndex) {
     }
 }
 
+bool Engine::trackEditorOpen(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return false;
+    if (deviceIndex < 0) return t->instrument && t->instrument->editorOpen();
+    if (deviceIndex < static_cast<int32_t>(t->devices.size()) && t->devices[deviceIndex])
+        return t->devices[deviceIndex]->editorOpen();
+    return false;
+}
+
 int32_t Engine::getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;

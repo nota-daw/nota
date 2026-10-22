@@ -592,6 +592,8 @@ public interface IAudioEngine : IDisposable
     bool DeviceSidechainTapPre(int trackId, int deviceIndex);
     void OpenPluginEditor(int trackId, int deviceIndex);
     void ClosePluginEditor(int trackId, int deviceIndex);
+    /// <summary>Whether the plugin's editor window is on screen (false when it failed to open).</summary>
+    bool PluginEditorIsOpen(int trackId, int deviceIndex);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);

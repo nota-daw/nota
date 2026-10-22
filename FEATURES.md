@@ -59,7 +59,8 @@ JUCE module; the engine core is JUCE-free.
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
-  to any version, open one as a copy, or name, note, star and delete versions. Saving on top
+  to any version, open one as a copy, or name, note, star and delete versions; a star button
+  in the tab's header lists starred versions only. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.
@@ -388,7 +389,8 @@ track count and closes with Escape.
 - **Audio→MIDI** (right-click an audio clip → Convert). With the **basic-pitch** AI model
   installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
   chords included, with velocities from the playing; Melody keeps the strongest note where notes
-  overlap. Without it they use the DSP below, and the Convert menu offers the model.
+  overlap. Without the model the Convert menu leaves Melody and Harmony out and offers the
+  model instead (the DSP converters below stay for the AI tools).
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Volt track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
@@ -920,7 +922,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   run on, which comes with the first model and goes with the last. Every asset is pinned to a
   URL, size and sha256 in the app; models install into Nota's data folder and run offline.
 - **Plugin device card** in two sizes: the small card shows vendor, format, parameter count
-  and latency with Open editor and Save preset; the full card adds every parameter as a knob
+  and latency with Open editor (a toggle: Close editor while the window is open; a window
+  that fails to open is reported in the status bar) and Save preset; the full card adds every parameter as a knob
   (with filter and pages, the plugin's own value text, double-click for its default) and a
   sidechain source where the plugin has one.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
@@ -1017,6 +1020,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
   confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder.
+  On Windows and Linux the reveal item reads Show in Explorer / Show in file manager.
+- **Foldable sections**: the BUILT-IN and PLUG-INS headers of the device tabs collapse and
+  expand on click.
 - **Hints for empty tabs** — explaining what the tab is and how to add content to it.
 
 ---

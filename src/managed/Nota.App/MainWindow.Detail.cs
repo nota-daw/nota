@@ -127,14 +127,16 @@ public partial class MainWindow
     // GridSplitter above it, so this just sets the initial/default height per mode).
     // honorPersist: the Clip tab restores the user's dragged height; the Devices tab always
     // snaps back to its natural card-fitting height, so switching to Devices resets it and
-    // switching back to Clip restores the persisted size.
-    private void ShowDetail(double height, bool honorPersist)
+    // switching back to Clip restores the persisted size. The Devices tab also can't be
+    // resized at all (no splitter): its cards have a fixed layout, so extra height is wasted
+    // and less clips them.
+    private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
         var row = BodyGrid.RowDefinitions[2];
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
         row.Height = new GridLength(h);
-        DetailSplitter.IsVisible = true;
+        DetailSplitter.IsVisible = resizable;
         DetailPanel.IsVisible = true;
     }
 
@@ -206,6 +208,16 @@ public partial class MainWindow
             ? _clipEditor is not null || SessionAudioEditorOpen
             : SelectedClip(out _, out _, out _);
         DetailPatternBtn.IsEnabled = PatternTarget(out _, out _, out _);
+        // Pattern only means something on a Drum Rack track, so elsewhere the tab is hidden
+        // rather than greyed out. A step grid left on screen by a track that lost its rack
+        // (or a selection that moved off it) hands the panel back to Devices.
+        int contextTrack = _session?.IsVisible == true && _sessionSlotTrack > 0 ? _sessionSlotTrack
+                         : _deviceChain is { TrackId: > 0 } dc ? dc.TrackId
+                         : Timeline.SelectedTrackId;
+        bool drumRack = IsDrumRackTrack(contextTrack);
+        DetailPatternBtn.IsVisible = drumRack;
+        if (!drumRack && !DetailFloating && DetailPanel.IsVisible && DetailBody.Content is DrumPatternView)
+            ShowDevices(contextTrack);
     }
 
     // --- Detail · Pattern (Drum Rack step grid) -----------------------------
@@ -354,7 +366,7 @@ public partial class MainWindow
         DetailClipBtn.IsChecked = false;
         // Devices: exactly the cards' height — the 1px seam, the 32px toolbar, the chain inset
         // above and below a card. Nothing floats under the chain.
-        ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false);
+        ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false, resizable: false);
     }
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI

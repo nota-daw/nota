@@ -302,7 +302,10 @@
                             RecognizesAccessKey="True"
                             HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                             VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          <!-- Inset by the border so the highlight sits inside the face, under the 1px
+               border, instead of painting over its top edge (#231: a lighter top border). -->
           <Border x:Name="PART_Lift" CornerRadius="{TemplateBinding CornerRadius}"
+                  Margin="{TemplateBinding BorderThickness}"
                   BoxShadow="{DynamicResource Shadow.Raised}" IsHitTestVisible="False"/>
         </Panel>
       </ControlTemplate>
@@ -390,7 +393,10 @@
                             RecognizesAccessKey="True"
                             HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                             VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          <!-- Inset by the border so the highlight sits inside the face, under the 1px
+               border, instead of painting over its top edge (#231: a lighter top border). -->
           <Border x:Name="PART_Lift" CornerRadius="{TemplateBinding CornerRadius}"
+                  Margin="{TemplateBinding BorderThickness}"
                   BoxShadow="{DynamicResource Shadow.Raised}" IsHitTestVisible="False"/>
         </Panel>
       </ControlTemplate>

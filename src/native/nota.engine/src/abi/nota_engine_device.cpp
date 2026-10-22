@@ -402,6 +402,9 @@ NotaResult nota_plugin_close_editor(NotaEngine* e, int32_t track_id, int32_t dev
     ENG(e)->closeTrackEditor(track_id, device_index);
     return NOTA_OK;
 }
+int32_t nota_plugin_editor_is_open(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return (e && CENG(e)->trackEditorOpen(track_id, device_index)) ? 1 : 0;
+}
 int32_t nota_plugin_get_state(
     const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {
     return e ? CENG(e)->getPluginState(track_id, device_index, out, capacity) : 0;

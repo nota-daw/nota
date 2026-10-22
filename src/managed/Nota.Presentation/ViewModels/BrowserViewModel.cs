@@ -476,6 +476,17 @@ public sealed partial class BrowserViewModel : ObservableObject
     private static bool Holds(BrowserItem node, BrowserItem item)
         => node.Children.Any(c => c == item || Holds(c, item));
 
+    // BUILT-IN / PLUG-INS sections the user collapsed, keyed "tab:SECTION" (#230). Session-only.
+    private readonly HashSet<string> _collapsedSections = new();
+
+    /// <summary>Collapses or expands a BUILT-IN / PLUG-INS section header of a device tab.</summary>
+    public void ToggleSection(BrowserItem header)
+    {
+        if (!header.IsGroup || header.Path.Length == 0) return;
+        if (!_collapsedSections.Remove(header.Path)) _collapsedSections.Add(header.Path);
+        if (int.TryParse(header.Path.AsSpan(0, header.Path.IndexOf(':')), out int tab)) RebuildVisible(tab);
+    }
+
     /// <summary>Sets the live search query for a tree tab (0 = Instruments, 1 = FX,
     /// 2 = MIDI, 3 = Files, 4 = Presets) and refreshes its visible list.</summary>
     public void FilterTree(int tab, string query)
@@ -517,6 +528,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         }
 
         string section = "";
+        bool collapsed = false;
         foreach (var node in devices)
         {
             if (_groupBySource)
@@ -525,13 +537,18 @@ public sealed partial class BrowserViewModel : ObservableObject
                 if (s != section)
                 {
                     section = s;
+                    string key = $"{tab}:{s}";
+                    collapsed = _collapsedSections.Contains(key);
                     dst.Add(new BrowserItem
                     {
                         Name = s,
                         Kind = BrowserItemKind.Group,
+                        Path = key,
+                        IsExpanded = !collapsed,
                         GroupCount = devices.Count(d => (d.IsPlugin ? "PLUG-INS" : "BUILT-IN") == s),
                     });
                 }
+                if (collapsed) continue;   // a collapsed section keeps only its header
             }
             dst.Add(node);
             // No query: presets follow only while the device is expanded. With a query, a

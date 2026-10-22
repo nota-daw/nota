@@ -55,6 +55,13 @@ internal sealed class HistoryView : UserControl
         Classes = { "ghost" }, Width = 22, Height = 22, Padding = new Thickness(0), Margin = new Thickness(6, 0, 0, 0),
         Content = new Glyph(GlyphKind.Options, 16),
     };
+    // Starred only (#226): the same toggle the other browser tabs have for favourites.
+    private readonly Button _starredOnly = new()
+    {
+        Classes = { "ghost" }, Width = 22, Height = 22, Padding = new Thickness(0), Margin = new Thickness(6, 0, 0, 0),
+        Content = new Glyph(GlyphKind.Star, 14),
+    };
+    private bool _onlyStarred;
     private ProjectHistoryState _state = ProjectHistoryState.Empty;
     private Dictionary<string, int> _numbers = new();   // version id -> 1-based number in save order
     private string? _dir;
@@ -66,12 +73,16 @@ internal sealed class HistoryView : UserControl
 
         var caption = new TextBlock { Text = "Versions", Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
         _summary.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Height = RowH, Margin = new Thickness(10, 8, 6, 4) };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Height = RowH, Margin = new Thickness(10, 8, 6, 4) };
         header.Children.Add(caption);
         Grid.SetColumn(_summary, 1);
         header.Children.Add(_summary);
-        Grid.SetColumn(_options, 2);
+        Grid.SetColumn(_starredOnly, 2);
+        header.Children.Add(_starredOnly);
+        Grid.SetColumn(_options, 3);
         header.Children.Add(_options);
+        _starredOnly.Click += (_, _) => { _onlyStarred = !_onlyStarred; Refresh(); };
+        PaintStarredOnly();
         _options.Click += (_, _) => BuildOptionsMenu().ShowAt(_options);
         ((Glyph)_options.Content!).BindResource(Glyph.ForegroundProperty, "Brush.TextTertiary");
         ToolTip.SetTip(_options, "Clean up the history");
@@ -123,7 +134,14 @@ internal sealed class HistoryView : UserControl
         }
 
         _numbers = _state.Versions.Select((v, i) => (v.Id, i)).ToDictionary(x => x.Id, x => x.i + 1);
-        var rows = HistoryGraph.Layout(_state);
+        var all = HistoryGraph.Layout(_state);
+        // Starred only drops the tree: the versions between two starred ones are hidden, so
+        // the lanes would join nothing. Each starred version is a plain dot, newest first.
+        IReadOnlyList<HistoryRow> rows = _onlyStarred
+            ? all.Where(r => r.Version.Starred)
+                 .Select(r => r with { Lane = 0, Through = [], Joins = [], FromAbove = false, ToBelow = false, LaneCount = 1 })
+                 .ToList()
+            : all;
         _list.ItemsSource = rows;
         _list.SelectedItem = rows.FirstOrDefault(r => r.Version.Id == keep);
         ShowDetails(_list.SelectedItem as HistoryRow);
@@ -131,19 +149,31 @@ internal sealed class HistoryView : UserControl
         _empty.Text = problem
             ?? (_dir is null ? "Save the project to start its history."
               : !_host.KeepVersionHistory && rows.Count == 0 ? "Version history is turned off in Settings."
-              : rows.Count == 0 ? "Each save adds a version here." : "");
+              : all.Count == 0 ? "Each save adds a version here."
+              : rows.Count == 0 ? "No starred versions yet. Right-click a version and choose Star." : "");
         _empty.IsVisible = _empty.Text.Length > 0;
         ToolTip.SetTip(_empty, problem is null ? null : "Its versions can't be listed until the file .history/versions.json is repaired.");
 
-        _options.IsVisible = rows.Count > 1;
-        if (rows.Count == 0 || _dir is null) _summary.Text = "";
+        _options.IsVisible = all.Count > 1;
+        _starredOnly.IsVisible = all.Count > 0;
+        PaintStarredOnly();
+        if (all.Count == 0 || _dir is null) _summary.Text = "";
         else
         {
             long size = 0;
             try { size = _history.Size(_dir).HistoryOnly; } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
-            _summary.Text = $"{rows.Count} · {NotaNum.Bytes(size)}";
-            ToolTip.SetTip(_summary, $"{rows.Count} version{(rows.Count == 1 ? "" : "s")} · older versions take {NotaNum.Bytes(size)} on disk");
+            _summary.Text = $"{all.Count} · {NotaNum.Bytes(size)}";
+            ToolTip.SetTip(_summary, $"{all.Count} version{(all.Count == 1 ? "" : "s")} · older versions take {NotaNum.Bytes(size)} on disk");
         }
+    }
+
+    // Lit (accent star) while only starred versions are listed.
+    private void PaintStarredOnly()
+    {
+        var g = (Glyph)_starredOnly.Content!;
+        g.Kind = _onlyStarred ? GlyphKind.StarFilled : GlyphKind.Star;
+        g.BindResource(Glyph.ForegroundProperty, _onlyStarred ? "Brush.Accent" : "Brush.TextTertiary");
+        ToolTip.SetTip(_starredOnly, _onlyStarred ? "Show all versions" : "Show starred versions only");
     }
 
     // --- rows ----------------------------------------------------------------

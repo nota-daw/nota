@@ -217,7 +217,8 @@ public sealed partial class DeviceChainView : UserControl
                Rebuild,
                c => RackPresetSaveRequested?.Invoke(c),
                ClearDropHints,
-               _factory);
+               _factory,
+               s => StatusMessage?.Invoke(s));
 
     // ---- instrument / sends / add ----------------------------------------
 

@@ -1194,11 +1194,19 @@ public sealed partial class ArrangementView
                 var convert = MenuKit.Item("Convert", GlyphKind.Arrow);
                 MenuItem ConvItem(string header, ClipConvertMode mode)
                     => MenuKit.Item(header, null, () => _o.ConvertClipRequested?.Invoke(trackId, idx, mode));
-                convert.Items.Add(ConvItem("Melody to new MIDI track", ClipConvertMode.Melody));
-                convert.Items.Add(ConvItem("Harmony to new MIDI track", ClipConvertMode.Harmony));
+                // Melody / Harmony are only offered on the AI model: the DSP fallback's results
+                // are much worse and the user couldn't tell which one ran. Without the model the
+                // menu offers to download it instead (the menu is built on open, so installing
+                // it brings the items back without a restart).
+                bool canTranscribe = _o.CanTranscribe?.Invoke() != false;
+                if (canTranscribe)
+                {
+                    convert.Items.Add(ConvItem("Melody to new MIDI track", ClipConvertMode.Melody));
+                    convert.Items.Add(ConvItem("Harmony to new MIDI track", ClipConvertMode.Harmony));
+                }
                 convert.Items.Add(ConvItem("Drums to new MIDI track", ClipConvertMode.Drums));
                 convert.Items.Add(ConvItem("Slice to new MIDI track", ClipConvertMode.Slice));
-                if (_o.CanTranscribe?.Invoke() == false)
+                if (!canTranscribe)
                 {
                     convert.Items.Add(new Separator());
                     convert.Items.Add(MenuKit.Item("Get the AI model for melody and harmony…", null, () => _o.TranscriptionModelRequested?.Invoke()));

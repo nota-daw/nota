@@ -39,6 +39,7 @@ class Device {
     // Native editor GUI (M3-4). Message thread only.
     virtual void openEditor() {}
     virtual void closeEditor() {}
+    virtual bool editorOpen() const { return false; }
 
     // Opaque plugin state (M3-5), for project save/restore. Message thread only.
     virtual std::vector<uint8_t> getState() const { return {}; }

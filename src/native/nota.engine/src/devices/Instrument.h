@@ -147,6 +147,8 @@ class Instrument {
     // open/hide their editor window. Must be called on the message thread.
     virtual void openEditor() {}
     virtual void closeEditor() {}
+    // Whether the editor window is on screen (hidden by its close button counts as closed).
+    virtual bool editorOpen() const { return false; }
 
     // Opaque plugin state (M3-5), for project save/restore. Empty for built-ins.
     // Message thread only.

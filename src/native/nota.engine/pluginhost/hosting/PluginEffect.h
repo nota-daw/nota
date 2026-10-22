@@ -39,6 +39,7 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
 
     void openEditor() override;
     void closeEditor() override;
+    bool editorOpen() const override { return editor_.isOpen(); }
 
     std::vector<uint8_t> getState() const override;
     void setState(const uint8_t* data, int32_t size) override;

@@ -62,6 +62,7 @@ struct EditorHost {
 
     void open(juce::AudioPluginInstance& p);
     void close();
+    bool isOpen() const { return window != nullptr && window->isVisible(); }
 };
 
 } // namespace hosting

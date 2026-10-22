@@ -482,7 +482,7 @@
             <Border Classes="segmented" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="1">
                 <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>
-                <ToggleButton x:Name="DetailPatternBtn" Classes="seg" Content="Pattern" IsEnabled="False"
+                <ToggleButton x:Name="DetailPatternBtn" Classes="seg" Content="Pattern" IsEnabled="False" IsVisible="False"
                               ToolTip.Tip="Step the selected MIDI clip on a Drum Rack track"
                               Click="OnDetailPattern"/>
                 <ToggleButton x:Name="DetailClipBtn" Classes="seg" Content="Clip" IsEnabled="False"

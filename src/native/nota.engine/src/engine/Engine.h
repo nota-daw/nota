@@ -763,6 +763,7 @@ class Engine {
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
     void closeTrackEditor(int32_t trackId, int32_t deviceIndex);
+    bool trackEditorOpen(int32_t trackId, int32_t deviceIndex) const;
     // Plugin state (M3-5). getPluginState writes up to `cap` bytes into `out`
     // (pass out=null to query size) and returns the full state size.
     int32_t getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const;

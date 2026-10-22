@@ -213,6 +213,13 @@ public sealed partial class NotaEngine
         Check(NativeMethods.PluginCloseEditor(_handle, trackId, deviceIndex));
     }
 
+    /// <summary>Whether a hosted plugin's native GUI is on screen.</summary>
+    public bool PluginEditorIsOpen(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.PluginEditorIsOpen(_handle, trackId, deviceIndex) != 0;
+    }
+
     /// <summary>Reads a hosted plugin's opaque state blob (for project save). Empty for built-ins.</summary>
     public byte[] GetPluginState(int trackId, int deviceIndex)
     {

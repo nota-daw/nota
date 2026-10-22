@@ -1706,6 +1706,9 @@ NOTA_API float       nota_rackdev_live_selector(const NotaEngine* engine, int32_
  * the chain. No-op for built-in instruments. Call from the UI/main thread. */
 NOTA_API NotaResult nota_plugin_open_editor(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API NotaResult nota_plugin_close_editor(NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* 1 while the plugin's editor window is on screen, else 0 (never opened, hidden by its close
+ * button, failed to open, or not a hosted plugin). Call from the UI/main thread. */
+NOTA_API int32_t    nota_plugin_editor_is_open(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* Opaque plugin state (M3-5, FR-36), for project save/restore. get writes up to
  * `capacity` bytes into `out` (pass out=NULL to query the size) and returns the

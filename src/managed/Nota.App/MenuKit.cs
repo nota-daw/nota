@@ -23,6 +23,14 @@ namespace Nota.App;
 
 internal static partial class MenuKit
 {
+    /// <summary>The "show this file in the OS file manager" label, in each platform's own
+    /// wording (pairs with <c>MainWindow.RevealInFileManager</c>). Menus use this instead of
+    /// hard-coding "Finder".</summary>
+    public static string RevealLabel =>
+        OperatingSystem.IsMacOS() ? "Reveal in Finder"
+        : OperatingSystem.IsWindows() ? "Show in Explorer"
+        : "Show in file manager";
+
     private static KeyModifiers Primary => OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
     /// <summary>⌘ + key on macOS, Ctrl + key elsewhere.</summary>

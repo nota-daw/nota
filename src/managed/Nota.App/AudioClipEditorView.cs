@@ -295,6 +295,7 @@ public sealed class AudioClipEditorView : UserControl
             _syncWarp();
             _warpModeText.Text = WarpModes[_warpMode];
             _warpModeText.Foreground = _warpEnabled ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
+            PaintHint();
             if (ai.SampleId != 0 && _engine.TryGetSampleInfo(ai.SampleId, out var si) && si.SampleRate > 0)
             {
                 double secs = si.Frames / si.SampleRate;
@@ -499,12 +500,17 @@ public sealed class AudioClipEditorView : UserControl
         LoadEnvelope();
     }
 
-    private void PaintHint() => _hint.Text = _mode switch
+    private void PaintHint()
     {
-        1 => "Click — point · drag — move · right-click — delete",
-        2 => "Drag a handle · double-click — reset",
-        _ => "Double-click the wave — marker · drag — align",
-    };
+        _hint.Text = _mode switch
+        {
+            1 => "Click — point · drag — move · right-click — delete",
+            2 => "Drag a handle · double-click — reset",
+            // An unwarped clip has no beat grid, so nothing in Sample mode snaps (#269).
+            _ when !_warpEnabled => "Snap needs Warp — turn on Warp to see the grid and snap to it",
+            _ => "Double-click the wave — marker · drag — align",
+        };
+    }
 
     // Loads the active target's envelope into the waveform with its value axis.
     private void LoadEnvelope()

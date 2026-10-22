@@ -712,13 +712,23 @@ public sealed class BrowserView : UserControl
     // A section header: caption, a hairline filling the gap, and the section's count.
     private Control GroupRow(BrowserItem item)
     {
+        // Device tabs' BUILT-IN / PLUG-INS headers fold their section on click (#230); a
+        // header without a key (other tabs) stays plain chrome.
+        bool foldable = item.Path.Length > 0;
         var label = new TextBlock
         {
             Text = NotaText.Label(item.Name),
             Classes = { "GroupLabel" },
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 0, 0),
         };
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(foldable ? 6 : 10, 0, 0, 0) };
+        if (foldable)
+        {
+            var caret = new Glyph(item.IsExpanded ? GlyphKind.CaretDown : GlyphKind.CaretRight, 10) { VerticalAlignment = VerticalAlignment.Center };
+            caret.BindResource(Glyph.ForegroundProperty, "Brush.TextTertiary");
+            head.Children.Add(caret);
+        }
+        head.Children.Add(label);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0) };
         rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
@@ -731,12 +741,23 @@ public sealed class BrowserView : UserControl
         count.Classes.Add("Mono");
         count.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
 
-        var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        grid.Children.Add(label);
+        var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Background = Brushes.Transparent };
+        grid.Children.Add(head);
         Grid.SetColumn(rule, 1);
         grid.Children.Add(rule);
         Grid.SetColumn(count, 2);
         grid.Children.Add(count);
+        if (foldable)
+        {
+            grid.Cursor = new Cursor(StandardCursorType.Hand);
+            ToolTip.SetTip(grid, item.IsExpanded ? "Collapse" : "Expand");
+            grid.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                _vm?.ToggleSection(item);
+            };
+        }
         return grid;
     }
 
@@ -1538,7 +1559,7 @@ public sealed class BrowserView : UserControl
             {
                 var similar = new MenuItem { Header = "Show similar sounds" };
                 similar.Click += (_, _) => ShowSimilar(item);
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(similar);
                 flyout.Items.Add(reveal);
@@ -1550,7 +1571,7 @@ public sealed class BrowserView : UserControl
             // carry a scheme instead of a path and have nothing to reveal.
             case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):
             {
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(reveal);
                 return flyout;
@@ -1560,7 +1581,7 @@ public sealed class BrowserView : UserControl
                 var multi = new MenuItem { Header = "Create multisample…" };
                 multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
                 ToolTip.SetTip(multi, "Map the folder's samples by their names into Nota Mosaic presets");
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
@@ -1570,7 +1591,7 @@ public sealed class BrowserView : UserControl
             {
                 var open = new MenuItem { Header = "Open" };
                 open.Click += (_, _) => ItemActivated?.Invoke(item, KeyModifiers.None);
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 var del = MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeleteProjectRequested?.Invoke(item));
                 flyout.Items.Add(open);
