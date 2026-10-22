@@ -2743,6 +2743,63 @@ bool Engine::copyClipBlock(const std::vector<std::pair<int32_t, int32_t>>& sel) 
     if (items.empty()) return false;
     clipboardBlock_ = std::move(items);
     clipboardBlockLen_ = len;
+    clipboardBlockOverwrite_ = false;
+    clipboardBlockAnchor_ = -1;
+    return true;
+}
+
+bool Engine::copyRange(const std::vector<int32_t>& trackIds, double start, double end) {
+    if (end <= start + 1e-9 || trackIds.empty() || !authoring_) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    constexpr double eps = 1e-6;
+    auto listed = [&](int32_t id) { return std::find(trackIds.begin(), trackIds.end(), id) != trackIds.end(); };
+    std::vector<BlockClip> items;
+    int32_t anchor = -1; // the range's top row
+    for (const auto& t : authoring_->tracks) {
+        if (t->type() == TrackType::Return || !listed(t->id())) continue;
+        if (anchor < 0) anchor = t->id();
+        auto add = [&](BlockClip b, double s) {
+            b.trackId = t->id();
+            b.relStart = s - start;
+            b.autom = captureClipAutomation(*t, s, s + b.len);
+            items.push_back(std::move(b));
+        };
+        if (t->type() == TrackType::Instrument) {
+            for (const auto& c : t->midiClips) {
+                const double cs = c.startBeat, ce = cs + c.lengthBeats;
+                if (ce <= start + eps || cs >= end - eps) continue;
+                BlockClip b;
+                b.kind = 1;
+                b.midi = midiSlice(c, start, end);
+                b.len = b.midi.lengthBeats;
+                const double s = b.midi.startBeat;
+                add(std::move(b), s);
+            }
+        } else if (t->type() == TrackType::Audio) {
+            for (const auto& c : t->clips) {
+                const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
+                if (ce <= start + eps || cs >= end - eps) continue;
+                BlockClip b;
+                b.kind = 0;
+                b.audio = audioSlice(c, start, end, spb, devSR);
+                b.audio.warpCache = nullptr; // the paste rebuilds the cache
+                b.len = audioDisplayLenBeats(b.audio, spb, devSR);
+                const double s = b.audio.startBeat;
+                add(std::move(b), s);
+            }
+        }
+    }
+    if (items.empty()) return false;
+    clipboardBlock_ = std::move(items);
+    clipboardBlockLen_ = end - start;
+    clipboardBlockOverwrite_ = true;
+    clipboardBlockAnchor_ = anchor;
+    return true;
+}
+
+bool Engine::cutRange(const std::vector<int32_t>& trackIds, double start, double end) {
+    if (!copyRange(trackIds, start, end)) return false;
+    deleteClipsInRange(trackIds, start, end);
     return true;
 }
 
@@ -2790,9 +2847,9 @@ bool Engine::cutClipBlock(const std::vector<std::pair<int32_t, int32_t>>& sel) {
 int32_t Engine::pasteClipBlock(double atBeat, int32_t sourceTrackId) {
     if (clipboardBlock_.empty() || !authoring_) return 0;
     // sourceTrackId >= 0 remaps the whole block onto that track (see remapBlock).
-    std::vector<BlockClip> items = sourceTrackId >= 0 ? remapBlock(clipboardBlock_, sourceTrackId) : clipboardBlock_;
+    std::vector<BlockClip> items = sourceTrackId >= 0 ? remapBlock(clipboardBlock_, sourceTrackId, clipboardBlockAnchor_) : clipboardBlock_;
     if (items.empty()) return 0;
-    placeBlock(items, atBeat);
+    placeBlock(items, atBeat, clipboardBlockOverwrite_);
     return static_cast<int32_t>(lastPlaced_.size());
 }
 
@@ -2800,7 +2857,8 @@ int32_t Engine::pasteClipBlock(double atBeat, int32_t sourceTrackId) {
 // clip lands on that track; a multi-track block shifts together). Clips that fall off the
 // track list or hit a type-mismatched track are skipped; a remapped clip's device/plugin
 // automation is dropped (indices are positional).
-std::vector<Engine::BlockClip> Engine::remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId) const {
+std::vector<Engine::BlockClip> Engine::remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId,
+                                                  int32_t anchorTrackId) const {
     auto idxOf = [&](int32_t tid) -> int {
         for (size_t i = 0; i < authoring_->tracks.size(); ++i)
             if (authoring_->tracks[i]->id() == tid) return static_cast<int>(i);
@@ -2812,6 +2870,7 @@ std::vector<Engine::BlockClip> Engine::remapBlock(const std::vector<BlockClip>& 
         int ix = idxOf(b.trackId);
         if (ix >= 0) topIdx = std::min(topIdx, ix);
     }
+    if (anchorTrackId >= 0 && idxOf(anchorTrackId) >= 0) topIdx = idxOf(anchorTrackId);
     if (destIdx < 0 || topIdx == std::numeric_limits<int>::max()) return {};
     const int delta = destIdx - topIdx;
     std::vector<BlockClip> remapped;

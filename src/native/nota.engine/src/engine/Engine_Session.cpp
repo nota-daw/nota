@@ -762,7 +762,7 @@ int32_t Engine::arrangementClipsToSession(const std::vector<std::pair<int32_t, i
 int32_t Engine::pasteClipBlockToSession(int32_t destTrackId, int32_t startScene) {
     if (clipboardBlock_.empty() || !authoring_) return -1;
     return landBlockInSession(
-        destTrackId >= 0 ? remapBlock(clipboardBlock_, destTrackId) : clipboardBlock_, startScene);
+        destTrackId >= 0 ? remapBlock(clipboardBlock_, destTrackId, clipboardBlockAnchor_) : clipboardBlock_, startScene);
 }
 
 int32_t Engine::sessionSlotsToArrangement(

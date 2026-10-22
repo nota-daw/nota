@@ -546,6 +546,13 @@ class Engine {
     bool cutClipBlock(const std::vector<std::pair<int32_t, int32_t>>& sel);
     int32_t pasteClipBlock(double atBeat, int32_t sourceTrackId);                   // -> clips pasted
     double duplicateClipBlock(const std::vector<std::pair<int32_t, int32_t>>& sel); // -> block length (>0), or -1
+    // Range copy/cut (arrangement time-selection ⌘C / ⌘X): the slice of every listed track's
+    // clips inside [start,end) becomes the block clipboard, beats relative to `start` (so a
+    // leading gap is kept), each slice with its automation. Copy leaves the project alone;
+    // cut then carves the range out like deleteClipsInRange (one undo step). A range block
+    // pastes in overwrite mode — it replaces what it lands on, like a range duplicate.
+    bool copyRange(const std::vector<int32_t>& trackIds, double start, double end);
+    bool cutRange(const std::vector<int32_t>& trackIds, double start, double end);
     int32_t clipboardBlockCount() const { return static_cast<int32_t>(clipboardBlock_.size()); }
     const std::vector<std::pair<int32_t, int32_t>>& lastPlaced() const { return lastPlaced_; }
 
@@ -1263,6 +1270,8 @@ class Engine {
     };
     std::vector<BlockClip> clipboardBlock_;
     double clipboardBlockLen_ = 0.0;
+    bool clipboardBlockOverwrite_ = false; // a range copy: paste replaces what it lands on
+    int32_t clipboardBlockAnchor_ = -1;    // a range copy: its top row (remap anchor), else -1
     // Clips created by the last block paste/duplicate — (trackId, clipIndex) — so the UI
     // can re-select exactly what it produced.
     std::vector<std::pair<int32_t, int32_t>> lastPlaced_;
@@ -1293,8 +1302,10 @@ class Engine {
     std::vector<BlockClip> captureBlock(const std::vector<std::pair<int32_t, int32_t>>& sel, double& blockLen) const;
     void placeBlock(const std::vector<BlockClip>& items, double placedStart, bool overwrite = false);
     // Remap a block by the track-index delta from its top track to destTrackId, dropping
-    // clips that fall off the track list or onto a track of the other kind.
-    std::vector<BlockClip> remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId) const;
+    // clips that fall off the track list or onto a track of the other kind. anchorTrackId >= 0
+    // pins the "top track" instead (a range block: the range's top row, even when empty).
+    std::vector<BlockClip> remapBlock(const std::vector<BlockClip>& items, int32_t destTrackId,
+                                      int32_t anchorTrackId = -1) const;
     int32_t landBlockInSession(const std::vector<BlockClip>& items, int32_t startScene);
     // A fresh slot looping one arrangement clip (see Engine_Session.cpp).
     SessionSlot slotFromMidiClip(const MidiClip& m) const;

@@ -1252,6 +1252,7 @@ public sealed partial class ArrangementView : UserControl
         var sel = SelectionBlock();
         if (sel.Length == 0 || !_engine.CopyClipBlock(sel)) return false;
         ClipTransfer.TookFromArrangement();
+        FocusTopTrackOf(sel);
         return true;
     }
 
@@ -1263,6 +1264,7 @@ public sealed partial class ArrangementView : UserControl
         var sel = SelectionBlock();
         if (sel.Length == 0 || !_engine.CutClipBlock(sel)) return false;
         ClipTransfer.TookFromArrangement();
+        FocusTopTrackOf(sel);
         Select(-1, -1);
         Refresh();
         return true;
@@ -1281,18 +1283,41 @@ public sealed partial class ArrangementView : UserControl
         return true;
     }
 
-    /// <summary>Keyboard paste: the block lands on its source tracks at the playhead (a slot
-    /// copied in the Session view: on its own track).</summary>
+    /// <summary>Keyboard paste at the playhead, onto the track the user last clicked
+    /// (<see cref="FocusTrackId"/>) — a multi-track block shifts so its top track lands there.
+    /// With no focused clip track the block lands on its source tracks (a slot copied in the
+    /// Session view: on its own track).</summary>
     public bool PasteClipboard()
     {
         if (_engine is null) return false;
-        if (ClipTransfer.FromSession) return PasteSessionSlot(Math.Max(0.0, _playheadBeats), -1);
+        double at = Math.Max(0.0, _playheadBeats);
+        int dest = PasteTargetTrackId();
+        if (ClipTransfer.FromSession) return PasteSessionSlot(at, dest);
         if (_engine.ClipboardBlockCount() == 0) return false;
-        if (_engine.PasteClipBlock(Math.Max(0.0, _playheadBeats), -1) <= 0) return false;
+        if (_engine.PasteClipBlock(at, dest) <= 0)
+        {
+            if (dest <= 0) return false;
+            StatusMessage?.Invoke("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            return true;
+        }
         Refresh();
         ReselectPlaced();
         return true;
     }
+
+    // After a copy/cut the keyboard paste targets the block's own top track until the user
+    // clicks another one (a marquee selection doesn't move the focus by itself).
+    private void FocusTopTrackOf((int trackId, int clipIndex)[] sel)
+    {
+        int top = -1, topRow = int.MaxValue;
+        foreach (var (track, _) in sel)
+            if (RowOfTrack(track) is var r and >= 0 && r < topRow) { topRow = r; top = track; }
+        if (top > 0) FocusTrackId = top;
+    }
+
+    // The keyboard paste's target: the focused track when it can hold clips, else -1 (source tracks).
+    private int PasteTargetTrackId()
+        => _tracks.Find(t => t.Id == FocusTrackId) is { IsReturn: false, IsGroup: false } ? FocusTrackId : -1;
 
     // The session clipboard's slot onto the timeline (destTrackId -1 = its own track); a cut
     // slot moves, emptying its slot in the same undo step.
@@ -1708,6 +1733,33 @@ public sealed partial class ArrangementView : UserControl
         if (ids.Length == 0 || end <= start || !_engine.ConsolidateRange(ids, start, end)) return false;
         Refresh();
         ReselectPlaced();
+        return true;
+    }
+
+    /// <summary>⌘C over a time selection: the covered slice of every selected track goes to the
+    /// block clipboard (cut at the range edges, nothing in the project changes). The range's top
+    /// track becomes the paste target, so ⌘V without clicking elsewhere pastes it back there.
+    /// False when there's no range or it covers no clip.</summary>
+    public bool CopyTimeSelection()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        var ids = TimeSelectionTrackIds();
+        if (ids.Length == 0 || !_engine.CopyRange(ids, _timeSelStart, _timeSelEnd)) return false;
+        ClipTransfer.TookFromArrangement();
+        FocusTrackId = ids[0];
+        return true;
+    }
+
+    /// <summary>⌘X over a time selection: <see cref="CopyTimeSelection"/>, then the slice is
+    /// removed (one undo step). The range stays selected. False when nothing was cut.</summary>
+    public bool CutTimeSelection()
+    {
+        if (_engine is null || !HasTimeSelection) return false;
+        var ids = TimeSelectionTrackIds();
+        if (ids.Length == 0 || !_engine.CutRange(ids, _timeSelStart, _timeSelEnd)) return false;
+        ClipTransfer.TookFromArrangement();
+        FocusTrackId = ids[0];
+        Refresh();
         return true;
     }
 

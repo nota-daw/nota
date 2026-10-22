@@ -1166,7 +1166,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
-            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clip (or automation range) · a clip copied in Session pastes here"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last"),
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
             ("⌘D", "Duplicate the selected clip(s) / range"),

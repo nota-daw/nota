@@ -111,6 +111,9 @@ track count and closes with Escape.
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
+  A selected time range (⇧-drag) copies, cuts, duplicates and deletes with ⌘C / ⌘X / ⌘D /
+  Delete — just the covered part of each track, cut at the range edges; ⌘V pastes clips or a
+  range at the playhead onto the track clicked last (a range replaces what it lands on).
   **Duplicate time** (⌘⇧D) copies a selected time range right after itself and **Insert
   silence** (⌘⇧I) opens a gap of its length, across the whole song — clips and automation
   after it move right, clips crossing it are cut (Edit menu and the range's right-click menu).

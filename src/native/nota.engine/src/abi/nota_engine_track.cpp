@@ -559,6 +559,18 @@ double nota_clips_block_duplicate(NotaEngine* e, const int32_t* track_ids, const
 int32_t nota_clips_block_count(NotaEngine* e) {
     return e ? CENG(e)->clipboardBlockCount() : 0;
 }
+NotaResult nota_clips_copy_range(NotaEngine* e, const int32_t* track_ids, int32_t n, double start, double end) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    std::vector<int32_t> ids;
+    if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);
+    return ENG(e)->copyRange(ids, start, end) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_clips_cut_range(NotaEngine* e, const int32_t* track_ids, int32_t n, double start, double end) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    std::vector<int32_t> ids;
+    if (track_ids && n > 0) ids.assign(track_ids, track_ids + n);
+    return ENG(e)->cutRange(ids, start, end) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 int32_t nota_clips_to_session(
     NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n, int32_t start_scene) {
     return e ? ENG(e)->arrangementClipsToSession(makeSel(track_ids, clip_indices, n), start_scene) : -1;

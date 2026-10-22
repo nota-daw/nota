@@ -228,6 +228,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clips_block_count")]
     internal static partial int ClipsBlockCount(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clips_copy_range")]
+    internal static partial NotaResult ClipsCopyRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clips_cut_range")]
+    internal static partial NotaResult ClipsCutRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
+
     [LibraryImport(Lib, EntryPoint = "nota_clips_delete_range")]
     internal static partial NotaResult ClipsDeleteRange(IntPtr engine, [In] int[] trackIds, int n, double start, double end);
 

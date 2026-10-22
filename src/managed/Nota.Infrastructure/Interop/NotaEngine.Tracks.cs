@@ -396,6 +396,15 @@ public sealed partial class NotaEngine
     public int ClipboardBlockCount()
     { ThrowIfDisposed(); return NativeMethods.ClipsBlockCount(_handle); }
 
+    /// <summary>Copies the [start,end) slice of the given tracks' clips to the block clipboard
+    /// (relative to <paramref name="start"/>, with automation). False when no clip is covered.</summary>
+    public bool CopyRange(int[] trackIds, double start, double end)
+    { ThrowIfDisposed(); return NativeMethods.ClipsCopyRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Copies the range slice, then carves it out (one undo step). False when no clip is covered.</summary>
+    public bool CutRange(int[] trackIds, double start, double end)
+    { ThrowIfDisposed(); return NativeMethods.ClipsCutRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
+
     /// <summary>Copies arrangement clips into session slots: each track's clips, in time order,
     /// fill consecutive slots from <paramref name="startScene"/> (-1 = the first scene row where
     /// every slot needed is empty; missing rows are appended). One undo step. Returns the first

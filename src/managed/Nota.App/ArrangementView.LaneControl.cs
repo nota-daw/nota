@@ -1098,8 +1098,9 @@ public sealed partial class ArrangementView
         }
 
         // Right-click on empty lane space: paste the clipboard clip (or the bounced range) here,
-        // insert a MIDI clip on an instrument track, and consolidate the time selection when the
-        // click lands inside it. Always opens, so the menu never silently fails to appear.
+        // insert a MIDI clip on an instrument track, and — when the click lands inside the time
+        // selection — copy / cut / duplicate / consolidate it. Always opens, so the menu never
+        // silently fails to appear.
         private void ShowLaneMenu(Point pos, double beat)
         {
             int ti = _o.RowAtY(pos.Y);
@@ -1109,10 +1110,14 @@ public sealed partial class ArrangementView
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
             double at = _o.Snap(beat);
             var flyout = new MenuFlyout();
-            var paste = new MenuItem { Header = "Paste", IsEnabled = _o.HasClipClipboard, Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
-            paste.Click += (_, _) => _o.PasteClipboardAt(trackId, at);
-            flyout.Items.Add(paste);
-            if (PasteBouncedItem(trackId, at) is { } bounced) flyout.Items.Add(bounced);
+            var clipboard = MenuKit.ClipboardGroup(
+                inRange ? () => _o.CopyTimeSelection() : null,
+                inRange ? () => _o.CutTimeSelection() : null,
+                () => _o.PasteClipboardAt(trackId, at),
+                inRange ? () => _o.DuplicateTimeSelection() : null,
+                _o.HasClipClipboard).ToList();
+            if (PasteBouncedItem(trackId, at) is { } bounced) clipboard.Insert(inRange ? 3 : 1, bounced);   // right after Paste
+            foreach (var mi in clipboard) flyout.Items.Add(mi);
             if (track.IsInstrument)
             {
                 var insert = new MenuItem { Header = "Insert MIDI clip", Icon = MenuKit.Icon(GlyphKind.Plus) };
@@ -1231,11 +1236,12 @@ public sealed partial class ArrangementView
                 session.Add(toScene);
             }
 
+            // Inside the time selection, Copy / Cut / Duplicate act on the range (like ⌘C / ⌘X / ⌘D).
             var clipboard = MenuKit.ClipboardGroup(
-                () => { EnsureSelected(); _o.CopySelectedClip(); },
-                () => { EnsureSelected(); _o.CutSelectedClip(); },
+                inRange ? () => _o.CopyTimeSelection() : () => { EnsureSelected(); _o.CopySelectedClip(); },
+                inRange ? () => _o.CutTimeSelection() : () => { EnsureSelected(); _o.CutSelectedClip(); },
                 () => _o.PasteClipboardAt(trackId, at),
-                () => { EnsureSelected(); _o.DuplicateSelectedClip(); },
+                inRange ? () => _o.DuplicateTimeSelection() : () => { EnsureSelected(); _o.DuplicateSelectedClip(); },
                 _o.HasClipClipboard).Cast<Control>().ToList();
             if (PasteBouncedItem(trackId, at) is { } bounced) clipboard.Insert(3, bounced);
 

@@ -287,6 +287,13 @@ public interface IAudioEngine : IDisposable
     double DuplicateClipBlock((int trackId, int clipIndex)[] sel);
     /// <summary>Number of clips in the block clipboard (0 = empty).</summary>
     int ClipboardBlockCount();
+    /// <summary>Copies the [start,end) slice of the given tracks' clips (with automation) to the
+    /// block clipboard, positioned relative to <paramref name="start"/>. The project is untouched;
+    /// a range block pastes overwriting what it lands on. False when the range covers no clip.</summary>
+    bool CopyRange(int[] trackIds, double start, double end);
+    /// <summary><see cref="CopyRange"/>, then carves the range out like <see cref="DeleteClipsInRange"/>
+    /// (one undo step). False when the range covers no clip.</summary>
+    bool CutRange(int[] trackIds, double start, double end);
     /// <summary>Copies arrangement clips into session slots: each track's clips, in time order, fill
     /// consecutive slots from startScene (-1 = the first scene row where every slot needed is empty;
     /// missing rows are appended). One undo step. Returns the first scene row filled, or -1.</summary>

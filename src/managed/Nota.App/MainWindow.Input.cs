@@ -281,6 +281,10 @@ public partial class MainWindow
                 if (e.Key == Key.X && Timeline.CutAutoSelection()) { _vm.StatusText = "Cut automation"; e.Handled = true; return; }
                 if (e.Key == Key.V && Timeline.PasteAuto()) { _vm.StatusText = "Pasted automation"; e.Handled = true; return; }
             }
+            // A time range (Shift+drag) copies / cuts the covered slice; it and a clip selection
+            // are exclusive, so these return false whenever clips are selected instead.
+            if (e.Key == Key.C && Timeline.CopyTimeSelection()) { _vm.StatusText = "Copied range"; e.Handled = true; return; }
+            if (e.Key == Key.X && Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Cut range"; e.Handled = true; return; }
             if (e.Key == Key.C && Timeline.CopySelectedClip()) { _vm.StatusText = "Copied clip(s)"; e.Handled = true; return; }
             if (e.Key == Key.X && Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip(s)"; e.Handled = true; return; }
             if (e.Key == Key.V && Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip(s)"; e.Handled = true; return; }

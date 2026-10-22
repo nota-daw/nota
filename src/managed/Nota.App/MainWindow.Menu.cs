@@ -154,6 +154,7 @@ public partial class MainWindow
         if (SessionFocused && _session!.CopySelection()) return;
         if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = "Copied track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = "Copied notes"; return; }
+        if (Timeline.CopyTimeSelection()) { _vm.StatusText = "Copied range"; return; }
         if (Timeline.CopySelectedClip()) _vm.StatusText = "Copied clip";
     }
     private void OnMenuCut(object? sender, EventArgs e)
@@ -162,6 +163,7 @@ public partial class MainWindow
         if (SessionFocused && _session!.CutSelection()) return;
         if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = "Cut track(s)"; return; }
         if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = "Cut notes"; return; }
+        if (Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Cut range"; return; }
         if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip"; }
     }
     private void OnMenuPaste(object? sender, EventArgs e)

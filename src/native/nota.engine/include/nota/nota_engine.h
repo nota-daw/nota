@@ -1284,6 +1284,13 @@ NOTA_API NotaResult nota_clips_block_cut(NotaEngine* engine, const int32_t* trac
 NOTA_API int32_t    nota_clips_block_paste(NotaEngine* engine, double at_beat, int32_t source_track_id); /* dest -1 = source tracks; -> clips pasted */
 NOTA_API double     nota_clips_block_duplicate(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices, int32_t count);
 NOTA_API int32_t    nota_clips_block_count(NotaEngine* engine);
+/* Range copy/cut (arrangement time-selection): the slice of each listed track's clips inside
+ * [start,end) becomes the block clipboard, positioned relative to `start`, with automation.
+ * copy_range leaves the project untouched; cut_range also carves the range out (one undo
+ * step, like delete_range). A range block pastes overwriting what it lands on. Error when
+ * the range covers no clip. */
+NOTA_API NotaResult nota_clips_copy_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
+NOTA_API NotaResult nota_clips_cut_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
 NOTA_API int32_t    nota_clips_last_placed(NotaEngine* engine, int32_t* out_track_ids, int32_t* out_clip_indices, int32_t cap);
 /* Arrangement clips -> session slots. Each track's clips, in time order, fill consecutive
  * slots from start_scene; start_scene -1 = the first scene row where every slot needed is

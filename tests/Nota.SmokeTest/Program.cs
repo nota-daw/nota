@@ -345,6 +345,14 @@ if (args.Length >= 1 && args[0] == "--returns")
     Console.WriteLine(failures == 0 ? "RETURNS PASSED" : $"RETURNS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Arrangement range copy / cut alone: `--range-clipboard`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--range-clipboard")
+{
+    Console.WriteLine("-- range clipboard --");
+    foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RANGE CLIPBOARD PASSED" : $"RANGE CLIPBOARD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Stereo Map measurements alone: `--stereomap`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--stereomap")
 {
@@ -15035,6 +15043,9 @@ foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- return delete --");
 foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- range clipboard --");
+foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- pan law --");
 foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);

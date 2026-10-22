@@ -141,6 +141,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **⌘1–⌘5 change a grid you can see** (nota-daw/nota#114): after a click in the audio clip
   editor while its view follows no grid (ADSR, or an unwarped clip), the grid shortcuts act
   on the arrangement instead of silently changing the clip editor's.
+- **Copy, cut and paste a time range; paste onto another track** (nota-daw/nota#281): with
+  a time range selected (⇧-drag), ⌘C / ⌘X copy or cut the covered part of every selected
+  track, cut at the range edges, and the range's right-click menu has **Copy**, **Cut** and
+  **Duplicate**. A pasted range keeps its distance from the range start and replaces what it
+  lands on. ⌘V now pastes onto the track you clicked last, so copy a clip, click another
+  track and ⌘V to put the copy there. Without that click it lands on its own track, as before.
 - **Context menus are never cut off at the sides**: a menu whose longest item had no shortcut
   (the track menu of a live-frozen track, with *Flatten (remove source)*) could open a little
   too narrow, clipping every row on both sides. Every menu and submenu now opens at its full
