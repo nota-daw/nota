@@ -67,5 +67,20 @@ internal static partial class DesignTokenCheck
             .Select(kv => $"{kv.Key} {kv.Value} → {counts.GetValueOrDefault(kv.Key)}").ToArray();
         yield return (slack.Length == 0,
             slack.Length == 0 ? "menu allow-list counts are tight" : $"menu allow-list above today's count (lower it): {string.Join(", ", slack.Take(8))}");
+
+        // Menus, flyout menus and submenus lay their items out in MenuItemsPanel, which sizes
+        // the native popup to the settled shared columns on the first pass (else the popup
+        // comes out too narrow and clips every row on both sides).
+        var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
+        bool themed = new[] { "<Style Selector=\"MenuFlyoutPresenter\">", "<Style Selector=\"ContextMenu\">", "<ControlTheme x:Key=\"{x:Type MenuItem}\"" }
+            .All(open =>
+            {
+                int at = theme.IndexOf(open, StringComparison.Ordinal);
+                int end = at < 0 ? -1 : theme.IndexOf(open.StartsWith("<Style") ? "</Style>" : "<Setter Property=\"Template\">", at, StringComparison.Ordinal);
+                return end > at && theme.IndexOf("<app:MenuItemsPanel/>", at, end - at, StringComparison.Ordinal) >= 0;
+            });
+        yield return (themed,
+            themed ? "menus lay out in MenuItemsPanel (popup sized on the first pass)"
+                   : "NotaTheme.axaml: MenuFlyoutPresenter, ContextMenu and the MenuItem theme set ItemsPanel to app:MenuItemsPanel");
     }
 }

@@ -120,6 +120,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **Context menus are never cut off at the sides**: a menu whose longest item had no shortcut
+  (the track menu of a live-frozen track, with *Flatten (remove source)*) could open a little
+  too narrow, clipping every row on both sides. Every menu and submenu now opens at its full
+  width.
 - **Chorus, Flanger, Lens and Phaser go into rack chains** (nota-daw/nota#203): they can be
   dropped onto an Instrument Rack or Audio Effect Rack chain and are listed in its add-device
   menu, like every other built-in audio effect.

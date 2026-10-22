@@ -81,6 +81,11 @@
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Padding" Value="8,0"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.Clip}"/>
+        <!-- Every menu's items sit in MenuItemsPanel: it sizes the menu to its settled
+             columns on the first layout pass, so the popup never comes out too narrow. -->
+        <Setter Property="ItemsPanel">
+          <ItemsPanelTemplate><app:MenuItemsPanel/></ItemsPanelTemplate>
+        </Setter>
         <Setter Property="Template">
           <ControlTemplate>
             <Panel>
@@ -1196,6 +1201,9 @@
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="Padding" Value="4"/>
     <Setter Property="MinWidth" Value="200"/>
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate><app:MenuItemsPanel/></ItemsPanelTemplate>
+    </Setter>
   </Style>
   <!-- A menu carrying inline rows (colour grid, height keys): wide enough that they never
        wrap, whatever the track's name (spec 034). -->
@@ -1224,6 +1232,9 @@
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="Padding" Value="4"/>
     <Setter Property="MinWidth" Value="200"/>
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate><app:MenuItemsPanel/></ItemsPanelTemplate>
+    </Setter>
   </Style>
 
   <!-- Menu items take the Nota MenuItem theme (ControlTheme above); the danger and inline
