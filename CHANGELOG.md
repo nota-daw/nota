@@ -97,6 +97,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     **Check now** button. Nothing downloads until you click Update.
 
 ### Changed
+- **Release notes list every change and who made it**: from the next release on, What's New
+  shows a release's summary, then **All changes**, the full Added / Changed / Fixed list with
+  each item's commit, then the release's contributors. Links in What's New open in the
+  browser. The GitHub release carries the same text; the news posts keep the summary and the
+  contributors.
 - **The clip editor ruler shows where the clip sits** (nota-daw/nota#275): with one MIDI or
   audio clip open, the ruler reads the clip's arrangement position — a clip at bar 9 starts
   at 9, not 1 — as a multi-clip selection already did. Unwarped audio clips read in bars too.

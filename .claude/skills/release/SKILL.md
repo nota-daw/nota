@@ -16,13 +16,15 @@ Two files describe a release, for two readers:
 - **`release-notes/X.Y.Z.en.md`** and **`release-notes/X.Y.Z.ru.md`** are the curated
   text: summarised, deduplicated, checked against the code. **Everything published comes
   from them**, and the app bundles the EN file for its What's New window, so the notes must
-  be committed on the release branch before the tag is built. `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
+  be committed on the release branch before the tag is built. They hold a summary, the
+  full Added / Changed / Fixed list with a commit link on each item, and the contributors
+  (format in P4). `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
 
-  | target    | where it goes                                   |
-  |-----------|-------------------------------------------------|
-  | `github`  | GitHub release body (the workflow uses this)    |
-  | `post-en` | English news channels                           |
-  | `post-ru` | Russian news channels                           |
+  | target    | where it goes                                   | full list |
+  |-----------|-------------------------------------------------|-----------|
+  | `github`  | GitHub release body (the workflow uses this)    | yes       |
+  | `post-en` | English news channels                           | no        |
+  | `post-ru` | Russian news channels                           | no        |
 
 The release runs through the branches like this. **The user does every commit, push and PR
 by hand.** This skill never commits, pushes or opens a PR (see the user-commits rule).
@@ -81,18 +83,44 @@ are.
 ### P4. Write the curated notes, EN and RU
 
 This is the main work of the phase. Create `release-notes/X.Y.Z.en.md` and
-`release-notes/X.Y.Z.ru.md`.
+`release-notes/X.Y.Z.ru.md`. Each has four parts, in this order:
 
-1. **Gather.** Read the whole `[X.Y.Z]` section you just promoted, then
-   `git log --oneline <prev-tag>..HEAD` (previous tag:
-   `git describe --tags --abbrev=0 --match 'v*'`).
+1. **Summary**: the lede and the numbered headline features, for someone who reads only
+   this part.
+2. **Full list**: every user-facing change of the release, grouped as Added / Changed /
+   Fixed / Removed.
+3. **Commit links**: each full-list item ends with a link to its commit.
+4. **Contributors**: everyone who has a commit in the release, linked to their GitHub
+   profile.
+
+Steps:
+
+1. **Gather.**
+   - The previous tag is the highest version tag:
+     `git tag --list 'v*' --sort=-v:refname | head -1`. Don't use `git describe` on
+     `develop`: release tags sit on `main`'s merge commits, which `develop` doesn't
+     contain, so `describe` returns a tag several releases old.
+   - Read the whole `[X.Y.Z]` section you just promoted.
+   - `scripts/release-credits.sh <prev-tag> origin/develop commits` lists every commit of
+     the release (short sha, sha, subject). It's the checklist for the full list.
+   - `scripts/release-credits.sh <prev-tag> origin/develop contributors` prints the
+     ready Contributors line. It asks GitHub for every commit's authors and co-authors
+     (needs `gh` signed in) and leaves out bots and AI co-authors.
 2. **Reconcile.** Merge entries that describe the same thing. Where entries conflict (a
    shortcut reassigned twice, a feature added and then reworked), **the code decides**:
    read the handler, the default or the UI and describe what ships. Drop anything that
-   was added and then removed within the same release, and leave out internal or
-   mechanical changes (refactors, CI, tests) unless a user can feel them.
-3. **Write.** Each language natively, not as a translation. Format (bold titles and `•`
-   bullets, no `#` headings, so the text pastes into Telegram as-is):
+   was added and then removed within the same release. Then build the full list from the
+   commits:
+   - Each user-facing change is one item, linked to the commit(s) that brought it. A fix
+     and its follow-up make one item with both links.
+   - Leave out internal or mechanical commits (refactors, CI, tests, release chores)
+     unless a user can feel them. Their authors are still contributors.
+   - Walk the `commits` output once more at the end: every user-facing commit must be in
+     an item.
+3. **Write.** Each language natively, not as a translation. Format: bold titles and `•`
+   bullets, no `#` headings, so the text pastes into Telegram as is. The two comment
+   markers say where the full list and the contributors start, whatever the language.
+   They are invisible on GitHub, and `release-notes.sh` strips them.
 
    ```
    <!-- SPDX-License-Identifier: AGPL-3.0-only -->
@@ -104,17 +132,56 @@ This is the main work of the phase. Create `release-notes/X.Y.Z.en.md` and
    **2. Next feature**
    …
 
-   **Also**
-   • visual changes, notable fixes, small conveniences, one line each
-   • any behaviour change users must know: a moved or removed shortcut, a changed default
+   <!-- changes -->
+   **Added**
+   • A new capability, one line ([a1b2c3d](https://github.com/nota-daw/nota/commit/<full sha>))
+
+   **Changed**
+   • A behaviour users must know: a moved shortcut, a changed default ([e4f5a6b](…), [c7d8e9f](…))
+
+   **Fixed**
+   • What no longer goes wrong, said from the user's side ([0a1b2c3](…))
+
+   **Removed**
+   • …
+
+   <!-- contributors -->
+   **Contributors**
+   [@login](https://github.com/login), [@other](https://github.com/other)
    ```
 
-   Rank the sections by importance. A patch release can be just the lede plus **Also**.
-   Leave out the title and the download link, because `release-notes.sh` adds them per
-   target. Use the user's product language: "track", "device card", "piano roll", not class
-   names.
-4. Show the user both rendered posts (`scripts/release-notes.sh X.Y.Z post-en`, `post-ru`)
-   and iterate until they approve. The rest of the release depends on this text.
+   Rules for the format:
+   - Rank the summary's sections by importance. A patch release can have just the lede
+     before the full list.
+   - Groups go in the order Added, Changed, Fixed, Removed; leave out empty groups.
+     Inside a group, put the most noticeable changes first.
+   - A commit link's text is the 7-character short sha and its URL takes the full sha
+     from the `commits` output. These are `develop`'s squash commits. They become part of
+     `main` through the develop → main merge, so the links keep working after the release.
+   - New notes have no **Also** block: the full list replaces it, so nothing is listed
+     twice.
+   - RU titles: **Добавлено**, **Изменено**, **Исправлено**, **Удалено**, **Участники**.
+     The EN and RU files have the same groups, the items in the same order with the same
+     links, and the same contributors.
+   - Contributors: paste the `contributors` line. Resolve every `warn:` line it printed
+     on stderr:
+     - An author with no GitHub login can be a second address of someone already listed
+       (the user's work email, for example). Drop that name.
+     - Otherwise, find the login and link it, or keep the plain name.
+     - Don't add or remove people by hand otherwise.
+   - Leave out the title and the download link, because `release-notes.sh` adds them per
+     target. Use the user's product language: "track", "device card", "piano roll", not
+     class names.
+4. Show the user the three renders and iterate until they approve. The rest of the
+   release depends on this text.
+   - `scripts/release-notes.sh X.Y.Z github` has all four parts.
+   - `post-en` and `post-ru` have the summary and the contributors but no full list. A
+     Telegram message holds 4096 characters, and the posts end with the link to the
+     GitHub release, which has the full list.
+
+   The app bundles the EN file. What's New shows the summary, then "All changes" with the
+   groups, then the contributors, and the links in it are clickable. The smoke test checks
+   that every full-list item of a shipped notes file ends in a commit link.
 
 ### P5. Bump the versions
 
@@ -164,8 +231,8 @@ Don't commit. Give the user:
 - the **PR into develop**: title `(chore) Release X.Y.Z` (it becomes the squash commit
   message), body = a short list of the changed files,
 - the **PR text** for develop → main, opened after the first one is merged. Title
-  `Release X.Y.Z`, body = the output of `scripts/release-notes.sh X.Y.Z github`, so the
-  reviewer reads exactly what will be published. Merge it with **Create a merge commit**
+  `Release X.Y.Z`, body = the output of `scripts/release-notes.sh X.Y.Z github` (summary,
+  full list and contributors), so the reviewer reads exactly what will be published. Merge it with **Create a merge commit**
   (the only method `main` allows),
 - the image path and any docs gaps,
 - the next step: merge both PRs once CI is green, then run `/release tag`.
@@ -216,5 +283,7 @@ already has `develop` as a parent.
   `release-notes/`.
 - Don't write published text anywhere except `release-notes/`. GitHub and the channels
   must come from the same files.
+- Don't type the contributors or commit shas from memory. Take them from
+  `scripts/release-credits.sh`, and resolve its warnings instead of ignoring them.
 - Don't bump only one of app or engine, and don't reset a component to 0.
 - Don't hard-code the date or reuse an existing version or tag.

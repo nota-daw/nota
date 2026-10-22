@@ -9,9 +9,13 @@
 // AppInfo.UnseenSince skips it — unreleased notes never reach the What's New window.
 //
 // ReleaseNotesParser reads the curated notes a release ships (release-notes/X.Y.Z.en.md,
-// format in .claude/skills/release/SKILL.md § P4): a lede, "**N. Title**" sections with
-// a paragraph each, and "**Also**" with "•" bullets. What's New prefers them over the
-// raw changelog section. No Avalonia here: the smoke test compiles this file directly.
+// format in .claude/skills/release/SKILL.md § P4): a summary — a lede and "**N. Title**"
+// sections with a paragraph each — then, after a "<!-- changes -->" marker, the full
+// list as "**Added**" / "**Changed**" / "**Fixed**" groups of "•" bullets ending in commit
+// links, and after "<!-- contributors -->" a "**Contributors**" line of profile links.
+// Notes from before the markers (a summary and "**Also**" bullets) parse as all-Feature
+// sections. What's New prefers the notes over the raw changelog section. No Avalonia
+// here: the smoke test compiles this file directly.
 
 using System;
 using System.Collections.Generic;
@@ -29,9 +33,15 @@ public sealed record ChangelogEntry(string Version, string Date,
 }
 
 /// <summary>A category within a changelog entry (Added / Changed / Fixed / Removed), or a
-/// feature of curated release notes: its title, a paragraph (<see cref="Text"/>) and/or
-/// bullets.</summary>
-public sealed record ChangelogSection(string Title, IReadOnlyList<string> Items, string Text = "");
+/// part of curated release notes: its title, a paragraph (<see cref="Text"/>) and/or
+/// bullets. <see cref="Kind"/> says which part of the notes it belongs to.</summary>
+public sealed record ChangelogSection(string Title, IReadOnlyList<string> Items, string Text = "",
+                                      SectionKind Kind = SectionKind.Feature);
+
+/// <summary>Which part of curated release notes a section is in: the summary's features
+/// (and every changelog category), a group of the full change list, or the
+/// contributors.</summary>
+public enum SectionKind { Feature, Changes, Contributors }
 
 /// <summary>A comparable semantic version (MAJOR.MINOR.PATCH). Pre-release/build
 /// metadata is ignored — the app only ships plain X.Y.Z versions.</summary>
@@ -149,6 +159,13 @@ public static class ReleaseNotesParser
     // order in a news post; the window keeps the order and drops the number.
     private static readonly Regex Heading = new(@"^\*\*(?:\d+\.\s*)?(?<title>(?:(?!\*\*).)+)\*\*$");
 
+    // Where the full change list and the contributors start: "<!-- changes -->" and
+    // "<!-- contributors -->" alone on a (trimmed) line, any case, any spacing inside.
+    // Comments, so they vanish on GitHub and in the posts whatever the language;
+    // release-notes.sh and the smoke test match them the same way.
+    public static readonly Regex ChangesMarker = new(@"^<!--\s*changes\s*-->$", RegexOptions.IgnoreCase);
+    public static readonly Regex ContributorsMarker = new(@"^<!--\s*contributors\s*-->$", RegexOptions.IgnoreCase);
+
     public static ChangelogEntry Parse(string version, string date, string markdown)
     {
         var lede = new List<string>();
@@ -156,11 +173,12 @@ public static class ReleaseNotesParser
         string? title = null;
         var text = new List<string>();
         var items = new List<string>();
+        var kind = SectionKind.Feature;
 
         void FlushSection()
         {
             if (title != null && (text.Count > 0 || items.Count > 0))
-                sections.Add(new ChangelogSection(title, items.ToArray(), string.Join("\n", text)));
+                sections.Add(new ChangelogSection(title, items.ToArray(), string.Join("\n", text), kind));
             title = null;
             text.Clear();
             items.Clear();
@@ -169,7 +187,23 @@ public static class ReleaseNotesParser
         foreach (var raw in markdown.Split('\n'))
         {
             var t = raw.Trim();
-            if (t.Length == 0 || t.StartsWith("<!--", StringComparison.Ordinal)) continue;
+            if (t.Length == 0) continue;
+            if (t.StartsWith("<!--", StringComparison.Ordinal))
+            {
+                // The part markers; contributors close the notes, so a later
+                // "changes" marker can't reopen the list.
+                if (ChangesMarker.IsMatch(t) && kind == SectionKind.Feature)
+                {
+                    FlushSection();
+                    kind = SectionKind.Changes;
+                }
+                else if (ContributorsMarker.IsMatch(t))
+                {
+                    FlushSection();
+                    kind = SectionKind.Contributors;
+                }
+                continue;
+            }
 
             if (Heading.Match(t) is { Success: true } m)
             {

@@ -1117,7 +1117,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
-  number in the status bar.
+  number in the status bar. A release's notes give a summary, then All changes (Added /
+  Changed / Fixed, each item linked to its commit), then the contributors; links open in the
+  browser.
 - **Self-update** — Nota looks for a newer GitHub release on every launch and once a day while
   it runs (Settings ▸ Updates turns that off), and on demand from Help ▸ Check for updates…
   (also in the macOS app menu), which also says when you're up to date or couldn't check. A
