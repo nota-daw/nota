@@ -1827,12 +1827,33 @@ NOTA_API int32_t nota_pluginhost_pump(void);
 
 /* ---- Plugin scanning & catalog (M3-1, FR-33/NFR-5) ----------------------- */
 /* Scans installed plugins out-of-process, AudioUnit first then VST3. Each
- * candidate is probed in a separate `worker_path` child process with a timeout,
- * so a crashing/hanging plugin cannot take down the host. Results are merged
- * into the in-memory catalog and persisted to app-support. Blocking; call from
- * the message thread. Returns the number of known plugins, or <0 on error.
- * `worker_path` is the absolute path to the nota-scanworker executable. */
+ * candidate is probed in a separate `worker_path` child process with a timeout
+ * (30 s; a candidate that times out or dies is retried alone with 2 min), a few
+ * in parallel, so a crashing/hanging plugin cannot take down the
+ * host or stall the scan. Results are merged into the in-memory catalog and
+ * persisted to app-support as the scan goes. A candidate that yields nothing
+ * (crash, timeout, no plugins) is remembered and skipped by later scans until
+ * its file changes. One scan runs at a time; a second call waits. Blocking;
+ * call off the UI thread. Returns the number of known plugins, or <0 on error.
+ * `worker_path` is the absolute path to the nota-scanworker executable.
+ * Each scan rewrites <data dir>/logs/plugin-scan.log (one line per probe). */
 NOTA_API int32_t nota_pluginhost_scan(const char* worker_path);
+
+/* nota_pluginhost_scan with options. `only_dir` (UTF-8, may be NULL): search just
+ * this folder for VST3 bundles instead of every location — e.g. after a store
+ * install. `flags`: NOTA_SCAN_RETRY_FAILED probes the remembered failures again. */
+#define NOTA_SCAN_RETRY_FAILED 1
+NOTA_API int32_t nota_pluginhost_scan_ex(const char* worker_path, const char* only_dir, int32_t flags);
+
+/* Progress of the running scan, callable from any thread while it runs: probes
+ * finished and probes planned (0 until discovery is done). Returns 1 while a scan
+ * runs, 0 otherwise. */
+NOTA_API int32_t nota_pluginhost_scan_progress(int32_t* done, int32_t* total);
+/* Name of a plugin being probed now (VST3 file name; "" for an AU or when none), UTF-8.
+ * Owned by the engine, valid until the next call on the same thread. */
+NOTA_API const char* nota_pluginhost_scan_current(void);
+/* Number of remembered failed candidates (skipped until their file changes). */
+NOTA_API int32_t nota_pluginhost_scan_failed_count(void);
 
 /* Number of plugins in the catalog (after a scan or a load of the saved list). */
 NOTA_API int32_t nota_pluginhost_plugin_count(void);

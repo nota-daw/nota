@@ -9,6 +9,13 @@ public interface IPluginCatalog
 {
     /// <summary>Rescans installed plugins out-of-process. Returns the known count.</summary>
     int Scan(string workerPath);
+    /// <summary>Rescan with options: <paramref name="onlyDir"/> searches just that folder (a store
+    /// install); <paramref name="retryFailed"/> probes plugins that failed before again.</summary>
+    int Scan(string workerPath, string? onlyDir, bool retryFailed) => Scan(workerPath);
+    /// <summary>Progress of the running scan, readable from any thread; null when none runs.</summary>
+    PluginScanProgress? ScanProgress => null;
+    /// <summary>Plugins that failed to load (crash, hang, nothing inside), skipped until they change.</summary>
+    int FailedCount => 0;
     /// <summary>Number of plugins currently in the catalog.</summary>
     int Count { get; }
     /// <summary>Human-readable entry ("Name | Format | inst|fx | Manufacturer | Category"; the category
@@ -24,3 +31,7 @@ public interface IPluginCatalog
     int ScanPathCount { get; }
     string? ScanPath(int index);
 }
+
+/// <summary>A running plugin scan: probes finished of <see cref="Total"/> (0 while still
+/// searching folders), and a plugin being probed now.</summary>
+public readonly record struct PluginScanProgress(int Done, int Total, string Current);

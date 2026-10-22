@@ -36,13 +36,38 @@ internal static class PluginScan
     }
 
     /// <summary>Rescans off the UI thread, then rebuilds the browser lists. Returns the number
-    /// of known plugins, or null when the scan worker is missing.</summary>
-    public static async Task<int?> RescanAsync(MainWindowViewModel main)
+    /// of known plugins, or null when the scan worker is missing. <paramref name="onlyDir"/>
+    /// limits the search to one folder (a store install); <paramref name="retryFailed"/>
+    /// probes plugins that failed before again (an explicit Rescan). While the scan runs,
+    /// <paramref name="progress"/> gets its state a few times a second on the calling thread.</summary>
+    public static async Task<int?> RescanAsync(MainWindowViewModel main, IProgress<PluginScanProgress>? progress = null,
+        string? onlyDir = null, bool retryFailed = false)
     {
         if (WorkerPath is not { } worker) return null;
         var catalog = App.Services.GetRequiredService<IPluginCatalog>();
-        int n = await Task.Run(() => catalog.Scan(worker));
+        var scan = Task.Run(() => catalog.Scan(worker, onlyDir, retryFailed));
+        if (progress is not null)
+        {
+            // A first scan of a large plugin folder takes minutes: keep showing that it moves.
+            while (!scan.IsCompleted)
+            {
+                await Task.WhenAny(scan, Task.Delay(250));
+                if (catalog.ScanProgress is { } p) progress.Report(p);
+            }
+        }
+        int n = await scan;
         main.Browser.Rebuild();
         return n;
     }
+
+    /// <summary>Status line for a running scan, e.g. "Scanning plugins · 312 of 1,000 · Analytiks".</summary>
+    public static string Describe(PluginScanProgress p)
+    {
+        if (p.Total == 0) return "Looking for plugins…";
+        var line = $"Scanning plugins · {p.Done:N0} of {p.Total:N0}";
+        return p.Current.Length > 0 ? $"{line} · {p.Current}" : line;
+    }
+
+    /// <summary>Share of the scan done, or -1 while the total isn't known yet.</summary>
+    public static double Fraction(PluginScanProgress p) => p.Total > 0 ? (double)p.Done / p.Total : -1;
 }

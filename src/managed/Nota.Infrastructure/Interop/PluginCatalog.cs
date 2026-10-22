@@ -7,6 +7,9 @@ namespace Nota.Infrastructure;
 public sealed class PluginCatalog : IPluginCatalog
 {
     public int Scan(string workerPath) => NotaEngine.ScanPlugins(workerPath);
+    public int Scan(string workerPath, string? onlyDir, bool retryFailed) => NotaEngine.ScanPlugins(workerPath, onlyDir, retryFailed);
+    public PluginScanProgress? ScanProgress => NotaEngine.ScanProgress;
+    public int FailedCount => NotaEngine.ScanFailedCount;
     public int Count => NotaEngine.PluginCount;
     public string? Description(int index) => NotaEngine.PluginDescription(index);
     public string? Id(int index) => NotaEngine.PluginId(index);

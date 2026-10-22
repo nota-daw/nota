@@ -18,6 +18,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int PluginHostScan(string workerPath);
 
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan_ex", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int PluginHostScanEx(string workerPath, string? onlyDir, int flags);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan_progress")]
+    internal static partial int PluginHostScanProgress(out int done, out int total);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan_current")]
+    internal static partial IntPtr PluginHostScanCurrent();
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan_failed_count")]
+    internal static partial int PluginHostScanFailedCount();
+
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_plugin_count")]
     internal static partial int PluginHostPluginCount();
 

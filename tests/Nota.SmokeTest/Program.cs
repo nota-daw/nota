@@ -215,6 +215,13 @@ if (args.Length >= 3 && args[0] == "--store-catalog")
     Console.WriteLine(failures == 0 ? "STORE CATALOG PASSED" : $"STORE CATALOG FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+if (args.Length >= 2 && args[0] == "--scan-scale")
+{
+    Console.WriteLine("-- plugin scan: large folders --");
+    foreach (var (ok, label) in PluginStoreTests.RunScanScale(args[1])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SCAN SCALE PASSED" : $"SCAN SCALE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--store-live")
 {
     Console.WriteLine("-- get plug-ins: live installs --");

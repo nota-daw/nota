@@ -421,6 +421,23 @@ if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
 endif()
 
+# --- Scanner self-test (bug plugin-scan-hang-windows) -------------------------
+# OutOfProcessScanner against stub workers that hang, die or spam stdout; the
+# binary is its own stub. Run by scripts/build*.sh: `nota-scanner-selftest`.
+add_executable(nota-scanner-selftest
+    pluginhost/scanner/tests/ScannerSelfTest.cpp
+    pluginhost/scanner/OutOfProcessScanner.cpp
+)
+target_include_directories(nota-scanner-selftest PRIVATE pluginhost/scanner)
+target_link_libraries(nota-scanner-selftest
+    PRIVATE juce::juce_audio_processors
+    PUBLIC  juce::juce_recommended_config_flags
+)
+target_compile_definitions(nota-scanner-selftest PRIVATE ${NOTA_JUCE_DEFS})
+if(APPLE)
+    target_link_libraries(nota-scanner-selftest PRIVATE "-framework CoreAudioKit")
+endif()
+
 # --- Nota Pentad as a standalone VST3 (debugging in third-party hosts) -------
 # Off by default: the app runs Pentad in-process; this wraps the same DSP
 # (devices/instruments/Pentad.h/.cpp) in a JUCE plugin with the generic editor. Configure with

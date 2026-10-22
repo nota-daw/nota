@@ -8,10 +8,35 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
+
+#if JUCE_WINDOWS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace nota {
 namespace scanner {
+
+namespace {
+
+// Ends the process now, skipping plugin unload and static teardown: some plugins
+// deadlock there (DllMain / static destructors), and the answer is already out.
+// TerminateProcess rather than _Exit on Windows — ExitProcess still runs DLL detach.
+[[noreturn]] void exitNow(int code) {
+    std::fflush(stdout);
+    std::fflush(stderr);
+#if JUCE_WINDOWS
+    ::TerminateProcess(::GetCurrentProcess(), (UINT)code);
+#endif
+    std::_Exit(code);
+}
+
+} // namespace
 
 int runScannerWorker(int argc, char** argv) {
     if (argc < 3) {
@@ -38,7 +63,7 @@ int runScannerWorker(int argc, char** argv) {
         for (auto* desc : found) root.addChildElement(desc->createXml().release());
 
         std::cout << "<<<NOTA_PLUGINS_BEGIN>>>\n" << root.toString() << "\n<<<NOTA_PLUGINS_END>>>" << std::endl;
-        return 0;
+        exitNow(0);
     }
 
     std::cerr << "unknown format: " << formatName << "\n";

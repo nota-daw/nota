@@ -96,6 +96,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   on one thread, up to 4x slower. On macOS the engine also no longer wakes every render
   thread when a block needs only a few, and a session that overloads one core no longer
   drops out every two seconds while it plays.
+- **Plug-in scans finish, and large plug-in folders scan in minutes** (nota-daw/nota#220): the
+  30-second limit per plug-in never took effect, so one plug-in that froze while being probed —
+  or on unload, after it had already answered — left "Scanning…" up for good, and nothing found
+  was saved. Now a stuck plug-in is stopped after 30 seconds and retried once on its own, with
+  two minutes to load; plug-ins are probed four at a time; the scan shows how far it is
+  ("Scanning plugins · 312 of 1,000"); what it found is saved as it goes, so a scan cut short
+  resumes; plug-ins that fail to load are remembered and skipped until they change (Rescan
+  plugins retries them); a Get Plug-ins install scans only its own folder; and each scan writes
+  `logs/plugin-scan.log` in Nota's data folder, naming every plug-in probed and how it went.
+  macOS and Linux: parallel scans no longer lose a plug-in's answer to a file descriptor closed
+  twice by the process helper.
 - **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
   longer than the room left after it: copies continue into the next open clip of the track,
   and those with no clip to land in are left out.

@@ -8,6 +8,7 @@
 #include "PluginCatalog.h"
 
 #include <cstdlib>
+#include <map>
 
 #include "audio_io/NotaConfigFile.h"
 
@@ -22,6 +23,7 @@ struct PluginCatalog::Impl {
     // (getTypes()), so reads index this instead; sync() after every mutation.
     std::vector<juce::PluginDescription> types;
     std::vector<std::string> scanPaths;
+    std::map<std::string, int64_t> failed; // id -> file stamp when it failed
     void sync() {
         const auto all = list.getTypes();
         types.assign(all.begin(), all.end());
@@ -57,6 +59,17 @@ juce::File catalogFile() {
 }
 juce::File scanPathsFile() {
     return supportDir().getChildFile("scanpaths.txt");
+}
+juce::File failedFile() {
+    return supportDir().getChildFile("scan-failed.txt");
+}
+
+// Modification time of a file-based plugin (VST3 path), 0 for registry ids (AU).
+int64_t fileStamp(const std::string& id) {
+    const juce::String path{juce::CharPointer_UTF8(id.c_str())};
+    if (!juce::File::isAbsolutePath(path)) return 0;
+    const juce::File f{path};
+    return f.exists() ? f.getLastModificationTime().toMilliseconds() : 0;
 }
 
 } // namespace
@@ -177,6 +190,12 @@ void PluginCatalog::removeMissingVst3OnDisk() {
         if (t.pluginFormatName == "VST3" && !juce::File(t.fileOrIdentifier).exists()) gone.add(t);
     for (const auto& t : gone) impl_->list.removeType(t);
     if (!gone.isEmpty()) impl_->sync();
+    // Failed bundles that were deleted are no longer worth remembering.
+    for (auto it = impl_->failed.begin(); it != impl_->failed.end();) {
+        const juce::String path{juce::CharPointer_UTF8(it->first.c_str())};
+        if (juce::File::isAbsolutePath(path) && !juce::File(path).exists()) it = impl_->failed.erase(it);
+        else ++it;
+    }
 }
 
 std::vector<std::string> PluginCatalog::unknownIds(const std::vector<std::string>& discovered) const {
@@ -190,9 +209,32 @@ std::vector<std::string> PluginCatalog::unknownIds(const std::vector<std::string
                 known = true;
                 break;
             }
-        if (!known) out.push_back(id);
+        if (known) continue;
+        if (auto f = impl_->failed.find(id); f != impl_->failed.end() && f->second == fileStamp(id)) continue;
+        out.push_back(id);
     }
     return out;
+}
+
+void PluginCatalog::markFailed(const std::string& id) {
+    const auto stamp = fileStamp(id);
+    std::unique_lock lock(mutex_);
+    impl_->failed[id] = stamp;
+}
+
+void PluginCatalog::forgetFailed(const std::string& id) {
+    std::unique_lock lock(mutex_);
+    impl_->failed.erase(id);
+}
+
+void PluginCatalog::clearFailed() {
+    std::unique_lock lock(mutex_);
+    impl_->failed.clear();
+}
+
+int32_t PluginCatalog::failedCount() const {
+    std::shared_lock lock(mutex_);
+    return static_cast<int32_t>(impl_->failed.size());
 }
 
 bool PluginCatalog::typeAt(int32_t index, juce::PluginDescription& out) const {
@@ -214,6 +256,37 @@ void PluginCatalog::loadOnce() {
 void PluginCatalog::save() const {
     std::shared_lock lock(mutex_);
     if (auto xml = impl_->list.createXml()) xml->writeTo(catalogFile());
+}
+
+void PluginCatalog::loadFailedOnce() {
+    std::unique_lock lock(mutex_);
+    if (failedLoaded_) return;
+    failedLoaded_ = true;
+    const auto f = failedFile();
+    if (!f.existsAsFile()) return;
+    juce::StringArray lines;
+    lines.addLines(f.loadFileAsString());
+    for (const auto& l : lines) {
+        const int tab = l.indexOfChar('\t');
+        if (tab <= 0) continue;
+        impl_->failed[l.substring(tab + 1).toStdString()] = l.substring(0, tab).getLargeIntValue();
+    }
+}
+
+void PluginCatalog::saveFailed() const {
+    juce::StringArray lines;
+    {
+        std::shared_lock lock(mutex_);
+        for (const auto& [id, stamp] : impl_->failed)
+            lines.add(juce::String(stamp) + "\t" + juce::String::fromUTF8(id.c_str()));
+    }
+    failedFile().replaceWithText(lines.joinIntoString("\n"));
+}
+
+std::string PluginCatalog::scanLogPath() {
+    const auto dir = supportDir();
+    if (dir.getFullPathName().isEmpty()) return {};
+    return dir.getChildFile("logs").getChildFile("plugin-scan.log").getFullPathName().toStdString();
 }
 
 void PluginCatalog::loadScanPathsOnce() {

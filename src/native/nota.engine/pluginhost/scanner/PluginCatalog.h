@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // PluginCatalog — thread-safe plugin registry.
-// Owns plugins.xml + scanpaths.txt in the per-user data dir. Background scans
+// Owns plugins.xml + scanpaths.txt + scan-failed.txt in the per-user data dir. Background scans
 // (C# Task.Run -> nota_pluginhost_scan) take the unique lock; UI reads
 // (count/desc/index_of_id) take the shared lock — no data races, no iterator
 // invalidation. Internally keeps full JUCE PluginDescriptions (uid, path hash,
@@ -56,7 +56,17 @@ class PluginCatalog {
     // Mutation from the scan coordinator (unique lock).
     void addType(const juce::PluginDescription& desc);
     void removeMissingVst3OnDisk();
+    // Discovered ids not in the catalog and not failed before (an id that failed is
+    // skipped until its file changes — see markFailed).
     std::vector<std::string> unknownIds(const std::vector<std::string>& discovered) const;
+
+    // Probes that found nothing usable (no answer, timeout, zero types), keyed by id
+    // with the file's modification time: a plugin that hung once costs its timeout on
+    // one scan, not on every scan. clearFailed() makes the next scan retry them all.
+    void markFailed(const std::string& id);
+    void forgetFailed(const std::string& id);
+    void clearFailed();
+    int32_t failedCount() const;
 
     // Full JUCE description of entry `index` for in-process instantiation, copied
     // under one lock so the index and the entry can't drift apart mid-scan. False
@@ -68,6 +78,12 @@ class PluginCatalog {
     void save() const;
     void loadScanPathsOnce();
     void saveScanPaths() const;
+    void loadFailedOnce();
+    void saveFailed() const;
+
+    // <data dir>/logs/plugin-scan.log — one line per probe, rewritten each scan.
+    // Empty when there is no data dir (persistence off).
+    static std::string scanLogPath();
 
   private:
     PluginCatalog();
@@ -77,6 +93,7 @@ class PluginCatalog {
     mutable std::shared_mutex mutex_;
     bool catalogLoaded_ = false;
     bool scanPathsLoaded_ = false;
+    bool failedLoaded_ = false;
 };
 
 } // namespace scanner

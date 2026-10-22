@@ -516,12 +516,13 @@ public sealed partial class PreferencesWindow
     private void InstallFromStore(StorePlugin p)
     {
         var main = _main;
+        var dir = _store.PluginsDir;
         Jobs.Install(p.Id, source: 0, p.Name, p.Asset?.Size ?? 0, new StoreProgress(0, $"Downloading {p.Name}…"),
             (progress, ct) => _store.InstallAsync(p, progress, ct),
             async () =>
             {
                 Jobs.Report(new StoreProgress(-1, $"Scanning {p.Name}…"));
-                return await RescanAfterStoreChange(main)
+                return await RescanAfterStoreChange(main, dir, $"Scanning {p.Name}…")
                     ? $"{p.Name} {p.Version} is installed — find it in the browser."
                     : $"{p.Name} is installed. Rescan plugins to use it.";
             });
@@ -535,18 +536,22 @@ public sealed partial class PreferencesWindow
             "Remove", "Cancel").ShowDialog<bool>(this);
         if (!ok) return;
         var main = _main;
+        var dir = _store.PluginsDir;
         Jobs.Remove(p.Id, source: 0, $"Removing {p.Name}…", async () =>
         {
             _store.Uninstall(p.Id);
-            await RescanAfterStoreChange(main);
+            await RescanAfterStoreChange(main, dir, $"Removing {p.Name}…");
             return $"{p.Name} was removed.";
         });
     }
 
-    // Static: the job can outlive this window.
-    private static async Task<bool> RescanAfterStoreChange(MainWindowViewModel? main)
+    // Static: the job can outlive this window. Only the store's folder is searched — a store
+    // install must not set off a scan of every plugin on the machine (nota-daw/nota#220).
+    private static async Task<bool> RescanAfterStoreChange(MainWindowViewModel? main, string storeDir, string label)
     {
         if (main is null) return false;
-        return await PluginScan.RescanAsync(main) is not null;
+        var progress = new Progress<PluginScanProgress>(s =>
+            Jobs.Report(new StoreProgress(PluginScan.Fraction(s), s.Total > 1 ? $"{label} {s.Done} of {s.Total}" : label)));
+        return await PluginScan.RescanAsync(main, progress, onlyDir: storeDir) is not null;
     }
 }

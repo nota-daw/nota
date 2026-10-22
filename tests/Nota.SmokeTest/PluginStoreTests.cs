@@ -214,6 +214,65 @@ internal static class PluginStoreTests
         Console.WriteLine($"  (installed under {root})");
     }
 
+    /// <summary>Scan behaviour for large plugin folders (nota-daw/nota#220), against the real
+    /// worker and empty fake .vst3 bundles (each probes to zero types, i.e. fails): a folder-only
+    /// scan, progress while it runs, failures remembered and skipped, re-probed once the file
+    /// changes or on retry, forgotten once deleted. Needs NOTA_DATA_DIR under /tmp like
+    /// <see cref="RunCatalog"/>.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunScanScale(string worker)
+    {
+        var home = Environment.GetEnvironmentVariable("NOTA_DATA_DIR") ?? "";
+        if (home.Length == 0 || !Path.GetFullPath(home).StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.Ordinal)
+                                && !home.StartsWith("/tmp/", StringComparison.Ordinal))
+        {
+            yield return (false, "run with NOTA_DATA_DIR=<scratch dir under /tmp> — this rescans the plugin catalog");
+            yield break;
+        }
+        const int N = 40;
+        var dir = Path.Combine(home, "fake-vst3");
+        for (int i = 0; i < N; i++) Directory.CreateDirectory(Path.Combine(dir, $"Fake {i:00}.vst3"));
+        var log = Path.Combine(home, "logs", "plugin-scan.log");
+        // "probing 40 with 4 workers" — how many probes the last scan ran.
+        int Probed() => File.ReadLines(log).Select(l => System.Text.RegularExpressions.Regex.Match(l, @"probing (\d+) with"))
+            .Where(m => m.Success).Select(m => int.Parse(m.Groups[1].Value)).LastOrDefault(-1);
+
+        // Progress, polled the way the app does while the scan runs.
+        var seen = new List<PluginScanProgress>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var scan = Task.Run(() => NotaEngine.ScanPlugins(worker, dir, retryFailed: false));
+        while (!scan.IsCompleted)
+        {
+            if (NotaEngine.ScanProgress is { } p) seen.Add(p);
+            Thread.Sleep(20);
+        }
+        scan.GetAwaiter().GetResult();
+        var first = sw.Elapsed;
+        var lines = File.ReadAllLines(log);
+        yield return (Probed() == N && !lines.Any(l => l.Contains("AudioUnit:", StringComparison.Ordinal)),
+            $"a folder-only scan probes just that folder's {N} bundles ({Probed()} probed)");
+        yield return (lines.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"with [2-9] workers")) || Environment.ProcessorCount < 4,
+            "probes run in parallel");
+        yield return (seen.Any(p => p.Total == N) && seen.Any(p => p.Done > 0 && p.Done < N) && NotaEngine.ScanProgress is null,
+            $"progress counts up while it runs ({seen.Count} samples) and clears after");
+        yield return (NotaEngine.ScanFailedCount == N && File.Exists(Path.Combine(home, "scan-failed.txt")),
+            $"bundles that load nothing are remembered as failed ({NotaEngine.ScanFailedCount})");
+
+        sw.Restart();
+        NotaEngine.ScanPlugins(worker, dir, retryFailed: false);
+        yield return (Probed() == 0 && sw.Elapsed < first / 2, $"the next scan skips them ({Probed()} probed, {sw.Elapsed.TotalSeconds:0.0} s vs {first.TotalSeconds:0.0} s)");
+
+        Directory.SetLastWriteTimeUtc(Path.Combine(dir, "Fake 07.vst3"), DateTime.UtcNow.AddMinutes(1));
+        NotaEngine.ScanPlugins(worker, dir, retryFailed: false);
+        yield return (Probed() == 1, $"a bundle that changed on disk is probed again ({Probed()} probed)");
+
+        NotaEngine.ScanPlugins(worker, dir, retryFailed: true);
+        yield return (Probed() == N, $"Rescan's retry probes every failed bundle again ({Probed()} probed)");
+
+        Directory.Delete(dir, recursive: true);
+        NotaEngine.ScanPlugins(worker, Path.Combine(home, "logs"), retryFailed: false);
+        yield return (NotaEngine.ScanFailedCount == 0, $"deleted bundles are forgotten ({NotaEngine.ScanFailedCount} left)");
+    }
+
     /// <summary>Catalog behaviour the store relies on, against a real VST3 bundle: a plugin found at a
     /// new path still resolves by its old identifier (path hash ignored), and a bundle deleted from
     /// disk drops out of the catalog on the next scan. Rescans the catalog, so it refuses to run

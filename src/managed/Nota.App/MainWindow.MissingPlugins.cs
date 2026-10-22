@@ -53,7 +53,8 @@ public partial class MainWindow
                 catch (StoreException e) { error ??= e.Message; }
             }
             prog.Report(ProgressReport.Indeterminate("Scanning plugins…"));
-            await PluginScan.RescanAsync(_vm);
+            await PluginScan.RescanAsync(_vm, new Progress<PluginScanProgress>(s =>
+                prog.Report(new ProgressReport(PluginScan.Fraction(s), PluginScan.Describe(s)))), onlyDir: store.PluginsDir);
         });
 
         if (error is not null) { _vm.StatusText = error; return; }

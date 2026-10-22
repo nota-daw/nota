@@ -36,6 +36,31 @@ public sealed partial class NotaEngine
         return n;
     }
 
+    /// <summary>
+    /// <see cref="ScanPlugins(string)"/> with options: <paramref name="onlyDir"/> searches just
+    /// that folder for VST3 bundles; <paramref name="retryFailed"/> probes the remembered
+    /// failures again. Blocking.
+    /// </summary>
+    public static int ScanPlugins(string workerPath, string? onlyDir, bool retryFailed)
+    {
+        int n = NativeMethods.PluginHostScanEx(workerPath, onlyDir, retryFailed ? 1 : 0);
+        if (n < 0) throw new NotaEngineException($"Plugin scan failed (code {n}).");
+        return n;
+    }
+
+    /// <summary>Progress of the running scan (any thread), or null when none runs.</summary>
+    public static PluginScanProgress? ScanProgress
+    {
+        get
+        {
+            if (NativeMethods.PluginHostScanProgress(out int done, out int total) == 0) return null;
+            return new PluginScanProgress(done, total, Marshal.PtrToStringUTF8(NativeMethods.PluginHostScanCurrent()) ?? "");
+        }
+    }
+
+    /// <summary>Remembered failed candidates, skipped until their file changes.</summary>
+    public static int ScanFailedCount => NativeMethods.PluginHostScanFailedCount();
+
     /// <summary>Number of plugins currently in the catalog.</summary>
     public static int PluginCount => NativeMethods.PluginHostPluginCount();
 

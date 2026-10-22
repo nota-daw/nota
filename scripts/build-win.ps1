@@ -17,10 +17,18 @@ Write-Host "==> Building native engine (x64/WASAPI)"
 cmake -G Ninja -S src/native/nota.engine -B $Native "-DCMAKE_BUILD_TYPE=Release"
 cmake --build $Native
 
+Write-Host "==> Scanner self-test"
+& "$Native/nota-scanner-selftest.exe"
+
 Write-Host "==> Building managed (.NET)"
 dotnet build Nota.sln -c Release --nologo
 
 Write-Host "==> Smoke test"
 dotnet run --project tests/Nota.SmokeTest -c Release --nologo
+
+Write-Host "==> Plugin scan check (large folders, scratch data dir)"
+$env:NOTA_DATA_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ("nota-scan-scale-" + [guid]::NewGuid().ToString('N'))
+dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --scan-scale (Resolve-Path "$Native/nota-scanworker.exe").Path
+Remove-Item Env:NOTA_DATA_DIR
 
 Write-Host "==> Done. Run the app with: dotnet run --project src/managed/Nota.App"

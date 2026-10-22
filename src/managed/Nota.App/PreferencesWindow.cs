@@ -708,8 +708,13 @@ public sealed partial class PreferencesWindow : NotaWindow
             rescanStatus.Text = $"Searching {folders} folder{(folders == 1 ? "" : "s")}";
             try
             {
-                int? n = await PluginScan.RescanAsync(_main);
-                rescanStatus.Text = n is { } c ? $"Found {c} plugin{(c == 1 ? "" : "s")}." : "Scanner worker not found.";
+                // An explicit Rescan also retries plugins that failed before.
+                var progress = new Progress<PluginScanProgress>(p => rescanStatus.Text = PluginScan.Describe(p));
+                int? n = await PluginScan.RescanAsync(_main, progress, retryFailed: true);
+                int failed = _catalog.FailedCount;
+                rescanStatus.Text = n is not { } c ? "Scanner worker not found."
+                    : $"Found {c:N0} plugin{(c == 1 ? "" : "s")}." +
+                      (failed > 0 ? $" {failed:N0} couldn't be loaded — see plugin-scan.log in Nota's logs folder." : "");
             }
             finally { rescan.IsEnabled = true; rescan.Content = "Rescan plugins"; }
         };

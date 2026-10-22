@@ -901,7 +901,10 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
-  paths in Preferences, and Rescan.
+  paths in Preferences, and Rescan. Four plugins load at a time, each with a time limit
+  (a stuck one is retried alone, then skipped); progress shows as "312 of 1,000"; results
+  are saved as the scan goes; plugins that failed are skipped until they change or a Rescan;
+  each scan writes `logs/plugin-scan.log`.
 - **Downloads** (Settings → Downloads, formerly Get Plug-ins) — open-source VST3 plugins
   from the [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry)
   (Surge XT, Dexed, Dragonfly Reverb, CHOW Tape Model, Stochas …), installed, updated and
