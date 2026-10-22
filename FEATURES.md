@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.56.1** (plus changes in development on `main`). This document describes what is
+**0.57.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -39,7 +39,8 @@ Contents
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
-JUCE module; the engine core is JUCE-free.
+JUCE module; the engine core is JUCE-free. A project too heavy for the audio thread renders
+on a pool of render threads, export and freeze use every core, and an idle engine uses no CPU.
 
 ---
 
@@ -1161,7 +1162,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
-- **Plug-ins**: scan paths, Rescan.
+- **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
+- **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two

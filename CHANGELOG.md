@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.57.1] — 2026-10-22
+
 ### Added
 - **Move the playhead from the clip editors** (nota-daw/nota#278): click or drag the audio
   clip editor's ruler to place the playhead, snapped to the grid on a warped clip (hold ⌥ to
