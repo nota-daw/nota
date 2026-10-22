@@ -404,6 +404,8 @@ public partial class MainWindow : Window
         Browser.RevealRequested += OnBrowserReveal;
         Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
+        Browser.DeletePresetRequested += OnBrowserDeletePreset;
+        Browser.OpenPresetsFolderRequested += OnBrowserOpenPresetsFolder;
         Browser.EditTagsRequested += OnBrowserEditTags;
 
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
@@ -415,6 +417,7 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         Timeline.TrackSelected += OnTrackSelected;
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.

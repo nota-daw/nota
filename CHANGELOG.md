@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Plug-in windows open when you add a plug-in** (nota-daw/nota#250): adding a VST3 / AU
+  instrument or effect from the browser, by drag and drop or from the palette opens its
+  editor right away. Loading a project, undo, paste and the AI tools never do. Turn it off in
+  **Preferences → Plug-ins → Open plug-in window on insert**.
+- **The "+" at the end of the device chain adds an effect** (nota-daw/nota#97): click it and
+  the browser opens on Audio effects with the cursor in its search, ready to type.
+- **Delete a saved preset from the browser** (nota-daw/nota#234): right-click a preset in the
+  Presets tab → **Delete…** moves it to the Trash. Right-click a folder row there to open the
+  presets folder.
 - **Starred versions only** (nota-daw/nota#226): a star button in the History tab's header
   lists just the versions you starred, newest first. Click it again to see the whole tree.
 - **Fold the browser's Built-in and Plug-ins sections** (nota-daw/nota#230): click a
@@ -112,6 +121,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **Chorus, Flanger, Lens and Phaser go into rack chains** (nota-daw/nota#203): they can be
+  dropped onto an Instrument Rack or Audio Effect Rack chain and are listed in its add-device
+  menu, like every other built-in audio effect.
+- **Space and Delete work again after editing a warp marker's BPM** (nota-daw/nota#141): Enter
+  or Esc in the inline BPM field hands the keyboard back to the app.
+- **An effect with no track to land on starts its own audio track** (nota-daw/nota#68):
+  double-clicking an audio effect in the browser with no track selected and no instrument
+  track used to do nothing but a status-bar line. A MIDI effect says it needs an instrument
+  track.
+- **Replacing a Drum Rack pad's sample keeps the pad's mix** (nota-daw/nota#237): a sample
+  dropped onto an occupied pad now swaps only the sound. Level, pan, mute and solo, sends,
+  choke and the pad's effects stay; the Sampler keeps its tune and envelope, while start, end
+  and the loop window start fresh for the new sample.
 - **Resizing a track no longer re-arms it** (nota-daw/nota#255): after you disarmed a track (or
   changed its mute or solo), changing its height brought the old state back.
 - **Buttons no longer have a lighter top edge** (nota-daw/nota#231): the raised highlight sits

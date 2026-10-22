@@ -128,6 +128,7 @@ public sealed class BrowserView : UserControl
     }
 
     private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
+    private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
@@ -187,6 +188,10 @@ public sealed class BrowserView : UserControl
     public event Action<BrowserItem>? CreateMultisampleRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
     public event Action<BrowserItem>? DeleteProjectRequested;
+    /// <summary>Delete a saved preset file (moves to Trash after confirmation).</summary>
+    public event Action<BrowserItem>? DeletePresetRequested;
+    /// <summary>Open the user presets folder in the OS file manager (a Presets tab folder row).</summary>
+    public event Action? OpenPresetsFolderRequested;
     /// <summary>Open the tag editor. Item null = manage all tags; non-null = create a tag
     /// and assign it to that device.</summary>
     public event Action<BrowserItem?>? EditTagsRequested;
@@ -425,6 +430,15 @@ public sealed class BrowserView : UserControl
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
     /// <summary>Opens the History tab (the project's versions).</summary>
     public void ShowHistory() { SelectTab(HistoryTab); SetCollapsed(false, persist: true); }
+    /// <summary>Unfolds the browser on Audio effects with the keyboard in its search, ready to
+    /// type (the device chain's "+", #97).</summary>
+    public void FocusEffectSearch()
+    {
+        SelectTab(EffectsTab);
+        SetCollapsed(false, persist: true);
+        // The search row was hidden while folded: focus it once it is laid out again.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => { _search.Focus(); _search.SelectAll(); }, Avalonia.Threading.DispatcherPriority.Input);
+    }
 
     /// <summary>Fold the browser down to its icon rail, or unfold it.</summary>
     public void SetCollapsed(bool collapsed, bool persist)
@@ -1565,11 +1579,28 @@ public sealed class BrowserView : UserControl
                 flyout.Items.Add(reveal);
                 return flyout;
             }
+            // A saved preset file on disk (#234). Synthetic rows (factory presets, drum kits)
+            // carry a scheme instead of a path: built in, nothing to reveal or delete.
+            case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):
+            {
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                reveal.Click += (_, _) => RevealRequested?.Invoke(item);
+                flyout.Items.Add(reveal);
+                flyout.Items.Add(new Separator());
+                flyout.Items.Add(MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeletePresetRequested?.Invoke(item)));
+                return flyout;
+            }
+            // The Presets tab's category / device rows group by what a preset holds; the files
+            // all sit in the one presets folder, so every row opens that.
+            case BrowserItemKind.Folder when _active == PresetsTab && item.Path.StartsWith("preset", StringComparison.Ordinal):
+            {
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                reveal.Click += (_, _) => OpenPresetsFolderRequested?.Invoke();
+                flyout.Items.Add(reveal);
+                return flyout;
+            }
             case BrowserItemKind.Sample:
             case BrowserItemKind.MidiFile:
-            // A saved preset file on disk. Synthetic rows (factory presets, drum kits)
-            // carry a scheme instead of a path and have nothing to reveal.
-            case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):
             {
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);

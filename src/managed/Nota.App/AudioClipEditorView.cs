@@ -257,7 +257,14 @@ public sealed class AudioClipEditorView : UserControl
             _wave.SetSegmentBpm(seg, v);   // → MarkersCommitted → engine + Reload
     }
 
-    private void HideBpm() { _bpmBox.IsVisible = false; _bpmSeg = -1; }
+    // A hidden field that keeps the keyboard swallows Space / Delete and every other shortcut
+    // (#141): hand focus back to the window when Enter / Escape closes it.
+    private void HideBpm()
+    {
+        if (_bpmBox.IsKeyboardFocusWithin) TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+        _bpmBox.IsVisible = false;
+        _bpmSeg = -1;
+    }
 
     // Mirror the waveform's zoom/scroll into the scrollbar (shown only when zoomed in).
     private void SyncWaveScroll()

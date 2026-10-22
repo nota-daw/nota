@@ -221,7 +221,8 @@ track count and closes with Escape.
     project.
   - **Send/Return** buses (sends to returns) with a return list.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
-- **Device chain** per track: instrument + effects + MIDI effects, laid out in a row.
+- **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
+  **+** at its end opens the browser on Audio effects with the cursor in the search.
   - Double-click a device's header (or Fold in its menu) to fold it into a narrow strip with
     its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
 
@@ -927,7 +928,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   (with filter and pages, the plugin's own value text, double-click for its default) and a
   sidechain source where the plugin has one.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
-  window that opens on top and focused, and closes when the device is removed).
+  window that opens on top and focused, and closes when the device is removed). Adding a
+  plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
+  window on insert, on by default); loading a project, undo and paste don't.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -1019,7 +1022,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
-  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder.
+  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder
+  and Delete… (to the Trash) on a saved preset, Reveal in Finder on a folder row (opens the
+  presets folder).
   On Windows and Linux the reveal item reads Show in Explorer / Show in file manager.
 - **Foldable sections**: the BUILT-IN and PLUG-INS headers of the device tabs collapse and
   expand on click.

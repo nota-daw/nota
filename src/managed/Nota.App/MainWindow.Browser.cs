@@ -68,7 +68,8 @@ public partial class MainWindow
 
     // Double-click on a browser row: an instrument replaces the selected instrument track's
     // instrument (clips and effects stay) — else, or with ⌥ held, it starts a track; effects
-    // go to the selected track (else the last instrument track), presets apply — through the
+    // go to the selected track (else the last instrument track, else a new audio track),
+    // presets apply — through the
     // same insert service as drag & drop and the command palette.
     private void OnBrowserItemActivated(BrowserItem item, KeyModifiers mods)
     {
@@ -90,8 +91,7 @@ public partial class MainWindow
                 case BrowserItemKind.PluginEffect:
                 {
                     int tgt = EffectTarget();
-                    if (tgt <= 0) { _vm.StatusText = "Select a track first."; break; }
-                    ApplyInsertResult(Insertion.RouteToTrack(item, tgt));
+                    ApplyInsertResult(tgt > 0 ? Insertion.RouteToTrack(item, tgt) : Insertion.EffectOnNewTrack(item));
                     break;
                 }
                 case BrowserItemKind.Sample:
@@ -143,6 +143,34 @@ public partial class MainWindow
         bool done = await Task.Run(() => MoveToTrash(item.Path));
         _vm.Browser.RebuildProjects();
         _vm.StatusText = done ? $"Moved {item.Name} to Trash" : $"Couldn't delete {item.Name}";
+    }
+
+    // Delete a saved preset (#234): confirm, then to the Trash, like a project.
+    private async void OnBrowserDeletePreset(BrowserItem item)
+    {
+        if (_vm is null) return;
+        bool ok = await new ConfirmWindow("Delete preset",
+            $"Move “{item.Name}” to the Trash?", "Delete", "Cancel").ShowDialog<bool>(this);
+        if (!ok) return;
+
+        bool done = await Task.Run(() => MoveToTrash(item.Path));
+        _vm.Browser.RebuildPresets();
+        _vm.StatusText = done ? $"Moved {item.Name} to Trash" : $"Couldn't delete {item.Name}";
+    }
+
+    // Open the user presets folder itself (not its parent with it selected).
+    private void OnBrowserOpenPresetsFolder()
+    {
+        if (_vm is null) return;
+        try
+        {
+            string dir = _vm.Settings.PresetsFolder();
+            Directory.CreateDirectory(dir);   // nothing saved yet: open it empty rather than fail
+            if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { dir });
+            else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
+            else Process.Start("xdg-open", new[] { dir });
+        }
+        catch (Exception ex) { _vm.StatusText = $"Reveal failed: {ex.Message}"; }
     }
 
     private static bool MoveToTrash(string path)

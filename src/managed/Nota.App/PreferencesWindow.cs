@@ -719,7 +719,16 @@ public sealed partial class PreferencesWindow : NotaWindow
             finally { rescan.IsEnabled = true; rescan.Content = "Rescan plugins"; }
         };
 
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var openOnInsert = SwitchRow("Open plug-in window on insert", settings.Current.OpenPluginWindowOnInsert, on =>
+        {
+            settings.Current.OpenPluginWindowOnInsert = on;
+            settings.Save();
+        });
+
         return Sections(
+            Section("Plug-in window", 10, openOnInsert,
+                Caption("Adding a plug-in from the browser, by drag and drop or from the palette opens its editor. Loading a project, undo and paste never do.")),
             Section("Plugin scan folders", 10,
                 well,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { addBtn, removeBtn } },

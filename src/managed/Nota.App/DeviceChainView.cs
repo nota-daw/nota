@@ -75,6 +75,10 @@ public sealed partial class DeviceChainView : UserControl
     /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
     public event Action<string>? StatusMessage;
 
+    /// <summary>The "+" at the end of the chain was clicked: MainWindow opens the browser on
+    /// Audio effects with the keyboard in its search.</summary>
+    public event Action? AddDeviceRequested;
+
     // Accent overlay shown while a browser item is dragged over the panel.
     private readonly Border _dropGlow = new()
     {
@@ -268,9 +272,23 @@ public sealed partial class DeviceChainView : UserControl
             Stroke = BorderStrong, StrokeThickness = 1, IsVisible = false,
             StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue,
         };
-        var host = new Grid { Children = { _addDash, new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary } } };
-        var card = new Border { Width = 28, Height = CardH, Background = Brushes.Transparent, Child = host };
-        ToolTip.SetTip(card, "Add device — double-click in the browser or drop here");
+        var plus = new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary };
+        var host = new Grid { Children = { _addDash, plus } };
+        var card = new Border
+        {
+            Width = 28, Height = CardH, Background = Brushes.Transparent, Child = host,
+            CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand),
+        };
+        // A real button (#97): a click opens the browser on Audio effects, typing into its search.
+        card.PointerEntered += (_, _) => { card.BindResource(Border.BackgroundProperty, "Brush.SurfaceHover"); plus.BindResource(Glyph.ForegroundProperty, "Brush.TextSecondary"); };
+        card.PointerExited += (_, _) => { card.Background = Brushes.Transparent; plus.Foreground = TextTertiary; };
+        card.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton != MouseButton.Left) return;
+            AddDeviceRequested?.Invoke();
+            e.Handled = true;
+        };
+        ToolTip.SetTip(card, "Add an audio effect: search the browser, or drop a device here");
         return card;
     }
 

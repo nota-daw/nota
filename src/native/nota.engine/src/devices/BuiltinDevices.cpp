@@ -29,6 +29,10 @@
 #include "devices/effects/Shutter.h"
 #include "devices/effects/Chamber.h"
 #include "devices/effects/Prism.h"
+#include "devices/effects/Lens.h"
+#include "devices/effects/Flanger.h"
+#include "devices/effects/Phaser.h"
+#include "devices/effects/Chorus.h"
 
 namespace nota {
 
@@ -55,6 +59,10 @@ std::shared_ptr<Device> makeChainDevice(int32_t kind) {
     case 19: return std::make_shared<Shutter>();
     case 20: return std::make_shared<Chamber>();
     case 21: return std::make_shared<Prism>();
+    case 22: return std::make_shared<Lens>();
+    case 23: return std::make_shared<Flanger>();
+    case 24: return std::make_shared<Phaser>();
+    case 25: return std::make_shared<Chorus>();
     default: return nullptr; // 5 = Effect Rack (nesting) / plugin: not via this factory
     }
 }

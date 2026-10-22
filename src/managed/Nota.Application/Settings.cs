@@ -106,6 +106,10 @@ public sealed class Settings
     /// <summary>The last items applied from the palette, most recent first (its Recent section).</summary>
     public List<string> PaletteRecent { get; set; } = new();
 
+    /// <summary>Adding a plug-in by hand (browser, drag & drop, palette) opens its editor window
+    /// right away (#250). On by default; Preferences → Plug-ins.</summary>
+    public bool OpenPluginWindowOnInsert { get; set; } = true;
+
     // --- browser view options (the ⋮ button next to the browser search) ------
     /// <summary>Show each row's type as a quiet tag on the right edge of the browser list.</summary>
     public bool BrowserShowTypeTags { get; set; } = true;

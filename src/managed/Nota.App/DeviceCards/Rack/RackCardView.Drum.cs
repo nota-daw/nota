@@ -758,14 +758,22 @@ internal sealed partial class RackCardView
         switch (item.Kind)
         {
             case Nota.Presentation.BrowserItemKind.Sample:
-                if (existing >= 0) a.RemoveChain(existing);
-                added = E.RackAddSamplerChain(T, item.Path, note, false);
-                if (added >= 0)
+                // An occupied pad keeps its chain (#237): level, pan, mute/solo, sends, choke and
+                // effects stay, only the sound changes. A Sampler keeps its tune, envelope and
+                // filter; another instrument gives way to a fresh Sampler.
+                if (existing >= 0 && E.RackSetChainSamplerSample(T, existing, item.Path, note))
                 {
-                    E.RackSetChainTriggerNote(T, added, note);
-                    // Name the pad after the sample — sixteen pads reading "Nota Sampler" say nothing.
-                    E.RackSetChainName(T, added, System.IO.Path.GetFileNameWithoutExtension(item.Path));
+                    added = existing;
+                    ResetSampleWindow(existing);
                 }
+                else
+                {
+                    if (existing >= 0) a.RemoveChain(existing);
+                    added = E.RackAddSamplerChain(T, item.Path, note, false);
+                    if (added >= 0) E.RackSetChainTriggerNote(T, added, note);
+                }
+                // Name the pad after the sample — sixteen pads reading "Nota Sampler" say nothing.
+                if (added >= 0) E.RackSetChainName(T, added, System.IO.Path.GetFileNameWithoutExtension(item.Path));
                 break;
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
                 if (existing >= 0) a.RemoveChain(existing);
@@ -783,6 +791,18 @@ internal sealed partial class RackCardView
         if (added >= 0) Sel = added;
         _ctx.NotifyChanged();
         DeferRebuild();
+    }
+
+    // Start / end, reverse and the loop window belong to the sample that was on the pad: a new
+    // sample starts from their defaults.
+    private static readonly string[] SampleWindowParams = { "start", "end", "reverse", "loopstart", "loopend", "loopxfade" };
+
+    private void ResetSampleWindow(int chain)
+    {
+        int n = E.RackChainInstrumentParamCount(T, chain);
+        for (int p = 0; p < n; p++)
+            if (Array.IndexOf(SampleWindowParams, E.RackChainInstrumentParamId(T, chain, p)) >= 0)
+                E.RackChainInstrumentParamSet(T, chain, p, E.RackChainInstrumentParamDefault(T, chain, p));
     }
 
     private void ShowAddPadMenu(IRackAccess a, Control anchor, int note)
