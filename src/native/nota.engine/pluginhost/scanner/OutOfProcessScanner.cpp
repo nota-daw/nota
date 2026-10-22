@@ -44,6 +44,12 @@
 #endif
 #endif
 
+#if !JUCE_WINDOWS && !JUCE_MAC
+// Global scope on purpose: declared inside the namespaces below it would name
+// nota::scanner::(anonymous)::environ, which nothing defines (the .so fails to link).
+extern char** environ;
+#endif
+
 namespace nota {
 namespace scanner {
 
@@ -138,8 +144,7 @@ char** currentEnvironment() {
 #if JUCE_MAC
     return *_NSGetEnviron(); // `environ` isn't reachable from a dylib on macOS
 #else
-    extern char** environ;
-    return environ;
+    return ::environ;
 #endif
 }
 
