@@ -165,6 +165,15 @@ public sealed partial class ArrangementView
                 }
             }
 
+            // Time display (#275): with the transport read-out on time, the ruler reads time too.
+            double bpm = _o._engine?.Bpm ?? 0;
+            if (RulerDisplay.ShowTime && bpm > 0) RenderTime(ctx, w, h, bpm);
+            else RenderBars(ctx, w, h);
+            RenderPlayheadAndReadout(ctx, w, h);
+        }
+
+        private void RenderBars(DrawingContext ctx, double w, double h)
+        {
             // Bar numbers in mono 7. The almanac labels every 4 bars at its base scale
             // (16px a bar); zoomed in far enough that a single bar has room, every bar is named.
             int firstBar = (int)Math.Floor(_o._scrollBeats / _o._beatsPerBar);
@@ -182,7 +191,49 @@ public sealed partial class ArrangementView
                     FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
+        }
 
+        // Ticks at whole time steps wide enough for their label, read m:ss[.f] like the transport.
+        private void RenderTime(DrawingContext ctx, double w, double h, double bpm)
+        {
+            double pxPerSec = _o._pixelsPerBeat * bpm / 60.0;
+            double charW = _charW > 0 ? _charW
+                : _charW = new FormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.Mono, NotaType.Axis, RulerText).Width / 10;
+            double stepS = RulerLabels.TimeSteps[^1];
+            foreach (var st in RulerLabels.TimeSteps)
+            {
+                int chars = st >= 1 ? 5 : st >= 0.1 ? 7 : st >= 0.01 ? 8 : 9;
+                if (st * pxPerSec >= chars * charW + 14) { stepS = st; break; }
+            }
+            double t0 = RulerLabels.Seconds(_o._scrollBeats, bpm);
+            for (long k = Math.Max(0, (long)Math.Floor(t0 / stepS)); ; k++)
+            {
+                double t = k * stepS;
+                double x = _o.BeatToX(RulerLabels.BeatsAt(t, bpm));
+                if (x > w) break;
+                if (x < 0) continue;
+                ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
+                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
+                ctx.DrawText(ft, new Point(x + 3, 3));
+            }
+        }
+        private double _charW;
+
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            RulerDisplay.Changed += InvalidateVisual;
+        }
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            RulerDisplay.Changed -= InvalidateVisual;
+        }
+
+        private void RenderPlayheadAndReadout(DrawingContext ctx, double w, double h)
+        {
             // Playhead flag: a 7×5 brass triangle at the top of the ruler.
             double px = _o.BeatToX(_o._playheadBeats);
             if (px >= -5 && px <= w + 5)

@@ -276,7 +276,10 @@ public partial class MainWindow : Window
             else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
+            // Every ruler reads in the read-out's unit, bars or time (#275).
+            else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
+        RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;

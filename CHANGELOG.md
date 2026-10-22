@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Move the playhead from the clip editors** (nota-daw/nota#278): click or drag the audio
+  clip editor's ruler to place the playhead, snapped to the grid on a warped clip (hold ⌥ to
+  place it freely). In both clip editors the playhead line itself can be grabbed and dragged.
+  A Session slot plays on its own loop clock, so its editors don't seek and say why.
+- **Rulers read in time** (nota-daw/nota#275): click the transport's position read-out to
+  switch it to time, and the arrangement ruler and both clip editor rulers switch with it.
+- **A clip's warp tempo, next to the Warp switch** (nota-daw/nota#248): the audio clip
+  editor's **Tempo** field shows the tempo the audio was recorded at. Drag it or double-click
+  to type a value; **÷2** and **×2** fix a half- or double-time detection in one click.
+  Hand-placed warp markers keep their timing, and on an unwarped clip a tempo turns Warp on.
+- **See the warp while you drag a marker** (nota-daw/nota#140): the waveform stretches and
+  squeezes live as a warp marker moves, and the clip is re-warped once when you let go. Esc
+  during the drag puts it back.
 - **Plug-in windows open when you add a plug-in** (nota-daw/nota#250): adding a VST3 / AU
   instrument or effect from the browser, by drag and drop or from the palette opens its
   editor right away. Loading a project, undo, paste and the AI tools never do. Turn it off in
@@ -84,6 +97,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     **Check now** button. Nothing downloads until you click Update.
 
 ### Changed
+- **The clip editor ruler shows where the clip sits** (nota-daw/nota#275): with one MIDI or
+  audio clip open, the ruler reads the clip's arrangement position — a clip at bar 9 starts
+  at 9, not 1 — as a multi-clip selection already did. Unwarped audio clips read in bars too.
 - **Detail panel tabs fit the track** (nota-daw/nota#247, nota-daw/nota#246): the **Pattern**
   tab shows only on a track with a Drum Rack instead of sitting greyed out everywhere else,
   and the panel can't be resized while **Devices** is shown, because the cards don't grow.
@@ -120,6 +136,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **The audio clip editor shows the playhead while stopped** (nota-daw/nota#277): whenever
+  the song position is inside the clip, as the piano roll does.
+- **⌘1–⌘5 change a grid you can see** (nota-daw/nota#114): after a click in the audio clip
+  editor while its view follows no grid (ADSR, or an unwarped clip), the grid shortcuts act
+  on the arrangement instead of silently changing the clip editor's.
 - **Context menus are never cut off at the sides**: a menu whose longest item had no shortcut
   (the track menu of a live-frozen track, with *Flatten (remove source)*) could open a little
   too narrow, clipping every row on both sides. Every menu and submenu now opens at its full

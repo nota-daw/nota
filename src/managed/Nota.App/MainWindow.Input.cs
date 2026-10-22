@@ -157,6 +157,12 @@ public partial class MainWindow
         // menu usually handles them first; de-duped against auto-repeat via _heldKeys.
 
         // Esc: cancel an in-progress arrangement gesture, else clear the selection (req 1.2.6/2.11).
+        // Esc mid-drag of a warp marker / segment tempo in the audio clip editor drops it (#140).
+        if (!mod && e.Key == Key.Escape && _audioEditor is { IsEffectivelyVisible: true } audioEd && audioEd.CancelGesture())
+        {
+            e.Handled = true;
+            return;
+        }
         if (!mod && e.Key == Key.Escape && Timeline.EscapePressed())
         {
             e.Handled = true;

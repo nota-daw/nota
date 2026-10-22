@@ -437,6 +437,13 @@ public partial class MainWindow
         _audioEditor = new AudioClipEditorView(Engine, trackId, clipIndex,
             TrackBrush(trackId), slot ? () => _session?.Refresh() : () => Timeline.Refresh());
         _audioEditor.WarpBuildRequested = () => _ = PollWarpBuildAsync();
+        // The ruler and the playhead line move the transport (#278); a slot plays on its own clock.
+        if (!slot)
+            _audioEditor.Seek = beat =>
+            {
+                Engine.Seek(Math.Max(0, beat));
+                Timeline.SetPlayhead(Math.Max(0, beat));
+            };
         _audioEditorTrackId = trackId;
         _audioEditorClipIndex = clipIndex;
     }
@@ -519,6 +526,7 @@ public partial class MainWindow
             AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
             ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : $"Track {t} clip",
+            Bpm = () => Engine.Bpm,   // the ruler's time display (#275)
             // The ruler moves the transport (#50): editor beat → arrangement beat.
             Seek = local =>
             {
@@ -785,6 +793,8 @@ public partial class MainWindow
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
             AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
+            IsSessionSlot = true,   // no Seek: the slot plays on its own loop clock
+            Bpm = () => Engine.Bpm,
         };
         double slotLen = Engine.SessionSlotLength(trackId, scene);
         roll.SetTrackColor(TrackBrush(trackId));

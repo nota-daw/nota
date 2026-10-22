@@ -47,6 +47,8 @@
     <Compile Include="..\..\src\managed\Nota.App\Changelog.cs" Link="Changelog.cs" />
     <!-- Typed value entry's parser / read-out search (no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\Controls\ValueText.cs" Link="ValueText.cs" />
+    <!-- Clip editor position / tempo / ruler math (specs/036; no Avalonia inside). -->
+    <Compile Include="..\..\src\managed\Nota.App\ClipEditor\*.cs" LinkBase="ClipEditor" />
   </ItemGroup>
 
 </Project>

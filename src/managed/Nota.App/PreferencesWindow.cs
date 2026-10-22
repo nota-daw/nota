@@ -1155,6 +1155,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Right-click ruler", "Loop on / off · loop the selection · clear the loop region"),
             ("P", "Show playhead · scroll the Arrangement to it without moving it · picks up a paused Follow"),
             ("⌘⇧R", "Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)"),
+            ("Click the position read-out", "Switch it between bars and time · every ruler follows"),
         }),
         ("Arrangement & editing", new[]
         {
@@ -1183,6 +1184,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘4", "Snap to grid on / off"),
             ("⌘5", "Switch between the adaptive (Auto) and a fixed grid"),
             ("⌥ while dragging", "Move freely, ignoring the grid"),
+            ("Audio clip editor on ADSR or an unwarped clip", "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
         }),
         ("Tracks (after a click in the track headers)", new[]
         {
@@ -1221,7 +1223,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Delete", "Delete the selected notes"),
             ("Double-click empty grid", "Add a note with the length and velocity of the last note touched · on a note, delete it"),
             ("Drag note edge", "Change the note's start or end"),
-            ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid"),
+            ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid"),
+            ("Drag the playhead line", "Scrub the playhead · on the ruler or over empty grid"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
@@ -1231,6 +1234,15 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+        }),
+        ("Audio clip editor", new[]
+        {
+            ("Click · drag the ruler", "Move the playhead there · drag to scrub · snapped to the grid on a warped clip, ⌥ off it"),
+            ("Drag the playhead line", "Scrub the playhead"),
+            ("Double-click the wave", "Add a warp marker · on a marker, delete it"),
+            ("Drag a warp marker", "Align the audio to the grid · the wave stretches as you drag"),
+            ("Esc", "While dragging a warp marker or a segment tempo: put it back"),
+            ("Drag · double-click Tempo", "Set the tempo the clip was recorded at · ÷2 / ×2 halve or double it"),
         }),
         ("Play notes (computer keyboard)", new[]
         {

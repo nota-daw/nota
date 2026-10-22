@@ -107,6 +107,9 @@ public sealed class DragNumber : UserControl
         base.OnPointerCaptureLost(e);
     }
 
+    /// <summary>Open the type-in box, as a double-click does.</summary>
+    public void BeginEdit() { if (!_editing) BeginEditor(); }
+
     private void BeginEditor()
     {
         _editing = true;

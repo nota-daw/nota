@@ -42,6 +42,8 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Moves the transport to a clip-local beat (#50): a click or drag on the ruler.
     /// Null (a session slot, which runs its own clock) leaves the ruler inert.</summary>
     public Action<double>? Seek { get; set; }
+    /// <summary>The roll edits a Session slot: its ruler says why it can't move the transport.</summary>
+    public bool IsSessionSlot { get; set; }
     /// <summary>Starts / ends a note on the clip's own track (note audition, #46; the playable
     /// keys, #47): pitch and velocity 0..1. Null leaves the roll silent. Set by the host.</summary>
     public Action<int, float>? AuditionOn { get; set; }
@@ -1420,7 +1422,8 @@ public sealed partial class PianoRollView : UserControl
     // Ruler label at beat b: "bar.beat", plus a 1/16 index when mid-beat (e.g. 3.2.3).
     internal string GridLabel(double b)
     {
-        int bar = (int)Math.Floor(b / _beatsPerBar) + 1 + RulerBarOffset;
+        b += RulerOrigin;
+        int bar = (int)Math.Floor(b / _beatsPerBar) + 1;
         double inBar = b - Math.Floor(b / _beatsPerBar) * _beatsPerBar;
         int beat = (int)Math.Floor(inBar) + 1;
         double frac = inBar - Math.Floor(inBar);
@@ -1428,9 +1431,31 @@ public sealed partial class PianoRollView : UserControl
         return $"{bar}.{beat}.{(int)Math.Round(frac * 4) + 1}";
     }
 
-    // Ruler bar numbers: the clip's own bars for one clip, the arrangement's when several are
-    // open (their origin sits on a bar line, see ClipSet).
-    private int RulerBarOffset => _set.IsMulti ? (int)Math.Round(_set.Origin / Math.Max(1, _beatsPerBar)) : 0;
+    // The ruler reads arrangement positions (#275): editor beat 0 is the open clips' origin —
+    // the clip's start for one clip, a bar line for several (see ClipSet). A Session slot has
+    // no arrangement position, so it counts from its own start.
+    private double RulerOrigin => IsSessionSlot ? 0 : _set.Origin;
+    /// <summary>The project tempo, for the ruler's time display. Set by the host.</summary>
+    public Func<double>? Bpm { get; set; }
+
+    // The playhead line can be grabbed and dragged like the ruler (#278).
+    private bool OnPlayheadLine(double x, double px)
+        => Seek is not null && _playheadBeat >= 0 && Math.Abs(x - BeatToX(_playheadBeat)) <= px;
+
+    // A ruler click or drag, or a playhead-line drag: seek to the (snapped; Alt free) beat.
+    private void SeekAtX(double x, bool free)
+    {
+        double raw = XToBeat(x);
+        double b = Math.Clamp(free ? raw : SnapBeat(raw), 0, _lengthBeats);
+        if (Math.Abs(b - _playheadBeat) < 1e-9) return;
+        Seek?.Invoke(b);
+        SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
+    }
+
+    private const string SlotSeekTip = "A Session slot plays on its own loop clock — launch it to play from the start";
+    private static readonly Cursor HandCursorShared = new(StandardCursorType.Hand);
+    private static readonly Cursor LineCursor = new(StandardCursorType.SizeWestEast);
+    private static readonly Cursor NoCursor = new(StandardCursorType.No);
 
     // ---- ruler -----------------------------------------------------------
     private sealed class RulerLane : Control
@@ -1444,7 +1469,15 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerEntered(PointerEventArgs e)
         {
             base.OnPointerEntered(e);
-            Cursor = _o.Seek is null ? Cursor.Default : new Cursor(StandardCursorType.Hand);
+            UpdateCursor(e.GetPosition(this).X);
+        }
+        // A hand over the ruler, ↔ on the playhead line; a Session slot can't seek, and says why.
+        private void UpdateCursor(double x)
+        {
+            Cursor = _o.Seek is not null ? (_o.OnPlayheadLine(x, PlayheadGrabPx) ? LineCursor : HandCursorShared)
+                   : _o.IsSessionSlot ? NoCursor : Cursor.Default;
+            object? tip = _o.Seek is null && _o.IsSessionSlot ? SlotSeekTip : null;
+            if (!Equals(ToolTip.GetTip(this), tip)) ToolTip.SetTip(this, tip);
         }
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
@@ -1452,13 +1485,14 @@ public sealed partial class PianoRollView : UserControl
             if (_o.Seek is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             _scrub = true;
             e.Pointer.Capture(this);
-            SeekAt(e.GetPosition(this).X);
+            SeekAt(e);
             e.Handled = true;
         }
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             base.OnPointerMoved(e);
-            if (_scrub) SeekAt(e.GetPosition(this).X);
+            if (_scrub) SeekAt(e);
+            else UpdateCursor(e.GetPosition(this).X);
         }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
@@ -1472,13 +1506,48 @@ public sealed partial class PianoRollView : UserControl
             _scrub = false;
             base.OnPointerCaptureLost(e);
         }
-        private void SeekAt(double x)
+        // Time display (#275): ticks at whole time steps of the arrangement, wide enough for
+        // their own label, read as m:ss[.fff] like the transport.
+        private void RenderTime(DrawingContext ctx, double h, double ppb, double viewEnd, double origin, double bpm)
         {
-            double b = Math.Clamp(_o.SnapBeat(_o.XToBeat(x)), 0, _o._lengthBeats);
-            if (Math.Abs(b - _o._playheadBeat) < 1e-9) return;
-            _o.Seek?.Invoke(b);
-            _o.SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
+            double pxPerSec = ppb * bpm / 60.0;
+            double charW = _charW > 0 ? _charW
+                : _charW = new FormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText).Width / 10;
+            double stepS = RulerLabels.TimeSteps[^1];
+            foreach (var st in RulerLabels.TimeSteps)
+            {
+                int chars = st >= 1 ? 5 : st >= 0.1 ? 7 : st >= 0.01 ? 8 : 9;
+                if (st * pxPerSec >= chars * charW + 16) { stepS = st; break; }
+            }
+            double t0 = RulerLabels.Seconds(origin + _o.ScrollBeats, bpm), t1 = RulerLabels.Seconds(origin + viewEnd, bpm);
+            for (long k = (long)Math.Floor(t0 / stepS); k * stepS <= t1 + 1e-9; k++)
+            {
+                double t = k * stepS;
+                double b = RulerLabels.BeatsAt(t, bpm) - origin;
+                if (b < -1e-9) continue;
+                double x = _o.BeatToX(b);
+                ctx.DrawLine(BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
+                if (b >= _o._lengthBeats - 1e-9) continue;
+                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
+            }
         }
+        private double _charW;
+
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            RulerDisplay.Changed += InvalidateVisual;
+        }
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            RulerDisplay.Changed -= InvalidateVisual;
+        }
+
+        private const double PlayheadGrabPx = 4;
+        private void SeekAt(PointerEventArgs e)
+            => _o.SeekAtX(e.GetPosition(this).X, (e.KeyModifiers & KeyModifiers.Alt) != 0);
         // Beats only: a bar reads "3" in Ink 2, a beat "3.2" in Ink 5, set on the baseline in
         // mono 9 just right of its tick. The loop is a 3px brass strip along the top.
         public override void Render(DrawingContext ctx)
@@ -1495,22 +1564,28 @@ public sealed partial class PianoRollView : UserControl
                 double loopStart = Math.Max(0, _o.BeatToX(cs));
                 if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
             }
-            // Label every beat while there is room for "12.4", else bars only.
-            double step = ppb >= 30 ? 1 : _o._beatsPerBar;
-            double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
-            for (int k = 0; ; k++)
+            double origin = _o.RulerOrigin;
+            double bpm = _o.Bpm?.Invoke() ?? 0;
+            if (RulerDisplay.ShowTime && bpm > 0) RenderTime(ctx, h, ppb, viewEnd, origin, bpm);
+            else
             {
-                double b = startB + k * step;
-                if (b > viewEnd + 1e-9) break;
-                double x = _o.BeatToX(b);
-                int bpb = _o._beatsPerBar;
-                bool bar = Math.Abs(b / bpb - Math.Round(b / bpb)) < 1e-6;
-                ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
-                if (b >= _o._lengthBeats - 1e-9) continue;
-                int barNo = (int)Math.Floor(b / bpb) + 1 + _o.RulerBarOffset, beatNo = (int)Math.Round(b - Math.Floor(b / bpb) * bpb) + 1;
-                string label = bar ? barNo.ToString(NotaNum.Culture) : $"{barNo}.{beatNo}";
-                var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
-                ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
+                // Label every beat while there is room for "12.4", else bars only. Ticks stay on
+                // the editor's own grid; the labels read where each sits in the arrangement.
+                double step = ppb >= 30 ? 1 : _o._beatsPerBar;
+                double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
+                for (int k = 0; ; k++)
+                {
+                    double b = startB + k * step;
+                    if (b > viewEnd + 1e-9) break;
+                    double x = _o.BeatToX(b);
+                    int bpb = _o._beatsPerBar;
+                    bool bar = Math.Abs(b / bpb - Math.Round(b / bpb)) < 1e-6;
+                    ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
+                    if (b >= _o._lengthBeats - 1e-9) continue;
+                    string label = RulerLabels.Bars(origin + b, step, bpb, NotaNum.Culture);
+                    var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
+                    ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
+                }
             }
             _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
@@ -1664,7 +1739,11 @@ public sealed partial class PianoRollView : UserControl
     private sealed class NoteGrid : Control
     {
         private readonly PianoRollView _o;
-        private enum Mode { None, Move, Resize, ResizeLeft, Marquee }
+        // PlayheadPending: pressed on the playhead line over empty space — a drag scrubs the
+        // transport (Scrub), a click without movement stays an ordinary empty-space click.
+        private enum Mode { None, Move, Resize, ResizeLeft, Marquee, PlayheadPending, Scrub }
+        private double _pressX;
+        private const double PlayheadGrabPx = 3, ScrubSlop = 3;
         private Mode _drag = Mode.None;
         /// <summary>A note move / resize / box selection is in progress.</summary>
         internal bool Dragging => _drag != Mode.None;
@@ -1962,6 +2041,17 @@ public sealed partial class PianoRollView : UserControl
                 return;
             }
 
+            // The playhead line over empty space can be dragged to scrub (#278); notes under it
+            // stay editable, and a plain click there is still an empty-space click.
+            if (hit < 0 && !shift && _o.OnPlayheadLine(p.X, PlayheadGrabPx))
+            {
+                _drag = Mode.PlayheadPending;
+                _pressX = p.X;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
             if (hit >= 0)
             {
                 if (shift)   // toggle membership, no drag
@@ -2013,6 +2103,9 @@ public sealed partial class PianoRollView : UserControl
             var p = e.GetPosition(this);
             _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;   // live, so Alt can toggle mid-drag
             if (_drag == Mode.None) { UpdateHover(p); return; }
+            if (_drag == Mode.PlayheadPending && Math.Abs(p.X - _pressX) >= ScrubSlop) _drag = Mode.Scrub;
+            if (_drag == Mode.Scrub) _o.SeekAtX(p.X, _free);
+            if (_drag is Mode.PlayheadPending or Mode.Scrub) return;
             _lastGrid = p;
             DragUpdate(p);
             EvaluateAutoScroll(p);
@@ -2118,7 +2211,8 @@ public sealed partial class PianoRollView : UserControl
         private void UpdateHover(Point p)
         {
             int hit = HitTest(p, out int edge);
-            int kind = hit < 0 ? 0 : edge != 0 ? 1 : 2;   // 0 arrow, 1 resize edge, 2 move body
+            // 0 arrow, 1 resize edge (also the draggable playhead line), 2 move body
+            int kind = hit < 0 ? (_o.OnPlayheadLine(p.X, PlayheadGrabPx) ? 1 : 0) : edge != 0 ? 1 : 2;
             if (kind != _cursorKind) { _cursorKind = kind; Cursor = kind == 1 ? ResizeCursor : kind == 2 ? MoveCursor : ArrowCursor; }
             int hn = kind == 1 ? hit : -1;   // the bright trim-edge affordance shows only on the edge
             bool left = edge < 0;
@@ -2129,6 +2223,7 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
         {
             _o.StopAudition();
+            if (_drag is Mode.PlayheadPending or Mode.Scrub) _drag = Mode.None;
             base.OnPointerCaptureLost(e);
         }
 
@@ -2147,6 +2242,12 @@ public sealed partial class PianoRollView : UserControl
             var was = _drag;
             _drag = Mode.None;
             e.Pointer.Capture(null);
+            if (was is Mode.PlayheadPending or Mode.Scrub)
+            {
+                // A click without movement on the line: what an empty-space click does — clear the selection.
+                if (was == Mode.PlayheadPending && _o._selection.Count > 0) { _o._selection.Clear(); _o.Invalidate(); _o.Changed?.Invoke(); }
+                return;
+            }
             _orig.Clear();
             if ((was == Mode.Resize || was == Mode.ResizeLeft) && _dragMoved) _o.Remember(_primary);
             if (was != Mode.Marquee && _dragMoved)

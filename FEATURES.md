@@ -71,7 +71,8 @@ JUCE module; the engine core is JUCE-free.
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
   the arrangement can be transposed to it.
-- **Transport**: play / stop / record, playhead position.
+- **Transport**: play / stop / record, playhead position. Click the position read-out to
+  switch it between bars and time; the arrangement and clip editor rulers follow it.
   - **Stop returns to the launch point** (a seek sets the start anchor).
   - **Pause** (⇧Space) — the playhead stays where it stopped and Play carries on from there.
   - **Follow** — the arrangement follows the cursor (playhead stays centred); scrolling away
@@ -149,7 +150,9 @@ track count and closes with Escape.
   roll's header chip open a menu with every option, as does the audio clip editor's header
   (trim brackets, warp markers and envelope points snap); ⌘1 / ⌘2 narrow / widen (in Auto,
   the density), ⌘3 triplets, ⌘4 snap on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting
-  on the editor used last. Hold ⌥ to drag freely; clip edges still attract a dragged clip.
+  on the editor used last (the arrangement while the audio clip editor shows ADSR or an
+  unwarped clip, which follow no grid). Hold ⌥ to drag freely; clip edges still attract a
+  dragged clip.
 - **Session View** — a clip grid (tracks × scenes) with an inspector that the toolbar's
   **Inspector** key (the sidebar icon) shows or hides (remembered); on a narrow window the least-used
   toolbar controls fold into a **⋯** menu. Named, coloured clips with note / waveform
@@ -242,7 +245,10 @@ track count and closes with Escape.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
   - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
-    the grid); the roll shows the playhead while stopped too, where playback will start.
+    the grid, ⌥ free); the playhead line itself drags too, on the ruler or over empty grid.
+    The roll shows the playhead while stopped, where playback will start, and its ruler
+    reads the clip's arrangement position (a clip at bar 9 starts at 9). A Session slot
+    plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
@@ -445,7 +451,15 @@ track count and closes with Escape.
   editors' snap grid. Warping runs in the background (the track shows "Processing…" and a
   re-warped clip plays its previous version until the new one is ready), so long files
   don't stall the app. The clip editor redraws the visible waveform at screen resolution,
-  down to single samples, and its ruler thins or adds bars, beats and 16ths with the zoom.
+  down to single samples, and its ruler — in the clip's arrangement position, bars or time,
+  warped or not — thins or adds bars, beats and 16ths with the zoom. Click or drag the ruler,
+  or drag the playhead line, to move the playhead (snapped on a warped clip, ⌥ free); the
+  playhead shows while stopped too.
+  - **Tempo** next to the Warp switch: the tempo the audio was recorded at — drag it or type
+    it; **÷2** / **×2** fix a half- or double-time detection. Warp markers keep their relative
+    timing; on an unwarped clip a tempo turns Warp on. One undo step each.
+  - Dragging a warp marker (or a segment's BPM chip) stretches the waveform live; the clip is
+    re-warped once on release, and Esc during the drag puts it back.
 - **Changing the sample rate** does not break third-party plugins or warped clips — the
   caches are rebuilt once when the rate changes.
 

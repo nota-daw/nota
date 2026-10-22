@@ -297,6 +297,14 @@ if (args.Length >= 1 && args[0] == "--valueentry")
     Console.WriteLine(failures == 0 ? "VALUE ENTRY PASSED" : $"VALUE ENTRY FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Clip editor math alone: `--clipeditor`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--clipeditor")
+{
+    Console.WriteLine("-- clip editor --");
+    foreach (var (ok, label) in ClipEditorTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CLIP EDITOR PASSED" : $"CLIP EDITOR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Snap grid alone: `--grid`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--grid")
 {
@@ -14935,6 +14943,10 @@ foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
 // --- app: typed value entry (parser + read-out search) ---
 Console.WriteLine("-- typed value entry --");
 foreach (var (ok, label) in ValueEntryTests.Run()) Check(ok, label);
+
+// --- app: clip editor position / tempo / ruler math (specs/036) ---
+Console.WriteLine("-- clip editor --");
+foreach (var (ok, label) in ClipEditorTests.Run()) Check(ok, label);
 
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");
