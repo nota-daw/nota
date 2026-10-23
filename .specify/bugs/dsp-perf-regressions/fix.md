@@ -130,3 +130,18 @@ Null test (`tests/perf` scenarios rendered 2 s each through the C ABI, develop v
 fix, Apple Silicon): same-build renders bit-identical; 45 of 52 scenarios bit-identical;
 Auto Filter, Prism and the `mix-*` scenarios differ at −105 dBFS peak or below (FMA
 contraction across the newly inlined calls).
+
+## Addendum — Volt on x86 (PR #288 gate)
+
+The x86 gate (develop → this fix) passed every row except Volt (+6.0 %) and the `mix-*`
+scenarios built from Volt tracks (+2.6 %). Reproduced under Valgrind in an amd64 container:
+with `VoiceExpr::tick` now inline, `VoltSynth::render` hit GCC's function-growth budget
+and stopped inlining `VoltSynth::osc` (6.6 M instructions as a call); marking `osc` inline
+pushed `svf` out instead. `osc`, `svf` and `advanceEnv` — in-class (implicitly inline)
+before #212, inlined by develop — are `NOTA_ALWAYS_INLINE`. x86 instructions vs develop:
+Volt 100.9 M → 98.7 M, `mix-4` 557.4 M → 539.1 M, Synth 46.4 M → 44.0 M. Volt renders
+bit-identical to develop.
+
+The same push hardens `AudioThreadPool` (review on #288): a worker whose epoch view lags
+could combine fields from two generations of a reused slot. Workers now snapshot all four
+fields, fence (acquire) and re-check `epoch_`; the publisher's field stores are release.

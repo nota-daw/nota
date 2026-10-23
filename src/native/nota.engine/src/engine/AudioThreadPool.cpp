@@ -134,16 +134,21 @@ void AudioThreadPool::workerLoop(int id) {
             const uint64_t t = claimed_.load(std::memory_order_relaxed);
             const uint64_t lg = epoch_.load(std::memory_order_acquire);
             if (stop_.load(std::memory_order_relaxed)) return;
+            // Snapshot the slot, then prove it is generation lg's: the slot is rewritten
+            // only for generation lg + kSlots, published once epoch_ has passed lg, and
+            // a field read from that rewrite makes the re-load below see the newer epoch.
             const JobSlot& s = slots_[lg & (kSlots - 1)];
             const uint64_t base = s.base.load(std::memory_order_relaxed);
-            if (t - base >= (uint64_t)s.n.load(std::memory_order_relaxed)) {
-                if (epoch_.load(std::memory_order_acquire) == lg) break; // stable: truly beyond
-                continue;
-            }
+            const int n = s.n.load(std::memory_order_relaxed);
+            const JobCall call = s.call.load(std::memory_order_relaxed);
+            void* const ctx = s.ctx.load(std::memory_order_relaxed);
+            std::atomic_thread_fence(std::memory_order_acquire);
+            if (epoch_.load(std::memory_order_relaxed) != lg) continue; // moved on: re-read
+            if (t - base >= (uint64_t)n) break;                           // stable: truly beyond
             uint64_t expect = t;
             if (claimed_.compare_exchange_weak(expect, t + 1, std::memory_order_relaxed)) {
-                // The CAS proved the slot unchanged since the check: call/ctx are this job's.
-                s.call.load(std::memory_order_relaxed)(s.ctx.load(std::memory_order_relaxed), id, (int)(t - base));
+                // The CAS proved no ticket was claimed since t, so job lg is still live.
+                call(ctx, id, (int)(t - base));
                 done_.fetch_add(1, std::memory_order_release); // publishes this task's writes
             }
         }

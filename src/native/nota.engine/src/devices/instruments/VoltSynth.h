@@ -290,11 +290,11 @@ class VoltSynth final : public Instrument {
     }
     static double wrap(double x) { return x >= 1.0 ? x - 1.0 : x; }
 
-    static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
+    static inline void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
 
     void setSvf(double& a1, double& a2, double& a3, double fc, double k) const;
     // TPT SVF (Cytomic). type: 0 LP, 1 HP, 2 BP, 3 Notch. state[0]=ic1, state[1]=ic2.
-    static double svf(double* st, double a1, double a2, double a3, double k, double in, int type);
+    static inline double svf(double* st, double a1, double a2, double a3, double k, double in, int type);
 
     // LFO shape: 0 sin, 1 tri, 2 sqr, 3 sample & hold. Returns -1..+1.
     static double lfoValue(int shape, double ph, float shHold);
@@ -304,7 +304,7 @@ class VoltSynth final : public Instrument {
 
     // Wave chip (0 saw, 1 square, 2 tri, 3 sine) with Shape blending it toward the next wave
     // in sine → triangle → saw → square order; Shape 0 is the chip itself.
-    static double osc(int wave, double shape, double pw, double ph, double dt);
+    static inline double osc(int wave, double shape, double pw, double ph, double dt);
     static double oscBlep(int wave, double ph, double dt, double pw);
     static double polyBlep(double t, double dt);
     float noise();

@@ -616,7 +616,7 @@ void VoltSynth::startVoice(Voice& v, int32_t pitch, float velocity) {
     v.modCount = 0;
 }
 
-void VoltSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
+NOTA_ALWAYS_INLINE void VoltSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
     switch (st) {
     case Stage::Attack:
         env += atk;
@@ -651,7 +651,7 @@ void VoltSynth::setSvf(double& a1, double& a2, double& a3, double fc, double k) 
     a3 = g * a2;
 }
 
-double VoltSynth::svf(double* st, double a1, double a2, double a3, double k, double in, int type) {
+NOTA_ALWAYS_INLINE double VoltSynth::svf(double* st, double a1, double a2, double a3, double k, double in, int type) {
     const double v3 = in - st[1];
     const double v1 = a1 * st[0] + a2 * v3;
     const double v2 = st[1] + a2 * st[0] + a3 * v3;
@@ -689,7 +689,7 @@ float VoltSynth::fadeInc(Param p) const {
     return (float)(1.0 / (expMap(t, 0.01, 5.0) * sampleRate_));
 }
 
-double VoltSynth::osc(int wave, double shape, double pw, double ph, double dt) {
+NOTA_ALWAYS_INLINE double VoltSynth::osc(int wave, double shape, double pw, double ph, double dt) {
     if (shape <= 0.0) return oscBlep(wave, ph, dt, pw);
     static constexpr int kPos[4] = {2, 3, 1, 0};  // chip → morph position
     static constexpr int kWave[4] = {3, 2, 0, 1}; // morph position → chip

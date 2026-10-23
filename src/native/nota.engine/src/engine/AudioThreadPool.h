@@ -31,7 +31,10 @@
 //    progress, bounded retries with W+1 <= 18 threads).
 //  - job descriptors live in generation-indexed slots; a publish writes its
 //    slot before the epoch bump (release) and is gated on the previous
-//    job's completion, so a live ticket's slot is stable while held.
+//    job's completion, so a live ticket's slot is stable while held. A
+//    worker whose epoch view is stale may still read a slot mid-rewrite, so
+//    it validates the snapshot like a seqlock (read the fields, acquire
+//    fence, epoch_ unchanged) before trusting any field.
 //  - parking is Dekker-style (all seq_cst): a worker bumps sleepers_, then
 //    re-checks epoch_ before waiting on wake_; dispatch() stores epoch_,
 //    then reads sleepers_. Either the worker sees the new epoch or the
@@ -111,10 +114,12 @@ class AudioThreadPool {
         // workers observe the slot through the epoch's acquire chain.
         const uint64_t g = epoch_.load(std::memory_order_relaxed) + 1;
         JobSlot& s = slots_[g & (kSlots - 1)];
-        s.call.store(&callTrampoline<F>, std::memory_order_relaxed);
-        s.ctx.store((void*)&fn, std::memory_order_relaxed);
-        s.n.store(n, std::memory_order_relaxed);
-        s.base.store(claimed_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        // Release stores: a worker that reads any of them also sees the epoch this
+        // thread had reached, so its re-check of epoch_ catches a slot being reused.
+        s.call.store(&callTrampoline<F>, std::memory_order_release);
+        s.ctx.store((void*)&fn, std::memory_order_release);
+        s.n.store(n, std::memory_order_release);
+        s.base.store(claimed_.load(std::memory_order_relaxed), std::memory_order_release);
         doneBase_ = done_.load(std::memory_order_relaxed);
         epoch_.store(g, std::memory_order_seq_cst); // publish (seq_cst: pairs with park())
         // Wake parked workers — at most `helpers`, and never more than there are
@@ -168,10 +173,11 @@ class AudioThreadPool {
     }
 
     using JobCall = void (*)(void*, int, int);
-    // Fields are atomics (relaxed: plain loads and stores on x86 and ARM) because a
-    // lagging worker may still read a slot while the caller rewrites it kSlots jobs
-    // later. Such a read is never acted on (its CAS fails, see the header comment),
-    // but with plain fields it would still be a data race.
+    // Fields are atomics because a lagging worker may still read a slot while the
+    // caller rewrites it kSlots jobs later. Workers read them seqlock-style: all four,
+    // then an acquire fence, then epoch_ again; a changed epoch discards the read, so
+    // fields from two generations are never combined (release stores on the writer
+    // side; on x86 these are plain moves).
     struct JobSlot {
         std::atomic<JobCall> call{nullptr};
         std::atomic<void*> ctx{nullptr};
