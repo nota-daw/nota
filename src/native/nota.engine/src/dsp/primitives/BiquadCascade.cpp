@@ -34,14 +34,6 @@ void BiquadCascade::reset() noexcept {
         for (auto& s : bank) s.reset();
 }
 
-double BiquadCascade::processSampleL(double x) NOTA_RT_SAFE {
-    return runBank(0, x);
-}
-
-double BiquadCascade::processSampleR(double x) NOTA_RT_SAFE {
-    return runBank(1, x);
-}
-
 void BiquadCascade::processBlock(float* buf, int32_t frames, BiquadChannel ch) NOTA_RT_SAFE {
     if (buf == nullptr || frames <= 0 || stages_ <= 0) return;
     if (ch == BiquadChannel::Stereo) {

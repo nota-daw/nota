@@ -22,6 +22,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Nota Prism, Nota EQ-8 and Nota Auto Filter use as little CPU as before the engine
+  rebuild**: Prism and EQ-8 had become up to twice as heavy, Auto Filter about 40 %
+  heavier, with the same sound. The shared filter core runs inline again and EQ-8 runs all
+  its bands per sample; the output is unchanged to well below the last bit of 16-bit audio.
+
 ## [0.57.1] — 2026-10-22
 
 ### Added

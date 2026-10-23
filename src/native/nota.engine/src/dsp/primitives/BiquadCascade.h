@@ -59,8 +59,31 @@ class BiquadCascade {
     void setSection(int i, const BiquadCoeffs& c) noexcept;
     void reset() noexcept;
 
-    double processSampleL(double x) NOTA_RT_SAFE;
-    double processSampleR(double x) NOTA_RT_SAFE;
+    double processSampleL(double x) NOTA_RT_SAFE { return runBank(0, x); }
+    double processSampleR(double x) NOTA_RT_SAFE { return runBank(1, x); }
+    // One stereo frame with channel routing, in double (for sample-major series chains).
+    void processFrame(double& l, double& r, BiquadChannel ch) NOTA_RT_SAFE {
+        switch (ch) {
+        case BiquadChannel::Stereo:
+            l = runBank(0, l);
+            r = runBank(1, r);
+            break;
+        case BiquadChannel::Left: l = runBank(0, l); break;
+        case BiquadChannel::Right: r = runBank(1, r); break;
+        case BiquadChannel::Mid: {
+            const double side = (l - r) * 0.5, f = runBank(0, (l + r) * 0.5);
+            l = f + side;
+            r = f - side;
+            break;
+        }
+        case BiquadChannel::Side: {
+            const double mid = (l + r) * 0.5, f = runBank(0, (l - r) * 0.5);
+            l = mid + f;
+            r = mid - f;
+            break;
+        }
+        }
+    }
     // Interleaved stereo block with channel routing (branch hoisted outside
     // the 64-sample chunks). Left/Mid/Side run on bank 0, Right on bank 1.
     void processBlock(float* buf, int32_t frames, BiquadChannel ch) NOTA_RT_SAFE;

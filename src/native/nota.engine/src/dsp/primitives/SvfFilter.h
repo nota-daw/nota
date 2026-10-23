@@ -82,5 +82,46 @@ class Lr4Splitter {
     SvfFilter lp1_, lp2_, hp1_, hp2_;
 };
 
+// Per-sample hot path, inline: the engine builds without LTO, so an out-of-line call
+// here costs every sample of every caller. Math runs in double like the state.
+inline void SvfFilter::processAll(float x, float& lp, float& bp, float& hp, float& notch) NOTA_RT_SAFE {
+    const double xd = x;
+    const double v3 = xd - ic2_;
+    const double v1 = a1_ * ic1_ + a2_ * v3;
+    const double v2 = ic2_ + a2_ * ic1_ + a3_ * v3;
+    ic1_ = 2.0 * v1 - ic1_;
+    ic2_ = 2.0 * v2 - ic2_;
+    const double hpd = xd - k_ * v1 - v2;
+    bp = (float)v1;
+    lp = (float)v2;
+    hp = (float)hpd;
+    notch = (float)(v2 + hpd);
+}
+
+inline float SvfFilter::process(float x) NOTA_RT_SAFE {
+    float lp, bp, hp, notch;
+    processAll(x, lp, bp, hp, notch);
+    switch (mode_) {
+    case Mode::LowPass: return lp;
+    case Mode::BandPass: return bp;
+    case Mode::HighPass: return hp;
+    case Mode::Notch: return notch;
+    case Mode::Peak: return lp - hp;
+    case Mode::Allpass: return x - 2.0f * (float)k_ * bp;
+    case Mode::Bell: {
+        const float peak = lp - hp;
+        return x + (linGain_ - 1.0f) * peak; // proportional-Q bell (boost & cut)
+    }
+    case Mode::LowShelf: return x + (linGain_ - 1.0f) * lp;
+    case Mode::HighShelf: return x + (linGain_ - 1.0f) * hp;
+    }
+    return lp;
+}
+
+inline void SvfFilter::processBlock(float* buf, int32_t n) NOTA_RT_SAFE {
+    if (buf == nullptr || n <= 0) return;
+    for (int32_t i = 0; i < n; ++i) buf[i] = process(buf[i]);
+}
+
 } // namespace dsp
 } // namespace nota

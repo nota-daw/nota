@@ -41,25 +41,6 @@ void SvfFilter::update() NOTA_RT_SAFE {
         linGain_ = fast_math::dbToLin(gainDb_);
 }
 
-float SvfFilter::process(float x) NOTA_RT_SAFE {
-    float lp, bp, hp, notch;
-    processAll(x, lp, bp, hp, notch);
-    switch (mode_) {
-    case Mode::LowPass: return lp;
-    case Mode::BandPass: return bp;
-    case Mode::HighPass: return hp;
-    case Mode::Notch: return notch;
-    case Mode::Peak: return lp - hp;
-    case Mode::Allpass: return x - 2.0f * (float)k_ * bp;
-    case Mode::Bell: {
-        const float peak = lp - hp;
-        return x + (linGain_ - 1.0f) * peak; // proportional-Q bell (boost & cut)
-    }
-    case Mode::LowShelf: return x + (linGain_ - 1.0f) * lp;
-    case Mode::HighShelf: return x + (linGain_ - 1.0f) * hp;
-    }
-    return lp;
-}
 
 void SvfFilter::setCoeffs(double a1, double a2, double a3, double k) NOTA_RT_SAFE {
     a1_ = a1;
@@ -68,22 +49,7 @@ void SvfFilter::setCoeffs(double a1, double a2, double a3, double k) NOTA_RT_SAF
     k_ = k;
 }
 
-void SvfFilter::processBlock(float* buf, int32_t n) NOTA_RT_SAFE {
-    if (buf == nullptr || n <= 0) return;
-    for (int32_t i = 0; i < n; ++i) buf[i] = process(buf[i]);
-}
 
-void SvfFilter::processAll(float x, float& lp, float& bp, float& hp, float& notch) NOTA_RT_SAFE {
-    const float v3 = x - ic2_;
-    const float v1 = a1_ * ic1_ + a2_ * v3;
-    const float v2 = ic2_ + a2_ * ic1_ + a3_ * v3;
-    ic1_ = 2.0f * v1 - ic1_;
-    ic2_ = 2.0f * v2 - ic2_;
-    bp = v1;
-    lp = v2;
-    hp = x - k_ * v1 - v2;
-    notch = lp + hp;
-}
 
 void Lr4Splitter::setSampleRate(double sr) noexcept {
     lp1_.setSampleRate(sr);
