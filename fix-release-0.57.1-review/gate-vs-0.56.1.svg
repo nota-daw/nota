@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="670" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="920" height="670" fill="#fcfcfb"/>
+<text x="20" y="28" font-size="17" font-weight="600" fill="#0b0b0b">CPU instructions vs Nota 0.56.1, the rows the release gate failed</text>
+<rect x="20" y="42" width="12" height="12" fill="#2a78d6"/><text x="38" y="52" font-size="13" fill="#52514e">develop before this PR (gate on #285, x86)</text>
+<rect x="340" y="42" width="12" height="12" fill="#eb6834"/><text x="358" y="52" font-size="13" fill="#52514e">this PR (perf-gate.sh, Linux arm64 container)</text>
+<line x1="250.0" y1="66" x2="250.0" y2="610" stroke="#e1e0d9"/>
+<text x="250.0" y="628" font-size="12" fill="#898781" text-anchor="middle">-30 %</text>
+<line x1="353.3" y1="66" x2="353.3" y2="610" stroke="#e1e0d9"/>
+<text x="353.3" y="628" font-size="12" fill="#898781" text-anchor="middle">-20 %</text>
+<line x1="456.7" y1="66" x2="456.7" y2="610" stroke="#e1e0d9"/>
+<text x="456.7" y="628" font-size="12" fill="#898781" text-anchor="middle">-10 %</text>
+<line x1="560.0" y1="66" x2="560.0" y2="610" stroke="#c3c2b7"/>
+<text x="560.0" y="628" font-size="12" fill="#898781" text-anchor="middle">+0 %</text>
+<line x1="663.3" y1="66" x2="663.3" y2="610" stroke="#e1e0d9"/>
+<text x="663.3" y="628" font-size="12" fill="#898781" text-anchor="middle">+10 %</text>
+<line x1="766.7" y1="66" x2="766.7" y2="610" stroke="#e1e0d9"/>
+<text x="766.7" y="628" font-size="12" fill="#898781" text-anchor="middle">+20 %</text>
+<line x1="870.0" y1="66" x2="870.0" y2="610" stroke="#e1e0d9"/>
+<text x="870.0" y="628" font-size="12" fill="#898781" text-anchor="middle">+30 %</text>
+<line x1="570.3" y1="66" x2="570.3" y2="610" stroke="#52514e" stroke-dasharray="4 3"/>
+<text x="574.3" y="646" font-size="12" fill="#52514e">gate limit +1 %</text>
+<text x="240" y="89" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Strata x8 on Synth</text>
+<rect x="560.0" y="75" width="281.9" height="10" fill="#2a78d6"/>
+<text x="845.9" y="84" font-size="10" fill="#52514e" text-anchor="start">+27.3</text>
+<rect x="560.0" y="86" width="44.7" height="10" fill="#eb6834"/>
+<text x="608.7" y="95" font-size="10" fill="#52514e" text-anchor="start">+4.3</text>
+<text x="240" y="119" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Reverb x8 on Synth</text>
+<rect x="560.0" y="105" width="125.2" height="10" fill="#2a78d6"/>
+<text x="689.2" y="114" font-size="10" fill="#52514e" text-anchor="start">+12.1</text>
+<rect x="539.4" y="116" width="20.6" height="10" fill="#eb6834"/>
+<text x="535.4" y="125" font-size="10" fill="#52514e" text-anchor="end">-2.0</text>
+<text x="240" y="149" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Crush x8 on Synth</text>
+<rect x="560.0" y="135" width="104.5" height="10" fill="#2a78d6"/>
+<text x="668.5" y="144" font-size="10" fill="#52514e" text-anchor="start">+10.1</text>
+<rect x="539.2" y="146" width="20.8" height="10" fill="#eb6834"/>
+<text x="535.2" y="155" font-size="10" fill="#52514e" text-anchor="end">-2.0</text>
+<text x="240" y="179" font-size="13" fill="#0b0b0b" text-anchor="end">Keys, one track</text>
+<rect x="560.0" y="165" width="103.1" height="10" fill="#2a78d6"/>
+<text x="667.1" y="174" font-size="10" fill="#52514e" text-anchor="start">+10.0</text>
+<rect x="553.4" y="176" width="6.6" height="10" fill="#eb6834"/>
+<text x="549.4" y="185" font-size="10" fill="#52514e" text-anchor="end">-0.6</text>
+<text x="240" y="209" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Delay x8 on Synth</text>
+<rect x="560.0" y="195" width="98.8" height="10" fill="#2a78d6"/>
+<text x="662.8" y="204" font-size="10" fill="#52514e" text-anchor="start">+9.6</text>
+<rect x="308.5" y="206" width="251.5" height="10" fill="#eb6834"/>
+<text x="304.5" y="215" font-size="10" fill="#52514e" text-anchor="end">-24.3</text>
+<text x="240" y="239" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Auto Filter x8 on Synth</text>
+<rect x="560.0" y="225" width="95.0" height="10" fill="#2a78d6"/>
+<text x="659.0" y="234" font-size="10" fill="#52514e" text-anchor="start">+9.2</text>
+<rect x="560.0" y="236" width="4.5" height="10" fill="#eb6834"/>
+<text x="568.5" y="245" font-size="10" fill="#52514e" text-anchor="start">+0.4</text>
+<text x="240" y="269" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Flanger x8 on Synth</text>
+<rect x="560.0" y="255" width="93.3" height="10" fill="#2a78d6"/>
+<text x="657.3" y="264" font-size="10" fill="#52514e" text-anchor="start">+9.0</text>
+<rect x="560.0" y="266" width="20.5" height="10" fill="#eb6834"/>
+<text x="584.5" y="275" font-size="10" fill="#52514e" text-anchor="start">+2.0</text>
+<text x="240" y="299" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Phaser x8 on Synth</text>
+<rect x="560.0" y="285" width="58.7" height="10" fill="#2a78d6"/>
+<text x="622.7" y="294" font-size="10" fill="#52514e" text-anchor="start">+5.7</text>
+<rect x="560.0" y="296" width="7.5" height="10" fill="#eb6834"/>
+<text x="571.5" y="305" font-size="10" fill="#52514e" text-anchor="start">+0.7</text>
+<text x="240" y="329" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Chorus x8 on Synth</text>
+<rect x="560.0" y="315" width="54.9" height="10" fill="#2a78d6"/>
+<text x="618.9" y="324" font-size="10" fill="#52514e" text-anchor="start">+5.3</text>
+<rect x="560.0" y="326" width="7.0" height="10" fill="#eb6834"/>
+<text x="571.0" y="335" font-size="10" fill="#52514e" text-anchor="start">+0.7</text>
+<text x="240" y="359" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Utility x8 on Synth</text>
+<rect x="560.0" y="345" width="53.8" height="10" fill="#2a78d6"/>
+<text x="617.8" y="354" font-size="10" fill="#52514e" text-anchor="start">+5.2</text>
+<rect x="550.3" y="356" width="9.7" height="10" fill="#eb6834"/>
+<text x="546.3" y="365" font-size="10" fill="#52514e" text-anchor="end">-0.9</text>
+<text x="240" y="389" font-size="13" fill="#0b0b0b" text-anchor="end">Synth alone (effect baseline)</text>
+<rect x="560.0" y="375" width="34.3" height="10" fill="#2a78d6"/>
+<text x="598.3" y="384" font-size="10" fill="#52514e" text-anchor="start">+3.3</text>
+<rect x="548.0" y="386" width="12.0" height="10" fill="#eb6834"/>
+<text x="544.0" y="395" font-size="10" fill="#52514e" text-anchor="end">-1.2</text>
+<text x="240" y="419" font-size="13" fill="#0b0b0b" text-anchor="end">Synth, one track</text>
+<rect x="560.0" y="405" width="34.3" height="10" fill="#2a78d6"/>
+<text x="598.3" y="414" font-size="10" fill="#52514e" text-anchor="start">+3.3</text>
+<rect x="548.8" y="416" width="11.2" height="10" fill="#eb6834"/>
+<text x="544.8" y="425" font-size="10" fill="#52514e" text-anchor="end">-1.1</text>
+<text x="240" y="449" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Compressor x8 on Synth</text>
+<rect x="560.0" y="435" width="31.2" height="10" fill="#2a78d6"/>
+<text x="595.2" y="444" font-size="10" fill="#52514e" text-anchor="start">+3.0</text>
+<rect x="465.2" y="446" width="94.8" height="10" fill="#eb6834"/>
+<text x="461.2" y="455" font-size="10" fill="#52514e" text-anchor="end">-9.2</text>
+<text x="240" y="479" font-size="13" fill="#0b0b0b" text-anchor="end">Consort, one track</text>
+<rect x="560.0" y="465" width="27.6" height="10" fill="#2a78d6"/>
+<text x="591.6" y="474" font-size="10" fill="#52514e" text-anchor="start">+2.7</text>
+<rect x="560.0" y="476" width="3.5" height="10" fill="#eb6834"/>
+<text x="567.5" y="485" font-size="10" fill="#52514e" text-anchor="start">+0.3</text>
+<text x="240" y="509" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Shutter x8 on Synth</text>
+<rect x="560.0" y="495" width="26.0" height="10" fill="#2a78d6"/>
+<text x="590.0" y="504" font-size="10" fill="#52514e" text-anchor="start">+2.5</text>
+<rect x="560.0" y="506" width="6.9" height="10" fill="#eb6834"/>
+<text x="570.9" y="515" font-size="10" fill="#52514e" text-anchor="start">+0.7</text>
+<text x="240" y="539" font-size="13" fill="#0b0b0b" text-anchor="end">Pentad, one track</text>
+<rect x="560.0" y="525" width="22.9" height="10" fill="#2a78d6"/>
+<text x="586.9" y="534" font-size="10" fill="#52514e" text-anchor="start">+2.2</text>
+<rect x="560.0" y="536" width="3.1" height="10" fill="#eb6834"/>
+<text x="567.1" y="545" font-size="10" fill="#52514e" text-anchor="start">+0.3</text>
+<text x="240" y="569" font-size="13" fill="#0b0b0b" text-anchor="end">Nota EQ-3 x8 on Synth</text>
+<rect x="560.0" y="555" width="14.2" height="10" fill="#2a78d6"/>
+<text x="578.2" y="564" font-size="10" fill="#52514e" text-anchor="start">+1.4</text>
+<rect x="560.0" y="566" width="4.9" height="10" fill="#eb6834"/>
+<text x="568.9" y="575" font-size="10" fill="#52514e" text-anchor="start">+0.5</text>
+<text x="240" y="599" font-size="13" fill="#0b0b0b" text-anchor="end">Nota Prism x8 on Synth</text>
+<rect x="560.0" y="585" width="9.1" height="10" fill="#2a78d6"/>
+<text x="573.1" y="594" font-size="10" fill="#52514e" text-anchor="start">+0.9</text>
+<rect x="550.7" y="596" width="9.3" height="10" fill="#eb6834"/>
+<text x="546.7" y="605" font-size="10" fill="#52514e" text-anchor="end">-0.9</text>
+</svg>

@@ -1,0 +1,52 @@
+aurora-supersaw-2x	Aurora Super Saw x2	716899501	0.7723
+effect-00	Nota EQ-8 x8 on Synth	110952558	0.1601
+effect-01	Nota Compressor x8 on Synth	167383597	0.1480
+effect-02	Nota Reverb x8 on Synth	737283841	0.1998
+effect-03	Nota Delay x8 on Synth	117417273	0.2123
+effect-04	Nota Utility x8 on Synth	151219595	0.1601
+effect-05	Nota Audio Effect Rack x8 on Synth	44992023	0.1601
+effect-06	Nota Valve x8 on Synth	279606505	1.0000
+effect-07	Nota Auto Filter x8 on Synth	100066216	1.0000
+effect-08	Nota Vintage x8 on Synth	374836346	1.0000
+effect-09	Nota Orbit x8 on Synth	86387796	0.1330
+effect-10	Nota Auto Shift x8 on Synth	2511078130	0.4188
+effect-11	Nota Beat Repeat x8 on Synth	156865274	0.1601
+effect-12	Nota Crush x8 on Synth	88055396	0.0799
+effect-13	Nota Dynamic EQ-8 x8 on Synth	333769719	0.2103
+effect-14	Nota Ceiling x8 on Synth	186066374	0.1601
+effect-15	Nota Strata x8 on Synth	45320826	0.1601
+effect-16	Nota EQ-3 x8 on Synth	185827922	0.1536
+effect-17	Nota Forge x8 on Synth	243430480	0.3450
+effect-18	Nota Level x8 on Synth	302420079	0.2689
+effect-19	Nota Shutter x8 on Synth	110398825	0.1601
+effect-20	Nota Chamber x8 on Synth	2095803104	1.0000
+effect-21	Nota Prism x8 on Synth	407132687	0.1614
+effect-22	Nota Lens x8 on Synth	63366528	0.1601
+effect-23	Nota Flanger x8 on Synth	117615626	1.0000
+effect-24	Nota Phaser x8 on Synth	199596734	0.3269
+effect-25	Nota Chorus x8 on Synth	242346067	0.0834
+effect-26	Nota Vocoder x8 on Synth	994367576	0.7070
+effect-base	Synth alone (effect baseline)	35143869	0.1601
+instrument-00	Synth, one track	35170800	0.1601
+instrument-01	Sampler (no sample), one track	4297965	0.0000
+instrument-02	Physical, one track	88145343	0.4730
+instrument-05	Aurora, one track	124606478	0.3231
+instrument-06	Volt, one track	87678494	0.3689
+instrument-07	Bass, one track	32044010	0.2984
+instrument-08	Pendulum, one track	85055981	0.2782
+instrument-09	Operator, one track	180184118	0.4161
+instrument-10	Grain, one track	180762126	0.3055
+instrument-11	Flux, one track	130612855	0.5744
+instrument-12	Rhythm Machine, one track	68854644	0.3987
+instrument-13	Monolith, one track	115774822	0.2962
+instrument-14	Pentad, one track	274190226	0.5369
+instrument-15	Consort, one track	163368171	0.6935
+instrument-16	Keys, one track	68351068	0.4951
+instrument-17	Mosaic (no program), one track	5299055	0.0000
+mix-1	1 tracks, all playing	121632850	0.2846
+mix-16	16 tracks, all playing	1908105733	1.0000
+mix-32	32 tracks, all playing	3814163345	1.0000
+mix-4	4 tracks, all playing	478890833	0.6311
+mix-8	8 tracks, all playing	959025570	1.0000
+silent-32	32 tracks, no clips	658966868	0.0000
+sparse-32	32 tracks, 1 in 4 playing	1465486581	1.0000
