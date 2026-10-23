@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #
 # Engine performance regression gate (specs/034-engine-perf-gate).
 # Builds the engine at two commits and renders the same scenarios with each. Two checks:

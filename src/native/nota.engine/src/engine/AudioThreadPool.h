@@ -111,10 +111,10 @@ class AudioThreadPool {
         // workers observe the slot through the epoch's acquire chain.
         const uint64_t g = epoch_.load(std::memory_order_relaxed) + 1;
         JobSlot& s = slots_[g & (kSlots - 1)];
-        s.call = &callTrampoline<F>;
-        s.ctx = (void*)&fn;
-        s.n = n;
-        s.base = claimed_.load(std::memory_order_relaxed);
+        s.call.store(&callTrampoline<F>, std::memory_order_relaxed);
+        s.ctx.store((void*)&fn, std::memory_order_relaxed);
+        s.n.store(n, std::memory_order_relaxed);
+        s.base.store(claimed_.load(std::memory_order_relaxed), std::memory_order_relaxed);
         doneBase_ = done_.load(std::memory_order_relaxed);
         epoch_.store(g, std::memory_order_seq_cst); // publish (seq_cst: pairs with park())
         // Wake parked workers — at most `helpers`, and never more than there are
@@ -141,12 +141,13 @@ class AudioThreadPool {
             uint64_t t = claimed_.load(std::memory_order_relaxed);
             uint64_t lg = epoch_.load(std::memory_order_acquire);
             const JobSlot& ls = slots_[lg & (kSlots - 1)];
-            if (t - ls.base >= (uint64_t)ls.n) {
+            const uint64_t base = ls.base.load(std::memory_order_relaxed);
+            if (t - base >= (uint64_t)ls.n.load(std::memory_order_relaxed)) {
                 if (epoch_.load(std::memory_order_acquire) == lg) break; // stable: truly beyond
                 continue; // view moved under us — re-evaluate, nothing consumed
             }
             if (claimed_.compare_exchange_weak(t, t + 1, std::memory_order_relaxed)) {
-                fn(self, (int)(t - ls.base));
+                fn(self, (int)(t - base));
                 done_.fetch_add(1, std::memory_order_release); // publishes this task's writes
             }
         }
@@ -167,11 +168,15 @@ class AudioThreadPool {
     }
 
     using JobCall = void (*)(void*, int, int);
+    // Fields are atomics (relaxed: plain loads and stores on x86 and ARM) because a
+    // lagging worker may still read a slot while the caller rewrites it kSlots jobs
+    // later. Such a read is never acted on (its CAS fails, see the header comment),
+    // but with plain fields it would still be a data race.
     struct JobSlot {
-        JobCall call = nullptr;
-        void* ctx = nullptr;
-        int n = 0;
-        uint64_t base = 0;
+        std::atomic<JobCall> call{nullptr};
+        std::atomic<void*> ctx{nullptr};
+        std::atomic<int> n{0};
+        std::atomic<uint64_t> base{0};
     };
 
     void workerLoop(int id);

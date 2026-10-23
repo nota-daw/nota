@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #
 # What /release needs to write the full change list and the contributors of a release
 # (release-notes/X.Y.Z.{en,ru}.md, format in .claude/skills/release/SKILL.md § P4).

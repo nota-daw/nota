@@ -491,9 +491,12 @@ class Engine {
 
     // Time-range clip ops (arrangement time-selection). Both split clips at the range
     // boundaries so only the covered content is affected, in one undo step. No ripple.
-    // deleteClipsInRange carves [start,end) out of every listed track. duplicateRange
-    // copies that slice to [end, end+(end-start)) and returns the range length (>0), or -1.
-    bool deleteClipsInRange(const std::vector<int32_t>& trackIds, double start, double end);
+    // deleteClipsInRange carves [start,end) out of every listed track; withAutomation also
+    // clears the automation under the carved slices (what copyRange captured with them).
+    // duplicateRange copies that slice to [end, end+(end-start)) and returns the range
+    // length (>0), or -1.
+    bool deleteClipsInRange(const std::vector<int32_t>& trackIds, double start, double end,
+                            bool withAutomation = false);
     double duplicateRange(const std::vector<int32_t>& trackIds, double start, double end);
     // insertTime opens a `len`-beat gap at `at` across the whole arrangement (every track and
     // the master): clips crossing `at` are cut, everything at or after it — clips and
@@ -549,7 +552,7 @@ class Engine {
     // Range copy/cut (arrangement time-selection ⌘C / ⌘X): the slice of every listed track's
     // clips inside [start,end) becomes the block clipboard, beats relative to `start` (so a
     // leading gap is kept), each slice with its automation. Copy leaves the project alone;
-    // cut then carves the range out like deleteClipsInRange (one undo step). A range block
+    // cut then carves the range and its automation out (one undo step). A range block
     // pastes in overwrite mode — it replaces what it lands on, like a range duplicate.
     bool copyRange(const std::vector<int32_t>& trackIds, double start, double end);
     bool cutRange(const std::vector<int32_t>& trackIds, double start, double end);

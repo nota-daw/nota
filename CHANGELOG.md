@@ -22,12 +22,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
-### Fixed
-- **Nota Prism, Nota EQ-8 and Nota Auto Filter use as little CPU as before the engine
-  rebuild**: Prism and EQ-8 had become up to twice as heavy, Auto Filter about 40 %
-  heavier, with the same sound. The shared filter core runs inline again and EQ-8 runs all
-  its bands per sample; the output is unchanged to well below the last bit of 16-bit audio.
-
 ## [0.57.1] — 2026-10-22
 
 ### Added
@@ -149,6 +143,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `scripts/perf-gate.sh develop` (Linux).
 
 ### Fixed
+- **The other built-in devices use as little CPU as before the engine rebuild too**:
+  Nota Delay, Flanger, Chorus, Phaser, Reverb, Crush, Utility, Strata and Compressor, and
+  every built-in instrument (Keys most of all), had become 2–30 % heavier. Their
+  per-sample helpers run inline again, and the peaks that decide when a device may sleep
+  are measured once per block instead of on every sample. The sound is unchanged.
+- **Cutting a time range takes its automation with it**: ⌘X on a range left the volume,
+  pan and effect automation inside it behind, so the pasted copy came on top of points
+  that still played at the old place. The cut now removes them in the same undo step.
+- **A stopped playhead no longer hides the handles under it in the audio clip editor**:
+  dragging a warp marker, a trim bracket or an envelope point that sat under the playhead
+  moved the playhead instead. The handle now wins; the ruler still seeks.
+- **Nota Prism, Nota EQ-8 and Nota Auto Filter use as little CPU as before the engine
+  rebuild**: Prism and EQ-8 had become up to twice as heavy, Auto Filter about 40 %
+  heavier, with the same sound. The shared filter core runs inline again and EQ-8 runs all
+  its bands per sample; the output is unchanged to well below the last bit of 16-bit audio.
 - **The audio clip editor shows the playhead while stopped** (nota-daw/nota#277): whenever
   the song position is inside the clip, as the piano roll does.
 - **⌘1–⌘5 change a grid you can see** (nota-daw/nota#114): after a click in the audio clip

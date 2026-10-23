@@ -1058,16 +1058,36 @@ public sealed class AudioClipEditorView : UserControl
             return best;
         }
 
+        // Whether a press at p would grab an edit handle in the current mode (mirrors the
+        // hit tests in OnPointerPressed, without acting on them).
+        private bool OverEditHandle(Point p, double w, double h)
+        {
+            if (_adsrMode) return ClipAdsrKit.Hit(p, AdsrFrameNow(w, h), _adsr) != AdsrHandle.None;
+            if (!_envMode)
+                foreach (var b in _bpmHot)
+                    if (b.rect.Contains(p)) return true;
+            if (_envMode) return HitEnv(p.X, p.Y, w, h) >= 0 || HitEnvSegment(p.X, p.Y, w, h) is not null;
+            if (_srcMode)
+                return Math.Abs(p.X - SrcToX(_srcOff, w)) <= HandlePx || Math.Abs(p.X - SrcToX(_srcOff + _srcLen, w)) <= HandlePx;
+            if (_trimMode && (Math.Abs(p.X - BeatToX(_trimStart, w)) <= HandlePx || Math.Abs(p.X - BeatToX(_trimEnd, w)) <= HandlePx))
+                return true;
+            if (_mk.Count < 2) return false;
+            int m = HitMarker(p.X, w);
+            return m > 0 && m < _mk.Count - 1;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             double W = Bounds.Width, H = Bounds.Height;
             _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
 
-            // The ruler, and the playhead line wherever it runs, move the transport (#278) —
-            // ahead of every other gesture, but only inside the ruler / the line's grab zone.
+            // The ruler, and the playhead line wherever it runs, move the transport (#278).
+            // The line yields to an edit handle under the pointer (a warp marker, a bracket,
+            // an ADSR or envelope point), so a stopped playhead never hides one.
             var pt = e.GetCurrentPoint(this);
             if (Seek is not null && pt.Properties.IsLeftButtonPressed && e.ClickCount == 1
-                && (pt.Position.Y < RulerH || OnPlayheadLine(pt.Position.X, W)))
+                && (pt.Position.Y < RulerH
+                    || (OnPlayheadLine(pt.Position.X, W) && !OverEditHandle(pt.Position, W, H))))
             {
                 _seekDrag = true;
                 _lastSeek = double.NaN;

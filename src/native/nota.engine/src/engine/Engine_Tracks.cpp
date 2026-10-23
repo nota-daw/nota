@@ -1669,7 +1669,8 @@ bool rangeTouchesTrack(const Track& t, double s, double e, double spb, double de
 }
 } // namespace
 
-bool Engine::deleteClipsInRange(const std::vector<int32_t>& trackIds, double start, double end) {
+bool Engine::deleteClipsInRange(const std::vector<int32_t>& trackIds, double start, double end,
+                                bool withAutomation) {
     if (end <= start + 1e-9 || trackIds.empty()) return false;
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
     auto listed = [&](int32_t id) { return std::find(trackIds.begin(), trackIds.end(), id) != trackIds.end(); };
@@ -1680,6 +1681,16 @@ bool Engine::deleteClipsInRange(const std::vector<int32_t>& trackIds, double sta
     for (auto& t : authoring_->tracks) {
         if (t->type() != TrackType::Return && listed(t->id()) && rangeTouchesTrack(*t, start, end, spb, devSR)) {
             auto nt = cloneTrack(*t);
+            if (withAutomation) { // the spans copyRange captured: each clip's slice of the range
+                auto clear = [&](double cs, double ce) {
+                    if (ce > start + 1e-6 && cs < end - 1e-6)
+                        removeAutomationInRange(*nt, std::max(cs, start), std::min(ce, end));
+                };
+                if (nt->type() == TrackType::Instrument)
+                    for (const auto& c : nt->midiClips) clear(c.startBeat, c.startBeat + c.lengthBeats);
+                else
+                    for (const auto& c : nt->clips) clear(c.startBeat, c.startBeat + audioDisplayLenBeats(c, spb, devSR));
+            }
             if (nt->type() == TrackType::Instrument) midiOverwriteRange(nt->midiClips, start, end);
             else
                 audioOverwriteRange(nt->clips, start, end, spb, devSR);
@@ -2799,7 +2810,7 @@ bool Engine::copyRange(const std::vector<int32_t>& trackIds, double start, doubl
 
 bool Engine::cutRange(const std::vector<int32_t>& trackIds, double start, double end) {
     if (!copyRange(trackIds, start, end)) return false;
-    deleteClipsInRange(trackIds, start, end);
+    deleteClipsInRange(trackIds, start, end, /*withAutomation=*/true);
     return true;
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #
 # Compares two perf-gate result sets (scripts/perf-gate.sh) and decides the gate.
 # Work rows: id, label, instructions, peak. Timing rows: id, wall_ms_per_s (one per

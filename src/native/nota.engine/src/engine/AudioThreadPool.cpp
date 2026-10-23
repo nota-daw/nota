@@ -135,13 +135,15 @@ void AudioThreadPool::workerLoop(int id) {
             const uint64_t lg = epoch_.load(std::memory_order_acquire);
             if (stop_.load(std::memory_order_relaxed)) return;
             const JobSlot& s = slots_[lg & (kSlots - 1)];
-            if (t - s.base >= (uint64_t)s.n) {
+            const uint64_t base = s.base.load(std::memory_order_relaxed);
+            if (t - base >= (uint64_t)s.n.load(std::memory_order_relaxed)) {
                 if (epoch_.load(std::memory_order_acquire) == lg) break; // stable: truly beyond
                 continue;
             }
             uint64_t expect = t;
             if (claimed_.compare_exchange_weak(expect, t + 1, std::memory_order_relaxed)) {
-                s.call(s.ctx, id, (int)(t - s.base));
+                // The CAS proved the slot unchanged since the check: call/ctx are this job's.
+                s.call.load(std::memory_order_relaxed)(s.ctx.load(std::memory_order_relaxed), id, (int)(t - base));
                 done_.fetch_add(1, std::memory_order_release); // publishes this task's writes
             }
         }

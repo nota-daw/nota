@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #
 # Engine benchmark: compares engine builds on the same machine through the public C ABI
 # (scripts/bench/engine-bench.cpp). Each label points at a directory that holds a Release

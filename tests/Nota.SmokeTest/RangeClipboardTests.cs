@@ -97,6 +97,27 @@ internal static class RangeClipboardTests
                 "range: the cut slice pastes at beat 20");
         }
 
+        // Cut takes the automation under the slice with it: it leaves the source, and the
+        // paste brings it back once (not on top of a copy left behind).
+        {
+            using var e = new NotaEngine();
+            int a = e.AddInstrumentTrack();
+            e.AddMidiClip(a, 0.0, 8.0);
+            int lane = e.AddAutomationLane(a, AutomationTarget.Volume, -1, -1);
+            e.SetAutomationPoints(a, lane, new[] { new AutomationPoint(1.0, 0.2f), new AutomationPoint(3.0, 0.4f),
+                                                   new AutomationPoint(5.0, 0.6f), new AutomationPoint(7.0, 0.8f) });
+            e.CutRange(new[] { a }, 2.0, 6.0);
+            var left = e.GetAutomationPoints(a, lane).Select(p => p.Beat).ToArray();
+            yield return (left.Length == 2 && Near(left[0], 1) && Near(left[1], 7),
+                $"range: cut removes the automation inside [2,6) ({string.Join(" ", left)})");
+            e.PasteClipBlock(20.0, -1);
+            var pasted = e.GetAutomationPoints(a, lane).Select(p => p.Beat).Where(b => b >= 20 - Eps).ToArray();
+            yield return (pasted.Length == 2 && Near(pasted[0], 21) && Near(pasted[1], 23),
+                $"range: the cut automation pastes with the slice ({string.Join(" ", pasted)})");
+            yield return (e.Undo() && e.Undo() && e.GetAutomationPoints(a, lane).Length == 4,
+                "range: undoing paste and cut restores the automation");
+        }
+
         // Cross-track paste anchors on the range's top row, even when that row is empty.
         {
             using var e = new NotaEngine();
