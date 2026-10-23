@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <cmath>
+
 #include "dsp/core/RtAttributes.h"
+#include "dsp/math/FastMath.h"
 
 namespace nota {
 namespace dsp {
@@ -83,6 +86,64 @@ class EnvelopeFollower {
     float attackCoef_ = 0.1f, releaseCoef_ = 0.999f;
     float value_ = 0.0f;
 };
+
+// Per-sample hot path: inline, so callers in other TUs inline it (no LTO).
+
+inline float AdsrEnvelope::tick() NOTA_RT_SAFE {
+    switch (stage_) {
+    case Stage::Idle: value_ = 0.0f; break;
+    case Stage::Attack:
+        value_ += attackInc_ * (1.0f - value_);
+        if (value_ >= 0.999f) {
+            value_ = 1.0f;
+            stage_ = Stage::Decay;
+        }
+        break;
+    case Stage::Decay:
+        value_ = sustain_ + decayCoef_ * (value_ - sustain_);
+        if (std::fabs(value_ - sustain_) < 0.0005f) {
+            value_ = sustain_;
+            stage_ = Stage::Sustain;
+        }
+        break;
+    case Stage::Sustain: value_ = sustain_; break;
+    case Stage::Release:
+        value_ *= releaseCoef_;
+        if (value_ < 0.0005f) {
+            value_ = 0.0f;
+            stage_ = Stage::Idle;
+        }
+        break;
+    }
+    return value_;
+}
+
+inline float ArEnvelope::tick() NOTA_RT_SAFE {
+    if (stage_ == 1) {
+        value_ += attackInc_ * (1.0f - value_);
+        if (value_ >= 0.999f) {
+            value_ = 1.0f;
+            stage_ = 2;
+        }
+    } else if (stage_ == 2) {
+        value_ *= releaseCoef_;
+        if (value_ < 0.0005f) {
+            value_ = 0.0f;
+            stage_ = 0;
+        }
+    } else {
+        value_ = 0.0f;
+    }
+    return value_;
+}
+
+inline float EnvelopeFollower::process(float x) NOTA_RT_SAFE {
+    const float a = x < 0.0f ? -x : x;
+    if (a > value_) value_ += attackCoef_ * (a - value_);
+    else
+        value_ *= releaseCoef_;
+    return value_;
+}
 
 } // namespace dsp
 } // namespace nota

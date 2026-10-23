@@ -154,7 +154,9 @@ void Phaser::process(float* buf, int32_t frames) {
         inPk = std::max(inPk, std::max(std::fabs(xL), std::fabs(xR)));
         const double yL = chain(sL_, aL_, xL, fbS_);
         const double yR = chain(sR_, aR_, xR, fbS_);
-        feedPk = std::max(feedPk, (float)std::max(std::fabs(yL), std::fabs(yR)));
+        // Only a silent-input block can count towards sleep, so only it measures the
+        // chain (a loud block resets the count anyway). Loop-invariant: unswitched.
+        if (inSilent) feedPk = std::max(feedPk, (float)std::max(std::fabs(yL), std::fabs(yR)));
 
         const double wg = wetS_ * stGain_;
         const double norm = 1.0 / std::max(dryS_ + std::fabs(wetS_), 1e-3);
@@ -398,7 +400,7 @@ double Phaser::coef(double fc) const {
     return (t - 1.0) / (t + 1.0);
 }
 
-double Phaser::chain(double* s, double a, double x, double fb) const {
+inline double Phaser::chain(double* s, double a, double x, double fb) const {
     const int n = stages_;
     double g = 1.0, S = 0.0;
     for (int k = 0; k < n; ++k) {

@@ -1316,7 +1316,7 @@ float Consort::readGain(int ch, float delay) const { // the compander gain store
     return y1 + (y2 - y1) * (rp - fl);
 }
 
-float Consort::readLine(int ch, float delay) const {
+inline float Consort::readLine(int ch, float delay) const {
     const float* b = dlyBuf_.get() + ch * dlyN_;
     const float rp = static_cast<float>(dlyW_) - delay;
     const float fl = std::floor(rp);

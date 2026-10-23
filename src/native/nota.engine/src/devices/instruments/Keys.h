@@ -59,15 +59,26 @@ constexpr float kPi = 3.14159265358979f;
 
 // The PICKUP transfer curve, shared with the editor's graph (KeysModel.cs mirrors it):
 // x = tine displacement (−1..1 at full scale), sym −1..1, dist 0..1, model 0..3.
-inline float pickupRaw(float x, float sym, float dist, int model) {
+// The terms that depend only on dist and model, worked out once per block rather than
+// per sample (same operations in the same order, so the curve is unchanged).
+struct PickupShape {
+    float a, k, twoMinusDist;
+    int model;
+};
+inline PickupShape pickupShape(float dist, int model) {
     const float a = 0.3f + (1.0f - dist) * 3.2f;
-    if (model == 2) { // Reed — electrostatic: odd-heavy, a little symmetry
-        const float k = (1.0f - dist) * 0.8f;
-        return x / (1.0f + a * 0.6f * std::fabs(x)) * (1.0f + k * x * x) / (1.0f + k) +
-               sym * 0.35f * (2.0f - dist) * x * x;
+    if (model == 2) return {a * 0.6f, (1.0f - dist) * 0.8f, 2.0f - dist, model}; // Reed
+    return {model == 3 ? a * 0.5f : a, 0.0f, 2.0f - dist, model};                // Clav: gentler
+}
+inline float pickupRaw(float x, float sym, const PickupShape& p) {
+    if (p.model == 2) { // Reed — electrostatic: odd-heavy, a little symmetry
+        return x / (1.0f + p.a * std::fabs(x)) * (1.0f + p.k * x * x) / (1.0f + p.k) +
+               sym * 0.35f * p.twoMinusDist * x * x;
     }
-    const float aa = model == 3 ? a * 0.5f : a; // Clav — a gentler magnetic pickup
-    return x / (1.0f + aa * std::fabs(x)) + sym * 0.55f * (2.0f - dist) * x * x;
+    return x / (1.0f + p.a * std::fabs(x)) + sym * 0.55f * p.twoMinusDist * x * x; // magnetic
+}
+inline float pickupRaw(float x, float sym, float dist, int model) {
+    return pickupRaw(x, sym, pickupShape(dist, model));
 }
 // The curve's peak magnitude on −1..1 (the editor scales its graph by the same number).
 inline float pickupNorm(float sym, float dist, int model) {

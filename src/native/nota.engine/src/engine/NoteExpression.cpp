@@ -17,9 +17,4 @@ void VoiceExpr::set(int32_t dim, float v, const float add[kExprDims]) {
     if (fresh) cur[dim] = v + add[dim];
 }
 
-void VoiceExpr::tick(const float add[kExprDims], float coef) {
-    fresh = false;
-    for (int d = 0; d < kExprDims; ++d) cur[d] += (tgt[d] + add[d] - cur[d]) * coef;
-}
-
 } // namespace nota

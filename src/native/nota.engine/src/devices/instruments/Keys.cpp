@@ -441,7 +441,12 @@ void Keys::retune(Voice& v, float bend) {
 }
 
 void Keys::renderVoice(Voice& v, float* mono, int n, int /*model*/, float sym, float dist, float pnorm, float noiseLin,
-    float relLin, const float exAdd[kExprDims], float exprCoef) {
+    float relLin, const float exAddIn[kExprDims], float exprCoef) {
+    // A local copy: through the pointer, every store to mono[] could alias the offsets,
+    // so the expression tick would reload them each sample.
+    float exAdd[kExprDims];
+    std::copy(exAddIn, exAddIn + kExprDims, exAdd);
+    const keys::PickupShape pickup = keys::pickupShape(dist, v.model);
     const float killStep = 1.0f / static_cast<float>(killLen());
     const float invNorm = 1.0f / pnorm;
     const float relLp = 1.0f - std::exp(-2.0f * keys::kPi * 700.0f / static_cast<float>(sr_));
@@ -472,7 +477,7 @@ void Keys::renderVoice(Voice& v, float* mono, int n, int /*model*/, float sym, f
         // Pickup.
         const float xd = std::clamp(x * v.drive * (1.0f + 0.6f * v.ex.pressure()), -1.6f, 1.6f);
         const float s = std::clamp(sym + v.symOff + 0.4f * v.ex.slide(), -1.5f, 1.5f);
-        float o = keys::pickupRaw(xd, s, dist, v.model) * invNorm * v.level * (1.0f + 0.3f * v.ex.pressure());
+        float o = keys::pickupRaw(xd, s, pickup) * invNorm * v.level * (1.0f + 0.3f * v.ex.pressure());
         // Hammer + damper noise.
         if (v.hnEnv > 1e-4f && noiseLin > 0.0f) {
             const float nz = rnd(v);

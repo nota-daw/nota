@@ -360,7 +360,7 @@ std::string Reverb::deviceText(int32_t id) const {
     return std::string(b);
 }
 
-float Reverb::readPre(const std::vector<float>& b, double delay) const {
+inline float Reverb::readPre(const std::vector<float>& b, double delay) const {
     const int n = static_cast<int>(b.size());
     double rp = preW_ - std::clamp(delay, 0.0, static_cast<double>(n) - 2.0);
     if (rp < 0) rp += n;

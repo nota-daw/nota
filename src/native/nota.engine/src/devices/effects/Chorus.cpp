@@ -480,7 +480,7 @@ double Chorus::warm(double& z, double x) const {
     return z + warmS_ * (std::tanh(k * z) / k - z);
 }
 
-float Chorus::readLine(const float* line, double d) const {
+inline float Chorus::readLine(const float* line, double d) const {
     const double r = (double)w_ - d;
     const double fl = std::floor(r);
     const float t = (float)(r - fl);

@@ -72,8 +72,12 @@ struct VoiceExpr {
         fresh = true;
     }
     void set(int32_t dim, float v, const float add[kExprDims]);
-    // One sample of smoothing towards own + global.
-    void tick(const float add[kExprDims], float coef);
+    // One sample of smoothing towards own + global. Inline: every voice of every
+    // instrument calls it per sample, from other TUs (the engine builds without LTO).
+    void tick(const float add[kExprDims], float coef) {
+        fresh = false;
+        for (int d = 0; d < kExprDims; ++d) cur[d] += (tgt[d] + add[d] - cur[d]) * coef;
+    }
 
     float bend() const { return cur[ExprBend]; }                                         // semitones
     float pressure() const { return std::clamp(cur[ExprPressure], 0.0f, 1.0f); }         // 0..1

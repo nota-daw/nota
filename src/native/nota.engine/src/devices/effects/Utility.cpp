@@ -578,7 +578,7 @@ float Utility::catmull(float y0, float y1, float y2, float y3, float t) {
     return a + t * (b + t * ((3 * (c - a) - 2 * b - d) + t * (2 * (a - c) + b + d)));
 }
 
-float Utility::truePeak(Tp& s, float x) {
+inline float Utility::truePeak(Tp& s, float x) {
     float pk = std::fabs(s.y2);
     for (int k = 1; k < 4; ++k) pk = std::max(pk, std::fabs(catmull(s.y0, s.y1, s.y2, x, k * 0.25f)));
     s.y0 = s.y1;

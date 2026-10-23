@@ -212,7 +212,7 @@ void Compressor::process(float* buf, int32_t frames) {
         keyPk = std::max(keyPk, std::max(std::fabs(key[0]), std::fabs(key[1])));
 
         const float gainL = (1.0f - mix) + mix * fast_math::dbToLin(makeupDb + autoMk - gr[0]);
-        const float gainR = (1.0f - mix) + mix * fast_math::dbToLin(makeupDb + autoMk - gr[1]);
+        const float gainR = linked ? gainL : (1.0f - mix) + mix * fast_math::dbToLin(makeupDb + autoMk - gr[1]);
 
         // Look-ahead: apply the current gain to the delayed audio.
         laBuf_[laW_ * 2] = l;

@@ -148,7 +148,7 @@ class Reverb : public Device {
     }
 
     // Fractional read `delay` samples behind the pre-delay write head (0 = the sample just written).
-    float readPre(const std::vector<float>& b, double delay) const;
+    inline float readPre(const std::vector<float>& b, double delay) const;
 
     void wipe();
 

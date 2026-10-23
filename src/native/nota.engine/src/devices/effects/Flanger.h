@@ -174,7 +174,7 @@ class Flanger : public Device {
     static double lfo(int wave, double p);
 
     // 4-point Hermite read `d` samples behind the write head (d ≥ 2, so every tap is written).
-    float readLine(const float* line, double d) const;
+    inline float readLine(const float* line, double d) const;
 
     void clearLine();
     void resetMeters() { inPkM_ = outPkLM_ = outPkRM_ = 0.0f; }

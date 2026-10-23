@@ -171,7 +171,7 @@ class Phaser : public Device {
 
     // One channel through the chain with its feedback loop solved delay-free: each stage is
     // y = a·x + s (s' = x − a·y), so the chain is y = g·w + S and w = x + fb·y.
-    double chain(double* s, double a, double x, double fb) const;
+    inline double chain(double* s, double a, double x, double fb) const;
 
     float get(int i) const { return p_[i].load(std::memory_order_relaxed); }
     static double expMap(float v, double lo, double hi) {

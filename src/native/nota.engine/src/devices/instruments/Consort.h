@@ -726,7 +726,7 @@ class Consort final : public Instrument {
     void setupDelayRate();
     void clearDelay();
     float readGain(int ch, float delay) const;
-    float readLine(int ch, float delay) const;
+    inline float readLine(int ch, float delay) const;
     void processDelay(int n, const float* P);
 
     void publishTelemetry();

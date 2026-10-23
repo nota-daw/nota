@@ -63,11 +63,6 @@ void OnePoleSmoother::setSampleRate(double sr, double timeMs) NOTA_RT_SAFE {
     if (!(coeff_ >= 0.0f && coeff_ <= 1.0f)) coeff_ = 0.01f;
 }
 
-float OnePoleSmoother::tick() NOTA_RT_SAFE {
-    value_ += coeff_ * (target_ - value_);
-    return value_;
-}
-
 void OnePoleSmoother::processBlock(float* dst, int32_t n) NOTA_RT_SAFE {
     if (dst == nullptr || n <= 0) return;
     for (int32_t i = 0; i < n; ++i) {

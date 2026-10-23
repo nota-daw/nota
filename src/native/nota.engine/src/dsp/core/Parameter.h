@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "dsp/core/RtAttributes.h"
+#include "dsp/math/FastMath.h"
 
 namespace nota {
 namespace dsp {
@@ -54,6 +55,13 @@ class ParameterChangeTracker {
     float lastSeen_ = 0.0f;
     bool initialized_ = false;
 };
+
+// Per-sample hot path: inline, so callers in other TUs inline it (no LTO).
+
+inline float OnePoleSmoother::tick() NOTA_RT_SAFE {
+    value_ += coeff_ * (target_ - value_);
+    return value_;
+}
 
 } // namespace dsp
 } // namespace nota

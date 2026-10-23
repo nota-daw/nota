@@ -247,7 +247,7 @@ class Utility : public Device {
         float y0 = 0, y1 = 0, y2 = 0;
     };
     static float catmull(float y0, float y1, float y2, float y3, float t);
-    static float truePeak(Tp& s, float x);
+    static inline float truePeak(Tp& s, float x);
     // Limiter: the inter-sample peak between the previous sample and this one, with the next
     // sample extrapolated — no look-ahead, so no latency.
     static float isp(Tp& s, float x);

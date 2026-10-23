@@ -198,7 +198,7 @@ class Chorus : public Device {
     }
 
     // 4-point Hermite read `d` samples behind the write head (d ≥ 2, so every tap is written).
-    float readLine(const float* line, double d) const;
+    inline float readLine(const float* line, double d) const;
 
     void clearLines();
     void resetMeters() { inPkM_ = outPkLM_ = outPkRM_ = 0.0f; }

@@ -204,7 +204,9 @@ void Crush::process(float* buf, int32_t frames) {
             dcY_[1] = yR;
             cR = yR;
         }
-        feedPk = std::max(feedPk, std::max(std::fabs(cL), std::fabs(cR)));
+        // Only a silent-input block can count towards sleep, so only it measures the
+        // crushed path (a loud block resets the count anyway). Loop-invariant: unswitched.
+        if (inSilent) feedPk = std::max(feedPk, std::max(std::fabs(cL), std::fabs(cR)));
 
         // Analysis ring: the driven input and the crushed path (before the mix).
         ringIn_[w & ringMask_] = drvMono;
@@ -429,7 +431,7 @@ std::string Crush::deviceText(int32_t id) const {
     return {};
 }
 
-float Crush::shape(int mode, float x) {
+inline float Crush::shape(int mode, float x) {
     switch (mode) {
     case 1: return fast_math::tanhPrecise(x * 1.5f) / 0.905f; // Analog: soft clip
     case 2: return wavefold(x * 2.5f, 0.7f);                  // Fold

@@ -112,8 +112,9 @@ void Flanger::process(float* buf, int32_t frames) {
         return;
     }
 
-    float inPk = 0.0f, outPkL = 0.0f, outPkR = 0.0f, pushPk = 0.0f;
+    float inPk = 0.0f, outPkL = 0.0f, outPkR = 0.0f;
     double tauL = 0.0, tauR = 0.0;
+    const int w0 = w_;
     for (int32_t i = 0; i < frames; ++i) {
         if (locked) {
             const double beat = beatStart_ + (double)i / spb_;
@@ -143,7 +144,6 @@ void Flanger::process(float* buf, int32_t frames) {
         const float pushR = sanitize(xR + (float)fbS_ * yR);
         lineL_[w_] = pushL;
         lineR_[w_] = pushR;
-        pushPk = std::max(pushPk, std::max(std::fabs(pushL), std::fabs(pushR)));
         w_ = (w_ + 1) & kMask;
 
         const double norm = 1.0 / std::max(dryS_ + std::fabs(wetS_), 1e-3);
@@ -166,7 +166,16 @@ void Flanger::process(float* buf, int32_t frames) {
 
     // Loop-feed peak (decays slowly so a ringing comb blocks accrual); sleep
     // additionally waits out the sweep's flight time so an in-flight echo is never
-    // cut: output silence alone proves nothing while the line is full.
+    // cut: output silence alone proves nothing while the line is full. The block's
+    // writes are the last `frames` slots before w_, read back in one pass (at most two
+    // runs around the wrap) rather than tracked per sample.
+    float pushPk = 0.0f;
+    for (int at = w0, left = std::min<int32_t>(frames, kBuf); left > 0;) {
+        const int run = std::min(left, kBuf - at);
+        pushPk = std::max({pushPk, simd_audio::peakAbs(lineL_ + at, run), simd_audio::peakAbs(lineR_ + at, run)});
+        left -= run;
+        at = (at + run) & kMask;
+    }
     feedPk_ = pushPk > feedPk_ ? pushPk : feedPk_ * 0.90f;
     const double flight = 0.008 * (1.0 + kDepthScale) * sr_; // 8 ms · 1.92, the longest modulated line
     if (inSilent && outPkL <= 1.0e-5f && outPkR <= 1.0e-5f && feedPk_ <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
@@ -379,7 +388,7 @@ double Flanger::lfo(int wave, double p) {
     return 2.0 * (g - std::floor(g)) - 1.0;
 }
 
-float Flanger::readLine(const float* line, double d) const {
+inline float Flanger::readLine(const float* line, double d) const {
     const double r = (double)w_ - d;
     const double fl = std::floor(r);
     const float t = (float)(r - fl);

@@ -69,6 +69,36 @@ inline bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f)
     return true;
 }
 
+// Peak absolute amplitude of a flat or interleaved float buffer (0 when empty). For a
+// peak a device needs only once per block: one pass after the loop is cheaper than a
+// running max inside a per-sample loop.
+inline float peakAbs(const float* src, int32_t count) noexcept {
+    if (!src || count <= 0) return 0.0f;
+    int32_t i = 0;
+    float peak = 0.0f;
+#if defined(NOTA_SIMD_NEON)
+    float32x4_t m0 = vdupq_n_f32(0.0f), m1 = vdupq_n_f32(0.0f);
+    for (; i + 8 <= count; i += 8) {
+        m0 = vmaxq_f32(m0, vabsq_f32(vld1q_f32(src + i)));
+        m1 = vmaxq_f32(m1, vabsq_f32(vld1q_f32(src + i + 4)));
+    }
+    peak = vmaxvq_f32(vmaxq_f32(m0, m1));
+#elif defined(NOTA_SIMD_SSE)
+    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
+    __m128 m0 = _mm_setzero_ps(), m1 = _mm_setzero_ps();
+    for (; i + 8 <= count; i += 8) {
+        m0 = _mm_max_ps(m0, _mm_and_ps(_mm_loadu_ps(src + i), absMask));
+        m1 = _mm_max_ps(m1, _mm_and_ps(_mm_loadu_ps(src + i + 4), absMask));
+    }
+    __m128 m = _mm_max_ps(m0, m1);
+    m = _mm_max_ps(m, _mm_movehl_ps(m, m));
+    m = _mm_max_ss(m, _mm_shuffle_ps(m, m, 1));
+    peak = _mm_cvtss_f32(m);
+#endif
+    for (; i < count; ++i) peak = std::max(peak, std::fabs(src[i]));
+    return peak;
+}
+
 // Single-pass peak absolute amplitude finder and sum-of-squares accumulator for float audio buffers.
 inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSquares) noexcept {
     if (!src || count <= 0) {

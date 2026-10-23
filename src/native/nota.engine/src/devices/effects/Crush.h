@@ -138,7 +138,7 @@ class Crush : public Device {
     static float db(float lin) { return lin > 1e-6f ? 20.0f * std::log10(lin) : -120.0f; }
     static float dbMs(double ms) { return ms > 1e-12 ? (float)(10.0 * std::log10(ms)) : -120.0f; }
 
-    static float shape(int mode, float x);
+    static inline float shape(int mode, float x);
     // A triangle fold: straight through ±threshold, then reflected back and forth for as far as
     // the input goes (a 4·threshold period), normalised to ±1. More drive, more folds.
     static float wavefold(float x, float threshold);

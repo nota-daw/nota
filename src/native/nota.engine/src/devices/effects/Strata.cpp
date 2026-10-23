@@ -136,7 +136,6 @@ void Strata::process(float* buf, int32_t frames) {
         }
     }
 
-    float outPk = 0.0f;
     for (int32_t i = 0; i < frames; ++i) {
         const float inL = buf[i * 2] * inGain, inR = buf[i * 2 + 1] * inGain;
         const bool recording = (mode == M_Rec || mode == M_Over) && recL >= 0;
@@ -199,7 +198,6 @@ void Strata::process(float* buf, int32_t frames) {
 
         buf[i * 2] = inL + wetL;
         buf[i * 2 + 1] = inR + wetR;
-        outPk = std::max(outPk, std::max(std::fabs(buf[i * 2]), std::fabs(buf[i * 2 + 1])));
 
         // Advance the loop / recording clock.
         if (mode == M_Rec && loopLen_.load() <= 0) {
@@ -232,9 +230,10 @@ void Strata::process(float* buf, int32_t frames) {
 
     // Auto-sleep: silent in / silent out settles only once no layer can still sound
     // (stopped / empty / no layers) and nothing is being recorded. A sounding loop
-    // (playing layers) and any queued command keep the hangover at zero.
+    // (playing layers) and any queued command keep the hangover at zero. The output
+    // is checked last, in one SIMD pass, and only when everything else is quiet.
     const bool still = (mode == M_Stop || mode == M_Empty || layerCount_.load() == 0);
-    if (inSilent && outPk <= 1.0e-5f && still && pending_.load(std::memory_order_acquire) < 0)
+    if (inSilent && still && pending_.load(std::memory_order_acquire) < 0 && simd_audio::isSilent(buf, frames * 2))
         quietSamples_ += (uint64_t)frames;
     else {
         quietSamples_ = 0;
