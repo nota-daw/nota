@@ -258,7 +258,39 @@ void Eq::process(float* buf, int32_t frames) {
             rt[b] = routing(ch[b]);
             act[nAct++] = b;
         }
-    for (int32_t off = 0; off < frames; off += kCtrl) {
+    bool flat = !moving;
+    for (int a = 0; a < nAct && flat; ++a) flat = rt[act[a]] == dsp::BiquadChannel::Stereo;
+    if (flat) {
+        // Common case — every active band Stereo and none gliding: the bands in series are
+        // one chain of sections. Run it from a contiguous copy, then store the state back.
+        dsp::BiquadSection chL[kBands * kMaxSec], chR[kBands * kMaxSec];
+        int n = 0;
+        for (int a = 0; a < nAct; ++a) {
+            dsp::BiquadCascade& bc = bands_[act[a]];
+            for (int k = 0; k < bc.stages(); ++k, ++n) {
+                chL[n] = bc.bank(0)[k];
+                chR[n] = bc.bank(1)[k];
+            }
+        }
+        for (int32_t i = 0; i < frames; ++i) {
+            double l = buf[i * 2], r = buf[i * 2 + 1];
+            for (int k = 0; k < n; ++k) {
+                l = chL[k].run(l);
+                r = chR[k].run(r);
+            }
+            buf[i * 2] = static_cast<float>(l);
+            buf[i * 2 + 1] = static_cast<float>(r);
+        }
+        n = 0;
+        for (int a = 0; a < nAct; ++a) {
+            dsp::BiquadCascade& bc = bands_[act[a]];
+            for (int k = 0; k < bc.stages(); ++k, ++n) {
+                bc.bank(0)[k] = chL[n];
+                bc.bank(1)[k] = chR[n];
+            }
+        }
+    }
+    for (int32_t off = 0; off < frames && !flat; off += kCtrl) {
         const int32_t m = off + kCtrl <= frames ? kCtrl : frames - off;
         for (int a = 0; a < nAct; ++a) {
             const int b = act[a];

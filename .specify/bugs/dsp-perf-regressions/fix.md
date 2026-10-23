@@ -74,3 +74,17 @@ None.
   that computes those peaks with the SIMD block helpers after the loop.
 - Auto Filter (~15 %) and EQ-8 (~15 %) are still a little above 0.56.1 on Apple Silicon;
   x86 numbers come from the Performance gate on this PR.
+
+## Addendum — EQ-8 instruction count (PR #287 gate)
+
+The first push failed the Performance gate on `effect-00` (+22.6 % instructions vs develop,
+−30 % wall time) and, through the EQ-8 on every track, `silent-32` / `sparse-32` (+1.5 %):
+the per-frame band loop paid a routing switch, an index lookup and a `stages_` reload per
+band. When every active band is Stereo and none is gliding (the common case), `Eq::process`
+now copies all bands' sections into one contiguous chain on the stack, runs each frame
+through it and stores the state back; the general per-band path stays for Left / Right /
+Mid / Side and glides. `BiquadCascade` gains `bank(int)` for that. Output is unchanged
+(the null test gives the same figures as before, bit-identical at defaults). Apple Silicon:
+EQ-8 x8 4.40 ms (develop 9.86, 0.56.1 4.79); instructions retired per second of audio
+(`/usr/bin/time -l`, whole process) 111 M vs develop 133 M; silent-32 653 vs 656 M,
+sparse-32 1688 vs 1716 M.

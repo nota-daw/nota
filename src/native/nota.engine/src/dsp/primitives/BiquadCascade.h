@@ -56,6 +56,9 @@ class BiquadCascade {
 
     void setStages(int n) noexcept;
     int stages() const noexcept { return stages_; }
+    // Direct access to a bank's sections (bank 0 = L/Mid/Side, 1 = R), for hosts that
+    // flatten several cascades into one chain.
+    BiquadSection* bank(int b) noexcept { return st_[b]; }
     void setSection(int i, const BiquadCoeffs& c) noexcept;
     void reset() noexcept;
 
