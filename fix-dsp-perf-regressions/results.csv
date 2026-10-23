@@ -1,0 +1,106 @@
+label,run,scenario,name,wall_ms_per_s
+main,1,effect-base,"Synth alone (effect baseline)",1.290
+develop,1,effect-base,"Synth alone (effect baseline)",1.228
+fix,1,effect-base,"Synth alone (effect baseline)",1.319
+main,1,effect-00,"Nota EQ-8 x8 on Synth",5.042
+develop,1,effect-00,"Nota EQ-8 x8 on Synth",10.439
+fix,1,effect-00,"Nota EQ-8 x8 on Synth",6.177
+main,1,effect-21,"Nota Prism x8 on Synth",15.163
+develop,1,effect-21,"Nota Prism x8 on Synth",25.889
+fix,1,effect-21,"Nota Prism x8 on Synth",14.784
+main,1,effect-07,"Nota Auto Filter x8 on Synth",4.764
+develop,1,effect-07,"Nota Auto Filter x8 on Synth",6.668
+fix,1,effect-07,"Nota Auto Filter x8 on Synth",5.453
+main,1,effect-01,"Nota Compressor x8 on Synth",5.697
+develop,1,effect-01,"Nota Compressor x8 on Synth",5.360
+fix,1,effect-01,"Nota Compressor x8 on Synth",5.496
+main,1,effect-13,"Nota Dynamic EQ-8 x8 on Synth",13.285
+develop,1,effect-13,"Nota Dynamic EQ-8 x8 on Synth",12.183
+fix,1,effect-13,"Nota Dynamic EQ-8 x8 on Synth",10.651
+main,1,effect-16,"Nota EQ-3 x8 on Synth",8.541
+develop,1,effect-16,"Nota EQ-3 x8 on Synth",8.444
+fix,1,effect-16,"Nota EQ-3 x8 on Synth",8.626
+main,2,effect-base,"Synth alone (effect baseline)",1.442
+develop,2,effect-base,"Synth alone (effect baseline)",1.343
+fix,2,effect-base,"Synth alone (effect baseline)",1.370
+main,2,effect-00,"Nota EQ-8 x8 on Synth",5.222
+develop,2,effect-00,"Nota EQ-8 x8 on Synth",10.623
+fix,2,effect-00,"Nota EQ-8 x8 on Synth",6.259
+main,2,effect-21,"Nota Prism x8 on Synth",14.585
+develop,2,effect-21,"Nota Prism x8 on Synth",26.254
+fix,2,effect-21,"Nota Prism x8 on Synth",15.611
+main,2,effect-07,"Nota Auto Filter x8 on Synth",4.685
+develop,2,effect-07,"Nota Auto Filter x8 on Synth",6.759
+fix,2,effect-07,"Nota Auto Filter x8 on Synth",5.406
+main,2,effect-01,"Nota Compressor x8 on Synth",5.735
+develop,2,effect-01,"Nota Compressor x8 on Synth",5.645
+fix,2,effect-01,"Nota Compressor x8 on Synth",5.572
+main,2,effect-13,"Nota Dynamic EQ-8 x8 on Synth",12.925
+develop,2,effect-13,"Nota Dynamic EQ-8 x8 on Synth",11.882
+fix,2,effect-13,"Nota Dynamic EQ-8 x8 on Synth",10.723
+main,2,effect-16,"Nota EQ-3 x8 on Synth",8.516
+develop,2,effect-16,"Nota EQ-3 x8 on Synth",8.652
+fix,2,effect-16,"Nota EQ-3 x8 on Synth",8.331
+main,3,effect-base,"Synth alone (effect baseline)",1.330
+develop,3,effect-base,"Synth alone (effect baseline)",1.399
+fix,3,effect-base,"Synth alone (effect baseline)",1.417
+main,3,effect-00,"Nota EQ-8 x8 on Synth",5.096
+develop,3,effect-00,"Nota EQ-8 x8 on Synth",11.147
+fix,3,effect-00,"Nota EQ-8 x8 on Synth",6.311
+main,3,effect-21,"Nota Prism x8 on Synth",14.991
+develop,3,effect-21,"Nota Prism x8 on Synth",26.657
+fix,3,effect-21,"Nota Prism x8 on Synth",15.745
+main,3,effect-07,"Nota Auto Filter x8 on Synth",4.657
+develop,3,effect-07,"Nota Auto Filter x8 on Synth",6.728
+fix,3,effect-07,"Nota Auto Filter x8 on Synth",5.502
+main,3,effect-01,"Nota Compressor x8 on Synth",5.808
+develop,3,effect-01,"Nota Compressor x8 on Synth",5.843
+fix,3,effect-01,"Nota Compressor x8 on Synth",5.524
+main,3,effect-13,"Nota Dynamic EQ-8 x8 on Synth",12.859
+develop,3,effect-13,"Nota Dynamic EQ-8 x8 on Synth",11.889
+fix,3,effect-13,"Nota Dynamic EQ-8 x8 on Synth",10.343
+main,3,effect-16,"Nota EQ-3 x8 on Synth",8.481
+develop,3,effect-16,"Nota EQ-3 x8 on Synth",8.686
+fix,3,effect-16,"Nota EQ-3 x8 on Synth",8.574
+main,4,effect-base,"Synth alone (effect baseline)",1.368
+develop,4,effect-base,"Synth alone (effect baseline)",1.361
+fix,4,effect-base,"Synth alone (effect baseline)",1.466
+main,4,effect-00,"Nota EQ-8 x8 on Synth",4.998
+develop,4,effect-00,"Nota EQ-8 x8 on Synth",10.871
+fix,4,effect-00,"Nota EQ-8 x8 on Synth",6.295
+main,4,effect-21,"Nota Prism x8 on Synth",14.554
+develop,4,effect-21,"Nota Prism x8 on Synth",26.759
+fix,4,effect-21,"Nota Prism x8 on Synth",15.522
+main,4,effect-07,"Nota Auto Filter x8 on Synth",4.520
+develop,4,effect-07,"Nota Auto Filter x8 on Synth",6.870
+fix,4,effect-07,"Nota Auto Filter x8 on Synth",5.511
+main,4,effect-01,"Nota Compressor x8 on Synth",5.864
+develop,4,effect-01,"Nota Compressor x8 on Synth",5.724
+fix,4,effect-01,"Nota Compressor x8 on Synth",5.445
+main,4,effect-13,"Nota Dynamic EQ-8 x8 on Synth",12.859
+develop,4,effect-13,"Nota Dynamic EQ-8 x8 on Synth",11.993
+fix,4,effect-13,"Nota Dynamic EQ-8 x8 on Synth",10.568
+main,4,effect-16,"Nota EQ-3 x8 on Synth",8.501
+develop,4,effect-16,"Nota EQ-3 x8 on Synth",8.703
+fix,4,effect-16,"Nota EQ-3 x8 on Synth",8.766
+main,5,effect-base,"Synth alone (effect baseline)",1.306
+develop,5,effect-base,"Synth alone (effect baseline)",1.403
+fix,5,effect-base,"Synth alone (effect baseline)",1.390
+main,5,effect-00,"Nota EQ-8 x8 on Synth",5.170
+develop,5,effect-00,"Nota EQ-8 x8 on Synth",10.361
+fix,5,effect-00,"Nota EQ-8 x8 on Synth",6.288
+main,5,effect-21,"Nota Prism x8 on Synth",14.657
+develop,5,effect-21,"Nota Prism x8 on Synth",27.061
+fix,5,effect-21,"Nota Prism x8 on Synth",15.965
+main,5,effect-07,"Nota Auto Filter x8 on Synth",4.502
+develop,5,effect-07,"Nota Auto Filter x8 on Synth",6.228
+fix,5,effect-07,"Nota Auto Filter x8 on Synth",5.571
+main,5,effect-01,"Nota Compressor x8 on Synth",5.748
+develop,5,effect-01,"Nota Compressor x8 on Synth",5.750
+fix,5,effect-01,"Nota Compressor x8 on Synth",5.211
+main,5,effect-13,"Nota Dynamic EQ-8 x8 on Synth",13.110
+develop,5,effect-13,"Nota Dynamic EQ-8 x8 on Synth",12.389
+fix,5,effect-13,"Nota Dynamic EQ-8 x8 on Synth",10.710
+main,5,effect-16,"Nota EQ-3 x8 on Synth",8.513
+develop,5,effect-16,"Nota EQ-3 x8 on Synth",8.702
+fix,5,effect-16,"Nota EQ-3 x8 on Synth",8.660

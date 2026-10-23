@@ -1,0 +1,5 @@
+machine: Apple M4 Max, 14 cores, 36 GB
+os: macOS 26.6.2
+compiler: Apple clang version 21.0.0 (clang-2100.1.1.101)
+commits: main=eaabf0cb develop=87170235 fix=a8da703
+harness: tests/perf/nota_perf run <id> 1 (48 kHz, 512-frame blocks, 1 s of audio, wall ms), Release

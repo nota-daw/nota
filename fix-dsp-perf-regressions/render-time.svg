@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="488" viewBox="0 0 960 488" font-family="-apple-system, Helvetica, Arial, sans-serif">
+<rect width="960" height="488" fill="#fcfcfb"/>
+<text x="170" y="28" font-size="17" font-weight="600" fill="#0b0b0b">Render time per 1 s of audio (ms, lower is better)</text>
+<rect x="170" y="42" width="12" height="12" rx="2" fill="#2a78d6"/><text x="188" y="52" font-size="13" fill="#52514e">0.56.1 (main)</text>
+<rect x="340" y="42" width="12" height="12" rx="2" fill="#eb6834"/><text x="358" y="52" font-size="13" fill="#52514e">develop</text>
+<rect x="510" y="42" width="12" height="12" rx="2" fill="#1baf7a"/><text x="528" y="52" font-size="13" fill="#52514e">This PR</text>
+<line x1="170.0" y1="70" x2="170.0" y2="454" stroke="#e1e0d9"/><text x="170.0" y="472" font-size="11" fill="#898781" text-anchor="middle">0</text>
+<line x1="295.0" y1="70" x2="295.0" y2="454" stroke="#e1e0d9"/><text x="295.0" y="472" font-size="11" fill="#898781" text-anchor="middle">5</text>
+<line x1="420.1" y1="70" x2="420.1" y2="454" stroke="#e1e0d9"/><text x="420.1" y="472" font-size="11" fill="#898781" text-anchor="middle">10</text>
+<line x1="545.1" y1="70" x2="545.1" y2="454" stroke="#e1e0d9"/><text x="545.1" y="472" font-size="11" fill="#898781" text-anchor="middle">15</text>
+<line x1="670.2" y1="70" x2="670.2" y2="454" stroke="#e1e0d9"/><text x="670.2" y="472" font-size="11" fill="#898781" text-anchor="middle">20</text>
+<line x1="795.2" y1="70" x2="795.2" y2="454" stroke="#e1e0d9"/><text x="795.2" y="472" font-size="11" fill="#898781" text-anchor="middle">25</text>
+<text x="158" y="100.0" font-size="13" fill="#0b0b0b" text-anchor="end">EQ-8 x8</text>
+<rect x="170" y="74" width="127.4" height="14" rx="2" fill="#2a78d6"/><text x="302.4" y="85" font-size="11" fill="#52514e">5.10</text>
+<rect x="170" y="89" width="265.7" height="14" rx="2" fill="#eb6834"/><text x="440.7" y="100" font-size="11" fill="#52514e">10.62</text>
+<rect x="170" y="104" width="157.3" height="14" rx="2" fill="#1baf7a"/><text x="332.3" y="115" font-size="11" fill="#52514e">6.29</text>
+<text x="158" y="154.0" font-size="13" fill="#0b0b0b" text-anchor="end">Prism x8</text>
+<rect x="170" y="128" width="366.6" height="14" rx="2" fill="#2a78d6"/><text x="541.6" y="139" font-size="11" fill="#52514e">14.66</text>
+<rect x="170" y="143" width="666.7" height="14" rx="2" fill="#eb6834"/><text x="841.7" y="154" font-size="11" fill="#52514e">26.66</text>
+<rect x="170" y="158" width="390.4" height="14" rx="2" fill="#1baf7a"/><text x="565.4" y="169" font-size="11" fill="#52514e">15.61</text>
+<text x="158" y="208.0" font-size="13" fill="#0b0b0b" text-anchor="end">Auto Filter x8</text>
+<rect x="170" y="182" width="116.5" height="14" rx="2" fill="#2a78d6"/><text x="291.5" y="193" font-size="11" fill="#52514e">4.66</text>
+<rect x="170" y="197" width="168.3" height="14" rx="2" fill="#eb6834"/><text x="343.3" y="208" font-size="11" fill="#52514e">6.73</text>
+<rect x="170" y="212" width="137.6" height="14" rx="2" fill="#1baf7a"/><text x="312.6" y="223" font-size="11" fill="#52514e">5.50</text>
+<text x="158" y="262.0" font-size="13" fill="#0b0b0b" text-anchor="end">Compressor x8</text>
+<rect x="170" y="236" width="143.8" height="14" rx="2" fill="#2a78d6"/><text x="318.8" y="247" font-size="11" fill="#52514e">5.75</text>
+<rect x="170" y="251" width="143.2" height="14" rx="2" fill="#eb6834"/><text x="318.2" y="262" font-size="11" fill="#52514e">5.72</text>
+<rect x="170" y="266" width="137.4" height="14" rx="2" fill="#1baf7a"/><text x="312.4" y="277" font-size="11" fill="#52514e">5.50</text>
+<text x="158" y="316.0" font-size="13" fill="#0b0b0b" text-anchor="end">Dynamic EQ-8 x8</text>
+<rect x="170" y="290" width="323.2" height="14" rx="2" fill="#2a78d6"/><text x="498.2" y="301" font-size="11" fill="#52514e">12.93</text>
+<rect x="170" y="305" width="299.9" height="14" rx="2" fill="#eb6834"/><text x="474.9" y="316" font-size="11" fill="#52514e">11.99</text>
+<rect x="170" y="320" width="266.4" height="14" rx="2" fill="#1baf7a"/><text x="441.4" y="331" font-size="11" fill="#52514e">10.65</text>
+<text x="158" y="370.0" font-size="13" fill="#0b0b0b" text-anchor="end">EQ-3 x8</text>
+<rect x="170" y="344" width="212.9" height="14" rx="2" fill="#2a78d6"/><text x="387.9" y="355" font-size="11" fill="#52514e">8.51</text>
+<rect x="170" y="359" width="217.2" height="14" rx="2" fill="#eb6834"/><text x="392.2" y="370" font-size="11" fill="#52514e">8.69</text>
+<rect x="170" y="374" width="215.7" height="14" rx="2" fill="#1baf7a"/><text x="390.7" y="385" font-size="11" fill="#52514e">8.63</text>
+<text x="158" y="424.0" font-size="13" fill="#0b0b0b" text-anchor="end">Synth alone</text>
+<rect x="170" y="398" width="33.3" height="14" rx="2" fill="#2a78d6"/><text x="208.3" y="409" font-size="11" fill="#52514e">1.33</text>
+<rect x="170" y="413" width="34.0" height="14" rx="2" fill="#eb6834"/><text x="209.0" y="424" font-size="11" fill="#52514e">1.36</text>
+<rect x="170" y="428" width="34.8" height="14" rx="2" fill="#1baf7a"/><text x="209.8" y="439" font-size="11" fill="#52514e">1.39</text>
+<line x1="170" y1="70" x2="170" y2="454" stroke="#c3c2b7"/></svg>
