@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Phaser body (a chain of LFO-swept all-pass stages, device kind
-// 24), a build of the "Nota Phaser" mockup (700 × 260) in the Flanger / Orbit language: an LFO
+// 24), a build of the "Nota Phaser" picture of the style guide (712 × 260), three pressed-in sections: an LFO
 // column (waveform, Hz or Sync, the rate as a big readout with its period, Rate and the Stereo phase
 // offset between the channels), a centre panel with the live all-pass response of L and R with the
 // notches ticked (drag: left / right = Center, up / down = Feedback) and, under it, the corner
-// frequency of both channels over two cycles with a running head, a STAGES column (2 / 4 / 6 / 8 /
+// frequency of both channels over two cycles with a running head, a Stages column (2 / 4 / 6 / 8 /
 // 12, Center, Depth in octaves, the bipolar Feedback, Mix, and the first notch's sweep and null
-// depth) with the mode the feedback makes, and a status strip. The live fc comes from the engine
+// depth) with the mode the feedback makes. The live fc comes from the engine
 // (Phaser.h scopeRead); the response is drawn from the same formula the DSP runs. Every control is
 // a device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -33,7 +33,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
     // Scope layout (Phaser::S_* / kTele).
     private const int S_FcL = 3, S_FcR = 4, S_WinPhase = 5, S_SampleRate = 10, kTele = 32;
 
-    public double Width => 700;
+    public double Width => 712;
     public bool FullBleed => true;
     public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
@@ -86,58 +86,49 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         static string PeriodF(double ms) => ms >= 1000 ? NotaNum.F($"{ms / 1000:0.00} s") : NotaNum.F($"{ms:0} ms");
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null) => new()
-        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
-        // Slider row: caps label · track · mono value.
-        Grid Slider(string label, int p, Func<double, string> fmt, string tip, double labelW = 44, double valueW = 44,
-            bool modulation = false, bool bipolar = false, Func<double, double>? snap = null)
+        // Slider row: label · value bar · value.
+        Grid Slider(string label, int p, Func<double, string> fmt, string tip, double labelW = 58, double valueW = 56,
+            bool bipolar = false, Func<double, double>? snap = null)
         {
             var bar = DeviceCardKit.SliderRow("", () => P(p), v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: valueW, modulation: modulation, bipolar: bipolar);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: valueW, bipolar: bipolar);
             readouts.Add(sync);
             Learn(bar, p);
             ToolTip.SetTip(bar, tip);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions($"{labelW},*"), VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(Caps(label));
+            g.Children.Add(DeviceBodyKit.Label(label));
             g.Children.Add(Col(bar, 1));
             return g;
         }
 
+        // A section: its title row on top (title · a control or word at the right), the body under it.
         RuleSection Island(Control head, Control body, double width = double.NaN)
         {
-            var headBar = new Border
-            {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
+            head.Margin = new Thickness(0, 0, 0, 8);
+            return DeviceBodyKit.Sec(new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(head, Avalonia.Controls.Dock.Top), body } },
+                new Thickness(12, 10, 12, 10), width);
         }
         static Grid HeadRow(Control left, Control right)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Center, MinHeight = 24 };
+            right.HorizontalAlignment = HorizontalAlignment.Right;
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;
         }
-        // A legend sample: a drawn 8px stroke and its word (never a typed dash).
+        // A legend sample: a drawn 10px stroke and its word (never a typed dash).
         static Control LegendItem(string word, IBrush ink) => new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Width = 8, Height = 1.5, Background = ink, VerticalAlignment = VerticalAlignment.Center }, Mono(word, 7, ink) },
+            Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+            Children = { new Border { Width = 10, Height = 2, Background = ink, VerticalAlignment = VerticalAlignment.Center }, DeviceBodyKit.Label(word, TextSecondary) },
         };
 
         // ======================================================================
         // LEFT — LFO: waveform · Hz / Sync · the rate · Rate · Stereo
         // ======================================================================
-        var syncSeg = Segments(new[] { "Hz", "Sync" }, () => Synced() ? 1 : 0, i => { SetP(Sync, i); RefreshAll(); }, out var syncSync, fill: true, padX: 0);
-        syncSeg.Width = 76;
+        var syncSeg = Segments(new[] { "Hz", "Sync" }, () => Synced() ? 1 : 0, i => { SetP(Sync, i); RefreshAll(); }, out var syncSync);
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, "Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays");
@@ -147,17 +138,17 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, "The LFO shape that sweeps the stages: Sine glides, Tri sweeps evenly, Saw rises and drops back");
 
-        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
-        var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
-        var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
+        var big = new TextBlock { FontSize = 34, FontWeight = FontWeight.Bold, LineHeight = 36, Foreground = TextPrimary, FontFamily = NotaFonts.UiFamily };
+        var bigSub = DeviceBodyKit.Note("", TextSecondary);
+        var period = DeviceBodyKit.Label(""); period.Margin = new Thickness(0, 2, 0, 0);
         readouts.Add(() =>
         {
             double hz = RateHz();
             if (Synced())
             {
                 big.Text = PhaserMath.DivNames[DivI()];
-                bigSub.Text = NotaNum.F($"note · {Bpm():0.##} BPM");
-                period.Text = HzF(hz) + " Hz · period " + PeriodF(PeriodMs());
+                bigSub.Text = NotaNum.F($"note · {Bpm():0.##} BPM");
+                period.Text = HzF(hz) + " Hz · period " + PeriodF(PeriodMs());
             }
             else
             {
@@ -165,36 +156,36 @@ internal sealed class PhaserDeviceBody : IDeviceBody
                 bigSub.Text = "Hz · free";
                 period.Text = "period " + PeriodF(PeriodMs());
             }
-            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
+            big.Foreground = On() ? TextPrimary : TextDisabled;
         });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
+        var bigBlock = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
 
-        var rateRow = Slider("RATE", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.02 … 8 Hz", 38, 46);
-        var divRow = Slider("RATE", Division, v => PhaserMath.DivNames[PhaserMath.DivIndex(v)],
-            "Rate — the note value of one LFO cycle, 4/1 … 1/16 with dotted (D) and triplet (T) values", 38, 46,
+        var rateRow = Slider("Rate", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.02 … 8 Hz", 48, 52);
+        var divRow = Slider("Rate", Division, v => PhaserMath.DivNames[PhaserMath.DivIndex(v)],
+            "Rate — the note value of one LFO cycle, 4/1 … 1/16 with dotted (D) and triplet (T) values", 48, 52,
             snap: v => PhaserMath.DivNorm(PhaserMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
-        var stereoRow = Slider("STEREO", Stereo, v => NotaNum.F($"{v * 180:0}°"),
-            "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite", 38, 46,
-            modulation: true, snap: v => Math.Round(v * 180) / 180);
+        var stereoRow = Slider("Stereo", Stereo, v => NotaNum.F($"{v * 180:0}°"),
+            "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite", 48, 52,
+            snap: v => Math.Round(v * 180) / 180);
 
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
+        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 10 };
         leftBody.Children.Add(waveSeg);
         leftBody.Children.Add(GRow(bigBlock, 1));
         leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
         leftBody.Children.Add(GRow(stereoRow, 3));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
+        var left = Island(HeadRow(DeviceBodyKit.Title("LFO"), syncSeg), leftBody, 180);
+        DockPanel.SetDock(left, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
-        // CENTRE — ALL-PASS RESPONSE, and fc over two cycles
+        // CENTRE — all-pass response, and fc over two cycles
         // ======================================================================
-        var fcWord = Mono("", 7, TextTertiary);
+        var fcWord = DeviceBodyKit.Label("", TextSecondary);
         var legend = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), fcWord },
+            Orientation = Orientation.Horizontal, Spacing = 10,
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", TextTertiary), fcWord },
         };
         var response = new PhaserResponseView { Value = () => (P(Center), P(Feedback)) };
         response.GestureBegin += () => { Begin(Center); Begin(Feedback); };
@@ -202,119 +193,78 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         response.Changed += (c, f) => { Raw(Center, c); Raw(Feedback, f); RefreshAll(); };
         response.ResetRequested += () => { Reset(Center); Reset(Feedback); RefreshAll(); };
         Learn(response, Center);
-        ToolTip.SetTip(response, "The notches the stages cut into the spectrum, L neutral and R teal, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; double-click resets both.");
+        ToolTip.SetTip(response, "The notches the stages cut into the spectrum, L light and R a darker grey, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; double-click resets both.");
 
-        var sweep = new PhaserSweepView { Margin = new Thickness(0, 4, 0, 0) };
-        ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now");
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(sweep, Dock.Bottom), response } };
-        var centre = Island(HeadRow(Caps("ALL-PASS RESPONSE"), legend), centreBody);
-        centre.Margin = new Thickness(5, 0);
+        var sweep = new PhaserSweepView { Margin = new Thickness(0, 8, 0, 0) };
+        ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now");
+        var centreBody = new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(sweep, Avalonia.Controls.Dock.Bottom), response } };
+        var centre = Island(HeadRow(DeviceBodyKit.Title("All-pass response"), legend), centreBody);
+        centre.Margin = new Thickness(SectionGap, 0);
 
         // ======================================================================
-        // RIGHT — STAGES: 2…12 · Center · Depth · Feedback · Mix · sweep / null readouts
+        // RIGHT — Stages: 2…12 · Center · Depth · Feedback · Mix · sweep / null readouts
         // ======================================================================
-        var modeWord = Mono("", 7, TextSecondary);
-        modeWord.Margin = new Thickness(0, 0, 5, 0);
+        var modeWord = DeviceBodyKit.Value();
         readouts.Add(() =>
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "bypass" ? TextDisabled : TextPrimary;
         });
-        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85 % the phaser whistles");
+        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85 % the phaser whistles");
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
             i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
-        foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(stageSync);
         Learn(stageSeg, Stages);
         ToolTip.SetTip(stageSeg, "All-pass stages: every two cut one notch — 2 is a gentle swirl, 12 a deep, dense sweep");
 
-        var centerRow = Slider("CENTER", Center, v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz",
-            "Center — the middle of the sweep, 50 Hz … 5 kHz: higher moves the notches up");
-        var depthRow = Slider("DEPTH", Depth, v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0} oct"),
-            "Depth — how far the LFO swings the stages around Center, up to ±3 octaves");
-        var fbRow = Slider("FEEDBACK", Feedback, v => FbF(PhaserMath.Fb(v)),
-            "Feedback — the chain's output fed back in, ±95 %: positive sharpens the peaks, negative moves and widens the notches", modulation: true, bipolar: true,
+        var centerRow = Slider("Center", Center, v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz",
+            "Center — the middle of the sweep, 50 Hz … 5 kHz: higher moves the notches up", 62);
+        var depthRow = Slider("Depth", Depth, v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0} oct"),
+            "Depth — how far the LFO swings the stages around Center, up to ±3 octaves", 62);
+        var fbRow = Slider("Feedback", Feedback, v => FbF(PhaserMath.Fb(v)),
+            "Feedback — the chain's output fed back in, ±95 %: positive sharpens the peaks, negative moves and widens the notches", 62, bipolar: true,
             snap: v => PhaserMath.FbNorm(Math.Round(PhaserMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("MIX", Mix, v => PctF(v), "Mix — 50 % gives the deepest notches; 100 % is the phase-shifted signal alone");
+        var mixRow = Slider("Mix", Mix, v => PctF(v), "Mix — 50 % gives the deepest notches; 100 % is the phase-shifted signal alone", 62);
 
         double PctAxis(double f) => Math.Clamp(Math.Log(Math.Max(f, 1e-3) / 20) / Math.Log(1000), 0, 1);
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
         {
-            value.TextAlignment = TextAlignment.Right; value.Width = 44;
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("44,*,Auto") };
-            g.Children.Add(Caps(label));
+            value.TextAlignment = TextAlignment.Right; value.Width = 56;
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*,Auto") };
+            g.Children.Add(DeviceBodyKit.Label(label));
             g.Children.Add(Col(bar, 1));
-            g.Children.Add(Col(new Border { Margin = new Thickness(6, 0, 0, 0), Child = value }, 2));
+            g.Children.Add(Col(new Border { Margin = new Thickness(8, 0, 0, 0), Child = value }, 2));
             ToolTip.SetTip(g, tip);
             return g;
         }
-        var sweepBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
-        var sweepVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
-        var nullVal = Mono("", 8, TextPrimary);
-        var reads = new Border
+        var sweepBar = new FlangerBar { Ink = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var sweepVal = DeviceBodyKit.Value();
+        var nullBar = new FlangerBar { Ink = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var nullVal = DeviceBodyKit.Value();
+        var reads = new StackPanel
         {
-            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
-            Child = new StackPanel
+            Spacing = 8, Children =
             {
-                Spacing = 4, Children =
-                {
-                    ReadRow("SWEEP", sweepBar, sweepVal, "The range the corner sweeps (20 Hz … 20 kHz on the bar), and the first notch now"),
-                    ReadRow("NULL", nullBar, nullVal, "How deep the notches cut, dB (0 … −36 on the bar)"),
-                },
+                DeviceBodyKit.Rule(),
+                ReadRow("Sweep", sweepBar, sweepVal, "The range the corner sweeps (20 Hz … 20 kHz on the bar), and the first notch now"),
+                ReadRow("Null", nullBar, nullVal, "How deep the notches cut, dB (0 … −36 on the bar)"),
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
+        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto") };
         rightBody.Children.Add(stageSeg);
         rightBody.Children.Add(GRow(centerRow, 2));
         rightBody.Children.Add(GRow(depthRow, 4));
         rightBody.Children.Add(GRow(fbRow, 6));
         rightBody.Children.Add(GRow(mixRow, 8));
         rightBody.Children.Add(GRow(reads, 10));
-        var right = Island(HeadRow(Caps("STAGES"), modeWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            double fb = Fb(), afb = Math.Abs(fb);
-            bool warn = false;
-            string foot;
-            if (!On()) foot = "Phaser bypassed: the signal passes unchanged";
-            else if (P(Mix) < 0.01f) { foot = "Mix at zero: only the dry signal is heard"; warn = true; }
-            else if (afb >= 0.85)
-            {
-                foot = "Feedback " + FbF(fb) + NotaNum.F($": peaks up to +{PhaserMath.PeakDb(P(Mix), fb):0.0} dB, the phaser whistles");
-                warn = true;
-            }
-            else if (P(Depth) < 0.01f) foot = "Depth at zero: the notches stand still";
-            else
-            {
-                int n = StagesN();
-                foot = n + " stages · " + PhaserMath.NotchCount(n, fb) + (PhaserMath.NotchCount(n, fb) == 1 ? " notch" : " notches") + " · fc "
-                    + PhaserMath.HzF(FcMin()) + " ↔ " + PhaserMath.HzF(FcMax()) + NotaNum.F($" Hz ({2 * PhaserMath.DepthOct * P(Depth):0.0} oct)");
-            }
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var right = Island(HeadRow(DeviceBodyKit.Title("Stages"), modeWord), rightBody, 194);
+        DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = DeviceBodyKit.Frame(new DockPanel { LastChildFill = true, Children = { left, right, centre } });
 
         void Refresh()
         {
