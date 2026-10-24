@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A thin horizontal volume fader matching the arrangement track-header mockup
-// (HANDOFF 1b): 3px track, filled portion, and an 8×9 draggable cap. Avalonia's
-// stock Slider is too chunky for the 64px row, so this is a purpose-built control.
+// The slider outside devices (style guide, spec 038) — track volume, Master, sends: a flat
+// 16px bar, corner 4, on the Sunken fill with no groove. A quiet grey fills up to the value
+// and a 2px Text-secondary line marks it; the value itself is written inside the bar at the
+// left (10.5 / 400), or just past the line when the fill is too short to hold it. Under the
+// pointer or in the hand it takes the value bar's colours: the soft orange tint and an
+// orange line.
 
 using System;
 using Avalonia;
@@ -15,16 +18,22 @@ namespace Nota.App;
 
 public sealed class MiniFader : Control
 {
-    private static readonly IBrush Track = NotaPalette.BgSunken;  // Brush.BgSunken
-    private static readonly IBrush Fill = NotaPalette.Rule;           // off the audio path
-    private static readonly IBrush Cap = NotaPalette.TextSecondary;
-    private static readonly IBrush FillAccent = NotaPalette.VizInk;   // on the audio path, at rest
-    private static readonly IBrush CapAccent = NotaPalette.TextPrimary;
-    private static readonly IBrush FillLive = NotaPalette.Accent;     // under the pointer or in the hand
-    private static readonly IBrush CapLive = NotaPalette.AccentBright;
+    private static readonly IBrush Ground = NotaPalette.BgSunken;
+    private static readonly IBrush Fill = NotaPalette.Derived(() => Mix(NotaPalette.BgSunken.Color, NotaPalette.TextTertiary.Color, 0.4));
+    private static readonly IBrush Line = NotaPalette.TextSecondary;
+    private static readonly IBrush FillLive = NotaPalette.AccentSoft;
+    private static readonly IBrush FillDrag = NotaPalette.Derived(() => Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.45));
+    private static readonly IBrush LineLive = NotaPalette.Accent;
+    private static readonly IBrush Ink = NotaPalette.TextPrimary;
+    private static readonly Typeface Face = NotaFonts.Sans;
 
-    /// <summary>On the audio path: neutral ink fill + cap instead of the quieter rule grey.</summary>
-    public bool Accent { get; init; }
+    public const double BarH = 16, LineW = 2;
+
+    private static Color Mix(Color a, Color b, double t)
+        => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+
+    /// <summary>The value written inside the bar (from the raw 0..max value); null writes nothing.</summary>
+    public Func<double, string>? Text { get; init; }
     /// <summary>Double-click target value, or negative to disable reset.</summary>
     public double Default { get; init; } = -1;
 
@@ -49,7 +58,7 @@ public sealed class MiniFader : Control
     {
         _max = max;
         _value = Math.Clamp(value, 0, max);
-        Height = 12;
+        Height = BarH;
         MinWidth = 40;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
@@ -124,16 +133,25 @@ public sealed class MiniFader : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0) return;
-        double cy = h / 2;
+        if (w <= 0 || h <= 0) return;
+        double bh = Math.Min(BarH, h), ty = (h - bh) / 2;
         double frac = _max > 0 ? _value / _max : 0;
         double fx = frac * w;
-
-        // Almanac slider: 3px well track, fill, 6×7 handle (SliderTrack draws the same).
-        ctx.DrawRectangle(Track, null, new Rect(0, cy - SliderTrack.TrackH / 2, w, SliderTrack.TrackH), NotaRadius.FieldValue, NotaRadius.FieldValue);
         bool live = _drag || _hover;
-        if (fx > 0) ctx.DrawRectangle(live ? FillLive : Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.FieldValue, NotaRadius.FieldValue);
-        double hw = SliderTrack.HandleW, hh = SliderTrack.HandleH;
-        ctx.DrawRectangle(live ? CapLive : Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.FieldValue, NotaRadius.FieldValue);
+        var bar = new RoundedRect(new Rect(0, ty, w, bh), NotaRadius.ValueBarValue);
+        ctx.DrawRectangle(Ground, null, bar);
+        using (ctx.PushClip(bar))
+        {
+            if (fx > 0.5) ctx.FillRectangle(_drag ? FillDrag : live ? FillLive : Fill, new Rect(0, ty, fx, bh));
+            double lx = Math.Clamp(fx, LineW / 2, w - LineW / 2) - LineW / 2;
+            ctx.FillRectangle(live ? LineLive : Line, new Rect(lx, ty, LineW, bh));
+            if (Text is { } fmt && bh >= 14)
+            {
+                var t = new NotaFormattedText(fmt(_value), NotaNum.Culture, FlowDirection.LeftToRight, Face, 10.5, Ink);
+                // Inside the fill at the left when it fits; otherwise just past the line.
+                double tx = t.Width + 12 <= fx ? 6 : Math.Min(fx + LineW + 4, w - t.Width - 4);
+                ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));
+            }
+        }
     }
 }

@@ -308,7 +308,7 @@ internal static class PluginCard
 
         float v0 = e.PluginParamGet(t, di, p);
         var value = new TextBlock { Text = Text(v0), Foreground = TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = CellW - 2 };
-        var knob = new Knob(v0, 1.0) { Accent = true, Default = e.PluginParamDefault(t, di, p), Width = Knob.SizeSecondary, Height = Knob.SizeSecondary };
+        var knob = new Knob(v0, 1.0) { Accent = true, Default = e.PluginParamDefault(t, di, p), Width = Knob.Size, Height = Knob.Size };
         knob.ValueChanged += v => { e.PluginParamSet(t, di, p, (float)v); value.Text = Text((float)v); ctx.NotifyChanged(); };
         knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, di, -1, pid);
         knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, di, -1, pid);

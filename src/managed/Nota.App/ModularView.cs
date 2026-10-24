@@ -1415,7 +1415,7 @@ public sealed class ModularView : UserControl
     {
         // Same cell as a device card (DeviceCardKit.KnobCell): secondary knob, caps label
         // over a mono value. A node passes its own label tint for modulation targets.
-        knob.Width = Knob.SizeSecondary; knob.Height = Knob.SizeSecondary;
+        knob.Width = Knob.Size; knob.Height = Knob.Size;
         var cell = (StackPanel)DeviceCardKit.KnobCell(name, knob, value, 50, labelInk: labelColor);
         cell.HorizontalAlignment = HorizontalAlignment.Center;
         cell.VerticalAlignment = VerticalAlignment.Center;

@@ -381,19 +381,14 @@
           <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="DSP 0%" FontWeight="Normal"/>
         </StackPanel>
 
-        <!-- Master: fader over its meter, with the gain in dB -->
-        <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="10,0,0,0">
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
-            <StackPanel Spacing="3" VerticalAlignment="Center">
-              <Panel x:Name="MasterVolHost" Width="88" Height="10"/>
-              <Panel x:Name="MasterMeterHost" Width="88" Height="4"/>
-            </StackPanel>
-            <TextBlock x:Name="MasterDb" Classes="Mono" FontSize="11" MinWidth="46" TextAlignment="Right"
-                       VerticalAlignment="Center" Text="{Binding Transport.MasterDbText}"
-                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+        <!-- Master: a flat bar with its dB value inside, the meter under it -->
+        <StackPanel x:Name="MasterWell" Grid.Column="9" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <Panel x:Name="MasterVolHost" Width="120" Height="16"/>
+            <Panel x:Name="MasterMeterHost" Width="120" Height="8"/>
           </StackPanel>
-        </Border>
+        </StackPanel>
       </Grid>
     </Border>
 

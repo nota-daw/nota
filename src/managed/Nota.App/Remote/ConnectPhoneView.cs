@@ -68,7 +68,7 @@ internal sealed class ConnectPhoneView : Border
         bool on = _settings.Current.RemoteEnabled;
 
         var title = new TextBlock { Text = "Connect phone", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-        var sw = new ToggleSwitch(on) { VerticalAlignment = VerticalAlignment.Center };
+        var sw = new ToggleSwitch(on, shell: true) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += v => { _settings.Current.RemoteEnabled = v; _settings.Save(); _ = _remote.ApplyAsync(); };
         var allow = new TextBlock { Text = "Allow", FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 7, Margin = new Thickness(18, 16, 18, 12) };

@@ -228,16 +228,15 @@ public partial class MainWindow : Window
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);
 
-        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
-        // sits over the master meter inside the MST module, with the gain printed in dB.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0 };
+        // The master slider: a flat bar over the master meter, its gain in dB written inside.
+        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
         var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
         masterVol.GestureBegin += masterUndo.Begin;
         masterVol.GestureEnd += masterUndo.End;
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)), MasterDb);
+        // Double-click the bar to type the master gain, ⌥-click for 0 dB.
+        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)));
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 

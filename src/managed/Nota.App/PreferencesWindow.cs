@@ -468,7 +468,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                     Text = dev.Name, FontSize = 12, Foreground = on ? TextPrimary : TextTertiary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 };
-                var sw = new ToggleSwitch(on, large: true) { VerticalAlignment = VerticalAlignment.Center };
+                var sw = new ToggleSwitch(on, large: true, shell: true) { VerticalAlignment = VerticalAlignment.Center };
                 sw.Changed += v =>
                 {
                     dot.Fill = v ? NotaPalette.Success : BorderStrong;
@@ -1484,7 +1484,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     // A settings switch (28×16) with its sentence; the sentence toggles it too.
     private static Control SwitchRow(string text, bool on, Action<bool> changed)
     {
-        var sw = new ToggleSwitch(on, large: true) { VerticalAlignment = VerticalAlignment.Center };
+        var sw = new ToggleSwitch(on, large: true, shell: true) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += changed;
         var label = new TextBlock { Text = text, FontSize = 12, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         label.Cursor = new Cursor(StandardCursorType.Hand);

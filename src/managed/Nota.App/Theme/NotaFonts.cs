@@ -79,9 +79,10 @@ internal static class NotaType
                         SectionLabel = 11, Readout = 17, Value = 11.5, Eyebrow = 10;
     public const double SectionLabelTracking = 0, EyebrowTracking = 0;
 
-    // Device scale — 7 is the floor (plot tick labels only); a label is 8 or more.
-    public const double DeviceName = 12, DeviceSection = 10.5, RowLabel = 9, KnobLabel = 8,
-                        KnobValue = 8, Axis = 7.5;
+    // Device scale (style guide): name 13/600, a parameter's value 11 over its name 10.5 (ink 3),
+    // section titles and row labels 10.5. 7 is the floor (plot tick labels only).
+    public const double DeviceName = 13, DeviceSection = 10.5, RowLabel = 10.5, KnobLabel = 10.5,
+                        KnobValue = 11, Axis = 9;
     public const double DeviceSectionTracking = 0, RowLabelTracking = 0, KnobLabelTracking = 0;
 
     public const double Floor = 7;

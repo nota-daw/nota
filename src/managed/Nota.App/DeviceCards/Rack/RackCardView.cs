@@ -1117,7 +1117,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         head.Children.Add(nameTb);
         Grid.SetColumn(rm, 1); head.Children.Add(rm);
 
-        var gain = new MiniFader(a.ChainGain(c), 2.0) { Accent = true, Width = 58, Default = 1.0 };
+        var gain = new MiniFader(a.ChainGain(c), 2.0) { Width = 58, Default = 1.0 };
         gain.ValueChanged += v => a.SetChainGain(c, (float)v);
         var pan = new MiniFader(a.ChainPan(c) * 0.5 + 0.5, 1.0) { Width = 40, Default = 0.5 };
         pan.ValueChanged += v => a.SetChainPan(c, (float)(v * 2.0 - 1.0));

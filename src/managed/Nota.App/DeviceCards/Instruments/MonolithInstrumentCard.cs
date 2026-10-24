@@ -72,7 +72,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         Control Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
 
-        Control K(string id, string name, Func<float, string>? fmt = null, bool mod = false, double sz = Knob.SizeSecondary, double cw = 46, bool inline = false)
+        Control K(string id, string name, Func<float, string>? fmt = null, bool mod = false, double sz = Knob.Size, double cw = 46, bool inline = false)
             => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
         // A table-row knob: [inline knob] value, side by side — for the oscillator rows and unison.
@@ -212,7 +212,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             T("glideon", "Glide", 0, 0); T("legato", "Legato", 0, 1);
             T("decayon", "Decay", 1, 0); T("oscmodon", "Osc mod", 1, 1);
             T("filtmodon", "Filter mod", 2, 0); T("osc3kbd", "Osc 3 kbd", 2, 1);
-            var knobs = Row(6, K("tune", "TUNE", StFmt, false, Knob.SizeSecondary, 40), K("glide", "GLIDE", GlideFmt, false, Knob.SizeSecondary, 40), K("modmix", "MOD MIX", v => $"{v * 100:0}\u2009%", false, Knob.SizeSecondary, 40));
+            var knobs = Row(6, K("tune", "TUNE", StFmt, false, Knob.Size, 40), K("glide", "GLIDE", GlideFmt, false, Knob.Size, 40), K("modmix", "MOD MIX", v => $"{v * 100:0}\u2009%", false, Knob.Size, 40));
             var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10, Height = 56 };
             Grid.SetColumn((Control)knobs, 0); Grid.SetColumn(toggles, 1);
             strip.Children.Add((Control)knobs); strip.Children.Add(toggles);
@@ -263,9 +263,9 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = filtCurve, Margin = new Thickness(0, 3, 0, 4) };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto"), ColumnSpacing = 2, VerticalAlignment = VerticalAlignment.Bottom };
             void C(Control c, int col) { Grid.SetColumn(c, col); knobs.Children.Add(c); }
-            C(K("cutoff", "CUTOFF", HzFmt, false, Knob.SizeSecondary, 44), 0);
-            C(K("emph", "EMPHASIS", EmphFmt, false, Knob.SizeSecondary, 48), 1);
-            C(K("contour", "CONTOUR", v => $"{v * 100:0}\u2009%", true, Knob.SizeSecondary, 44), 2);
+            C(K("cutoff", "CUTOFF", HzFmt, false, Knob.Size, 44), 0);
+            C(K("emph", "EMPHASIS", EmphFmt, false, Knob.Size, 48), 1);
+            C(K("contour", "CONTOUR", v => $"{v * 100:0}\u2009%", true, Knob.Size, 44), 2);
             var kbd = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = {
                 new TextBlock { Text = "Kbd ctrl", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC },
                 Row(3, Toggle("kbd1", "1/3"), Toggle("kbd2", "2/3")) } };
@@ -328,7 +328,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         }
         Control OutputTab()
         {
-            var vol = K("volume", "VOLUME", VolFmt, false, Knob.SizeMain, 60);
+            var vol = K("volume", "VOLUME", VolFmt, false, Knob.Size, 60);
             var sp = new StackPanel { Spacing = 6, Margin = new Thickness(2, 2), Children = {
                 new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { vol } },
                 new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = new StackPanel { Spacing = 4, Children = {

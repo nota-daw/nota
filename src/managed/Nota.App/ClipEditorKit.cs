@@ -267,7 +267,7 @@ internal static class ClipEditorKit
     /// rides the far right of the row (e.g. "8 beats").</summary>
     public static Border SwitchRow(string label, Func<bool> get, Action toggle, out Action sync, Control? trailing = null, double height = FieldH)
     {
-        var track = new SwitchTrack();
+        var track = new SwitchTrack(shell: true);
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 8 };
         g.Children.Add(track);
         var word = new TextBlock { Text = label, FontSize = NotaType.Body, Foreground = NotaPalette.TextStrong, VerticalAlignment = VerticalAlignment.Center };

@@ -798,9 +798,9 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
         var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var gainCell = PKnob("volume", "GAIN", "Gain", Pct, NotaSize.KnobMain, 44);
-        var driveCell = PKnob("drive", "DRIVE", "Drive", Pct, NotaSize.KnobRegular, 40);
-        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 40);
+        var gainCell = PKnob("volume", "GAIN", "Gain", Pct, NotaSize.Knob, 44);
+        var driveCell = PKnob("drive", "DRIVE", "Drive", Pct, NotaSize.Knob, 40);
+        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.Knob, 40);
         globalBottom.Children.Add(gainCell);
         Grid.SetColumn(driveCell, 1); globalBottom.Children.Add(driveCell);
         Grid.SetColumn(panCell, 2); globalBottom.Children.Add(panCell);

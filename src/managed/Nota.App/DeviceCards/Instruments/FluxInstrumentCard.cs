@@ -270,7 +270,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
 
         var scope = new FluxReactScope { VerticalAlignment = VerticalAlignment.Stretch, Live = live };
 
-        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, Teal);
+        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.Knob, 44, Teal);
         var targetSeg = Segments(Targets, TargetIdx, iv => { Begin("target"); SetP("target", iv / 3f); End("target"); Refresh(); },
             out var targetSync, fill: true, dim: () => !live, padX: 2);
         readouts.Add(targetSync);

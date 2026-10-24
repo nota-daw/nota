@@ -98,7 +98,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         };
 
         // ---- shared builders ----------------------------------------------------------
-        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.KnobSecondary, double cellW = 54,
+        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.Knob, double cellW = 54,
             IBrush? arc = null, bool emphasised = false, string? tip = null)
         {
             int pi = I(id);
@@ -341,7 +341,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var envRow = Row(16,
             (PKnob("attack", "ATTACK", v => NotaNum.Time(SamplerModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "DECAY", v => NotaNum.Time(SamplerModel.DecaySec(v))), "Auto"),
-            (PKnob("sustain", "SUSTAIN", DbLin, NotaSize.KnobMain, 58), "Auto"),
+            (PKnob("sustain", "SUSTAIN", DbLin, NotaSize.Knob, 58), "Auto"),
             (PKnob("release", "RELEASE", v => NotaNum.Time(SamplerModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
             (velBlock, "Auto"));
@@ -362,7 +362,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 7);
         ToolTip.SetTip(typeSeg, "Off · low-pass · high-pass · band-pass (12\u2009dB/oct)");
-        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobMain, 58, emphasised: true);
+        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.Knob, 58, emphasised: true);
         var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
         var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: "The cutoff follows the key, 0 … 100\u2009%");
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
@@ -437,7 +437,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
                 Slider("GLIDE", "glide", () => GlideText(G("glide")), tip: "Slide from the last note — in Mono, legato: no retrigger"),
             },
         };
-        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: "The level after everything");
+        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.Knob, 50, tip: "The level after everything");
         var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: "How much velocity sets the level");
 
         Control meterBlock;

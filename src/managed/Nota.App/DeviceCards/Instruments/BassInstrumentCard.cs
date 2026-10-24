@@ -593,8 +593,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
         var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 48);
-        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 44);
+        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.Knob, 48);
+        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.Knob, 44);
         globalBottom.Children.Add(volCell);
         Grid.SetColumn(panCell, 1); globalBottom.Children.Add(panCell);
         Grid.SetColumn(meterBlock, 2); globalBottom.Children.Add(meterBlock);
