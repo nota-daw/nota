@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A rotary knob for device / instrument parameters (the Studio dial): a 270° groove in the
-// well colour, the value arc over it — neutral ink at rest, the accent while live — a
-// raised cap on a seam and a primary-ink pointer —
-// all laid out on a 52-unit grid (groove r 21 · stroke 5, cap r 14, pointer 2.4 wide
-// reaching the cap's edge) and scaled to the knob's size. Drag vertically to change
+// A rotary knob for device / instrument parameters (style guide, spec 038): a 270° arc,
+// 2.4 wide with round ends, on the knob track; the value in orange inside a device (grey
+// for a knob off the audio path); a small centre cap; a thin ink-1 pointer from the centre
+// to the arc. A bipolar knob fills from 12 o'clock. A Flat knob is the one used outside
+// device cards (sends): no cap, the value in ink 3, orange only while live. Drag vertically to change
 // (up = increase; Ctrl/⌘/Shift = fine). Double-click resets and ⌥-click types a value
 // (ValueEntry, attached by KnobCell once `Format` is set). Same public API as
 // MiniFader (Value / max / Accent / ValueChanged / GestureBegin / GestureEnd) so it
 // drops into the plugin editors.
 //
-// A knob exists in exactly three sizes — 34 secondary · 36 regular · 44 main. Width and
-// Height are coerced onto that scale, so a call site asking for 30 or 40 gets 34 or 44.
-// The one exception is an `Inline` knob (24) that sits inside a table row, where a
-// section knob cannot fit — the Consort / Pentad / Monolith oscillator rows and ADSR strips.
+// A device knob is 26; an `Inline` knob, whose label sits beside it (Glide, an EQ band, the
+// oscillator rows and ADSR strips), is 22; a Flat knob outside a device is 28. Width and
+// Height are coerced onto that scale, whatever a call site asks for.
 
 using System;
 using Avalonia;
@@ -26,49 +25,44 @@ namespace Nota.App;
 
 public sealed class Knob : Control
 {
-    // The dial: a raised face on a seam, a well-coloured track, the value arc in neutral
-    // ink at rest and in the accent only while the knob is live (under the pointer or in
-    // the hand) — a resting value is never orange.
-    private static readonly IBrush Groove = NotaPalette.BgSunken;         // the track: well
-    private static readonly IBrush NeutralArc = NotaPalette.Rule;         // a knob off the audio path, or disabled
-    private static readonly IBrush RestArc = NotaPalette.VizInk;          // a value at rest
-    private static readonly IBrush LiveArc = NotaPalette.Accent;          // the value while it is being set
-    private static readonly IBrush Cap = NotaPalette.SurfaceRaised;
-    private static readonly IBrush CapEdge = NotaPalette.Seam;
-    private static readonly IBrush CapEdgeOff = NotaPalette.Seam;
-    private static readonly IBrush PointerNeutral = NotaPalette.TextPrimary;
+    private static readonly IBrush Track = NotaPalette.KnobTrack;
+    private static readonly IBrush DeviceArc = NotaPalette.Accent;        // a device value, at rest and live
+    private static readonly IBrush GreyArc = NotaPalette.TextTertiary;    // off the audio path, or a flat knob at rest
+    private static readonly IBrush OffArc = NotaPalette.TextDisabled;     // disabled or inactive
+    private static readonly IBrush LiveArc = NotaPalette.Accent;          // a flat knob while it is being set
+    private static readonly IBrush Cap = NotaPalette.KnobCap;
+    private static readonly IBrush CapEdge = NotaPalette.Seam;   // the guide's cap edge: Sunken in dark, Seam in light — within a step
+    private static readonly IBrush PointerOn = NotaPalette.TextPrimary;
     private static readonly IBrush PointerOff = NotaPalette.TextDisabled;
 
     private const double StartDeg = 135.0;   // down-left
     private const double SweepDeg = 270.0;   // clockwise to down-right
+    private const double Stroke = 2.4, PointerW = 1.6;
 
-    // The knob is drawn in a 52-unit box; everything scales from it.
-    private const double Grid = 52, GrooveR = 21, GrooveStroke = 5, CapR = 14, PointerW = 2.4, PointerLen = 12;
-
-    public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain, SizeInline = NotaSize.KnobInline;
+    public const double Size = NotaSize.Knob, SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat;
 
     static Knob()
     {
-        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => o is Knob { _inline: true } ? SizeInline : Snap(v)));
-        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => o is Knob { _inline: true } ? SizeInline : Snap(v)));
+        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => double.IsNaN(v) ? v : ((Knob)o).Fixed));
+        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => double.IsNaN(v) ? v : ((Knob)o).Fixed));
     }
 
-    /// <summary>Onto the three-size scale: up to 34 is secondary, under 40 regular, else main.</summary>
-    public static double Snap(double v) => double.IsNaN(v) ? v : v <= SizeSecondary ? SizeSecondary : v < 40 ? SizeRegular : SizeMain;
+    private double Fixed => _inline ? SizeInline : _flat ? SizeFlat : Size;
 
-    /// <summary>The paired light tone of a role chroma, for the pointer on a chroma arc.</summary>
-    private static IBrush PointerFor(IBrush arc)
-        => ReferenceEquals(arc, NotaPalette.Teal) ? NotaPalette.TealBright
-         : ReferenceEquals(arc, NotaPalette.Rose) ? NotaPalette.RoseBright
-         : arc;
-
-    /// <summary>The 24 px table-row knob, outside the three-size scale (see the header).</summary>
+    /// <summary>The 22 px knob with its label beside it (see the header).</summary>
     public bool Inline { get => _inline; init { _inline = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
     private readonly bool _inline;
 
-    /// <summary>On the audio path: its value arc is drawn in neutral ink (and the accent while
-    /// live) rather than the quieter rule grey of an off-path knob.</summary>
+    /// <summary>The 28 px knob outside a device card: no cap, a grey value, orange while live.</summary>
+    public bool Flat { get => _flat; init { _flat = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
+    private readonly bool _flat;
+
+    /// <summary>On the audio path: inside a device its value is orange; a knob off the audio
+    /// path draws its value in ink 3.</summary>
     public bool Accent { get; init; }
+
+    /// <summary>The value fills from 12 o'clock (pan, detune, a ± amount).</summary>
+    public bool Bipolar { get; init; }
 
     /// <summary>Overrides the value-arc colour (e.g. teal for modulation knobs); may change live
     /// (a knob that turns into a modulation depth when its mode switches).</summary>
@@ -139,8 +133,8 @@ public sealed class Knob : Control
     {
         _max = max <= 0 ? 1.0 : max;
         _value = Math.Clamp(value, 0, _max);
-        Width = SizeRegular;
-        Height = SizeRegular;
+        Width = Size;
+        Height = Size;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
     }
 
@@ -216,29 +210,29 @@ public sealed class Knob : Control
         if (w <= 0 || h <= 0) return;
         // Transparent fill makes the whole knob area hit-testable (not just the arc).
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        double k = Math.Min(w, h) / Grid;          // units → px
-        double cx = w / 2, cy = h / 2;
+        double d = Math.Min(w, h), cx = w / 2, cy = h / 2;
         double frac = _max > 0 ? _value / _max : 0;
         bool on = IsEffectivelyEnabled && !_dim;
-
         bool live = on && (_drag || _hover);
-        var arcBrush = !on ? NeutralArc : ArcColor ?? (live ? LiveArc : Accent ? RestArc : NeutralArc);
-        var pointer = !on ? PointerOff : ArcColor is { } c ? PointerFor(c) : PointerNeutral;
 
-        // Groove, then the value arc over it — round caps.
-        double r = GrooveR * k, sw = GrooveStroke * k;
-        ctx.DrawGeometry(null, new Pen(Groove, sw, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, 1));
-        if (frac > 0.001)
-            ctx.DrawGeometry(null, new Pen(arcBrush, sw, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, frac));
+        var arcBrush = !on ? OffArc
+            : ArcColor ?? (_flat ? (live ? LiveArc : GreyArc) : Accent || live ? DeviceArc : GreyArc);
+        var pointer = !on ? PointerOff : PointerOn;
 
-        // Raised face with a 1px seam edge.
-        ctx.DrawEllipse(Cap, new Pen(on ? CapEdge : CapEdgeOff, 1), new Point(cx, cy), CapR * k, CapR * k);
+        // The track, then the value arc over it — round ends. A bipolar value grows from the top.
+        double r = d / 2 - 3;
+        ctx.DrawGeometry(null, new Pen(Track, Stroke, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, 1));
+        double from = Bipolar ? 0.5 : 0;
+        if (Math.Abs(frac - from) > 0.001)
+            ctx.DrawGeometry(null, new Pen(arcBrush, Stroke, lineCap: PenLineCap.Round), Arc(cx, cy, r, Math.Min(from, frac), Math.Max(from, frac)));
 
-        // Pointer from the centre to the cap's edge.
+        // The centre cap, devices only.
+        if (!_flat) ctx.DrawEllipse(Cap, new Pen(CapEdge, 1), new Point(cx, cy), d / 2 - 5, d / 2 - 5);
+
+        // Pointer from the centre to the arc.
         double a = (StartDeg + frac * SweepDeg) * Math.PI / 180.0;
-        double len = PointerLen * k;
-        ctx.DrawLine(new Pen(pointer, PointerW * k, lineCap: PenLineCap.Round),
-            new Point(cx, cy), new Point(cx + Math.Cos(a) * len, cy + Math.Sin(a) * len));
+        ctx.DrawLine(new Pen(pointer, PointerW, lineCap: PenLineCap.Round),
+            new Point(cx, cy), new Point(cx + Math.Cos(a) * r, cy + Math.Sin(a) * r));
     }
 
     // The sweep from fraction t0..t1 as a true arc.

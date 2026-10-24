@@ -126,7 +126,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         static Control Right(Control c) { c.HorizontalAlignment = HorizontalAlignment.Right; return c; }
         static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
-        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 44, bool inline = false)
+        Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.Size, double cw = 44, bool inline = false)
             => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
         // A compact horizontal knob: [inline knob] value — for the oscillator table.
@@ -454,10 +454,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 2), Child = curve };
             var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
-            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 50));
-            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 46), 1));
-            knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, Knob.SizeSecondary, 50), 2));
-            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, Knob.SizeSecondary, 46), 3));
+            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.Size, 50));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.Size, 46), 1));
+            knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, Knob.Size, 50), 2));
+            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, Knob.Size, 46), 3));
             var j1 = new ConsortJackDot(11); var j2 = new ConsortJackDot(11);
             ToolTip.SetTip(j1, "Filt 1 cutoff input"); ToolTip.SetTip(j2, "Filt 2 cutoff input");
             cur.Add(() => { j1.Set(PatchedAt(false, 10)); j2.Set(PatchedAt(false, 11)); });
@@ -519,10 +519,10 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             cur.Add(() => { jo.Set(PatchedAt(true, 1)); jr.Set(PatchedAt(false, 1)); });
             var head = new DockPanel { Height = 14, LastChildFill = false, Children = { Docked(Caps("LFO"), Avalonia.Controls.Dock.Left), Docked(Row(4, jo, jr), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 4, 0, 0) };
-            knobs.Children.Add(K("lforate", "RATE", LfoRate, true, Knob.SizeSecondary, 44));
-            knobs.Children.Add(Col(K("lfopitch", "PITCH", LfoCents, true, Knob.SizeSecondary, 44), 1));
-            knobs.Children.Add(Col(K("lfocut", "CUTOFF", v => Pct(v), true, Knob.SizeSecondary, 44), 2));
-            knobs.Children.Add(Col(K("lfopwm", "PWM", v => Pct(v), true, Knob.SizeSecondary, 44), 3));
+            knobs.Children.Add(K("lforate", "RATE", LfoRate, true, Knob.Size, 44));
+            knobs.Children.Add(Col(K("lfopitch", "PITCH", LfoCents, true, Knob.Size, 44), 1));
+            knobs.Children.Add(Col(K("lfocut", "CUTOFF", v => Pct(v), true, Knob.Size, 44), 2));
+            knobs.Children.Add(Col(K("lfopwm", "PWM", v => Pct(v), true, Knob.Size, 44), 3));
             // The switch word carries the synced division ("SYNC 1/4"), refreshed with the card.
             var syncT = Switch("Sync", () => On("lfosync"), () => { SetP("lfosync", On("lfosync") ? 0f : 1f); Refresh(); }, out var syncPaint,
                 liveLabel: () => On("lfosync") ? $"Sync {SyncNames[Math.Clamp((int)Math.Round(G("lforate") * 13), 0, 13)]}" : "Sync");
@@ -548,7 +548,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var title = (TextBlock)head.Children[0];
             cur.Add(() => title.Text = On("dlydigital") ? "Delay · digital" : "Analog delay · BBD");
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 2, 0, 3), Child = view };
-            var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, Knob.SizeSecondary, 44), K("dlyspacing", "SPACING", DlySpc, false, Knob.SizeSecondary, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, Knob.SizeSecondary, 46), K("dlymix", "MIX", v => Pct(v), false, Knob.SizeSecondary, 40));
+            var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, Knob.Size, 44), K("dlyspacing", "SPACING", DlySpc, false, Knob.Size, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, Knob.Size, 46), K("dlymix", "MIX", v => Pct(v), false, Knob.Size, 40));
             var opts = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Chips("dlyping", new[] { "Ping", "Stereo" }, new[] { 1f, 0f }), Toggle("dlydigital", "Digital") } };
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             bottom.Children.Add(knobs); bottom.Children.Add(Col(Right(opts), 1));
@@ -844,7 +844,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Lbl("L", 7, MutedC, FontWeight.Normal)) } },
                                 new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", 7, MutedC, FontWeight.Normal)) } }, scale);
             meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(12, K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 56), meters);
+            var top = Row(12, K("volume", "VOLUME", VolDb, false, Knob.Size, 56), meters);
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Avalonia.Controls.Dock.Top),
                 Docked(Divider(new StackPanel { Spacing = 4, Children = {

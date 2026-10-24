@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The horizontal slider from the almanac's slider row: a 3px track in the well colour, a
-// brass fill, and a 6×7 Brass Light handle. Bipolar sliders fill from the centre and show
-// a 1px centre mark. An inactive slider (IsDim) loses brass — fill Border strong, handle
-// Ink 5 — but keeps its position, so the number next to it stays meaningful. A
-// modulation-depth slider (Modulation) draws in teal instead of brass, like the teal
-// arc of a modulation knob.
+// The value bar, the slider inside devices (style guide, spec 038): 16 high, corner 4, in a
+// groove; the soft orange tint fills up to the value and a 3px orange line marks it. While
+// dragged the fill deepens toward orange. Bipolar bars fill from the centre, with a 1px
+// centre mark. An inactive bar (IsDim) keeps its position in ink 4, so the number next to
+// it stays meaningful. A role chroma (Ink) recolours the line.
 //
 // It works in normalised 0..1; the caller maps to the parameter (linear, log, stepped).
 // Interaction follows the almanac (§ Interaction contract), with the one exception it allows:
@@ -28,18 +27,18 @@ namespace Nota.App;
 
 internal sealed class SliderTrack : Control
 {
-    private static readonly IBrush Groove = NotaPalette.BgSunken;
-    private static readonly IBrush Fill = NotaPalette.VizInk;          // at rest: neutral
-    private static readonly IBrush FillLive = NotaPalette.Accent;      // under the pointer or in the hand
-    private static readonly IBrush FillDim = NotaPalette.Rule;
-    private static readonly IBrush Handle = NotaPalette.TextPrimary;
-    private static readonly IBrush HandleLive = NotaPalette.AccentBright;
-    private static readonly IBrush ModFill = NotaPalette.Teal;
-    private static readonly IBrush ModHandle = NotaPalette.TealBright;
-    private static readonly IBrush HandleDim = NotaPalette.TextTertiary;
+    private static readonly IBrush Fill = NotaPalette.AccentSoft;
+    private static readonly IBrush FillDrag = NotaPalette.Derived(() => Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.45));
+    private static readonly IBrush Line = NotaPalette.Accent;
+    private static readonly IBrush FillDim = NotaPalette.Well;
+    private static readonly IBrush LineDim = NotaPalette.TextDisabled;
+    private static readonly IBrush Mark = NotaPalette.TextSecondary;   // a live level against the value
     private static readonly IBrush Centre = NotaPalette.BorderStrong;
 
-    public const double TrackH = 3, HandleW = 6, HandleH = 7, Height0 = 9;
+    public const double LineW = 3, Height0 = 16;
+
+    private static Color Mix(Color a, Color b, double t)
+        => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
 
     private double _norm;
     private bool _dim, _drag;
@@ -47,15 +46,16 @@ internal sealed class SliderTrack : Control
 
     public bool Bipolar { get; init; }
 
-    /// <summary>A modulation depth: teal fill and handle instead of brass.</summary>
+    /// <summary>A modulation depth. Drawn like any value bar: the guide keeps one orange for
+    /// every value inside a device.</summary>
     public bool Modulation { get; init; }
 
-    /// <summary>A role chroma for the fill (teal / rose), overriding brass or Modulation; its
-    /// light tone draws the handle. May change live.</summary>
+    /// <summary>A role chroma for the value line (rose for a destructive amount), overriding
+    /// orange. May change live.</summary>
     public IBrush? Ink { get => _ink; set { if (ReferenceEquals(_ink, value)) return; _ink = value; InvalidateVisual(); } }
     private IBrush? _ink;
 
-    /// <summary>A 1px teal mark at this 0..1 position (a live level against the value); NaN hides it.</summary>
+    /// <summary>A 1px mark at this 0..1 position (a live level against the value); NaN hides it.</summary>
     public double Marker { get => _marker; set { if (value.Equals(_marker)) return; _marker = value; InvalidateVisual(); } }
     private double _marker = double.NaN;
 
@@ -113,12 +113,6 @@ internal sealed class SliderTrack : Control
         Nudge((dx / span + dy / 140.0) / (fine ? 10.0 : 1.0));
     }
 
-    // Under the pointer (or in the hand) the control is live and takes the accent; at rest
-    // its value is neutral ink — the accent marks a knob or fader only while focused or dragged.
-    private bool _hover;
-    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
-    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
-
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
@@ -149,23 +143,20 @@ internal sealed class SliderTrack : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));   // whole row height hit-tests
-        double cy = h / 2, ty = cy - TrackH / 2;
-        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.FieldValue));
+        double bh = Math.Min(Height0, h), ty = (h - bh) / 2;
+        var bar = new RoundedRect(new Rect(0, ty, w, bh), NotaRadius.ValueBarValue);
+        NotaDepth.Groove(ctx, this, bar);
 
         double x = _norm * w;
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
-        if (b - a > 0.5)
-            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : _drag || _hover ? FillLive : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.FieldValue));
-        if (Bipolar)
-            ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, cy - 3, 1, 6));
-
-        if (!double.IsNaN(_marker) && !_dim)
-            ctx.FillRectangle(ModHandle, new Rect(Math.Round(Math.Clamp(_marker, 0, 1) * (w - 1)), 0, 1, h));
-
-        double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
-        IBrush inkHandle = ReferenceEquals(_ink, NotaPalette.Rose) ? NotaPalette.RoseBright
-            : ReferenceEquals(_ink, NotaPalette.Teal) ? ModHandle : _ink ?? (Modulation ? ModHandle : _drag || _hover ? HandleLive : Handle);
-        ctx.DrawRectangle(_dim ? HandleDim : inkHandle, null,
-            new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.FieldValue));
+        using (ctx.PushClip(bar))
+        {
+            if (b - a > 0.5) ctx.FillRectangle(_dim ? FillDim : _drag ? FillDrag : Fill, new Rect(a, ty, b - a, bh));
+            if (Bipolar) ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, ty + 3, 1, bh - 6));
+            if (!double.IsNaN(_marker) && !_dim)
+                ctx.FillRectangle(Mark, new Rect(Math.Round(Math.Clamp(_marker, 0, 1) * (w - 1)), ty, 1, bh));
+            double lx = Math.Clamp(x, LineW / 2, w - LineW / 2) - LineW / 2;
+            ctx.FillRectangle(_dim ? LineDim : _ink ?? Line, new Rect(lx, ty, LineW, bh));
+        }
     }
 }

@@ -176,7 +176,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         }
 
         // ---- shared builders ----------------------------------------------------------
-        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.KnobSecondary, double cellW = 54, IBrush? arc = null)
+        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.Knob, double cellW = 54, IBrush? arc = null)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };

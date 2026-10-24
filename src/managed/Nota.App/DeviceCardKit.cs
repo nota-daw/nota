@@ -20,7 +20,9 @@ namespace Nota.App;
 internal static class DeviceCardKit
 {
     internal const double CardH = 260;
-    internal const double HeaderH = 22;   // device header: a raised, bevelled 22px strip
+    internal const double HeaderH = 32;   // device header: name · preset · type tag · power
+    internal const double CardPad = 8;    // the body's distance from the card edge
+    internal const double SectionGap = 10, SectionPad = 12;   // between pressed-in sections; inside one
 
     internal static readonly IBrush Raised = NotaPalette.SurfaceRaised;
     internal static readonly IBrush Card2 = NotaPalette.SurfaceCard;
@@ -49,31 +51,27 @@ internal static class DeviceCardKit
     // readout and the Drum Rack pad labels.
     internal static string NoteName(int note) => $"{NoteNames[((note % 12) + 12) % 12]}{note / 12 - 1}";
 
-    // A parameter cell: knob, then its name (sentence case, 8/500) over a mono value 8,
-    // centred, no gap — line heights 9 and 10, so under a 34 knob the cell is exactly 53px
-    // tall. A parameter changed from its default (or what the current tab is about — pass
-    // `emphasised`) lifts its name to primary ink; the accent is kept for a knob in the
-    // hand. Under modulation the arc takes its source's chroma and the label stays neutral.
+    // A parameter cell: knob, then its value (11, ink 1) over its name (10.5, sentence case,
+    // ink 3), centred — line heights 13, so under a 26 knob the cell is ParamCell (56) tall.
+    // An Inline knob (22) puts the name and value beside it instead. A parameter changed from
+    // its default (or what the current tab is about — pass `emphasised`) lifts its name to
+    // ink 2. Under modulation the arc takes its source's chroma.
     internal static Control KnobCell(string name, Knob knob, TextBlock value, double cellW = 58, bool emphasised = false, IBrush? labelInk = null)
     {
-        knob.HorizontalAlignment = HorizontalAlignment.Center;
-        value.HorizontalAlignment = HorizontalAlignment.Center;
-        value.TextAlignment = TextAlignment.Center;
         value.FontSize = NotaType.KnobValue;
-        value.LineHeight = 10;
+        value.LineHeight = 13;
         value.FontFamily = NotaFonts.UiFamily;
         var lbl = new TextBlock
         {
-            Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
-            LineHeight = 9, Foreground = labelInk ?? TextSecondary,
-            HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = cellW - 2,
+            Text = NotaText.Label(name), FontSize = NotaType.KnobLabel,
+            LineHeight = 13, Foreground = labelInk ?? TextTertiary,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var valueInk = value.Foreground ?? TextPrimary;
         void Paint()
         {
             bool hot = knob.ArcColor is null && (emphasised || knob.IsModified);
-            lbl.Foreground = hot ? TextPrimary : labelInk ?? TextSecondary;
+            lbl.Foreground = hot ? TextSecondary : labelInk ?? TextTertiary;
             value.Foreground = valueInk;
         }
         knob.ValueSet += Paint;
@@ -81,28 +79,45 @@ internal static class DeviceCardKit
         // ⌥-click the knob, or double-click its value, to type one; double-click the knob to reset (specs/035). A knob
         // without a Format is typed by reading its value line back after each probe.
         ValueEntry.Attach(knob, name, value);
-        return new StackPanel { Width = cellW, Spacing = 0, Children = { knob, lbl, value } };
+        if (knob.Inline)
+        {
+            // Label and value beside the 22 knob (Glide, an EQ band).
+            knob.VerticalAlignment = VerticalAlignment.Center;
+            value.TextAlignment = lbl.TextAlignment = TextAlignment.Left;
+            lbl.MaxWidth = Math.Max(10, cellW - Knob.SizeInline - 6);
+            return new StackPanel
+            {
+                Width = cellW, Orientation = Orientation.Horizontal, Spacing = 6,
+                Children = { knob, new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { lbl, value } } },
+            };
+        }
+        knob.HorizontalAlignment = HorizontalAlignment.Center;
+        value.HorizontalAlignment = lbl.HorizontalAlignment = HorizontalAlignment.Center;
+        value.TextAlignment = lbl.TextAlignment = TextAlignment.Center;
+        value.Margin = new Thickness(0, 2, 0, 0);
+        lbl.MaxWidth = cellW - 2;
+        return new StackPanel { Width = cellW, Spacing = 0, Children = { knob, value, lbl } };
     }
 
-    // An on/off switch with its word to the right (always a word, never an icon; 8px
-    // sentence case inside a device). Left button toggles; right-click bubbles to the CV menu.
+    // An on/off switch with its word 6 to the right (always a word, never an icon; 11 in
+    // ink 2, sentence case). Left button toggles; right-click bubbles to the CV menu.
     // `sync` repaints from `get` — register it with the card's live-follow refreshers.
     internal static Border Switch(string label, Func<bool> get, Action toggle, out Action sync, Func<bool>? dim = null, Func<string>? liveLabel = null)
     {
         var track = new SwitchTrack();
         var txt = new TextBlock
         {
-            Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Text = NotaText.Label(label), FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { track } };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { track } };
         if (label.Length > 0 || liveLabel is not null) row.Children.Add(txt);
         var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = row };
         void Paint()
         {
             bool on = get(), d = dim?.Invoke() ?? false;
             track.IsOn = on; track.IsDim = d;
-            txt.Foreground = on && !d ? TextPrimary : d ? TextDisabled : TextSecondary;
+            txt.Foreground = d ? TextDisabled : on ? TextPrimary : TextSecondary;
             if (liveLabel is not null) txt.Text = NotaText.Label(liveLabel());
         }
         host.PointerPressed += (_, e) =>
@@ -115,31 +130,32 @@ internal static class DeviceCardKit
         return host;
     }
 
-    // Segments: a recessed strip with a rule edge, and the chosen segment a solid accent fill
-    // with derived ink — chosen is what the accent is for. 9px inside a device. Two to four
-    // choices; more than four is a dropdown. `current` returns the lit index, or −1 when
-    // the value sits between choices. `fill` spreads the segments over the full width;
-    // `padX` narrows each segment's side padding where a strip must fit a tight column, and
-    // `fontSize` drops to 8 (never below 7) where a dense control strip needs it.
+    // Segments inside a device: a groove (2 padding, corner 7) holding 20px cells (6 padding,
+    // corner 5, 11 in ink 3); the picked cell rises out of the groove in the soft tint with
+    // orange text. Two to four choices; more than four is a dropdown. `current` returns the
+    // picked index, or −1 when the value sits between choices. An inactive strip (`dim` —
+    // e.g. a shelf band's slope) draws every cell in ink 4 with nothing picked, never faded.
+    // `fill` spreads the cells over the full width; `padX` narrows each cell's side padding
+    // where a strip must fit a tight column; `fontSize` drops (never below 9) for a dense strip.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
     internal static Border Segments(string[] names, Func<int> current, Action<int> pick, out Action sync,
-        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6, double fontSize = NotaType.RowLabel)
+        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6, double fontSize = NotaType.KnobValue)
     {
         int n = names.Length;
         var cells = new Border[n];
         var texts = new TextBlock[n];
-        Panel row = fill ? new Grid { ColumnSpacing = 1 } : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
+        Panel row = fill ? new Grid() : new StackPanel { Orientation = Orientation.Horizontal };
         for (int i = 0; i < n; i++)
         {
             int iv = i;
             var tb = new TextBlock
             {
-                Text = NotaText.Label(names[i]), FontSize = Math.Max(7, fontSize), HorizontalAlignment = HorizontalAlignment.Center,
+                Text = NotaText.Label(names[i]), FontSize = Math.Max(9, fontSize), HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
             };
             var c = new Border
             {
-                CornerRadius = NotaRadius.Cell, Padding = new Thickness(padX, 1), MinWidth = minSegWidth,
+                Height = NotaSize.Seg, CornerRadius = NotaRadius.Cell, Padding = new Thickness(padX, 0), MinWidth = minSegWidth,
                 Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = tb,
             };
             c.PointerPressed += (_, e) =>
@@ -160,20 +176,21 @@ internal static class DeviceCardKit
             bool d = dim?.Invoke() ?? false;
             for (int i = 0; i < n; i++)
             {
-                bool on = i == cur;
-                cells[i].Background = on ? (d ? NotaPalette.BorderStrong : Brass) : Brushes.Transparent;
-                texts[i].Foreground = on ? (d ? TextPrimary : OnAccent) : d ? TextDisabled : TextSecondary;
-                texts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Medium;
+                bool on = i == cur && !d;
+                cells[i].Background = on ? NotaPalette.AccentSoft : Brushes.Transparent;
+                if (on) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+                else cells[i].BoxShadow = default;
+                texts[i].Foreground = on ? AccentBright : d ? TextDisabled : TextTertiary;
             }
         }
         sync = Paint;
         Paint();
         var host = new Border
         {
-            Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Field, Padding = new Thickness(1),
+            Background = NotaPalette.Groove, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             VerticalAlignment = VerticalAlignment.Center, Child = row,
         };
+        host.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
         if (!fill) host.HorizontalAlignment = HorizontalAlignment.Left;
         return host;
     }
@@ -186,10 +203,10 @@ internal static class DeviceCardKit
         return Math.Abs(values[best] - v) < 0.02f ? best : -1;
     }
 
-    // A slider row: its name (sentence case, 9/500) · a 3px track with a 6×7 handle, neutral
-    // at rest and accent while in the hand · a mono 9 value in a fixed-width right-aligned
-    // column, so values stacked in a column line up on the right. An inactive row (`dim`)
-    // drops its label and value to the faint ink — but the number stays readable.
+    // A slider row: its name (10.5, ink 3, sentence case) · a 16px value bar in a groove · the
+    // value (11, ink 1) in a fixed-width right-aligned column, so values stacked in a column
+    // line up on the right. An inactive row (`dim`) drops its label and value to ink 4 — but
+    // the number stays readable.
     //
     // Works in normalised 0..1: `norm` reads, `setNorm` writes (the caller maps to the
     // parameter and does its own follow-up); `text` formats the value for display.
@@ -208,7 +225,7 @@ internal static class DeviceCardKit
         if (!double.IsNaN(trackWidth)) track.Width = trackWidth;
         var val = new TextBlock
         {
-            FontFamily = NotaFonts.UiFamily, FontSize = 9, TextAlignment = TextAlignment.Right,
+            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.None,
         };
         if (valueWidth > 0) val.Width = valueWidth;
@@ -217,7 +234,7 @@ internal static class DeviceCardKit
         {
             lbl = new TextBlock
             {
-                Text = NotaText.Label(label), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium,
+                Text = NotaText.Label(label), FontSize = NotaType.RowLabel,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
@@ -230,7 +247,7 @@ internal static class DeviceCardKit
             track.IsDim = d;
             val.Text = text();
             val.Foreground = d ? TextDisabled : TextPrimary;
-            if (lbl is not null) lbl.Foreground = d ? TextDisabled : TextSecondary;
+            if (lbl is not null) lbl.Foreground = d ? TextDisabled : TextTertiary;
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
@@ -261,16 +278,15 @@ internal static class DeviceCardKit
         return g;
     }
 
-    /// <summary>A card section: no fill, no frame, a 1px Rule on the edges it shares with a
-    /// neighbouring section (found from the layout unless <paramref name="edges"/> names
-    /// them). Content keeps the 1px inset of the framed box it replaces. Graph windows and
-    /// wells keep their own frame — they are not sections.</summary>
+    /// <summary>A card section, pressed into the card (corner 7, a darker grey with a thin inner
+    /// edge). <paramref name="edges"/> is kept for older call sites; a pressed-in section has
+    /// no dividing rules. Graph windows keep their own frame — they are not sections.</summary>
     internal static Decorator Section(Control body, SectionEdge edges = SectionEdge.Auto)
         => new RuleSection { Edges = edges, Child = body };
 
     internal static Control Hint(string text) => new TextBlock
     {
-        Text = text, FontSize = 9, Foreground = TextTertiary,
+        Text = text, FontSize = NotaType.KnobLabel, Foreground = TextTertiary,
         VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0),
     };
 
@@ -293,27 +309,29 @@ internal static class DeviceCardKit
 
     internal static Border TextButton(string text)
     {
+        // A raised button inside a device: no border, a light top edge.
         var b = new Border
         {
-            Background = Raised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4), HorizontalAlignment = HorizontalAlignment.Center,
+            Background = NotaPalette.SurfaceHover,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 3), HorizontalAlignment = HorizontalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = text, FontSize = 9, Foreground = TextPrimary },
+            Child = new TextBlock { Text = text, FontSize = NotaType.Caption, Foreground = TextPrimary },
         };
+        b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         return b;
     }
 
     internal static Control BypassTag() => new Border
     {
-        BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
-        Padding = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary },
+        Background = NotaPalette.Well, CornerRadius = NotaRadius.Cell,
+        Padding = new Thickness(5, 1), VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.Caption, Foreground = TextTertiary },
     };
 
     // A caption above a control (centered, sentence case, secondary ink).
     internal static Control Labeled(string label, Control c)
     {
-        var lbl = new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
+        var lbl = new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.RowLabel, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
         return new StackPanel { Spacing = 2, Children = { lbl, c } };
     }
 
@@ -321,22 +339,22 @@ internal static class DeviceCardKit
     internal static Control ChipRow(string[] options, Func<int> get, Action<int> set)
         => Segments(options, () => Math.Clamp(get(), 0, options.Length - 1), set, out _);
 
-    // Preset picker "‹ Name ▾ ›" — a sunken field (a list you pick from, not a button): the
+    // Preset picker "‹ Name ▾ ›" — raised in a device header (22 high, corner 6, 11.5): the
     // name opens the factory presets for this kind with the current one checked — under an
     // "Init" entry when the caller can reset to defaults (init); ‹ › step to the previous /
     // next preset (from Init, › is the first and ‹ the last). Clicks are handled so they
     // neither select nor start dragging the card. Shared by the card shell and the rack chain
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18, Action? init = null)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null)
     {
-        double H = height;   // 18 in a card header, 22 in the device window's title bar
+        double H = height;   // 22: a card header and the device window's title bar
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
+            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var chevron = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        var chevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         DockPanel.SetDock(chevron, Dock.Right);
         var name = new Border
         {
@@ -383,18 +401,18 @@ internal static class DeviceCardKit
             };
             return b;
         }
-        Border Rule() => new() { Width = 1, Background = NotaPalette.GraphBorder };
-
-        return new Border
+        var picker = new Border
         {
-            Height = H, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Field, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
+            Height = H, Background = NotaPalette.SurfaceHover,
+            CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center,
             Child = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"),
-                Children = { Step(-1), At(Rule(), 1), At(name, 2), At(Rule(), 3), At(Step(+1), 4) },
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+                Children = { Step(-1), At(name, 1), At(Step(+1), 2) },
             },
         };
+        picker.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+        return picker;
         static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
     }
 }

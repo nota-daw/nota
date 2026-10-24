@@ -153,7 +153,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             var knob = new Nota.App.Knob(G(id), 1.0)
             {
                 Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
-                Width = NotaSize.KnobSecondary, Height = NotaSize.KnobSecondary, VerticalAlignment = VerticalAlignment.Center,
+                Width = NotaSize.Knob, Height = NotaSize.Knob, VerticalAlignment = VerticalAlignment.Center,
             };
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => Begin(id);
@@ -474,7 +474,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         meterBlock.Children.Add(meter);
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
         var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        globalBottom.Children.Add(Knob("volume", "Volume", v => NotaNum.Pct(v), size: NotaSize.KnobMain, cellW: 52));
+        globalBottom.Children.Add(Knob("volume", "Volume", v => NotaNum.Pct(v), size: NotaSize.Knob, cellW: 52));
         Grid.SetColumn(meterBlock, 1); globalBottom.Children.Add(meterBlock);
 
         var globalTop = new StackPanel

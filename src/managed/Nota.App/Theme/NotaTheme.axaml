@@ -41,13 +41,12 @@
       <sys:Double x:Key="Control.Icon">28</sys:Double>        <!-- icon button: toolbar, rail -->
       <sys:Double x:Key="Control.Transport">28</sys:Double>   <!-- transport key, an icon button -->
       <sys:Double x:Key="Control.Play">36</sys:Double>        <!-- Play is the one wide transport key -->
-      <sys:Double x:Key="Control.Console">30</sys:Double>     <!-- the recessed transport group inside the row -->
+      <sys:Double x:Key="Control.Console">32</sys:Double>     <!-- the transport keys' well: 28 + 2 × 2 -->
       <sys:Double x:Key="Control.TransportBar">44</sys:Double> <!-- the docked transport row -->
-      <sys:Double x:Key="Control.KnobSecondary">34</sys:Double>
-      <sys:Double x:Key="Control.KnobRegular">36</sys:Double>
-      <sys:Double x:Key="Control.KnobMain">44</sys:Double>
-      <sys:Double x:Key="Control.KnobInline">24</sys:Double>
-      <sys:Double x:Key="Control.ParamCell">53</sys:Double>   <!-- knob 34 + label line 9 + value line 10 -->
+      <sys:Double x:Key="Control.Knob">26</sys:Double>        <!-- device knob, centre cap -->
+      <sys:Double x:Key="Control.KnobInline">22</sys:Double>  <!-- device knob, label beside -->
+      <sys:Double x:Key="Control.KnobFlat">28</sys:Double>    <!-- knob outside a device -->
+      <sys:Double x:Key="Control.ParamCell">56</sys:Double>   <!-- knob 26 + value 13 + label 13 + gaps -->
 
       <!-- Spacing. Inside a device everything moves in 2px units, in the shell in 4px. -->
       <sys:Double x:Key="Space.DeviceHair">2</sys:Double>
@@ -577,7 +576,7 @@
        corner 9, so playback reads as one object instead of three neighbours. -->
   <Style Selector="Border.console">
     <Setter Property="Height" Value="{StaticResource Control.Console}"/>
-    <Setter Property="Padding" Value="1,0,8,0"/>
+    <Setter Property="Padding" Value="2"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Card}"/>
@@ -661,15 +660,6 @@
   </Style>
   <Style Selector="Border.segmented StackPanel">
     <Setter Property="Spacing" Value="0"/>
-  </Style>
-  <!-- The master well in the transport row: a flat well like the console. -->
-  <Style Selector="Border.transport Border.tp-well">
-    <Setter Property="Height" Value="{StaticResource Control.Console}"/>
-    <Setter Property="Padding" Value="8,0"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
-    <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
-    <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <!-- One cell: 20 high, 8 padding, corner 5, 11.5 in ink 3, no fill at rest. -->
   <Style Selector="ToggleButton.seg">
@@ -805,7 +795,7 @@
   <Style Selector="CheckBox:checked /template/ Rectangle#Knob">
     <Setter Property="HorizontalAlignment" Value="Right"/>
     <Setter Property="Margin" Value="0,0,1,0"/>
-    <Setter Property="Fill" Value="{DynamicResource Brush.Panel}"/>
+    <Setter Property="Fill" Value="{DynamicResource Brush.SurfaceDeep}"/>
   </Style>
   <Style Selector="CheckBox:indeterminate /template/ Border#Track">
     <Setter Property="Background" Value="{DynamicResource Brush.BorderStrong}"/>

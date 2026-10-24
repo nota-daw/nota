@@ -444,8 +444,8 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
         var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 50);
-        var mixCell = PKnob("drywet", "DRY/WET", "Dry/Wet", Pct, NotaSize.KnobRegular, 46);
+        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.Knob, 50);
+        var mixCell = PKnob("drywet", "DRY/WET", "Dry/Wet", Pct, NotaSize.Knob, 46);
         ToolTip.SetTip(mixCell, "Blend the sample itself (dry) with the grain cloud (wet)");
         outRow.Children.Add(volCell);
         Grid.SetColumn(mixCell, 1); outRow.Children.Add(mixCell);

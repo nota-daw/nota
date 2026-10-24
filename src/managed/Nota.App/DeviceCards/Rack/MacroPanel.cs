@@ -146,7 +146,7 @@ internal static class MacroPanel
         bool assigned = Mappings(s, m).Count > 0;
         string pid = RhythmModel.MacroId(m);
 
-        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned, Format = v => Pct((float)v) };
+        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.Size, Height = Knob.Size, IsDim = !assigned, Format = v => Pct((float)v) };
         var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.UiFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
         knob.ValueChanged += v =>
         {

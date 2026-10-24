@@ -459,7 +459,7 @@ internal static class NotaPalette
         ["Brush.BgApp"] = BgApp,                 ["Brush.LaneB"] = LaneB,
         ["Brush.Panel"] = Panel,                 ["Brush.TrackOff"] = TrackOff,
         ["Brush.SurfaceCard"] = SurfaceCard,     ["Brush.SurfaceRaised"] = SurfaceRaised,
-        ["Brush.SurfaceInset"] = SurfaceInset,
+        ["Brush.SurfaceInset"] = SurfaceInset,   ["Brush.SurfaceDeep"] = SurfaceDeep,
         ["Brush.SurfaceHover"] = SurfaceHover,   ["Brush.SurfaceActive"] = SurfaceActive,
         ["Brush.SurfaceSelected"] = SelHeaderBg,
         ["Brush.GridBeat"] = GridBeat,           ["Brush.GridBar"] = GridBar,

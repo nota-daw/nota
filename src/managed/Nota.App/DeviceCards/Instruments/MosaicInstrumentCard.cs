@@ -184,7 +184,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         };
 
         // ---- shared builders ------------------------------------------------------------------
-        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.KnobSecondary, double cellW = 52, IBrush? arc = null, string? tip = null)
+        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.Knob, double cellW = 52, IBrush? arc = null, string? tip = null)
         {
             int pi = I(id);
             if (pi < 0) return new Panel();
@@ -209,7 +209,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         }
 
         // A knob over a zone / group value (program data): live in the map, committed on release.
-        Control VKnob(string label, Func<double> getNorm, Action<double> setNorm, Func<string> fmt, double def, IBrush? arc = null, string? tip = null, double size = NotaSize.KnobSecondary)
+        Control VKnob(string label, Func<double> getNorm, Action<double> setNorm, Func<string> fmt, double def, IBrush? arc = null, string? tip = null, double size = NotaSize.Knob)
         {
             var value = new TextBlock { Text = fmt(), Foreground = TextPrimary };
             var knob = new Knob(getNorm(), 1.0) { Accent = true, ArcColor = arc, Default = def, Width = size, Height = size };
@@ -669,7 +669,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var relSwitch = Switch("", () => G("relon") >= 0.5f, () => Write("relon", G("relon") >= 0.5f ? 0 : 1), out var relSync, liveLabel: () => G("relon") >= 0.5f ? "on" : "off");
         readouts.Add(relSync);
         if (I("relon") is var rli and >= 0) MidiLearn.Bind(relSwitch, MidiTarget.PluginParam(track, -1, rli), "Release Triggers");
-        var relVolKnob = PKnob("relvol", "Rel vol", v => NotaNum.Db(MosaicModel.RelVolDb(v), signed: true), NotaSize.KnobMain, 52, tip: "The release samples' level");
+        var relVolKnob = PKnob("relvol", "Rel vol", v => NotaNum.Db(MosaicModel.RelVolDb(v), signed: true), NotaSize.Knob, 52, tip: "The release samples' level");
         var lenCurve = new MosaicCurveView
         {
             Width = 120, Height = 34,
@@ -735,7 +735,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var envRow = Row(12,
             (PKnob("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), "Auto"),
-            (PKnob("sustain", "Sustain", DbLin, NotaSize.KnobMain, 56), "Auto"),
+            (PKnob("sustain", "Sustain", DbLin, NotaSize.Knob, 56), "Auto"),
             (PKnob("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
             (PKnob("velcurve", "Vel curve", v => { int c = MosaicModel.VelCurve(v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }, arc: Teal, tip: "Velocity → level curve"), "Auto"),
@@ -758,7 +758,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1), "Let the amp envelope open (or close) the filter", on: () => G("envcutoff") >= 0.5f);
         var filterRow = Row(10,
             (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)), "Auto"),
-            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobMain, 56), "Auto"),
+            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.Knob, 56), "Auto"),
             (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
             (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: "The cutoff follows the key"), "Auto"),
             (new Panel(), "*"), (envBtn, "Auto"),
@@ -1045,7 +1045,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Grid.SetColumn(voicesTxt, 2); pedalRow.Children.Add(voicesTxt);
             sliders.Children.Add(pedalRow);
 
-            var outKnob = PKnob("output", "Output", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: "The level after everything");
+            var outKnob = PKnob("output", "Output", v => NotaNum.Pct(v), NotaSize.Knob, 50, tip: "The level after everything");
             var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: "How much velocity sets the level");
             var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
             ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });

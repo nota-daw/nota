@@ -245,12 +245,12 @@ internal static partial class DesignTokenCheck
                                  : $"icon glyphs typed as text: {string.Join(", ", offenders.Take(10))}");
 
         var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
-        yield return (knob.Contains("NotaSize.KnobSecondary") && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
-            "Knob snaps to the three almanac sizes");
+        yield return (knob.Contains("NotaSize.Knob,") && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
+            "Knob is coerced onto its sizes (26 device, 22 label beside, 28 flat)");
         var sw = File.ReadAllText(Path.Combine(app, "Controls/SwitchTrack.cs"));
-        yield return (Regex.IsMatch(sw, @"W = 18, H = 10, KnobD = 7, Inset = 1\.5"), "SwitchTrack is 18×10 with a 7px knob inset 1.5");
+        yield return (Regex.IsMatch(sw, @"W = 20, H = 12, KnobD = 8, Inset = 2\b"), "SwitchTrack is 20×12 with an 8px knob inset 2");
         var sl = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
-        yield return (Regex.IsMatch(sl, @"TrackH = 3, HandleW = 6, HandleH = 7"), "SliderTrack is a 3px track with a 6×7 handle");
+        yield return (Regex.IsMatch(sl, @"LineW = 3, Height0 = 16") && sl.Contains("NotaDepth.Groove"), "SliderTrack is a 16px value bar in a groove with a 3px line");
     }
 
     /// <summary>Numbers and labels: a display culture with a point and U+2212, units after a
@@ -347,7 +347,8 @@ internal static partial class DesignTokenCheck
             ballistics.Length == 0 ? "meters and spectra have no release ballistics" : $"meter/spectrum ballistics in: {string.Join(", ", ballistics)}");
 
         var meter = File.ReadAllText(Path.Combine(app, "Controls/MeterBar.cs"));
-        yield return (Regex.IsMatch(meter, @"ChannelW = 11, Step = 5"), "level meter channels are 11px with a 5px step");
+        yield return (Regex.IsMatch(meter, @"ChannelW = 3, Step = 1\.5") && Regex.IsMatch(meter, @"CautionAt = 0\.70, AlertAt = 0\.88"),
+            "level meter channels are 3px, 1.5 apart, green to 70 %, amber to 88 %");
 
         var arr = string.Concat(Files(app, "ArrangementView*.cs").Select(File.ReadAllText));
         yield return (!arr.Contains("PlayheadGlow") && Regex.IsMatch(arr, @"PlayheadPen = new Pen\(PlayheadBrush, 1\)"),
@@ -410,7 +411,7 @@ internal static partial class DesignTokenCheck
         var app = Path.Combine(root, "src/managed/Nota.App");
 
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
-        yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
+        yield return (Regex.IsMatch(kit, @"HeaderH = 32;"), "device card header is 32px");
 
         // Accepted exceptions (decided 2026-09-16): parameter stubs are narrow; the Bass and
         // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.) The
@@ -456,15 +457,17 @@ internal static partial class DesignTokenCheck
         yield return (radii.Length == 0,
             radii.Length == 0 ? "every Radius.* is on the 0/2/3/4/5/6/7/9 scale" : $"radii off the scale: {string.Join(", ", radii)}");
 
-        // A blurred shadow means the element floats. Only Shadow.Popover / Shadow.Modal may
-        // carry a blur; every other shadow is a bevel or an edge. They are built from the
-        // theme in NotaThemeService, one res["Shadow.*"] = … statement each.
+        // A wide blur means the element floats. Only Shadow.Popover / Shadow.Modal may blur more
+        // than 2px; the device-card depth (groove, section, switch, lifted part) is a 1–2px
+        // shadow and every other shadow is a bevel or an edge. They are built from the theme
+        // in NotaThemeService, one res["Shadow.*"] = … statement each.
         var service = File.ReadAllText(Path.Combine(app, "Theme/NotaThemeService.cs"));
         var blurred = Regex.Matches(service, @"res\[""(?<k>Shadow\.\w+)""\]\s*=(?<v>[^;]+);")
-            .Where(m => m.Groups["v"].Value.Contains("Blur") && m.Groups["k"].Value is not ("Shadow.Popover" or "Shadow.Modal"))
+            .Where(m => Regex.Matches(m.Groups["v"].Value, @"Blur = (?<b>[0-9]+)").Any(b => int.Parse(b.Groups["b"].Value) > 2)
+                        && m.Groups["k"].Value is not ("Shadow.Popover" or "Shadow.Modal"))
             .Select(m => m.Groups["k"].Value).ToList();
         yield return (blurred.Count == 0,
-            blurred.Count == 0 ? "only Shadow.Popover / Shadow.Modal carry a blur (floating layers)" : $"blurred shadows on docked surfaces: {string.Join(", ", blurred.Distinct())}");
+            blurred.Count == 0 ? "only Shadow.Popover / Shadow.Modal blur more than 2px (floating layers)" : $"blurred shadows on docked surfaces: {string.Join(", ", blurred.Distinct())}");
         var axamlShadows = Files(app, "*.axaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.EndsWith("Theme/NotaTheme.axaml"))
             .Where(f => Regex.IsMatch(File.ReadAllText(f), """BoxShadow="(?!\{)"""))
@@ -497,18 +500,20 @@ internal static partial class DesignTokenCheck
         yield return (shouters.Length == 0,
             shouters.Length == 0 ? "the shared label builders do not upper-case (NotaText.Label)" : $"upper-casing label builders: {string.Join(", ", shouters)}");
 
-        // Live or chosen: the shared value controls draw a resting value in neutral ink.
+        // Orange's third job: values inside a device are orange lines (knob arcs, value-bar
+        // lines); a graph curve stays Viz ink, and a flat knob outside a device is grey at rest.
         var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
         var graph = File.ReadAllText(Path.Combine(app, "Controls/NotaGraph.cs"));
         var slider = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
-        yield return (knob.Contains("RestArc = NotaPalette.VizInk") && graph.Contains("PrimaryPen = new Pen(NotaPalette.VizInk")
-                      && slider.Contains("Fill = NotaPalette.VizInk"),
-            "knob arcs, slider fills and graph curves are neutral at rest (accent only while live)");
+        yield return (knob.Contains("DeviceArc = NotaPalette.Accent") && knob.Contains("GreyArc = NotaPalette.TextTertiary")
+                      && graph.Contains("PrimaryPen = new Pen(NotaPalette.VizInk") && slider.Contains("Line = NotaPalette.Accent"),
+            "device knob arcs and value-bar lines are orange; graph curves are Viz ink; flat knobs are grey at rest");
 
-        // The docked shell: a 44px transport row with a 30px console, panels on a 1px seam.
+        // The docked shell: a 44px toolbar whose transport keys sit in a 32px well (28px icon
+        // buttons in 2px of well), panels on a 1px seam.
         var geo = File.ReadAllText(Path.Combine(app, "Theme/NotaGeometry.cs"));
-        yield return (Regex.IsMatch(geo, @"TransportBar = 44;") && Regex.IsMatch(geo, @"Console = 30;") && Regex.IsMatch(geo, @"Gutter = 1;"),
-            "transport row 44 · console 30 · panels meet on a 1px seam");
+        yield return (Regex.IsMatch(geo, @"TransportBar = 44;") && Regex.IsMatch(geo, @"Console = 32;") && Regex.IsMatch(geo, @"Gutter = 1;"),
+            "toolbar 44 · transport well 32 · panels meet on a 1px seam");
 
         // No value of the earlier Ember palette is in a Studio theme (the Ember themes are
         // Ember by definition — spec 011 FR-016).

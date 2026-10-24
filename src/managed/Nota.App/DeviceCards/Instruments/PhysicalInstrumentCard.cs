@@ -428,8 +428,8 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
         var outBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48);
-        var panCell = PKnob("pan", "PAN", PanText, NotaSize.KnobSecondary, 42);
+        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.Knob, 48);
+        var panCell = PKnob("pan", "PAN", PanText, NotaSize.Knob, 42);
         outBottom.Children.Add(volCell);
         Grid.SetColumn(panCell, 1); outBottom.Children.Add(panCell);
         Grid.SetColumn(meterBlock, 2); outBottom.Children.Add(meterBlock);
