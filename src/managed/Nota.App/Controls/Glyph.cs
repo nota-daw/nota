@@ -41,6 +41,18 @@ internal enum GlyphKind
 
 internal sealed class Glyph : Control
 {
+    /// <summary>The six filter types drawn as their response in a 22 × 12 box (EQ-8 and
+    /// Dynamic EQ-8 band row): high-pass, low shelf, bell, notch, high shelf, low-pass.</summary>
+    internal static readonly Geometry[] FilterShapes =
+    {
+        Geometry.Parse("M1,11 C4,4 6,3 10,3 L21,3"),
+        Geometry.Parse("M1,3 L5,3 C9,3 11,9 15,9 L21,9"),
+        Geometry.Parse("M1,9 L5,9 C8,9 9,3 11,3 C13,3 14,9 17,9 L21,9"),
+        Geometry.Parse("M1,3 L7,3 C9,3 10,11 11,11 C12,11 13,3 15,3 L21,3"),
+        Geometry.Parse("M1,9 L7,9 C11,9 13,3 17,3 L21,3"),
+        Geometry.Parse("M1,3 L12,3 C16,3 18,4 21,11"),
+    };
+
     public static readonly StyledProperty<IBrush?> ForegroundProperty =
         TextElement.ForegroundProperty.AddOwner<Glyph>();
 
