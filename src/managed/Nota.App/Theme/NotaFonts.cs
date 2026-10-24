@@ -82,7 +82,7 @@ internal static class NotaType
     // Device scale (style guide): name 13/600, a parameter's value 11 over its name 10.5 (ink 3),
     // section titles and row labels 10.5. 7 is the floor (plot tick labels only).
     public const double DeviceName = 13, DeviceSection = 10.5, RowLabel = 10.5, KnobLabel = 10.5,
-                        KnobValue = 11, Axis = 9;
+                        KnobValue = 11, Axis = 10;
     public const double DeviceSectionTracking = 0, RowLabelTracking = 0, KnobLabelTracking = 0;
 
     public const double Floor = 7;

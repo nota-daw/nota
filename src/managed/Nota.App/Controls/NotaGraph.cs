@@ -25,7 +25,7 @@ internal static class NotaGraph
     public const double Radius = NotaRadius.FieldValue;   // 3
     public const double PrimaryWidth = 1.8, SecondaryWidth = 1.4;
     public const double NodeD = 7, NodeRing = 2;
-    public const double AxisSize = 7.5, TitleSize = 8;
+    public const double AxisSize = NotaType.Axis, TitleSize = NotaType.DeviceSection;   // column-head size, ink 4; a graph title 10.5
 
     public static IBrush Ground => NotaPalette.BgSunken;
     public static IBrush Frame => NotaPalette.GraphBorder;
