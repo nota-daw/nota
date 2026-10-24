@@ -930,7 +930,9 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
 - **Status 22**: one line of caption text (Label 11, ink 2) on `BgApp`, a seam above it,
   16 px in. This is the window's status line; device cards have none.
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
-  colour (grey for master); sliders and knobs are the flat shell kind.
+  colour (grey for master); sliders and knobs are the flat shell kind, sends with their
+  amount written inside the bar. The footer's Sends and I/O toggles are chips (shown is
+  picked: the soft tint), and the A–B crossfader placeholder is a flat slider.
 
 ### Device card
 
@@ -954,17 +956,24 @@ The controls at the left of each track in the arrangement.
   in ink 3, M, S, arm (monitor on audio tracks). Controls row (20): volume (a flat slider
   with its value inside), the pan knob and its value, the input picker. Every control the
   header had stays.
-- **Colour:** a 3 px bar in the track colour down the left edge.
-- **Selected:** the header takes `TrackHeaderSelected` and its lane `LaneSelected`.
+- **Colour:** a 3 px bar in the track colour down the left edge. Inside a group the member
+  is indented 14: the group's 4 px bar runs down through it, then its own 3 px bar.
+- **Keys:** M, S and arm are 18 × 18, 4 apart; the type tag is Label 11 in ink 3; the
+  input picker is 66 wide (a custom picker, not a ComboBox, so its text never truncates),
+  and the monitor key goes ink 4 while Master is the input.
+- **Selected:** the header takes `TrackHeaderSelected` (background only, no outline) and its
+  lane `LaneSelected`.
 - **Meter** down the right edge.
+- **Rows** default to 54; below 50 a row is compact (the name row only), from 100 large.
+  The pinned Return / Master rows are one 30 px line each (name, flat slider 122, meter).
 
 ### Clip
 
 A block of notes or audio on a track lane.
 
 - **Fill:** 20 % of the track colour over the lane, corner 6.
-- **Edge:** a thin line in the track colour; **selected:** a 1 px outline in ink 1, never
-  orange.
+- **Edge:** a thin line in the track colour; **selected:** a 1.5 px outline in ink 1,
+  never orange.
 - **Content:** notes, waveform and the name (11.5 / 600) in the full track colour.
 - Audio clips draw their waveform as spaced bars by default (a 1 px stroke every 3 px,
   mirrored about the centre); Settings → Appearance → Waveform switches to Solid.
@@ -983,9 +992,13 @@ A group track and the tracks inside it.
 
 A clip slot in the Session view grid.
 
-- **Clip:** the track tint with the name in the track colour, corner 5.
-- **Selected:** a 1 px outline in ink 1, not orange.
-- **Empty:** fades back to the well.
+- **Clip:** the track tint (20 %, a step deeper while playing) with the name (11.5 / 600)
+  in the track colour and the length in ink 3; corner 5.
+- **Selected:** a 1.5 px outline in ink 1, not orange; the selected column's header takes
+  `SurfaceSelected` with no outline.
+- **Empty:** fades back to the well (`Well`).
+- **Mixer rows** under the grid use the flat shell slider with the value inside (sends and
+  volume) and the 14 px pan knob with its value beside it.
 - The inspector column is 260 and can be hidden (an Inspector icon button at the right of
   the Session toolbar, remembered in `SessionInspectorOpen`). When the toolbar is narrow
   its least-used controls fold, one at a time, into a "⋯" menu that lists whatever is
@@ -1013,9 +1026,18 @@ A device as a card in the Modular view, with its inputs and outputs for cables.
 
 ### Editor settings strip
 
-The settings row above the notes in the piano roll (`PianoRollView`): every clip setting in
-one row above the notes, so the notes get the full width. It costs about 40 px of note
-height; the help hint sits next to Notes and Envelopes. MIDI and audio share one editor
+The settings row above the notes in the piano roll (`ClipPropsView`): every clip setting in
+one row above the notes, so the notes get the full width. It costs 40 px of note height
+(`ClipEditorKit.StripH`); the help hint sits next to Notes and Envelopes in the header.
+
+- **Groups** split by short thin lines: Clip (Start, Length, the Loop switch and its
+  length), Quantize (grid menu, Quantize button, Strength as a flat slider with its value
+  inside), Transpose (−, the value, +), Selection (one line of text).
+- **Type:** group title 13 / 600 ink 1, labels 12 ink 3; fields 26 high on the well,
+  corner 6, no border. Inactive parts (Loop off, its length) in ink 4.
+- **Header row:** the clip cell (colour bar, name 13 / 600, kind in Label 11 ink 3 right
+  after the name), the tabs, then flat buttons (Fit, the snap chip, audition, Tools,
+  "Remove out of scale"): no well at rest, the well on hover, the soft tint when on. MIDI and audio share one editor
 frame (`ClipEditorKit`); the canvas sits on the ground, notes in the track colour quieter by
 velocity, selected notes orange, scale rows a neutral lift; envelopes and expression curves
 are `VizInk`, only the point under the pointer is orange.
@@ -1023,7 +1045,11 @@ are `VizInk`, only the point under the pointer is orange.
 ### Audio editor
 
 A single column, 232 wide (`AudioClipEditorView`), rearranged so nothing scrolls: Start and
-Length side by side, the Warp switch on its title row. The canvas keeps its ruler 24 and
+Length side by side; Gain as a flat slider with its value inside; the Warp title row holds
+the switch, its state ("off" or the marker count, Label 11 ink 3) and the stretch-mode menu;
+Detect tempo and To transients side by side; then the Detected row. Section titles are
+13 / 600 ink 1, row labels Label 11 ink 3, sections 14 apart on thin rules. The clip cell in
+the header puts the kind ("Audio") right after the name. The canvas keeps its ruler 24 and
 22 px warp-marker strip, and everything outside the played region is darkened.
 
 ### Arrangement
@@ -1301,19 +1327,17 @@ Places where a screen's needs override a general rule, kept on purpose:
 
 True today, not yet fixed:
 
-- **Implementation in progress on this branch.** The theme tokens (the fifteen new
-  brushes and the changed values), one typeface with tabular figures, the corner scale,
-  `NotaSize` and the shared knob, switch, value bar and meter are at the guide's values.
-  The rest of the controls, the shell, the device cards and every device, the Modular
-  nodes and the icons are redrawn commit by commit on `ui/style-guide`; until a part is
-  redrawn the app draws it the earlier way (boxed toolbar values, raised buttons,
-  solid-orange picks, 700-wide cards with a status line, Pentad's flat wheels, icons on
-  the 16 grid with a 1.5 line, Follow as a flag on a ruler).
+- **Implementation in progress on this branch.** Done: the theme tokens, the typeface,
+  the corner scale, the shared controls, the arrangement (track colours in the new order,
+  clips, two-row track headers, groups, the overview and zoom row), the browser (30 px
+  rows) and rail, the piano-roll settings strip, the audio editor column, Session slots,
+  the mixer, EQ-8 and Dynamic EQ-8. Still being redrawn on `ui/style-guide`: the other
+  device cards, the Modular nodes and the icons; until a part is redrawn the app draws it
+  the earlier way.
 - **Constants not yet at the guide's values.** The `TextBlock.*` device classes still hold
   the earlier scale (`DeviceName` 12, `RowLabel` 9, `KnobLabel` and `KnobValue` 8, `Axis`
-  7.5), while `NotaType` already has the guide's device scale; the browser's rows are 26
-  (the guide: 30); `AutoTrackColorIndex` still walks the slots in table order. Each moves
-  in the commit that redraws its users.
+  7.5), while `NotaType` already has the guide's device scale. They move in the commit
+  that redraws their users.
 - **Tests that hold the earlier layout:** `RunLayout` still checks a 22 header (the code
   is already at 32), cards 700 except a list, and browser rows 26–28. It is updated with
   the device-card and browser commits, not weakened.
