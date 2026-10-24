@@ -131,11 +131,7 @@ public sealed class AudioClipEditorView : UserControl
         var gain = SliderRow("Gain", 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
             reset: () => SetGain(1.0), valueW: 44);
         var pitchRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
-        pitchRow.Children.Add(new TextBlock
-        {
-            Text = "Pitch", Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
-            Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
-        });
+        pitchRow.Children.Add(RowLabel("Pitch", 44));
         var pitch = Stepper(_pitchText, () => Pitch(-1), () => Pitch(1), zone: 24);
         Grid.SetColumn(pitch, 1); pitchRow.Children.Add(pitch);
         // Reverse is non-destructive (the file is untouched) and free to toggle, so it
@@ -143,19 +139,25 @@ public sealed class AudioClipEditorView : UserControl
         var reverse = SwitchRow("Reverse", () => _reversed, ToggleReverse, out _syncReverse, height: 22);
         var playback = Section(SectionTitle("Playback"), 10, gain, pitchRow, reverse);
 
-        // WARP — on/off and the stretch mode, the two detectors, what they found.
-        var warpSwitch = SwitchRow("Warp", () => _warpEnabled, ToggleWarp, out _syncWarp);
+        // WARP — the title row carries the switch, its state and the stretch mode; then the
+        // tempo, the two detectors side by side, and what they found.
+        var warpSwitch = SwitchRow("", () => _warpEnabled, ToggleWarp, out _syncWarp);
         var mode = Dropdown(_warpModeText, a => ShowMenu(a, WarpModes, _warpMode, SetWarpMode));
-        mode.Width = 104;
-        var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        warpRow.Children.Add(warpSwitch);
-        Grid.SetColumn(mode, 1); warpRow.Children.Add(mode);
+        mode.Width = 96;
+        _markerCount.FontSize = NotaType.Caption;
+        _markerCount.Foreground = NotaPalette.TextTertiary;
+        var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 8 };
+        warpRow.Children.Add(TitleText("Warp"));
+        Grid.SetColumn(warpSwitch, 1); warpRow.Children.Add(warpSwitch);
+        Grid.SetColumn(_markerCount, 2); warpRow.Children.Add(_markerCount);
+        Grid.SetColumn(mode, 4); warpRow.Children.Add(mode);
         var detect = ClipEditorKit.Button("Detect tempo", AutoWarp);
         ToolTip.SetTip(detect, "Detect the file's tempo and conform it to the project");
         var transients = ClipEditorKit.Button("To transients", TransientWarp);
         ToolTip.SetTip(transients, "Pin a marker on every hit so drums lock to the grid");
-        var warp = Section(SectionTitle("Warp", _markerCount), 8,
-            warpRow, TempoRow(), Pair(detect, transients), Card(KeyValue("Detected", _detectedText)));
+        var detected = KeyValue("Detected", _detectedText);
+        detected.Height = 20;
+        var warp = Section(warpRow, 8, TempoRow(), Pair(detect, transients), detected);
 
         // ADSR — the clip's amplitude shape (the ADSR tab swaps the inspector to it). Times
         // run on a square-law slider over the clip length, so short attacks stay fine-grained.
@@ -408,11 +410,7 @@ public sealed class AudioClipEditorView : UserControl
     // "Tempo [ 87.00 BPM ] ÷2 ×2" under the Warp switch: drag the value, double-click to type.
     private Control TempoRow()
     {
-        var label = new TextBlock
-        {
-            Text = "Tempo", Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
-            Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
-        };
+        var label = RowLabel("Tempo", 44);
         _tempo = new DragNumber(120, ClipTempo.MinBpm, ClipTempo.MaxBpm, 0.5, "0.00", fontSize: NotaType.Body)
         { VerticalAlignment = VerticalAlignment.Center };
         _tempo.GestureBegin += () => _tempoGesture = true;

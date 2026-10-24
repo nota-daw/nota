@@ -17,6 +17,10 @@
 // by the row); right-click opens the parameter menu.
 // GestureBegin / GestureEnd bracket the drag so automation writes are recorded, and the
 // row's live-follow refresher should skip while Dragging.
+//
+// A Shell bar is the same control outside a device (the clip editors' rows): drawn like
+// MiniFader — flat on the Sunken fill, a quiet grey fill, a 2px ink-2 line and its value
+// written inside — taking the soft tint and an orange line only under the pointer or in the hand.
 
 using System;
 using Avalonia;
@@ -36,7 +40,12 @@ internal sealed class SliderTrack : Control
     private static readonly IBrush Mark = NotaPalette.TextSecondary;   // a live level against the value
     private static readonly IBrush Centre = NotaPalette.BorderStrong;
 
-    public const double LineW = 3, Height0 = 16;
+    private static readonly IBrush ShellGround = NotaPalette.BgSunken;
+    private static readonly IBrush ShellFill = NotaPalette.Derived(() => Mix(NotaPalette.BgSunken.Color, NotaPalette.TextTertiary.Color, 0.4));
+    private static readonly IBrush ShellLine = NotaPalette.TextSecondary;
+    private static readonly Typeface Face = NotaFonts.Sans;
+
+    public const double LineW = 3, Height0 = 16, ShellLineW = 2;
 
     private static Color Mix(Color a, Color b, double t)
         => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
@@ -46,6 +55,16 @@ internal sealed class SliderTrack : Control
     private double _lastX, _lastY;
 
     public bool Bipolar { get; init; }
+
+    /// <summary>Outside a device: flat and grey at rest, the value written inside (see above).</summary>
+    public bool Shell { get; init; }
+
+    /// <summary>The value written inside a Shell bar; null writes nothing.</summary>
+    public Func<string>? Text { get; set; }
+
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; if (Shell) InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; if (Shell) InvalidateVisual(); }
 
     /// <summary>An upright value bar (a device fader): 16 wide, filling from the bottom. Set it
     /// in the initializer; it swaps the default height for a width.</summary>
@@ -164,6 +183,7 @@ internal sealed class SliderTrack : Control
         if (w <= 0 || h <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));   // whole row height hit-tests
         if (_vertical) { RenderUpright(ctx, w, h); return; }
+        if (Shell) { RenderShell(ctx, w, h); return; }
         double bh = Math.Min(Height0, h), ty = (h - bh) / 2;
         var bar = new RoundedRect(new Rect(0, ty, w, bh), NotaRadius.ValueBarValue);
         NotaDepth.Groove(ctx, this, bar);
@@ -178,6 +198,31 @@ internal sealed class SliderTrack : Control
                 ctx.FillRectangle(Mark, new Rect(Math.Round(Math.Clamp(_marker, 0, 1) * (w - 1)), ty, 1, bh));
             double lx = Math.Clamp(x, LineW / 2, w - LineW / 2) - LineW / 2;
             ctx.FillRectangle(_dim ? LineDim : _ink ?? Line, new Rect(lx, ty, LineW, bh));
+        }
+    }
+
+    private void RenderShell(DrawingContext ctx, double w, double h)
+    {
+        double bh = Math.Min(Height0, h), ty = (h - bh) / 2;
+        var bar = new RoundedRect(new Rect(0, ty, w, bh), NotaRadius.ValueBarValue);
+        ctx.DrawRectangle(ShellGround, null, bar);
+        bool live = !_dim && (_drag || _hover);
+        double x = _norm * w;
+        double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
+        using (ctx.PushClip(bar))
+        {
+            if (b - a > 0.5 && !_dim) ctx.FillRectangle(_drag ? FillDrag : live ? Fill : ShellFill, new Rect(a, ty, b - a, bh));
+            if (Bipolar) ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, ty + 3, 1, bh - 6));
+            double lx = Math.Clamp(x, ShellLineW / 2, w - ShellLineW / 2) - ShellLineW / 2;
+            ctx.FillRectangle(_dim ? LineDim : live ? Line : ShellLine, new Rect(lx, ty, ShellLineW, bh));
+            if (Text?.Invoke() is { Length: > 0 } str && bh >= 14)
+            {
+                var t = new NotaFormattedText(str, NotaNum.Culture, FlowDirection.LeftToRight, Face, 10.5,
+                    _dim ? NotaPalette.TextDisabled : NotaPalette.TextPrimary);
+                double fx = Bipolar ? 0 : x;
+                double tx = Bipolar || t.Width + 12 <= fx ? 6 : Math.Min(fx + ShellLineW + 4, w - t.Width - 4);
+                ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));
+            }
         }
     }
 

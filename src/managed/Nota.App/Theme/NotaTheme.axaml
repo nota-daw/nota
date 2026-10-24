@@ -507,6 +507,15 @@
     <Setter Property="BorderThickness" Value="0"/>
   </Style>
 
+  <!-- A flat chip (the clip editor's header row: Fit, snap, Tools): no well at rest, the
+       well on hover, the soft tint when on. -->
+  <Style Selector="Button.chip.flat, ToggleButton.chip.flat, Button.flat">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.chip.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
+  </Style>
+
   <!-- Engaged chip (MIDI learn…): the soft tint. The .chip Foreground above is a class
        selector declared after the generic ToggleButton:checked rule, so it would win on a
        checked chip; state the orange ink here. -->
