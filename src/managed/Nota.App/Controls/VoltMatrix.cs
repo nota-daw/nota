@@ -24,7 +24,7 @@ internal sealed class VoltMatrix : Control
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush GridB = NotaGraph.Grid;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush ModInk = NotaPalette.TextSecondary;   // a modulator source: ink 2, told from audio sources by shade
     private static readonly IBrush Lit = NotaPalette.TextPrimary;
     private static readonly IBrush LitEdge = NotaPalette.BorderStrong;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
@@ -124,7 +124,7 @@ internal sealed class VoltMatrix : Control
         for (int s = 0; s < _src.Length; s++)
         {
             double cy = HeaderH + s * ch;
-            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < Modulators ? Teal : TxtC, 8);
+            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < Modulators ? ModInk : TxtC, NotaGraph.AxisSize);
             for (int d = 0; d < _dst.Length; d++)
             {
                 double cx = LabelW + d * cw;

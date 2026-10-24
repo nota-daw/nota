@@ -18,7 +18,7 @@ public sealed class ValueBar : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Border = NotaPalette.Rule;
-    private static readonly IBrush FillAccent = NotaPalette.Teal;                          // modulation
+    private static readonly IBrush FillAccent = NotaPalette.Wash(NotaPalette.Accent, 0x8C); // the guide keeps one orange for values
     private static readonly IBrush FillBrass = NotaPalette.Wash(NotaPalette.VizInk, 0x40); // at rest: neutral
     private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C);  // live
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
@@ -29,7 +29,7 @@ public sealed class ValueBar : Control
     private bool _drag;
     private double _lastY;
 
-    /// <summary>Teal fill (modulation-ish) instead of the brass default.</summary>
+    /// <summary>An orange fill instead of the neutral default.</summary>
     public bool Accent { get; init; }
     /// <summary>Value change per pixel of vertical drag.</summary>
     public double Sensitivity { get; init; } = 0.006;

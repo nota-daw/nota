@@ -591,7 +591,7 @@ public sealed class DrumPatternView : UserControl
             : step % (_res * BeatsPerBar) == 0 ? NotaPalette.SurfaceInset
             : step % _res == 0 ? NotaPalette.SurfaceDeep
             : NotaPalette.SurfaceAbyss;
-        cell.BorderBrush = play ? NotaPalette.TealBright
+        cell.BorderBrush = play ? NotaPalette.TextPrimary
             : accent ? NotaPalette.AccentBright
             : on ? Hue(_pads[r].Chain)
             : step % (_res * BeatsPerBar) == 0 ? NotaPalette.BorderDefault

@@ -1350,7 +1350,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             text = $"→ C{lastChain + 1} {pn}";
         }
         else if (count > 1) text = $"→ {count} params";
-        return new TextBlock { Text = text, FontSize = 8, Foreground = NotaPalette.TealBright, TextTrimming = TextTrimming.CharacterEllipsis };
+        return new TextBlock { Text = text, FontSize = NotaType.Axis, Foreground = NotaPalette.TextTertiary, TextTrimming = TextTrimming.CharacterEllipsis };
     }
 
     private void ShowMacroMenu(IRackAccess a, Control anchor, int m)
