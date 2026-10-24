@@ -174,7 +174,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0 dB");
+        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0\u2009dB");
         readouts.Add(() =>
         {
             float o = P(DynEq.OutputP);
@@ -317,11 +317,11 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 float r = Rng(); if (Math.Abs(r) < 0.05f) r = ModeOf(b) == DynEq.Lift ? -6 : 6;
                 SetP(pRange, -r); RefreshAll(); curve.InvalidateVisual(); e.Handled = true;
             };
-            var thr = ValueRow("Thresh", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0} dB"),
+            var thr = ValueRow("Thresh", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0}\u2009dB"),
                 "Threshold — where the band starts to act; the grey mark is the band's level now",
                 marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b))));
             var rng = ValueRow("Range", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
-                "Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost",
+                "Range — how far the gain can move at full engagement (6\u2009dB past the threshold); click the arrow to flip cut / boost",
                 getN: () => Math.Abs(Rng()) / 18.0,
                 setN: n =>
                 {

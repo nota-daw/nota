@@ -68,7 +68,7 @@ public sealed class ClipPropsView : UserControl
         qButton.Height = StripField;
         qButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
         // Strength: the shell slider, its value inside (style guide § Slider: quantize strength).
-        static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0}%", v * 100);
+        static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0}\u2009%", v * 100);
         var strength = new MiniFader(_strength, 1) { Width = 92, Default = 0.8, Text = Pct };
         strength.ValueChanged += v => _strength = v;
         ValueEntry.Attach(strength, strength.EntryField("Strength", Pct));

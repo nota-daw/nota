@@ -24,15 +24,7 @@ internal static class EqBandUi
     /// high shelf, low-pass (DynEq.TypeNames order).</summary>
     internal sealed class FilterShape : Control
     {
-        private static readonly Geometry[] Shapes =
-        {
-            Geometry.Parse("M1,11 C4,4 6,3 10,3 L21,3"),
-            Geometry.Parse("M1,3 L5,3 C9,3 11,9 15,9 L21,9"),
-            Geometry.Parse("M1,9 L5,9 C8,9 9,3 11,3 C13,3 14,9 17,9 L21,9"),
-            Geometry.Parse("M1,3 L7,3 C9,3 10,11 11,11 C12,11 13,3 15,3 L21,3"),
-            Geometry.Parse("M1,9 L7,9 C11,9 13,3 17,3 L21,3"),
-            Geometry.Parse("M1,3 L12,3 C16,3 18,4 21,11"),
-        };
+        private static readonly Geometry[] Shapes = Glyph.FilterShapes;
 
         private int _type;
         private IBrush _ink = TextSecondary;
@@ -134,7 +126,7 @@ internal static class EqBandUi
         picker.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(picker, 1);
         grid.Children.Add(picker);
-        var bar = new Border { Height = 2, CornerRadius = new CornerRadius(1), Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(4, 0, 4, 1) };
+        var bar = new Border { Height = 2, CornerRadius = NotaRadius.Fine, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(4, 0, 4, 1) };
         var cell = new Border
         {
             Height = CellH, CornerRadius = NotaRadius.Field, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
