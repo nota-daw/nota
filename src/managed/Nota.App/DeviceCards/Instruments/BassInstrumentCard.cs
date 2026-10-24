@@ -220,7 +220,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             int range = BendRange(G("bendrange"));
             double semis = (G("bend") - 0.5) * 2 * range;
             bool centred = Math.Abs(semis) < 0.05;
-            bendVal.Text = centred ? $"±{range} st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
+            bendVal.Text = centred ? $"±{NotaNum.Unit(range, "0", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
             bendVal.Foreground = centred ? TextSecondary : TextPrimary;
             bool modOn = G("modwheel") > 1e-3f;
             modVal.Text = NotaNum.Pct(G("modwheel"));

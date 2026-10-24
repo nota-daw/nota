@@ -41,7 +41,7 @@ internal static class InstrumentCardKit
                 Text = names[i], FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            var line = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(1) };
+            var line = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = NotaRadius.Fine };
             var cell = new Panel
             {
                 Height = TabRowH, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
