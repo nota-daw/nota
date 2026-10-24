@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A two-handle range slider in the almanac slider look (SliderTrack): a 3px well-colour
-// track, a brass fill between the handles and two 6×7 Brass Light handles. Works in
+// A two-ended value bar in the SliderTrack look (style guide): a 16-high groove, the soft
+// orange fill between the ends and a 3px orange line at each end. Works in
 // normalised 0..1 (the caller maps to its units and keeps a minimum gap). A press picks the
 // nearer handle and a horizontal drag moves it by the pointer's travel — a click never jumps
 // a value; Shift (or Ctrl/⌘) drags fine. Double-click resets. GestureBegin / GestureEnd
@@ -18,13 +18,11 @@ namespace Nota.App;
 
 internal sealed class RangeSliderTrack : Control
 {
-    private static readonly IBrush Groove = NotaPalette.BgSunken;
-    private static readonly IBrush Fill = NotaPalette.VizInk;           // at rest: neutral
-    private static readonly IBrush FillLive = NotaPalette.Accent;       // a handle under the pointer or in the hand
-    private static readonly IBrush Handle = NotaPalette.AccentBright;
-    private static readonly IBrush HandleIdle = NotaPalette.TextSecondary;
+    private static readonly IBrush Fill = NotaPalette.AccentSoft;
+    private static readonly IBrush Line = NotaPalette.Accent;
+    private static readonly IBrush LineHot = NotaPalette.AccentBright;   // an end under the pointer or in the hand
 
-    private const double TrackH = 3, HandleW = 6, HandleH = 7;
+    private const double LineW = SliderTrack.LineW;
 
     private double _lo, _hi = 1, _lastX;
     private int _drag = -1, _hover = -1;
@@ -44,7 +42,7 @@ internal sealed class RangeSliderTrack : Control
 
     public RangeSliderTrack()
     {
-        Height = 12;
+        Height = SliderTrack.Height0;
         MinWidth = 40;
         Cursor = new Cursor(StandardCursorType.SizeWestEast);
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
@@ -118,16 +116,20 @@ internal sealed class RangeSliderTrack : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        double cy = h / 2, ty = cy - TrackH / 2;
-        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.FieldValue));
+        double bh = Math.Min(SliderTrack.Height0, h), ty = (h - bh) / 2;
+        var bar = new RoundedRect(new Rect(0, ty, w, bh), NotaRadius.ValueBarValue);
+        NotaDepth.Groove(ctx, this, bar);
         double a = _lo * w, b = _hi * w;
-        if (b - a > 0.5) ctx.DrawRectangle(_drag >= 0 || _hover >= 0 ? FillLive : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.FieldValue));
-        for (int k = 0; k < 2; k++)
+        using (ctx.PushClip(bar))
         {
-            double x = k == 0 ? a : b;
-            double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
-            bool hot = _drag == k || _hover == k;
-            ctx.DrawRectangle(hot ? Handle : HandleIdle, null, new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.FieldValue));
+            if (b - a > 0.5) ctx.FillRectangle(Fill, new Rect(a, ty, b - a, bh));
+            for (int k = 0; k < 2; k++)
+            {
+                double x = k == 0 ? a : b;
+                double lx = Math.Clamp(x, LineW / 2, w - LineW / 2) - LineW / 2;
+                bool hot = _drag == k || _hover == k;
+                ctx.FillRectangle(hot ? LineHot : Line, new Rect(lx, ty, LineW, bh));
+            }
         }
     }
 }

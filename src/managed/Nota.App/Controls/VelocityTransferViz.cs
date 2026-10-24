@@ -23,8 +23,7 @@ namespace Nota.App;
 
 internal sealed class VelocityTransferViz : Control
 {
-    private static readonly IBrush Well = NotaPalette.BgSunken;
-    private static readonly IBrush WellEdge = NotaPalette.GraphBorder;
+    private static readonly IBrush Well = NotaPalette.Groove;
     private static readonly IBrush Cross = NotaPalette.GridBeat;
     private static readonly IBrush Limit = NotaPalette.BorderStrong;
     private static readonly IBrush Diag = NotaPalette.BorderDefault;
@@ -98,7 +97,7 @@ internal sealed class VelocityTransferViz : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         var well = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(Well, new Pen(WellEdge, 1), new RoundedRect(well.Deflate(0.5), NotaRadius.FieldValue));
+        ctx.DrawRectangle(Well, null, new RoundedRect(well, NotaRadius.FieldValue));
         using var clip = ctx.PushClip(new RoundedRect(well.Deflate(1), NotaRadius.FieldValue));
         double iw = w - 2, ih = h - 2;
         Point P(double xn, double yn) => new(1 + xn * iw, 1 + (1 - Math.Clamp(yn, 0, 1)) * ih);
