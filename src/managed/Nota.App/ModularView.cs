@@ -1042,7 +1042,8 @@ public sealed class ModularView : UserControl
             viz.Set(buf, m);
         });
         // Unwired, the scope says what it can watch: a modulator's CV, patched into its input. It
-        // doesn't tap audio — a first-time user tried to hang it off a filter's output (#261).
+        // doesn't tap audio — a first-time user tried to hang it off a filter's output (#261). The hint
+        // stands in for the trace, which would only draw a flat line through it.
         Control body = viz;
         if ((int)Math.Round(e.ModulatorGet(t, modId, 10)) < 0)
         {
@@ -1052,7 +1053,7 @@ public sealed class ModularView : UserControl
                 FontSize = 9, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
             };
-            body = new Panel { Children = { viz, hint } };
+            body = hint;
         }
         var vizBox = new Border { Height = 76, Margin = new Thickness(9, 6), Child = body };
         col.Children.Add(Row(vizBox, 2));
