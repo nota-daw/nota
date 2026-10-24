@@ -107,8 +107,8 @@ All paths are under `src/managed/Nota.App/` unless they start with a top-level f
 - [x] T041 CHANGELOG `[Unreleased]`, FEATURES.md (EQ-8 band row and fold)
 - [ ] T042 (open: the guide is the shared style-guide page, not a repo file) Correct the style guide's EQ-8 sizes (920 / 776) and add a Vocoder picture
 - [x] T043 `scripts/build-linux.sh` with `CI=true`; fix anything red
-- [ ] T044 Mac check through the Mac session (build, smoke test, hands-on look)
-- [ ] T045 Push `ui/style-guide`, draft PR against develop with before/after images in
+- [x] T044 Mac check through the Mac session (build, smoke test, hands-on look)
+- [x] T045 Push `ui/style-guide`, draft PR against develop with before/after images in
   `pr-assets/pr-NNN/`, then ready for review when CI is green
 - [x] T046 Follow-up nota-docs PR: re-shoot manual screenshots (EN + RU)
 
