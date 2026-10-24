@@ -402,7 +402,7 @@ internal static partial class DesignTokenCheck
             yield return (hits[name].Count == 0, hits[name].Count == 0 ? $"no {name}" : $"{name}: {string.Join(", ", hits[name].Take(8))}");
     }
 
-    /// <summary>Layout: device cards 700 wide with a 22px header (documented exceptions only),
+    /// <summary>Layout: device cards 260 high with a 32px header and a width that fits the device,
     /// transport at the top, list rows 26. See DESIGN.md § Device cards and § Shell.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunLayout()
     {
@@ -413,19 +413,17 @@ internal static partial class DesignTokenCheck
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
         yield return (Regex.IsMatch(kit, @"HeaderH = 32;"), "device card header is 32px");
 
-        // Accepted exceptions (decided 2026-09-16): parameter stubs are narrow; the Bass and
-        // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.) The
-        // generic instrument card is an "Open GUI" stub, 170 wide since before it joined the
-        // shared shell (spec 012).
-        // Volt grew to 790 when it absorbed Nota Synth and Nota Bass (specs/026).
-        var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs", "GenericInstrumentCard.cs", "VoltInstrumentCard.cs" };
+        // Style guide (spec 038): every card is 260 high and its width fits the device. A width
+        // outside 260–940 is a layout that has lost its frame. The generic instrument card is an
+        // "Open GUI" stub (170) and parameter stubs are narrow.
+        yield return (Regex.IsMatch(kit, @"CardH = 260;"), "device cards are 260 high");
+        var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs", "GenericInstrumentCard.cs" };
         var off = Files(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")
-                .Where(m => m.Groups["w"].Value != "700").Select(m => $"{Path.GetFileName(f)} ({m.Groups["w"].Value})"))
+                .Where(m => int.Parse(m.Groups["w"].Value) is < 260 or > 940).Select(m => $"{Path.GetFileName(f)} ({m.Groups["w"].Value})"))
             .ToArray();
-        yield return (off.Length == 0, off.Length == 0 ? "device cards are 700 wide (documented exceptions aside)" : $"cards off the 700 format: {string.Join(", ", off)}");
+        yield return (off.Length == 0, off.Length == 0 ? "device card widths fit their devices (260–940)" : $"cards outside 260–940 wide: {string.Join(", ", off)}");
 
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
         yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
