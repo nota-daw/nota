@@ -850,7 +850,7 @@ def toolbar(compact=False):
     right = (f'<span class="stat"><i class="sdot on"></i>MIDI</span><span class="stat"><i class="sdot"></i>Remote</span>'
              f'{slider(110, 0.74, "Master · 0.0 dB")}')
     sep = '<span class="vsep"></span>'
-    return (f'<div class="toolbar">{views}{sep}{transport}{timing}{pills}{sep}{grid}{sep}{tools}'
+    return (f'<div class="toolbar">{views}{transport}{timing}{pills}{sep}{grid}{sep}{tools}'
             f'<span class="flex"></span>{right}</div>')
 
 

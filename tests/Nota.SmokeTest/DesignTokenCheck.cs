@@ -437,8 +437,8 @@ internal static partial class DesignTokenCheck
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
         yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
             "transport is a docked row at the top of the window");
-        yield return (Regex.IsMatch(main, "<StackPanel Grid.Column=\"1\"[^>]*>\\s*<Border Classes=\"tb-sep\"/>\\s*<Border Classes=\"console\">"),
-            "transport keys sit in the console well, first in the transport-and-timing group");
+        yield return (Regex.IsMatch(main, "<StackPanel Grid.Column=\"1\"[^>]*>\\s*<Border Classes=\"console\">"),
+            "transport keys sit in the console well, first in the transport-and-timing group, with no rule after the views");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
         yield return (Regex.IsMatch(browser, @"const double RowH = 30;"), "browser list rows are 30px (style guide)");

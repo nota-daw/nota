@@ -578,7 +578,9 @@ option is raised.
 
 The bar across the top: views, transport, tempo, grid and tools.
 
-- **Groups:** views, transport and timing, grid, tools, master, split by short thin lines.
+- **Groups:** views, transport and timing, grid, tools, master. The views and the transport
+  well sit 12 apart with no line between them (both are wells already); the later groups
+  are split by short thin lines.
 - **Values** are plain numbers at Readout 17 / 500 with the unit in ink 3 (`124.00 BPM`,
   `1.1.00 bars`); no box.
 - **Toggles:** Overdub and Tap are small pills on the well; Tap keeps its four beat dots.
@@ -946,8 +948,10 @@ The card each instrument or effect lives in, in the device panel.
   included.
 - **Sections** are pressed in, corner 7; 8 from the card edge, 10 apart, 12 padding
   inside; rows spread to fill the height.
-- **No status line:** nothing sits under the card. A control or readout that lived there
-  moves into the card (§ Devices).
+- **No status line:** nothing sits under the card. A control or a device's own readout that
+  lived there moves into the card (§ Devices). The engine readouts every status line ended
+  with (sample rate, latency, voices, CPU) go, as the style guide's Changes section lists
+  for each device.
 
 ### Track header
 

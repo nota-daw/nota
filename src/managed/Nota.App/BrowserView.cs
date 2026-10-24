@@ -411,7 +411,7 @@ public sealed class BrowserView : UserControl
             Child = grid,
         };
         outer.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
-        outer.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        outer.BindResource(Border.BackgroundProperty, "Brush.Panel");
         outer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = outer;
 

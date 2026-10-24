@@ -283,21 +283,37 @@ public sealed partial class DeviceChainView : UserControl
             });
 
             // The return's colour and letter over the knob, so the column reads as that bus.
+            int colorIdx = ArrangementView.EffectiveColorIndex(_engine, ti.Id);
+            var swatch = new Border
+            {
+                Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
+                Background = ArrangementView.TrackBrush(colorIdx),
+            };
             var tag = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
                 Children =
                 {
-                    new Border
-                    {
-                        Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
-                        Background = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id)),
-                    },
+                    swatch,
                     new TextBlock { Text = letter.ToString(), FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
                 },
             };
-            var column = new StackPanel { Width = SendColumnW, Children = { tag, KnobCell(returnName, knob, value, SendColumnW) } };
+            var cell = (Panel)KnobCell(returnName, knob, value, SendColumnW);
+            var nameLbl = (TextBlock)cell.Children[2];   // knob · value · name
+            var column = new StackPanel { Width = SendColumnW, Children = { tag, cell } };
             ToolTip.SetTip(column, $"Send {letter} to {returnName}");
+            // Follow a rename or recolour of the return made elsewhere (Session, the arrangement),
+            // checked every half second or so rather than on every tick.
+            int retId = ti.Id, tick = 0;
+            string shownName = returnName;
+            _deviceLiveRefreshers.Add(() =>
+            {
+                if (++tick % 15 != 0) return;
+                int c = ArrangementView.EffectiveColorIndex(_engine, retId);
+                if (c != colorIdx) { colorIdx = c; swatch.Background = ArrangementView.TrackBrush(c); }
+                string n = _engine.GetTrackName(retId);
+                if (n.Length > 0 && n != shownName) { shownName = n; nameLbl.Text = NotaText.Label(n); ToolTip.SetTip(column, $"Send {letter} to {n}"); }
+            });
             columns.Children.Add(column);
             shown++;
         }

@@ -41,7 +41,6 @@ internal sealed class EqDeviceBody : IDeviceBody
     public string? Subtitle => "Equalizer";   // the processing type, shown as the header badge
 
     // Whether the right column is folded, per track and device: view state for this session only.
-    private static readonly Dictionary<(int, int), bool> Folded = new();
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -73,6 +72,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         double Sc(int i) => scN > i ? scope[i] : 0;
 
         var curve = new Eq8Curve(engine, track, di);
+        if (EqBandUi.PickedBand(track, di) is int picked) curve.SelectedBand = picked;   // survives a chain rebuild
         void RefreshAll()
         {
             for (int i = 0; i < readouts.Count; i++) readouts[i]();
@@ -280,7 +280,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         graphSection.Margin = new Thickness(0, 0, SectionGap, 0);
         bodyRow.Children.Add(right); bodyRow.Children.Add(graphSection);
 
-        bool folded = Folded.TryGetValue((track, di), out var f0) && f0;
+        bool folded = EqBandUi.IsFolded(track, di);
         void Rebuild()
         {
             bandReadouts.Clear();
@@ -291,9 +291,9 @@ internal sealed class EqDeviceBody : IDeviceBody
             bodyRow.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
         }
-        void SetFolded(bool v) { folded = v; Folded[(track, di)] = v; Rebuild(); RefreshAll(); }
+        void SetFolded(bool v) { folded = v; EqBandUi.SetFolded(track, di, v); Rebuild(); RefreshAll(); }
         Rebuild();
-        curve.SelectionChanged += () => { Rebuild(); RefreshAll(); };
+        curve.SelectionChanged += () => { EqBandUi.SetPickedBand(track, di, curve.SelectedBand); Rebuild(); RefreshAll(); };
         curve.Edited += RefreshAll;
         var root = bodyRow;
 

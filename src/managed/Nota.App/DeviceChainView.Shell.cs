@@ -77,6 +77,7 @@ public sealed partial class DeviceChainView
     private void RemapExtras(ChainKind k, Func<int, int> map)
     {
         if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
+        if (k == ChainKind.Effect) EqBandUi.RemapViews(_trackId, map);   // an EQ's fold and picked band follow its device
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);

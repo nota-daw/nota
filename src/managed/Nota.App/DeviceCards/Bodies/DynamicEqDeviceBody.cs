@@ -42,7 +42,6 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
     public string? Subtitle => "Dynamic EQ";
 
     // Whether the right panel is folded, per track and device: view state for this session only.
-    private static readonly Dictionary<(int, int), bool> Folded = new();
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -77,6 +76,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         int scN = 0;
 
         var curve = new DynamicEqCurve(engine, track, di);
+        if (EqBandUi.PickedBand(track, di) is int picked) curve.SelectedBand = picked;   // survives a chain rebuild
         int Sel() => curve.SelectedBand;
         bool BandOn(int b) => B(b, DynEq.On) > 0.5f;
         int TypeOf(int b) => Math.Clamp((int)Math.Round(B(b, DynEq.TypeF)), 0, 5);
@@ -427,7 +427,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         graphSection.Margin = new Thickness(0, 0, SectionGap, 0);
         var root = new DockPanel { LastChildFill = true, Children = { Docked(right, Dock.Right), graphSection } };
 
-        bool folded = Folded.TryGetValue((track, di), out var f0) && f0;
+        bool folded = EqBandUi.IsFolded(track, di);
         void Rebuild()
         {
             bandReadouts.Clear();
@@ -446,9 +446,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             root.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
         }
-        void SetFolded(bool v) { folded = v; Folded[(track, di)] = v; Rebuild(); RefreshAll(); }
+        void SetFolded(bool v) { folded = v; EqBandUi.SetFolded(track, di, v); Rebuild(); RefreshAll(); }
         Rebuild();
-        curve.SelectionChanged += () => { Rebuild(); RefreshAll(); };
+        curve.SelectionChanged += () => { EqBandUi.SetPickedBand(track, di, curve.SelectedBand); Rebuild(); RefreshAll(); };
         curve.Edited += RefreshAll;
 
         void Refresh()

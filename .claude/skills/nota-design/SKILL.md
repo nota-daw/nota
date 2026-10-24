@@ -139,7 +139,7 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   right-click menu.
 - **Body:** sections pressed in (`DeviceCardKit.Section`), 8 from the card edge, 10 apart,
   12 padding inside, rows spread to fill the height. Columns run choice → work → output.
-  **No status line** under the card: anything that lived there moves into the card.
+  **No status line** under the card: a control or device readout that lived there moves into the card; the engine readouts (sample rate, latency, voices, CPU) go.
 - **Inside:** capped knobs (26, or 22 with the label beside), value bars for every slider
   (16 high in a groove, soft fill, 3 px orange line; upright for faders), segment groups in
   a groove with the picked cell raised, square switches (20 × 12, orange when on), the

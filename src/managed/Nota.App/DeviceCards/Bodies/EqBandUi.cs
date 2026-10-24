@@ -7,6 +7,8 @@
 // of the band panel, and the arrow that folds the side panel.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -19,6 +21,22 @@ namespace Nota.App;
 internal static class EqBandUi
 {
     internal const double ChipH = 20, BadgeD = 18;
+
+    // Each EQ card's view state by (track, effect slot): whether its right panel is folded and
+    // which band is picked, so a rebuild of the chain (reselecting the track, adding a return)
+    // keeps both. The chain view remaps it with the cards' other state when devices move or go
+    // (RemapViews), so it stays with its device rather than its slot.
+    private static readonly Dictionary<(int Track, int Slot), (bool Folded, int Band)> Views = new();
+    internal static bool IsFolded(int track, int slot) => Views.TryGetValue((track, slot), out var v) && v.Folded;
+    internal static void SetFolded(int track, int slot, bool folded) => Views[(track, slot)] = (folded, PickedBand(track, slot) ?? -1);
+    internal static int? PickedBand(int track, int slot) => Views.TryGetValue((track, slot), out var v) && v.Band >= 0 ? v.Band : null;
+    internal static void SetPickedBand(int track, int slot, int band) => Views[(track, slot)] = (IsFolded(track, slot), band);
+    internal static void RemapViews(int track, Func<int, int> map)
+    {
+        var mine = Views.Where(kv => kv.Key.Track == track).ToList();
+        foreach (var kv in mine) Views.Remove(kv.Key);
+        foreach (var kv in mine) { int ni = map(kv.Key.Slot); if (ni >= 0) Views[(track, ni)] = kv.Value; }
+    }
 
     /// <summary>A filter type drawn as its response, 22 × 12: high-pass, low shelf, bell, notch,
     /// high shelf, low-pass (DynEq.TypeNames order).</summary>
@@ -88,13 +106,14 @@ internal static class EqBandUi
             Text = (band + 1).ToString(), FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, FontWeight = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var shape = new FilterShape { Width = 15, Height = 8, Margin = new Thickness(2, 0, 0, 0) };
+        // The shape sits centred in the space between the number and the frequency.
+        var shape = new FilterShape { Width = 15, Height = 8, Margin = new Thickness(2, 0), HorizontalAlignment = HorizontalAlignment.Center };
         var hz = new TextBlock
         {
             FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.None, Margin = new Thickness(2, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.None,
         };
-        var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
+        var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         line.Children.Add(num);
         Grid.SetColumn(shape, 1); line.Children.Add(shape);
         Grid.SetColumn(hz, 2); line.Children.Add(hz);
