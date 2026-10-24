@@ -3,15 +3,13 @@
 //
 // Nota Shutter (device kind 19) card windows, all read from the engine's telemetry
 // (Shutter.h scopeRead) so the picture is what the gate does:
-//  · ShPill — a State column pill meter: a level rising from the bottom (input / key, with
-//    the threshold tick) or a reduction hanging from the top.
-//  · ShSignalView — the Signal tab: the input over the window as teal columns, the gated
+//  · ShSignalView — the Signal tab: the input over the window as darker grey columns, the gated
 //    output in neutral ink, the threshold and the close level (dashed) where
 //    they act. Drag a line up or down to set the threshold / the return.
 //  · ShEnvelopeView — the Envelope tab: one opening drawn from the attack / hold / release /
 //    shape / floor (inverted for Duck). Drag the nodes sideways for the times, the floor up
 //    or down.
-//  · ShKeyView — the Sidechain tab: the detector band-pass (teal, 12 dB/oct) with its HP /
+//  · ShKeyView — the Sidechain tab: the detector band-pass (a darker grey, 12 dB/oct) with its HP /
 //    LP nodes to drag, under the reduction over the window (neutral ink).
 //  · ShPatternView — the Pattern tab: the step grid (a column per step, quantised to the
 //    levels) with the gain it makes on top — smooth and swing bend the curve — the current
@@ -27,44 +25,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 
 namespace Nota.App;
-
-internal sealed class ShPill : Control
-{
-    private double _v, _tick = double.NaN;
-    public bool FromTop { get; init; }
-    public IBrush Ink { get; init; } = NotaPalette.VizInk;
-
-    public ShPill() { Width = 16; }
-
-    /// <summary>The fill 0..1 and the threshold tick 0..1 (NaN = none).</summary>
-    public void Set(double v, double tick)
-    {
-        v = Math.Clamp(v, 0, 1);
-        if (Math.Abs(v - _v) < 1e-3 && (tick.Equals(_tick) || Math.Abs(tick - _tick) < 1e-3)) return;
-        _v = v; _tick = tick; InvalidateVisual();
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 4 || h < 8) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-        {
-            double y = FromTop ? _v * h : (1 - _v) * h;
-            var fill = FromTop ? new Rect(0, 0, w, y) : new Rect(0, y, w, h - y);
-            ctx.FillRectangle(NotaPalette.Wash((SolidColorBrush)Ink, 0x48), fill);
-            if (_v > 0.004) ctx.FillRectangle(Ink, new Rect(1.5, Math.Clamp(y - 1, 0, h - 2), w - 3, 2));
-            if (!double.IsNaN(_tick))
-            {
-                double ty = (1 - Math.Clamp(_tick, 0, 1)) * h;
-                ctx.DrawLine(new Pen(NotaPalette.Threshold, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(0, ty), new Point(w, ty));
-            }
-        }
-    }
-}
 
 /// <summary>A window with draggable handles: subclasses say which handle is under the pointer
 /// and what value a drag gives it.</summary>
@@ -196,8 +156,8 @@ internal sealed class ShSignalView : ShDragView
 
         if (_n > 1)
         {
-            // Input: a teal column per slice.
-            var inPen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x70), Math.Max(1, Math.Min(2.4, gw / _n * 0.55)));
+            // Input: a darker grey column per slice.
+            var inPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x99), Math.Max(1, Math.Min(2.4, gw / _n * 0.55)));
             double floorY = Y(DbBot);
             for (int i = 0; i < _n; i++)
                 if (_in[i] > DbBot + 0.5) ctx.DrawLine(inPen, new Point(X(i), floorY), new Point(X(i), Y(_in[i])));
@@ -220,7 +180,7 @@ internal sealed class ShSignalView : ShDragView
         ctx.DrawLine(new Pen(hotR ? NotaPalette.Accent : NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, Y(_ret)), new Point(w, Y(_ret)));
 
         NotaGraph.Title(ctx, frame, _duck ? "Signal and duck" : "Signal and gate");
-        NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TealBright, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
         var thrTxt = NotaNum.F($"threshold {_thr:0.0}");
         double ty = Y(_thr) - 11;
         if (ty < 14) ty = Y(_thr) + 2;
@@ -325,9 +285,9 @@ internal sealed class ShEnvelopeView : ShDragView
         var mark = new Pen(NotaPalette.GraphBorder, 1, new DashStyle(new double[] { 3, 4 }, 0));
         foreach (double x in new[] { X0, xa, xh, xr }) if (x < w) ctx.DrawLine(mark, new Point(x, 0), new Point(x, h));
 
-        // Floor (or the duck depth): teal dashed.
+        // Floor (or the duck depth): dashed in a darker grey.
         double yf = Yg(_floor);
-        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1, new DashStyle(new double[] { 4, 4 }, 0)), new Point(0, yf), new Point(w, yf));
+        ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 4, 4 }, 0)), new Point(0, yf), new Point(w, yf));
 
         // One opening: rest → attack → hold → release → rest, sampled with the breakpoints kept exact.
         var ts = new List<double>();
@@ -348,13 +308,13 @@ internal sealed class ShEnvelopeView : ShDragView
         }
         ctx.DrawGeometry(null, NotaGraph.PrimaryPen, g);
         for (int k = 0; k < 3; k++) { var n = Node(k); if (n.X < w - 2) NotaGraph.Node(ctx, n, Active == k); }
-        NotaGraph.Node(ctx, Node(HFloor), Active == HFloor, NotaPalette.Teal);
+        NotaGraph.Node(ctx, Node(HFloor), Active == HFloor, Active == HFloor ? null : NotaPalette.TextTertiary);
 
         NotaGraph.Title(ctx, frame, _duck ? "Duck envelope" : _retrig ? "Gate envelope · trigger" : "Gate envelope");
         TextR(ctx, "open 0\u2009dB", w - 6, 3, NotaPalette.TextSecondary);
         double fy = _duck ? yf + 2 : yf - 11;
         if (fy > h - 24) fy = yf - 11;
-        TextR(ctx, (_duck ? "duck " : "floor ") + _floorText, w - 22, fy, NotaPalette.TealBright);
+        TextR(ctx, (_duck ? "duck " : "floor ") + _floorText, w - 22, fy, NotaPalette.TextSecondary);
         double lx = Math.Max(4, X0 + (xa - X0) / 2 - 10);
         Text(ctx, "atk " + _atkText, Math.Min(lx, w * 0.2), h - 11);
         Text(ctx, "hold " + _holdText, Math.Clamp((xa + xh) / 2 - 12, w * 0.24, w * 0.5), h - 11);
@@ -426,7 +386,7 @@ internal sealed class ShKeyView : ShDragView
                     var pt = new Point((i + 0.5) / _n * w, Bot - red * (Bot - Top) * 0.85);
                     if (i == 0) c.BeginFigure(pt, false); else c.LineTo(pt);
                 }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0xB0), 1.3, lineJoin: PenLineJoin.Round), g);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.3, lineJoin: PenLineJoin.Round), g);
         }
 
         // The key band-pass.
@@ -439,15 +399,15 @@ internal sealed class ShKeyView : ShDragView
                 var pt = new Point(x, Yd(Mag(FAt(x))));
                 if (i == 0) c.BeginFigure(pt, false); else c.LineTo(pt);
             }
-        ctx.DrawGeometry(null, NotaGraph.SecondaryPen(_on ? NotaPalette.Teal : NotaPalette.BorderStrong, 1.8), curve);
+        ctx.DrawGeometry(null, NotaGraph.SecondaryPen(_on ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, 1.8), curve);
         if (_on)
         {
-            NotaGraph.Node(ctx, new Point(X(_hpHz), Yd(Mag(_hpHz))), Active == HHp, NotaPalette.Teal);
-            NotaGraph.Node(ctx, new Point(X(_lpHz), Yd(Mag(_lpHz))), Active == HLp, NotaPalette.Teal);
+            NotaGraph.Node(ctx, new Point(X(_hpHz), Yd(Mag(_hpHz))), Active == HHp);
+            NotaGraph.Node(ctx, new Point(X(_lpHz), Yd(Mag(_lpHz))), Active == HLp);
         }
 
         NotaGraph.Title(ctx, frame, _on ? "Detector filter" : "Detector · full band");
-        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.TealBright, NotaGraph.Mark.Line), (_legend, NotaPalette.VizInk, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.TextSecondary, NotaGraph.Mark.Line), (_legend, NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         static string Hz(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.0}\u2009k") : NotaNum.F($"{f:0}");
         Text(ctx, "20", 4, h - 11);
         TextR(ctx, "20\u2009k", w - 4, h - 11);
@@ -455,8 +415,8 @@ internal sealed class ShKeyView : ShDragView
         {
             double hx = Math.Clamp(X(_hpHz) - 8, 22, w - 90);
             double lx = Math.Clamp(X(_lpHz) - 8, hx + 30, w - 50);
-            Text(ctx, Hz(_hpHz), hx, h - 11, NotaPalette.TealBright);
-            Text(ctx, Hz(_lpHz), lx, h - 11, NotaPalette.TealBright);
+            Text(ctx, Hz(_hpHz), hx, h - 11, NotaPalette.TextSecondary);
+            Text(ctx, Hz(_lpHz), lx, h - 11, NotaPalette.TextSecondary);
         }
     }
 }
@@ -486,7 +446,7 @@ internal sealed class ShPatternView : Control
     public ShPatternView() { ClipToBounds = true; MinHeight = 40; Cursor = new Cursor(StandardCursorType.Cross); }
 
     /// <summary>Steps 0..1, levels, the step / phase playing now (−1 = none), smooth 0..1 (½ step at 1),
-    /// swing in steps, depth, Map (teal), active (pattern on), the curve's label.</summary>
+    /// swing in steps, depth, Map (the second grey), active (pattern on), the curve's label.</summary>
     public void Set(float[] steps, int n, int levels, int cur, double phase, double smooth, double swing, double depth, bool map, bool active, string label)
     {
         if (_drag) { _cur = cur; _phase = phase; InvalidateVisual(); return; }   // the hand owns the steps
@@ -564,9 +524,8 @@ internal sealed class ShPatternView : Control
         NotaGraph.Window(ctx, frame);
         int n = _steps.Length;
         double cw = w / n;
-        var ink = _map ? NotaPalette.Teal : NotaPalette.VizInk;
-        var inkBright = _map ? NotaPalette.TealBright : NotaPalette.VizInk;
-        double dim = _active ? 1 : 0.45;
+        // Map draws in the second grey; a pattern that is off is drawn in ink 4, never faded.
+        var ink = !_active ? NotaPalette.TextDisabled : _map ? NotaPalette.TextSecondary : NotaPalette.VizInk;
 
         // Level lines, then the step columns: the playing one lit, a stronger line every 4.
         for (int i = 1; i < _levels; i++)
@@ -582,14 +541,14 @@ internal sealed class ShPatternView : Control
             double x = Math.Round(i * cw) + 0.5;
             ctx.DrawLine(i % 4 == 0 ? strong : NotaGraph.GridPen, new Point(x, 0), new Point(x, h));
         }
-        var fill = NotaPalette.Wash(ink, (byte)(0x34 * dim));
+        var fill = NotaPalette.Wash(ink, 0x34);
         for (int i = 0; i < n; i++)
         {
             double v = Q(_steps[i]);
             if (v <= 0) continue;
             double x0 = i * cw + 1, x1 = (i + 1) * cw - 1, y = h - v * h;
             ctx.FillRectangle(fill, new Rect(x0, y, Math.Max(1, x1 - x0), h - y));
-            ctx.FillRectangle(_active ? ink : NotaPalette.BorderStrong, new Rect(x0, y, Math.Max(1, x1 - x0), 2));
+            ctx.FillRectangle(ink, new Rect(x0, y, Math.Max(1, x1 - x0), 2));
         }
 
         // The gain curve: swing pushes the off-steps, smooth ramps into each step.
@@ -609,14 +568,14 @@ internal sealed class ShPatternView : Control
             }
             c.LineTo(new Point(w, Y(_steps[n - 1])));
         }
-        ctx.DrawGeometry(null, new Pen(_active ? inkBright : NotaPalette.BorderStrong, 1.6, lineJoin: PenLineJoin.Round), g);
+        ctx.DrawGeometry(null, new Pen(ink, 1.6, lineJoin: PenLineJoin.Round), g);
 
         if (_phase >= 0 && _active)
         {
             double px = Math.Round(_phase * w) + 0.5;
-            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xB0), 1), new Point(px, 0), new Point(px, h));
+            ctx.DrawLine(new Pen(NotaPalette.Accent, 1), new Point(px, 0), new Point(px, h));
         }
-        var ft = NotaGraph.AxisText(_label, _active ? inkBright : NotaPalette.TextTertiary);
+        var ft = NotaGraph.AxisText(_label, _active ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
         var chip = new Rect(w - ft.Width - 12, 5, ft.Width + 8, ft.Height + 2);
         ctx.FillRectangle(NotaPalette.BgSunken, chip, 3);
         ctx.DrawText(ft, new Point(chip.X + 4, chip.Y + 1));
