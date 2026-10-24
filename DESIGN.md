@@ -1181,7 +1181,7 @@ control, label and value stays.
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
 | Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 940 | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel's second column is the picked band's dynamics; the status line's Dynamic switch and draggable Out readout move to its bottom. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics rows are ink 4 while the band is Static. No fold (until asked for). |
+| Dynamic EQ-8 | 940; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel's second column is the picked band's dynamics; the status line's Dynamic switch and draggable Out readout move to its bottom. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics rows are ink 4 while the band is Static. The right panel folds like EQ-8's (below), its arrow at the dynamics title. |
 | EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
 | EQ-8 | 720; 580 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
 | Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
@@ -1210,9 +1210,10 @@ groove (Low cut, Low shelf, Bell, Notch, High shelf, High cut; the picked one ti
 in the tooltip), then Freq, Gain and Q side by side. A row that does not apply (Slope on a shelf band) is ink 4
 with nothing picked. The card stays 260 high; the graph grows sideways only.
 
-**The EQ-8 fold.** EQ-8's right panel folds to a narrow strip (60) with an
-arrow to bring it back over the picked band's Freq, Gain and Q knobs, stacked; the card narrows from 720 to 580; the band tabs and the graph keep
-working (a node's right-click menu still sets type, slope and channel). Folding hides nothing that unfolding doesn't bring back, and changes
+**The EQ fold.** EQ-8's and Dynamic EQ-8's right panel folds to a narrow strip (60) with an
+arrow to bring it back over the picked band's Freq, Gain and Q knobs, stacked and centred in the space under it; the card narrows from 720 to 580
+(Dynamic EQ-8 940 to 584); the band tabs and the graph keep
+working (a node's right-click menu still sets type, slope and channel, or type, mode and solo). Folding hides nothing that unfolding doesn't bring back, and changes
 no parameter. The fold is kept per device for the session (like Prism's picked band), not
 saved in the project.
 
@@ -1304,7 +1305,7 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **The round wheels keep their 0.56.1 look** inside device cards and never sit in a
   groove.
 - **Every card stays 260 high**, EQ cards included; a device that needs room grows
-  sideways (and EQ-8 folds).
+  sideways (and the EQ cards fold).
 - **Menu hover is a full orange fill.** The guide's three strengths don't cover menus; a
   hovered item counts as live (§ Menus).
 - **Menu popups without a blur**, a seam ring only (§ Menus).
@@ -1328,7 +1329,6 @@ Places where a screen's needs override a general rule, kept on purpose:
   Auto Shift's note, Level's value.
 - **Zoom 28 px per beat** by default.
 - **Nota Remote keeps its own styling and Geist Mono** for now (§ Nota Remote).
-- **Dynamic EQ-8 has no fold** until one is asked for.
 
 ## Known drift
 

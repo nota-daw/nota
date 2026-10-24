@@ -216,7 +216,7 @@ internal static class EqBandUi
             if (!e.GetCurrentPoint(btn).Properties.IsLeftButtonPressed) return;
             toggle(); e.Handled = true;
         };
-        ToolTip.SetTip(btn, folded ? "Show the band and global settings" : "Fold the band and global settings away");
+        ToolTip.SetTip(btn, folded ? "Show the band settings" : "Fold the band settings away");
         return btn;
     }
 

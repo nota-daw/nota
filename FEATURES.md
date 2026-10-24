@@ -752,8 +752,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   they differ, the output spectrum, draggable numbered nodes with a whisker to each dynamic
   band's range and its gain now, a tooltip with a 2 s gain history), a row of band chips over
   the graph (number, filter shape, frequency, each band's activity), the selected band's
-  settings in a panel at the right with the band's level on the threshold;
-  33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
+  settings in a panel at the right with the band's level on the threshold, which folds to a
+  strip with the band's Freq, Gain and Q; 33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
 - **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.

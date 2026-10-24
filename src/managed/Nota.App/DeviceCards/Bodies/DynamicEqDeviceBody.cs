@@ -10,7 +10,9 @@
 // Range, Attack, Release, its key and Solo) over the device's Dynamic master switch and output.
 // The live readings come from the engine (DynamicEq.h scopeRead). Every control is a device param
 // (raw units), so automation / MIDI learn / presets / A-B / persistence come for free; the key
-// track is the device's sidechain routing. FullBleed — the shared shell draws the header.
+// track is the device's sidechain routing. As on EQ-8, the arrow folds the panel to a thin strip
+// that keeps the band's Freq, Gain and Q (the card narrows from 940 to 584); the fold is
+// session-only view state. FullBleed — the shared shell draws the header.
 
 using System;
 using System.Collections.Generic;
@@ -29,12 +31,18 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
     // The right panel: the band column, a gap, the dynamics column, inside the section's padding
     // and its 1px edge.
-    internal const double BandW = 176, DynW = 200, PanelGap = 16;
+    // Folded, a strip just wide enough for the picked band's Freq, Gain and Q stacked under the arrow.
+    internal const double BandW = 176, DynW = 200, PanelGap = 16, StripW = EqDeviceBody.StripW;
     internal const double PanelW = BandW + PanelGap + DynW + 2 * SectionPad;
+    public const double OpenW = 940, FoldedW = OpenW - PanelW + StripW;   // 584 folded
 
-    public double Width => 940;
+    public double Width => OpenW;
+    public bool AutoWidth => true;   // the card follows the fold
     public bool FullBleed => true;
     public string? Subtitle => "Dynamic EQ";
+
+    // Whether the right panel is folded, per track and device: view state for this session only.
+    private static readonly Dictionary<(int, int), bool> Folded = new();
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -191,8 +199,45 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         var masterRow = new DockPanel { Children = { Docked(outBox, Dock.Right), Docked(outLbl, Dock.Right), dynSw } };
 
         var right = Section(new ContentControl());
-        right.Width = PanelW;
-        right.Padding = new Thickness(SectionPad - 1);
+
+        // A knob cell bound to the band's Freq, Gain or Q.
+        Control K(int p, string label, Func<string> fmt, string tip, double cellW, Func<string>? liveLabel = null, Func<bool>? inactive = null)
+        {
+            var val = new TextBlock { Text = fmt(), Foreground = TextPrimary };
+            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Default = ToN(p, DefOf(p)) };
+            knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            Learn(knob, p);
+            ToolTip.SetTip(knob, tip);
+            var cell = KnobCell(label, knob, val, cellW);
+            TextBlock? lbl = null;
+            if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
+            bool? wasInactive = null;
+            bandReadouts.Add(() =>
+            {
+                if (!knob.Dragging) { double c = ToN(p, P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
+                val.Text = fmt();
+                if (lbl is not null && liveLabel is not null) lbl.Text = liveLabel();
+                bool ina = inactive?.Invoke() ?? false;
+                if (wasInactive != ina) { Inactive.Set(cell, ina); wasInactive = ina; }
+            });
+            cell.HorizontalAlignment = HorizontalAlignment.Center;
+            return cell;
+        }
+        // The picked band's Freq, Gain and Q knobs (across in the panel, stacked in the folded strip).
+        Control[] BandKnobs(int b, double cw)
+        {
+            int pF = DynEq.P(b, DynEq.FreqF), pG = DynEq.P(b, DynEq.GainF), pQ = DynEq.P(b, DynEq.QF);
+            return new[]
+            {
+                K(pF, "Freq", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", cw),
+                K(pG, "Gain", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", "Gain — the static gain; or drag the node up / down", cw,
+                    inactive: () => !Capable(b)),
+                K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", cw,
+                    liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"),
+            };
+        }
 
         // ======================================================================
         // RIGHT — the picked band: head, filter shapes, Freq, Gain and Q (rebuilt when the
@@ -200,53 +245,26 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         // ======================================================================
         Control BandColumn(int b)
         {
-            int pOn = DynEq.P(b, DynEq.On), pType = DynEq.P(b, DynEq.TypeF), pF = DynEq.P(b, DynEq.FreqF), pG = DynEq.P(b, DynEq.GainF), pQ = DynEq.P(b, DynEq.QF);
+            int pOn = DynEq.P(b, DynEq.On), pType = DynEq.P(b, DynEq.TypeF);
             void Toggle() { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }
             var badge = EqBandUi.Badge(b, () => BandOn(b), Toggle, out var badgeSync);
             var onSw = Switch("On", () => BandOn(b), Toggle, out var onSync);
             Learn(badge, pOn); Learn(onSw, pOn);
             ToolTip.SetTip(badge, "Band on — off leaves the band out of the signal (double-click its node does the same)");
             ToolTip.SetTip(onSw, "Band on — off leaves the band out of the signal (double-click its node does the same)");
-            var head = EqBandUi.Head(badge, onSw, () => DynEq.TypeNames[TypeOf(b)], () => BandOn(b), out var headSync);
+            var bandHead = EqBandUi.Head(badge, onSw, () => DynEq.TypeNames[TypeOf(b)], () => BandOn(b), out var headSync);
             bandReadouts.Add(badgeSync); bandReadouts.Add(onSync); bandReadouts.Add(headSync);
 
             var types = EqBandUi.TypeRow(DynEq.TypeNames, () => TypeOf(b), i => SetType(b, i), out var typeSync);
             Learn(types, pType);
             bandReadouts.Add(typeSync);
 
-            Control K(int p, string label, Func<string> fmt, string tip, Func<string>? liveLabel = null, Func<bool>? inactive = null)
-            {
-                var val = new TextBlock { Text = fmt(), Foreground = TextPrimary };
-                var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Default = ToN(p, DefOf(p)) };
-                knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
-                knob.GestureBegin += () => Begin(p);
-                knob.GestureEnd += () => End(p);
-                Learn(knob, p);
-                ToolTip.SetTip(knob, tip);
-                var cell = KnobCell(label, knob, val, 58);
-                TextBlock? lbl = null;
-                if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
-                bool? wasInactive = null;
-                bandReadouts.Add(() =>
-                {
-                    if (!knob.Dragging) { double c = ToN(p, P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
-                    val.Text = fmt();
-                    if (lbl is not null && liveLabel is not null) lbl.Text = liveLabel();
-                    bool ina = inactive?.Invoke() ?? false;
-                    if (wasInactive != ina) { Inactive.Set(cell, ina); wasInactive = ina; }
-                });
-                cell.HorizontalAlignment = HorizontalAlignment.Center;
-                return cell;
-            }
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
-            knobs.Children.Add(K(pF, "Freq", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right"));
-            knobs.Children.Add(Col(K(pG, "Gain", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", "Gain — the static gain; or drag the node up / down",
-                inactive: () => !Capable(b)), 1));
-            knobs.Children.Add(Col(K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node",
-                liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"), 2));
+            var cells = BandKnobs(b, 58);
+            for (int i = 0; i < cells.Length; i++) knobs.Children.Add(Col(cells[i], i));
 
             var col = new Grid { Width = BandW, RowDefinitions = new RowDefinitions("Auto,8,Auto,*,Auto,*") };
-            col.Children.Add(head);
+            col.Children.Add(bandHead);
             col.Children.Add(Row(types, 2));
             col.Children.Add(Row(knobs, 4));
             return col;
@@ -259,7 +277,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         {
             int pMode = DynEq.P(b, DynEq.ModeF), pThr = DynEq.P(b, DynEq.ThrF), pRange = DynEq.P(b, DynEq.RangeF),
                 pAtk = DynEq.P(b, DynEq.AtkF), pRel = DynEq.P(b, DynEq.RelF), pKey = DynEq.KeyBase + b;
-            var title = EqBandUi.Title(NotaNum.F($"Band {b + 1} dynamics"));
+            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
+            fold.Margin = new Thickness(8, 0, 0, 0);
+            var title = new DockPanel { Height = 20, Children = { Docked(fold, Dock.Right), EqBandUi.Title(NotaNum.F($"Band {b + 1} dynamics")) } };
 
             var modeSeg = Segments(DynEq.ModeNames, () => ModeOf(b), i =>
             {
@@ -390,20 +410,43 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             return col;
         }
 
+        // The folded strip: the arrow that opens the panel again, the picked band's knobs centred
+        // in the space under it (nudged down past the label lines' slack), as on EQ-8.
+        Control FoldedStrip(int b)
+        {
+            var open = EqBandUi.FoldButton(true, () => SetFolded(false));
+            open.HorizontalAlignment = HorizontalAlignment.Center;
+            var knobs = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var k in BandKnobs(b, StripW - 2)) knobs.Children.Add(k);
+            var strip = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+            strip.Children.Add(open);
+            strip.Children.Add(Row(knobs, 1));
+            return strip;
+        }
+
         graphSection.Margin = new Thickness(0, 0, SectionGap, 0);
         var root = new DockPanel { LastChildFill = true, Children = { Docked(right, Dock.Right), graphSection } };
 
+        bool folded = Folded.TryGetValue((track, di), out var f0) && f0;
         void Rebuild()
         {
             bandReadouts.Clear();
             if (masterRow.Parent is Panel old) old.Children.Remove(masterRow);   // the shared bottom row moves into the new column
             int b = Sel();
-            var panel = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"Auto,{PanelGap},Auto")) };
-            panel.Children.Add(BandColumn(b));
-            panel.Children.Add(Col(DynamicsColumn(b), 2));
-            ((ContentControl)right.Child!).Content = panel;
+            right.Width = folded ? StripW : PanelW;
+            right.Padding = folded ? new Thickness(0, 6) : new Thickness(SectionPad - 1);
+            if (folded) ((ContentControl)right.Child!).Content = FoldedStrip(b);
+            else
+            {
+                var panel = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"Auto,{PanelGap},Auto")) };
+                panel.Children.Add(BandColumn(b));
+                panel.Children.Add(Col(DynamicsColumn(b), 2));
+                ((ContentControl)right.Child!).Content = panel;
+            }
+            root.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
         }
+        void SetFolded(bool v) { folded = v; Folded[(track, di)] = v; Rebuild(); RefreshAll(); }
         Rebuild();
         curve.SelectionChanged += () => { Rebuild(); RefreshAll(); };
         curve.Edited += RefreshAll;

@@ -51,8 +51,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **EQ-8 and Dynamic EQ-8** keep their classic layout in the new style: a slim row of band
     chips (number, filter shape, frequency) over a large graph, and one panel at the right with the
     picked band's type, Freq, Gain and Q side by side. In EQ-8 that panel is one narrow column
-    again, as before, with Analyzer and Auto gain back over the graph, and it folds away to
-    give the graph more room.
+    again, as before, with Analyzer and Auto gain back over the graph. In both, the panel
+    folds to a slim strip that keeps the picked band's Freq, Gain and Q, giving the graph more
+    room.
   - **Devices:** cards are raised with pressed-in sections, have no status line, use value
     bars instead of thin sliders, and draw inactive controls in a quieter grey instead of
     fading them.
