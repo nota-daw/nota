@@ -245,8 +245,8 @@ internal sealed class LensDeviceBody : IDeviceBody
             KnobRow(specNote,
                     K(SmoothP, "Smooth", v => Pc(v)),
                     K(DecayP, "Decay", v => Sec(Exp(v, 0.05, 8))),
-                    K(TiltP, "Tilt", v => Inv($"{v * 9:0.0} dB")),
-                    K(FloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB"))));
+                    K(TiltP, "Tilt", v => Inv($"{v * 9:0.0}\u2009dB")),
+                    K(FloorP, "Floor", v => Inv($"{-120 + v * 80:0}\u2009dB"))));
 
         Control ScopeTab()
         {
@@ -262,17 +262,17 @@ internal sealed class LensDeviceBody : IDeviceBody
                         K(TimeDivP, "Time/div", v => Ms(Exp(v, 0.00002, 0.02))),
                         K(VoltDivP, "Volt/div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}")),
                         K(TrigLevelP, "Trig level", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}")),
-                        K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"))));
+                        K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0}\u2009ms"))));
         }
 
         Control WaterfallTab() => GraphHost(
             TopRow("Speed", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall())),
             waterfall, wfInfo,
             KnobRow(wfNote,
-                    K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0} dB")),
-                    K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB")),
+                    K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0}\u2009dB")),
+                    K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0}\u2009dB")),
                     K(WfContrastP, "Contrast", v => Pc(v)),
-                    K(WfOverlapP, "Overlap", v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %"))));
+                    K(WfOverlapP, "Overlap", v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#}\u2009%"))));
 
         // ---- right panel --------------------------------------------------------------
         var cursorBox = ReadBox("Cursor", "—", "move over the graph");
@@ -285,7 +285,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             double hz = spectrum.CursorHz;
             if (hz <= 0) { cursorBox.A.Text = "—"; cursorBox.B.Text = "move over the graph"; return; }
             cursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            cursorBox.B.Text = Inv($"{spectrum.CursorDb:0.0} dB · bin {(Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0):0}");
+            cursorBox.B.Text = Inv($"{spectrum.CursorDb:0.0}\u2009dB · bin {(Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0):0}");
         };
         waterfall.CursorMoved += () =>
         {
@@ -342,7 +342,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             TogglePair(Toggle(LogFreqP, "Log freq"), Toggle(NoteGridP, "Note grid")),
             SegRow("Window", WindowP, new[] { "Hann", "B-H", "Flat" }),
             Row("FFT", FftSizeP, v => Inv($"{FftSizes[Math.Clamp((int)Math.Round(v * 3), 0, 3)]}")),
-            Row("Overlap", WfOverlapP, v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %")),
+            Row("Overlap", WfOverlapP, v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#}\u2009%")),
             Row("Avg", AverageP, v => Inv($"{1 + v * 15:0}")));
 
         Control DisplayTab() => Stack(null,
@@ -356,8 +356,8 @@ internal sealed class LensDeviceBody : IDeviceBody
                 },
             },
             SegRow("Source", SourceP, new[] { "L+R", "L", "R" }),
-            Row("Top", ScaleTopP, v => Inv($"{24 - v * 60:0} dB")),
-            Row("Range", ScaleRangeP, v => Inv($"{30 + v * 90:0} dB")),
+            Row("Top", ScaleTopP, v => Inv($"{24 - v * 60:0}\u2009dB")),
+            Row("Range", ScaleRangeP, v => Inv($"{30 + v * 90:0}\u2009dB")),
             Row("Rate", RateP, v => Inv($"{10 + v * 50:0} fps")));
 
         // ---- Scale rail ---------------------------------------------------------------
@@ -375,9 +375,9 @@ internal sealed class LensDeviceBody : IDeviceBody
             return new DeviceBodyKit.RailFader(caption(), bar, val);
         }
         var railA = RailBar(() => centreTab == 1 ? VoltDivP : ScaleTopP, () => centreTab == 1 ? "V/div" : "Top",
-            () => centreTab == 1 ? Inv($"{VoltDiv():0.00}") : Inv($"{TopDb():0} dB"));
+            () => centreTab == 1 ? Inv($"{VoltDiv():0.00}") : Inv($"{TopDb():0}\u2009dB"));
         var railB = RailBar(() => centreTab == 1 ? TimeDivP : ScaleRangeP, () => centreTab == 1 ? "T/div" : "Rng",
-            () => centreTab == 1 ? Ms(TimeDiv()) : Inv($"{RangeDb():0} dB"));
+            () => centreTab == 1 ? Ms(TimeDiv()) : Inv($"{RangeDb():0}\u2009dB"));
         var railBody = DeviceBodyKit.FaderRail("Scale", false, out var railLbls, railA, railB);
         var rail = DeviceBodyKit.Sec(railBody, new Thickness(8, 16, 8, 10), 91);
         DeviceBodyKit.Dock(rail, Avalonia.Controls.Dock.Left);

@@ -340,7 +340,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             var corr = Mono("", 11, TextSecondary);
             readouts.Add(() => corr.Text = "corr " + CorrF(Sc(S_Corr)));
             var chips = IndexChips(ChannelMode, Modes, "Channel — Stereo; Left or Right on both sides; Swap the sides");
-            var head = HeadRow(Row(8, Caps("CHANNEL"), chips, WidthModeSeg()), corr);
+            var head = HeadRow(Row(8, Caps("Channel"), chips, WidthModeSeg()), corr);
             var knobs = KnobRow(new[]
             {
                 K(Gain, "GAIN", GainF),
@@ -379,7 +379,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             Learn(quickSeg, MonoFreq);
             var slope = Latch(MonoSlope, () => Idx(MonoSlope) > 0, () => SetP(MonoSlope, (Idx(MonoSlope) + 1) % 3),
                 () => NotaNum.F($"Slope {Slopes[Idx(MonoSlope)]}"), "Slope of the mono cutoff — 6, 12 or 24 dB/oct; click to step");
-            var head = HeadRow(Row(8, Caps("MONO"), onOff, quickSeg, WidthModeSeg(), slope), wv);
+            var head = HeadRow(Row(8, Caps("Mono"), onOff, quickSeg, WidthModeSeg(), slope), wv);
             var knobs = KnobRow(new[]
             {
                 K(MonoFreq, "MONO", MonoF, dim: () => !On(MonoBelow)),
@@ -409,7 +409,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             var delta = Mono("", 7, TextSecondary);
             readouts.Add(() => delta.Text = DeltaText());
             var chips = IndexChips(Meter, Meters, "Meter — LUFS-S: short-term loudness (3 s, K-weighted); Peak: sample peak; RMS: 300 ms");
-            var head = HeadRow(Row(8, Caps("METER"), chips, Button("Gain match", GainMatch, GainMatchTip, true), Button("Reset", ResetLevels, ResetTip, false)), delta);
+            var head = HeadRow(Row(8, Caps("Meter"), chips, Button("Gain match", GainMatch, GainMatchTip, true), Button("Reset", ResetLevels, ResetTip, false)), delta);
             var knobs = KnobRow(new[]
             {
                 K(Gain, "GAIN", GainF),
@@ -502,7 +502,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             {
                 Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4),
                 Child = new StackPanel { Spacing = 1, Children = {
-                    Caps("MEASUREMENTS"),
+                    Caps("Measurements"),
                     Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),
                     Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
                     Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), TextPrimary) } },
