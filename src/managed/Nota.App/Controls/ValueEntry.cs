@@ -169,7 +169,7 @@ internal static partial class ValueEntry
     public static void Reset(ValueField f)
     {
         if (f.Reset is { } act) { f.Begin?.Invoke(); act(); f.End?.Invoke(); f.After?.Invoke(); return; }
-        if (f.Default is not { } d) return;
+        if (f.CurrentDefault is not { } d) return;
         d = Math.Clamp(d, 0, 1);
         if (Math.Abs(f.Get() - d) < 1e-9) return;
         f.Begin?.Invoke(); f.Set(d); f.End?.Invoke(); f.After?.Invoke();
@@ -177,7 +177,7 @@ internal static partial class ValueEntry
 
     private static void Clear(ValueField f) { f.Clear?.Invoke(); f.After?.Invoke(); }
 
-    private static bool AtDefault(ValueField f) => f.Reset is null && f.Default is { } d && Math.Abs(f.Get() - Math.Clamp(d, 0, 1)) < 1e-9;
+    private static bool AtDefault(ValueField f) => f.Reset is null && f.CurrentDefault is { } d && Math.Abs(f.Get() - Math.Clamp(d, 0, 1)) < 1e-9;
 
     /// <summary>Apply typed text: the position whose read-out shows it, written as one gesture.
     /// Unreadable text or a value the read-out already shows changes nothing.</summary>

@@ -115,14 +115,17 @@ public sealed class Knob : Control
     /// GestureBegin / ValueChanged / GestureEnd a drag does. Null without a Format.</summary>
     internal ValueField? EntryField(string name)
         => Format is not { } fmt ? null : new ValueField(name, () => _value / _max, n => fmt(n * _max), n => SetByHand(n * _max),
-            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), double.IsNaN(Default) ? null : Math.Clamp(Default, 0, _max) / _max);
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), NormDefault()) { DefaultNow = NormDefault };
 
     /// <summary>A probing field for a knob without a Format: each probe sets the knob (running its
     /// ValueChanged handlers) and reads <paramref name="text"/> back.</summary>
     internal ValueField ProbingField(string name, Func<string> text)
         => ValueEntry.Probing(name, () => _value / _max, n => SetByHand(n * _max), text,
             () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke()) with
-        { Default = double.IsNaN(Default) ? null : Math.Clamp(Default, 0, _max) / _max };
+        { Default = NormDefault(), DefaultNow = NormDefault };
+
+    // The reset position as 0..1, read when a reset happens: a call site may move Default later.
+    private double? NormDefault() => double.IsNaN(Default) ? null : Math.Clamp(Default, 0, _max) / _max;
 
     // A value set by the user other than by dragging (typed, reset): repaint and notify.
     private void SetByHand(double v)

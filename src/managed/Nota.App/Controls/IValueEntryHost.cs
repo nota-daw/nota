@@ -34,7 +34,13 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     /// before the gesture opens.</summary>
     public bool Probes { get; init; }
 
-    public bool CanReset => Reset is not null || Default is not null;
+    /// <summary>Reads the default when it is needed, for an owner whose default moves (a knob whose
+    /// reset value follows a mode); <see cref="Default"/> is used without it.</summary>
+    public Func<double?>? DefaultNow { get; init; }
+    /// <summary>The default in effect now.</summary>
+    public double? CurrentDefault => DefaultNow is { } now ? now() : Default;
+
+    public bool CanReset => Reset is not null || CurrentDefault is not null;
 }
 
 /// <summary>A control with several typeable handles: double-click / ⌥-click / right-click ask it
