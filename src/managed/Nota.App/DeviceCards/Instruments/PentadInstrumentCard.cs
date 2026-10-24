@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — built-in Nota Pentad editor (instrument kind 14), 724 × 260 in the
+// Detail · Devices — built-in Nota Pentad editor (instrument kind 14), 748 × 260 in the
 // style guide's frame: an always-visible Wheels section (the round pitch / mod wheels), a
 // centre tabbed section (Oscillators / Filter · Amp / Poly Mod) and a right tabbed section
 // (Mixer / Output) whose tab row carries the Voice setup menu (polyphony, allocation,
@@ -43,7 +43,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
 
     public bool BodyOnly => true;
     public string Subtitle => "Analog poly";
-    public double CardWidth => 724;
+    public double CardWidth => 748;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {
@@ -291,7 +291,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             // bottom row: glide · glide mode · voice mode · voices
             var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 54, true);
             var mode = Row(6, Caps("Mode"), Chips("voicemode", new[] { "Poly", "Uni", "Mono" }));
-            var strip = new VoiceKeys { Height = 16, MinWidth = 82, HorizontalAlignment = HorizontalAlignment.Right }; voiceStrips.Add(strip);
+            var strip = new VoiceKeys { Height = 16, MinWidth = 68, HorizontalAlignment = HorizontalAlignment.Right }; voiceStrips.Add(strip);
             var voices = Row(6, Caps("Voices"), strip);
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,*,Auto"), ColumnSpacing = 4, Height = 44 };
             bottom.Children.Add(glide); bottom.Children.Add(Col(Chips("glidemode", new[] { "Off", "On", "Leg" }), 1));
@@ -589,7 +589,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w < 2 || h < 2) return;
-            const double gap = 3, cellW = 14;
+            const double gap = 2, cellW = 12;
             double cw = Math.Min(cellW, (w - gap * (_n - 1)) / _n);
             double x0 = w - (cw * _n + gap * (_n - 1));
             for (int i = 0; i < _n; i++)
