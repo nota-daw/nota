@@ -41,11 +41,14 @@ internal static class NotaRadius
 
 internal static class NotaSize
 {
-    public const double Chip = 20;        // filter chip
-    public const double Seg = 24;         // tab segment
+    public const double Chip = 24;        // filter chip
+    public const double Seg = 20;         // one segment cell
     public const double Shell = 26;       // shell button, field, dropdown
-    public const double SegGroup = 30;    // segment container
-    public const double Transport = 26;   // transport key
+    public const double SegGroup = 24;    // segment group: a 20 cell in a 2px well
+    public const double Dropdown = 22;    // dropdown menu
+    public const double Search = 30;      // browser search
+    public const double Icon = 28;        // icon button: toolbar, rail
+    public const double Transport = 28;   // transport key, an icon button
     public const double Play = 36;        // Play is the one wide transport key
     public const double Console = 30;     // the recessed transport group inside the row
     public const double TransportBar = 44; // the docked transport row

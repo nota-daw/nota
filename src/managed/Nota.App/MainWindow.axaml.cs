@@ -244,15 +244,15 @@ public partial class MainWindow : Window
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
         // (half a BPM per pixel), the hundredths come from double-click-to-type.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
-        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsNum.ValueChanged += v => vm.Transport.TimeSigNumerator = (int)Math.Round(v);
         TimeSigNumHost.Children.Add(tsNum);
-        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsDen.ValueChanged += v =>
         {
             int d = NearestPow2(v);
