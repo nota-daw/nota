@@ -1061,14 +1061,26 @@
   </Style>
 
   <!-- ===== Browser icon rail (custom vertical tabs) ===== -->
-  <!-- Full-bleed 36px tab in a 40px rail; the active one is marked by a 2px accent edge
-       on the left and an accent icon rather than a filled chip, so the rail stays quiet. -->
+  <!-- Style guide: a 40px rail on the deep grey; each tab is a 28px icon button (corner 7)
+       with 6 between them. Hover shows the well; the current page gets the soft tint, an
+       orange icon and a 2 × 14 orange tick at the rail's left edge. -->
   <Style Selector="Border.RailTab">
     <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="Height" Value="36"/>
+    <Setter Property="Height" Value="34"/>
   </Style>
-  <Style Selector="Border.RailTab:pointerover">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHover}"/>
+  <Style Selector="Border.RailKey">
+    <Setter Property="Width" Value="{StaticResource Control.Icon}"/>
+    <Setter Property="Height" Value="{StaticResource Control.Icon}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.RailTab:pointerover Border.RailKey">
+    <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
+  </Style>
+  <Style Selector="Border.RailTab.active Border.RailKey">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSoft}"/>
   </Style>
   <Style Selector="Border.RailTab app|Glyph">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -1076,13 +1088,14 @@
   <Style Selector="Border.RailTab.active app|Glyph">
     <Setter Property="Foreground" Value="{DynamicResource Brush.AccentBright}"/>
   </Style>
-  <!-- The active edge: a 2px accent bar inset from the tab's top and bottom. -->
+  <!-- The current page's tick: 2 × 14 at the rail's left edge. -->
   <Style Selector="Border.RailBar">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Width" Value="2"/>
-    <Setter Property="Margin" Value="0,6"/>
-    <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
+    <Setter Property="Height" Value="14"/>
+    <Setter Property="CornerRadius" Value="0,1,1,0"/>
     <Setter Property="HorizontalAlignment" Value="Left"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <Style Selector="Border.RailTab.active Border.RailBar">
     <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
@@ -1117,21 +1130,20 @@
   <Style Selector="ListBoxItem:selected Border.RowEdge">
     <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
   </Style>
-  <Style Selector="TextBlock.RowName">
-    <Setter Property="FontSize" Value="12"/>
-    <Setter Property="FontWeight" Value="Medium"/>
+  <Style Selector="TextBlock.RowName">     <!-- track-name scale: 13 / 580 -->
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
   <Style Selector="TextBlock.RowName.child">
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
-  <!-- Row metadata on the right: mono, like every other measurement-ish value, and one ink
-       step under the name's tertiary neighbours so the names lead (T3.3 still holds). -->
+  <!-- Row metadata on the right: the label scale, 11 / 400 in ink 3. -->
   <Style Selector="TextBlock.RowTag">
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="10"/>
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextFaint}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
   <Style Selector="ListBoxItem:selected TextBlock.RowTag">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -1165,10 +1177,10 @@
   <Style Selector="ListBox.themes ListBoxItem:selected Border.ThemeFrame">
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
   </Style>
-  <Style Selector="TextBlock.GroupLabel">     <!-- browser section: 11 / 600, muted, sentence case -->
-    <Setter Property="FontSize" Value="11"/>
+  <Style Selector="TextBlock.GroupLabel">     <!-- browser section: 12 / 600, ink 2, sentence case -->
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
 
   <!-- ===== Flat search box ===== -->
