@@ -2,15 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Forge body (multi-stage saturator, device kind 17), a build of
-// the "Nota Forge" mockup (700 × 260) in the EQ-8 language: on the left the routing (Serial /
-// Parallel / M/S / Multi) over the three stages — each with its on dot, its type and the role it
-// plays in the routing, a draggable output trim (drag the dB up / down), Drive and a teal
-// Feedback; a click selects the stage. In the centre Amount / Wet / Out over the transfer curve
-// (the whole device — the selected stage in M/S and Multi — every stage alone faintly, the
-// LFO-modulated curve dashed teal, a node where the input sits; drag it for Amount) and the
-// harmonics of a −6 dB sine with THD. On the right the selected stage's shape (type, Bias, Tone,
-// Width), the modulation (LFO → Drive, Env → Tone, Rate, Sync) and Oversampling; a status strip
-// under it all. Curves, harmonics and meters come from the engine (Forge.h scopeRead). Every
+// the "Nota Forge" mockup (700 × 260): on the left the routing (Serial / Parallel / M/S / Multi)
+// over the three stages, rows split by rules — each with its on switch, its number (tinted when
+// selected), its type, a draggable output trim (drag the dB up / down), Drive and Feedback; a
+// click selects the stage, and a stage that is off is drawn in ink 4. In the centre Amount / Wet /
+// Out over the transfer curve (the whole device — the selected stage in M/S and Multi — every
+// stage alone in a lighter grey, the LFO-modulated curve dashed, a node where the input sits;
+// drag it for Amount) and the harmonics of a −6 dB sine with THD. On the right the selected
+// stage's shape (type, Bias, Tone, Width), the modulation (LFO → Drive, Env → Tone, Rate, Sync)
+// and Oversampling. Curves, harmonics and meters come from the engine (Forge.h scopeRead). Every
 // control is a device param (normalized 0..1), so automation / MIDI learn / presets / A-B /
 // persistence come for free. Double-click resets a control.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -102,35 +102,37 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             : NotaNum.F($"{0.05 * Math.Pow(400, v):0.00} Hz");
 
         // ---- small builders -----------------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
-        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
+        static TextBlock Caps(string t, IBrush? c = null) => FxParts.Label(t, c);
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static RuleSection Island(Control child, double width = double.NaN) => new() { Width = width, Child = child };
-        static Border Bar(Control child, Thickness pad) => new()
-        { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = pad, Child = child };
-
-        // Slider row, as the mockup draws it inside the card: caps 7 label · 3px track · mono 8 value
-        // (primary ink once moved off its default). The param is chosen at paint time — the selected
-        // stage's, or a fixed one. Double-click resets.
-        Control Slider(string label, Func<int> param, Func<double, string> fmt, string tip, double labelW, double valueW,
-            bool teal = false, bool bipolar = false)
+        static RuleSection Island(Control child, double width, Thickness pad) => new() { Width = width, Padding = pad, Child = child };
+        static Border Rule() => new() { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center };
+        // A stage number: a 16px chip, tinted when the stage is the selected one.
+        static (Border chip, TextBlock text) NumChip()
         {
-            var lbl = Caps(label, teal ? Teal : TextTertiary);
+            var t = new TextBlock { FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            return (new Border { Width = 16, Height = 16, CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center, Child = t }, t);
+        }
+        static TextBlock StageName() => new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+
+        // Slider row: label · value bar · value. The param is chosen at paint time — the selected
+        // stage's, or a fixed one. `dim` draws the row in ink 4 (its stage is off). Double-click resets.
+        Control Slider(string label, Func<int> param, Func<double, string> fmt, string tip, double labelW, double valueW,
+            bool bipolar = false, Func<bool>? dim = null)
+        {
+            var lbl = Caps(label);
             lbl.TextTrimming = TextTrimming.None;
-            var track = new SliderTrack { Bipolar = bipolar, Modulation = teal, Reset = () => { Reset(param()); Refresh(); }, VerticalAlignment = VerticalAlignment.Center };
+            var track = new SliderTrack { Bipolar = bipolar, Reset = () => { Reset(param()); Refresh(); }, VerticalAlignment = VerticalAlignment.Center };
             track.Changed += v => { Raw(param(), v); Refresh(); };
             track.GestureBegin += () => Begin(param());
             track.GestureEnd += () => End(param());
-            var val = Mono("", 8, TextPrimary);
+            var val = FxParts.Value();
             val.TextAlignment = TextAlignment.Right;
             val.HorizontalAlignment = HorizontalAlignment.Right;
             ValueEntry.Attach(val, () => P(param()), v => Raw(param(), v), () => fmt(P(param())), () => Begin(param()), () => End(param()), Refresh, control: track);
             static ColumnDefinition Fixed(double w) => new(w > 0 ? new GridLength(w) : GridLength.Auto);
-            var g = new Grid { ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+            var g = new Grid { ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
             g.ColumnDefinitions.Add(Fixed(labelW));
             g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
             g.ColumnDefinitions.Add(Fixed(valueW));
@@ -138,9 +140,12 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 int p = param();
+                bool off = dim?.Invoke() ?? false;
                 if (!track.Dragging) track.Norm = P(p);
+                track.IsDim = off;
                 val.Text = fmt(P(p));
-                val.Foreground = Math.Abs(P(p) - Def(p)) > 0.003 ? TextPrimary : TextSecondary;
+                val.Foreground = off ? TextDisabled : TextPrimary;
+                lbl.Foreground = off ? TextDisabled : TextTertiary;
             });
             LearnFollow(g, param);
             ToolTip.SetTip(g, tip);
@@ -151,35 +156,33 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         // LEFT — routing + the three stages
         // ======================================================================
         var routeSeg = Segments(RouteNames, RouteI, i => { SetP(Routing, i / 3f); Refresh(); }, out var routeSync, fill: true, padX: 2);
+        routeSeg.VerticalAlignment = VerticalAlignment.Top;
         readouts.Add(routeSync);
         Learn(routeSeg, Routing);
         ToolTip.SetTip(routeSeg, "Routing — Serial: 1 → 2 → 3. Parallel: all three from the same input, averaged. M/S: stage 1 drives the Mid, stage 2 the Side, stage 3 the recombined stereo. Multi: stage 1 the lows (< 180 Hz), 2 the mids, 3 the highs (> 2.4 kHz)");
 
         Control StageTile(int s)
         {
-            var dot = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
-            var num = Mono((s + 1).ToString(), 8, TextSecondary); num.FontWeight = FontWeight.Bold;
-            var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var role = new TextBlock { FontSize = 7, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
-            var outTxt = Mono("", 8, TextSecondary);
+            var dot = new SwitchTrack { Cursor = new Cursor(StandardCursorType.Hand) };
+            var (numChip, num) = NumChip();
+            num.Text = (s + 1).ToString();
+            var name = StageName();
+            var role = FxParts.Info();
+            var outTxt = FxParts.Value();
             var outBox = new Border
             {
-                Background = Sunken, CornerRadius = NotaRadius.Field, Padding = new Thickness(2, 0), VerticalAlignment = VerticalAlignment.Center,
+                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0), Height = 16, VerticalAlignment = VerticalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = outTxt,
             };
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 5 };
-            head.Children.Add(dot); head.Children.Add(Col(num, 1)); head.Children.Add(Col(name, 2)); head.Children.Add(Col(role, 3)); head.Children.Add(Col(outBox, 4));
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 8, Height = 18 };
+            head.Children.Add(dot); head.Children.Add(Col(numChip, 1)); head.Children.Add(Col(name, 2)); head.Children.Add(Col(role, 3)); head.Children.Add(Col(outBox, 4));
 
             bool Lit() => On(OnP(s)) && Active();
-            var drive = Slider("DRIVE", () => DriveP(s), PctF, $"Stage {s + 1} drive — how hard the stage is pushed (gain 1 … ×21, the level made up)", 42, 32);
-            var fb = Slider("FEEDBACK", () => FbP(s), FbF, $"Stage {s + 1} feedback — its output back into its input (0 … 85 %): thicker, and on the edge of ringing with Fold / Fuzz", 44, 30, teal: true);
-            var rows = new StackPanel { Spacing = 1, Children = { drive, fb } };
-            var body = new DockPanel { Children = { Docked(head, Dock.Top), new Border { VerticalAlignment = VerticalAlignment.Bottom, Child = rows } } };
-            var tile = new Border
-            {
-                BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 3), Background = Sunken,
-                Cursor = new Cursor(StandardCursorType.Hand), Child = body,
-            };
+            var drive = Slider("Drive", () => DriveP(s), PctF, $"Stage {s + 1} drive — how hard the stage is pushed (gain 1 … ×21, the level made up)", 48, 30, dim: () => !Lit());
+            var fb = Slider("Feedback", () => FbP(s), FbF, $"Stage {s + 1} feedback — its output back into its input (0 … 85 %): thicker, and on the edge of ringing with Fold / Fuzz", 48, 30, dim: () => !Lit());
+            var body = new Grid { RowDefinitions = new RowDefinitions("18,17,17") };
+            body.Children.Add(head); body.Children.Add(GRow(drive, 1)); body.Children.Add(GRow(fb, 2));
+            var tile = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = body };
 
             tile.PointerPressed += (_, e) =>
             {
@@ -216,33 +219,34 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 bool lit = Lit(), isSel = s == sel;
-                dot.Background = lit ? Brass : BorderStrong;
-                num.Foreground = lit ? TextSecondary : TextDisabled;
+                dot.IsOn = On(OnP(s));
+                dot.IsDim = !Active();
+                numChip.Background = isSel ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                num.Foreground = isSel ? AccentBright : lit ? TextSecondary : TextDisabled;
                 name.Text = ForgeMath.AlgoNames[TypeI(s)];
-                name.Foreground = lit ? TextPrimary : TextTertiary;
+                name.Foreground = lit ? TextPrimary : TextDisabled;
                 role.Text = NotaText.Label(ForgeMath.Role(RouteI(), s));
-                role.Foreground = lit ? NotaPalette.TealBright : TextDisabled;
-                double trim = (P(OutP(s)) - 0.5) * 24;
+                role.Foreground = lit ? TextTertiary : TextDisabled;
                 outTxt.Text = TrimF(P(OutP(s)));
-                outTxt.Foreground = Math.Abs(trim) > 0.05 ? TextPrimary : lit ? TextSecondary : TextDisabled;
-                tile.BorderBrush = isSel ? Brass : NotaPalette.GraphBorder;
-                tile.Background = isSel ? Raised : Sunken;
-                rows.Opacity = lit ? 1 : 0.45;
+                outTxt.Foreground = lit ? TextPrimary : TextDisabled;
             });
             return tile;
         }
-        var stageGrid = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), RowSpacing = 4, Margin = new Thickness(4) };
-        for (int s = 0; s < 3; s++) stageGrid.Children.Add(GRow(StageTile(s), s));
-        var left = Island(new DockPanel { Children = { Docked(Bar(routeSeg, new Thickness(3, 0)), Dock.Top), stageGrid } }, 186);
+        var stageGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,6,52,1,52,1,52,*") };
+        stageGrid.Children.Add(routeSeg);
+        for (int s = 0; s < 3; s++) stageGrid.Children.Add(GRow(StageTile(s), 2 + s * 2));
+        stageGrid.Children.Add(GRow(Rule(), 3));
+        stageGrid.Children.Add(GRow(Rule(), 5));
+        var left = Island(stageGrid, 196, new Thickness(SectionPad, SectionPad, SectionPad, 8));
         DockPanel.SetDock(left, Dock.Left);
 
         // ======================================================================
         // CENTRE — Amount / Wet / Out over the transfer curve and the harmonics
         // ======================================================================
-        var macros = new Grid { ColumnDefinitions = new ColumnDefinitions("13*,10*,10*"), ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        macros.Children.Add(Slider("AMOUNT", () => Amount, AmtF, "Amount — 0 … +30 dB into the stages. Drag the curve up / down for the same", 0, 0));
-        macros.Children.Add(Col(Slider("WET", () => Wet, PctF, "Wet — the forged signal against the dry one", 0, 0), 1));
-        macros.Children.Add(Col(Slider("OUT", () => Output, OutF, "Output, −24 … +24 dB", 0, 0, bipolar: true), 2));
+        var macros = new Grid { RowDefinitions = new RowDefinitions("19,19,19") };
+        macros.Children.Add(Slider("Amount", () => Amount, AmtF, "Amount — 0 … +30 dB into the stages. Drag the curve up / down for the same", 46, 54));
+        macros.Children.Add(GRow(Slider("Wet", () => Wet, PctF, "Wet — the forged signal against the dry one", 46, 54), 1));
+        macros.Children.Add(GRow(Slider("Out", () => Output, OutF, "Output, −24 … +24 dB", 46, 54, bipolar: true), 2));
 
         var transfer = new FgTransferView { Value = _ => P(Amount) };
         transfer.GestureBegin += _ => Begin(Amount);
@@ -250,32 +254,32 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         transfer.Changed += (_, v) => { Raw(Amount, v); Refresh(); };
         transfer.ResetRequested += _ => { Reset(Amount); Refresh(); };
         Learn(transfer, Amount);
-        ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed teal, the node where the input sits now. Drag up / down for Amount; double-click resets.");
-        var harm = new FgHarmonicsView { Height = 50 };
+        ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone in a lighter grey, the LFO-modulated curve dashed, the node where the input sits now. Drag up / down for Amount; double-click resets.");
+        var harm = new FgHarmonicsView { Height = 46 };
         ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
         var graphs = new DockPanel
         {
-            Margin = new Thickness(5), LastChildFill = true,
-            Children = { Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = harm }, Dock.Bottom), transfer },
+            Margin = new Thickness(0, 6, 0, 0), LastChildFill = true,
+            Children = { Docked(new Border { Margin = new Thickness(0, 9, 0, 0), Child = harm }, Dock.Bottom), transfer },
         };
-        var centre = Island(new DockPanel { Children = { Docked(Bar(macros, new Thickness(6, 0)), Dock.Top), graphs } });
-        centre.Margin = new Thickness(5, 0);
+        var centre = Island(new DockPanel { Children = { Docked(macros, Dock.Top), graphs } }, double.NaN, new Thickness(SectionPad, 10, SectionPad, SectionPad));
+        centre.Margin = new Thickness(SectionGap, 0);
 
         // ======================================================================
         // RIGHT — the selected stage's shape, modulation, oversampling
         // ======================================================================
-        var badgeTxt = Mono("", 8, OnAccent); badgeTxt.FontWeight = FontWeight.Bold; badgeTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
-        var stName = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var shapeHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6 };
-        shapeHead.Children.Add(badge); shapeHead.Children.Add(Col(stName, 1)); shapeHead.Children.Add(Col(Caps("SHAPE"), 2));
+        var (badge, badgeTxt) = NumChip();
+        badge.Background = NotaPalette.AccentSoft;
+        var stName = StageName();
+        var shapeHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
+        shapeHead.Children.Add(badge); shapeHead.Children.Add(Col(stName, 1)); shapeHead.Children.Add(Col(Caps("Shape"), 2));
         readouts.Add(() =>
         {
             bool lit = On(OnP(sel));
             badgeTxt.Text = (sel + 1).ToString();
-            badge.Background = lit ? AccentBright : TextDisabled;
+            badgeTxt.Foreground = lit ? AccentBright : TextDisabled;
             stName.Text = ForgeMath.AlgoNames[TypeI(sel)];
-            stName.Foreground = lit ? TextPrimary : TextTertiary;
+            stName.Foreground = lit ? TextPrimary : TextDisabled;
         });
 
         var typeSeg = Segments(ForgeMath.ChipNames, () => Array.IndexOf(ForgeMath.ChipAlgo, TypeI(sel)),
@@ -284,10 +288,10 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         ToolTip.SetTip(typeSeg, "The selected stage's type — Tube: soft, asymmetric, warm; Tape: soft and even; Diode: hard on one side; Fuzz: squared-off, dense; Fold: folds the peaks back, bright and metallic; Digital: a hard clip");
 
         // Gauge knob on the selected stage's param.
-        Control StageKnob(Func<int> param, string label, Func<double, string> fmt, string tip)
+        Control StageKnob(Func<int> param, string label, Func<double, string> fmt, string tip, bool bipolar = false)
         {
-            var val = Mono(fmt(P(param())), 7, TextPrimary);
-            var knob = new Knob(P(param()), 1.0) { Accent = true, Default = Def(param()), Width = 30, Height = 30 };
+            var val = FxParts.Value(fmt(P(param())));
+            var knob = new Knob(P(param()), 1.0) { Accent = true, Inline = true, Bipolar = bipolar, Default = Def(param()) };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(param(), v); val.Text = fmt(P(param())); Refresh(); };
             knob.GestureBegin += () => Begin(param());
@@ -298,18 +302,17 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             {
                 if (!knob.Dragging) { double c = P(param()); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(param()));
-                val.Foreground = Math.Abs(P(param()) - Def(param())) > 0.003 ? TextPrimary : TextSecondary;
             });
-            return KnobCell(label, knob, val, 46);
+            return KnobCell(label, knob, val, 60);
         }
         var knobs = new UniformGrid
         {
             Rows = 1,
             Children =
             {
-                StageKnob(() => BiasP(sel), "BIAS", BiasF, "Bias — the stage's asymmetry, −100 … +100 %: pushes the curve off-centre, adding even harmonics"),
-                StageKnob(() => ToneP(sel), "TONE", ToneF, "Tone — a tilt after the stage, −12 … +12 dB around 800 Hz: darker or brighter distortion"),
-                StageKnob(() => WidthSP(sel), "WIDTH", WidthF, "Width — the stage's stereo image, 0 … 200 % (in M/S, stage 2's width scales the side)"),
+                StageKnob(() => BiasP(sel), "Bias", BiasF, "Bias — the stage's asymmetry, −100 … +100 %: pushes the curve off-centre, adding even harmonics", bipolar: true),
+                StageKnob(() => ToneP(sel), "Tone", ToneF, "Tone — a tilt after the stage, −12 … +12 dB around 800 Hz: darker or brighter distortion", bipolar: true),
+                StageKnob(() => WidthSP(sel), "Width", WidthF, "Width — the stage's stereo image, 0 … 200 % (in M/S, stage 2's width scales the side)"),
             },
         };
 
@@ -318,77 +321,32 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         Learn(syncSw, LfoSync);
         ToolTip.SetTip(syncSw, "Sync — the LFO rate as a note division locked to the song, or free in Hz");
         var modHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        modHead.Children.Add(Caps("MODULATION", Teal)); modHead.Children.Add(Col(syncSw, 1));
-        var mods = new StackPanel
-        {
-            Spacing = 2,
-            Children =
-            {
-                Slider("LFO → DRIVE", () => LfoDrive, PctF, "LFO → Drive — the LFO sweeps every stage's drive, up to ±30 %", 50, 40, teal: true),
-                Slider("ENV → TONE", () => EnvTone, PctF, "Env → Tone — loud parts push the tone brighter", 50, 40, teal: true),
-                Slider("RATE", () => LfoRate, RateF, "LFO rate — free 0.05 … 20 Hz, or with Sync a division from 2 bars to 1/64", 50, 40, teal: true),
-            },
-        };
+        modHead.Children.Add(Caps("Modulation", TextSecondary)); modHead.Children.Add(Col(syncSw, 1));
+        var lfoDrive = Slider("LFO → drive", () => LfoDrive, PctF, "LFO → Drive — the LFO sweeps every stage's drive, up to ±30 %", 62, 50);
+        var envTone = Slider("Env → tone", () => EnvTone, PctF, "Env → Tone — loud parts push the tone brighter", 62, 50);
+        var rate = Slider("Rate", () => LfoRate, RateF, "LFO rate — free 0.05 … 20 Hz, or with Sync a division from 2 bars to 1/64", 62, 50);
         var osSeg = Segments(OsNames, OsI, i => { SetP(OS, i / 3f); Refresh(); }, out var osSync, fill: true, padX: 2);
         readouts.Add(osSync);
         Learn(osSeg, OS);
         ToolTip.SetTip(osSeg, "Oversampling — runs the stages at 2 / 4 / 8 × the rate so the harmonics above Nyquist don't fold back (minimum phase, no latency)");
-        var osRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
-        osRow.Children.Add(Caps("OVERSAMPLE")); osRow.Children.Add(Col(osSeg, 1));
-        static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = c };
+        var osRow = new Grid { ColumnDefinitions = new ColumnDefinitions("70,*") };
+        osRow.Children.Add(Caps("Oversample")); osRow.Children.Add(Col(osSeg, 1));
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(GRow(typeSeg, 0));
-        rightBody.Children.Add(GRow(knobs, 2));
-        rightBody.Children.Add(GRow(Rule(modHead), 4));
-        rightBody.Children.Add(GRow(new Border { Margin = new Thickness(0, 3, 0, 0), Child = mods }, 5));
-        rightBody.Children.Add(GRow(Rule(osRow), 7));
-        var right = Island(new DockPanel { Children = { Docked(Bar(shapeHead, new Thickness(8, 0)), Dock.Top), rightBody } }, 184);
+        var rightBody = new Grid { RowDefinitions = new RowDefinitions("18,6,Auto,30,10,20,18,18,18,*,Auto") };
+        rightBody.Children.Add(shapeHead);
+        rightBody.Children.Add(GRow(typeSeg, 2));
+        rightBody.Children.Add(GRow(knobs, 3));
+        rightBody.Children.Add(GRow(Rule(), 4));
+        rightBody.Children.Add(GRow(modHead, 5));
+        rightBody.Children.Add(GRow(lfoDrive, 6));
+        rightBody.Children.Add(GRow(envTone, 7));
+        rightBody.Children.Add(GRow(rate, 8));
+        rightBody.Children.Add(GRow(osRow, 10));
+        var right = Island(rightBody, 206, new Thickness(SectionPad));
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (Sc(ForgeMath.S_Alias) > 0.5) return "Digital / Fold without oversampling alias: switch on 2× or more";
-            int on = 0; for (int s = 0; s < 3; s++) if (On(OnP(s))) on++;
-            var parts = new List<string>
-            {
-                $"{on} of 3 stages",
-                new[] { "serial", "parallel", "mid/side", "multiband" }[RouteI()],
-                $"S{sel + 1} {ForgeMath.AlgoNames[TypeI(sel)]} {PctF(P(DriveP(sel)))}",
-            };
-            if (P(LfoDrive) > 0.005f) parts.Add($"LFO {PctF(P(LfoDrive))} {RateF(P(LfoRate))}");
-            if (P(EnvTone) > 0.005f) parts.Add($"env → tone {PctF(P(EnvTone))}");
-            // The master offsets have no knob on the card (their per-stage successors do) — say so when set.
-            if (Math.Abs(P(Tone) - 0.5f) > 0.002f) parts.Add("master tone " + SgnI((P(Tone) - 0.5) * 200) + " %");
-            if (Math.Abs(P(Bias) - 0.5f) > 0.002f) parts.Add("master bias " + BiasF(P(Bias)));
-            if (Math.Abs(P(WidthP) - 0.5f) > 0.002f) parts.Add("master width " + WidthF(P(WidthP)));
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            bool alias = Sc(ForgeMath.S_Alias) > 0.5;
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = alias ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(ForgeMath.S_SampleRate);
-            statusRight.Text = sr > 0
-                ? NotaNum.F($"{sr / 1000:0.#} kHz · OS {(OsI() == 0 ? "off" : OsNames[OsI()])} · latency {Sc(ForgeMath.S_Latency):0} smp · CPU {Sc(ForgeMath.S_Cpu) * 100:0.0} %")
-                : "";
-        });
-        ToolTip.SetTip(statusLeft, "What the device is doing; the master Tone / Bias / Width offsets of older projects show here when set");
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { left, right, centre } };
 
         var onArr = new bool[3];
         refreshNow = () =>
