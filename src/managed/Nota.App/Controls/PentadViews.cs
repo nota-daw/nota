@@ -213,33 +213,31 @@ internal sealed class PentadVoiceStrip : Control
     }
 }
 
-// A level bar in dBFS (−48..+3): green, amber above −6 dB. Vertical or horizontal.
+// A level bar in dBFS (−48..+3), drawn like every level meter (MeterScale): on the well,
+// corner 2, green to 70 % of its scale, amber to 88 %, red above. Upright it is one 3px
+// channel centred in its width (the L / R caption under it keeps the width); lying down it
+// fills its height (a thin wet level).
 internal sealed class PentadLevelBar : Control
 {
     private double _db = -100;
     public bool Vertical { get; init; }
-    public void SetLinear(double peak) { _db = peak > 1e-6 ? 20 * Math.Log10(peak) : -100; InvalidateVisual(); }
+    public void SetLinear(double peak)
+    {
+        double db = peak > 1e-6 ? 20 * Math.Log10(peak) : -100;
+        if (Math.Abs(db - _db) < 0.05) return;
+        _db = db; InvalidateVisual();
+    }
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
-        static double Frac(double db) => Math.Clamp((db + 48) / 51.0, 0, 1);
-        double f = Frac(_db), fw = Frac(-6);
-        if (f <= 0) return;
+        if (w < 1 || h < 1) return;
+        double f = Math.Clamp((_db + 48) / 51.0, 0, 1);
         if (Vertical)
         {
-            double ih = h - 2;
-            double gTop = h - 1 - ih * Math.Min(f, fw);
-            ctx.FillRectangle(NotaPalette.Success, new Rect(1, gTop, w - 2, h - 1 - gTop));
-            if (f > fw) ctx.FillRectangle(NotaPalette.Warning, new Rect(1, h - 1 - ih * f, w - 2, ih * (f - fw)));
+            double cw = Math.Min(w, MeterScale.ChannelW);
+            MeterScale.DrawChannel(ctx, new Rect((w - cw) / 2, 0, cw, h), f, 0, horizontal: false);
         }
-        else
-        {
-            double iw = w;
-            ctx.FillRectangle(NotaPalette.Success, new Rect(0, 0, iw * Math.Min(f, fw), h));
-            if (f > fw) ctx.FillRectangle(NotaPalette.Warning, new Rect(iw * fw, 0, iw * (f - fw), h));
-        }
+        else MeterScale.DrawChannel(ctx, new Rect(0, 0, w, h), f, 0, horizontal: true);
     }
 }

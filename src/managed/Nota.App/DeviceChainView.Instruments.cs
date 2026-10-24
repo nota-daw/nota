@@ -107,7 +107,7 @@ public sealed partial class DeviceChainView
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Drums · {pads} pad{(pads == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
             Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
-            PresetKind: 4, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument, Presets: kits);
+            PresetKind: 4, IsInstrument: true, Width: 740, Kind: ChainKind.Instrument, Presets: kits);
         return BuildCardShell(spec, body);
     }
 
