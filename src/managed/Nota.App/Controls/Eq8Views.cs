@@ -182,7 +182,9 @@ public sealed class Eq8Curve : Control
     // ---- geometry: the plot is the whole control ----
     private double X(double f) => Eq8.FreqToN(f) * Bounds.Width;
     private double Y(double db) => Eq8.GainToN(db) * Bounds.Height;
-    private Point NodeAt(int b) => new(X(P(b, Eq8.FreqF)), Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
+    // A node at 20 Hz or 20 kHz stays whole inside the window.
+    private Point NodeAt(int b) => new(Math.Clamp(X(P(b, Eq8.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
+        Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
 
     private int Hit(Point p)
     {
