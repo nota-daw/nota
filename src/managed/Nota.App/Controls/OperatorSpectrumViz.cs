@@ -66,7 +66,7 @@ internal sealed class OperatorSpectrumViz : Control
         void Tick(int k, string lbl)
         {
             double tx = x0 + Math.Min(_n, k) * bw;
-            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, Axis);
+            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, Axis);
             ctx.DrawText(ft, new Point(Math.Min(tx, x1 - ft.Width), bot + 2));
         }
         Tick(0, "f"); Tick(10, "10f"); Tick(20, "20f"); Tick(30, "30f");

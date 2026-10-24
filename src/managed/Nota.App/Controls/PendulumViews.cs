@@ -6,7 +6,7 @@
 //   PendulumLanesView  one lane per ball — x is pitch (low … high), the chord's degree
 //                      boundaries as faint ticks, the ball with a short trail showing which
 //                      way it travels, the wall it came from (dim ink), the one it strikes
-//                      (accent), and in teal how long until it reaches the wall ahead. The
+//                      (accent), and in grey how long until it reaches the wall ahead. The
 //                      space answers "why this note".
 //   PendulumBarView    the bar as a 1/16 strip the generated notes fall into (height =
 //                      pitch within the chord), this bar in neutral ink with the note just
@@ -25,7 +25,7 @@ namespace Nota.App;
 
 internal static class PendulumInk
 {
-    public static FormattedText Mono(string t, IBrush ink, double size = 7)
+    public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
         => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     /// <summary>Seconds as the lanes print them: 0.12 s, 1.3 s, or — when never.</summary>
@@ -59,7 +59,7 @@ internal sealed class PendulumLanesView : Control
         if (w <= 0 || h <= 0) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
-        const double padX = 6, padTop = 4, axisH = 9, leftW = 22, rightW = 20, gap = 6;
+        const double padX = 8, padTop = 4, axisH = 13, leftW = 22, rightW = 18, gap = 6;
         double laneX0 = padX + leftW + gap, laneX1 = w - padX - rightW - gap, laneW = Math.Max(10, laneX1 - laneX0);
         double top = padTop, bot = h - axisH - 2;
         double rowH = (bot - top) / _count;
@@ -68,7 +68,7 @@ internal sealed class PendulumLanesView : Control
         var accent = NotaPalette.Accent;
         var hairPen = new Pen(NotaPalette.GraphBorder, 1);
         var tickPen = new Pen(NotaPalette.GridBeat, 1);
-        var leadPen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x8C), 1);
+        var leadPen = new Pen(NotaPalette.TextTertiary, 1);
 
         for (int b = 0; b < _count; b++)
         {
@@ -103,13 +103,13 @@ internal sealed class PendulumLanesView : Control
 
             double bx = laneX0 + Math.Clamp(ball.Pos, 0, 1) * laneW;
 
-            // Where it is going: a teal lead to the wall ahead and the time to get there.
+            // Where it is going: a grey lead to the wall ahead and the time to get there.
             if (ball.Dir != 0 && !striking)
             {
                 double wx = ball.Dir > 0 ? laneX1 : laneX0;
                 ctx.DrawLine(leadPen, new Point(bx, cy), new Point(wx, cy));
                 string t = PendulumInk.Secs(ball.ToWall);
-                var ft = PendulumInk.Mono(ball.Dir > 0 ? $"→ {t}" : $"{t} ←", NotaPalette.TealBright);
+                var ft = PendulumInk.Mono(ball.Dir > 0 ? $"→ {t}" : $"{t} ←", NotaPalette.TextSecondary);
                 double ty = Math.Max(cy - rowH * 0.5, cy - ft.Height - 2);
                 ctx.DrawText(ft, new Point(ball.Dir > 0 ? laneX1 - 4 - ft.Width : laneX0 + 4, ty));
             }
@@ -140,7 +140,7 @@ internal sealed class PendulumLanesView : Control
         }
 
         // Axis: what x means.
-        double ay = h - axisH - 1;
+        double ay = h - axisH;
         var lo = PendulumInk.Mono("low", NotaPalette.TextAxis);
         var mid = PendulumInk.Mono(degrees > 0 ? $"x = pitch · {degrees} notes held" : "x = pitch · hold a chord", NotaPalette.TextAxis);
         var hi = PendulumInk.Mono("high", NotaPalette.TextAxis);
@@ -175,17 +175,17 @@ internal sealed class PendulumBarView : Control
         if (w <= 0 || h <= 0) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
-        const double padX = 6;
-        var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaPalette.TextTertiary);
-        ctx.DrawText(cap, new Point(padX, 3));
+        const double padX = 8;
+        var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaGraph.TitleSize, NotaPalette.TextSecondary);
+        ctx.DrawText(cap, new Point(padX, 2));
         var sub = PendulumInk.Mono($"bar · quantize {_quant.ToLowerInvariant()}", NotaPalette.TextAxis);
-        ctx.DrawText(sub, new Point(padX + cap.Width + 6, 3));
+        ctx.DrawText(sub, new Point(padX + cap.Width + 6, 2 + (cap.Height - sub.Height) / 2));
         int shown = Visible(_s);
-        var right = PendulumInk.Mono($"{_sort} · {shown} {(shown == 1 ? "note" : "notes")}", NotaPalette.TealBright);
-        ctx.DrawText(right, new Point(w - padX - right.Width, 3));
+        var right = PendulumInk.Mono($"{_sort} · {shown} {(shown == 1 ? "note" : "notes")}", NotaPalette.TextTertiary);
+        ctx.DrawText(right, new Point(w - padX - right.Width, 2 + (cap.Height - right.Height) / 2));
 
         int n = Math.Max(1, _s.StepCount);
-        double gx0 = padX, gx1 = w - padX, gy0 = 4 + cap.Height + 2, gy1 = h - 3;
+        double gx0 = padX, gx1 = w - padX, gy0 = 2 + cap.Height + 1, gy1 = h - 4;
         double cw = (gx1 - gx0 + 1) / n;
         int lo = int.MaxValue, hi = int.MinValue;
         for (int i = 0; i < n; i++) if (_s.Steps[i].Pitch >= 0) { lo = Math.Min(lo, _s.Steps[i].Pitch); hi = Math.Max(hi, _s.Steps[i].Pitch); }
@@ -249,23 +249,24 @@ internal sealed class PendulumBallList : Control
             var ball = _s.BallState[b];
             double y = b * (rowH + gap);
             bool sel = b == _s.LastBall;
-            var rr = new RoundedRect(new Rect(0.5, y + 0.5, w - 1, rowH - 1), NotaRadius.CellValue);
-            ctx.DrawRectangle(sel ? NotaPalette.AccentSubtle : NotaPalette.BgSunken, new Pen(sel ? NotaPalette.BorderBrass : NotaPalette.GraphBorder, 1), rr);
-            double cy = y + rowH / 2, x = 6;
+            var rr = new RoundedRect(new Rect(0, y, w, rowH), NotaRadius.CellValue);
+            ctx.DrawRectangle(sel ? NotaPalette.AccentSoft : NotaGraph.Ground, null, rr);
+            double fs = rowH >= 15 ? NotaType.KnobValue : NotaGraph.AxisSize;
+            double cy = y + rowH / 2, x = 8;
             ctx.DrawEllipse(sel ? NotaPalette.Accent : NotaPalette.VizInk, null, new Point(x + 3, cy), 3, 3);
-            x += 11;
+            x += 14;
             void Col(string t, IBrush ink, double width)
             {
-                var ft = PendulumInk.Mono(t, ink);
+                var ft = PendulumInk.Mono(t, ink, fs);
                 ctx.DrawText(ft, new Point(x, cy - ft.Height / 2));
                 x += width;
             }
-            Col(_div, NotaPalette.TextPrimary, 25);
-            Col(NotaNum.Unit(ball.Rate * 100, "+0;−0;0", "%"), sel ? NotaPalette.AccentBright : NotaPalette.TextSecondary, 33);
-            Col(NotaNum.Unit(ball.Phase * 100, "0", "%"), sel ? NotaPalette.TextMuted : NotaPalette.TextTertiary, 30);
+            Col(_div, NotaPalette.TextPrimary, 30);
+            Col(NotaNum.Unit(ball.Rate * 100, "+0;−0;0", "%"), sel ? NotaPalette.AccentBright : NotaPalette.TextSecondary, 40);
+            Col(NotaNum.Unit(ball.Phase * 100, "0", "%"), NotaPalette.TextTertiary, 34);
             bool fresh = ball.Pitch >= 0 && ball.Since < PendulumInk.Fresh;
-            var note = PendulumInk.Mono(PendulumModel.NoteName(ball.Pitch), fresh ? NotaPalette.AccentBright : ball.Pitch >= 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled);
-            ctx.DrawText(note, new Point(w - 6 - note.Width, cy - note.Height / 2));
+            var note = PendulumInk.Mono(PendulumModel.NoteName(ball.Pitch), fresh ? NotaPalette.AccentBright : ball.Pitch >= 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, fs);
+            ctx.DrawText(note, new Point(w - 8 - note.Width, cy - note.Height / 2));
         }
     }
 }
