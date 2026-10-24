@@ -581,7 +581,7 @@ internal sealed class ChamberEqCurve : Control
     }
 }
 
-// The modulation LFO: a teal sine scrolling at the Rate, its swing following the Depth.
+// The modulation LFO: a grey sine scrolling at the Rate, its swing following the Depth.
 internal sealed class ChamberLfoView : Control
 {
     private double _rate = 0.4, _depth = 0.3, _phase;
@@ -601,6 +601,7 @@ internal sealed class ChamberLfoView : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 8 || h < 8) return;
+        // No rate label: the Rate knob beside it reads the same number, and a label here sat on the wave.
         ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, h / 2), new Point(w, h / 2));
         double amp = (h / 2 - 3) * (0.12 + 0.88 * Math.Clamp(_depth, 0, 1));
         const double cycles = 3;
@@ -615,7 +616,5 @@ internal sealed class ChamberLfoView : Control
             }
         }
         ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.5), g);
-        var t = ChamberInk.Text(_rate >= 1 ? NotaNum.F($"{_rate:0.0}\u2009Hz") : NotaNum.F($"{_rate:0.00}\u2009Hz"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
-        ctx.DrawText(t, new Point(w - t.Width - 3, 1));
     }
 }

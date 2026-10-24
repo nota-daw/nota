@@ -252,7 +252,13 @@ public sealed class BrowserView : UserControl
         var rail = new DockPanel { Width = 40 };
         DockPanel.SetDock(_collapseBtn, Dock.Bottom);
         rail.Children.Add(_collapseBtn);
-        rail.Children.Add(tabStack);
+        // A short window scrolls the tabs under the fold key instead of drawing them over it.
+        rail.Children.Add(new ScrollViewer
+        {
+            Content = tabStack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
 
         // --- Search (style guide): 30 high, corner 7, the well; a 16px icon, the placeholder in
         // ink 3, the match count on the right in ink 3; an orange edge while typing ---

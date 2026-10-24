@@ -119,8 +119,8 @@ internal static class MacroPanel
     // ==================== the grid ====================
 
     /// <summary>The eight macros, 4 × 2, each the knob beside its words. <paramref name="stacked"/>:
-    /// the Drum Rack's tall slots, flush with the pad grid ("Macro 1" over the name over where it
-    /// goes); otherwise Rhythm's short ones ("1 · Tune" over where it goes). A click selects.</summary>
+    /// the Drum Rack's tall slots, flush with the pad grid (the name over where it goes, on up to
+    /// two lines); otherwise Rhythm's short ones ("1 · Tune" over where it goes). A click selects.</summary>
     public static Control Grid(DeviceCardContext ctx, IMacroSurface s, int selected, Action<int> select, List<Action> tick, bool stacked,
                                bool receiversInMenu = false)
     {
@@ -180,14 +180,14 @@ internal static class MacroPanel
         Control words;
         if (stacked)
         {
-            // The value under the knob; three lines beside it: "Macro N", the name, where it goes.
-            var idxTb = new TextBlock { Text = $"Macro {m + 1}", FontSize = NotaType.RowLabel, Foreground = sel ? AccentBright : assigned ? TextTertiary : TextDisabled, TextTrimming = TextTrimming.CharacterEllipsis };
-            var nameTb = new TextBlock
-            {
-                Text = assigned || custom ? name : "", FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold,
-                TextTrimming = TextTrimming.CharacterEllipsis, Foreground = nameInk, IsVisible = assigned || custom,
-            };
-            words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { idxTb, nameTb, recv } };
+            // The value under the knob; beside it the name (or "Macro N" while it has none) over
+            // where it goes, on up to two lines so a long target isn't cut to "Decay · 1…".
+            var nameTb = custom
+                ? new TextBlock { Text = name, FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = nameInk }
+                : new TextBlock { Text = $"Macro {m + 1}", FontSize = NotaType.RowLabel, Foreground = sel ? AccentBright : assigned ? TextTertiary : TextDisabled, TextTrimming = TextTrimming.CharacterEllipsis };
+            recv.TextWrapping = TextWrapping.Wrap;
+            recv.MaxLines = 2;
+            words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { nameTb, recv } };
         }
         else
         {
@@ -305,6 +305,7 @@ internal static class MacroPanel
         head.Children.Add(nm);
         var idxTb = Cap($"Macro {m + 1}");
         idxTb.FontWeight = FontWeight.Normal;
+        idxTb.IsVisible = s.MacroName(m) != $"Macro {m + 1}";   // an unnamed macro would read "Macro 1  Macro 1"
         Avalonia.Controls.Grid.SetColumn(idxTb, 1); head.Children.Add(idxTb);
         val.HorizontalAlignment = HorizontalAlignment.Right;
         Avalonia.Controls.Grid.SetColumn(val, 2); head.Children.Add(val);

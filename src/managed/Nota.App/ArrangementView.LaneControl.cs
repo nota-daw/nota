@@ -1517,7 +1517,7 @@ public sealed partial class ArrangementView
             using var _ = ctx.PushClip(new Rect(0, top, w, Math.Max(0, y + rowH - 2 - top)));
             int span = Math.Max(1, pr.hi - pr.lo + 1);
             double step = Math.Min(content.Height / span, 4), noteH = Math.Max(1, step);
-            var ink = TrackBrush(colorIndex);
+            var ink = ClipColors(colorIndex).content;   // as the stored notes are drawn
             foreach (var h in held)
             {
                 double x0 = _o.BeatToX(h.StartBeat), x1 = _o.BeatToX(Math.Max(h.StartBeat, rp.NowBeat));

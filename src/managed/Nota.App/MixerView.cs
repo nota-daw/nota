@@ -97,7 +97,8 @@ public sealed class MixerView : UserControl
         {
             Content = _row,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            // A short window scrolls the strips rather than cutting off M / S / arm.
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
         var dock = new DockPanel();
         var footer = Footer();
@@ -206,13 +207,11 @@ public sealed class MixerView : UserControl
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
-        if (!isReturn)
-        {
-            var sends = SendsRow(id, returns);
-            sends.IsVisible = _sendsVisible;
-            _sendSections.Add(sends);
-            col.Children.Add(sends);
-        }
+        // A return has no sends; a blank of the same height keeps its fader level with the rest.
+        var sends = isReturn ? Blank(42) : SendsRow(id, returns);
+        sends.IsVisible = _sendsVisible;
+        _sendSections.Add(sends);
+        col.Children.Add(sends);
 
         col.Children.Add(PanRow(id, ti.Pan, ti.IsGroup));
         col.Children.Add(FaderRow(id, ti.Volume, color, out var db, out var meter));
@@ -236,6 +235,13 @@ public sealed class MixerView : UserControl
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
+        // Master has no sends or pan: blanks of their height line its fader up with the strips.
+        var sends = Blank(42);
+        sends.IsVisible = _sendsVisible;
+        _sendSections.Add(sends);
+        col.Children.Add(sends);
+        col.Children.Add(Blank(38));
+
         Control db;
         var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Master, out db, out var meter);
         _meters.Add((-1, meter));
@@ -251,6 +257,9 @@ public sealed class MixerView : UserControl
             CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
+
+    private static Border Blank(double height) =>
+        new() { Height = height, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1) };
 
     // ---- footer: section toggles + pan law + crossfader placeholder -------
 
@@ -551,7 +560,9 @@ public sealed class MixerView : UserControl
         var letters = new Grid { ColumnDefinitions = new ColumnDefinitions($"{MeterScale.ChannelW},{MeterScale.Step},{MeterScale.ChannelW}"), Margin = new Thickness(0, 3, 0, 0) };
         foreach (var (txt, col) in new[] { ("L", 0), ("R", 2) })
         {
-            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
+            // The letter is wider than its 3px column, so it borrows room either side
+            // (a cell clips what it can't fit, which cut R down to an F).
+            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, TextAlignment = TextAlignment.Center, Margin = new Thickness(-5, 0, -5, 0) };
             Grid.SetColumn(t, col); letters.Children.Add(t);
         }
         DockPanel.SetDock(letters, Dock.Bottom);

@@ -2957,16 +2957,23 @@ public sealed partial class ArrangementView : UserControl
     private static (IBrush fill, IPen border, IBrush strip, IBrush content) ClipColors(int idx)
     {
         if (_clipColors.TryGetValue(idx, out var v)) return v;
+        // The content ink (notes, waveform, name) keeps 3:1 on the lane: a light shade on the
+        // light theme's grey ground would otherwise wash out.
         v = (ClipTint(idx, 0.30), new Pen(ClipTint(idx, 0.50), 1), ClipTint(idx, 0.20),
-             NotaPalette.Derived(() => TrackColorForIndex(idx)));
+             NotaPalette.Derived(() => NotaPalette.Legible(TrackColorForIndex(idx), NotaPalette.BgApp.Color)));
         _clipColors[idx] = v;
         return v;
     }
+    private static readonly Dictionary<int, SolidColorBrush> _trackBrushes = new();
 
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
     /// in the variant that was active when the view was built.</summary>
-    public static SolidColorBrush TrackBrush(int idx) => (SolidColorBrush)ClipColors(idx).content;
+    public static SolidColorBrush TrackBrush(int idx)
+    {
+        if (!_trackBrushes.TryGetValue(idx, out var b)) _trackBrushes[idx] = b = NotaPalette.Derived(() => TrackColorForIndex(idx));
+        return b;
+    }
 
     /// <summary>A palette index at a fixed alpha (a group row's 16% tint, a member's 6% wash),
     /// cached per index and alpha so it follows the theme without a derivation per build.</summary>

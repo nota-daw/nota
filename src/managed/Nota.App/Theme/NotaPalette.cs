@@ -150,6 +150,21 @@ internal static class NotaPalette
     public static Color ReadableInkOn(Color fill) =>
         Contrast(InkDark, fill) >= Contrast(InkLight, fill) ? InkDark : InkLight;
 
+    /// <summary><paramref name="ink"/> moved toward dark ink or white (away from
+    /// <paramref name="ground"/>) just far enough to reach <paramref name="min"/> contrast;
+    /// unchanged when it already does. Keeps a hue while making it legible on its ground.</summary>
+    public static Color Legible(Color ink, Color ground, double min = 3.0)
+    {
+        if (Contrast(ink, ground) >= min) return ink;
+        var to = ReadableInkOn(ground);
+        for (double t = 0.05; t < 1; t += 0.05)
+        {
+            var c = Color.FromRgb((byte)(ink.R + (to.R - ink.R) * t), (byte)(ink.G + (to.G - ink.G) * t), (byte)(ink.B + (to.B - ink.B) * t));
+            if (Contrast(c, ground) >= min) return c;
+        }
+        return to;
+    }
+
     private static double Contrast(Color a, Color b)
     {
         double la = Luminance(a), lb = Luminance(b);

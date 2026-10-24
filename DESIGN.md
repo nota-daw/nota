@@ -974,7 +974,9 @@ A block of notes or audio on a track lane.
 - **Fill:** 20 % of the track colour over the lane, corner 6.
 - **Edge:** a thin line in the track colour; **selected:** a 1.5 px outline in ink 1,
   never orange.
-- **Content:** notes, waveform and the name (11.5 / 600) in the full track colour.
+- **Content:** notes, waveform and the name (11.5 / 600) in the full track colour, moved toward
+  dark ink (or white) just enough to keep 3 : 1 on the lane. Only a light shade on Studio Light
+  needs it.
 - Audio clips draw their waveform as spaced bars by default (a 1 px stroke every 3 px,
   mirrored about the centre); Settings → Appearance → Waveform switches to Solid.
 
