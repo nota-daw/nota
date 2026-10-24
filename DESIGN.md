@@ -16,10 +16,10 @@ different strengths, and one typeface with fixed-width digits. It replaces the e
 "Studio" rules (spec 010) where they differ; the colour themes, the token mechanism and
 the interaction contract carry over.
 
-The design is being built on the `ui/style-guide` branch in phases (§ Known drift). The
-tokens, the typeface, the corner scale and the shared sizes came first; the controls,
-shell, device cards, Modular view and icons are redrawn commit by commit. This file
-describes the target, and § Enforced by tests says what a test holds.
+The design was built on the `ui/style-guide` branch: the tokens, the typeface, the corner
+scale and the shared sizes first, then the controls, the shell, the editors, every device
+card and the Modular view. This file describes what the app draws; § Known drift lists the
+few places that still fall short, and § Enforced by tests says what a test holds.
 
 Colour is a **theme** (§ Colour themes). Layout, type, shapes and where orange goes are the
 same in every theme; only the values change. Four themes are built in: **Studio Dark**
@@ -1009,11 +1009,13 @@ A clip slot in the Session view grid.
 A device as a card in the Modular view, with its inputs and outputs for cables.
 
 - **Card:** 214 wide, corner 7, raised like a device card.
-- **Header 34**, tinted by category: blue for instruments, green for effects, grey for the
-  track output; plain grey (`SurfaceCard`) when bypassed.
+- **Header 34**, tinted by category: blue for instruments, green for effects, mauve (24 %)
+  for MIDI effects, an orange wash (16 %) for modulators, a faint grey for the track's
+  audio in and out; plain grey (`SurfaceCard`) when bypassed.
 - **On / off:** a power switch on every device, the instrument included; the track output
   shows a green dot because it cannot be switched off.
-- **Actions:** expand and delete in the header; the output keeps its Master label.
+- **Actions:** expand and delete (a bin icon) in the header; the output keeps its Master
+  label.
 - **Ports** on the card edges, inputs left and outputs right; the first row lines up on
   every node so the main cable runs straight; round for audio, square for MIDI, diamond for
   CV, in the port colours of 0.56.1.
@@ -1172,7 +1174,7 @@ control, label and value stays.
 | Auto Shift | 700 | Status line removed. Shift-tab sliders become value bars; the In and Corr pitch columns stay as empty readout columns until something is sung. |
 | Beat Repeat | 700 | Status line removed. Character-tab sliders become value bars; Repeat filter and Latch share one row. |
 | Ceiling | 700 | Status line removed. Look and Link become value bars; the Limit title stays orange while the limiter is reducing. |
-| Chamber | 700 | Status line removed. Blend and Wet faders become upright value bars; Levels-tab sliders become value bars and the wet meter a thin level bar. |
+| Chamber | 700 | Status line removed. Blend and Wet faders become upright value bars; Levels-tab sliders become value bars and the wet meter a thin level bar. The IR, decay and LFO views lose their teal and mauve (greys by shade). On EQ · Mod the EQ position switch sits beside Tail EQ, so Modulation and Shimmer fit; the shimmer toggle reads Feed back. |
 | Chorus | 700 | Status line removed. Rate, Offset, HPF and the Voice sliders become value bars; Detune and Delay stay read-only range bars. |
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
@@ -1269,7 +1271,7 @@ drift).
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; `Knob` snaps to its three sizes (26 device, 22 label beside, 28 flat); `SwitchTrack` is 20 × 12 with an 8 px knob inset 2; `SliderTrack` is a 16 px value bar in a groove with a 3 px line |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, green to 70 %, amber to 88 %; the arrangement playhead 1 px without glow |
-| `RunLayout` | `DeviceCardKit.HeaderH` 22 (still the earlier value, § Known drift); cards 700 wide except the listed files (parameter stubs, generic cards, Bass, Physical, Volt); the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 26–28 |
+| `RunLayout` | `DeviceCardKit.HeaderH` 32 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
 | `RunNumbers` | Display culture installed; no hyphen in a negative format section or before ∞; no hyphen-minus before a digit in a view literal (`NumberAllowList.txt`); no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |
 | `RunStudio` | Every `Radius.*` on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale; only `Shadow.Popover` / `Shadow.Modal` blur more than 2 px, no literal `BoxShadow` in views; no positive `LetterSpacing` in the theme or views (bar the Remote pairing code), `NotaType` tracking 0, no upper-casing in the shared label builders; device knob arcs and value-bar lines `Accent`, flat knobs `TextTertiary` at rest, graph curves `VizInk`; toolbar 44, transport well 32, seam 1; no Ember value in the Studio themes |
@@ -1327,20 +1329,6 @@ Places where a screen's needs override a general rule, kept on purpose:
 
 True today, not yet fixed:
 
-- **Implementation in progress on this branch.** Done: the theme tokens, the typeface,
-  the corner scale, the shared controls, the arrangement (track colours in the new order,
-  clips, two-row track headers, groups, the overview and zoom row), the browser (30 px
-  rows) and rail, the piano-roll settings strip, the audio editor column, Session slots,
-  the mixer, EQ-8 and Dynamic EQ-8. Still being redrawn on `ui/style-guide`: the other
-  device cards, the Modular nodes and the icons; until a part is redrawn the app draws it
-  the earlier way.
-- **Constants not yet at the guide's values.** The `TextBlock.*` device classes still hold
-  the earlier scale (`DeviceName` 12, `RowLabel` 9, `KnobLabel` and `KnobValue` 8, `Axis`
-  7.5), while `NotaType` already has the guide's device scale. They move in the commit
-  that redraws their users.
-- **Tests that hold the earlier layout:** `RunLayout` still checks a 22 header (the code
-  is already at 32), cards 700 except a list, and browser rows 26–28. It is updated with
-  the device-card and browser commits, not weakened.
 - **No single brush for orange text on the soft tint.** The guide uses `AccentBright` in
   Studio Dark and `AccentPale` in Studio Light; `AccentPale` has no `Brush.*` key yet, and
   neither has `SurfaceDeep`. Add the keys (or one derived "on soft tint" brush) when the
@@ -1359,8 +1347,6 @@ True today, not yet fixed:
   (an alias of `Accent`) and `Inactive.IsBrass` still say brass, and comments in a few
   views say Graphite, Paper, brass or almanac. New code uses the names in § Colour; a
   rename pass can follow.
-- **Screenshots in the user manual** (`../nota-docs`, EN and RU) show the earlier look;
-  they are re-shot in a nota-docs follow-up once the app change lands.
 - **Column order** choice → work → output is applied in Utility; the other cards have not
   been audited card by card.
 - **Graph controls** (curves, pads, envelope and matrix handles) reset on double-click but
