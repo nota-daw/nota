@@ -998,11 +998,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         rail.Width = RailW;
 
         // ---- the tab row's hint ----------------------------------------------------
-        string RouteWord(string id) => Routes[Sel(id, 4)];
         string OscWord(int o) => BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
         string FiltPre() => fsel == 0 ? "fil1" : "fil2";
-        string FiltFreqId() => fsel == 0 ? "cutoff" : "fil2freq";
-        string FiltResoId() => fsel == 0 ? "resonance" : "fil2reso";
 
         string Hint() => tab switch
         {
