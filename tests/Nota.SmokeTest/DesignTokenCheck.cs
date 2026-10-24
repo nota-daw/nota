@@ -432,7 +432,7 @@ internal static partial class DesignTokenCheck
             "transport keys sit in the console well, first in the transport-and-timing group");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
-        yield return (Regex.IsMatch(browser, @"const double RowH = 2[6-8];"), "browser list rows are 26–28px");
+        yield return (Regex.IsMatch(browser, @"const double RowH = 30;"), "browser list rows are 30px (style guide)");
     }
 
     /// <summary>The Studio rules (DESIGN.md) that the older checks do not hold:

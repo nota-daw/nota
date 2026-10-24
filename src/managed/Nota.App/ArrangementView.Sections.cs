@@ -52,18 +52,11 @@ public sealed partial class ArrangementView
     /// <summary>Raised whenever the section list changes, so the host can mark the project dirty.</summary>
     public event Action? SectionsChanged;
 
-    // The lane row: the same header-column chrome as the ruler, then the spans themselves.
+    // The lane row: a plain stretch of header column, then the spans themselves.
     private Border BuildSectionsRow()
     {
-        var label = new TextBlock
-        {
-            Text = "Sections", Classes = { "SectionLabel" },
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-        };
         var grid = new Grid { Height = SectionsH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(label));
+        grid.Children.Add(HeaderPanel(null));   // the lane says what it is ("drag here to mark a section")
         Grid.SetColumn(_sectionsLane, 1);
         grid.Children.Add(_sectionsLane);
 
