@@ -294,9 +294,9 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Child = rootText,
         };
-        rootBox.PointerWheelChanged += (_, e) =>
+        rootBox.PointerWheelChanged += (wt, e) =>
         {
-            if (WheelInput.Step(e) is not { } s) return;
+            if (WheelInput.Step(e, wt) is not { } s) return;
             e.Handled = true; if (s == 0) return;
             rootv = Math.Clamp(rootv + s, 0, 127); acc.SetRoot(rootv); Refresh();
         };

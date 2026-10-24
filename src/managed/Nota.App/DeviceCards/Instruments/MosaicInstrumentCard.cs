@@ -300,9 +300,9 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             };
             b.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); done?.Invoke(); };
             b.PointerCaptureLost += (_, _) => { if (!drag) return; drag = false; done?.Invoke(); };
-            b.PointerWheelChanged += (_, e) =>
+            b.PointerWheelChanged += (wt, e) =>
             {
-                if (WheelInput.Step(e) is not { } s) return;
+                if (WheelInput.Step(e, wt) is not { } s) return;
                 e.Handled = true; if (s == 0) return;
                 step(s); tb.Text = text(); done?.Invoke(); Refresh();
             };

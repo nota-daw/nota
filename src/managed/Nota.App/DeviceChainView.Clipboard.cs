@@ -118,7 +118,10 @@ public sealed partial class DeviceChainView
             StatusMessage?.Invoke($"{name} can't go in a rack: it has a sidechain key, automation or a modulation link");
             return;
         }
-        TrackExtras().Remove(ExtraKey(ChainKind.Effect, di));   // its preset label stays with the device, now in the chain
+        // The device's A/B snapshots and preset label live only here: the rack keeps them for
+        // when ⌘⇧G (or undo) brings the device back out.
+        TrackExtras().Remove(ExtraKey(ChainKind.Effect, di), out var own);
+        if (own != null) Extra(ChainKind.Effect, di).Wrapped = own;
         StatusMessage?.Invoke($"Put {name} in an Audio Effect Rack");
         Rebuild(); Changed?.Invoke();
     }
@@ -128,6 +131,7 @@ public sealed partial class DeviceChainView
         if (!SelectedIsRack) { StatusMessage?.Invoke("Select an Audio Effect Rack to take its devices out"); return; }
         int di = _selDeviceIndex;
         int end = _engine.TrackDeviceCount(_trackId);
+        var wrapped = Extra(ChainKind.Effect, di).Wrapped;
         int n = _engine.UnwrapRack(_trackId, di);
         if (n < 0)
         {
@@ -140,6 +144,8 @@ public sealed partial class DeviceChainView
         {
             TrackExtras().Remove(ExtraKey(ChainKind.Effect, di));
             for (int i = 1; i < n; i++) ExtrasMoved(ChainKind.Effect, end - 1 + i, di + i);
+            if (wrapped != null && wrapped.Sig == CardSig(_trackId, ChainKind.Effect, di))
+                TrackExtras()[ExtraKey(ChainKind.Effect, di)] = wrapped;
         }
         _selDeviceIndex = n > 0 ? di : -1;
         StatusMessage?.Invoke(n == 1 ? "Took the device out of the rack" : $"Took {n} devices out of the rack");

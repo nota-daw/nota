@@ -30,6 +30,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Fixed
+- **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer
+  resets it (a Reverb kept ringing cut off), an effect an Arp's CC lane drives stays out of a
+  rack instead of losing that link, and ⌘⇧G or undo gives the device back its A/B snapshots
+  and preset label. Rack edits during playback no longer race the audio thread over the
+  sustain pedal and pad decay state, and the wheel on one stepper box no longer carries
+  travel left over from another.
 - **Copy, paste and duplicate keep every setting** (nota-daw/nota#238): a pasted device came
   back with only part of its settings (a pasted Compressor at its default threshold and ratio).
   Copy now takes the whole device — every parameter, its state, bypass and sidechain — and

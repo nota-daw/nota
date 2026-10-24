@@ -351,7 +351,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             readouts.Add(() => name.Text = Notes[Root()]);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent,
                 Children = { Arrow(GlyphKind.ChevronLeft, -1), name, Arrow(GlyphKind.ChevronRight, 1) } };
-            row.PointerWheelChanged += (_, ev) => { if (WheelInput.Step(ev) is not { } s) return; ev.Handled = true; if (s != 0) StepRoot(s); };
+            row.PointerWheelChanged += (wt, ev) => { if (WheelInput.Step(ev, wt) is not { } s) return; ev.Handled = true; if (s != 0) StepRoot(s); };
             ToolTip.SetTip(row, "Root — click the arrows or scroll");
             Learn(row, PRoot, "Root");
             return row;
@@ -393,9 +393,9 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 fly.ShowAt(box);
                 ev.Handled = true;
             };
-            box.PointerWheelChanged += (_, ev) =>
+            box.PointerWheelChanged += (wt, ev) =>
             {
-                if (WheelInput.Step(ev) is not { } s) return;
+                if (WheelInput.Step(ev, wt) is not { } s) return;
                 ev.Handled = true; if (s == 0) return;
                 int at = Array.IndexOf(TypeRows, Sc()); if (at < 0) at = TypeRows.Length - 1;
                 PickType(TypeRows[Math.Clamp(at - s, 0, TypeRows.Length - 1)]);
@@ -433,7 +433,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             void Stop() { if (!drag) return; drag = false; End(p); }
             valHit.PointerReleased += (_, ev) => { if (drag) ev.Pointer.Capture(null); Stop(); };
             valHit.PointerCaptureLost += (_, _) => Stop();
-            valHit.PointerWheelChanged += (_, ev) => { if (WheelInput.Step(ev) is not { } s) return; ev.Handled = true; if (s != 0) { Begin(p); Put(Get() + s); End(p); } };
+            valHit.PointerWheelChanged += (wt, ev) => { if (WheelInput.Step(ev, wt) is not { } s) return; ev.Handled = true; if (s != 0) { Begin(p); Put(Get() + s); End(p); } };
             readouts.Add(() => val.Text = DeviceCardKit.NoteName(Get()));
             var box = new Border
             {

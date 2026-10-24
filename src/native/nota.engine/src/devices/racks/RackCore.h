@@ -56,7 +56,8 @@ class RackCore {
         std::atomic<int32_t> chokeGroup{0}; // 0 = none, 1..8 choke group
         std::atomic<int32_t> tune{0};       // pad transpose, semitones (-48..+48)
         std::atomic<float> decay{1.0f};     // pad decay 0..1 (1 = sustain / no shaping)
-        float ampEnv = 0.0f;                // audio-thread only: pad decay VCA state
+        std::atomic<float> ampEnv{0.0f};    // pad decay VCA state: written on the audio thread only;
+                                            // relaxed so a rack fork can carry it over
         bool retrig = false;                // audio-thread only: noteOn asks for an env kick
     };
 
@@ -165,7 +166,9 @@ class RackCore {
     int32_t chainDeviceCount(int32_t chain) const;
     int32_t addChainDevice(int32_t chain, int32_t deviceKind);
     // Adds a pre-built device (e.g. a hosted plugin the engine instantiated) to a chain.
-    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev);
+    // prepare = false: the device is already prepared at this rack's rate and may be playing
+    // (moved in by wrapDeviceInRack), so it isn't reset.
+    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare = true);
     bool removeChainDevice(int32_t chain, int32_t dev);
     bool moveChainDevice(int32_t chain, int32_t from, int32_t to);
     Device* chainDeviceAt(int32_t chain, int32_t dev) const;

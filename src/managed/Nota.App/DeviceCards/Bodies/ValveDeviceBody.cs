@@ -249,9 +249,9 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 fly.ShowAt(box);
                 e.Handled = true;
             };
-            box.PointerWheelChanged += (_, e) =>
+            box.PointerWheelChanged += (wt, e) =>
             {
-                if (WheelInput.Step(e) is not { } s) return;
+                if (WheelInput.Step(e, wt) is not { } s) return;
                 e.Handled = true; if (s == 0) return;
                 int m = Math.Clamp(Idx(p) - s, 0, names.Length - 1);
                 SetP(p, m); RefreshAll();
