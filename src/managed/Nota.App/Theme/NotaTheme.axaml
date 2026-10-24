@@ -247,6 +247,14 @@
             </ControlTemplate>
           </Setter>
         </Style>
+        <!-- An inline row draws its own cursor (a ring or a raised key), so the highlight
+             fill never lands on it: a colour grid on solid orange read as a picked row. -->
+        <Style Selector="^.inline:selected">
+          <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+          <Style Selector="^ /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="Transparent"/>
+          </Style>
+        </Style>
       </ControlTheme>
     </ResourceDictionary>
   </Styles.Resources>
