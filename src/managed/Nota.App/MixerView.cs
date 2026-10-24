@@ -261,7 +261,7 @@ public sealed class MixerView : UserControl
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new TextBlock { Text = "Show", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle },
+            Children = { new TextBlock { Text = "Show", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle },
         };
 
         var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
@@ -282,10 +282,10 @@ public sealed class MixerView : UserControl
     private Border SectionToggle(string label, bool initial, Action<bool> set)
     {
         bool on = initial;
-        var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        // Toggled on: a solid accent key with derived ink; off: a raised key.
-        void Paint() { b.Background = on ? Brass : NotaPalette.SurfaceRaised; b.BorderBrush = on ? Brass : NotaPalette.Seam; t.Foreground = on ? OnAccent : TextSecondary; }
+        var t = new TextBlock { Text = label, FontSize = NotaType.Body, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = NotaSize.Chip, Padding = new Thickness(10, 0), CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        // A chip (style guide): shown is picked, so the soft tint and orange text; hidden sits on the well.
+        void Paint() { b.Background = on ? NotaPalette.AccentSoft : NotaPalette.Well; t.Foreground = on ? NotaPalette.AccentBright : TextSecondary; }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
         Paint();
         return b;
@@ -295,7 +295,7 @@ public sealed class MixerView : UserControl
     // badge for projects made before the law existed (they keep Balance until switched).
     private Control PanLawGroup()
     {
-        var label = new TextBlock { Text = "Pan law", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = "Pan law", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var seg = ClipEditorKit.Segments(new[] { "Stereo", "Balance" }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
         {
             var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
@@ -350,20 +350,18 @@ public sealed class MixerView : UserControl
         return b;
     }
 
-    // Crossfader is not in the engine yet — a disabled A/B track with an M7+ badge.
+    // Crossfader is not in the engine yet — a disabled A–B value bar with an M7+ badge.
     private Control Crossfader()
     {
-        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
-        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var host = new Panel { Width = 120, Children = { track, knob } };
+        var host = new MiniFader(0.5, 1.0) { Width = 120, VerticalAlignment = VerticalAlignment.Center, Text = _ => "Centre" };
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, IsEnabled = false,
             Children =
             {
-                new TextBlock { Text = "A", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "A", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
                 host,
-                new TextBlock { Text = "B", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "B", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         return new StackPanel
@@ -448,10 +446,10 @@ public sealed class MixerView : UserControl
         {
             char letter = (char)('A' + bus);
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            grid.Children.Add(new TextBlock { Text = letter.ToString(), FontSize = 8, Foreground = TextTertiary, Width = 8, VerticalAlignment = VerticalAlignment.Center });
+            grid.Children.Add(new TextBlock { Text = letter.ToString(), FontSize = NotaType.Eyebrow, Foreground = TextTertiary, Width = 10, VerticalAlignment = VerticalAlignment.Center });
             if (bus < returns)
             {
-                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
+                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center, Text = NotaNum.Pct };
                 int b = bus;
                 f.ValueChanged += v => _engine.SetTrackSend(id, b, (float)v);
                 ValueEntry.Attach(f, f.EntryField($"Send {(char)('A' + b)}", NotaNum.Pct));

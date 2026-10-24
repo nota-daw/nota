@@ -142,7 +142,7 @@ public sealed partial class SessionView
         return ft;
     }
 
-    private static readonly IPen SelPen = new Pen(NotaPalette.Accent, 1);
+    private static readonly IPen SelPen = new Pen(NotaPalette.TextPrimary, 1.5);   // style guide: a selected slot is outlined in the text colour, not orange
     private static readonly IPen PlayheadPen = new Pen(NotaPalette.TextPrimary, 1);
 
     // The almanac's play triangle, drawn in a w×h box centred on c.
@@ -288,7 +288,7 @@ public sealed partial class SessionView
         {
             bool sel = _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId && _c.Kind is ColKind.Track or ColKind.Group;
             Background = sel ? NotaPalette.SelHeaderBg : _c.Kind is ColKind.Return or ColKind.Master ? NotaPalette.Panel : NotaPalette.SurfaceCard;
-            BorderBrush = sel ? NotaPalette.AccentDim : Brushes.Transparent;
+            BorderBrush = Brushes.Transparent;
             if (_arr is not null) _arr.IsVisible = _o._engine.SessionPlayingSlot(_c.TrackId) >= 0;
         }
     }
@@ -475,7 +475,7 @@ public sealed partial class SessionView
 
             if (!_filled)
             {
-                FillCell(ctx, r, NotaPalette.SurfaceCard, dropTarget ? NotaPalette.Accent : null);
+                FillCell(ctx, r, NotaPalette.Well, dropTarget ? NotaPalette.Accent : null);
                 var c = r.Center;
                 if (_o._armed.Contains(_c.TrackId))
                     ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 3.25, 3.25);
@@ -491,7 +491,7 @@ public sealed partial class SessionView
             double pos = playing ? eng.SessionSlotPosition(_c.TrackId) : 0;
             double frac = playing && _lenBeats > 0 ? pos / _lenBeats : 0;
 
-            IBrush bg = NotaPalette.Wash(_brush, playing ? (byte)0x40 : (byte)0x24);
+            IBrush bg = NotaPalette.Wash(_brush, playing ? (byte)0x45 : (byte)0x33);   // the clip's 20 % track tint
             IBrush border = dropTarget ? NotaPalette.Accent
                 : playing ? NotaPalette.Success
                 : queued ? (_o._blinkOn ? NotaPalette.Warning : NotaPalette.Wash(NotaPalette.Warning, 0x66))
@@ -512,10 +512,10 @@ public sealed partial class SessionView
                 DrawTriangle(ctx, lc, 8, 9, tri);
             }
 
-            var lenFt = Ft(_len, NotaFonts.Sans, 9, playing ? NotaPalette.TextStrong : NotaPalette.TextMuted);
+            var lenFt = Ft(_len, NotaFonts.Sans, 10, playing ? NotaPalette.TextStrong : NotaPalette.TextTertiary);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
-            var nameFt = Ft(_name, NotaFonts.SansMedium, 11, NotaPalette.TextPrimary, lenX - 27 - 4);
+            var nameFt = Ft(_name, NotaFonts.SansSemiBold, NotaType.ClipName, _brush, lenX - 27 - 4);
             ctx.DrawText(nameFt, new Point(27, (TopRowH - nameFt.Height) / 2));
 
             var area = new Rect(7, 25, r.Width - 14, r.Height - 31);
@@ -682,7 +682,7 @@ public sealed partial class SessionView
             bool selected = _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _g.TrackId && _o._sel.Scene == _scene;
             if (!Any)
             {
-                FillCell(ctx, r, NotaPalette.SurfaceCard, null);
+                FillCell(ctx, r, NotaPalette.Well, null);
                 ctx.DrawRectangle(NotaPalette.BorderStrong, null, new Rect(r.Center.X - 3, r.Center.Y - 3, 6, 6), 1, 1);
                 if (selected) DrawSelection(ctx, r);
                 return;
