@@ -224,7 +224,7 @@ internal sealed class PrismSpectrum : Control
             var col = PrismInk.Band[upper];
             bool hot = _hover == idx || _drag == idx;
             ctx.DrawLine(new Pen(_drag == idx ? NotaPalette.Accent : col, hot ? 2 : 1), new Point(x, 0), new Point(x, h));
-            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), 7, _drag == idx ? NotaPalette.AccentBright : upper == 1 ? NotaPalette.TextPrimary : col);
+            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), NotaGraph.AxisSize, _drag == idx ? NotaPalette.AccentBright : upper == 1 ? NotaPalette.TextPrimary : col);
             double tw = t.Width + 8, tx = Math.Clamp(x - tw / 2, 0, w - tw);
             var tag = new Rect(tx, 0, tw, 12);
             ctx.DrawRectangle(hot ? NotaPalette.SurfaceRaised : NotaPalette.SurfaceCard, new Pen(col, 1), tag, 3, 3);
@@ -233,9 +233,9 @@ internal sealed class PrismSpectrum : Control
         if (_bands >= 2) Cross(_xl, 1, 0);
         if (_bands >= 3) Cross(_xh, 2, 1);
 
-        var l0 = PrismInk.Text("20", 7, NotaPalette.TextDisabled);
+        var l0 = PrismInk.Text("20", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(l0, new Point(5, h - l0.Height - 1));
-        var l1 = PrismInk.Text("20k Hz", 7, NotaPalette.TextDisabled);
+        var l1 = PrismInk.Text("20k Hz", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(l1, new Point(w - l1.Width - 5, h - l1.Height - 1));
         ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
     }
@@ -378,9 +378,9 @@ internal sealed class PrismTransfer : Control
         if (_below || _hover == 2) ctx.DrawEllipse(_drag == 2 ? NotaPalette.Accent : _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, _hover == 2 ? new Pen(NotaPalette.TextPrimary, 1) : null, below, 3, 3);
         ctx.DrawEllipse(_drag == 1 ? NotaPalette.Accent : PrismInk.BandLit[_band], _hover == 1 ? new Pen(NotaPalette.TextPrimary, 1) : null, Pt(_thrA, Out(_thrA)), 3.5, 3.5);
 
-        var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), 7, PrismInk.BandLit[_band]);
+        var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), NotaGraph.AxisSize, PrismInk.BandLit[_band]);
         ctx.DrawText(ta, new Point(4, 3));
-        var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", 7, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
+        var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", NotaGraph.AxisSize, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
         ctx.DrawText(tb, new Point(4, h - tb.Height - 2));
         ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
     }
@@ -436,13 +436,13 @@ internal sealed class PrismEnvTrace : Control
         Trace(_in, new Pen(NotaPalette.BorderStrong, 1.2));
         Trace(_det, new Pen(col, 1.7));
 
-        var title = PrismInk.Caps("Detector envelope · " + PrismInk.Names[_band].ToLowerInvariant(), 7, NotaPalette.TextTertiary);
+        var title = PrismInk.Caps("Detector envelope · " + PrismInk.Names[_band].ToLowerInvariant(), NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(title, new Point(5, 3));
-        var l2 = PrismInk.Text("detector", 7, PrismInk.BandLit[_band]);
-        var l1 = PrismInk.Text("input", 7, NotaPalette.TextTertiary);
+        var l2 = PrismInk.Text("detector", NotaGraph.AxisSize, PrismInk.BandLit[_band]);
+        var l1 = PrismInk.Text("input", NotaGraph.AxisSize, NotaPalette.TextTertiary);
         double x2 = w - l2.Width - 5, x1 = x2 - 14 - l1.Width - 12;
-        ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(x1, 7, 8, 2)); ctx.DrawText(l1, new Point(x1 + 11, 3));
-        ctx.FillRectangle(col, new Rect(x2 - 11, 7, 8, 2)); ctx.DrawText(l2, new Point(x2, 3));
+        ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(x1, 9, 8, 2)); ctx.DrawText(l1, new Point(x1 + 11, 3));
+        ctx.FillRectangle(col, new Rect(x2 - 11, 9, 8, 2)); ctx.DrawText(l2, new Point(x2, 3));
         ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
     }
 }
