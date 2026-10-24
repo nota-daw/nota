@@ -17,12 +17,10 @@ namespace Nota.App;
 
 internal sealed class ChordKeysViz : Control
 {
-    private static readonly IBrush Well = NotaPalette.BgSunken;
-    private static readonly IBrush WellEdge = NotaPalette.GraphBorder;
     private static readonly IBrush WhiteKey = NotaPalette.MiniKeyWhite;
     private static readonly IBrush BlackKey = NotaPalette.KeyBlack;
-    internal static readonly IBrush Added = NotaPalette.Wash(NotaPalette.Accent, 0xC8);   // a deeper accent, clearly apart from Played in both appearances
-    private static readonly IBrush Played = NotaPalette.AccentBright;
+    internal static readonly IBrush Added = NotaPalette.Wash(NotaPalette.Accent, 0x80);   // a deeper accent, clearly apart from Played in both appearances
+    private static readonly IBrush Played = NotaPalette.Accent;
     private static readonly IBrush Label = NotaPalette.TextAxis;
     private static readonly IPen RootRing = new Pen(NotaPalette.Accent, 1);
 
@@ -61,7 +59,7 @@ internal sealed class ChordKeysViz : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(Well, null, frame, NotaRadius.CellValue, NotaRadius.CellValue);
+        NotaDepth.Groove(ctx, this, new RoundedRect(frame, NotaRadius.CellValue));
         var inner = frame.Deflate(1);
         double ww = inner.Width / 21.0;
         var clip = ctx.PushClip(inner);
@@ -95,11 +93,10 @@ internal sealed class ChordKeysViz : Control
             for (int o = 0; o < 3; o++)
             {
                 var ft = new NotaFormattedText(DeviceCardKit.NoteName(_start + o * 12), System.Globalization.CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, new Typeface(NotaFonts.UiFamily), 6, Label);
+                    FlowDirection.LeftToRight, new Typeface(NotaFonts.UiFamily), NotaType.Axis, Label);
                 double x = inner.X + o * 7 * ww + (ww - ft.Width) / 2;
-                ctx.DrawText(ft, new Point(x, inner.Bottom - ft.Height - 1));
+                ctx.DrawText(ft, new Point(x + 1, inner.Bottom - ft.Height - 2));
             }
         clip.Dispose();
-        ctx.DrawRectangle(null, new Pen(WellEdge, 1), frame.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
     }
 }
