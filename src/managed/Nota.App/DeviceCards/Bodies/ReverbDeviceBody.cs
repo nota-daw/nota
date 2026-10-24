@@ -204,7 +204,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             return new DeviceBodyKit.RailFader(label, f, val);
         }
         var tailBody = DeviceBodyKit.FaderRail("Tail", true, out var tailLbls,
-            TailFader(Decay, "Decay", () => DecayF(P(Decay)), "Decay — RT60, the time the tail takes to fall 60 dB (0.2 … 12 s); Freeze holds it forever. Double-click resets."),
+            TailFader(Decay, "Decay", () => DecayF(P(Decay)), "Decay — RT60, the time the tail takes to fall 60\u2009dB (0.2 … 12\u2009s); Freeze holds it forever. Double-click resets."),
             TailFader(HFDamp, "Damp", () => Pct(P(HFDamp)), "HF Damp — how much faster the highs die than the lows. Double-click resets."));
         var tailTitle = (TextBlock)((DockPanel)tailBody).Children[0];
         // Freeze shows on the rail's title and the Decay label (live, orange), not on a frame.

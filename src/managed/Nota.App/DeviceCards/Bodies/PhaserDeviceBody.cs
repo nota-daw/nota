@@ -161,7 +161,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         var bigBlock = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
 
-        var rateRow = Slider("Rate", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.02 … 8 Hz", 48, 52);
+        var rateRow = Slider("Rate", Rate, v => HzF(PhaserMath.FreeHz(v)) + "\u2009Hz", "Rate — the free LFO rate, 0.02 … 8\u2009Hz", 48, 52);
         var divRow = Slider("Rate", Division, v => PhaserMath.DivNames[PhaserMath.DivIndex(v)],
             "Rate — the note value of one LFO cycle, 4/1 … 1/16 with dotted (D) and triplet (T) values", 48, 52,
             snap: v => PhaserMath.DivNorm(PhaserMath.DivIndex(v)));
@@ -196,7 +196,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         ToolTip.SetTip(response, "The notches the stages cut into the spectrum, L light and R a darker grey, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; double-click resets both.");
 
         var sweep = new PhaserSweepView { Margin = new Thickness(0, 8, 0, 0) };
-        ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now");
+        ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20\u2009Hz … 20\u2009kHz), and where each is now");
         var centreBody = new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(sweep, Avalonia.Controls.Dock.Bottom), response } };
         var centre = Island(HeadRow(DeviceBodyKit.Title("All-pass response"), legend), centreBody);
         centre.Margin = new Thickness(SectionGap, 0);
@@ -211,7 +211,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             modeWord.Text = m;
             modeWord.Foreground = m == "bypass" ? TextDisabled : TextPrimary;
         });
-        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85 % the phaser whistles");
+        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85\u2009% the phaser whistles");
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
             i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
@@ -220,13 +220,13 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         ToolTip.SetTip(stageSeg, "All-pass stages: every two cut one notch — 2 is a gentle swirl, 12 a deep, dense sweep");
 
         var centerRow = Slider("Center", Center, v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz",
-            "Center — the middle of the sweep, 50 Hz … 5 kHz: higher moves the notches up", 62);
+            "Center — the middle of the sweep, 50\u2009Hz … 5\u2009kHz: higher moves the notches up", 62);
         var depthRow = Slider("Depth", Depth, v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0} oct"),
             "Depth — how far the LFO swings the stages around Center, up to ±3 octaves", 62);
         var fbRow = Slider("Feedback", Feedback, v => FbF(PhaserMath.Fb(v)),
             "Feedback — the chain's output fed back in, ±95 %: positive sharpens the peaks, negative moves and widens the notches", 62, bipolar: true,
             snap: v => PhaserMath.FbNorm(Math.Round(PhaserMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("Mix", Mix, v => PctF(v), "Mix — 50 % gives the deepest notches; 100 % is the phase-shifted signal alone", 62);
+        var mixRow = Slider("Mix", Mix, v => PctF(v), "Mix — 50\u2009% gives the deepest notches; 100\u2009% is the phase-shifted signal alone", 62);
 
         double PctAxis(double f) => Math.Clamp(Math.Log(Math.Max(f, 1e-3) / 20) / Math.Log(1000), 0, 1);
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
@@ -248,7 +248,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             Spacing = 8, Children =
             {
                 DeviceBodyKit.Rule(),
-                ReadRow("Sweep", sweepBar, sweepVal, "The range the corner sweeps (20 Hz … 20 kHz on the bar), and the first notch now"),
+                ReadRow("Sweep", sweepBar, sweepVal, "The range the corner sweeps (20\u2009Hz … 20\u2009kHz on the bar), and the first notch now"),
                 ReadRow("Null", nullBar, nullVal, "How deep the notches cut, dB (0 … −36 on the bar)"),
             },
         };
