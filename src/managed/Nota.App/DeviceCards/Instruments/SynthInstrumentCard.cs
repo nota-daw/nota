@@ -321,7 +321,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         rail.Width = RailW;
 
         // ---- assembly ---------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); root.Children.Add(rail);
         ShowTab();

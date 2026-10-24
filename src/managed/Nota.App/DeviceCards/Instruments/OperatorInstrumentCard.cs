@@ -451,7 +451,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 
         var globalTop = new StackPanel
         {
-            Spacing = 4, Margin = new Thickness(0, 6, 0, 0),
+            Spacing = 2,
             Children =
             {
                 Slider("FM", "fmdepth", () => NotaNum.Pct(G("fmdepth") * 2)),
@@ -584,7 +584,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         tabPanel.Padding = rail.Padding = new Thickness(SectionPad);
 
         // ---- assembly ---------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(wheelsPanel);
         Grid.SetColumn(tabPanel, 1); root.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); root.Children.Add(rail);

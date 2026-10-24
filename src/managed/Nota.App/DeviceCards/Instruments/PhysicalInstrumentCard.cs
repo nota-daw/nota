@@ -435,7 +435,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         ctx.AddDeviceRefresher(RefreshPartials);   // follows the struck note (the partials' reach under Nyquist)
 
         // ---- assembly ---------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); root.Children.Add(rail);
 

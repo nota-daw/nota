@@ -902,7 +902,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             _ => $"8 slots · {MacroAssigned()} assigned",
         };
         // ---- assembly ---------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(wheelsPanel);
         Grid.SetColumn(tabPanel, 1); root.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); root.Children.Add(rail);
