@@ -40,16 +40,13 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // ---- Instrument Rack (mockup 2p) shared bits ----
     private static readonly IBrush IrHdr = NotaPalette.SurfaceCard;
     private static readonly IBrush IrRail = NotaPalette.SurfaceInset;
-    private static readonly IBrush IrInset = NotaPalette.BgSunken;
-    private static readonly IBrush IrBorder = NotaPalette.BorderDefault;
     private static readonly IBrush IrField = NotaPalette.GraphBorder;
-    private static readonly IBrush IrCard = NotaPalette.SurfaceRaised;
     private static readonly IBrush IrAmber = NotaPalette.Accent;
     private static readonly IBrush IrAmberLit = NotaPalette.AccentBright;   // selection only
     private static readonly IBrush IrTeal = NotaPalette.TextSecondary;   // the old teal "mapping" ink, now a grey
     private static readonly IBrush IrTxt = NotaPalette.TextPrimary;
     private static readonly IBrush IrMuted = NotaPalette.TextTertiary;
-    private static readonly IBrush IrRed = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
+    private static readonly IBrush DashIdle = NotaPalette.BorderStrong;
     private static bool _macroMapMode;     // Instrument Rack: second (Macro-map) view
     private static int _splitAxis;         // 0 = Key zone, 1 = Velocity
     private static bool _aeMacroMap;       // Audio Effect Rack: macro-map view
@@ -256,7 +253,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         return new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8), Children = { WithRight(n), title } };
     }
 
-    // ---- the rack's own device slots (style guide); the Rhythm FX strip keeps IrSlot ----
+    // ---- device slots (style guide): the rack's chains and the Rhythm FX strip ----
     private Border SgSlot(IBrush dot, string name, string kind, bool dim, Action openGui, Action openParams, Control footerLeft, Action? onDelete = null)
     {
         var head = new DockPanel { LastChildFill = true, Height = 22, Children = {
@@ -340,45 +337,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         return b;
     }
 
-    // A minimal device "slot" — name + type + two open buttons (full GUI / param knobs)
-    // + macro/bypass footer.
-    private Border IrSlot(IBrush dot, string name, string kind, bool dim, Action openGui, Action openParams, Control footerLeft, Action? onDelete = null)
-    {
-        var head = new DockPanel { LastChildFill = true, Height = 18, Children = {
-            new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = dot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0), [DockPanel.DockProperty] = Dock.Left },
-            WithRight(new TextBlock { Text = kind, FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center }),
-            new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis } } };
-        if (onDelete != null) head.Children.Insert(1, WithRight(SlotDelBtn(onDelete)));
-        var headWrap = new Border { BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(6, 0), Child = head };
-        Border MiniBtn(string label, Action act)
-        {
-            var b = new Border { BorderThickness = new Thickness(1), BorderBrush = IrBorder, Background = IrInset, CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 2), Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new TextBlock { Text = label, FontSize = 8, Foreground = NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center } };
-            b.PointerPressed += (_, e) => { e.Handled = true; act(); };
-            return b;
-        }
-        var center = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 4, Children = { MiniBtn("GUI", openGui), MiniBtn("Params", openParams) } };
-        var footer = new Border { Height = 14, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(6, 0), Child =
-            new DockPanel { LastChildFill = true, Children = { WithRight(new Glyph(GlyphKind.Grip, 8) { Foreground = IrMuted }), footerLeft } } };
-        DockPanel.SetDock(headWrap, Dock.Top); DockPanel.SetDock(footer, Dock.Bottom);
-        var slotCard = new Border { Width = 96, Background = IrCard, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, ClipToBounds = true,
-            Child = new DockPanel { LastChildFill = true, Children = { headWrap, footer, center } } };
-        if (dim) slotCard.AttachedToVisualTree += (_, _) => Inactive.Set(slotCard, true, interactive: true);   // no opacity for state
-        return slotCard;
-    }
-
-    // Small borderless ✕ in a device slot header that removes that device from the chain.
-    private Border SlotDelBtn(Action onDelete)
-    {
-        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = IrMuted };
-        var b = new Border { Width = 13, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Stretch, Child = glyph };
-        ToolTip.SetTip(b, "Remove device");
-        b.PointerEntered += (_, _) => glyph.Foreground = IrRed;
-        b.PointerExited += (_, _) => glyph.Foreground = IrMuted;
-        b.PointerPressed += (_, e) => { e.Handled = true; onDelete(); };
-        return b;
-    }
-
     private int MacrosOnTarget(IRackAccess a, int sc, int dev)
     {
         int n = 0;
@@ -394,44 +352,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         slot = SgSlot(ChainHue(sc), string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc),
             a.ChainInstrumentKind(sc) < 0 ? "Plug" : "Inst", false, () => OpenChainInstrumentGui(a, sc, slot), () => OpenChainInstrumentParams(a, sc, slot), footer);
         return slot;
-    }
-
-    private Control IrDeviceSlot(IRackAccess a, int sc, int d)
-    {
-        bool byp = a.ChainDeviceBypassed(sc, d);
-        int mc = MacrosOnTarget(a, sc, d);
-        var footer = mc > 0 ? (Control)new TextBlock { Text = $"{mc} macro", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center }
-                            : IrMsBtn("Byp", byp, NotaPalette.TextTertiary, () => { a.SetChainDeviceBypassed(sc, d, !byp); _ctx.RequestRebuild(); });
-        Border slot = null!;
-        slot = IrSlot(byp ? IrMuted : Success, a.ChainDeviceName(sc, d), a.ChainDeviceBuiltinKind(sc, d) < 0 ? "Plug" : "FX", byp, () => OpenChainDeviceGui(a, sc, d, slot), () => OpenChainDeviceParams(a, sc, d, slot), footer,
-            () => { a.RemoveChainDevice(sc, d); DeferRebuild(); });
-        return slot;
-    }
-
-    private static readonly IBrush DashIdle = NotaPalette.BorderStrong;
-
-    private Control IrAddDeviceSlot(IRackAccess a, int sc)
-    {
-        var plus = new Glyph(GlyphKind.Plus, 10) { Foreground = IrMuted };
-        var lbl = new TextBlock { Text = "Device", FontSize = 8, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center };
-        var dash = new Avalonia.Controls.Shapes.Rectangle { Stroke = DashIdle, StrokeThickness = 1, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2.5 }, RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue, IsVisible = false };
-        var box = new Panel { Width = 52, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent,
-            Children = { dash, new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 2, Children = { plus, lbl } } } };
-
-        // The dashed outline shows only while an effect is dragged over the slot (spec 012).
-        void Idle() { dash.IsVisible = false; dash.Stroke = DashIdle; dash.Fill = null; plus.Foreground = IrMuted; lbl.Foreground = IrMuted; }
-        void Hover() { dash.Stroke = NotaPalette.TextTertiary; plus.Foreground = IrTxt; lbl.Foreground = NotaPalette.TextSecondary; }
-        void Drop() { dash.IsVisible = true; dash.Stroke = IrTeal; dash.Fill = NotaPalette.Wash(NotaPalette.Teal, 0x22); plus.Foreground = IrTeal; lbl.Foreground = IrTeal; }
-
-        ToolTip.SetTip(box, "Add device — click for the list, or drop an effect here");
-        box.PointerEntered += (_, _) => Hover();
-        box.PointerExited += (_, _) => Idle();
-        box.PointerPressed += (_, _) => ShowAddDeviceMenu(a, sc, box);
-        DragDrop.SetAllowDrop(box, true);
-        DragDrop.AddDragOverHandler(box, (_, e) => { if (!BrowserView.IsBrowserDrag || !IsEffect(BrowserView.CurrentDrag)) { e.DragEffects = DragDropEffects.None; return; } e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow(); Drop(); });
-        DragDrop.AddDragLeaveHandler(box, (_, _) => Idle());
-        DragDrop.AddDropHandler(box, (_, e) => { Idle(); if (BrowserView.CurrentDrag is { } it && IsEffect(it)) { DropEffectOnChain(a, sc, it); e.Handled = true; } });
-        return box;
     }
 
     // Add-device menu: built-in effects + a "Plug-ins" submenu of installed effect plug-ins.
@@ -725,14 +645,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private Control IrSeg(string[] names, int sel, Action<int> onSel)
     {
         return DeviceCardKit.Segments(names, () => sel, onSel, out _, padX: 6);
-    }
-
-    private Border IrMsBtn(string t, bool on, SolidColorBrush fill, Action onClick)
-    {
-        var b = new Border { MinWidth = 13, Height = 12, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), BorderBrush = on ? fill : NotaPalette.BorderStrong, Background = on ? fill : IrCard, Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = t, FontSize = 7, FontWeight = FontWeight.Medium, Foreground = on ? NotaPalette.InkOn(fill) : NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(3, 0) } };
-        b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
-        return b;
     }
 
     private Border IrRailBtn(string t, Action onClick)
@@ -1508,9 +1420,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     /// it, through <see cref="RhythmVoiceAccess"/>.</summary>
     public Control BuildEffectStrip(IRackAccess a, int chain)
     {
-        var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        for (int d = 0; d < a.ChainDeviceCount(chain); d++) slots.Children.Add(IrDeviceSlot(a, chain, d));
-        slots.Children.Add(IrAddDeviceSlot(a, chain));
+        var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        for (int d = 0; d < a.ChainDeviceCount(chain); d++) slots.Children.Add(SgDeviceSlot(a, chain, d));
+        slots.Children.Add(SgAddDeviceSlot(a, chain));
         return new ScrollViewer { Content = slots, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
     }
 
