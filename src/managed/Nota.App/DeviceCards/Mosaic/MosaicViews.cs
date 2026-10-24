@@ -4,17 +4,18 @@
 // Nota Mosaic's windows:
 //
 //   MosaicZoneMap    the zone map — keys on X, velocity on Y, the keyboard under it with a
-//                    neutral tick under every root. Zones are tiles; the selected one is
-//                    outlined in bright accent with its root written in; zones sounding now
+//                    neutral tick under every root. Zones are tiles in a groove; the selected
+//                    one is outlined in orange with its root written in; zones sounding now
 //                    fill accent (muted accent while the pedal holds them, a deeper wash for
 //                    release samples and fades); an exclusive group is outlined. Click a
 //                    tile to select it (again: the next round-robin tile under it), drag it
 //                    to move, drag an edge to resize. The keyboard plays (press / release).
 //                    The mini (S) map is the same picture without axes or input.
-//   MosaicCurveView  a small curve window: the release level against hold time, or the
-//                    velocity curve. Drag up / down to change it; double-click resets.
+//   MosaicCurveView  a small curve: the release level against hold time, or the velocity
+//                    curve (the card puts it in a graph window). Drag up / down to change it;
+//                    double-click resets.
 //
-// All in the NotaGraph window (well, hairline, radius 4, labels in mono 7).
+// Labels are NotaGraph axis text; the map's ground is the groove, its tiles the well tone.
 
 using System;
 using System.Collections.Generic;
@@ -48,7 +49,7 @@ internal sealed class MosaicZoneMap : Control
     public event Action<int, int, int, int, int, bool>? Edited;
     public event Action<int>? KeyDown, KeyUp;
 
-    private const double AxisW = 14, KeyH = 12, OctH = 9;
+    private const double AxisW = 22, KeyH = 12, KeyGap = 3, TickGap = 5, OctH = 13;
 
     public MosaicZoneMap() { ClipToBounds = true; }
 
@@ -81,7 +82,7 @@ internal sealed class MosaicZoneMap : Control
     private Rect MapRect()
     {
         double ax = Mini ? 0 : AxisW;
-        double bottom = Mini ? KeyH * 0.75 : KeyH + OctH + 2;
+        double bottom = Mini ? KeyH * 0.75 + 1 : KeyGap + KeyH + TickGap + OctH;
         return new Rect(ax, 0, Math.Max(1, Bounds.Width - ax), Math.Max(1, Bounds.Height - bottom));
     }
     private double KeyW(Rect m) => m.Width / Math.Max(1, _hi - _lo + 1);
@@ -234,7 +235,7 @@ internal sealed class MosaicZoneMap : Control
     }
 
     // ---- drawing -----------------------------------------------------------------------------
-    private static readonly IPen Hair = new Pen(NotaPalette.GraphBorder, 1);
+    private static readonly IPen Hair = new Pen(NotaPalette.KnobTrack, 1);
     private static readonly IPen SelPen = new Pen(NotaPalette.AccentBright, 1.5);
     private static readonly IPen ExclPen = new Pen(NotaPalette.TextTertiary, 1);
 
@@ -243,17 +244,8 @@ internal sealed class MosaicZoneMap : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         var m = MapRect();
-        NotaGraph.Window(ctx, m);
-        var inner = m.Deflate(1);
+        ctx.DrawRectangle(NotaPalette.Groove, null, new RoundedRect(m, NotaRadius.FieldValue));
         double kw = KeyW(m);
-
-        // Octave rules (a C every 12 keys).
-        for (int k = _lo; k <= _hi; k++)
-            if (k % 12 == 0 && k > _lo)
-            {
-                double x = Math.Round(m.X + (k - _lo) * kw) + 0.5;
-                ctx.DrawLine(NotaGraph.GridPen, new Point(x, inner.Top), new Point(x, inner.Bottom));
-            }
 
         // Tiles: plain ones first, the sounding over them, the selected last.
         var drawn = new HashSet<Rect>();
@@ -263,34 +255,34 @@ internal sealed class MosaicZoneMap : Control
             var z = _zones[i];
             if (!Shows(z)) continue;
             roots.Add(z.Root);
-            var r = ZoneRect(m, z).Deflate(0.5);
+            var r = ZoneRect(m, z).Deflate(1);
             if (_sounding.ContainsKey(i) || i == _sel || !drawn.Add(r)) continue;
-            ctx.DrawRectangle(NotaPalette.SurfaceCard, Hair, new RoundedRect(r, 1));
+            ctx.DrawRectangle(NotaPalette.Well, Hair, new RoundedRect(r.Deflate(0.5), 2));
             if (z.Excl != 0 || z.OffBy != 0) ctx.DrawRectangle(null, ExclPen, new RoundedRect(r.Deflate(1.5), 1));
         }
         foreach (var (i, st) in _sounding)
         {
             if (i < 0 || i >= _zones.Count || !Shows(_zones[i])) continue;
-            var r = ZoneRect(m, _zones[i]).Deflate(0.5);
+            var r = ZoneRect(m, _zones[i]).Deflate(1);
             IBrush fill = st == 0 ? NotaPalette.Accent : st == 1 ? NotaPalette.AccentDim : NotaPalette.AccentMute;
-            ctx.DrawRectangle(fill, null, new RoundedRect(r, 1));
+            ctx.DrawRectangle(fill, null, new RoundedRect(r, 2));
         }
         if (_sel >= 0 && _sel < _zones.Count && Shows(_zones[_sel]))
         {
             var z = _zones[_sel];
-            var r = ZoneRect(m, z).Deflate(0.75);
-            if (!_sounding.ContainsKey(_sel)) ctx.DrawRectangle(NotaPalette.AccentSubtle, null, new RoundedRect(r, 1));
-            ctx.DrawRectangle(null, SelPen, new RoundedRect(r, 1));
+            var r = ZoneRect(m, z).Deflate(1.25);
+            if (!_sounding.ContainsKey(_sel)) ctx.DrawRectangle(NotaPalette.AccentSoft, null, new RoundedRect(r, 2));
+            ctx.DrawRectangle(null, SelPen, new RoundedRect(r, 2));
             if (!Mini)
             {
-                var t = SamplerInk.Mono(MosaicNames.NoteName(z.Root), _sounding.ContainsKey(_sel) ? NotaPalette.TextOnAccent : NotaPalette.AccentBright, 6.5);
+                var t = NotaGraph.AxisText(MosaicNames.NoteName(z.Root), _sounding.ContainsKey(_sel) ? NotaPalette.TextOnAccent : NotaPalette.AccentBright, NotaType.RowLabel);
                 if (t.Width + 2 < r.Width && t.Height + 2 < r.Height)
                     ctx.DrawText(t, new Point(r.X + (r.Width - t.Width) / 2, r.Y + (r.Height - t.Height) / 2));
             }
         }
         if (_zones.Count == 0 && _empty.Length > 0)
         {
-            var t = SamplerInk.Mono(_empty, NotaPalette.TextTertiary, 8);
+            var t = NotaGraph.AxisText(_empty, NotaPalette.TextTertiary, Mini ? NotaType.RowLabel : NotaType.KnobValue);
             ctx.DrawText(t, new Point(m.X + (m.Width - t.Width) / 2, m.Y + (m.Height - t.Height) / 2));
         }
 
@@ -298,35 +290,47 @@ internal sealed class MosaicZoneMap : Control
         if (!Mini)
             foreach (var (v, s) in new[] { (127, "127"), (64, "64"), (1, "1") })
             {
-                var t = SamplerInk.Mono(s, NotaPalette.TextAxis, 6);
+                var t = NotaGraph.AxisText(s);
                 double y = m.Y + (127 - v) / 128.0 * m.Height;
                 y = Math.Clamp(y, m.Y, m.Bottom - t.Height);
-                ctx.DrawText(t, new Point(AxisW - 2 - t.Width, y));
+                ctx.DrawText(t, new Point(AxisW - 4 - t.Width, y));
             }
 
-        // The keyboard: white / black keys, sounding keys accent, a neutral tick under every root.
-        double ky = m.Bottom + 1, kh = Mini ? KeyH * 0.75 - 2 : KeyH;
+        // The keyboard: one white strip with the black keys over it, sounding keys orange, a
+        // neutral tick under every root.
+        double ky = m.Bottom + (Mini ? 1 : KeyGap), kh = Mini ? KeyH * 0.75 - 1 : KeyH;
         var held = new HashSet<int>(_keysDown);
         held.UnionWith(_playing);
-        for (int k = _lo; k <= _hi; k++)
+        var strip = new Rect(m.X, ky, m.Width, kh);
+        using (ctx.PushClip(new RoundedRect(strip, 2)))
         {
-            int pc = k % 12;
-            bool black = pc is 1 or 3 or 6 or 8 or 10;
-            var r = new Rect(m.X + (k - _lo) * kw + 0.5, ky, Math.Max(1, kw - 1), black ? kh * 0.62 : kh);
-            IBrush fill = held.Contains(k) ? NotaPalette.Accent : Flagged.Contains(k) ? NotaPalette.Danger
-                : black ? NotaPalette.KeyBlack : NotaPalette.MiniKeyWhite;
-            ctx.DrawRectangle(fill, null, r);
-            if (roots.Contains(k) && !Mini)
-                ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(r.X + r.Width * 0.2, ky + kh + 1, Math.Max(1, r.Width * 0.6), 1.5));
+            ctx.DrawRectangle(NotaPalette.MiniKeyWhite, null, strip);
+            for (int k = _lo; k <= _hi; k++)
+            {
+                int pc = k % 12;
+                bool black = pc is 1 or 3 or 6 or 8 or 10;
+                var r = new Rect(m.X + (k - _lo) * kw, ky, Math.Max(1, kw), black ? kh * 0.6 : kh);
+                IBrush? fill = held.Contains(k) ? NotaPalette.Accent : Flagged.Contains(k) ? NotaPalette.Danger
+                    : black ? NotaPalette.KeyBlack : null;
+                if (fill is not null) ctx.DrawRectangle(fill, null, r);
+            }
         }
         if (!Mini)
+        {
+            for (int k = _lo; k <= _hi; k++)
+                if (roots.Contains(k))
+                {
+                    double x = m.X + (k - _lo) * kw;
+                    ctx.DrawRectangle(NotaPalette.TextTertiary, null, new Rect(x + kw * 0.15, ky + kh + 2, Math.Max(1.5, kw * 0.7), 2));
+                }
             for (int k = _lo; k <= _hi; k++)
                 if (k % 12 == 0)
                 {
-                    var t = SamplerInk.Mono(MosaicNames.NoteName(k), NotaPalette.TextAxis, 6);
+                    var t = NotaGraph.AxisText(MosaicNames.NoteName(k));
                     double x = m.X + (k - _lo) * kw;
-                    if (x + t.Width <= m.Right + 1) ctx.DrawText(t, new Point(x, ky + kh + 2));
+                    if (x + t.Width <= m.Right + 1) ctx.DrawText(t, new Point(x, ky + kh + TickGap));
                 }
+        }
     }
 }
 
@@ -390,7 +394,6 @@ internal sealed class MosaicCurveView : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 4 || h <= 4) return;
         var r = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, r);
         var inner = r.Deflate(5);
         var geo = new StreamGeometry();
         using (var g = geo.Open())
