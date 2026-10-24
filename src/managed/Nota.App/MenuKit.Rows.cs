@@ -82,7 +82,10 @@ internal static partial class MenuKit
                 Grid.SetColumn(ring, b); Grid.SetRow(ring, s);
                 grid.Children.Add(ring);
                 row.Add(ring, ci, ci == current, (cell, chosen, cursor) =>
-                    cell.BorderBrush = chosen ? NotaPalette.TextPrimary : cursor ? NotaPalette.TextMuted : Brushes.Transparent,
+                {
+                    cell.BorderBrush = chosen ? NotaPalette.TextPrimary : cursor ? NotaPalette.TextMuted : Brushes.Transparent;
+                    cell.Background = cursor ? NotaPalette.SurfaceHover : Brushes.Transparent;   // shows on the chosen swatch too
+                },
                     up: s > 0 ? row.Count - bases : -1, down: s < shades - 1 ? row.Count + bases : -1);
             }
 
@@ -119,13 +122,16 @@ internal static partial class MenuKit
         {
             var (name, value) = options[i];
             var text = new TextBlock { Text = name, FontSize = NotaType.Caption, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var key = new Border { MinWidth = 52, Height = 18, Padding = new Thickness(6, 0), Child = text };
+            var key = new Border { MinWidth = 52, Height = 18, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1), Child = text };
             keys.Children.Add(key);
             bool isChosen = chosen is { } c && EqualityComparer<T>.Default.Equals(c, value);
             row.Add(key, i, isChosen, (cell, ch, cursor) =>
             {
                 var k = cell;
                 k.Background = ch ? NotaPalette.Accent : cursor ? NotaPalette.SurfaceHover : NotaPalette.SurfaceRaised;
+                // The keyboard cursor rings its key (the row takes no highlight fill), so it
+                // shows on the chosen key too.
+                k.BorderBrush = cursor ? NotaPalette.TextPrimary : Brushes.Transparent;
                 ((TextBlock)k.Child!).Foreground = ch ? NotaPalette.TextOnAccent : NotaPalette.TextSecondary;
             });
         }
