@@ -911,7 +911,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   **Nota Kits**, ready to drag anywhere a sample goes.
 - **Nota Audio Effect Rack** — **Parallel / Series / Select** modes (by input level),
   Dry/Wet + Gain, PDC, Fold, Save; chains with gain/meter/M·S; named macros and mappings;
-  the "+ Device" menu lists built-in effects and a Plug-ins submenu.
+  the "+ Device" menu lists built-in effects and a Plug-ins submenu. ⌘G on a selected audio
+  effect wraps it in a new rack (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back.
 - Devices inside chains appear as cards with knobs, a **Full** button (the device's
   complete UI in a popup — the native GUI for a plugin, the tabbed editor for the
   Sampler), a ✕ delete button, and drag-to-reorder.
