@@ -262,12 +262,15 @@ internal sealed class EqDeviceBody : IDeviceBody
         // The folded strip: the arrow that opens the panel again over the picked band's knobs.
         Control FoldedStrip(int b)
         {
-            var strip = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+            // The knobs sit centred in the space under the arrow (nudged down past the label lines' slack),
+            // so the gap above them matches the one below.
             var open = EqBandUi.FoldButton(true, () => SetFolded(false));
             open.HorizontalAlignment = HorizontalAlignment.Center;
-            open.Margin = new Thickness(0, 0, 0, 2);
+            var knobs = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var k in BandKnobs(b, StripW - 2)) knobs.Children.Add(k);
+            var strip = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
             strip.Children.Add(open);
-            foreach (var k in BandKnobs(b, StripW - 2)) strip.Children.Add(k);
+            strip.Children.Add(Row(knobs, 1));
             return strip;
         }
 
