@@ -958,37 +958,32 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
   </Style>
 
-  <!-- Device scale (inside a 260px card) -->
-  <Style Selector="TextBlock.DeviceName">     <!-- 12 / 600 -->
-    <Setter Property="FontSize" Value="12"/>
+  <!-- Device scale (inside a 260px card; mirrors NotaType) -->
+  <Style Selector="TextBlock.DeviceName">     <!-- 13 / 600 -->
+    <Setter Property="FontSize" Value="13"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.DeviceSection">  <!-- section title: 10.5 / 600, muted -->
+  <Style Selector="TextBlock.DeviceSection">  <!-- section title: 10.5 / 400, ink 3 -->
     <Setter Property="FontSize" Value="10.5"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.RowLabel">       <!-- slider-row label: 9 / 500 -->
-    <Setter Property="FontSize" Value="9"/>
-    <Setter Property="FontWeight" Value="Medium"/>
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+  <Style Selector="TextBlock.RowLabel">       <!-- row label: 10.5 / 400, ink 3 -->
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.KnobLabel">      <!-- the control's name: 8 / 500 -->
-    <Setter Property="FontSize" Value="8"/>
-    <Setter Property="FontWeight" Value="Medium"/>
-    <Setter Property="LineHeight" Value="9"/>
-    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+  <Style Selector="TextBlock.KnobLabel">      <!-- the control's name: 10.5 / 400, ink 3 -->
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="LineHeight" Value="13"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.KnobValue">      <!-- parameter value: mono 8 -->
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="8"/>
-    <Setter Property="LineHeight" Value="10"/>
+  <Style Selector="TextBlock.KnobValue">      <!-- parameter value: 11 / 400, ink 1 -->
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.Axis">           <!-- tick label inside a graph: mono 7.5 -->
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="7.5"/>
+  <Style Selector="TextBlock.Axis">           <!-- tick label inside a graph: 9, ink 4 -->
+    <Setter Property="FontSize" Value="9"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextAxis}"/>
   </Style>
 
