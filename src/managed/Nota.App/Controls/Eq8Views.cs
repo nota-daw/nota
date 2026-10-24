@@ -186,6 +186,9 @@ public sealed class Eq8Curve : Control
     private Point NodeAt(int b) => new(Math.Clamp(X(P(b, Eq8.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
         Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
 
+    /// <summary>Whether a band node is within reach of <paramref name="p"/> (in this control's coordinates).</summary>
+    internal bool NodeNear(Point p) => Hit(p) >= 0;
+
     private int Hit(Point p)
     {
         int best = -1; double bestD = HitR * HitR;

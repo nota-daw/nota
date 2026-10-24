@@ -18,6 +18,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -126,7 +127,14 @@ internal sealed class EqDeviceBody : IDeviceBody
             Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(6, 5), HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top, Children = { EqBandUi.Label("Analyzer"), anaSeg, new Border { Width = 6 }, autoSw },
         };
-        var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, new Panel { Children = { curve, overlay } } } });
+        // A node near the pointer takes the click from the overlay, so a band dragged up into
+        // that corner can still be grabbed there.
+        var graphArea = new Panel { Children = { curve, overlay } };
+        graphArea.AddHandler(InputElement.PointerMovedEvent, (_, e) =>
+        {
+            if (e.Pointer.Captured is null) overlay.IsHitTestVisible = !curve.NodeNear(e.GetPosition(curve));
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, graphArea } });
         graphSection.Padding = new Thickness(SectionPad - 1);
 
         // 0..1 mappings (frequency and Q are log)

@@ -83,9 +83,9 @@ internal static partial class MenuKit
                 grid.Children.Add(ring);
                 row.Add(ring, ci, ci == current, (cell, chosen, cursor) =>
                 {
-                    // The cursor thickens the ring, so it shows on the chosen swatch too.
-                    cell.BorderBrush = chosen ? NotaPalette.TextPrimary : cursor ? NotaPalette.TextMuted : Brushes.Transparent;
-                    cell.BorderThickness = new Thickness(cursor ? 2 : 1);
+                    // On the chosen swatch the cursor turns the ring orange (the focus outline's colour).
+                    cell.BorderBrush = chosen && cursor ? NotaPalette.Accent : chosen ? NotaPalette.TextPrimary
+                        : cursor ? NotaPalette.TextMuted : Brushes.Transparent;
                 },
                     up: s > 0 ? row.Count - bases : -1, down: s < shades - 1 ? row.Count + bases : -1);
             }

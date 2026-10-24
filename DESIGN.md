@@ -858,7 +858,7 @@ field sits in a groove and a preset menu is raised.
   space or a control (lane background, snap chip, metronome) has none.
 - **Inline rows** put the most common property edit in the menu itself, one click, no
   submenu: the **colour grid** (the 9 track colours × base / light / dark, plus Auto; the
-  current colour ringed in ink 1, the pointer or keyboard cursor in ink 3) and **segment
+  current colour ringed in ink 1, the pointer or keyboard cursor in ink 3, orange on the current colour) and **segment
   buttons** ("Height: Compact · Standard · Large", Option-click for every track; the
   chosen one in the soft tint). They never highlight as a whole; arrows move inside them,
   Enter applies, and a pick closes the menu. Small **captions** in ink 3 ("Recent") head a
