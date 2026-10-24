@@ -190,7 +190,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), tauWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TextTertiary), tauWord },
         };
         var comb = new FlangerCombView { Value = () => (P(Delay), P(Feedback)) };
         comb.GestureBegin += () => { Begin(Delay); Begin(Feedback); };

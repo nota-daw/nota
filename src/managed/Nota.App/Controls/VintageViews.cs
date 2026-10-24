@@ -3,11 +3,11 @@
 //
 // Nota Vintage card windows (the centre panel's three tabs):
 //  • VtCurveView — Curve: the static transfer curve the engine runs (input level → output,
-//                  neutral ink), what reaches the output with Mix and Output (teal), the dry
+//                  neutral ink), what reaches the output with Mix and Output (a darker grey), the dry
 //                  line dashed, a dot where the input peak sits on the curve and the dust
 //                  of Crackle; drag up / down for the drive;
 //  • VtWearView  — Wear: the pitch drift over the last ~4 s in cents — wow in neutral ink,
-//                  flutter in teal — from the engine's history; drag up / down for the
+//                  flutter in a darker grey — from the engine's history; drag up / down for the
 //                  depth of the selected source, sideways for its rate;
 //  • VtHarmView  — Output: the harmonics the curve adds at the input level (f … 7f,
 //                  relative to the fundamental) against the hiss floor; drag for the drive.
@@ -124,7 +124,7 @@ internal sealed class VtCurveView : VtWindowBase
             double Heard(int i) => (1 - _mix) * ((double)i / (_n - 1)) + _mix * _curve[i] * _out;
             bool differs = false;
             for (int i = 0; i < _n && !differs; i++) differs = Math.Abs(Heard(i) - _curve[i]) > 0.01;
-            if (differs) ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1.1), Line(Heard));
+            if (differs) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), Line(Heard));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(i => _curve[i]));
 
             // where the input sits on the curve now
@@ -135,12 +135,12 @@ internal sealed class VtCurveView : VtWindowBase
                 double yv = _curve[a] + (_curve[b] - _curve[a]) * (f - a);
                 NotaGraph.Node(ctx, new Point(X(t), Y(yv)), Dragging);
             }
-            if (differs) NotaGraph.Legend(ctx, w - 5, 14, ("heard", NotaPalette.TealBright, NotaGraph.Mark.Line));
+            if (differs) NotaGraph.Legend(ctx, w - 5, 14, ("heard", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         }
 
         // dust: re-sprinkled every frame, as many specks as the crackle asks for
         int dots = (int)(_crackle * 26);
-        var dust = NotaPalette.Wash(NotaPalette.VizInk, 0x70);
+        var dust = NotaPalette.TextTertiary;
         for (int i = 0; i < dots; i++)
         {
             double rr = 0.6 + Rand() * 0.8;
@@ -207,7 +207,7 @@ internal sealed class VtWearView : VtWindowBase
             c.EndFigure(false);
             return g;
         }
-        if (showF) ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
+        if (showF) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
         if (showW) ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(k => _wow[k]));
         var scale = NotaGraph.AxisText(NotaNum.F($"±{range:0} ¢"));
         ctx.DrawText(scale, new Point(4, top));
@@ -217,7 +217,7 @@ internal sealed class VtWearView : VtWindowBase
         {
             NotaGraph.Title(ctx, frame, "Pitch drift");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _peak, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-            if (_show != 0) NotaGraph.Legend(ctx, w - 5, h - 26, ("flutter", NotaPalette.TealBright, NotaGraph.Mark.Line));
+            if (_show != 0) NotaGraph.Legend(ctx, w - 5, h - 26, ("flutter", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _end);
             var m = NotaGraph.AxisText(_mid);
@@ -264,12 +264,12 @@ internal sealed class VtHarmView : VtWindowBase
                 c.LineTo(new Point(w * 0.6, fy)); c.LineTo(new Point(w, fy + 3));
                 c.EndFigure(false);
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1.1), g);
-            var ft = NotaGraph.AxisText(_floorText, NotaPalette.TealBright);
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), g);
+            var ft = NotaGraph.AxisText(_floorText, NotaPalette.TextSecondary);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, Math.Max(top, fy - ft.Height - 2)));
         }
         var bar = new Pen(NotaPalette.VizInk, 3, lineCap: PenLineCap.Round);
-        var dim = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x50), 3, lineCap: PenLineCap.Round);
+        var dim = new Pen(NotaPalette.TextDisabled, 3, lineCap: PenLineCap.Round);   // under the hiss: ink 4
         for (int k = 0; k < 7; k++)
         {
             double x = Xk(k);
