@@ -2,9 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The custom-drawn views of the Nota Delay card: the repeat window (the echo train per
-// channel, L in neutral ink above the axis and R in rose below, the sounding repeat lit in accent),
-// the Loop column's vertical faders, and the feedback tone graph (low cut / high cut, dragged
-// by its handles). They draw what the card hands them and own no engine state.
+// channel, L in the light graph grey above the axis and R in a darker grey below, the sounding
+// repeat lit in accent) and the feedback tone graph (low cut / high cut, dragged by its
+// handles). The Loop column's faders are upright value bars. They draw what the card hands
+// them and own no engine state.
 
 using System;
 using System.Globalization;
@@ -52,8 +53,8 @@ internal sealed class DelayTaps : Control
         InvalidateVisual();
     }
 
-    private static FormattedText Text(string t, IBrush ink, double size = 8)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+    private static FormattedText Text(string t, IBrush ink, double size = NotaType.Axis)
+        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public override void Render(DrawingContext ctx)
     {
@@ -77,8 +78,11 @@ internal sealed class DelayTaps : Control
 
         void Train(double frac, bool up, int lit)
         {
-            var ink = up ? NotaPalette.Wash(NotaPalette.VizInk, 0xA0) : NotaPalette.Rose;
-            var litInk = up ? NotaPalette.Accent : NotaPalette.RoseBright;
+            // L in the graph's own grey, R a shade darker; with ping-pong the repeat that leads
+            // keeps that shade and the other steps one down.
+            var ink = up ? (_ping ? NotaPalette.TextSecondary : NotaPalette.VizInk) : NotaPalette.TextTertiary;
+            var leadInk = up ? NotaPalette.VizInk : NotaPalette.TextSecondary;
+            var litInk = NotaPalette.Accent;
             for (int n = 1; n <= MaxTaps; n++)
             {
                 double x = x0 + n * frac * (x1 - x0);
@@ -91,7 +95,7 @@ internal sealed class DelayTaps : Control
                 // Ping-pong bounces the repeat across the channels, so every other one leads.
                 bool lead = _ping && ((n % 2 == 1) == up);
                 bool sounding = n - 1 == lit;
-                var pen = sounding ? litInk : lead ? (up ? NotaPalette.VizInk : NotaPalette.RoseBright) : ink;
+                var pen = sounding ? litInk : lead ? leadInk : ink;
                 ctx.DrawLine(new Pen(pen, sounding ? 2.4 : 2), new Point(x, mid), head);
                 ctx.DrawEllipse(pen, null, head, sounding ? 3 : 2.4, sounding ? 3 : 2.4);
             }
@@ -103,82 +107,6 @@ internal sealed class DelayTaps : Control
         if (_sub.Length > 0) { var ft = Text(_sub, NotaGraph.AxisInk); ctx.DrawText(ft, new Point(x0 - 2, h - 4 - ft.Height)); }
         if (_ruler.Length > 0) { var ft = Text(_ruler, NotaGraph.AxisInk); ctx.DrawText(ft, new Point(x1 + 2 - ft.Width, 4)); }
         if (_window.Length > 0) { var ft = Text(_window, NotaGraph.AxisInk); ctx.DrawText(ft, new Point(x1 + 2 - ft.Width, h - 4 - ft.Height)); }
-    }
-}
-
-// A vertical fader in the LOOP column: a groove, a wash fill in the parameter's own chroma
-// and a bright handle. Drag up to raise, double-click restores the default.
-internal sealed class DelayFader : Control
-{
-    private double _v;
-    private bool _drag;
-
-    /// <summary>The fill chroma — neutral ink for feedback, rose for spread. The handle turns
-    /// accent while dragged.</summary>
-    public IBrush Ink { get; init; } = NotaPalette.VizInk;
-    public IBrush Handle { get; init; } = NotaPalette.VizInk;
-    public double Default { get; set; } = double.NaN;
-    public bool Dragging => _drag;
-
-    public event Action<double>? Changed;
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-
-    public DelayFader() { Width = 16; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
-
-    public void Set(double v)
-    {
-        if (_drag) return;
-        double n = Math.Clamp(v, 0, 1);
-        if (Math.Abs(n - _v) < 1e-4) return;
-        _v = n; InvalidateVisual();
-    }
-
-    private void Apply(PointerEventArgs e)
-    {
-        double h = Bounds.Height; if (h <= 2) return;
-        _v = Math.Clamp(1 - e.GetPosition(this).Y / h, 0, 1);
-        Changed?.Invoke(_v); InvalidateVisual();
-    }
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
-        {
-            GestureBegin?.Invoke(); _v = Default; Changed?.Invoke(_v); GestureEnd?.Invoke();
-            InvalidateVisual(); e.Handled = true; return;
-        }
-        _drag = true; GestureBegin?.Invoke(); e.Pointer.Capture(this); Apply(e); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (!_drag) return;
-        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 4) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, r, r);
-        double y = (1 - _v) * h;
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-            ctx.FillRectangle(NotaPalette.Wash((SolidColorBrush)Ink, 0x48), new Rect(0, y, w, h - y));
-        ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : Handle, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
     }
 }
 

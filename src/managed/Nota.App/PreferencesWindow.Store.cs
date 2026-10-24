@@ -74,7 +74,7 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < StoreFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
             _storeCounts[i] = count;
             var b = new ToggleButton
             {
@@ -182,7 +182,7 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = h.Title, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = h.Count.ToString(), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = h.Count.ToString(), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             }),
@@ -263,7 +263,7 @@ public sealed partial class PreferencesWindow
         // it — wrapping _storeItems in a fresh one would throw "already has a parent".
         _storeList.Content = _storeItems.Parent as Border ?? new Border
         {
-            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
             ClipToBounds = true, Child = _storeItems,
         };
     }
@@ -308,7 +308,7 @@ public sealed partial class PreferencesWindow
     private Control StoreDock()
     {
         _dockTitle = new TextBlock { FontSize = 12, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        _dockDetail = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _dockDetail = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
         _dockCancel = StoreButton("Cancel", enabled: true, Jobs.Cancel);
         _dockCancel.VerticalAlignment = VerticalAlignment.Center;
@@ -379,11 +379,11 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = p.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = here ? TextPrimary : TextSecondary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                         PlatformIcons(p.Platforms),
                     },
                 },
-                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = here ? TextTertiary : TextDisabled },
+                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = here ? TextTertiary : TextDisabled },
                 new TextBlock { Text = p.Description, FontSize = 12, LineHeight = 18, Foreground = here ? TextSecondary : TextTertiary, TextWrapping = TextWrapping.Wrap },
             },
         };
@@ -419,7 +419,7 @@ public sealed partial class PreferencesWindow
         if (inst is null && p.Asset is { Size: > 0 } asset)
             actions.Children.Add(new TextBlock
             {
-                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 10, FontFamily = NotaFonts.MonoFamily,
+                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 10, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
             });
         var source = StoreLink("Source", GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Repo)));
@@ -440,7 +440,7 @@ public sealed partial class PreferencesWindow
         var b = new Button
         {
             Content = label, IsEnabled = enabled, Height = 26, MinWidth = 88, FontSize = 12, Padding = new Thickness(12, 0),
-            CornerRadius = NotaRadius.Tile, HorizontalAlignment = HorizontalAlignment.Right,
+            CornerRadius = NotaRadius.Group, HorizontalAlignment = HorizontalAlignment.Right,
         };
         b.Click += (_, _) => onClick();
         return b;

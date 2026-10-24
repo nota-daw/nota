@@ -121,13 +121,11 @@ internal sealed class FgTransferView : ShDragView
                     {
                         bool isSel = s == _sel;
                         if (_single && isSel) continue;
-                        double op = _on[s] ? (isSel ? 0.45 : 0.7) : 0.25;
-                        var ink = isSel ? NotaPalette.AccentBright : NotaPalette.TextDisabled;
-                        using (ctx.PushOpacity(op))
-                            ctx.DrawGeometry(null, new Pen(ink, 1), Path(_stage[s]));
+                        var ink = !_on[s] ? NotaPalette.TextDisabled : isSel ? NotaPalette.TextSecondary : NotaPalette.TextTertiary;
+                        ctx.DrawGeometry(null, new Pen(ink, 1), Path(_stage[s]));
                     }
                 if (_active && _hasMod)
-                    ctx.DrawGeometry(null, new Pen(NotaPalette.TealBright, 1.2, new DashStyle(new double[] { 4, 3 }, 0)), Path(_mod));
+                    ctx.DrawGeometry(null, new Pen(NotaPalette.TextSecondary, 1.2, new DashStyle(new double[] { 4, 3 }, 0)), Path(_mod));
                 ctx.DrawGeometry(null, new Pen(!_active ? NotaPalette.TextDisabled : Dragging ? NotaPalette.Accent : NotaPalette.VizInk, Dragging ? 2.2 : NotaGraph.PrimaryWidth,
                     lineJoin: PenLineJoin.Round), Path(_main));
 
@@ -144,7 +142,7 @@ internal sealed class FgTransferView : ShDragView
 
         NotaGraph.Title(ctx, frame, "Transfer");
         if (_active && _hasMod)
-            NotaGraph.Legend(ctx, w - 6, 3, (_label, NotaPalette.VizInk, NotaGraph.Mark.Line), ("modulated", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+            NotaGraph.Legend(ctx, w - 6, 3, (_label, NotaPalette.VizInk, NotaGraph.Mark.Line), ("modulated", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         else
             NotaGraph.Legend(ctx, w - 6, 3, (_active ? _label : "bypass", _active ? NotaPalette.VizInk : NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "in −1");

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Orbit views (device kind 9) — the pictures on the Orbit card:
-//   OrbitGainView — both channels' gain over two LFO cycles (L neutral ink, R teal, R offset by Phase),
+//   OrbitGainView — both channels' gain over two LFO cycles (L neutral ink, R a darker grey, offset by Phase),
 //                   the floor the depth reaches, and a running head with the gain dots on it.
 //                   Drag up / down for Amount, left / right for Phase; double-click resets both.
 //   OrbitPanBar   — the stereo position now on an L—R line, over the swing the LFO covers.
@@ -153,8 +153,8 @@ internal sealed class OrbitGainView : Control
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 4, 3 }, 0)), new Point(x0, fy), new Point(x1, fy));
 
         // R first so L reads on top where they meet (tremolo).
-        IBrush inkL = _on ? NotaPalette.VizInk : NotaPalette.TextAxis;
-        IBrush inkR = _on ? NotaPalette.TealBright : NotaPalette.TextAxis;
+        IBrush inkL = _on ? NotaPalette.VizInk : NotaPalette.TextDisabled;
+        IBrush inkR = _on ? NotaPalette.TextTertiary : NotaPalette.TextDisabled;   // R: a darker grey
         Curve(ctx, _phase, inkR);
         Curve(ctx, 0, inkL);
 
@@ -173,8 +173,8 @@ internal sealed class OrbitGainView : Control
         {
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
-            NotaGraph.Node(ctx, new Point(hx, Y(_gr)), true, NotaPalette.TealBright);
-            NotaGraph.Node(ctx, new Point(hx, Y(_gl)), true, NotaPalette.VizInk);
+            NotaGraph.Node(ctx, new Point(hx, Y(_gr)), true, NotaPalette.TextTertiary);
+            NotaGraph.Node(ctx, new Point(hx, Y(_gl)), true, NotaPalette.Accent);   // the live value
         }
 
         void Curve(DrawingContext dc, double off, IBrush ink)
@@ -201,7 +201,7 @@ internal sealed class OrbitPanBar : Control
 {
     private double _pan, _min, _max;
 
-    public OrbitPanBar() { Height = 9; }
+    public OrbitPanBar() { Height = 11; }
 
     public void Set(double pan, double min, double max)
     {
@@ -219,8 +219,8 @@ internal sealed class OrbitPanBar : Control
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, cy), new Point(w, cy));
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(Math.Round(w / 2) + 0.5, cy - 3.5), new Point(Math.Round(w / 2) + 0.5, cy + 3.5));
         if (_max > _min)
-            ctx.DrawRectangle(NotaPalette.TrackOff, null, new RoundedRect(new Rect(X(_min), cy - 1.5, Math.Max(1, X(_max) - X(_min)), 3), 1.5));
-        ctx.DrawEllipse(NotaPalette.TextPrimary, new Pen(NotaPalette.SurfaceCard, 2), new Point(X(_pan), cy), 3.5, 3.5);
+            ctx.DrawRectangle(NotaPalette.TextTertiary, null, new RoundedRect(new Rect(X(_min), cy - 1.5, Math.Max(1, X(_max) - X(_min)), 3), 1.5));
+        ctx.DrawEllipse(NotaPalette.Accent, new Pen(NotaPalette.DeviceSection, 2), new Point(X(_pan), cy), 4, 4);
     }
 }
 
@@ -229,7 +229,7 @@ internal sealed class OrbitMeter : Control
     private double _norm;
     public IBrush Ink { get; set; } = NotaPalette.VizInk;
 
-    public OrbitMeter() { Height = 4; }
+    public OrbitMeter() { Height = 3; }
 
     public void Set(double norm)
     {
@@ -242,8 +242,8 @@ internal sealed class OrbitMeter : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var r = new RoundedRect(new Rect(0, 0, w, h), h / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, r);
+        var r = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.FineValue);
+        ctx.DrawRectangle(NotaPalette.Well, null, r);
         if (_norm > 0)
             using (ctx.PushClip(r)) ctx.DrawRectangle(Ink, null, new Rect(0, 0, w * _norm, h));
     }

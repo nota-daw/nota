@@ -273,7 +273,7 @@ internal static partial class ValueEntry
         var box = new TextBox
         {
             Classes = { "value" },
-            Text = was, FontFamily = font?.FontFamily ?? NotaFonts.MonoFamily, FontSize = fontSize,
+            Text = was, FontFamily = font?.FontFamily ?? NotaFonts.UiFamily, FontSize = fontSize,
             FontWeight = font?.FontWeight ?? FontWeight.Normal,
             Height = h, Width = w,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,

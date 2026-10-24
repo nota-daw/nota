@@ -131,11 +131,7 @@ public sealed class AudioClipEditorView : UserControl
         var gain = SliderRow("Gain", 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
             reset: () => SetGain(1.0), valueW: 44);
         var pitchRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
-        pitchRow.Children.Add(new TextBlock
-        {
-            Text = "Pitch", Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
-            Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
-        });
+        pitchRow.Children.Add(RowLabel("Pitch", 44));
         var pitch = Stepper(_pitchText, () => Pitch(-1), () => Pitch(1), zone: 24);
         Grid.SetColumn(pitch, 1); pitchRow.Children.Add(pitch);
         // Reverse is non-destructive (the file is untouched) and free to toggle, so it
@@ -143,19 +139,25 @@ public sealed class AudioClipEditorView : UserControl
         var reverse = SwitchRow("Reverse", () => _reversed, ToggleReverse, out _syncReverse, height: 22);
         var playback = Section(SectionTitle("Playback"), 10, gain, pitchRow, reverse);
 
-        // WARP — on/off and the stretch mode, the two detectors, what they found.
-        var warpSwitch = SwitchRow("Warp", () => _warpEnabled, ToggleWarp, out _syncWarp);
+        // WARP — the title row carries the switch, its state and the stretch mode; then the
+        // tempo, the two detectors side by side, and what they found.
+        var warpSwitch = SwitchRow("", () => _warpEnabled, ToggleWarp, out _syncWarp);
         var mode = Dropdown(_warpModeText, a => ShowMenu(a, WarpModes, _warpMode, SetWarpMode));
-        mode.Width = 104;
-        var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        warpRow.Children.Add(warpSwitch);
-        Grid.SetColumn(mode, 1); warpRow.Children.Add(mode);
+        mode.Width = 96;
+        _markerCount.FontSize = NotaType.Caption;
+        _markerCount.Foreground = NotaPalette.TextTertiary;
+        var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 8 };
+        warpRow.Children.Add(TitleText("Warp"));
+        Grid.SetColumn(warpSwitch, 1); warpRow.Children.Add(warpSwitch);
+        Grid.SetColumn(_markerCount, 2); warpRow.Children.Add(_markerCount);
+        Grid.SetColumn(mode, 4); warpRow.Children.Add(mode);
         var detect = ClipEditorKit.Button("Detect tempo", AutoWarp);
         ToolTip.SetTip(detect, "Detect the file's tempo and conform it to the project");
         var transients = ClipEditorKit.Button("To transients", TransientWarp);
         ToolTip.SetTip(transients, "Pin a marker on every hit so drums lock to the grid");
-        var warp = Section(SectionTitle("Warp", _markerCount), 8,
-            warpRow, TempoRow(), Pair(detect, transients), Card(KeyValue("Detected", _detectedText)));
+        var detected = KeyValue("Detected", _detectedText);
+        detected.Height = 20;
+        var warp = Section(warpRow, 8, TempoRow(), Pair(detect, transients), detected);
 
         // ADSR — the clip's amplitude shape (the ADSR tab swaps the inspector to it). Times
         // run on a square-law slider over the clip length, so short attacks stay fine-grained.
@@ -408,11 +410,7 @@ public sealed class AudioClipEditorView : UserControl
     // "Tempo [ 87.00 BPM ] ÷2 ×2" under the Warp switch: drag the value, double-click to type.
     private Control TempoRow()
     {
-        var label = new TextBlock
-        {
-            Text = "Tempo", Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
-            Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
-        };
+        var label = RowLabel("Tempo", 44);
         _tempo = new DragNumber(120, ClipTempo.MinBpm, ClipTempo.MaxBpm, 0.5, "0.00", fontSize: NotaType.Body)
         { VerticalAlignment = VerticalAlignment.Center };
         _tempo.GestureBegin += () => _tempoGesture = true;
@@ -698,7 +696,7 @@ public sealed class AudioClipEditorView : UserControl
         private static readonly IPen SelLine = new Pen(NotaPalette.AccentDim, 1);
         private static readonly IPen GridBeatPen = new Pen(NotaPalette.GridSubBeat, 1);
         private static readonly IPen GridBarPen = new Pen(NotaPalette.BorderDefault, 1);
-        private static readonly Typeface GridFace = NotaFonts.Mono;
+        private static readonly Typeface GridFace = NotaFonts.Sans;
         // BPM chip in the marker strip (drag to scrub the segment tempo); the hot one and the
         // selected marker's position chip take Brass Wash with a brass edge.
         private static readonly IBrush ChipBg = NotaPalette.Panel;
@@ -1637,7 +1635,7 @@ public sealed class AudioClipEditorView : UserControl
         }
         private double _monoCharW;
         private double MonoCharW => _monoCharW > 0 ? _monoCharW
-            : _monoCharW = new FormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
+            : _monoCharW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
 
         // bar / bar.beat / bar.beat.16th[.sub] label for a beat (1-based), as fine as the step needs.
         private static string BeatLabel(double beat, double step)
@@ -1758,7 +1756,7 @@ public sealed class AudioClipEditorView : UserControl
                     if (Math.Abs(x1 - x0) < 72) continue;   // mirrored: x1 sits left of x0
                     double bpm = beatSpan * _srcSR * 60.0 / srcSpan;
                     bool hotChip = i == _bpmHoverSeg || i == _bpmScrubSeg;
-                    var num = new FormattedText(bpm.ToString("0.00", NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, hotChip ? ChipInkHot : ChipInk);
+                    var num = new NotaFormattedText(bpm.ToString("0.00", NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, hotChip ? ChipInkHot : ChipInk);
                     double cw = num.Width + 12, chH = 16;
                     double cx = Math.Clamp((x0 + x1) / 2, cw / 2 + 2, w - cw / 2 - 2);
                     if (cx < 0 || cx > w) continue;
@@ -1777,7 +1775,7 @@ public sealed class AudioClipEditorView : UserControl
                     // In the ruler's terms: where the marker plays in the arrangement (a slot: its own).
                     var map = Map;
                     double at = !_slot && map.Valid ? Math.Max(0, map.ArrangementBeatAtContent(_mk[_selMk].beat / TotalBeats)) : _mk[_selMk].beat;
-                    var ft = new FormattedText(Position(at), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
+                    var ft = new NotaFormattedText(Position(at), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
                     double cw = ft.Width + 12;
                     double lx = x + 9 + cw > w ? x - 9 - cw : x + 9;
                     var chip = new Rect(lx, RulerH + 3, cw, 16);
@@ -1856,7 +1854,7 @@ public sealed class AudioClipEditorView : UserControl
                 ClipAdsrKit.DrawHandles(ctx, adsrF, adsrFit, hot, NodeFill, NodeHot, NodeRing);
                 if (_adsrDrag is not (AdsrHandle.None or AdsrHandle.AttackOrSustain))
                 {
-                    var ft = new FormattedText(ClipAdsrKit.Readout(_adsrDrag, adsrFit, _bpm), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
+                    var ft = new NotaFormattedText(ClipAdsrKit.Readout(_adsrDrag, adsrFit, _bpm), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
                     double cw = ft.Width + 12;
                     var chip = new Rect(Math.Clamp(adsrF.Left + 8, 2, Math.Max(2, w - cw - 2)), top + 6, cw, 16);
                     ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), 3, 3);
@@ -1900,7 +1898,7 @@ public sealed class AudioClipEditorView : UserControl
             double XAt(double beat) => FracToX(map.ContentAtArrangementBeat(beat), w);
             void Label(string text, double x, bool strong)
             {
-                var ft = new FormattedText(text, NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, strong ? RulerBar : RulerBeat);
+                var ft = new NotaFormattedText(text, NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, strong ? RulerBar : RulerBeat);
                 ctx.DrawText(ft, new Point(x + 4, RulerH - 5 - ft.Height));
             }
 
@@ -1980,7 +1978,7 @@ public sealed class AudioClipEditorView : UserControl
                     else
                         ctx.DrawLine(GridBeatPen, new Point(x + 0.5, RulerH - 6), new Point(x + 0.5, RulerH));
                     if (!labelled || b >= tb - 1e-6) continue;
-                    var ft = new FormattedText(BeatLabel(b, labelStep), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, bar ? RulerBar : RulerBeat);
+                    var ft = new NotaFormattedText(BeatLabel(b, labelStep), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, bar ? RulerBar : RulerBeat);
                     ctx.DrawText(ft, new Point(_reversed ? x - 4 - ft.Width : x + 4, RulerH - 5 - ft.Height));
                 }
                 return;
@@ -2000,7 +1998,7 @@ public sealed class AudioClipEditorView : UserControl
                 double x = SrcToX(t * _srcSR, w);
                 if (x < -200 || x > w + 0.5) continue;
                 ctx.DrawLine(GridBeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, RulerH));
-                var ft = new FormattedText(SecondsLabel(t, stepS), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, k == 0 ? RulerBar : RulerBeat);
+                var ft = new NotaFormattedText(SecondsLabel(t, stepS), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, k == 0 ? RulerBar : RulerBeat);
                 ctx.DrawText(ft, new Point(_reversed ? x - 4 - ft.Width : x + 4, RulerH - 5 - ft.Height));
             }
         }

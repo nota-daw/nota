@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The 232px inspector beside the piano roll (nota-design "Nota Clip Editor" 1a): CLIP
-// (Start / Length in bars.beats.16ths, the Loop switch and its length), QUANTIZE (its step,
-// Quantize, strength — the snap grid itself is the header chip), TRANSPOSE (− value +) and SELECTION (the selected note's
-// pitch / start / length / velocity, or the range of several), ending in one hint line.
+// The piano roll's settings strip (style guide § Editor settings strip): every setting in one
+// row above the notes, so the notes get the full width — Clip (Start / Length in
+// bars.beats.16ths, the Loop switch and its length), Quantize (its step, Quantize, strength —
+// the snap grid itself is the header chip), Transpose (− value +) and Selection (the selected
+// note's pitch, start, length and velocity, or the range of several, on one line).
 // Edits drive the PianoRollView; read-outs follow its Changed event.
 
 using System;
@@ -30,13 +31,10 @@ public sealed class ClipPropsView : UserControl
     private readonly PianoRollView _roll;
     private readonly TextBlock _startText = Mono("");
     private readonly TextBlock _lengthText = Mono("");
-    private readonly TextBlock _loopText = Mono("", 10, NotaPalette.TextStrong);
+    private readonly TextBlock _loopText = Mono("", NotaType.Body, NotaPalette.TextDisabled);
     private readonly TextBlock _transposeText = Mono("");
     private readonly TextBlock _gridText = Mono("");
-    private readonly TextBlock _selCount = Meta("—");
-    private readonly StackPanel _selRows = new();
-    private readonly Border _selCard;
-    private readonly Border _selEmpty;
+    private readonly TextBlock _selText = StripLabel("No notes selected");
     private int _transpose;
     private double _strength = 0.8;
 
@@ -46,58 +44,65 @@ public sealed class ClipPropsView : UserControl
         _startText.Text = Position(startBeat);
         _gridText.Text = roll.Grids.Quantize.Label;
 
-        // CLIP — clips always loop in this model; the switch waits for a per-clip loop.
-        var loop = SwitchRow("Loop", () => true, () => { }, out _, _loopText);
+        // Clip — clips always loop in this model; the switch waits for a per-clip loop, so it
+        // is drawn off (ink 4), not faded.
+        var loop = SwitchRow("Loop", () => false, () => { }, out _, _loopText, StripField);
         loop.IsEnabled = false;
         ToolTip.SetTip(loop, "Clips always loop");
-        var clip = Section("Clip",
-            Pair(Labeled("Start", Field(_startText)), Labeled("Length", Field(_lengthText))),
+        var clip = StripGroup("Clip",
+            StripLabel("Start"), Sized(StripValue(_startText), 58),
+            StripLabel("Length"), Sized(StripValue(_lengthText), 58),
             loop);
 
-        // QUANTIZE — its own step (not the snap grid, which follows the zoom), one-tap
-        // Quantize at the strength below.
-        var grid = Section("Quantize",
-            Pair(Dropdown(_gridText, a => ShowMenu(a, Array.ConvertAll(QuantizeSteps, q => q.Label),
-                    Array.IndexOf(QuantizeSteps, _roll.Grids.Quantize), i =>
-                {
-                    _roll.Grids.SetQuantize(QuantizeSteps[i]);
-                    _gridText.Text = QuantizeSteps[i].Label;
-                })),
-                ClipEditorKit.Button("Quantize", () => _roll.Quantize(_strength))),
-            SliderRow("Strength", 64, () => _strength, v => _strength = v,
-                () => string.Format(NotaNum.Culture, "{0:0}\u2009%", _strength * 100), out _, reset: () => _strength = 0.8, valueW: 34));
-
-        // TRANSPOSE — − value +; the value turns Brass Light while it is off zero.
-        _transposeText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        var tRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6 };
-        tRow.Children.Add(GlyphButton(GlyphKind.Minus, () => Transpose(-1)));
-        var tField = Field(_transposeText);
-        Grid.SetColumn(tField, 1); tRow.Children.Add(tField);
-        var plus = GlyphButton(GlyphKind.Plus, () => Transpose(1));
-        Grid.SetColumn(plus, 2); tRow.Children.Add(plus);
-        var transpose = Section("Transpose", tRow);
-
-        // SELECTION — a card of read-outs, or one empty-state line in the same frame.
-        _selCard = Card(_selRows);
-        _selCard.Padding = new Thickness(0);
-        _selEmpty = new Border
-        {
-            Height = 104, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
-            Child = new TextBlock
+        // Quantize — its own step (not the snap grid, which follows the zoom), one-tap
+        // Quantize at the strength beside it.
+        var step = Dropdown(_gridText, a => ShowMenu(a, Array.ConvertAll(QuantizeSteps, q => q.Label),
+            Array.IndexOf(QuantizeSteps, _roll.Grids.Quantize), i =>
             {
-                Text = "No notes selected", FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            },
-        };
-        var selection = Section(SectionTitle("Selection", _selCount), 8, _selCard, _selEmpty);
+                _roll.Grids.SetQuantize(QuantizeSteps[i]);
+                _gridText.Text = QuantizeSteps[i].Label;
+            }));
+        step.Height = StripField;
+        step.MinWidth = 64;
+        var qButton = ClipEditorKit.Button("Quantize", () => _roll.Quantize(_strength));
+        qButton.Height = StripField;
+        qButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+        // Strength: the shell slider, its value inside (style guide § Slider: quantize strength).
+        static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0}\u2009%", v * 100);
+        var strength = new MiniFader(_strength, 1) { Width = 92, Default = 0.8, Text = Pct };
+        strength.ValueChanged += v => _strength = v;
+        ValueEntry.Attach(strength, strength.EntryField("Strength", Pct));
+        var grid = StripGroup("Quantize", step, qButton, StripLabel("Strength"), strength);
 
-        Content = Inspector(Sections(clip, grid, transpose, selection),
-            Hint("Double-click — add or delete · edge — length · Shift — add to selection"));
+        // Transpose — − value +; the value is ink 1 while it is off zero.
+        _transposeText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        var minus = GlyphButton(GlyphKind.Minus, () => Transpose(-1));
+        var plus = GlyphButton(GlyphKind.Plus, () => Transpose(1));
+        minus.Height = plus.Height = StripField;
+        minus.Width = plus.Width = StripField;
+        var transpose = StripGroup("Transpose", minus, Sized(StripValue(_transposeText), 52), plus);
+
+        // Selection — one line of read-outs, or "No notes selected".
+        _selText.TextTrimming = TextTrimming.CharacterEllipsis;
+        var selection = StripGroup("Selection", _selText);
+
+        Content = Strip(clip, grid, transpose, selection);
 
         PaintTranspose();
         OnRollChanged();
         _roll.Changed += OnRollChanged;
     }
+
+    private const double StripField = 26;
+
+    private static Border StripValue(TextBlock value)
+    {
+        var f = Field(value);
+        f.Height = StripField;
+        return f;
+    }
+
+    private static T Sized<T>(T c, double w) where T : Control { c.Width = w; return c; }
 
     /// <summary>Re-points the START read-out after the clip moved or was trimmed from the
     /// left in the arrangement. LENGTH / LOOP follow the roll's own Changed event.</summary>
@@ -127,36 +132,20 @@ public sealed class ClipPropsView : UserControl
     private void PaintSelection()
     {
         var sel = _roll.SelectedNotes();
-        _selCount.Text = sel.Count > 0 ? sel.Count.ToString(NotaNum.Culture) : "—";
-        _selCard.IsVisible = sel.Count > 0;
-        _selEmpty.IsVisible = sel.Count == 0;
-        _selRows.Children.Clear();
+        _selText.Foreground = sel.Count > 0 ? NotaPalette.TextPrimary : NotaPalette.TextTertiary;
+        if (sel.Count == 0) { _selText.Text = "No notes selected"; return; }
         if (sel.Count == 1)
         {
             var n = sel[0];
-            Row("Pitch", PianoRollView.NoteName(n.Pitch));
-            Row("Start", Position(n.StartBeat));
-            Row("Length", string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
-            Row("Velocity", Vel(n.Velocity).ToString(NotaNum.Culture), last: true);
+            _selText.Text = string.Format(NotaNum.Culture, "{0} · {1} · {2:0.##}/16 · velocity {3}",
+                PianoRollView.NoteName(n.Pitch), Position(n.StartBeat), n.LengthBeats * 4, Vel(n.Velocity));
+            return;
         }
-        else if (sel.Count > 1)
-        {
-            int lo = sel.Min(n => n.Pitch), hi = sel.Max(n => n.Pitch);
-            int vLo = sel.Min(n => Vel(n.Velocity)), vHi = sel.Max(n => Vel(n.Velocity));
-            Row("Notes", sel.Count.ToString(NotaNum.Culture));
-            Row("Range", lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
-            Row("Velocity", vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}", last: true);
-        }
-
-        void Row(string key, string value, bool last = false)
-        {
-            var v = Mono(value);
-            _selRows.Children.Add(new Border
-            {
-                Padding = new Thickness(10, 0), BorderBrush = NotaPalette.GraphBorder,
-                BorderThickness = new Thickness(0, 0, 0, last ? 0 : 1), Child = KeyValue(key, v),
-            });
-        }
+        int lo = sel.Min(n => n.Pitch), hi = sel.Max(n => n.Pitch);
+        int vLo = sel.Min(n => Vel(n.Velocity)), vHi = sel.Max(n => Vel(n.Velocity));
+        string range = lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}";
+        string vel = vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}";
+        _selText.Text = $"{sel.Count.ToString(NotaNum.Culture)} notes · {range} · velocity {vel}";
     }
 
     private static int Vel(float v) => (int)Math.Round(Math.Clamp(v, 0, 1) * 127);

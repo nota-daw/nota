@@ -32,16 +32,24 @@ internal static class ClipEditorKit
     /// clip it names (the multi-clip editor's active clip).</summary>
     public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
                                 out TextBlock nameOut, out Border colorBar)
+        => Header(trackColor, name, kind, modes, afterModes, right, InspectorW, out nameOut, out colorBar);
+
+    /// <summary>As above with the clip cell <paramref name="cellW"/> wide, or fitting the name
+    /// when NaN (the piano roll, whose settings run in a strip under the header).</summary>
+    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
+                                double cellW, out TextBlock nameOut, out Border colorBar)
     {
-        var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 9 };
+        var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9 };
         var nameText = new TextBlock
         {
-            Text = name, FontSize = NotaType.Name, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary,
+            Text = name, FontSize = NotaType.TrackName, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        nameText.MaxWidth = double.IsNaN(cellW) ? 200 : cellW - 28 - 52;   // the kind sits right after the name
         var badge = new TextBlock
         {
-            Text = NotaText.Label(kind), FontFamily = NotaFonts.MonoFamily, FontSize = 10,
+            Text = kind.Length > 4 ? char.ToUpperInvariant(kind[0]) + kind[1..].ToLowerInvariant() : kind,
+            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Caption,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         cell.Children.Add(nameText);
@@ -49,18 +57,18 @@ internal static class ClipEditorKit
         Grid.SetColumn(badge, 1); cell.Children.Add(badge);
         var cellHost = new Border
         {
-            Width = InspectorW, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(0, 0, 1, 0),
+            Width = cellW, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(0, 0, 1, 0),
             Child = new Grid
             {
                 Children =
                 {
                     (colorBar = new Border { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Background = trackColor }),
-                    new Border { Padding = new Thickness(14, 0), Child = cell },
+                    new Border { Padding = new Thickness(14, 0, double.IsNaN(cellW) ? 16 : 14, 0), Child = cell },
                 },
             },
         };
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 12 };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions(double.IsNaN(cellW) ? "Auto,Auto,*,Auto,Auto" : "Auto,Auto,Auto,*,Auto"), ColumnSpacing = 12 };
         row.Children.Add(cellHost);
         modes.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(modes, 1); row.Children.Add(modes);
@@ -107,6 +115,43 @@ internal static class ClipEditorKit
         return new Border { Classes = { "segmented" }, Child = row, HorizontalAlignment = fill ? HorizontalAlignment.Stretch : HorizontalAlignment.Left };
     }
 
+    // ---- settings strip (piano roll) ----------------------------------------
+
+    /// <summary>The settings row above the notes (style guide § Editor settings strip): groups
+    /// left to right, split by hairlines, 40 high on the panel grey.</summary>
+    public const double StripH = 40;
+
+    public static Border Strip(params Control[] groups)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 0; i < groups.Length; i++)
+        {
+            if (i > 0) row.Children.Add(HeaderDivider());
+            groups[i].VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(groups[i]);
+        }
+        return new Border
+        {
+            Height = StripH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault,
+            BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 0, 12, 0), ClipToBounds = true, Child = row,
+        };
+    }
+
+    /// <summary>One strip group: its title (13 / 600) then its controls, 8 apart.</summary>
+    public static StackPanel StripGroup(string title, params Control[] items)
+    {
+        var g = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        g.Children.Add(new TextBlock { Text = title, FontSize = NotaType.TrackName, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) });
+        foreach (var c in items) { c.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(c); }
+        return g;
+    }
+
+    /// <summary>A label in a strip or row: 12 / 400, ink 3.</summary>
+    public static TextBlock StripLabel(string text) => new()
+    {
+        Text = text, FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+    };
+
     // ---- inspector --------------------------------------------------------
 
     /// <summary>The 232px inspector: scrolling sections with the hint line pinned below.</summary>
@@ -134,10 +179,10 @@ internal static class ClipEditorKit
         };
     }
 
-    /// <summary>A vertical run of sections split by hairlines (gap 18 around each rule).</summary>
+    /// <summary>A vertical run of sections split by hairlines (gap 14 around each rule).</summary>
     public static StackPanel Sections(params Control[] sections)
     {
-        var s = new StackPanel { Spacing = 18 };
+        var s = new StackPanel { Spacing = 14 };
         for (int i = 0; i < sections.Length; i++)
         {
             if (i > 0) s.Children.Add(Rule());
@@ -148,17 +193,26 @@ internal static class ClipEditorKit
 
     public static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder };
 
-    /// <summary>A section title (sentence case, muted), with an optional mono read-out on the right.</summary>
+    /// <summary>A section title (13 / 600, ink 1), with an optional read-out on the right.</summary>
     public static Grid SectionTitle(string title, TextBlock? right = null)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        g.Children.Add(new TextBlock
-        {
-            Text = NotaText.Label(title), FontSize = NotaType.SectionLabel, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center,
-        });
+        g.Children.Add(TitleText(title));
         if (right is not null) { Grid.SetColumn(right, 1); g.Children.Add(right); }
         return g;
     }
+
+    public static TextBlock TitleText(string title) => new()
+    {
+        Text = NotaText.Label(title), FontSize = NotaType.TrackName, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>A row label beside a control: 11, ink 3, <paramref name="width"/> wide.</summary>
+    public static TextBlock RowLabel(string text, double width) => new()
+    {
+        Text = text, Width = width, FontSize = NotaType.Caption, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+    };
 
     public static StackPanel Section(string title, params Control[] body) => Section(SectionTitle(title), 8, body);
 
@@ -173,12 +227,12 @@ internal static class ClipEditorKit
     /// <summary>The one line of Ink 5 at the foot of the inspector.</summary>
     public static TextBlock Hint(string text) => new()
     {
-        Text = text, FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+        Text = text, FontSize = NotaType.Caption, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
     };
 
     public static TextBlock Mono(string text, double size = 11, IBrush? fg = null) => new()
     {
-        Text = text, FontFamily = NotaFonts.MonoFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
+        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -197,30 +251,25 @@ internal static class ClipEditorKit
     public static StackPanel Labeled(string label, Control field) => new()
     {
         Spacing = 4,
-        Children = { new TextBlock { Text = label, FontSize = 10, Foreground = NotaPalette.TextMuted }, field },
+        Children = { new TextBlock { Text = label, FontSize = NotaType.Caption, Foreground = NotaPalette.TextTertiary }, field },
     };
 
     // ---- fields and buttons -----------------------------------------------
 
-    /// <summary>A 26px sunken field.</summary>
-    public static Border Field(Control? child = null, double padX = 9)
+    /// <summary>A 26px field on the well (style guide: no border, corner 6).</summary>
+    public static Border Field(Control? child = null, double padX = 9) => new()
     {
-        var b = new Border
-        {
-            Height = FieldH, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(padX, 0), Child = child, VerticalAlignment = VerticalAlignment.Center,
-        };
-        b.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
-        return b;
-    }
+        Height = FieldH, Background = NotaPalette.Well, CornerRadius = NotaRadius.Field,
+        Padding = new Thickness(padX, 0), Child = child, VerticalAlignment = VerticalAlignment.Center,
+    };
 
-    /// <summary>A sunken dropdown: value left, an Ink 6 chevron right. Opens on a left click.</summary>
+    /// <summary>A dropdown on the well: value left, an ink 3 chevron right. Opens on a left click.</summary>
     public static Border Dropdown(TextBlock value, Action<Control> open)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 14 };
         value.VerticalAlignment = VerticalAlignment.Center;
         g.Children.Add(value);
-        var chev = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center };
+        var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(chev, 1); g.Children.Add(chev);
         var f = Field(g);
         f.Cursor = new Cursor(StandardCursorType.Hand);
@@ -267,11 +316,15 @@ internal static class ClipEditorKit
     /// rides the far right of the row (e.g. "8 beats").</summary>
     public static Border SwitchRow(string label, Func<bool> get, Action toggle, out Action sync, Control? trailing = null, double height = FieldH)
     {
-        var track = new SwitchTrack();
+        var track = new SwitchTrack(shell: true);
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 8 };
         g.Children.Add(track);
-        var word = new TextBlock { Text = label, FontSize = NotaType.Body, Foreground = NotaPalette.TextStrong, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(word, 1); g.Children.Add(word);
+        if (label.Length > 0)
+        {
+            var word = new TextBlock { Text = label, FontSize = NotaType.Body, Foreground = NotaPalette.TextStrong, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(word, 1); g.Children.Add(word);
+        }
+        else g.ColumnSpacing = 0;
         if (trailing is not null) { Grid.SetColumn(trailing, 3); g.Children.Add(trailing); }
         var host = new Border { Height = height, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
         void Paint() => track.IsOn = get();
@@ -325,45 +378,41 @@ internal static class ClipEditorKit
     public static Border Card(Control child) => new()
     {
         Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 0), Child = child,
+        CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 0), Child = child,
     };
 
-    /// <summary>A shell slider row: label · 3px track · fixed-width mono value. Double-click the
-    /// slider or the value to type one, ⌥-click to reset; `textAt` (the read-out at a position,
-    /// pure) lets typing search without writing.</summary>
+    /// <summary>A shell slider row (style guide): the label (11, ink 3) and a flat bar with its
+    /// value written inside. Double-click the bar to type a value, ⌥-click to reset; `textAt`
+    /// (the read-out at a position, pure) lets typing search without writing. `valueW` is kept
+    /// for older call sites; the value now lives in the bar.</summary>
     public static Grid SliderRow(string label, double labelW, Func<double> norm, Action<double> setNorm, Func<string> text,
         out Action sync, Action? reset = null, double valueW = 36, Func<bool>? dim = null, Func<double, string>? textAt = null)
     {
         Action repaint = () => { };
-        var track = new SliderTrack { Reset = reset is null ? null : () => { reset(); repaint(); } };
+        var track = new SliderTrack { Shell = true, Text = text, Reset = reset is null ? null : () => { reset(); repaint(); } };
         var lbl = new TextBlock
         {
-            Text = NotaText.Label(label), Width = labelW, FontSize = 9, FontWeight = FontWeight.Medium,
+            Text = label, Width = labelW, FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var val = Mono("", 10);
-        val.Width = valueW;
-        val.TextAlignment = TextAlignment.Right;
         void Paint()
         {
             bool d = dim?.Invoke() ?? false;
             track.Norm = norm();
             track.IsDim = d;
-            val.Text = text();
-            val.Foreground = d ? NotaPalette.TextDisabled : NotaPalette.TextStrong;
-            lbl.Foreground = d ? NotaPalette.TextAxis : NotaPalette.TextTertiary;
+            track.InvalidateVisual();
+            lbl.Foreground = d ? NotaPalette.TextDisabled : NotaPalette.TextTertiary;
         }
         repaint = Paint;
-        track.Changed += v => { setNorm(v); val.Text = text(); };
+        track.Changed += v => { setNorm(v); track.InvalidateVisual(); };
         Action? rowReset = reset is null ? null : () => { reset(); Paint(); };
         var field = textAt is null
             ? ValueEntry.Probing(label, norm, setNorm, text, after: Paint, reset: rowReset)
             : new ValueField(label, norm, textAt, setNorm) { After = Paint, Reset = rowReset };
-        ValueEntry.Attach(track, field, val);
-        var g = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10 };
+        ValueEntry.Attach(track, field);
+        var g = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
         g.Children.Add(lbl);
         Grid.SetColumn(track, 1); g.Children.Add(track);
-        Grid.SetColumn(val, 2); g.Children.Add(val);
         sync = () => { if (!track.Dragging) Paint(); };
         Paint();
         return g;

@@ -3,12 +3,10 @@
 //
 // Nota Level views (device kind 18) — the pictures on the Level card:
 //   LvHistoryView — the last 8 s of loudness: the input (dim ink), the output (neutral ink) and the target
-//                   (dashed teal, with a ±1 LU band) that moves with a reference track. A dot
+//                   (dashed grey, with a ±1 LU band) that moves with a reference track. A dot
 //                   marks the output now. Drag up / down for Target (not while a reference
 //                   drives it); double-click resets it.
-//   LvGainFader   — the correction as a vertical fader around 0 dB (±Max Gain): teal while Auto
-//                   rides it, a neutral fill with a draggable cap in Manual (accent while dragged).
-//   LvMeter       — a 4px bar with an optional teal marker (the target, the ceiling, 0 dB).
+//   LvMeter       — a 3px channel with an optional grey tick (the target, the ceiling, 0 dB).
 //   LvLegend      — the graph legend drawn with NotaGraph's samples, for the panel bar.
 // LevelMath holds the telemetry layout (AutoGain.h) and the unit mappings.
 
@@ -135,19 +133,19 @@ internal sealed class LvHistoryView : Control
 
         float tNow = _tar[(_w + N - 1) % N];
         // The ±1 LU band around the target now.
-        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Teal, 0x14), new Rect(0, Y(tNow + 1), w, Math.Max(1, Y(tNow - 1) - Y(tNow + 1))));
+        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x10), new Rect(0, Y(tNow + 1), w, Math.Max(1, Y(tNow - 1) - Y(tNow + 1))));
 
         int first = N - _count;
         // Input (ink), under the target and the output.
         Trace(ctx, _in, first, new Pen(NotaPalette.TextTertiary, 1));
-        // Target, dashed teal (steps with a reference).
-        var tp = new Pen(NotaPalette.TealBright, 1, new DashStyle(new double[] { 4, 3 }, 0));
+        // Target, dashed grey (steps with a reference).
+        var tp = new Pen(NotaPalette.TextSecondary, 1, new DashStyle(new double[] { 4, 3 }, 0));
         Trace(ctx, _tar, Math.Max(0, first), tp, allowSilent: true);
         // Output, neutral ink.
         Trace(ctx, _out, first, NotaGraph.SecondaryPen(_on ? NotaPalette.VizInk : NotaPalette.TextTertiary, NotaGraph.PrimaryWidth));
 
         NotaGraph.Title(ctx, frame, "Loudness");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _lock, _locked ? NotaPalette.TealBright : NotaPalette.TextTertiary);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _lock, _locked ? NotaPalette.TextSecondary : NotaPalette.TextTertiary);
         foreach (double lu in new[] { -10.0, -20, -30 })
         {
             var ft = NotaGraph.AxisText(NotaNum.F($"{lu:0;−0}"));
@@ -156,7 +154,7 @@ internal sealed class LvHistoryView : Control
         }
         if (_targetLabel.Length > 0)
         {
-            var ft = NotaGraph.AxisText(_targetLabel, NotaPalette.TealBright);
+            var ft = NotaGraph.AxisText(_targetLabel, NotaPalette.TextSecondary);
             double y = Y(tNow) - ft.Height - 1;
             if (y < 12) y = Y(tNow) + 2;
             ctx.DrawText(ft, new Point(w - 14 - ft.Width, y));
@@ -188,83 +186,14 @@ internal sealed class LvHistoryView : Control
     }
 }
 
-internal sealed class LvGainFader : Control
-{
-    private double _db, _max = 12;
-    private bool _manual, _on = true, _drag;
-    private double _y0, _v0;
-
-    /// <summary>The manual gain (dB) at the start of a drag.</summary>
-    public Func<double>? Value { get; set; }
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-    public event Action<double>? Changed;   // new gain in dB
-    public event Action? ResetRequested;
-    public bool Dragging => _drag;
-
-    public LvGainFader() { Width = 14; }
-
-    public void Set(double db, double maxDb, bool manual, bool on)
-    {
-        _db = db; _max = Math.Max(0.01, maxDb); _manual = manual; _on = on;
-        Cursor = manual ? new Cursor(StandardCursorType.SizeNorthSouth) : Cursor.Default;
-        InvalidateVisual();
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!_manual || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { ResetRequested?.Invoke(); e.Handled = true; return; }
-        _v0 = Value?.Invoke() ?? _db; _y0 = e.GetPosition(this).Y; _drag = true;
-        GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        if (!_drag) return;
-        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        // Full range (−max … +max) over ~140 px, fine steps with a modifier.
-        double d = (_y0 - e.GetPosition(this).Y) / 140.0 * 2 * _max * (fine ? 0.1 : 1);
-        Changed?.Invoke(Math.Round(Math.Clamp(_v0 + d, -_max, _max) * 10) / 10);
-    }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (!_drag) return;
-        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 4) return;
-        double cx = w / 2, top = 2.5, bot = h - 2.5;
-        double Y(double db) => top + (0.5 - Math.Clamp(db / _max, -1, 1) / 2) * (bot - top);
-        ctx.FillRectangle(NotaPalette.BgSunken, new Rect(cx - 2, 0, 4, h), 2);
-        ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(0, Math.Round(Y(0)), w, 1));
-        IBrush fill = !_on ? NotaPalette.BorderStrong : !_manual ? NotaPalette.Teal : _drag ? NotaPalette.Accent : NotaPalette.VizInk;
-        double y0 = Y(0), y1 = Y(_db);
-        ctx.FillRectangle(fill, new Rect(cx - 2, Math.Min(y0, y1), 4, Math.Abs(y1 - y0)), 1);
-        IBrush cap = !_on ? NotaPalette.TextDisabled : _manual ? NotaPalette.TextPrimary : NotaPalette.TealBright;
-        ctx.FillRectangle(cap, new Rect(0, y1 - 2.5, w, 5), 2);
-    }
-}
-
 internal sealed class LvMeter : Control
 {
     private double _l, _r, _mark = double.NaN;
     private IBrush _ink = NotaPalette.VizInk;
 
-    public LvMeter() { Height = 4; }
+    public LvMeter() { Height = 10; }
 
-    /// <summary>Fill from <paramref name="from"/> to <paramref name="to"/> (0..1), a teal marker at
+    /// <summary>Fill from <paramref name="from"/> to <paramref name="to"/> (0..1), a grey marker at
     /// <paramref name="marker"/> (NaN hides it).</summary>
     public void Set(double from, double to, IBrush ink, double marker)
     {
@@ -276,20 +205,24 @@ internal sealed class LvMeter : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        using (ctx.PushClip(new RoundedRect(new Rect(0, 0, w, h), 2)))
+        // A 3px channel on the well, the level in its ink, and the target (or ceiling) as a
+        // 2px grey tick standing over it.
+        double ty = Math.Round((h - 3) / 2);
+        using (ctx.PushClip(new RoundedRect(new Rect(0, ty, w, 3), NotaRadius.FineValue)))
         {
-            ctx.FillRectangle(NotaPalette.BgSunken, new Rect(0, 0, w, h));
-            if (_r > _l) ctx.FillRectangle(_ink, new Rect(_l * w, 0, (_r - _l) * w, h));
-            if (!double.IsNaN(_mark)) ctx.FillRectangle(NotaPalette.TealBright, new Rect(Math.Clamp(_mark, 0, 1) * (w - 1), 0, 1, h));
+            ctx.FillRectangle(NotaPalette.Well, new Rect(0, ty, w, 3));
+            if (_r > _l) ctx.FillRectangle(_ink, new Rect(_l * w, ty, (_r - _l) * w, 3));
         }
+        if (!double.IsNaN(_mark))
+            ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(Math.Round(Math.Clamp(_mark, 0, 1) * (w - 2)), 0, 2, h), 1);
     }
 }
 
 internal sealed class LvLegend : Control
 {
-    public LvLegend() { Height = 11; Width = 132; }
+    public LvLegend() { Height = 14; Width = 150; }
 
     public override void Render(DrawingContext ctx)
         => NotaGraph.Legend(ctx, Bounds.Width, 0, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line),
-            ("output", NotaPalette.VizInk, NotaGraph.Mark.Line), ("target", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+            ("output", NotaPalette.VizInk, NotaGraph.Mark.Line), ("target", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
 }

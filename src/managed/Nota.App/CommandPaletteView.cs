@@ -82,7 +82,7 @@ internal sealed class CommandPaletteView : UserControl
         _pillText.TextTrimming = TextTrimming.CharacterEllipsis;
         _pill = new Border
         {
-            Height = 24, MaxWidth = 310, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control,
+            Height = 24, MaxWidth = 310, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field,
             VerticalAlignment = VerticalAlignment.Center, Child = _pillText, IsVisible = false,
         };
         var fieldGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
@@ -92,7 +92,7 @@ internal sealed class CommandPaletteView : UserControl
         var field = new Border
         {
             Height = 38, Padding = new Thickness(10, 0, 6, 0), Background = NotaPalette.BgSunken,
-            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
             Child = fieldGrid, Margin = new Thickness(10, 10, 10, 8),
         };
 
@@ -142,12 +142,12 @@ internal sealed class CommandPaletteView : UserControl
         var face = new Border
         {
             Background = NotaPalette.Panel, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Modal, ClipToBounds = true, Child = body,
+            CornerRadius = NotaRadius.Card, ClipToBounds = true, Child = body,
         };
         _card = new Border
         {
             Width = CardWidth, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-            CornerRadius = NotaRadius.Modal, Child = face,
+            CornerRadius = NotaRadius.Card, Child = face,
         };
         _card.BindResource(Border.BoxShadowProperty, "Shadow.Modal");
         // Clicks outside the card close the palette; nothing dims the window (CP-17).
@@ -207,7 +207,7 @@ internal sealed class CommandPaletteView : UserControl
             _layoutText.Inlines = new InlineCollection
             {
                 new Run("Showing results for "),
-                new Run(_results.LayoutHint) { FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextPrimary },
+                new Run(_results.LayoutHint) { FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary },
                 new Run(" · typed in the other keyboard layout"),
             };
         }
@@ -223,7 +223,7 @@ internal sealed class CommandPaletteView : UserControl
             bool on = prefix == q.Prefix;
             var chip = new Border
             {
-                Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand),
+                Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
                 Background = on ? NotaPalette.BorderDefault : Brushes.Transparent,
                 BorderBrush = on ? NotaPalette.BorderStrong : Brushes.Transparent, BorderThickness = new Thickness(1),
                 Child = new StackPanel
@@ -329,7 +329,7 @@ internal sealed class CommandPaletteView : UserControl
             right.Children.Add(tag);
         }
 
-        var edge = new Border { Width = 2, CornerRadius = NotaRadius.Bar, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left, Tag = "edge" };
+        var edge = new Border { Width = 2, CornerRadius = NotaRadius.Fine, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left, Tag = "edge" };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10, Margin = new Thickness(12, 5) };
         grid.Children.Add(icon);
         Grid.SetColumn(text, 1); grid.Children.Add(text);
@@ -505,18 +505,18 @@ internal sealed class CommandPaletteView : UserControl
 
     internal static Control KeyCap(string label, double size, double fontSize) => new Border
     {
-        MinWidth = size, Height = size, Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Badge,
+        MinWidth = size, Height = size, Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Cell,
         BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1, 1, 1, 2), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = label, FontSize = fontSize, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextStrong,
+            Text = label, FontSize = fontSize, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextStrong,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         },
     };
 
     private static TextBlock Mono(double size, IBrush ink, string text = "") => new()
     {
-        Text = text, FontSize = size, FontFamily = NotaFonts.MonoFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = size, FontFamily = NotaFonts.UiFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
     };
 
     // A shared-set icon in a square box: the 16-unit grid scaled as a whole, so the kinds keep
@@ -540,7 +540,7 @@ internal sealed class PaletteToast : Border
         Margin = new Thickness(0, 0, 0, 48);
         Height = 32;
         Padding = new Thickness(12, 0, 6, 0);
-        CornerRadius = NotaRadius.Panel;
+        CornerRadius = NotaRadius.Group;
         Background = NotaPalette.SurfaceHover;
         BorderBrush = NotaPalette.BorderStrong;
         BorderThickness = new Thickness(1);
@@ -550,12 +550,12 @@ internal sealed class PaletteToast : Border
             Children =
             {
                 new TextBlock { Text = "Undo", FontSize = 11, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         _undo = new Border
         {
-            Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, Background = NotaPalette.BorderDefault,
+            Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Background = NotaPalette.BorderDefault,
             Cursor = new Cursor(StandardCursorType.Hand), Child = undoLabel, VerticalAlignment = VerticalAlignment.Center,
         };
         _undo.PointerPressed += (_, e) => { e.Handled = true; var u = _onUndo; Hide(); u?.Invoke(); };

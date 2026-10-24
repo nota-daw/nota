@@ -73,7 +73,7 @@ public sealed partial class DeviceChainView
         var strip = new Border
         {
             Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body, ClipToBounds = true,
+            CornerRadius = NotaRadius.Card, ClipToBounds = true,
             Padding = new Thickness(0, 0, 0, 8),
             Child = new DockPanel { LastChildFill = true, Children = { power, rotated } },
             Cursor = movable ? new Cursor(StandardCursorType.SizeAll) : null,
@@ -85,7 +85,7 @@ public sealed partial class DeviceChainView
         var selRing = new Border
         {
             BorderBrush = Brass, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
+            CornerRadius = new CornerRadius(NotaRadius.CardValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = IsSelected(k, di),
         };
         var card = new Border { Width = FoldedW, Height = CardH, Child = new Panel { Children = { strip, selRing } } };

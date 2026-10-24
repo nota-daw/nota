@@ -18,15 +18,18 @@ internal static class MidiCardHeader
 {
     public static Control LearnButton(DeviceCardContext ctx)
     {
-        var tb = new TextBlock { Text = "MIDI learn", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
-        var learn = new Border { Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+        // A raised 22px device button (the kit's TextButton); armed, it takes the soft tint with
+        // orange text.
+        var learn = DeviceCardKit.TextButton("MIDI learn");
+        learn.Height = NotaSize.Dropdown; learn.Padding = new Thickness(10, 0); learn.VerticalAlignment = VerticalAlignment.Center;
+        var tb = (TextBlock)learn.Child!;
+        tb.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(learn, "Map a hardware control: arm, touch a control on the card, move a knob or key");
         void Sync()
         {
             bool on = TopLevel.GetTopLevel(learn) is MainWindow w && w.MidiLearnArmed;
-            learn.Background = on ? NotaPalette.AccentSubtle : NotaPalette.TrackOff;
-            learn.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.TrackOff;
-            tb.Foreground = on ? NotaPalette.AccentHover : NotaPalette.TextPrimary;
+            learn.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+            tb.Foreground = on ? NotaPalette.AccentBright : NotaPalette.TextPrimary;
         }
         learn.PointerPressed += (_, ev) =>
         {
@@ -48,7 +51,7 @@ internal static class MidiCardHeader
     public static Control SizeToggle(DeviceCardContext ctx, Func<bool> isMini, Action<bool> setMini)
     {
         var size = DeviceCardKit.Segments(new[] { "S", "L" }, () => isMini() ? 0 : 1,
-            i => { setMini(i == 0); ctx.RequestRebuild(); }, out _, padX: 0, minSegWidth: 16, fontSize: 8);
+            i => { setMini(i == 0); ctx.RequestRebuild(); }, out _, padX: 5, minSegWidth: 18);
         ToolTip.SetTip(size, "Card size: S (mini) / L (full)");
         return size;
     }

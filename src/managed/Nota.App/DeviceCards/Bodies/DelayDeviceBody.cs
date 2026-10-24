@@ -4,7 +4,7 @@
 // Detail · Devices — built-in Delay body (device kind 3), a build of the "Nota Delay"
 // mockup (700 × 260) on the Chamber frame: an always-visible LOOP column (Feedback ·
 // Spread), a centre tabbed panel (Time / Loop · Wow) over the live repeat window, a right
-// tabbed panel (Levels / Output) and a status strip. The repeat window and the feedback
+// tabbed panel (Levels / Output); no status line. The repeat window and the feedback
 // filter are controls, not decoration. Every control is a device param, so automation /
 // MIDI learn / presets / A-B / persistence come for free; Tap tempo and Clear loop are the
 // two actions that are not (the first writes Time L/R, the second wipes the loop).
@@ -94,17 +94,15 @@ internal sealed class DelayDeviceBody : IDeviceBody
         double SpreadMs() => P(Spread) * 50;
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
-        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => FxParts.Label(t, c);
+        static TextBlock Mono(string t, double fs, IBrush c) { var tb = FxParts.Info(t, c); tb.TextTrimming = TextTrimming.None; return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         static Border Divider(Control child, double top = 5) => new()
-        { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
+        { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
         Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Action? onChange = null)
@@ -142,15 +140,15 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // A latching chip over a toggle param (Link · Ping · Fade · Freeze).
         Border Latch(int p, string text, string tip)
         {
-            var tb = new TextBlock { Text = text, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 18, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            // Raised at rest; on, the soft tint with orange text.
+            var tb = new TextBlock { Text = text, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(9, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             void Hi()
             {
                 bool on = On(p);
-                b.Background = on ? NotaPalette.AccentSubtle : Sunken;
-                b.BorderBrush = on ? NotaPalette.BorderBrass : BorderDef;
-                tb.Foreground = on ? NotaPalette.AccentHover : TextTertiary;
-                tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                b.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                tb.Foreground = on ? AccentBright : TextPrimary;
             }
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; SetP(p, On(p) ? 0f : 1f); Hi(); e.Handled = true; };
             ToolTip.SetTip(b, tip);
@@ -162,15 +160,17 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // A small text button (an action, not a parameter).
         Border Btn(string text, Action click, string? tip = null)
         {
-            var tb = new TextBlock { Text = text, FontSize = 8, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = Raised, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            // A raised button inside a device.
+            var tb = new TextBlock { Text = text, FontSize = NotaType.KnobValue, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); e.Handled = true; };
             if (tip != null) ToolTip.SetTip(b, tip);
             return b;
         }
 
         // Horizontal bar slider over a param.
-        Control Bar(int p, Func<double, string> fmt, Func<bool>? dim = null, double valW = 30)
+        Control Bar(int p, Func<double, string> fmt, Func<bool>? dim = null, double valW = 34)
         {
             var row = DeviceCardKit.SliderRow("", () => P(p), v => Raw(p, (float)v), () => fmt(P(p)), out var sync,
                 begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), dim: dim, valueWidth: valW);
@@ -178,7 +178,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return row;
         }
-        Control SliderRow(string label, int p, Func<double, string> fmt, double labW = 52, Func<bool>? dim = null, double valW = 30)
+        Control SliderRow(string label, int p, Func<double, string> fmt, double labW = 57, Func<bool>? dim = null, double valW = 34)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps(label));
@@ -227,7 +227,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 ruler = "";
                 win = Window(windowSec);
             }
-            if (freeze) { title = "LOOP HELD · no decay"; sub = NotaNum.F($"R {Ms(msr)}"); }
+            if (freeze) { title = "Loop held · no decay"; sub = NotaNum.F($"R {Ms(msr)}"); }
             foreach (var t in tapViews) t.Set(fracL, fracR, P(Feedback), On(PingPong), freeze, title, sub, ruler, win);
 
             // Light the repeat that is sounding: the card counts them off the wall clock at the
@@ -247,37 +247,34 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // ======================================================================
         // LEFT — Loop column (Feedback · Spread)
         // ======================================================================
-        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<string> value, string tip)
+        Control LoopFader(int p, string label, Func<string> value, string tip)
         {
-            var f = new DelayFader { Ink = ink, Handle = handle, Width = 18, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
-            f.Changed += v => Raw(p, (float)v);
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
+            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center; lb.Margin = new Thickness(0, 7, 0, 0);
+            var val = Mono("", 7, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Center;
+            var f = FxParts.Fader(engine.DeviceParamName(track, di, p), () => P(p), v => Raw(p, (float)v), value,
+                () => Begin(p), () => End(p), () => Reset(p), val, out var fSync, after: SyncTaps);
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             ToolTip.SetTip(f, tip);
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            var val = Mono("", 7, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Center;
             readouts.Add(() =>
             {
-                f.Set(P(p));
-                val.Text = value();
+                fSync();
                 bool hot = On(Freeze) && p == Feedback;
                 val.Foreground = hot ? AccentBright : P(p) > 0.9f ? NotaPalette.Warning : TextPrimary;   // Freeze is live; > 90 % runs away
                 lb.Foreground = hot ? AccentBright : TextTertiary;
             });
-            return new DockPanel { Width = 44, Children = { Docked(val, Dock.Bottom), Docked(lb, Dock.Bottom), f } };
+            return new DockPanel { Width = 54, Children = { Docked(val, Dock.Bottom), Docked(lb, Dock.Bottom), f } };
         }
-        var loopTitle = Caps("LOOP"); loopTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
-        faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
+        var loopTitle = new TextBlock { Text = "Loop", FontSize = FxParts.TabSize, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, Margin = new Thickness(12, 0, 0, 0) };
+        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0) };
+        faders.Children.Add(LoopFader(Feedback, "Feedback",
             () => On(Freeze) ? "Hold" : Pct(P(Feedback)),
             "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. Double-click resets."));
-        faders.Children.Add(Col(LoopFader(Spread, "SPREAD", NotaPalette.Rose, NotaPalette.RoseBright,
+        faders.Children.Add(Col(LoopFader(Spread, "Spread",
             () => NotaNum.F($"{P(Spread) * 50:0} ms"),
             "Spread — pushes the right channel later, up to 50 ms. Double-click resets."), 1));
         var loopCol = new RuleSection
         {
-            Width = 96, Padding = new Thickness(0, 5, 0, 4),
+            Width = 118, Padding = new Thickness(0, 12, 0, 12),
             Child = new DockPanel { Children = { Docked(loopTitle, Dock.Top), faders } },
         };
         DockPanel.SetDock(loopCol, Dock.Left);
@@ -293,7 +290,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             {
                 Control LR(string ch, int p, Func<bool>? dim)
                 {
-                    var g = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*"), ColumnSpacing = 5, Height = 20 };
+                    var g = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*"), ColumnSpacing = 8, Height = 24 };
                     var lbl = Caps(ch); g.Children.Add(lbl);
                     // Eight divisions: past the almanac's four-choice limit for segments — an
                     // accepted exception, see DESIGN.md § Accepted exceptions.
@@ -301,13 +298,13 @@ internal sealed class DelayDeviceBody : IDeviceBody
                     if (dim is not null) readouts.Add(() => lbl.Foreground = dim() ? TextDisabled : TextTertiary);
                     return g;
                 }
-                return new StackPanel { Spacing = 4, Children = { LR("L", DivL, null), LR("R", DivR, () => On(LinkLR)) } };
+                return new StackPanel { Spacing = 6, Children = { LR("L", DivL, null), LR("R", DivR, () => On(LinkLR)) } };
             }
             Control MsRow()
             {
                 var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,Auto"), Height = 56 };
-                g.Children.Add(K(TimeL, "L TIME", v => Ms(v * 2000), 34, 50, null, SyncTaps));
-                g.Children.Add(Col(K(TimeR, "R TIME", v => On(LinkLR) ? Ms(P(TimeL) * 2000) : Ms(v * 2000), 34, 50, null, SyncTaps), 1));
+                g.Children.Add(K(TimeL, "L time", v => Ms(v * 2000), 34, 50, null, SyncTaps));
+                g.Children.Add(Col(K(TimeR, "R time", v => On(LinkLR) ? Ms(P(TimeL) * 2000) : Ms(v * 2000), 34, 50, null, SyncTaps), 1));
                 g.Children.Add(Col(K(Feedback, "FEEDBACK", Pct, 34, 50, null, SyncTaps), 2));
                 g.Children.Add(Col(K(Spread, "SPREAD", v => NotaNum.F($"{v * 50:0} ms"), 34, 50, null, SyncTaps), 3));
                 var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Children = {
@@ -325,8 +322,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 ? NotaNum.F($"L {DivNames[Sel(DivL, 8)]} · R {DivNames[On(LinkLR) ? Sel(DivL, 8) : Sel(DivR, 8)]}")
                 : On(LinkLR) ? "channels linked" : "channels independent");
 
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"), ColumnSpacing = 5, Height = 20 };
-            head.Children.Add(Caps("MODE"));
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"), ColumnSpacing = 8, Height = 24 };
+            head.Children.Add(Caps("Mode"));
             head.Children.Add(Col(modeSeg, 1));
             head.Children.Add(Col(Latch(LinkLR, "Link", "Link L/R — the right channel follows the left's time"), 2));
             head.Children.Add(Col(Latch(PingPong, "Ping", "Ping-pong — each repeat crosses to the other channel"), 3));
@@ -336,10 +333,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
             var bottom = new Border { Child = host };
             // Automation or a preset can flip Sync under us — follow it.
             readouts.Add(() => { if (On(SyncMode) != ReferenceEquals(host.Content, syncRows)) Refill(); });
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 4), Children = {
+            return new DockPanel { LastChildFill = true, Margin = new Thickness(0, 6, 0, 0), Children = {
                 Docked(head, Dock.Top),
                 Docked(bottom, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 4, 0, 4), Child = NewTaps() } } };
+                new Border { Margin = new Thickness(0, 6, 0, 6), Child = NewTaps() } } };
         }
 
         // ======================================================================
@@ -357,18 +354,18 @@ internal sealed class DelayDeviceBody : IDeviceBody
             readouts.Add(() => { if (!filter.Dragging) filter.Set(P(LowCut), P(HighCut), LowHz(P(LowCut)), HighHz(P(HighCut))); });
 
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,48,*,60,60,Auto"), ColumnSpacing = 4, Height = 58 };
-            g.Children.Add(K(Feedback, "FEEDBACK", v => On(Freeze) ? "HOLD" : Pct(v), 34, 48, null, SyncTaps));
+            g.Children.Add(K(Feedback, "FEEDBACK", v => On(Freeze) ? "Hold" : Pct(v), 34, 48, null, SyncTaps));
             g.Children.Add(Col(K(Diffuse, "DIFFUSE", Pct, 34, 48), 1));
             g.Children.Add(Col(new Border { Margin = new Thickness(2, 2, 2, 6), Child = filter }, 2));
-            g.Children.Add(Col(K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 60, Teal), 3));
-            g.Children.Add(Col(K(WowDepth, "WOW DEPTH", Pct, 34, 60, Teal), 4));
+            g.Children.Add(Col(K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 60), 3));
+            g.Children.Add(Col(K(WowDepth, "WOW DEPTH", Pct, 34, 60), 4));
             var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = {
                 Toggle(Freeze, "Freeze"), Toggle(TapeMode, "Tape mode") } };
             g.Children.Add(Col(toggles, 5));
 
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 4), Children = {
+            return new DockPanel { LastChildFill = true, Margin = new Thickness(0, 6, 0, 0), Children = {
                 Docked(g, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 0, 0, 4), Child = NewTaps() } } };
+                new Border { Margin = new Thickness(0, 0, 0, 6), Child = NewTaps() } } };
         }
 
         // ======================================================================
@@ -392,7 +389,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         Control LevelsTab()
         {
             var wetBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
-            var wetDb = Mono("", 8, TextPrimary); wetDb.Width = 30; wetDb.TextAlignment = TextAlignment.Right;
+            var wetDb = Mono("", 8, TextPrimary); wetDb.Width = 34; wetDb.TextAlignment = TextAlignment.Right;
             readouts.Add(() =>
             {
                 double pk = Sc(S_WetPk);
@@ -401,42 +398,40 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 wetDb.Text = ShortDb(db);
                 wetDb.Foreground = db > -6 ? NotaPalette.Warning : TextPrimary;
             });
-            var wet = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            wet.Children.Add(Caps("WET")); wet.Children.Add(Col(wetBar, 1)); wet.Children.Add(Col(wetDb, 2));
+            var wet = new Grid { ColumnDefinitions = new ColumnDefinitions("49,*,Auto"), ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            wet.Children.Add(Caps("Wet")); wet.Children.Add(Col(wetBar, 1)); wet.Children.Add(Col(wetDb, 2));
 
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            static Border Wide(Border b) { b.HorizontalAlignment = HorizontalAlignment.Stretch; return b; }
             var freezeBtn = Btn("Freeze", () => { SetP(Freeze, On(Freeze) ? 0f : 1f); SyncTaps(); }, "Freeze — hold the loop forever; the input is muted and the repeats stop decaying");
             var freezeTxt = (TextBlock)freezeBtn.Child!;
-            freezeBtn.BorderThickness = new Thickness(1);
             readouts.Add(() =>
             {
                 bool on = On(Freeze);
-                freezeBtn.Background = on ? NotaPalette.AccentSubtle : Raised;
-                freezeBtn.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent;
-                freezeTxt.Foreground = on ? NotaPalette.AccentHover : TextPrimary;
-                freezeTxt.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                freezeBtn.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                freezeTxt.Foreground = on ? AccentBright : TextPrimary;
             });
-            btns.Children.Add(freezeBtn);
-            btns.Children.Add(Col(Btn("Tap tempo", TapTempo, "Tap four times to set the delay time by ear (switches to free ms)"), 1));
+            btns.Children.Add(Wide(freezeBtn));
+            btns.Children.Add(Col(Wide(Btn("Tap tempo", TapTempo, "Tap four times to set the delay time by ear (switches to free ms)")), 1));
 
             var clear = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            clear.Children.Add(Btn("Clear loop", () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), "Empty the delay buffer — silences what is still circulating"));
+            clear.Children.Add(Wide(Btn("Clear loop", () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), "Empty the delay buffer — silences what is still circulating")));
             clear.Children.Add(Col(Toggle(WetOnly, "Wet only"), 1));
 
             var rows = new Control[]
             {
-                SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
-                SliderRow("DRY", DryLevel, v => ShortDb(DryDb(v)), 52, () => On(WetOnly)),
-                SliderRow("OUT", Output, v => ShortDb(OutDb(v))),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
-                SliderRow("FEEDBACK", Feedback, v => On(Freeze) ? "HOLD" : Pct(v), 52),
-                SliderRow("SPREAD", Spread, v => NotaNum.F($"{v * 50:0}"), 52),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
+                SliderRow("Mix", DryWet, Pct, dim: () => On(WetOnly)),
+                SliderRow("Dry", DryLevel, v => ShortDb(DryDb(v)), dim: () => On(WetOnly)),
+                SliderRow("Out", Output, v => ShortDb(OutDb(v))),
+                new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center },
+                SliderRow("Feedback", Feedback, v => On(Freeze) ? "Hold" : Pct(v)),
+                SliderRow("Spread", Spread, v => NotaNum.F($"{v * 50:0}")),
                 btns, clear, wet,
             };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("*,*,*,Auto,*,*,Auto,*,*,*") };
+            var grid = new Grid { RowDefinitions = new RowDefinitions("19,19,19,3,19,19,25,24,*"), Margin = new Thickness(0, 3, 0, 0) };
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
-            return new Border { Padding = new Thickness(8, 4), Child = grid };
+            btns.VerticalAlignment = VerticalAlignment.Bottom; clear.VerticalAlignment = VerticalAlignment.Bottom;
+            return grid;
         }
 
         Control OutputTab()
@@ -445,29 +440,31 @@ internal sealed class DelayDeviceBody : IDeviceBody
             var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
             readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
             static Control Centre(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Mono("0", 7, TextDisabled), GRow(Mono("−12", 7, TextDisabled), 1), GRow(Mono("−48", 7, TextDisabled), 2) } };
+            static TextBlock Axis(string t) { var a = FxParts.Info(t, TextDisabled); a.FontSize = NotaType.Axis; return a; }
+            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Axis("0"), GRow(Axis("−12"), 1), GRow(Axis("−48"), 2) } };
             var meters = Row(4,
                 new StackPanel { Spacing = 2, Children = { meterL, Centre(Caps("L")) } },
                 new StackPanel { Spacing = 2, Children = { meterR, Centre(Caps("R")) } },
                 scale);
             meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "OUT", v => Db(OutDb(v)), 40, 54), meters);
+            var top = Row(8, K(Output, "Out", v => Db(OutDb(v)), 40, 54), meters);
 
-            var mid = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
-                SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 52),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 52) } };
+            var mid = new StackPanel { Spacing = 3, Children = {
+                SliderRow("Mix", DryWet, Pct, dim: () => On(WetOnly)),
+                SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")),
+                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
 
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — repeats with no dry, for a return / send track");
             var comp = Toggle(LatencyComp, "Latency comp.");
             ToolTip.SetTip(comp, "The diffuser lengthens the loop by a fixed group delay; on, the read pointer is pulled back by exactly that so each repeat lands on the set time.");
-            var bottom = new StackPanel { Spacing = 5, Children = { wetOnly, comp } };
+            var bottom = new StackPanel { Spacing = 3, Children = { wetOnly, comp } };
 
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
             ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            return new Border { Padding = new Thickness(8, 5), Child = body };
+            body.Margin = new Thickness(0, 6, 0, 0);
+            return body;
         }
 
         // ======================================================================
@@ -499,50 +496,15 @@ internal sealed class DelayDeviceBody : IDeviceBody
         Control CentreBody(int t) => centreBodies[t] ??= t == 1 ? LoopTab() : TimeTab();
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : LevelsTab();
 
-        var centre = TabFrame(new[] { "Time", "Loop · Wow" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
-        var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
+        var centre = FxParts.Tabs(new[] { "Time", "Loop · Wow" }, centreHost, CentreBody, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
+        var rightFrame = FxParts.Tabs(new[] { "Levels", "Output" }, rightHost, RightBody, _ => { foreach (var a in readouts) a(); });
+        var right = FxParts.Section(rightFrame); right.Width = 200;
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (On(Freeze))
-                return NotaNum.F($"Freeze: loop held, input muted · filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
-            string time = On(SyncMode)
-                ? NotaNum.F($"Sync {DivNames[Sel(DivL, 8)]}{(On(LinkLR) ? "" : NotaNum.F($" / {DivNames[Sel(DivR, 8)]}"))}")
-                : NotaNum.F($"ms · L {MsL():0} / R {(On(LinkLR) ? MsL() : MsR()):0}");
-            string mode = On(PingPong) ? " · ping-pong" : "";
-            string tape = On(TapeMode) ? " · tape" : "";
-            // How many repeats stay above −60 dB — the honest answer to "how long does it ring".
-            float fb = Math.Clamp(P(Feedback), 0.001f, 0.98f);
-            int audible = (int)Math.Floor(Math.Log(0.001) / Math.Log(fb));
-            return NotaNum.F($"{time}{mode}{tape} · feedback {Pct(P(Feedback))} · {audible} audible repeats");
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = On(Freeze) ? AccentBright : TextSecondary;
-            double sr = Sc(S_SampleRate), diff = Sc(S_DiffuseSmp);
-            string comp = P(Diffuse) <= 0.001f || diff < 1 ? "" : On(LatencyComp)
-                ? NotaNum.F($" · diffuser −{diff:0}\u2009smp compensated")
-                : NotaNum.F($" · diffuser +{diff:0}\u2009smp");
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = FxParts.Section(centre); centreBox.Margin = new Thickness(SectionGap, 0);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { loopCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { loopCol, right, centreBox } };
+        var root = bodyRow;
 
         void Refresh()
         {
@@ -552,46 +514,5 @@ internal sealed class DelayDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
         return root;
-
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

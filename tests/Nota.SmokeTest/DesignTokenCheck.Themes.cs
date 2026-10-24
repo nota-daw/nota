@@ -22,7 +22,13 @@ internal static partial class DesignTokenCheck
         "SystemAccentDark1", "SystemAccentDark2", "SystemAccentDark3",
         "ShadowBevel", "ShadowPopover", "ShadowModal",
     };
-    private static readonly HashSet<string> AlphaTokens = new() { "ShadowBevel", "ShadowPopover", "ShadowModal" };
+    // Mirrors NotaThemes.AlphaTokens: the shadows, plus the see-through wells and the device
+    // bevel of the style guide (spec 038).
+    private static readonly HashSet<string> AlphaTokens = new()
+    {
+        "ShadowBevel", "ShadowPopover", "ShadowModal",
+        "Well", "WellTrack", "KnobTrack", "DeviceSectionEdge", "Bevel",
+    };
 
     public static IEnumerable<(bool Ok, string Label)> RunThemes()
     {

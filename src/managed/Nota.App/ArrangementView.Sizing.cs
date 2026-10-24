@@ -25,11 +25,11 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // Row heights: a track row is 30–256 px; drags snap lightly to the three presets.
-    internal const double DefaultRowHeight = 64;
+    internal const double DefaultRowHeight = 54;
     internal const double MinRowHeight = 30;
     internal const double MaxRowHeight = 256;
     internal const double CompactRowHeight = 30;
-    internal const double StandardRowHeight = 64;
+    internal const double StandardRowHeight = 54;
     internal const double LargeRowHeight = 128;
     private const double SnapPx = 4;
     private static readonly double[] RowPresets = { CompactRowHeight, StandardRowHeight, LargeRowHeight };
@@ -59,10 +59,11 @@ public sealed partial class ArrangementView
 
     internal enum HeaderTier { Compact, Standard, Large }
 
-    // The standard header needs ~61 px of visible content (three rows), the large one ~106,
-    // so each tier starts where its layout fits — below 62 a row is compact.
+    // The standard header needs ~50 px (two 18px rows 6 apart, with room above and below), the
+    // large one ~80 (a third row for the input picker), so each tier starts where its layout
+    // fits — below 50 a row is compact, the name row alone.
     internal static HeaderTier TierFor(double height)
-        => height < 62 ? HeaderTier.Compact : height < 112 ? HeaderTier.Standard : HeaderTier.Large;
+        => height < 50 ? HeaderTier.Compact : height < 100 ? HeaderTier.Standard : HeaderTier.Large;
 
     internal static double ClampRowHeight(double h) => Math.Clamp(h, MinRowHeight, MaxRowHeight);
 
@@ -180,7 +181,7 @@ public sealed partial class ArrangementView
         if (_rowResizeChanged) Dispatcher.UIThread.Post(RelayoutRows, DispatcherPriority.Render);
     }
 
-    /// <summary>Double-click on a row seam: the row (or the selection it is in) back to 64 px.</summary>
+    /// <summary>Double-click on a row seam: the row (or the selection it is in) back to the default height.</summary>
     internal void ResetRowHeight(int trackId)
     {
         _rowResizing = false;

@@ -2,11 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the kit macros of the Drum Rack and Nota Rhythm, from the almanac's
-// "1c Macro" cards. Eight knobs over the whole kit, as a 4 × 2 grid: the value in primary text, the
-// name, and in teal where it goes ("→ Reverb · Snare, Clap"). An unassigned macro is a dashed,
-// empty cell. The selected macro's receivers — every mapping, with its range as a teal band and
-// the value it sits at now as a neutral tick — are listed by MacroDetail (the Drum Rack's right
-// panel); the band's ends drag.
+// "1c Macro" cards. Eight knobs over the whole kit, as a 4 × 2 grid of raised slots (like the
+// Drum Rack's pads): the knob, its name and value, and in ink 3 where it goes ("→ Reverb · Snare,
+// Clap"). An unassigned macro is a pressed-in slot in ink 4. The selected macro's receivers —
+// every mapping, with its range as a soft orange band between two orange ends and the value it
+// sits at now as a neutral tick — are listed by Detail (the Drum Rack's right panel); the band's
+// ends drag.
 //
 // Both instruments reach this through IMacroSurface: the rack's macros (RackCore) and the
 // Rhythm's own. A mapping is a RackMacroMapping whose Chain is the pad chain or the voice.
@@ -18,10 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
-using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -119,15 +118,16 @@ internal static class MacroPanel
 
     // ==================== the grid ====================
 
-    /// <summary>The eight macros, 4 × 2. <paramref name="stacked"/>: the knob over its words (the
-    /// Drum Rack's tall cells); otherwise the knob beside them (Rhythm's). A click selects.</summary>
+    /// <summary>The eight macros, 4 × 2, each the knob beside its words. <paramref name="stacked"/>:
+    /// the Drum Rack's tall slots, flush with the pad grid ("Macro 1" over the name over where it
+    /// goes); otherwise Rhythm's short ones ("1 · Tune" over where it goes). A click selects.</summary>
     public static Control Grid(DeviceCardContext ctx, IMacroSurface s, int selected, Action<int> select, List<Action> tick, bool stacked,
                                bool receiversInMenu = false)
     {
         var g = new Grid
         {
             RowDefinitions = new RowDefinitions("*,*"), ColumnDefinitions = new ColumnDefinitions("*,*,*,*"),
-            RowSpacing = stacked ? 5 : 4, ColumnSpacing = stacked ? 5 : 4, Margin = stacked ? new Thickness(7, 5) : new Thickness(6, 5),
+            RowSpacing = 4, ColumnSpacing = 4, Margin = stacked ? new Thickness(0) : new Thickness(6, 5),
         };
         for (int m = 0; m < Count; m++)
         {
@@ -146,8 +146,12 @@ internal static class MacroPanel
         bool assigned = Mappings(s, m).Count > 0;
         string pid = RhythmModel.MacroId(m);
 
-        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned, Format = v => Pct((float)v) };
-        var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
+        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.Size, Height = Knob.Size, IsDim = !assigned, Format = v => Pct((float)v) };
+        var value = new TextBlock
+        {
+            Text = Pct(Value(e, s, m)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary,
+            VerticalAlignment = VerticalAlignment.Center, IsVisible = assigned,
+        };
         knob.ValueChanged += v =>
         {
             e.PluginParamSet(track, di, pi, (float)v);
@@ -167,57 +171,55 @@ internal static class MacroPanel
 
         string name = s.MacroName(m);
         bool custom = name != $"Macro {m + 1}";
-        var title = new TextBlock
-        {
-            Text = assigned || custom ? (stacked ? $"Macro {m + 1} · {name}" : $"{m + 1} · {name}") : (stacked ? $"Macro {m + 1}" : $"{m + 1}"),
-            FontSize = 7, FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis,
-            Foreground = !assigned ? TextDisabled : sel ? AccentBright : NotaPalette.TextStrong,
-        };
+        IBrush nameInk = sel ? AccentBright : assigned ? TextPrimary : TextDisabled;
         var recv = new TextBlock
         {
-            Text = assigned ? Receivers(s, m, compact: !stacked) : "not assigned", FontSize = 7, TextTrimming = TextTrimming.CharacterEllipsis,
-            Foreground = assigned ? NotaPalette.TealBright : TextDisabled,
+            Text = assigned ? Receivers(s, m, compact: true) : stacked ? "not assigned" : "free", FontSize = NotaType.RowLabel, TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = assigned ? TextTertiary : TextDisabled,
         };
-
-        Control content;
+        Control words;
         if (stacked)
         {
-            title.HorizontalAlignment = recv.HorizontalAlignment = value.HorizontalAlignment = HorizontalAlignment.Center;
-            var col = new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { knob } };
-            if (assigned) col.Children.Add(value);
-            col.Children.Add(title); col.Children.Add(recv);
-            knob.HorizontalAlignment = HorizontalAlignment.Center;
-            content = col;
+            // The value under the knob; three lines beside it: "Macro N", the name, where it goes.
+            var idxTb = new TextBlock { Text = $"Macro {m + 1}", FontSize = NotaType.RowLabel, Foreground = sel ? AccentBright : assigned ? TextTertiary : TextDisabled, TextTrimming = TextTrimming.CharacterEllipsis };
+            var nameTb = new TextBlock
+            {
+                Text = assigned || custom ? name : "", FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis, Foreground = nameInk, IsVisible = assigned || custom,
+            };
+            words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { idxTb, nameTb, recv } };
         }
         else
         {
-            var words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { title } };
-            if (assigned) words.Children.Add(value);
-            words.Children.Add(recv);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 3, VerticalAlignment = VerticalAlignment.Center };
-            row.Children.Add(knob);
-            Avalonia.Controls.Grid.SetColumn(words, 1); row.Children.Add(words);
-            content = row;
+            // Two lines: "N · name" with the value at the right, where it goes.
+            var title = new TextBlock
+            {
+                Text = assigned || custom ? $"{m + 1} · {name}" : $"{m + 1}", FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Foreground = nameInk,
+            };
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 4, Children = { title } };
+            Avalonia.Controls.Grid.SetColumn(value, 1); line.Children.Add(value);
+            words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { line, recv } };
         }
+        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = stacked ? 8 : 4, VerticalAlignment = VerticalAlignment.Center };
+        knob.VerticalAlignment = VerticalAlignment.Center;
+        if (stacked)
+        {
+            knob.HorizontalAlignment = value.HorizontalAlignment = HorizontalAlignment.Center;
+            content.Children.Add(new StackPanel { Spacing = 1, MinWidth = 34, VerticalAlignment = VerticalAlignment.Center, Children = { knob, value } });
+        }
+        else content.Children.Add(knob);
+        Avalonia.Controls.Grid.SetColumn(words, 1); content.Children.Add(words);
 
+        // An assigned macro is a raised slot (the soft tint when selected); a free one is pressed in.
         var cell = new Border
         {
-            CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(assigned ? 1 : 0), ClipToBounds = true,
-            Padding = stacked ? new Thickness(3) : new Thickness(2, 3, 3, 3), Cursor = new Cursor(StandardCursorType.Hand),
-            Background = sel ? NotaPalette.AccentSubtle : assigned ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken,
-            BorderBrush = sel ? NotaPalette.BorderBrass : BorderDef, Child = content,
+            CornerRadius = NotaRadius.Field,
+            Padding = stacked ? new Thickness(6, 3, 8, 3) : new Thickness(3, 3, 5, 3), Cursor = new Cursor(StandardCursorType.Hand),
+            Background = sel ? NotaPalette.AccentSoft : assigned ? NotaPalette.SurfaceHover : NotaPalette.Groove, Child = content,
         };
+        if (assigned) cell.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         Control host = cell;
-        if (!assigned)
-        {
-            // An empty macro: a dashed outline instead of the cell edge.
-            var dash = new Rectangle
-            {
-                Stroke = sel ? NotaPalette.BorderBrass : BorderDef, StrokeThickness = 1, StrokeDashArray = new AvaloniaList<double>(3, 2),
-                RadiusX = 4, RadiusY = 4, IsHitTestVisible = false,
-            };
-            host = new Panel { Children = { cell, dash } };
-        }
         ToolTip.SetTip(host, assigned
             ? $"{name} — {Receivers(s, m)}\nDrag to turn · click to show its receivers · right-click to map, rename or clear"
             : $"Macro {m + 1} is free — right-click (or Map) to give it a target");
@@ -267,7 +269,7 @@ internal static class MacroPanel
 
     public static void PromptRename(DeviceCardContext ctx, IMacroSurface s, Control anchor, int m)
     {
-        var box = new TextBox { Text = s.MacroName(m), FontSize = 9, Width = 110, Height = 20, Padding = new Thickness(4, 0) };
+        var box = new TextBox { Text = s.MacroName(m), FontSize = NotaType.Caption, Width = 120, Height = 22, Padding = new Thickness(6, 0) };
         var fly = new Flyout { Content = box };
         box.KeyDown += (_, e) =>
         {
@@ -295,14 +297,18 @@ internal static class MacroPanel
     public static Control Detail(DeviceCardContext ctx, IMacroSurface s, int m, List<Action> tick)
     {
         var e = ctx.Engine;
-        var val = new TextBlock { FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var val = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         tick.Add(() => val.Text = Pct(Value(e, s, m)));
-        var head = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, Margin = new Thickness(8, 0) };
-        head.Children.Add(Cap($"Macro {m + 1}"));
-        var nm = new TextBlock { Text = s.MacroName(m), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        Avalonia.Controls.Grid.SetColumn(nm, 1); head.Children.Add(nm);
+        // Header (like the pad panel's): name · "Macro N" · the value at the right.
+        var head = new Grid { Height = 16, ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Margin = new Thickness(0, 0, 0, 6) };
+        var nm = new TextBlock { Text = s.MacroName(m), FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 100 };
+        head.Children.Add(nm);
+        var idxTb = Cap($"Macro {m + 1}");
+        idxTb.FontWeight = FontWeight.Normal;
+        Avalonia.Controls.Grid.SetColumn(idxTb, 1); head.Children.Add(idxTb);
+        val.HorizontalAlignment = HorizontalAlignment.Right;
         Avalonia.Controls.Grid.SetColumn(val, 2); head.Children.Add(val);
-        var headBar = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
+        var headBar = head;
 
         var idx = new List<int>();
         var maps = Mappings(s, m, idx);
@@ -310,10 +316,10 @@ internal static class MacroPanel
         var order = Enumerable.Range(0, maps.Count).OrderBy(k => maps[k].Chain).ThenBy(k => maps[k].DeviceIndex).ThenBy(k => maps[k].ParamIndex).ToList();
         maps = order.Select(k => maps[k]).ToList();
         idx = order.Select(k => idx[k]).ToList();
-        var rows = new StackPanel { Spacing = 6 };
+        var rows = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 6, 0) };
         var capRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        capRow.Children.Add(Cap("RECEIVERS"));
-        var mm2 = new TextBlock { Text = "min → max", FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        capRow.Children.Add(Cap("Receivers"));
+        var mm2 = new TextBlock { Text = "min → max", FontSize = NotaType.RowLabel, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         Avalonia.Controls.Grid.SetColumn(mm2, 1); capRow.Children.Add(mm2);
         rows.Children.Add(capRow);
         // One receiver per row. When a macro drives several params on each slot, the rows say which.
@@ -323,28 +329,28 @@ internal static class MacroPanel
             rows.Children.Add(new TextBlock
             {
                 Text = "Nothing mapped yet. Map gives this knob a pad control, an instrument param or any of the kit's effects.",
-                FontSize = 8, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
+                FontSize = NotaType.RowLabel, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
             });
         var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
 
         Border mapBtn = null!;
-        mapBtn = Button("Map", teal: true, () => ShowMapMenu(ctx, s, mapBtn, m));
+        mapBtn = Button("Map", () => ShowMapMenu(ctx, s, mapBtn, m));
         ToolTip.SetTip(mapBtn, "Add a receiver: a pad control, the pad's instrument or one of its effects");
         Border renameBtn = null!;
-        renameBtn = Button("Rename", teal: false, () => PromptRename(ctx, s, renameBtn, m));
-        var clearBtn = Button("Clear", teal: false, () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); });
+        renameBtn = Button("Rename", () => PromptRename(ctx, s, renameBtn, m));
+        var clearBtn = Button("Clear", () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); });
         ToolTip.SetTip(clearBtn, "Remove every receiver of this macro");
-        var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
+        var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 6 };
         buttons.Children.Add(mapBtn);
         Avalonia.Controls.Grid.SetColumn(renameBtn, 1); buttons.Children.Add(renameBtn);
         Avalonia.Controls.Grid.SetColumn(clearBtn, 2); buttons.Children.Add(clearBtn);
         var foot = new Border
         {
-            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = buttons,
+            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0), Margin = new Thickness(0, 4, 0, 0), Child = buttons,
         };
 
         DockPanel.SetDock(foot, Dock.Bottom);
-        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(8, 6), Children = { foot, scroll } };
+        var body = new DockPanel { LastChildFill = true, Children = { foot, scroll } };
         DockPanel.SetDock(headBar, Dock.Top);
         return new DockPanel { LastChildFill = true, Children = { headBar, body } };
     }
@@ -355,8 +361,8 @@ internal static class MacroPanel
         var tick = new List<Action>();
         var box = new Border
         {
-            Width = 240, Height = 190, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = Detail(ctx, s, m, tick),
+            Width = 250, Height = 200, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Padding = new Thickness(10, 8), Child = Detail(ctx, s, m, tick),
         };
         var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         timer.Tick += (_, _) => { foreach (var t in tick) t(); };
@@ -381,19 +387,25 @@ internal static class MacroPanel
         double span = Math.Max(1e-6, max - min);
         double fLo = Math.Clamp((mm.RangeMin - min) / span, 0, 1), fHi = Math.Clamp((mm.RangeMax - min) / span, 0, 1);
 
-        var hue = new Border { Width = 3, Height = 8, CornerRadius = NotaRadius.Bar, Background = s.SlotHue(mm.Chain), VerticalAlignment = VerticalAlignment.Center };
+        var hue = new Border { Width = 3, Height = 10, CornerRadius = NotaRadius.Fine, Background = s.SlotHue(mm.Chain), VerticalAlignment = VerticalAlignment.Center };
         string label = withParam ? $"{s.SlotName(mm.Chain)} · {pn}" : s.SlotName(mm.Chain);
-        var name = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Medium, Foreground = TextPrimary, Width = withParam ? 74 : 50, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { Text = label, FontSize = NotaType.RowLabel, Foreground = TextSecondary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         ToolTip.SetTip(name, dev.Length > 0 ? $"{s.SlotName(mm.Chain)} · {Short(dev)} · {pn}" : $"{s.SlotName(mm.Chain)} · {pn}");
 
-        var band = new Border { Height = 3, CornerRadius = NotaRadius.Bar, Background = NotaPalette.Teal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var now = new Border { Width = 2, Height = 7, Background = NotaPalette.VizInk, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        // The range: a groove with the soft orange tint between its two ends (orange lines, the
+        // values), and a neutral tick where the target is now.
+        var band = new Border { Background = NotaPalette.AccentSoft, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var endLo = new Border { Width = 2, Background = NotaPalette.Accent, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var endHi = new Border { Width = 2, Background = NotaPalette.Accent, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var now = new Border { Width = 1.5, Background = NotaPalette.VizInk, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
+        var groove = new Border { CornerRadius = NotaRadius.Fine, Background = NotaPalette.Groove, ClipToBounds = true, Child = new Panel { Children = { band, endLo, endHi, now } } };
+        groove.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
         var track = new Panel
         {
-            Height = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Height = 3, CornerRadius = NotaRadius.Bar, Background = NotaPalette.BgSunken, VerticalAlignment = VerticalAlignment.Center }, band, now },
+            Height = 12, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), VerticalAlignment = VerticalAlignment.Center,
+            Children = { new Border { Height = 8, VerticalAlignment = VerticalAlignment.Center, Child = groove } },
         };
-        var vals = new TextBlock { FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, Width = 46, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var vals = new TextBlock { FontSize = NotaType.RowLabel, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, TextAlignment = TextAlignment.Right, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         string unit = s.TargetUnit(mm);
         void Text() => vals.Text = $"{s.FormatTarget(mm, (float)(min + fLo * span))}–{s.FormatTarget(mm, (float)(min + fHi * span))}"
                                    + (unit.Length > 0 ? "\u2009" + unit : "");
@@ -402,8 +414,10 @@ internal static class MacroPanel
             double w = track.Bounds.Width;
             double a = Math.Min(fLo, fHi), b = Math.Max(fLo, fHi);   // an inverted range still draws
             band.Margin = new Thickness(a * w, 0, 0, 0); band.Width = Math.Max(2, (b - a) * w);
+            endLo.Margin = new Thickness(Math.Clamp(a * w - 1, 0, Math.Max(0, w - 2)), 0, 0, 0);
+            endHi.Margin = new Thickness(Math.Clamp(b * w - 1, 0, Math.Max(0, w - 2)), 0, 0, 0);
             double cur = Math.Clamp((s.TargetValue(mm) - min) / span, 0, 1);
-            now.Margin = new Thickness(Math.Clamp(cur * w - 1, 0, Math.Max(0, w - 2)), 0, 0, 0);
+            now.Margin = new Thickness(Math.Clamp(cur * w - 0.75, 0, Math.Max(0, w - 1.5)), 0, 0, 0);
         }
         Text();
         tick.Add(Layout);
@@ -429,11 +443,13 @@ internal static class MacroPanel
         track.PointerCaptureLost += (_, _) => { if (drag != 0) { drag = 0; ctx.NotifyChanged(); } };
         ToolTip.SetTip(track, "The range the macro sweeps: drag either end · the tick is where it is now");
 
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };
+        // Two lines: hue · pad (· param) · values, then the range under the name.
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 6, RowSpacing = 2, Background = Brushes.Transparent };
         g.Children.Add(hue);
         Avalonia.Controls.Grid.SetColumn(name, 1); g.Children.Add(name);
-        Avalonia.Controls.Grid.SetColumn(track, 2); g.Children.Add(track);
-        Avalonia.Controls.Grid.SetColumn(vals, 3); g.Children.Add(vals);
+        Avalonia.Controls.Grid.SetColumn(vals, 2); g.Children.Add(vals);
+        Avalonia.Controls.Grid.SetRow(track, 1); Avalonia.Controls.Grid.SetColumn(track, 1); Avalonia.Controls.Grid.SetColumnSpan(track, 2);
+        g.Children.Add(track);
         g.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(g).Properties.IsRightButtonPressed) return;
@@ -454,22 +470,12 @@ internal static class MacroPanel
         Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// <summary>A 16px action button; the teal one is Map (it adds modulation).</summary>
-    public static Border Button(string text, bool teal, Action click)
+    /// <summary>A raised 22px device button (the kit's TextButton, filling its column).</summary>
+    public static Border Button(string text, Action click)
     {
-        var tb = new TextBlock
-        {
-            Text = text, FontSize = 7, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Foreground = teal ? NotaPalette.TealBright : NotaPalette.TextStrong,
-        };
-        IBrush rest = teal ? NotaPalette.Wash(NotaPalette.Teal, 0x33) : NotaPalette.SurfaceRaised;
-        var b = new Border
-        {
-            Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
-            Background = rest, BorderBrush = teal ? NotaPalette.Teal : BorderDef, Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
-        };
-        b.PointerEntered += (_, _) => b.Background = teal ? NotaPalette.Wash(NotaPalette.Teal, 0x55) : NotaPalette.SurfaceHover;
-        b.PointerExited += (_, _) => b.Background = rest;
+        var b = TextButton(text);
+        b.Height = 22; b.Padding = new Thickness(4, 0); b.HorizontalAlignment = HorizontalAlignment.Stretch;
+        if (b.Child is TextBlock tb) { tb.HorizontalAlignment = HorizontalAlignment.Center; tb.VerticalAlignment = VerticalAlignment.Center; }
         b.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;

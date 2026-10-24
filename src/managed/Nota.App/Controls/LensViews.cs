@@ -114,7 +114,7 @@ internal static class LensInk
     public static IBrush Trace => NotaPalette.VizInk;            // the signal at rest: neutral ink
     public static IBrush TraceLit => NotaPalette.AccentBright;   // live state only: the hover cursor, a locked trigger
     public static IBrush Fill => NotaPalette.Wash(NotaPalette.VizInk, 0x22);
-    public static IBrush Hold => NotaPalette.Teal;
+    public static IBrush Hold => NotaPalette.TextTertiary;   // a second source: a darker grey
     public static IBrush Axis => NotaPalette.TextAxis;
     public static IBrush Label => NotaPalette.TextTertiary;
     public static IPen GridFaint => new Pen(NotaPalette.GridBeat, 1);
@@ -125,7 +125,7 @@ internal static class LensInk
     /// keeps its case ("Scope · 2.00 ms/div").</summary>
     public static void Title(DrawingContext ctx, string caps, string value, double x = 6, double y = 4)
     {
-        var head = new FormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        var head = new NotaFormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansSemiBold, NotaGraph.TitleSize, Label);
         ctx.DrawText(head, new Point(x, y));
         if (value.Length > 0) Text(ctx, value, x + head.Width + 5, y, Axis, 8);
@@ -144,12 +144,12 @@ internal static class LensInk
     }
 
     public static void Text(DrawingContext ctx, string s, double x, double y, IBrush ink, double size = 7, bool mono = true)
-        => ctx.DrawText(new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Mono : NotaFonts.SansMedium, size, ink), new Point(x, y));
+        => ctx.DrawText(new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, ink), new Point(x, y));
 
     public static double TextW(string s, double size = 7, bool mono = true)
-        => new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Mono : NotaFonts.SansMedium, size, NotaPalette.TextPrimary).Width;
+        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, NotaPalette.TextPrimary).Width;
 }
 
 // ===========================================================================
@@ -215,7 +215,7 @@ internal sealed class LensSpectrumView : Control
                 double hz = 440.0 * Math.Pow(2, (12 * oct - 57) / 12.0);   // C of each octave
                 if (hz < _d.FreqLo || hz >= _d.FreqHi) continue;
                 double x = _d.FracOf(hz) * w;
-                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x22), 1), new Point(x, 0), new Point(x, plotH));
+                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x40), 1), new Point(x, 0), new Point(x, plotH));
             }
         }
 
@@ -259,7 +259,7 @@ internal sealed class LensSpectrumView : Control
                 }
                 if (started) hc.EndFigure(false);
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xB4), 1), hold);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1), hold);
         }
         ctx.DrawGeometry(null, new Pen(LensInk.Trace, NotaGraph.PrimaryWidth * (0.6 + 0.6 * _d.Bright)), line);
 
@@ -394,7 +394,7 @@ internal sealed class LensScopeView : Control
 
         // Trigger level (draggable) + the trigger point, pinned at 25 % like a bench scope.
         double ty = YOf(_d.TrigLevel, h);
-        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xC0), 1, new DashStyle(new double[] { 3, 4 }, 0)), new Point(0, ty), new Point(w, ty));
+        ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 4 }, 0)), new Point(0, ty), new Point(w, ty));
         ctx.DrawRectangle(LensInk.Hold, null, new Rect(0, ty - 3.5, 5, 7));
         double tx = w * 0.25;
         ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x80), 1), new Point(tx, 0), new Point(tx, h));
@@ -549,7 +549,7 @@ internal sealed class LensWaterfallView : Control
                 double hz = 440.0 * Math.Pow(2, (12 * oct - 57) / 12.0);   // C of each octave
                 if (hz < _d.FreqLo || hz >= _d.FreqHi) continue;
                 double y = (1 - _d.FracOf(hz)) * plotH;
-                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x33), 1), new Point(0, y), new Point(w, y));
+                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x50), 1), new Point(0, y), new Point(w, y));
             }
         }
         if (_cursorFrac >= 0)
@@ -562,80 +562,5 @@ internal sealed class LensWaterfallView : Control
         string span = NotaNum.F($"−{_d.WfSpanSec:0} s");
         LensInk.Text(ctx, span, 4, plotH + 1, LensInk.Axis);
         LensInk.Text(ctx, "now", w - LensInk.TextW("now") - 4, plotH + 1, LensInk.Axis);
-    }
-}
-
-// ===========================================================================
-//  Scale rail slider
-// ===========================================================================
-/// <summary>The thin vertical slider of the Lens Scale rail: a sunken groove with a
-/// filled column and a bright cap (accent while dragged). Drag or wheel; double-click resets.</summary>
-internal sealed class LensVSlider : Control
-{
-    private readonly SolidColorBrush _ink;
-    private double _value;
-    private bool _drag;
-    private double _lastY;
-
-    public double Default { get; set; } = -1;
-    public bool Dragging => _drag;
-    public event Action<double>? ValueChanged;
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-
-    public double Value { get => _value; set { _value = Math.Clamp(value, 0, 1); InvalidateVisual(); } }
-
-    public LensVSlider(double value, SolidColorBrush ink)
-    {
-        _value = Math.Clamp(value, 0, 1);
-        _ink = ink;
-        Width = 16;
-        Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Default >= 0) { Value = Default; ValueChanged?.Invoke(_value); e.Handled = true; return; }
-        _drag = true; _lastY = e.GetPosition(this).Y;
-        GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        if (!_drag) return;
-        double y = e.GetPosition(this).Y;
-        Value = _value + (_lastY - y) / Math.Max(24, Bounds.Height);
-        _lastY = y;
-        ValueChanged?.Invoke(_value);
-    }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); e.Pointer.Capture(null); }
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-    {
-        if (!WheelInput.IsVertical(e)) return;
-        Value = _value + WheelInput.Notches(e.Delta.Y) * 0.02;
-        ValueChanged?.Invoke(_value);
-        e.Handled = true;
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var r = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), new RoundedRect(r.Deflate(0.5), w / 2));
-        double fillH = _value * (h - 4);
-        ctx.DrawRectangle(NotaPalette.Wash(_ink, 0x4C), null,
-            new RoundedRect(new Rect(1.5, h - 2 - fillH, w - 3, fillH), (w - 3) / 2));
-        double capY = Math.Clamp(h - 2 - fillH, 2, h - 4);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : _ink, null, new RoundedRect(new Rect(1, capY - 1, w - 2, 2.5), 1.5));
     }
 }

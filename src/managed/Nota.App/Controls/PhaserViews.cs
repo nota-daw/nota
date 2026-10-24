@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Phaser views (device kind 24) — the pictures on the Phaser card:
-//   PhaserResponseView — the live all-pass response of both channels (L neutral ink, R teal) over 20 Hz …
+//   PhaserResponseView — the live all-pass response of both channels (L neutral ink, R a darker grey) over 20 Hz …
 //                        20 kHz, −36 … +12 dB, the left corner dashed and every notch ticked on
 //                        the top edge. Drag left / right moves Center, up / down the Feedback;
 //                        double-click resets both.
@@ -176,12 +176,12 @@ internal sealed class PhaserResponseView : Control
             ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(X(_fcL), 0), new Point(X(_fcL), h));
 
         // R first so L reads on top where they meet.
-        Curve(_fcR, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(_fcL, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.6, 1);
+        Curve(_fcR, _on ? NotaPalette.TextTertiary : NotaPalette.TextDisabled, 1.2, 1);
+        Curve(_fcL, _on ? NotaPalette.VizInk : NotaPalette.TextDisabled, 1.6, 1);
 
         if (_on)
         {
-            Ticks(_fcR, NotaPalette.TealBright);
+            Ticks(_fcR, NotaPalette.TextTertiary);
             Ticks(_fcL, NotaPalette.VizInk);
         }
 
@@ -249,23 +249,23 @@ internal sealed class PhaserSweepView : Control
         double Y(double f) => h * (34 - Math.Clamp(Math.Log(Math.Max(f, 1e-3) / 20) / Math.Log(1000), 0, 1) * 28) / 40;
         ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(X(1), 0), new Point(X(1), h));
 
-        Curve(_off, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.4, 1);
+        Curve(_off, _on ? NotaPalette.TextTertiary : NotaPalette.TextDisabled, 1.2, 1);
+        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextDisabled, 1.4, 1);
 
-        var tl = NotaGraph.AxisText("fc 20k", size: 6);
+        var tl = NotaGraph.AxisText("fc 20k");
         ctx.DrawText(tl, new Point(5, 1));
-        var bl = NotaGraph.AxisText("20", size: 6);
+        var bl = NotaGraph.AxisText("20");
         ctx.DrawText(bl, new Point(5, h - 1 - bl.Height));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
-        var br = NotaGraph.AxisText(span, size: 6);
+        var br = NotaGraph.AxisText(span);
         ctx.DrawText(br, new Point(w - 5 - br.Width, h - 1 - br.Height));
 
         if (_on)
         {
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
-            DrawDot(new Point(hx, Y(_fcR)), NotaPalette.TealBright);
-            DrawDot(new Point(hx, Y(_fcL)), NotaPalette.VizInk);
+            DrawDot(new Point(hx, Y(_fcR)), NotaPalette.TextTertiary);
+            DrawDot(new Point(hx, Y(_fcL)), NotaPalette.Accent);   // the live value
         }
 
         void DrawDot(Point p, IBrush ink) => ctx.DrawEllipse(ink, new Pen(NotaGraph.Ground, 2), p, 3, 3);

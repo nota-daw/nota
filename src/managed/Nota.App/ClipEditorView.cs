@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Clip for MIDI clips (nota-design "Nota Clip Editor" 1a): a 38px header — the clip
-// cell, Notes | Envelopes, then the Scale switch with its key, mode and "Remove out of
-// scale", and the Tools toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
-// the 272px clip-tools panel (MidiToolsView). Envelopes is a mode of the same canvas: the
+// Detail · Clip for MIDI clips (style guide): a 38px header — the clip cell, Notes |
+// Envelopes and the help hint, then the Scale switch with its key, mode and "Remove out of
+// scale", and the Tools toggle — over the settings strip (ClipPropsView), then the piano roll
+// (PianoRollView) with the 272px clip-tools panel (MidiToolsView) beside it. Envelopes is a mode of the same canvas: the
 // notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
 // brass, on the roll's own beat axis so zoom and scroll carry over. With several clips open
 // (specs/029) the header, inspector and envelopes follow the roll's active clip.
@@ -46,18 +46,16 @@ public sealed class ClipEditorView : UserControl
             clipName = ClipName(trackId, clipIndex, clipName);
         }
 
-        // Inspector | roll | clip-tools panel. The tools panel is a toggle rather than a
-        // tab because its whole point is watching the roll change while you turn a knob.
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        // Settings strip over roll | clip-tools panel. The tools panel is a toggle rather than
+        // a tab because its whole point is watching the roll change while you turn a knob.
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         _props = new ClipPropsView(roll, startBeat);
-        grid.Children.Add(_props);
-        Grid.SetColumn(roll, 1);
         grid.Children.Add(roll);
         _tools = new MidiToolsView(roll) { IsVisible = false };
-        Grid.SetColumn(_tools, 2);
+        Grid.SetColumn(_tools, 1);
         grid.Children.Add(_tools);
 
-        _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip" } };
+        _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip", "flat" } };
         _toolsToggle.Click += (_, _) => SetTools(_toolsToggle.IsChecked == true);
 
         var tabs = Segments(new[] { "Notes", "Envelopes" }, 0, i => ShowTab(i == 1), out _setTab);
@@ -67,9 +65,14 @@ public sealed class ClipEditorView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 12,
             Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
-        var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar);
+        var hint = Hint("Double-click — add or delete · edge — length · Shift — add to selection");
+        hint.TextWrapping = TextWrapping.NoWrap;
+        hint.TextTrimming = TextTrimming.CharacterEllipsis;
+        hint.VerticalAlignment = VerticalAlignment.Center;
+        var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, hint, right, double.NaN, out _nameText, out _colorBar);
         DockPanel.SetDock(header, Dock.Top);
-        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+        DockPanel.SetDock(_props, Dock.Top);
+        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, _props, grid } };
         roll.ActiveClipChanged += OnActiveClipChanged;
         if (roll.Clips.IsMulti) OnActiveClipChanged();   // envelopes on the active clip's place on the axis
     }
@@ -106,7 +109,7 @@ public sealed class ClipEditorView : UserControl
     {
         var b = new ToggleButton
         {
-            Content = new Glyph(GlyphKind.Speaker, 14), Padding = new Thickness(8, 0), Classes = { "chip" },
+            Content = new Glyph(GlyphKind.Speaker, 14), Padding = new Thickness(8, 0), Classes = { "chip", "flat" },
             IsChecked = PianoRollView.AuditionEnabled,
         };
         ToolTip.SetTip(b, "Hear notes as you place, click or drag them");
@@ -120,7 +123,7 @@ public sealed class ClipEditorView : UserControl
     // Fit to notes (⇧F): rows zoom so every note of the clip is in view.
     private static Control FitControl(PianoRollView roll)
     {
-        var b = new Button { Content = "Fit", Padding = new Thickness(10, 0), Classes = { "chip" } };
+        var b = new Button { Content = "Fit", Padding = new Thickness(10, 0), Classes = { "chip", "flat" } };
         ToolTip.SetTip(b, "Fit to notes (⇧F)");
         b.Click += (_, _) => roll.FitToNotes();
         return b;
@@ -131,6 +134,7 @@ public sealed class ClipEditorView : UserControl
     {
         var (button, chip) = SnapChip.Create(EditorKind.PianoRoll, () => roll.SnapGridState);
         roll.GridChanged += chip.Refresh;
+        button.Classes.Add("flat");
         return button;
     }
 
@@ -176,6 +180,7 @@ public sealed class ClipEditorView : UserControl
         var mode = Dropdown(_modeText, a => ShowMenu(a, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); PaintScale(); }));
         // Deletes the notes the overlay dims; live only while some note is out of scale.
         _dropOutOfScale = ClipEditorKit.Button("Remove out of scale", () => Roll.RemoveOutOfScaleNotes());
+        _dropOutOfScale.Classes.Add("flat");
         _dropOutOfScale.HorizontalAlignment = HorizontalAlignment.Left;
         _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
@@ -214,7 +219,7 @@ public sealed class ClipEditorView : UserControl
             var chip = new Border
             {
                 Height = 22, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 0), Margin = new Thickness(10, 8, 0, 0),
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0), Margin = new Thickness(10, 8, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel
@@ -446,7 +451,7 @@ public sealed class ClipEditorView : UserControl
             if (Background is not null) ctx.FillRectangle(Background, new Rect(0, 0, w, h));
             if (_pts.Count == 0)   // empty state: one Ink 5 line
             {
-                var ft = new FormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
+                var ft = new NotaFormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
                 ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
                 return;
             }

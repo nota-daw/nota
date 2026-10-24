@@ -70,7 +70,7 @@ public sealed class MidiMapView : UserControl
         top.Children.Add(del);
 
         var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        src.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        src.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         // Source on the left; the invert toggle rides the right of the same line so the
         // range row below has room for just MIN / MAX.
         var srcRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -79,7 +79,7 @@ public sealed class MidiMapView : UserControl
             // Nota Remote: a drawn phone outline marks the source, as the gamepad has its word.
             var phone = new Border
             {
-                Width = 7, Height = 11, CornerRadius = NotaRadius.Bar, BorderThickness = new Avalonia.Thickness(1.3),
+                Width = 7, Height = 11, CornerRadius = NotaRadius.Fine, BorderThickness = new Avalonia.Thickness(1.3),
                 BorderBrush = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center,
             };
             srcRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { phone, src } });

@@ -83,8 +83,9 @@ internal static class ConsortJacks
     public static int Points => Sources.Length - 1 + Dests.Length - 1;
 
     // Audio cables are the primary source and draw in neutral ink; envelope and modulation keep their chromas.
-    public static IBrush ToneBrush(Tone t) => t switch { Tone.Env => NotaPalette.Teal, Tone.Audio => NotaPalette.VizInk, _ => ChamberInk.Mauve };
-    public static Color ToneColor(Tone t) => t switch { Tone.Env => NotaPalette.Teal.Color, Tone.Audio => NotaPalette.VizInk.Color, _ => ChamberInk.MauveColor };
+    // Greys told apart by shade (style guide): audio the brightest, envelopes, then modulation.
+    public static IBrush ToneBrush(Tone t) => t switch { Tone.Env => NotaPalette.TextSecondary, Tone.Audio => NotaPalette.VizInk, _ => NotaPalette.TextTertiary };
+    public static Color ToneColor(Tone t) => t switch { Tone.Env => NotaPalette.TextSecondary.Color, Tone.Audio => NotaPalette.VizInk.Color, _ => NotaPalette.TextTertiary.Color };
     public static Jack Src(int i) => i > 0 && i < Sources.Length ? Sources[i] : Sources[0];
     public static Jack Dst(int i) => i > 0 && i < Dests.Length ? Dests[i] : Dests[0];
     public static string ShortName(string n) => n.Replace(" out", "").Replace(" in", "").Replace("Osc ", "Osc").Replace("Filt ", "Filt").Replace(" cutoff", "").Replace("Delay ", "Dly ").Replace(" pitch", "").Replace("Env ", "Env");
@@ -167,7 +168,7 @@ internal sealed class ConsortJackDot : Control
 // ---- dual transistor-ladder response: L (slate) / R (neutral ink) or the series HP→LP curve ----
 internal sealed class ConsortFilterCurve : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso, _space, _comp;
     private int _mode = 1;
     private bool _drag;
@@ -239,23 +240,23 @@ internal sealed class ConsortFilterCurve : Control
         }
         else
         {
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Slate, 1.5), Curve(x => Db(Mag(Wr(x, _cut), _mode == 2))));
+            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.5), Curve(x => Db(Mag(Wr(x, _cut), _mode == 2))));
             ctx.DrawGeometry(null, new Pen(ink, 1.5), Curve(x => Db(Mag(Wr(x, cutB), false))));
         }
         string Hz(double n) { double hz = 20 * Math.Pow(1000, n); return hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz"; }
-        var lt = new FormattedText((_mode == 0 ? "HP " : "L ") + Hz(_cut), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _mode == 0 ? NotaPalette.TextSecondary : ChamberInk.Slate);
-        var rt = new FormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextPrimary);
+        var lt = new NotaFormattedText((_mode == 0 ? "HP " : "L ") + Hz(_cut), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _mode == 0 ? NotaPalette.TextSecondary : NotaPalette.TextTertiary);
+        var rt = new NotaFormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextPrimary);
         ctx.DrawText(lt, new Point(4, 3));
         ctx.DrawText(rt, new Point(w - rt.Width - 4, 3));
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(Mag(1, _mode == 2 || _mode == 0))), 4, h - 4);
-        ctx.DrawEllipse(_drag ? NotaPalette.Accent : _mode == 1 ? ChamberInk.Slate : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
+        ctx.DrawEllipse(_drag ? NotaPalette.Accent : _mode == 1 ? NotaPalette.TextTertiary : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
     }
 }
 
 // ---- BBD taps: the L lane on top, R below; bar height = level of each repeat ----
 internal sealed class ConsortDelayView : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _tl = 0.26, _tr = 0.39, _fb = 0.6, _mix = 0.4;
     private bool _ping = true, _digital;
     public ConsortDelayView() { ClipToBounds = true; }
@@ -282,7 +283,7 @@ internal sealed class ConsortDelayView : Control
         }
         double span = Math.Max(_tl, _tr) * 4.2;
         span = ChamberInk.Axis(0, span);
-        var bl = ChamberInk.Slate; var br = NotaPalette.VizInk;
+        var bl = NotaPalette.TextTertiary; var br = NotaPalette.VizInk;
         foreach (var (t, a, r) in taps)
         {
             if (t > span) continue;
@@ -292,12 +293,12 @@ internal sealed class ConsortDelayView : Control
             if (!r) ctx.FillRectangle(bl, new Rect(x - 1.5, mid - 3 - ht, 3, ht));
             else ctx.FillRectangle(br, new Rect(x - 1.5, mid + 3, 3, ht));
         }
-        var ll = new FormattedText("L", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, bl);
-        var rl = new FormattedText("R", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, br);
+        var ll = new NotaFormattedText("L", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, bl);
+        var rl = new NotaFormattedText("R", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, br);
         ctx.DrawText(ll, new Point(4, 2)); ctx.DrawText(rl, new Point(4, h - rl.Height - 1));
-        var info = new FormattedText($"fb {_fb * 100:0}\u2009% · {(_digital ? "digital" : "compander on")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextSecondary);
+        var info = new NotaFormattedText($"fb {_fb * 100:0}\u2009% · {(_digital ? "digital" : "compander on")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextSecondary);
         ctx.DrawText(info, new Point(w - info.Width - 4, 2));
-        var ax = new FormattedText(ChamberInk.AxisLabel(span), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextDisabled);
+        var ax = new NotaFormattedText(ChamberInk.AxisLabel(span), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(ax, new Point(w - ax.Width - 4, h - ax.Height - 1));
     }
 }
@@ -305,7 +306,7 @@ internal sealed class ConsortDelayView : Control
 // ---- the 16 step cells: type (note / ratchet / tie / rest), playhead, length. Click / drag paints ----
 internal sealed class ConsortStepGrid : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private readonly int[] _type = new int[16];
     private int _len = 16, _play = -1, _ratchet = 3;
     private bool _drag; private int _last = -1;
@@ -348,7 +349,7 @@ internal sealed class ConsortStepGrid : Control
         if (w < 16 || h < 4) return;
         const double gap = 3;
         double cw = (w - gap * 15) / 16;
-        var ac = NotaPalette.VizInk.Color; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
+        var ac = NotaPalette.VizInk.Color; var mv = NotaPalette.TextSecondary.Color; var tl = NotaPalette.TextTertiary.Color;
         for (int i = 0; i < 16; i++)
         {
             var r = new Rect(i * (cw + gap) + 0.5, 0.5, cw - 1, h - 1);
@@ -358,7 +359,7 @@ internal sealed class ConsortStepGrid : Control
             IBrush fill = t == 3 ? NotaPalette.BgSunken : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0x40 : 0x14), c.R, c.G, c.B));
             IBrush stroke = t == 3 ? NotaPalette.BorderDefault : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0xE0 : 0x50), c.R, c.G, c.B));
             ctx.DrawRectangle(fill, new Pen(stroke, i == _play ? 2 : 1), r, 3, 3);
-            var ft = new FormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, inLen ? (t == 3 ? NotaPalette.TextDisabled : NotaPalette.TextPrimary) : NotaPalette.TextDisabled);
+            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, inLen ? (t == 3 ? NotaPalette.TextDisabled : NotaPalette.TextPrimary) : NotaPalette.TextDisabled);
             ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
             if (i == _play) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1), r.Inflate(1.5), 4, 4);
         }
@@ -369,7 +370,7 @@ internal sealed class ConsortStepGrid : Control
 internal sealed class ConsortPitchLane : Control
 {
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private readonly int[] _p = new int[16], _t = new int[16];
     private int _len = 16, _play = -1, _dragStep = -1;
     private bool _arp;
@@ -413,13 +414,13 @@ internal sealed class ConsortPitchLane : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 16 || h < Top + 6) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var cap = new FormattedText(_arp ? "Pitch · arp (step types shape the rhythm)" : "Pitch · step offsets from the key", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 7, NotaPalette.TextTertiary);
+        var cap = new NotaFormattedText(_arp ? "Pitch · arp (step types shape the rhythm)" : "Pitch · step offsets from the key", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(cap, new Point(6, 3));
         double hh = h - Top - 4, cw = w / 16;
         double Y(int p) => Top + (1 - (p + 24) / 48.0) * hh;
         var grid = new Pen(NotaPalette.SurfaceCard, 1);
         foreach (int p in new[] { -12, 0, 12 }) ctx.DrawLine(grid, new Point(0, Y(p)), new Point(w, Y(p)));
-        var ac = NotaPalette.VizInk.Color; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
+        var ac = NotaPalette.VizInk.Color; var mv = NotaPalette.TextSecondary.Color; var tl = NotaPalette.TextTertiary.Color;
         for (int i = 0; i < 16; i++)
         {
             if (_t[i] == 3) continue;
@@ -438,7 +439,7 @@ internal sealed class ConsortPitchLane : Control
         }
         if (_dragStep >= 0)
         {
-            var ft = new FormattedText(_p[_dragStep] == 0 ? "0\u2009st" : $"{_p[_dragStep]:+0;−0}\u2009st", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.AccentBright);
+            var ft = new NotaFormattedText(_p[_dragStep] == 0 ? "0\u2009st" : $"{_p[_dragStep]:+0;−0}\u2009st", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.AccentBright);
             double x = Math.Clamp((_dragStep + 0.5) * cw - ft.Width / 2, 2, w - ft.Width - 2);
             ctx.DrawText(ft, new Point(x, Math.Max(Top, Y(_p[_dragStep]) - 16)));
         }
@@ -450,7 +451,7 @@ internal sealed class ConsortPitchLane : Control
 //      jack to pull its cables, right-click for its cable list. ----
 internal sealed class ConsortJackField : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
@@ -479,11 +480,14 @@ internal sealed class ConsortJackField : Control
         if (_list)
         {
             double colW = w / _rows.Count;
+            int most = 1;
+            foreach (var col in _rows) { int n = 0; foreach (var g in col) n += g.Jacks.Length; most = Math.Max(most, n); }
+            double pitch = Math.Min(15.5, (h - 30) / Math.Max(1, most - 1));   // the longest column fits the height
             for (int c = 0; c < _rows.Count; c++)
             {
                 int k = 0;
                 foreach (var g in _rows[c])
-                    foreach (var j in g.Jacks) { _pos[(j.Out, j.Index)] = new Point(c * colW + 10, 24 + k * 15.5); k++; }
+                    foreach (var j in g.Jacks) { _pos[(j.Out, j.Index)] = new Point(c * colW + 10, 23 + k * pitch); k++; }
             }
             return;
         }
@@ -584,8 +588,8 @@ internal sealed class ConsortJackField : Control
             double colW = w / _rows.Count;
             for (int c = 0; c < _rows.Count; c++)
             {
-                var t = new FormattedText(NotaText.Label(_rows[c][0].Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, 7.5, NotaPalette.TextTertiary);
-                ctx.DrawText(t, new Point(c * colW + 4, 4));
+                var t = new NotaFormattedText(NotaText.Label(_rows[c][0].Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, NotaGraph.AxisSize, NotaPalette.TextTertiary);
+                ctx.DrawText(t, new Point(c * colW + 4, 2));
             }
         }
         else
@@ -595,7 +599,7 @@ internal sealed class ConsortJackField : Control
                 foreach (var g in _rows[r])
                 {
                     if (g.Jacks.Length == 0 || !_pos.TryGetValue((g.Jacks[0].Out, g.Jacks[0].Index), out var p0)) continue;
-                    var t = new FormattedText(NotaText.Label(g.Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, 7, NotaPalette.TextTertiary);
+                    var t = new NotaFormattedText(NotaText.Label(g.Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, NotaGraph.AxisSize, NotaPalette.TextTertiary);
                     ctx.DrawText(t, new Point(p0.X - 5, r * rowH + rowH * 0.5 - 17));
                 }
         }
@@ -612,12 +616,12 @@ internal sealed class ConsortJackField : Control
                     if (col != null) ctx.DrawEllipse(col, null, p, 2, 2);
                     if (_list)
                     {
-                        var t = new FormattedText(j.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 8.5, col != null || hov ? NotaPalette.TextPrimary : NotaPalette.TextTertiary);
+                        var t = new NotaFormattedText(j.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaGraph.AxisSize, col != null || hov ? NotaPalette.TextPrimary : NotaPalette.TextTertiary);
                         ctx.DrawText(t, new Point(p.X + 10, p.Y - t.Height / 2));
                     }
                     else
                     {
-                        var t = new FormattedText(j.Short, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.Floor, col != null ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
+                        var t = new NotaFormattedText(j.Short, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Floor, col != null ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
                         ctx.DrawText(t, new Point(p.X - t.Width / 2, p.Y + 7));
                     }
                 }
@@ -640,7 +644,7 @@ internal sealed class ConsortJackField : Control
             var j = hk.Item1 ? ConsortJacks.Src(hk.Item2) : ConsortJacks.Dst(hk.Item2);
             if (_pos.TryGetValue(hk, out var p))
             {
-                var t = new FormattedText($"{j.Name} · {(j.Out ? "out" : "in")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 8, NotaPalette.TextPrimary);
+                var t = new NotaFormattedText($"{j.Name} · {(j.Out ? "out" : "in")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary);
                 double x = Math.Clamp(p.X - t.Width / 2, 1, w - t.Width - 1), y = p.Y - 21;
                 if (y < 1) y = p.Y + 15;
                 ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderStrong, 1), new Rect(x - 3, y - 1, t.Width + 6, t.Height + 2), 3, 3);
@@ -653,7 +657,7 @@ internal sealed class ConsortJackField : Control
 // ---- source × destination matrix: rows = sources, columns = destinations, cell = depth ----
 internal sealed class ConsortPatchMatrix : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
@@ -723,12 +727,12 @@ internal sealed class ConsortPatchMatrix : Control
         if (w < 40 || h < 30 || _rows.Length == 0 || _cols.Length == 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         double rh = RowH, cw = ColW;
-        var corner = new FormattedText("Src → dst", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, 7, NotaPalette.TextDisabled);
+        var corner = new NotaFormattedText("Src → dst", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(corner, new Point(4, (HeadH - corner.Height) / 2));
         for (int c = 0; c < _cols.Length; c++)
         {
             var d = ConsortJacks.Dst(_cols[c]);
-            var t = new FormattedText(d.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, 7.5, NotaPalette.TextSecondary) { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            var t = new NotaFormattedText(d.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaGraph.AxisSize, NotaPalette.TextSecondary) { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(RowHdrW + c * cw + (cw - t.Width) / 2, (HeadH - t.Height) / 2));
         }
         var line = new Pen(NotaPalette.BorderDefault, 1);
@@ -737,7 +741,7 @@ internal sealed class ConsortPatchMatrix : Control
             double y = HeadH + r * rh;
             ctx.DrawLine(line, new Point(0, y), new Point(w, y));
             var s = ConsortJacks.Src(_rows[r]);
-            var t = new FormattedText(s.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 8.5, NotaPalette.TextPrimary) { MaxTextWidth = RowHdrW - 6, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            var t = new NotaFormattedText(s.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary) { MaxTextWidth = RowHdrW - 6, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(4, y + (rh - t.Height) / 2));
             var tc = ConsortJacks.ToneColor(s.Tone);
             for (int c = 0; c < _cols.Length; c++)
@@ -750,13 +754,13 @@ internal sealed class ConsortPatchMatrix : Control
                     // depth bar from the centre
                     double mid = cell.X + cell.Width / 2, bw = cell.Width / 2 * Math.Abs(cb.Depth);
                     ctx.FillRectangle(new SolidColorBrush(Color.FromArgb(0x38, tc.R, tc.G, tc.B)), new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
-                    var v = new FormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.TextPrimary);
+                    var v = new NotaFormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextPrimary);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }
                 else
                 {
                     ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), cell, 3, 3);
-                    var v = new FormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, NotaPalette.TextDisabled);
+                    var v = new NotaFormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextDisabled);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }
             }

@@ -2,9 +2,9 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Flux "React" scope: a rolling view of what the synth hears on
-// its sidechain, in a graph window (NotaGraph). Teal above the centre line = the envelope
-// follower; the neutral line below = the spectral tilt (brighter material swings further
-// down); teal verticals = detected transients. A narrow well to the right is the reaction
+// its sidechain, in a graph window (NotaGraph). The line above the centre = the envelope
+// follower; the ink-3 line below = the spectral tilt (brighter material swings further
+// down); faint verticals = detected transients. A narrow well to the right is the reaction
 // itself — how hard the target is being driven right now. With no source the window is
 // neutral: a flat line and one Ink 6 sentence. Fed one sample per UI tick via Push().
 
@@ -74,8 +74,8 @@ internal sealed class FluxReactScope : Control
             {
                 double X(int i) => 1 + (plot.Width - 2) * i / (N - 1);
 
-                // transients: a teal vertical on each rising edge past the threshold.
-                var tick = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1);
+                // transients: a grey vertical on each rising edge past the threshold.
+                var tick = new Pen(NotaPalette.TextDisabled, 1);
                 for (int i = 1; i < N; i++)
                 {
                     int idx = (_head + i) % N, prev = (_head + i - 1) % N;
@@ -86,30 +86,27 @@ internal sealed class FluxReactScope : Control
                     }
                 }
 
-                // tilt below the centre (neutral), envelope above it (teal).
-                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.BorderStrong, 1.2), Curve(i => mid + 2 + _tilt[i] * (half - 2), X));
-                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.Teal, 1.6), Curve(i => mid - 2 - _env[i] * (half - 2), X));
+                // tilt below the centre (ink 3), envelope above it (the graph ink).
+                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), Curve(i => mid + 2 + _tilt[i] * (half - 2), X));
+                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.VizInk, 1.6), Curve(i => mid - 2 - _env[i] * (half - 2), X));
             }
         }
 
-        var lbl = new FormattedText("Sidechain", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
-            NotaType.KnobLabel, _live ? NotaPalette.TextTertiary : NotaPalette.TextDisabled);
-        ctx.DrawText(lbl, new Point(6, 4));
-        NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TealBright : NotaPalette.TextAxis);
+        NotaGraph.Title(ctx, plot, "Sidechain");
+        NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", NotaPalette.TextAxis);
         if (!_live)
         {
-            var none = new FormattedText("no source assigned", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans,
-                NotaType.KnobLabel, NotaPalette.TextDisabled);
+            var none = NotaGraph.AxisText("no source assigned", NotaPalette.TextTertiary);
             ctx.DrawText(none, new Point((plot.Width - none.Width) / 2, h - 8 - none.Height));
         }
 
         // the reaction, in its own narrow well.
         var bar = new Rect(w - BarW, 0, BarW, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar.Deflate(0.5), NotaRadius.ClipValue));
+        ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar.Deflate(0.5), NotaRadius.FieldValue));
         if (_live && _react > 0.005f)
         {
             double fill = (h - 4) * _react;
-            ctx.FillRectangle(NotaPalette.Teal, new Rect(bar.X + 2, h - 2 - fill, BarW - 4, fill), (float)NotaRadius.ClipValue);
+            ctx.FillRectangle(NotaPalette.VizInk, new Rect(bar.X + 2, h - 2 - fill, BarW - 4, fill), (float)NotaRadius.FieldValue);
         }
     }
 

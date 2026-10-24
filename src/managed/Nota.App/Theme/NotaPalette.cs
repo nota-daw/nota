@@ -378,6 +378,30 @@ internal static class NotaPalette
     public static readonly SolidColorBrush TooltipBg      = T(nameof(TooltipBg)); // tooltip: a raised popover
     public static readonly SolidColorBrush TooltipText    = T(nameof(TooltipText));
 
+    // ---- Wells and depth (style guide, spec 038) ----------------------------
+    // The shell is flat: a button, field or menu at rest sits on a faint well instead of
+    // a border. Depth lives only inside device cards: the card is raised (DeviceHeader,
+    // Bevel), each section is pressed in (DeviceSection + its edge), and controls sit in
+    // a Groove. The wells are see-through, so they read on any ground.
+    public static readonly SolidColorBrush Well              = T(nameof(Well)); // Brush.Well — behind a button, field or menu at rest
+    public static readonly SolidColorBrush WellTrack         = T(nameof(WellTrack)); // Brush.WellTrack — switch and slider track
+    public static readonly SolidColorBrush KnobTrack         = T(nameof(KnobTrack)); // Brush.KnobTrack — the arc a knob's value runs on
+    public static readonly SolidColorBrush Groove            = T(nameof(Groove)); // Brush.Groove — device controls sit in one
+    public static readonly SolidColorBrush DeviceSection     = T(nameof(DeviceSection)); // Brush.DeviceSection — a pressed-in section inside a device
+    public static readonly SolidColorBrush DeviceSectionEdge = T(nameof(DeviceSectionEdge)); // Brush.DeviceSectionEdge — that section's inner edge
+    public static readonly SolidColorBrush DeviceHeader      = T(nameof(DeviceHeader)); // Brush.DeviceHeader — device card header
+    public static readonly SolidColorBrush Bevel             = T(nameof(Bevel)); // Brush.Bevel — light top edge on raised parts
+    public static readonly SolidColorBrush KnobCap           = T(nameof(KnobCap)); // Brush.KnobCap — knob centre cap (devices only)
+    // Picked, not live: a pale accent fill with accent text (AccentBright on it).
+    public static readonly SolidColorBrush AccentSoft        = T(nameof(AccentSoft)); // Brush.AccentSoft — behind something picked
+    // Track meters: green to 70 %, amber to 88 %, red above.
+    public static readonly SolidColorBrush MeterSafe         = T(nameof(MeterSafe)); // Brush.MeterSafe
+    public static readonly SolidColorBrush MeterHot          = T(nameof(MeterHot)); // Brush.MeterHot
+    public static readonly SolidColorBrush MeterOver         = T(nameof(MeterOver)); // Brush.MeterOver
+    // A selected track: its header and its lane get a slightly lighter ground.
+    public static readonly SolidColorBrush TrackHeaderSelected = T(nameof(TrackHeaderSelected)); // Brush.TrackHeaderSelected
+    public static readonly SolidColorBrush LaneSelected      = T(nameof(LaneSelected)); // Brush.LaneSelected
+
     // ---- Piano keys (the clip editor keyboard is dark: keys recede, notes lead) ---
     public static readonly SolidColorBrush KeyWhite     = T(nameof(KeyWhite)); // piano-roll keys: dark, never the brightest thing
     public static readonly SolidColorBrush KeyBlack     = T(nameof(KeyBlack)); // black keys and their lanes
@@ -435,7 +459,7 @@ internal static class NotaPalette
         ["Brush.BgApp"] = BgApp,                 ["Brush.LaneB"] = LaneB,
         ["Brush.Panel"] = Panel,                 ["Brush.TrackOff"] = TrackOff,
         ["Brush.SurfaceCard"] = SurfaceCard,     ["Brush.SurfaceRaised"] = SurfaceRaised,
-        ["Brush.SurfaceInset"] = SurfaceInset,
+        ["Brush.SurfaceInset"] = SurfaceInset,   ["Brush.SurfaceDeep"] = SurfaceDeep,
         ["Brush.SurfaceHover"] = SurfaceHover,   ["Brush.SurfaceActive"] = SurfaceActive,
         ["Brush.SurfaceSelected"] = SelHeaderBg,
         ["Brush.GridBeat"] = GridBeat,           ["Brush.GridBar"] = GridBar,
@@ -470,6 +494,14 @@ internal static class NotaPalette
         ["Brush.Track9"] = TrackSlots[8],
         ["Brush.ReturnA"] = ReturnSlots[0],      ["Brush.ReturnB"] = ReturnSlots[1],
         ["Brush.Master"] = Master,
+        ["Brush.Well"] = Well,                   ["Brush.WellTrack"] = WellTrack,
+        ["Brush.KnobTrack"] = KnobTrack,         ["Brush.Groove"] = Groove,
+        ["Brush.DeviceSection"] = DeviceSection, ["Brush.DeviceSectionEdge"] = DeviceSectionEdge,
+        ["Brush.DeviceHeader"] = DeviceHeader,   ["Brush.Bevel"] = Bevel,
+        ["Brush.KnobCap"] = KnobCap,             ["Brush.AccentSoft"] = AccentSoft,
+        ["Brush.MeterSafe"] = MeterSafe,         ["Brush.MeterHot"] = MeterHot,
+        ["Brush.MeterOver"] = MeterOver,
+        ["Brush.TrackHeaderSelected"] = TrackHeaderSelected, ["Brush.LaneSelected"] = LaneSelected,
         // Washes, not tokens: they follow their source slot.
         ["Brush.SurfaceHoverClear"] = Wash(SurfaceHover, 0x00),
         ["Brush.DangerSubtle"] = Wash(Danger, 0x33),

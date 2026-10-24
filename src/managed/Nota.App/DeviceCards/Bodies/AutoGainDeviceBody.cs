@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Level body (loudness leveler, device kind 18), a build of the
-// "Nota Level" mockup (700 × 260) in the EQ-8 / Forge language. On the left the CORRECTION:
-// Manual / Auto, a fader around 0 dB (Auto rides it in teal; in Manual drag it), the gain applied
+// "Nota Level" picture of the style guide (760 × 260), three pressed-in sections. On the left the CORRECTION:
+// Manual / Auto, an upright value bar around 0 dB (Auto rides it; in Manual drag it), the gain applied
 // in large type with why it is held (max gain, true-peak), MATCH (Manual: set the gain to the
 // distance to the target) / RESET (Auto: restart the measurement from now), Target and Trim.
 // Click the Target value for the standards or a reference track — routed, the target follows
@@ -11,7 +11,8 @@
 // over 8 s of loudness — input, output and the target with its ±1 LU band (drag the line for
 // Target) — and a readout row. On the right the METERS (IN / OUT against the target, TP against
 // the ceiling, the correction), RESPONSE (Fast / Slow, Window, Max Gain) and TRUE-PEAK SAFE with
-// its ceiling (drag the dBTP). A status strip says what the leveler is doing. Every control is a
+// its ceiling (drag the dBTP). The big number and the line under it say what the leveler is
+// doing. Every control is a
 // device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free; double-click resets. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -38,7 +39,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ("−18\u2009LUFS · audiobook", -18), ("−23\u2009LUFS · EBU R128", -23), ("−24\u2009LUFS · ATSC A/85", -24), ("−27\u2009LUFS · cinema dialogue", -27),
     };
 
-    public double Width => 700;
+    public double Width => 760;
     public bool FullBleed => true;
     public string? Subtitle => "Leveler";
 
@@ -79,35 +80,25 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         static string MaxF(double v) => NotaNum.F($"{MaxGainDb(v):0}\u2009dB");
 
         // ---- small builders ------------------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
-        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static RuleSection Island(Control child, double width = double.NaN) => new()
-        {
-            Width = width, Child = child,
-        };
-        static Border Bar(Control child, Thickness pad) => new()
-        { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = pad, Child = child };
-        static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
+        static Control Ruled(Control c) => new StackPanel { Spacing = 0, Children = { DeviceBodyKit.Rule(), new Border { Padding = new Thickness(0, 6, 0, 0), Child = c } } };
 
-        // Slider row: label · 3px track · mono 8 value (primary ink once off its default).
-        // `valueHost` replaces the plain value (the Target's menu); `dim` greys the track.
+        // Slider row: label · value bar · value (11, ink 1; ink 4 while dim).
+        // `valueClick` replaces the typed value with a menu (the Target's standards); `dim` greys the bar.
         Control Slider(string label, int p, Func<double, string> fmt, string tip, double labelW, double valueW,
             bool bipolar = false, Func<bool>? dim = null, Func<(string Text, IBrush? Ink)>? valueOverride = null, Action<Control>? valueClick = null)
         {
-            var lbl = Caps(label);
+            var lbl = DeviceBodyKit.Label(label);
             lbl.TextTrimming = TextTrimming.None;
             var trk = new SliderTrack { Bipolar = bipolar, Reset = () => { Reset(p); RefreshAll(); }, VerticalAlignment = VerticalAlignment.Center };
             trk.Changed += v => { Raw(p, v); RefreshAll(); };
             trk.GestureBegin += () => Begin(p);
             trk.GestureEnd += () => End(p);
-            var val = Mono("", 8, TextPrimary);
+            var val = DeviceBodyKit.Value();
             val.TextAlignment = TextAlignment.Right;
             val.HorizontalAlignment = HorizontalAlignment.Right;
+            val.TextTrimming = TextTrimming.CharacterEllipsis;
             Control valCtl = val;
             if (valueClick is null)
                 ValueEntry.Attach(val, () => P(p), v => Raw(p, v), () => fmt(P(p)), () => Begin(p), () => End(p), RefreshAll, control: trk);
@@ -121,7 +112,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 };
                 valCtl = box;
             }
-            var g = new Grid { ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+            var g = new Grid { ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
             g.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(labelW)));
             g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
             g.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(valueW)));
@@ -136,7 +127,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 else
                 {
                     val.Text = fmt(P(p));
-                    val.Foreground = d ? TextTertiary : Math.Abs(P(p) - Def(p)) > 0.003 ? TextPrimary : TextSecondary;
+                    val.Foreground = d ? TextDisabled : TextPrimary;
                 }
             });
             Learn(g, p);
@@ -144,10 +135,10 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             return g;
         }
 
-        Border Seg(string[] names, Func<int> cur, Action<int> pick, int p, string tip, double width)
+        Border Seg(string[] names, Func<int> cur, Action<int> pick, int p, string tip)
         {
-            var s = Segments(names, cur, i => { pick(i); RefreshAll(); }, out var sync, fill: true, padX: 2);
-            s.Width = width;
+            var s = Segments(names, cur, i => { pick(i); RefreshAll(); }, out var sync);
+            s.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(sync);
             Learn(s, p);
             ToolTip.SetTip(s, tip);
@@ -206,30 +197,31 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 SetP(Auto, 0);
             }
             else if (i == 1) SetP(Auto, 1);
-        }, Auto, "Auto rides the gain to the target over Window; Manual holds the fader where you put it (Match sets it to the distance to the target)", 84);
+        }, Auto, "Auto rides the gain to the target over Window; Manual holds the fader where you put it (Match sets it to the distance to the target)");
         var corrHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        corrHead.Children.Add(Caps("CORRECTION")); corrHead.Children.Add(Col(modeSeg, 1));
+        corrHead.Children.Add(DeviceBodyKit.Title("Correction")); corrHead.Children.Add(Col(modeSeg, 1));
 
-        var fader = new LvGainFader { Value = () => GainDb(P(Gain)), VerticalAlignment = VerticalAlignment.Stretch };
+        // The correction around 0 dB as an upright value bar (±Max gain): in Manual drag it;
+        // in Auto it shows the ride and takes no drag.
+        double FaderNorm(double db) => 0.5 + Math.Clamp(db / Math.Max(0.01, MaxG()), -1, 1) / 2;
+        var fader = new SliderTrack { Vertical = true, Bipolar = true, Reset = () => { Reset(Gain); RefreshAll(); } };
         fader.GestureBegin += () => Begin(Gain);
         fader.GestureEnd += () => End(Gain);
-        fader.Changed += db => { Raw(Gain, GainNorm(db)); RefreshAll(); };
-        fader.ResetRequested += () => { Reset(Gain); RefreshAll(); };
+        fader.Changed += v => { Raw(Gain, GainNorm(Math.Round((v - 0.5) * 2 * MaxG() * 10) / 10)); RefreshAll(); };
+        ValueEntry.Attach(fader, ValueEntry.Probing("Gain", () => P(Gain), v => Raw(Gain, v), () => Sgn(GainDb(P(Gain))) + " dB",
+            () => Begin(Gain), () => End(Gain), RefreshAll, () => { Reset(Gain); RefreshAll(); }));
         Learn(fader, Gain);
-        ToolTip.SetTip(fader, "The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); double-click resets to 0\u2009dB. In Auto it shows the ride");
+        ToolTip.SetTip(fader, "The correction around 0 dB, ±Max Gain. In Manual drag it (Shift for fine steps); double-click resets to 0 dB. In Auto it shows the ride");
 
-        var maxTop = Mono("", 7, TextDisabled);
-        var modeTag = Mono("", 7, TextDisabled);
-        var maxBot = Mono("", 7, TextDisabled);
-        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28; big.LetterSpacing = -0.5;
-        var bigSub = new TextBlock { Text = "dB applied", FontSize = 8, Foreground = TextSecondary };
-        var reason = Mono("", 7, TextTertiary); reason.Margin = new Thickness(0, 2, 0, 0);
-        var matchTxt = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary };
-        var match = new Border
-        {
-            Background = Raised, CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
-            VerticalAlignment = VerticalAlignment.Bottom, Child = matchTxt,
-        };
+        var maxTop = DeviceBodyKit.Label("");
+        var modeTag = DeviceBodyKit.Label("");
+        var maxBot = DeviceBodyKit.Label("");
+        var big = new TextBlock { FontSize = 34, FontWeight = FontWeight.Bold, LineHeight = 36, Foreground = TextPrimary, FontFamily = NotaFonts.UiFamily };
+        var bigSub = DeviceBodyKit.Note("dB applied", TextSecondary);
+        var reason = DeviceBodyKit.Label(""); reason.Margin = new Thickness(0, 2, 0, 0);
+        var match = TextButton("Match");
+        var matchTxt = (TextBlock)match.Child!;
+        match.VerticalAlignment = VerticalAlignment.Bottom;
         match.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(match).Properties.IsLeftButtonPressed) return;
@@ -255,35 +247,37 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         topLine.Children.Add(maxTop); topLine.Children.Add(Col(modeTag, 1));
         var botLine = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), VerticalAlignment = VerticalAlignment.Bottom };
         botLine.Children.Add(maxBot); botLine.Children.Add(Col(match, 1));
-        maxBot.VerticalAlignment = VerticalAlignment.Bottom;
+        maxBot.VerticalAlignment = VerticalAlignment.Center;
         var numCol = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto") };
         numCol.Children.Add(GRow(topLine, 0));
-        numCol.Children.Add(GRow(new StackPanel { Spacing = 1, Children = { big, bigSub, reason } }, 2));
+        numCol.Children.Add(GRow(new StackPanel { Spacing = 0, Children = { big, bigSub, reason } }, 2));
         numCol.Children.Add(GRow(botLine, 4));
-        var gainArea = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 9 };
+        var gainArea = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 20, Margin = new Thickness(0, 10, 0, 0) };
         gainArea.Children.Add(fader); gainArea.Children.Add(Col(numCol, 1));
 
-        var targetRow = Slider("TARGET", Target, TargetF,
+        var targetRow = Slider("Target", Target, TargetF,
             "Target loudness, −36 … 0 LUFS. Click the value for the standards or to match another track's loudness (a reference); drag the dashed line in the graph for the same",
-            38, 50, dim: HasRef,
-            valueOverride: () => HasRef() ? ("REF " + TrackName(Ref()), TextSecondary) : ("", null),
+            38, 66, dim: HasRef,
+            valueOverride: () => HasRef() ? ("Ref " + TrackName(Ref()), TextSecondary) : ("", null),
             valueClick: TargetMenu);
-        var trimRow = Slider("TRIM", Trim, TrimF, "Trim — a fixed offset after the correction, −12 … +12\u2009dB (the output then sits that far off the target)", 38, 50, bipolar: true);
+        var trimRow = Slider("Trim", Trim, TrimF, "Trim — a fixed offset after the correction, −12 … +12 dB (the output then sits that far off the target)", 38, 66, bipolar: true);
 
-        var leftBody = new DockPanel { Margin = new Thickness(8, 6), LastChildFill = true };
-        leftBody.Children.Add(Docked(new StackPanel { Spacing = 5, Margin = new Thickness(0, 6, 0, 0), Children = { targetRow, trimRow } }, Dock.Bottom));
+        var leftBody = new DockPanel { LastChildFill = true };
+        leftBody.Children.Add(DeviceBodyKit.Dock(corrHead, Avalonia.Controls.Dock.Top));
+        leftBody.Children.Add(DeviceBodyKit.Dock(new StackPanel { Spacing = 4, Margin = new Thickness(0, 12, 0, 0), Children = { targetRow, trimRow } }, Avalonia.Controls.Dock.Bottom));
         leftBody.Children.Add(gainArea);
-        var left = Island(new DockPanel { Children = { Docked(Bar(corrHead, new Thickness(8, 0, 3, 0)), Dock.Top), leftBody } }, 176);
-        DockPanel.SetDock(left, Dock.Left);
+        var left = DeviceBodyKit.Sec(leftBody, new Thickness(12, 10, 12, 10), 186);
+        DockPanel.SetDock(left, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
         // CENTRE — scale + loudness history
         // ======================================================================
         var scaleSeg = Seg(ScaleNames, () => ScaleIndex(P(Scale)), i => SetP(Scale, i / 2.0), Scale,
-            "Scale — what the correction reads: Momentary (400\u2009ms, fast and nervous), Short-term (3\u2009s) or Integrated (12\u2009s with BS.1770 gating, the steadiest)", 118);
+            "Scale — what the correction reads: Momentary (400 ms, fast and nervous), Short-term (3 s) or Integrated (12 s with BS.1770 gating, the steadiest)");
+        scaleSeg.HorizontalAlignment = HorizontalAlignment.Left;
         var legend = new LvLegend { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 8 };
-        centreHead.Children.Add(Caps("SCALE")); centreHead.Children.Add(Col(scaleSeg, 1)); centreHead.Children.Add(Col(legend, 2));
+        var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 10 };
+        centreHead.Children.Add(DeviceBodyKit.Label("Scale")); centreHead.Children.Add(Col(scaleSeg, 1)); centreHead.Children.Add(Col(legend, 2));
 
         var hist = new LvHistoryView { Value = () => P(Target) };
         hist.GestureBegin += () => Begin(Target);
@@ -291,60 +285,62 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         hist.Changed += v => { Raw(Target, v); RefreshAll(); };
         hist.ResetRequested += () => { Reset(Target); RefreshAll(); };
         Learn(hist, Target);
-        ToolTip.SetTip(hist, "The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; double-click resets it");
+        ToolTip.SetTip(hist, "The last 8 s: input, output and the target with its ±1 LU band (momentary loudness). Drag up / down to move the target; double-click resets it");
 
-        IBrush Dim() => TextDisabled;
-        var rIn = Mono("", 8, TextSecondary); var rOut = Mono("", 8, TextPrimary); var rDelta = Mono("", 8, TextSecondary); var rTp = Mono("", 8, TextSecondary);
+        TextBlock Dot() => DeviceBodyKit.Note("·", TextDisabled);
+        var rIn = DeviceBodyKit.Note(); var rOut = DeviceBodyKit.Note("", TextPrimary); var rDelta = DeviceBodyKit.Note(); var rTp = DeviceBodyKit.Note();
         var readRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8, Height = 14, HorizontalAlignment = HorizontalAlignment.Center,
-            Children = { rIn, Mono("·", 8, Dim()), rOut, Mono("·", 8, Dim()), rDelta, Mono("·", 8, Dim()), rTp },
+            Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { rIn, Dot(), rOut, Dot(), rDelta, Dot(), rTp },
         };
-        var centreBody = new DockPanel { Margin = new Thickness(5), LastChildFill = true };
-        centreBody.Children.Add(Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = readRow }, Dock.Bottom));
-        centreBody.Children.Add(hist);
-        var centre = Island(new DockPanel { Children = { Docked(Bar(centreHead, new Thickness(6, 0)), Dock.Top), centreBody } });
-        centre.Margin = new Thickness(5, 0);
+        var centreBody = new DockPanel { LastChildFill = true };
+        centreBody.Children.Add(DeviceBodyKit.Dock(centreHead, Avalonia.Controls.Dock.Top));
+        centreBody.Children.Add(DeviceBodyKit.Dock(new Border { Margin = new Thickness(0, 8, 0, 0), Child = readRow }, Avalonia.Controls.Dock.Bottom));
+        centreBody.Children.Add(new Border { Margin = new Thickness(0, 8, 0, 0), Child = hist });
+        var centre = DeviceBodyKit.Sec(centreBody, new Thickness(12, 10, 12, 8));
+        centre.Margin = new Thickness(SectionGap, 0);
 
         // ======================================================================
         // RIGHT — meters, response, true-peak safe
         // ======================================================================
-        var scaleName = Mono("", 7, TextTertiary);
+        var scaleName = DeviceBodyKit.Label("");
         var metersHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        metersHead.Children.Add(Caps("METERS")); metersHead.Children.Add(Col(scaleName, 1));
+        metersHead.Children.Add(DeviceBodyKit.Title("Meters")); metersHead.Children.Add(Col(scaleName, 1));
 
         (Control Row, LvMeter M, TextBlock V) MeterRow(string label, string tip)
         {
             var m = new LvMeter { VerticalAlignment = VerticalAlignment.Center };
-            var v = Mono("", 8, TextPrimary); v.TextAlignment = TextAlignment.Right; v.HorizontalAlignment = HorizontalAlignment.Right;
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("24,*,34"), ColumnSpacing = 6, Background = Brushes.Transparent };
-            var l = Caps(label); if (label == "TP") l.Text = label;   // true peak: an acronym Label would lowercase
+            var v = DeviceBodyKit.Value(); v.TextAlignment = TextAlignment.Right; v.HorizontalAlignment = HorizontalAlignment.Right;
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("26,*,44"), ColumnSpacing = 8, Background = Brushes.Transparent, Height = 15 };
+            var l = DeviceBodyKit.Label(label, TextSecondary); if (label == "TP") l.Text = label;   // true peak: an acronym Label would lowercase
             g.Children.Add(l); g.Children.Add(Col(m, 1)); g.Children.Add(Col(v, 2));
             ToolTip.SetTip(g, tip);
             return (g, m, v);
         }
-        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mTp = MeterRow("TP", "Output true peak (dBTP); the teal mark is the ceiling while True-peak safe is on");
-        var mCor = MeterRow("COR", "The correction applied, ±Max Gain around 0\u2009dB (trim not included)");
+        var mIn = MeterRow("In", "Input loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mOut = MeterRow("Out", "Output loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mTp = MeterRow("TP", "Output true peak (dBTP); the grey mark is the ceiling while True-peak safe is on");
+        var mCor = MeterRow("Cor", "The correction applied, ±Max Gain around 0 dB (trim not included)");
 
         var respSeg = Seg(new[] { "Fast", "Slow" }, () => On(Response) ? 1 : 0, i => SetP(Response, i), Response,
-            "Response — Slow glides over the whole Window with a 20\u2009ms look-ahead; Fast over a quarter of it with 5\u2009ms", 76);
+            "Response — Slow glides over the whole Window with a 20 ms look-ahead; Fast over a quarter of it with 5 ms");
         var respRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        respRow.Children.Add(Caps("RESPONSE", Teal)); respRow.Children.Add(Col(respSeg, 1));
-        var winRow = Slider("WINDOW", WindowP, WindowF, "Window — how long the ride takes to reach the target, 0.4 … 10\u2009s (Fast: a quarter of it)", 48, 36);
-        var maxRow = Slider("MAX GAIN", MaxGain, MaxF, "Max gain — the most the correction may boost or cut, 0 … 24\u2009dB", 48, 36);
+        respRow.Children.Add(DeviceBodyKit.Label("Response", TextSecondary)); respRow.Children.Add(Col(respSeg, 1));
+        var winRow = Slider("Window", WindowP, WindowF, "Window — how long the ride takes to reach the target, 0.4 … 10 s (Fast: a quarter of it)", 56, 40);
+        var maxRow = Slider("Max gain", MaxGain, MaxF, "Max gain — the most the correction may boost or cut, 0 … 24 dB", 56, 40);
 
         var safeSw = Switch("True-peak safe", () => On(Safe), () => { SetP(Safe, On(Safe) ? 0 : 1); RefreshAll(); }, out var safeSync);
         readouts.Add(safeSync);
         Learn(safeSw, Safe);
-        ToolTip.SetTip(safeSw, "True-peak safe — a look-ahead limiter keeps the output under the ceiling (adds 5 / 20\u2009ms of latency, compensated)");
-        var ceilTxt = Mono("", 8, TextPrimary);
+        ToolTip.SetTip(safeSw, "True-peak safe — a look-ahead limiter keeps the output under the ceiling (adds 5 / 20 ms of latency, compensated)");
+        var ceilTxt = DeviceBodyKit.Value();
         var ceilBox = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Clip, Padding = new Thickness(3, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 3), VerticalAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = ceilTxt,
         };
+        ceilBox.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
         bool cd = false; double cy0 = 0, cv0 = 0;
         ceilBox.PointerPressed += (_, e) =>
         {
@@ -363,38 +359,27 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ceilBox.PointerReleased += (_, e) => { if (cd) { cd = false; End(Ceiling); e.Pointer.Capture(null); } };
         ceilBox.PointerCaptureLost += (_, _) => { if (cd) { cd = false; End(Ceiling); } };
         Learn(ceilBox, Ceiling);
-        ToolTip.SetTip(ceilBox, "Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), double-click resets to −1.0");
+        ToolTip.SetTip(ceilBox, "Ceiling, −6 … 0 dBTP — drag up / down (Shift for fine steps), double-click resets to −1.0");
         readouts.Add(() =>
         {
-            ceilTxt.Text = NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}\u2009dBTP");
-            ceilTxt.Foreground = !On(Safe) ? TextDisabled : Math.Abs(P(Ceiling) - Def(Ceiling)) > 0.003 ? TextPrimary : TextSecondary;
+            ceilTxt.Text = NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0} dBTP");
+            ceilTxt.Foreground = !On(Safe) ? TextDisabled : TextPrimary;
         });
         var safeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         safeRow.Children.Add(safeSw); safeRow.Children.Add(Col(ceilBox, 1));
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,Auto,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(GRow(mIn.Row, 0));
-        rightBody.Children.Add(GRow(mOut.Row, 2));
+        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,*,Auto") };
+        rightBody.Children.Add(GRow(metersHead, 0));
+        rightBody.Children.Add(GRow(mIn.Row, 2));
+        rightBody.Children.Add(GRow(mOut.Row, 3));
         rightBody.Children.Add(GRow(mTp.Row, 4));
-        rightBody.Children.Add(GRow(mCor.Row, 6));
-        rightBody.Children.Add(GRow(Rule(respRow), 8));
-        rightBody.Children.Add(GRow(new Border { Margin = new Thickness(0, 4, 0, 0), Child = winRow }, 9));
-        rightBody.Children.Add(GRow(new Border { Margin = new Thickness(0, 3, 0, 0), Child = maxRow }, 10));
-        rightBody.Children.Add(GRow(Rule(safeRow), 12));
-        var right = Island(new DockPanel { Children = { Docked(Bar(metersHead, new Thickness(8, 0)), Dock.Top), rightBody } }, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-        ToolTip.SetTip(statusLeft, "What the leveler is doing now");
+        rightBody.Children.Add(GRow(mCor.Row, 5));
+        rightBody.Children.Add(GRow(Ruled(respRow), 7));
+        rightBody.Children.Add(GRow(new Border { Margin = new Thickness(0, 6, 0, 0), Child = winRow }, 8));
+        rightBody.Children.Add(GRow(new Border { Margin = new Thickness(0, 4, 0, 0), Child = maxRow }, 9));
+        rightBody.Children.Add(GRow(Ruled(safeRow), 11));
+        var right = DeviceBodyKit.Sec(rightBody, new Thickness(12, 10, 12, 8), 202);
+        DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
 
         // ---- live state ---------------------------------------------------------------------
         static double MeterX(double lufs) => Math.Clamp((lufs - LevelMath.LBot) / (LevelMath.LTop - LevelMath.LBot), 0, 1);
@@ -412,7 +397,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             if (!primed) target = HasRef() ? target : TargetLufs(P(Target));
 
             // Correction column.
-            fader.Set(!on ? 0 : manual ? Math.Clamp(GainDb(P(Gain)), -maxG, maxG) : g, maxG, manual, on);
+            if (!fader.Dragging) fader.Norm = FaderNorm(!on ? 0 : manual ? Math.Clamp(GainDb(P(Gain)), -maxG, maxG) : g);
+            fader.IsDim = !on;
+            fader.IsHitTestVisible = manual;
             maxTop.Text = NotaNum.F($"+{maxG:0}");
             maxBot.Text = NotaNum.F($"−{maxG:0}");
             modeTag.Text = manual ? "fader" : "auto";
@@ -422,7 +409,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 : tpClamp ? "limited by true-peak" : clamp == 1 && !manual ? "limited by max gain" : clamp == 2 && !manual ? "limited by max cut"
                 : manual ? "manual" : "auto · " + (On(Response) ? "slow" : "fast");
             reason.Text = why;
-            reason.Foreground = on && (tpClamp || (clamp > 0 && !manual)) ? NotaPalette.Warning : TextTertiary;
+            reason.Foreground = on && primed && (tpClamp || (clamp > 0 && !manual)) ? NotaPalette.Warning : TextTertiary;
+            maxTop.Foreground = maxBot.Foreground = modeTag.Foreground = on ? TextTertiary : TextDisabled;
 
             // Graph.
             string tl = HasRef() ? "Ref " + Lufs(target) : Lufs(target) + "\u2009LUFS";
@@ -444,32 +432,11 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             mTp.M.Set(0, MeterX(tp), tpOver ? Danger : TextSecondary, On(Safe) ? MeterX(CeilingDb(P(Ceiling))) : double.NaN);
             mTp.V.Text = Lufs(tp); mTp.V.Foreground = tpOver ? Danger : TextPrimary;
             double cf = Math.Clamp(g / Math.Max(0.01, maxG), -1, 1) / 2;
-            mCor.M.Set(0.5, 0.5 + cf, Teal, 0.5); mCor.V.Text = Sgn(on ? g : 0);
-
-            // Status.
-            string foot; IBrush footInk = TextSecondary;
-            double matchG = Math.Clamp(target - measured - trim, -maxG, maxG);
-            if (!on) foot = "Leveler bypassed: the output equals the input";
-            else if (!primed) foot = "Waiting for signal — the gain holds until the input has been measured";
-            else if (silent) foot = "Input silent: the measurement and the gain hold";
-            else if (manual && Math.Abs(delta) >= 1) { foot = $"Output {Sgn(delta)}\u2009LU from the target · Match sets {Sgn(matchG)}\u2009dB"; footInk = NotaPalette.Warning; }
-            else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = NotaPalette.Warning; }
-            else if (clamp > 0 && !manual) { foot = NotaNum.F($"Needs more than {maxG:0} dB: raise Max gain or Trim"); footInk = NotaPalette.Warning; }
-            else
-            {
-                foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));
-                if (HasRef()) foot += " · matching " + TrackName(Ref());
-                else if (Math.Abs(trim) > 0.05) foot += " · trim " + Sgn(trim) + "\u2009dB";
-            }
-            statusLeft.Text = foot; statusLeft.Foreground = footInk;
-            double sr = Sc(S_SampleRate);
-            string la = On(Safe) ? (On(Response) ? "look-ahead 20\u2009ms" : "look-ahead 5\u2009ms") : "look-ahead off";
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · {ScaleNames[si].ToLowerInvariant()} · {la} · corr {Sc(S_Corr):+0.00;−0.00;0.00}") : la;
+            mCor.M.Set(0.5, 0.5 + cf, NotaPalette.VizInk, 0.5); mCor.V.Text = Sgn(on ? g : 0);
         });
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = DeviceBodyKit.Frame(new DockPanel { LastChildFill = true, Children = { left, right, centre } });
 
         // One history sample per UI tick (the graph spans N ticks ≈ 8 s); edits only repaint.
         void Tick()

@@ -7,12 +7,12 @@
 // from the text around it. Use Glyph as a control, or Glyph.Draw inside a Render.
 //
 // Transport shapes follow the almanac exactly: Stop a 10px square with radius 1, Record an
-// 11px circle, Play an 11×14 triangle. Everything else is a 1.5px stroke on the same grid.
+// 11px circle, Play an 11×14 triangle. Everything else is a stroke of 1.6 units on the 24 grid.
 //
 // This is the app's one icon set (spec 012): no icon is drawn outside this file. Kinds below
-// "Path kinds" are path data on a 16-unit grid, scaled as a whole to the requested size (never
+// "Path kinds" are path data on a 24-unit grid, scaled as a whole to the requested size (never
 // stretched to their own bounds, so a wide and a tall icon keep their optical balance). Their
-// stroke parts take the shared pen — round caps and joins, max(1.2, size × 1.5/16) — and
+// stroke parts take the shared pen — round caps and joins, max(1, size × 1.6/24) — and
 // their fill parts take the ink.
 
 using System;
@@ -34,13 +34,25 @@ internal enum GlyphKind
     // Context-menu icons
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
-    // Path kinds (16-unit grid, see Paths)
+    // Path kinds (24-unit grid, see Paths)
     Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
 }
 
 internal sealed class Glyph : Control
 {
+    /// <summary>The six filter types drawn as their response in a 22 × 12 box (EQ-8 and
+    /// Dynamic EQ-8 band row): high-pass, low shelf, bell, notch, high shelf, low-pass.</summary>
+    internal static readonly Geometry[] FilterShapes =
+    {
+        Geometry.Parse("M1,11 C4,4 6,3 10,3 L21,3"),
+        Geometry.Parse("M1,3 L5,3 C9,3 11,9 15,9 L21,9"),
+        Geometry.Parse("M1,9 L5,9 C8,9 9,3 11,3 C13,3 14,9 17,9 L21,9"),
+        Geometry.Parse("M1,3 L7,3 C9,3 10,11 11,11 C12,11 13,3 15,3 L21,3"),
+        Geometry.Parse("M1,9 L7,9 C11,9 13,3 17,3 L21,3"),
+        Geometry.Parse("M1,3 L12,3 C16,3 18,4 21,11"),
+    };
+
     public static readonly StyledProperty<IBrush?> ForegroundProperty =
         TextElement.ForegroundProperty.AddOwner<Glyph>();
 
@@ -100,7 +112,7 @@ internal sealed class Glyph : Control
     {
         double w = r.Width, h = r.Height, x = r.X, y = r.Y, s = Math.Min(w, h);
         double cx = x + w / 2, cy = y + h / 2;
-        var pen = new Pen(ink, Math.Max(1.2, s * 1.5 / 16), lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(ink, Math.Max(1.0, s * 1.6 / 24), lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         if (Paths.ContainsKey(kind)) { DrawPath(ctx, kind, cx - s / 2, cy - s / 2, s, ink, pen.Thickness); return; }
         switch (kind)
         {
@@ -419,107 +431,107 @@ internal sealed class Glyph : Control
         }
     }
 
-// 16-unit path kinds: (stroke, fill). Stroke parts use the shared pen; fill parts the ink.
+// 24-unit path kinds: (stroke, fill). Stroke parts use the shared pen; fill parts the ink.
     private static readonly Dictionary<GlyphKind, (string? Stroke, string? Fill)> Paths = new()
     {
         // Clip blocks on three lanes (the Arrangement view), solid.
-        [GlyphKind.Arrangement] = (null, "M1.5 2.5 H8 V5.5 H1.5 Z M10 2.5 H14.5 V5.5 H10 Z M4 7 H12 V10 H4 Z M1.5 11.5 H6 V14.5 H1.5 Z M8 11.5 H13 V14.5 H8 Z"),
+        [GlyphKind.Arrangement] = (null, "M2.25 3.75 H12 V8.25 H2.25 Z M15 3.75 H21.75 V8.25 H15 Z M6 10.5 H18 V15 H6 Z M2.25 17.25 H9 V21.75 H2.25 Z M12 17.25 H19.5 V21.75 H12 Z"),
         // A grid of clip cells, three tracks by two scenes (the Session view), solid.
-        [GlyphKind.Session] = (null, "M1.5 2.5 H5 V7 H1.5 Z M6.25 2.5 H9.75 V7 H6.25 Z M11 2.5 H14.5 V7 H11 Z M1.5 9 H5 V13.5 H1.5 Z M6.25 9 H9.75 V13.5 H6.25 Z M11 9 H14.5 V13.5 H11 Z"),
+        [GlyphKind.Session] = (null, "M2.25 3.75 H7.5 V10.5 H2.25 Z M9.375 3.75 H14.625 V10.5 H9.375 Z M16.5 3.75 H21.75 V10.5 H16.5 Z M2.25 13.5 H7.5 V20.25 H2.25 Z M9.375 13.5 H14.625 V20.25 H9.375 Z M16.5 13.5 H21.75 V20.25 H16.5 Z"),
         // Three nodes joined by cables (the Modular view).
-        [GlyphKind.Modular] = ("M1.7 4 A1.8 1.8 0 1 0 5.3 4 A1.8 1.8 0 1 0 1.7 4 Z M1.7 12 A1.8 1.8 0 1 0 5.3 12 A1.8 1.8 0 1 0 1.7 12 Z M10.7 8 A1.8 1.8 0 1 0 14.3 8 A1.8 1.8 0 1 0 10.7 8 Z M5.2 4.8 L10.8 7.2 M5.2 11.2 L10.8 8.8", null),
+        [GlyphKind.Modular] = ("M2.55 6 A2.7 2.7 0 1 0 7.95 6 A2.7 2.7 0 1 0 2.55 6 Z M2.55 18 A2.7 2.7 0 1 0 7.95 18 A2.7 2.7 0 1 0 2.55 18 Z M16.05 12 A2.7 2.7 0 1 0 21.45 12 A2.7 2.7 0 1 0 16.05 12 Z M7.8 7.2 L16.2 10.8 M7.8 16.8 L16.2 13.2", null),
         // A piano keyboard: case, key dividers, three black keys.
-        [GlyphKind.Keyboard] = ("M2.333 4 h11.333 v8 h-11.333 zM6.133 4 v8 M9.867 4 v8 M4.2 4 v3.333 M8 4 v3.333 M11.8 4 v3.333", null),
+        [GlyphKind.Keyboard] = ("M3.5 6 h17 v12 h-17 zM9.2 6 v12 M14.801 6 v12 M6.3 6 v5 M12 6 v5 M17.7 6 v5", null),
         // Three faders with offset handles (audio effects).
-        [GlyphKind.Sliders] = ("M4.667 3 v10 M8 3 v10 M11.333 3 v10 M3.333 6 h2.667 M6.667 9.667 h2.667 M10 5 h2.667", null),
+        [GlyphKind.Sliders] = ("M7 4.5 v15 M12 4.5 v15 M17 4.5 v15 M5 9 h4 M10 14.5 h4 M15 7.5 h4", null),
         // An arrow down onto a line.
-        [GlyphKind.Downloads] = ("M8 2.667 V10 M4.667 6.667 L8 10 L11.333 6.667 M3.333 12.667 H12.667", null),
+        [GlyphKind.Downloads] = ("M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19", null),
         // A five-point star, outlined.
-        [GlyphKind.Star] = ("M8 2 L9.667 6 L14 6.2 L10.667 9 L11.8 13.333 L8 10.8 L4.2 13.333 L5.333 9 L2 6.2 L6.333 6 Z", null),
+        [GlyphKind.Star] = ("M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z", null),
         // A five-point star, solid (a favourite).
-        [GlyphKind.StarFilled] = (null, "M8 2 L9.667 6 L14 6.2 L10.667 9 L11.8 13.333 L8 10.8 L4.2 13.333 L5.333 9 L2 6.2 L6.333 6 Z"),
+        [GlyphKind.StarFilled] = (null, "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z"),
         // A bookmark (a saved preset).
-        [GlyphKind.Bookmark] = ("M4.333 2.667 h7.333 v10.667 l-3.667 -2.933 l-3.667 2.933 z", null),
+        [GlyphKind.Bookmark] = ("M6.5 4 h11 v16 l-5.5 -4.399 l-5.5 4.399 z", null),
         // A document with a dog-ear and two lines (a project).
-        [GlyphKind.Doc] = ("M4 2.333 h5.067 l3.2 3.2 v8.133 h-8.267 zM9.067 2.333 v3.2 h3.2 M6.133 8.933 h4 M6.133 11.2 h4", null),
+        [GlyphKind.Doc] = ("M6 3.5 h7.601 l4.8 4.8 v12.199 h-12.4 zM13.601 3.5 v4.8 h4.8 M9.2 13.399 h6 M9.2 16.8 h6", null),
         // An eighth note (MIDI effects).
-        [GlyphKind.Midi] = ("M4 11.467 a1.733 1.6 0 1 0 3.467 0 a1.733 1.6 0 1 0 -3.467 0 M7.467 11.467 V3.333 c2 0.6 3.733 1.6 3.733 3.733", null),
+        [GlyphKind.Midi] = ("M6 17.201 a2.599 2.4 0 1 0 5.2 0 a2.599 2.4 0 1 0 -5.2 0 M11.2 17.201 V5 c3 0.9 5.599 2.4 5.599 5.599", null),
         // Two nodes joined by a link (a MIDI-learn mapping).
-        [GlyphKind.Map] = ("M2.267 11.733 a1.733 1.733 0 1 0 3.467 0 a1.733 1.733 0 1 0 -3.467 0 M10.267 4.267 a1.733 1.733 0 1 0 3.467 0 a1.733 1.733 0 1 0 -3.467 0 M5.267 10.467 L10.733 5.533", null),
+        [GlyphKind.Map] = ("M3.401 17.599 a2.599 2.599 0 1 0 5.2 0 a2.599 2.599 0 1 0 -5.2 0 M15.4 6.401 a2.599 2.599 0 1 0 5.2 0 a2.599 2.599 0 1 0 -5.2 0 M7.901 15.701 L16.099 8.3", null),
         // A clock with a counter-clockwise tail (version history).
-        [GlyphKind.History] = ("M3.067 6.133 A5.333 5.333 0 1 1 2.667 8 M3.067 6.133 L2.4 3.867 M3.067 6.133 L5.333 5.733 M8 5.067 V8 L10 9.333", null),
+        [GlyphKind.History] = ("M4.601 9.2 A8 8 0 1 1 4 12 M4.601 9.2 L3.6 5.8 M4.601 9.2 L8 8.599 M12 7.601 V12 L15 14", null),
         // A window with its left sidebar ruled off.
-        [GlyphKind.Sidebar] = ("M2.333 3.667 h11.333 v8.667 h-11.333 zM6.333 3.667 v8.667", null),
+        [GlyphKind.Sidebar] = ("M3.5 5.5 h17 v13 h-17 zM9.5 5.5 v13", null),
         // Three centred rules, shortening downward (view options).
-        [GlyphKind.Options] = ("M2.667 4.667 H13.333 M4.667 8 H11.333 M6.667 11.333 H9.333", null),
+        [GlyphKind.Options] = ("M4 7 H20 M7 12 H17 M10 17 H14", null),
         // A magnifier.
-        [GlyphKind.Search] = ("M7 2.667 A4.333 4.333 0 1 0 7 11.333 A4.333 4.333 0 1 0 7 2.667 M10.333 10.333 L14 14", null),
+        [GlyphKind.Search] = ("M10.5 4 A6.5 6.5 0 1 0 10.5 17 A6.5 6.5 0 1 0 10.5 4 M15.5 15.5 L21 21", null),
         // A small solid triangle pointing right (a closed disclosure).
-        [GlyphKind.CaretRight] = (null, "M5.5 3 L11.5 8 L5.5 13 Z"),
+        [GlyphKind.CaretRight] = (null, "M8.25 4.5 L17.25 12 L8.25 19.5 Z"),
         // A small solid triangle pointing down (an open disclosure).
-        [GlyphKind.CaretDown] = (null, "M3 5.5 L13 5.5 L8 11.5 Z"),
+        [GlyphKind.CaretDown] = (null, "M4.5 8.25 L19.5 8.25 L12 17.25 Z"),
         // Level bars of different heights (audio).
-        [GlyphKind.Levels] = ("M2.667 6.667 V9.333 M5.333 4.667 V11.333 M8 2.667 V13.333 M10.667 5.333 V10.667 M13.333 7.333 V8.667", null),
+        [GlyphKind.Levels] = ("M4 10 V14 M8 7 V17 M12 4 V20 M16 8 V16 M20 11 V13", null),
         // A game controller.
-        [GlyphKind.Gamepad] = ("M4.667 5.333 H11.333 A2.667 2.667 0 0 1 14 8 V8.667 A2.667 2.667 0 0 1 9.333 10.667 H6.667 A2.667 2.667 0 0 1 2 8.667 V8 A2.667 2.667 0 0 1 4.667 5.333 ZM4.667 7.333 V8.667 M4 8 H5.333 M10.667 7.667 H10.673 M12 8.333 H12.007", null),
+        [GlyphKind.Gamepad] = ("M7 8 H17 A4 4 0 0 1 21 12 V13 A4 4 0 0 1 14 16 H10 A4 4 0 0 1 3 13 V12 A4 4 0 0 1 7 8 ZM7 11 V13 M6 12 H8 M16 11.5 H16.009 M18 12.5 H18.011", null),
         // A phone (Remote).
-        [GlyphKind.Phone] = ("M5.333 2 H10.667 A1 1 0 0 1 11.667 3 V13 A1 1 0 0 1 10.667 14 H5.333 A1 1 0 0 1 4.333 13 V3 A1 1 0 0 1 5.333 2 ZM7.333 12 H8.667", null),
+        [GlyphKind.Phone] = ("M8 3 H16 A1.5 1.5 0 0 1 17.5 4.5 V19.5 A1.5 1.5 0 0 1 16 21 H8 A1.5 1.5 0 0 1 6.5 19.5 V4.5 A1.5 1.5 0 0 1 8 3 ZM11 18 H13", null),
         // A plug with two prongs (plug-ins).
-        [GlyphKind.Plug] = ("M6 2 V4.667 M10 2 V4.667 M4 4.667 H12 V7.333 A4 4 0 0 1 4 7.333 ZM8 11.333 V14", null),
+        [GlyphKind.Plug] = ("M9 3 V7 M15 3 V7 M6 7 H18 V11 A6 6 0 0 1 6 11 ZM12 17 V21", null),
         // A folder with rounded corners (the content library).
-        [GlyphKind.Library] = ("M2 4.667 A0.667 0.667 0 0 1 2.667 4 H6 L7.333 5.333 H13.333 A0.667 0.667 0 0 1 14 6 V12 A0.667 0.667 0 0 1 13.333 12.667 H2.667 A0.667 0.667 0 0 1 2 12 Z", null),
+        [GlyphKind.Library] = ("M3 7 A1.001 1.001 0 0 1 4 6 H9 L11 8 H20 A1.001 1.001 0 0 1 21 9 V18 A1.001 1.001 0 0 1 20 19 H4 A1.001 1.001 0 0 1 3 18 Z", null),
         // A half-filled circle (appearance).
-        [GlyphKind.Appearance] = ("M8 2.667 A5.333 5.333 0 1 0 8 13.333 ZM8 2.667 A5.333 5.333 0 0 1 8 13.333", null),
+        [GlyphKind.Appearance] = ("M12 4 A8 8 0 1 0 12 20 ZM12 4 A8 8 0 0 1 12 20", null),
         // A keycap row on a keyboard (shortcuts).
-        [GlyphKind.Shortcuts] = ("M2 4.667 H14 V11.333 H2 ZM4.667 7.333 H4.673 M7.333 7.333 H7.34 M10 7.333 H10.007 M5.333 9.333 H10.667", null),
+        [GlyphKind.Shortcuts] = ("M3 7 H21 V17 H3 ZM7 11 H7.01 M11 11 H11.01 M15 11 H15.011 M8 14 H16", null),
         // A circular arrow (a new version: Settings → Updates).
-        [GlyphKind.Update] = ("M13 8 A5 5 0 1 1 11.536 4.464 M11.6 1.6 V4.5 H8.7", null),
+        [GlyphKind.Update] = ("M19.5 12 A7.5 7.5 0 1 1 17.304 6.696 M17.4 2.4 V6.75 H13.05", null),
         // A controller with keys (MIDI devices).
-        [GlyphKind.MidiPort] = ("M2.667 3.333 H13.333 V12.667 H2.667 ZM5.333 3.333 V8.667 M8 3.333 V8.667 M10.667 3.333 V8.667", null),
+        [GlyphKind.MidiPort] = ("M4 5 H20 V19 H4 ZM8 5 V13 M12 5 V13 M16 5 V13", null),
         // A prompt: chevron and cursor (a command).
-        [GlyphKind.Action] = ("M3.333 4.667 L6.667 8 L3.333 11.333 M8 11.333 H12.667", null),
+        [GlyphKind.Action] = ("M5 7 L10 12 L5 17 M12 17 H19", null),
         // Three rules, the last short (a track).
-        [GlyphKind.Track] = ("M2.667 4.667 H13.333 M2.667 8 H13.333 M2.667 11.333 H8.667", null),
+        [GlyphKind.Track] = ("M4 7 H20 M4 12 H20 M4 17 H13", null),
         // A box with a knob (a device).
-        [GlyphKind.Device] = ("M2.667 3.333 H13.333 V12.667 H2.667 ZM6 8 A2 2 0 1 0 10 8 A2 2 0 1 0 6 8", null),
+        [GlyphKind.Device] = ("M4 5 H20 V19 H4 ZM9 12 A3 3 0 1 0 15 12 A3 3 0 1 0 9 12", null),
         // A bookmark (a preset).
-        [GlyphKind.Preset] = ("M4.667 2.667 H11.333 V13.333 L8 10.667 L4.667 13.333 Z", null),
+        [GlyphKind.Preset] = ("M7 4 H17 V20 L12 16 L7 20 Z", null),
         // Two nodes joined by a cable (a modular patch).
-        [GlyphKind.Patch] = ("M2.667 4.667 A1.667 1.667 0 1 0 6 4.667 A1.667 1.667 0 1 0 2.667 4.667 M10 11.333 A1.667 1.667 0 1 0 13.333 11.333 A1.667 1.667 0 1 0 10 11.333 M5.667 5.667 L10.333 10.333", null),
+        [GlyphKind.Patch] = ("M4 7 A2.501 2.501 0 1 0 9 7 A2.501 2.501 0 1 0 4 7 M15 17 A2.501 2.501 0 1 0 20 17 A2.501 2.501 0 1 0 15 17 M8.5 8.5 L15.5 15.5", null),
         // Two arrows chasing each other (loop).
-        [GlyphKind.Loop] = ("M11.333 2 l2 2 l-2 2 M13.333 4 H5.333 a2.667 2.667 0 0 0 -2.667 2.667 v0.667 M4.667 14 l-2 -2 l2 -2 M2.667 12 h8 a2.667 2.667 0 0 0 2.667 -2.667 v-0.667", null),
+        [GlyphKind.Loop] = ("M17 3 l3 3 l-3 3 M20 6 H8 a4 4 0 0 0 -4 4 v1.001 M7 21 l-3 -3 l3 -3 M4 18 h12 a4 4 0 0 0 4 -4 v-1.001", null),
         // A speaker cone; layer a Speaker* wave kind over it.
-        [GlyphKind.Speaker] = ("M2.667 6 h2.667 l3.333 -2.667 v9.333 l-3.333 -2.667 h-2.667 z", null),
+        [GlyphKind.Speaker] = ("M4 9 h4 l5 -4 v14 l-5 -4 h-4 z", null),
         // A cross beside the speaker (muted).
-        [GlyphKind.SpeakerMute] = ("M10.667 6 l3.333 4 M14 6 l-3.333 4", null),
+        [GlyphKind.SpeakerMute] = ("M16 9 l5 6 M21 9 l-5 6", null),
         // One wave beside the speaker (quiet).
-        [GlyphKind.SpeakerLow] = ("M10.667 6.333 a2.333 2.333 0 0 1 0 3.333", null),
+        [GlyphKind.SpeakerLow] = ("M16 9.5 a3.5 3.5 0 0 1 0 5", null),
         // Two waves beside the speaker (loud).
-        [GlyphKind.SpeakerHigh] = ("M10.667 6.333 a2.333 2.333 0 0 1 0 3.333 M12.333 4.667 a4.667 4.667 0 0 1 0 6.667", null),
+        [GlyphKind.SpeakerHigh] = ("M16 9.5 a3.5 3.5 0 0 1 0 5 M18.5 7 a7 7 0 0 1 0 10", null),
         // A metronome: body, rod and weight.
-        [GlyphKind.Metronome] = ("M6.533 3.667 H9.467 L12.667 13.333 H3.333 ZM8 12.667 L9.267 2.133", "M7.553 7.333 A1.067 1.067 0 1 0 9.687 7.333 A1.067 1.067 0 1 0 7.553 7.333 Z"),
-        // The playhead flag standing on its ruler (follow playhead).
-        [GlyphKind.Follow] = ("M2.333 11.867 H13.667 M6.333 8.333 V11.867", "M4.333 3.333 H8.333 V6 L6.333 8.333 L4.333 6 Z"),
+        [GlyphKind.Metronome] = ("M9.8 5.5 H14.201 L19 20 H5 ZM12 19 L13.9 3.2", "M11.329 11 A1.6 1.6 0 1 0 14.53 11 A1.6 1.6 0 1 0 11.329 11 Z"),
+        // A playhead with a short arrow pointing right (follow playhead: the view keeps up with it).
+        [GlyphKind.Follow] = ("M7 7.5 V20 M12 13.5 H20 M17 10.5 L20 13.5 L17 16.5", "M4.5 4 H9.5 L7 7.5 Z"),
         // A horseshoe magnet with banded poles (snap to grid).
-        [GlyphKind.Snap] = (null, "M2.667 11.333 V8.333 A5.333 5.333 0 0 1 13.333 8.333 V11.333 H10.333 V8.333 A2.333 2.333 0 0 0 5.667 8.333 V11.333 ZM2.667 12.667 H5.667 V14.333 H2.667 ZM10.333 12.667 H13.333 V14.333 H10.333 Z"),
+        [GlyphKind.Snap] = (null, "M4 17 V12.5 A8 8 0 0 1 20 12.5 V17 H15.5 V12.5 A3.5 3.5 0 0 0 8.5 12.5 V17 ZM4 19 H8.5 V21.5 H4 ZM15.5 19 H20 V21.5 H15.5 Z"),
         // A breakpoint envelope with two handles.
-        [GlyphKind.Automation] = ("M2 11.667 H6 L9.667 5 H14", "M4.733 11.667 A1.267 1.267 0 1 0 7.267 11.667 A1.267 1.267 0 1 0 4.733 11.667 ZM8.4 5 A1.267 1.267 0 1 0 10.933 5 A1.267 1.267 0 1 0 8.4 5 Z"),
+        [GlyphKind.Automation] = ("M3 17.5 H9 L14.5 7.5 H21", "M7.099 17.5 A1.9 1.9 0 1 0 10.901 17.5 A1.9 1.9 0 1 0 7.099 17.5 ZM12.6 7.5 A1.9 1.9 0 1 0 16.399 7.5 A1.9 1.9 0 1 0 12.6 7.5 Z"),
         // The Apple mark.
         [GlyphKind.Apple] = (null, "F1 M8 4.8 C6.4 3.733 3 3.867 3 7.867 C3 11.067 4.933 14 6.2 14 C7.067 14 7.333 13.533 8 13.533 C8.667 13.533 8.933 14 9.8 14 C10.8 14 12.267 12.133 12.867 10.267 C11.733 9.8 11.067 8.8 11.067 7.667 C11.067 6.6 11.667 5.733 12.533 5.267 C11.467 4 9.333 3.933 8 4.8 ZM8.133 4.2 C8.133 2.867 9.067 1.867 10.4 1.8 C10.4 3.133 9.467 4.133 8.133 4.2 Z"),
         // The Windows mark.
-        [GlyphKind.Windows] = (null, "M2.333 2.333 H7.333 V7.333 H2.333 ZM8.667 2.333 H13.667 V7.333 H8.667 ZM2.333 8.667 H7.333 V13.667 H2.333 ZM8.667 8.667 H13.667 V13.667 H8.667 Z"),
+        [GlyphKind.Windows] = (null, "M3.5 3.5 H11 V11 H3.5 ZM13 3.5 H20.5 V11 H13 ZM3.5 13 H11 V20.5 H3.5 ZM13 13 H20.5 V20.5 H13 Z"),
         // The Linux penguin (even-odd, so the belly is a hole).
         [GlyphKind.Linux] = (null, "F1 M8 1.333 C9.333 1.333 10.133 2.4 10.133 3.867 C10.133 4.933 9.667 5.467 10 6.267 C11.067 7.733 12.667 9.6 12.267 11.867 L13.2 14 H2.8 L3.733 11.867 C3.333 9.6 4.933 7.733 6 6.267 C6.333 5.467 5.867 4.933 5.867 3.867 C5.867 2.4 6.667 1.333 8 1.333 ZM8 6.8 C6.733 6.8 5.867 8.667 5.867 10.533 C5.867 12.2 6.8 13.2 8 13.2 C9.2 13.2 10.133 12.2 10.133 10.533 C10.133 8.667 9.267 6.8 8 6.8 Z"),
         // Two interlocked chain links (a live-freeze link).
         // A padlock, shut and open: a clip locked as reference in the multi-clip editor (specs/029).
-        [GlyphKind.Lock] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.333 0 v2", null),
-        [GlyphKind.LockOpen] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.2 -0.8", null),
-        [GlyphKind.ChainLink] = ("M2.711 5.619 L6.266 9.175 A2.057 2.057 0 0 0 9.175 6.266 L5.619 2.711 A2.057 2.057 0 0 0 2.711 5.619 ZM6.825 9.734 L10.381 13.289 A2.057 2.057 0 0 0 13.289 10.381 L9.734 6.825 A2.057 2.057 0 0 0 6.825 9.734 Z", null),
+        [GlyphKind.Lock] = ("M5 11 h14 v10 h-14 z M8 11 v-3 a4 4 0 0 1 8 0 v3", null),
+        [GlyphKind.LockOpen] = ("M5 11 h14 v10 h-14 z M8 11 v-3 a4 4 0 0 1 7.8 -1.2", null),
+        [GlyphKind.ChainLink] = ("M4.066 8.428 L9.399 13.763 A3.085 3.085 0 0 0 13.763 9.399 L8.428 4.066 A3.085 3.085 0 0 0 4.066 8.428 ZM10.238 14.601 L15.572 19.933 A3.085 3.085 0 0 0 19.933 15.572 L14.601 10.238 A3.085 3.085 0 0 0 10.238 14.601 Z", null),
     };
 
     private static readonly Dictionary<GlyphKind, (Geometry? Stroke, Geometry? Fill)> Parsed = new();
 
-    // A path kind in the s×s box at (x, y): the 16-unit grid scaled as a whole, the stroke
+    // A path kind in the s×s box at (x, y): the 24-unit grid scaled as a whole, the stroke
     // kept at the shared on-screen weight.
     private static void DrawPath(DrawingContext ctx, GlyphKind kind, double x, double y, double s, IBrush ink, double strokePx)
     {
@@ -528,7 +540,7 @@ internal sealed class Glyph : Control
             var (st, fi) = Paths[kind];
             Parsed[kind] = g = (st is null ? null : Geometry.Parse(st), fi is null ? null : Geometry.Parse(fi));
         }
-        double k = s / 16;
+        double k = s / 24;
         using (ctx.PushTransform(Matrix.CreateScale(k, k) * Matrix.CreateTranslation(x, y)))
         {
             if (g.Fill is not null) ctx.DrawGeometry(ink, null, g.Fill);

@@ -2,30 +2,29 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Rhythm editor (instrument kind 12): an eight-voice drum
-// machine in the 700 × 260 card the almanac draws for it. Reading order, left to right:
+// machine in a 776 × 260 card. Reading order, left to right:
 //
-//   KIT 104       the voices — a hue dot, the name (a kit voice takes its sample's name), an
-//                 "fx" mark when it has effects, SYN / SMP. Click selects and plays the voice;
+//   Kit 132       the voices — a hue dot, the name (a kit voice takes its sample's name), an
+//                 "fx" mark when it has effects, syn / smp. Click selects and plays the voice;
 //                 drop a file on one to load it as a sample; right-click for more. The kit
 //                 itself is the header's preset picker (the factory drum kits).
-//   VOICE         the selected voice, on two tabs. Sound — Synth: the HIT contour (drag it —
+//   Voice         the selected voice, on two tabs. Sound — Synth: the Hit contour (drag it —
 //                 across is Decay, up / down Tune) and Tune · Decay · Punch · Tone · Drive ·
 //                 Level; Sample: the file with its Start / End region (drag the lines),
 //                 Reverse, and Start · Length · Tune (st) · Decay · Drive · Level. FX — the
 //                 voice's insert chain, the Drum Rack's device slots over RhythmVoiceAccess:
 //                 click a slot for the effect's own card, add from the menu or drop one.
-//                 MACRO (the header's VOICE / MACRO) swaps the whole panel for the kit's eight
+//                 Macro (the head's Voice / Macro) swaps the whole panel for the kit's eight
 //                 macros (MacroPanel): a knob each, its name and where it goes. They map onto
 //                 voice params and onto the voices' effects; a kit loads with its own
 //                 (KitMacros). Map adds a receiver to the selected macro; right-click a macro
 //                 for its receivers and ranges, rename or clear.
-//   PERFORM 186   Swing · Human · Accent (teal — they shape the playing, not the sound),
-//                 Master and Glue (the bus compressor), the output meter.
-//   STEP          a full-width strip: the selected voice's sixteen steps in bank A–D, a
-//                 velocity lane under them. An on step is accent (a toggle that is on), a
-//                 brighter one the accent step, an outline a quiet step; teal is the playhead
-//                 and the velocity.
-//   status        what the voice is and where its steps are · voices · rate · tempo · CPU.
+//   Step          under the Voice panel: the selected voice's sixteen steps in bank A–D, a
+//                 velocity lane under them. An on step is orange (a toggle that is on), a
+//                 brighter one the accent step, a soft one a quiet step; the playhead and the
+//                 velocity are grey.
+//   Perform 196   Swing · Human · Accent as value bars, Master and Glue (the bus
+//                 compressor), the output meter.
 //
 // Every knob is a plugin param → automation / persist / clone, followed live. The steps are
 // structural state, edited via engine.InstrumentAction and read from the state blob; the
@@ -51,11 +50,11 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Drum machine";
-    public double CardWidth => 700;
+    public double CardWidth => 776;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active) => $"{Math.Max(0, active)}/{RM.Voices}";
 
-    private const double KitW = 104, RailW = 186, StepH = 46, HeadH = 18, StatusH = 18, GraphW = 112;
+    private const double KitW = 132, RailW = 196, StepH = 77, GraphW = 112;
 
     private static int _voiceTab;   // 0 Sound, 1 FX — kept across rebuilds (a voice click, a kit load)
     private static bool _macroMode; // the centre shows the macros instead of the voice
@@ -114,29 +113,33 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
+        static TextBlock Mono(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
+        // A section title: 12, semibold, ink 1.
+        static TextBlock Title(string t, IBrush? c = null) => new()
+        {
+            Text = t, FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold, Foreground = c ?? TextPrimary,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
 
         void Refresh() { foreach (var r in readouts) r(); }
 
         // ---- shared builders ---------------------------------------------------------------
-        Control PKnob(string id, string label, Func<float, string> fmt, double size = 30, double cellW = 42, string? tip = null)
+        Control PKnob(string id, string label, Func<float, string> fmt, double cellW = 50, string? tip = null)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, Default = engine.InstrumentParamDefault(track, pi), Width = size, Height = size,
+                Accent = true, Default = engine.InstrumentParamDefault(track, pi),
             };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };
@@ -157,28 +160,27 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 begin: pi >= 0 ? () => Begin(id) : null,
                 end: pi >= 0 ? () => End(id) : null,
                 reset: pi >= 0 ? () => { Write(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
-                labelWidth: 38, valueWidth: 28, modulation: true);
-            row.ColumnSpacing = 6;
+                labelWidth: 44, valueWidth: 40);
             readouts.Add(sync);
             ToolTip.SetTip(row, tip);
             if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             return row;
         }
 
-        // A small raised button; a latching one turns accent-washed while on.
+        // A raised button; a latching one rises in the soft tint, its word in orange, while on.
         Border SmallButton(Control content, TextBlock label, Action click, Func<bool>? on = null)
         {
             var b = new Border
             {
-                Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
+                Height = NotaSize.Dropdown, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = content, VerticalAlignment = VerticalAlignment.Center,
             };
+            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             void Paint()
             {
                 bool lit = on?.Invoke() ?? false;
-                b.Background = lit ? NotaPalette.AccentSubtle : NotaPalette.SurfaceRaised;
-                b.BorderBrush = lit ? NotaPalette.BorderBrass : BorderDef;
-                label.Foreground = lit ? AccentBright : NotaPalette.TextStrong;
+                b.Background = lit ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                label.Foreground = lit ? AccentBright : TextPrimary;
             }
             b.PointerPressed += (_, e) =>
             {
@@ -237,33 +239,33 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
 
         // ---- KIT ------------------------------------------------------------------------------
-        var kitRows = new Grid { Margin = new Thickness(2) };
+        var kitRows = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         var kitDots = new Ellipse[RM.Voices];
         for (int v = 0; v < RM.Voices; v++)
         {
-            kitRows.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
+            kitRows.RowDefinitions.Add(new RowDefinition(20, GridUnitType.Pixel));
             int vv = v; bool on = v == sel;
-            var dot = new Ellipse { Width = 5, Height = 5, Fill = Hue(v), VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Ellipse { Width = 6, Height = 6, Fill = Hue(v), VerticalAlignment = VerticalAlignment.Center };
             kitDots[v] = dot;
             var nm = new TextBlock
             {
-                Text = VoiceLabel(engine, track, v, isSample[v]), FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
+                Text = VoiceLabel(engine, track, v, isSample[v]), FontSize = NotaType.KnobValue, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
                 Foreground = on ? AccentBright : TextPrimary, VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(5, 0, 4, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0, 2, 0),
             };
-            var tag = Mono(isSample[v] ? "smp" : "syn", on ? AccentBright : TextTertiary);
+            var tag = Mono(isSample[v] ? "smp" : "syn", on ? AccentBright : TextTertiary, NotaType.KnobValue);
             var fxTag = Mono(engine.RhythmVoiceDeviceCount(track, v) > 0 ? "fx" : "", on ? AccentBright : TextTertiary);
             fxTag.Margin = new Thickness(0, 0, 3, 0);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(5, 0) };
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(7, 0, 6, 0) };
             row.Children.Add(dot);
             Grid.SetColumn(nm, 1); row.Children.Add(nm);
             Grid.SetColumn(fxTag, 2); row.Children.Add(fxTag);
             Grid.SetColumn(tag, 3); row.Children.Add(tag);
-            IBrush restBorder = on ? NotaPalette.BorderBrass : Brushes.Transparent;
+            IBrush restBorder = Brushes.Transparent;
             var box = new Border
             {
-                CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
-                Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent, BorderBrush = restBorder, Child = row,
+                CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                Background = on ? NotaPalette.AccentSoft : Brushes.Transparent, BorderBrush = restBorder, Child = row,
             };
             ToolTip.SetTip(box, $"{RM.VoiceNames[v]} · MIDI {DeviceCardKit.NoteName(RM.MidiNotes[v])}\nClick: select and play · drop a file to load it · right-click for more");
             AttachFxTip(fxTag, v);
@@ -276,7 +278,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 Act(RM.A_Audition, vv, 0.8f);
                 if (vv != sel) { Act(RM.A_SelectVoice, vv); ctx.RequestRebuild(); }
             };
-            AcceptDrops(box, vv, h => box.BorderBrush = h ? Teal : restBorder);
+            AcceptDrops(box, vv, h => box.BorderBrush = h ? NotaPalette.TextSecondary : restBorder);
             Grid.SetRow(box, v); kitRows.Children.Add(box);
         }
         void AttachFxTip(Control c, int v)
@@ -302,9 +304,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 () => { Act(RM.A_ClearVoice, v); ctx.NotifyChanged(); ReloadPattern(); }));
             fly.ShowAt(anchor);
         }
-        var kitHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(7, 0) };
-        kitHead.Children.Add(Cap("KIT"));
-        var kitSub = Mono("syn/smp", NotaPalette.TextDisabled); kitSub.HorizontalAlignment = HorizontalAlignment.Right;
+        var kitHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 20 };
+        kitHead.Children.Add(Title("Kit"));
+        var kitSub = Mono("syn/smp", TextTertiary, NotaType.Eyebrow); kitSub.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(kitSub, 1); kitHead.Children.Add(kitSub);
         var kit = Section(kitHead, kitRows);
         kit.Width = KitW;
@@ -318,27 +320,27 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 else LoadSample(kit, sel);
             }
             else if (sampleMode) { Act(RM.A_SetSource, sel, 0f); ctx.NotifyChanged(); ctx.RequestRebuild(); }
-        }, out _, padX: 6, fontSize: 7);
+        }, out _);
         ToolTip.SetTip(srcSeg, "Synth: the voice's own engine · Sample: a loaded one-shot (loads one if the voice has none)");
 
-        var folder = new Glyph(GlyphKind.Folder, 8) { Foreground = NotaPalette.TextStrong };
+        var folder = new Glyph(GlyphKind.Folder, 10) { Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var fileText = new TextBlock
         {
-            Text = sampleMode ? sampleName : "Load file…", FontSize = 7, FontWeight = FontWeight.SemiBold, MaxWidth = 90,
+            Text = sampleMode ? sampleName : "Load file…", FontSize = NotaType.Body, MaxWidth = 100,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
-        if (sampleMode) fileText.FontFamily = NotaFonts.MonoFamily;
-        var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { folder, fileText } }, fileText,
+        var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { folder, fileText } }, fileText,
             () => LoadSample(kit, sel), () => sampleMode);
-        readouts.Add(() => folder.Foreground = sampleMode ? NotaPalette.TextPrimary : NotaPalette.TextStrong);
+        readouts.Add(() => folder.Foreground = sampleMode ? AccentBright : TextSecondary);
         ToolTip.SetTip(fileBtn, sampleMode ? $"{sampleName} — click to load another file" : "Load a one-shot into this voice (or drop a file on the voice)");
 
-        var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Center };
+        var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         // VOICE / MACRO: which the centre shows. The lit one is the one on screen.
         Control ModeCap(string text, bool macro)
         {
             bool on = macro == _macroMode;
-            var c = Cap(text, on ? (macro ? AccentBright : NotaPalette.TextStrong) : NotaPalette.TextDisabled);
+            var c = Title(text, on ? TextPrimary : TextDisabled);
+            if (!on) c.FontWeight = FontWeight.Normal;
             var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = c };
             ToolTip.SetTip(host, macro ? "The kit's eight macros — knobs over every voice and its effects" : "The selected voice's sound and effects");
             host.PointerPressed += (_, e) =>
@@ -349,44 +351,49 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             };
             return host;
         }
-        voiceHead.Children.Add(ModeCap("VOICE", false));
-        voiceHead.Children.Add(ModeCap("MACRO", true));
-        if (!_macroMode) voiceHead.Children.Add(new TextBlock { Text = VoiceLabel(engine, track, sel, sampleMode), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 84, TextTrimming = TextTrimming.CharacterEllipsis });
+        var voiceCap = ModeCap("Voice", false);
+        voiceHead.Children.Add(voiceCap);
+        voiceHead.Children.Add(ModeCap("Macro", true));
+        if (!_macroMode)
+        {
+            var nameT = Title(VoiceLabel(engine, track, sel, sampleMode)); nameT.MaxWidth = 84; nameT.Margin = new Thickness(4, 0, 0, 0);
+            voiceHead.Children.Add(nameT);
+        }
         int fxCount = engine.RhythmVoiceDeviceCount(track, sel);
         var tabSeg = Segments(new[] { "Sound", fxCount > 0 ? $"FX {fxCount}" : "FX" }, () => _voiceTab, i =>
         {
             if (i == _voiceTab) return;
             _voiceTab = i; ctx.RequestRebuild();
-        }, out _, padX: 6, fontSize: 7);
+        }, out _);
         ToolTip.SetTip(tabSeg, "Sound: the voice's source and shape · FX: its own effects, before the kit bus");
         if (!_macroMode) voiceHead.Children.Add(tabSeg);
-        var voiceTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var voiceTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         var macros = new RhythmMacroSurface(engine, track, idx, isSample, Dots);
         if (_macroMode)
         {
             voiceTools.Children.Add(Mono($"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned"));
+            var mapText = new TextBlock { Text = "Map", FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
             Border map = null!;
-            map = MacroPanel.Button("Map", teal: true, () => MacroPanel.ShowMapMenu(ctx, macros, map, _macro));
-            map.Height = 14;
+            map = SmallButton(mapText, mapText, () => MacroPanel.ShowMapMenu(ctx, macros, map, _macro));
             ToolTip.SetTip(map, $"Add a receiver to {macros.MacroName(_macro)}: a voice param, a kit setting or a voice's effect");
             voiceTools.Children.Add(map);
         }
         else if (_voiceTab == 0) { voiceTools.Children.Add(srcSeg); voiceTools.Children.Add(fileBtn); }
         else if (_voiceTab == 1)
         {
-            var hint = Mono("signal left → right", NotaPalette.TextDisabled);
+            var hint = Mono("signal left → right", TextTertiary);
             voiceTools.Children.Add(hint);
         }
         if (sampleMode && _voiceTab == 0 && !_macroMode)
         {
-            var revText = new TextBlock { Text = "Reverse", FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var revText = new TextBlock { Text = "Reverse", FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
             var rev = SmallButton(revText, revText,
                 () => { Write(P("reverse"), G(P("reverse")) >= 0.5f ? 0f : 1f); Refresh(); }, () => G(P("reverse")) >= 0.5f);
             ToolTip.SetTip(rev, "Play the region back to front");
             if (I(P("reverse")) is var ri and >= 0) MidiLearn.Bind(rev, MidiTarget.PluginParam(track, -1, ri), engine.PluginParamName(track, -1, ri));
             voiceTools.Children.Add(rev);
         }
-        var voiceHeadRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var voiceHeadRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 8 };
         voiceHeadRow.Children.Add(voiceHead);
         Grid.SetColumn(voiceTools, 1); voiceHeadRow.Children.Add(voiceTools);
 
@@ -409,7 +416,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             {
                 float st = G(P("start")), en = (float)RM.RegionEnd(st, G(P("length")));
                 string secs = sampleSecs > 0 ? " · " + NotaNum.Unit((en - st) * sampleSecs, "0.00", "s") : "";
-                sv.Set(sampleName, Hue(sel), st, en, G(P("reverse")) >= 0.5f, posSel, $"{RM.Pct(st)} → {RM.Pct(en)}{secs}");
+                sv.Set(sampleName, NotaPalette.VizInk, st, en, G(P("reverse")) >= 0.5f, posSel, $"{RM.Pct(st)} → {RM.Pct(en)}{secs}");
             });
             ToolTip.SetTip(sv, "Drag the Start and End lines to set them · double-click to load another file");
             AcceptDrops(sv, sel, _ => { });
@@ -437,21 +444,21 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         Control[] cells = sampleMode
             ? new[]
             {
-                PKnob(P("start"), "START", v => RM.Pct(v), tip: "Where in the file the hit starts"),
-                PKnob(P("length"), "LENGTH", v => RM.Pct(v), tip: "How much of the file plays, from Start"),
-                PKnob(P("tune"), "TUNE", v => RM.Semis(RM.SampleSemis(v)), tip: "Transpose, ±12 semitones"),
-                PKnob(P("decay"), "DECAY", v => RM.Pct(v), tip: "Amp decay — shortens the hit"),
-                PKnob(P("drive"), "DRIVE", v => RM.Pct(v), tip: "Saturation"),
-                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: "The voice's level in the kit"),
+                PKnob(P("start"), "Start", v => RM.Pct(v), tip: "Where in the file the hit starts"),
+                PKnob(P("length"), "Length", v => RM.Pct(v), tip: "How much of the file plays, from Start"),
+                PKnob(P("tune"), "Tune", v => RM.Semis(RM.SampleSemis(v)), tip: "Transpose, ±12 semitones"),
+                PKnob(P("decay"), "Decay", v => RM.Pct(v), tip: "Amp decay — shortens the hit"),
+                PKnob(P("drive"), "Drive", v => RM.Pct(v), tip: "Saturation"),
+                PKnob(P("level"), "Level", v => RM.Pct(v), tip: "The voice's level in the kit"),
             }
             : new[]
             {
-                PKnob(P("tune"), "TUNE", v => RM.Pct(v), tip: "Pitch (Kick, Snare, Tom, Hats, Perc) or noise colour (Clap, Rim)"),
-                PKnob(P("decay"), "DECAY", v => RM.Pct(v), tip: "Amp decay"),
-                PKnob(P("punch"), "PUNCH", v => RM.Pct(v), tip: "Attack click / snap"),
-                PKnob(P("tone"), "TONE", v => RM.Pct(v), tip: "Snare body ↔ noise · Hats metal ↔ noise · Perc ring ratio"),
-                PKnob(P("drive"), "DRIVE", v => RM.Pct(v), tip: "Saturation"),
-                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: "The voice's level in the kit"),
+                PKnob(P("tune"), "Tune", v => RM.Pct(v), tip: "Pitch (Kick, Snare, Tom, Hats, Perc) or noise colour (Clap, Rim)"),
+                PKnob(P("decay"), "Decay", v => RM.Pct(v), tip: "Amp decay"),
+                PKnob(P("punch"), "Punch", v => RM.Pct(v), tip: "Attack click / snap"),
+                PKnob(P("tone"), "Tone", v => RM.Pct(v), tip: "Snare body ↔ noise · Hats metal ↔ noise · Perc ring ratio"),
+                PKnob(P("drive"), "Drive", v => RM.Pct(v), tip: "Saturation"),
+                PKnob(P("level"), "Level", v => RM.Pct(v), tip: "The voice's level in the kit"),
             };
         for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
@@ -461,59 +468,61 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         else if (_voiceTab == 1)
         {
             var fxStrip = new RackCardView(ctx).BuildEffectStrip(new RhythmVoiceAccess(engine, track), sel);
-            voiceBody = new Border { Margin = new Thickness(6, 5), Child = fxStrip };
+            voiceBody = new Border { Child = fxStrip };
         }
         else
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Margin = new Thickness(6, 5) };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
             g.Children.Add(graph);
             Grid.SetColumn(knobs, 1); g.Children.Add(knobs);
             voiceBody = g;
         }
+        voiceBody.Margin = new Thickness(0, 5, 0, 0);
         var voice = Section(voiceHeadRow, voiceBody);
 
         // ---- PERFORM --------------------------------------------------------------------------
-        var perfHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 0) };
-        perfHead.Children.Add(Cap("PERFORM"));
-        var perfSub = Mono("shift+step = accent", NotaPalette.TextDisabled); perfSub.HorizontalAlignment = HorizontalAlignment.Right;
+        var perfHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 20 };
+        perfHead.Children.Add(Title("Perform"));
+        var perfSub = Mono("shift+step = accent", TextTertiary, NotaType.Eyebrow); perfSub.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(perfSub, 1); perfHead.Children.Add(perfSub);
 
         var sliders = new StackPanel
         {
-            Spacing = 6,
+            Spacing = 9, Margin = new Thickness(0, 6, 0, 0),
             Children =
             {
-                Slider("SWING", "swing", "Swing: delays every second 16th — at 100\u2009% by half a step"),
-                Slider("HUMAN", "humanize", "Humanize: a random nudge to every hit's velocity"),
-                Slider("ACCENT", "accent", "How much louder an accented step plays"),
+                Slider("Swing", "swing", "Swing: delays every second 16th — at 100\u2009% by half a step"),
+                Slider("Human", "humanize", "Humanize: a random nudge to every hit's velocity"),
+                Slider("Accent", "accent", "How much louder an accented step plays"),
             },
         };
 
-        var meter = new MeterBar { Height = 48, Width = MeterScale.StereoWidth, VerticalAlignment = VerticalAlignment.Center };
+        var meter = new MeterBar { Height = 52, Width = MeterScale.StereoWidth, VerticalAlignment = VerticalAlignment.Center };
         ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid { Height = 48, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
+        var meterScale = new Grid { Height = 52, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
         for (int i = 0; i < 3; i++)
         {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis);
+            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
+            c.LineHeight = 10;
             Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
         }
         var meterBlock = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 6,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
         };
         meterBlock.Children.Add(meter);
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
-        var master = PKnob("volume", "MASTER", v => RM.Pct(v), 40, 46, "The kit's output level");
-        var glue = PKnob("glue", "GLUE", v => RM.Pct(v), 30, 40, "Glue: a bus compressor on the whole kit — holds the hits together (0 = off)");
-        var perfFoot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
+        var master = PKnob("volume", "Master", v => RM.Pct(v), 52, "The kit's output level");
+        var glue = PKnob("glue", "Glue", v => RM.Pct(v), 48, "Glue: a bus compressor on the whole kit — holds the hits together (0 = off)");
+        var perfFoot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 8, Margin = new Thickness(0, 8, 0, 0) };
         perfFoot.Children.Add(master);
         Grid.SetColumn(glue, 1); perfFoot.Children.Add(glue);
         Grid.SetColumn(meterBlock, 2); perfFoot.Children.Add(meterBlock);
-        var perfFootHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = perfFoot };
+        var perfFootHost = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Child = perfFoot };
 
-        var perfBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6, Margin = new Thickness(8, 6) };
+        var perfBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 8 };
         perfBody.Children.Add(sliders);
         Grid.SetRow(perfFootHost, 1); perfBody.Children.Add(perfFootHost);
         var perform = Section(perfHead, perfBody);
@@ -589,13 +598,13 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             fly.ShowAt(strip);
         };
 
-        // Banks A–D: the playing bank in teal (it is the performance, not a parameter).
-        var bankRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
+        // Banks A–D: a segment strip whose picked cell is the playing bank.
+        var bankRow = new StackPanel { Orientation = Orientation.Horizontal };
         for (int b = 0; b < RM.Banks; b++)
         {
             int bb = b;
-            var tb = new TextBlock { Text = RM.BankNames[b], FontSize = 7, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var cell = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var tb = new TextBlock { Text = RM.BankNames[b], FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var cell = new Border { Height = NotaSize.Seg, MinWidth = 22, CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = tb };
             ToolTip.SetTip(cell, $"Bank {RM.BankNames[b]} — play and edit this pattern · right-click to copy or clear it");
             cell.PointerPressed += (_, e) =>
             {
@@ -612,9 +621,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             for (int b = 0; b < RM.Banks; b++)
             {
                 bool on = b == bank;
-                bankCells[b].Background = on ? Teal : Brushes.Transparent;
-                bankTexts[b].Foreground = on ? OnAccent : TextTertiary;
-                bankTexts[b].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                bankCells[b].Background = on ? NotaPalette.AccentSoft : Brushes.Transparent;
+                if (on) bankCells[b].BindResource(Border.BoxShadowProperty, "Shadow.Lifted"); else bankCells[b].BoxShadow = default;
+                bankTexts[b].Foreground = on ? AccentBright : TextTertiary;
             }
         }
         void BankMenu(int b, Control anchor)
@@ -637,24 +646,27 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
         var bankBox = new Border
         {
-            Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = bankRow,
+            Background = NotaPalette.Groove, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center, Child = bankRow,
         };
+        bankBox.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
 
-        var stepCount = Mono("", TextTertiary);
+        var stepCount = Mono("", TextTertiary, NotaType.Caption);
         stepCount.HorizontalAlignment = HorizontalAlignment.Right;
         readouts.Add(() => stepCount.Text = $"{pat.Count(bank, sel)} of {RM.Steps} · 1/16 · bank {RM.BankNames[bank]}");
-        var stepHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 6, Height = 12 };
-        stepHead.Children.Add(Cap("STEP"));
-        var stepName = new TextBlock { Text = RM.VoiceNames[sel], FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var stepHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 8 };
+        stepHead.Children.Add(Title("Step", TextTertiary));
+        ((TextBlock)stepHead.Children[0]).FontWeight = FontWeight.Normal;
+        var stepName = Title(RM.VoiceNames[sel]);
         Grid.SetColumn(stepName, 1); stepHead.Children.Add(stepName);
         Grid.SetColumn(bankBox, 2); stepHead.Children.Add(bankBox);
         Grid.SetColumn(stepCount, 3); stepHead.Children.Add(stepCount);
-        var stepGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 3, Margin = new Thickness(6, 4) };
+        var stepGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 5 };
         stepGrid.Children.Add(stepHead);
         Grid.SetRow(strip, 1); stepGrid.Children.Add(strip);
         var steps = SectionBox(stepGrid);
         steps.Height = StepH;
+        steps.Padding = new Thickness(SectionPad, SectionPad, SectionPad, 9);
 
         void ReloadPattern()
         {
@@ -663,17 +675,6 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             bank = pat.CurrentBank;
             LoadStrip(); PaintBanks(); Refresh();
         }
-
-        // ---- status ----------------------------------------------------------------------------
-        readouts.Add(() => status.Text = _macroMode ? MacroPanel.Status(engine, macros, _macro) : RM.Summary(G, pat, sel, sampleMode, sampleName));
-        var statusBar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- live ------------------------------------------------------------------------------
         void Live()
@@ -691,22 +692,16 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 float f = scope[RM.S_Flash0 + sel], p = scope[RM.S_Pos0 + sel];
                 if (Math.Abs(f - flashSel) > 0.05f || Math.Abs(p - posSel) > 0.002f) { flashSel = f; posSel = p; Refresh(); }
             }
-            int voices = Math.Max(0, engine.InstrumentVoiceCount(track));
-            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{RM.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
         }
 
         // ---- assembly --------------------------------------------------------------------------
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = NotaSpace.DeviceGap };
-        top.Children.Add(kit);
-        Grid.SetColumn(voice, 1); top.Children.Add(voice);
-        Grid.SetColumn(perform, 2); top.Children.Add(perform);
-        var body = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = NotaSpace.DeviceGap, Margin = new Thickness(NotaSpace.DeviceGap) };
-        body.Children.Add(top);
-        Grid.SetRow(steps, 1); body.Children.Add(steps);
-
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var centre = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = SectionGap };
+        centre.Children.Add(voice);
+        Grid.SetRow(steps, 1); centre.Children.Add(steps);
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
+        root.Children.Add(kit);
+        Grid.SetColumn(centre, 1); root.Children.Add(centre);
+        Grid.SetColumn(perform, 2); root.Children.Add(perform);
 
         LoadStrip(); PaintBanks();
         ctx.AddDeviceRefresher(Live);
@@ -845,14 +840,16 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
     }
 
-    // A section: a rule-divided area of the card, with an 18px header strip.
+    // A pressed-in section with its head row (a title and its tools) over the body.
     private static Decorator Section(Control head, Control body)
     {
-        var headHost = new Border { Height = HeadH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
+        var headHost = new Border { MinHeight = 20, Child = head };
         var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         g.Children.Add(headHost);
         Grid.SetRow(body, 1); g.Children.Add(body);
-        return SectionBox(g);
+        var s = SectionBox(g);
+        s.Padding = new Thickness(SectionPad);
+        return s;
     }
 
     private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);

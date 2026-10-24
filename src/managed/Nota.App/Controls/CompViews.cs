@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The custom-drawn views of the Nota Compressor card: the LEVEL column's faders (with the
-// live level the fader is set against), the transfer curve (drag the threshold node), the
+// The custom-drawn views of the Nota Compressor card: the transfer curve (drag the threshold node), the
 // gain-reduction history, the Motion envelope (reduction against the input, at a time scale
 // where attack and release can be read) and the sidechain key spectrum with its filters
 // (drag the HP / LP handles; up/down sets Q). They draw what the card hands them and own
@@ -20,8 +19,8 @@ namespace Nota.App;
 
 internal static class CompDraw
 {
-    public static FormattedText Text(string t, IBrush ink, double size = 7)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+    public static FormattedText Text(string t, IBrush ink, double size = NotaGraph.AxisSize)
+        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void Polyline(DrawingContext ctx, IPen pen, IReadOnlyList<Point> pts)
     {
@@ -45,96 +44,6 @@ internal static class CompDraw
     }
 
     public static string Db(double db) => db <= -99 ? "−∞" : NotaNum.F($"{db:0.0}");
-}
-
-// A vertical fader in the LEVEL column: a groove, a wash fill in its chroma up to the value
-// and a bright handle, plus a hairline tick at the live level it works against (the input
-// for the threshold). Drag moves the value relative to where it was — a click never jumps it;
-// Shift / Ctrl / ⌘ drag fine; double-click restores the default.
-internal sealed class CompFader : Control
-{
-    private double _v, _live = double.NaN, _startV, _startY;
-    private bool _drag;
-
-    public IBrush Ink { get; set; } = NotaPalette.VizInk;      // resting fill: neutral ink
-    public IBrush Handle { get; set; } = NotaPalette.VizInk;   // turns accent while dragged
-    public double Default { get; set; } = double.NaN;
-    public bool Dragging => _drag;
-
-    public event Action<double>? Changed;
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-
-    public CompFader() { Width = 16; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
-
-    public void Set(double v, double live = double.NaN)
-    {
-        double n = Math.Clamp(v, 0, 1);
-        bool dirty = !_drag && Math.Abs(n - _v) > 1e-4;
-        if (!_drag) _v = n;
-        if (!(double.IsNaN(live) && double.IsNaN(_live)) && Math.Abs(live - _live) > 1e-3) { _live = live; dirty = true; }
-        if (dirty) InvalidateVisual();
-    }
-
-    public void Recolor(IBrush ink, IBrush handle) { Ink = ink; Handle = handle; InvalidateVisual(); }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
-        {
-            GestureBegin?.Invoke(); _v = Default; Changed?.Invoke(_v); GestureEnd?.Invoke();
-            InvalidateVisual(); e.Handled = true; return;
-        }
-        _drag = true; _startV = _v; _startY = e.GetPosition(this).Y;
-        GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        if (!_drag) return;
-        double h = Math.Max(20, Bounds.Height);
-        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        double v = Math.Clamp(_startV + (_startY - e.GetPosition(this).Y) / h * (fine ? 0.2 : 1.0), 0, 1);
-        if (Math.Abs(v - _v) < 1e-6) return;
-        _v = v; Changed?.Invoke(_v); InvalidateVisual();
-    }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (!_drag) return;
-        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 4) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, r, r);
-        double y = (1 - _v) * h;
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-        {
-            ctx.FillRectangle(NotaPalette.Wash((SolidColorBrush)Ink, 0x48), new Rect(0, y, w, h - y));
-            if (!double.IsNaN(_live) && _live > 0.001)
-            {
-                double ly = (1 - Math.Clamp(_live, 0, 1)) * h;
-                ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1), new Point(3, ly), new Point(w - 3, ly));
-            }
-        }
-        ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : Handle, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
-    }
 }
 
 // The transfer curve: input dB (x, −60…0) against output dB (y), unity dashed, the knee drawn
@@ -233,7 +142,7 @@ internal sealed class CompTransferView : Control
             double li = Math.Min(Hi, _live);
             ctx.DrawEllipse(NotaPalette.TextPrimary, null, new Point(X(li), Y(li - CompDraw.Reduction(li, _thr, _ratio, _knee, _range))), 2, 2);
         }
-        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: _drag);
+        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: true);   // the one point is always the picked one
 
         NotaGraph.Title(ctx, rect, "Transfer");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, NotaNum.F($"{_ratio:0.#}:1"), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
@@ -243,7 +152,7 @@ internal sealed class CompTransferView : Control
 }
 
 // The reduction history: four seconds of gain reduction hanging from the top edge (depth =
-// reduction), a teal dashed line at the held peak. Push() once per UI tick; a click clears
+// reduction), a grey dashed line at the held peak. Push() once per UI tick; a click clears
 // the held peak.
 internal sealed class CompGrHistoryView : Control
 {
@@ -301,8 +210,8 @@ internal sealed class CompGrHistoryView : Control
         if (Peak > 0.05)
         {
             double py = top + Math.Clamp(Peak / scale, 0, 1) * (bot - top);
-            ctx.DrawLine(new Pen(NotaPalette.Teal, 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) }, new Point(x0, py), new Point(x1, py));
-            var ft = CompDraw.Text(NotaNum.F($"peak −{Peak:0.0}"), NotaPalette.TealBright);
+            ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) }, new Point(x0, py), new Point(x1, py));
+            var ft = CompDraw.Text(NotaNum.F($"peak −{Peak:0.0}"), NotaPalette.TextTertiary);
             ctx.DrawText(ft, new Point(x1 - ft.Width - 2, Math.Clamp(py - ft.Height - 1, top, bot - ft.Height)));
         }
         NotaGraph.Title(ctx, rect, "Gain reduction");
@@ -364,14 +273,14 @@ internal sealed class CompMotionView : Control
                 double x = x0 + (double)c / (cols - 1) * (x1 - x0);
                 inPts.Add(new Point(x, YIn(mi))); grPts.Add(new Point(x, YGr(mg)));
             }
-            CompDraw.Polyline(ctx, NotaGraph.SecondaryPen(NotaPalette.Teal, 1.1), inPts);
+            CompDraw.Polyline(ctx, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), inPts);
             CompDraw.Polyline(ctx, NotaGraph.PrimaryPen, grPts);
         }
         double ty = YIn(_thr);
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) }, new Point(x0, ty), new Point(x1, ty));
 
         NotaGraph.Title(ctx, rect, "Reduction envelope");
-        NotaGraph.Legend(ctx, x1 - 2, 3, ("reduction", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, x1 - 2, 3, ("reduction", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, _windowMs >= 1000 ? NotaNum.F($"{_windowMs / 1000:0.#} s") : NotaNum.F($"{_windowMs:0} ms"));
         var sc = CompDraw.Text(NotaNum.F($"−{_grScale:0} dB"), NotaPalette.TextAxis);
@@ -380,7 +289,7 @@ internal sealed class CompMotionView : Control
 }
 
 // The sidechain key: the spectrum of the unfiltered key (neutral ink) with the detector filters
-// laid over it (teal dashed — the 2-pole HP × LP response with its Q). Drag a handle
+// laid over it (grey dashed — the 2-pole HP × LP response with its Q). Drag a handle
 // sideways to move its corner, up / down to change Q; double-click opens that filter.
 // Framed in accent while Listen is on (the key is what you hear).
 internal sealed class CompKeyView : Control
@@ -547,7 +456,7 @@ internal sealed class CompKeyView : Control
             double m = (hpOn ? Mag2(f, _hp, _q, true) : 1) * (lpOn ? Mag2(f, _lp, _q, false) : 1);
             fp.Add(new Point(x, Y(20 * Math.Log10(Math.Max(m, 1e-6)) - 6)));
         }
-        CompDraw.Polyline(ctx, new Pen(NotaPalette.Teal, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }, fp);
+        CompDraw.Polyline(ctx, new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }, fp);
 
         foreach (var (hz, idx, on) in new[] { (_hp, 1, hpOn), (_lp, 2, lpOn) })
         {
@@ -562,7 +471,7 @@ internal sealed class CompKeyView : Control
         }
 
         NotaGraph.Title(ctx, rect, "Sidechain key");
-        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.VizInk, NotaGraph.Mark.Line), ("key filter", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.VizInk, NotaGraph.Mark.Line), ("key filter", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         if (!_has)
         {
             var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, 8);

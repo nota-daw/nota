@@ -98,19 +98,18 @@ public sealed partial class SessionView
                 if (c.Kind is ColKind.Track or ColKind.Group)
                 {
                     int bus = b, id = c.TrackId;
-                    var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { Default = 0 };
-                    var read = ReadoutText();
-                    void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
-                    f.ValueChanged += v => { _engine.SetTrackSend(id, bus, (float)v); Show(); };
-                    ValueEntry.Attach(f, f.EntryField("Send", v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
-                    Show();
+                    // The send amount is written inside the bar (style guide: shell sliders).
+                    static string SendText(double v) => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0");
+                    var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { Default = 0, Text = SendText };
+                    f.ValueChanged += v => _engine.SetTrackSend(id, bus, (float)v);
+                    ValueEntry.Attach(f, f.EntryField("Send", SendText));
                     sendSyncs.Add(() =>
                     {
                         if (f.Dragging) return;
                         double v = _engine.GetTrackSend(id, bus);
-                        if (Math.Abs(v - f.Value) > 1e-3) { f.Value = v; Show(); }
+                        if (Math.Abs(v - f.Value) > 1e-3) f.Value = v;
                     });
-                    rows.Add(FaderRow(f, read));
+                    rows.Add(FaderRow(f, null));
                 }
                 else rows.Add(new Border { Height = FaderRowH });
             }
@@ -131,14 +130,13 @@ public sealed partial class SessionView
                 Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
                 pan.PanChanged += p => panUndo.Change(p, setPan);
                 ValueEntry.Attach(pan, pan.EntryField("Pan"));
-                panRow = FaderRow(pan, ReadoutText());
+                panRow = FaderRow(pan, null);
             }
             else panRow = new Border { Height = FaderRowH };
 
             double vol0 = hasTrack ? ti.Volume : GetMasterVolume?.Invoke() ?? 1f;
-            var vol = new MiniFader(vol0, 1.5) { Default = 1.0 };
-            var db = ReadoutText();
-            void ShowDb() => db.Text = vol.Value <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(vol.Value), signed: true);
+            static string DbText(double v) => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true);
+            var vol = new MiniFader(vol0, 1.5) { Default = 1.0, Text = DbText };
             var volUndo = new MixGesture(_engine, hasTrack ? MixTarget.Volume(c.TrackId) : MixTarget.Master);
             vol.GestureBegin += volUndo.Begin;
             vol.GestureEnd += volUndo.End;
@@ -147,9 +145,8 @@ public sealed partial class SessionView
                 if (hasTrack) _engine.SetTrackVolume(c.TrackId, (float)v);
                 else SetMasterVolume?.Invoke((float)v);
             };
-            vol.ValueChanged += v => { volUndo.Change(v, setVol); ShowDb(); };
-            ValueEntry.Attach(vol, vol.EntryField("Volume", v => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true)), db);
-            ShowDb();
+            vol.ValueChanged += v => volUndo.Change(v, setVol);
+            ValueEntry.Attach(vol, vol.EntryField("Volume", DbText));
 
             var mL = new MeterLine(); var mR = new MeterLine();
             var meters = new StackPanel { Height = MeterRowH, Spacing = 1, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Children = { mL, mR } };
@@ -175,7 +172,7 @@ public sealed partial class SessionView
                         UpdateStates();
                     }));
             }
-            root.Children.Add(Section(panRow, FaderRow(vol, db), meters, btns));
+            root.Children.Add(Section(panRow, FaderRow(vol, null), meters, btns));
         }
         if (sendSyncs.Count > 0)
         {
@@ -188,17 +185,16 @@ public sealed partial class SessionView
     private static TextBlock ReadoutText()
     {
         var t = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
 
-    private static Control FaderRow(Control fader, TextBlock readout)
+    private static Control FaderRow(Control fader, TextBlock? readout)
     {
         fader.VerticalAlignment = VerticalAlignment.Center;
         var g = new Grid { Height = FaderRowH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(4, 0), ColumnSpacing = 6 };
         g.Children.Add(fader);
-        Grid.SetColumn(readout, 1);
-        g.Children.Add(readout);
+        if (readout is not null) { Grid.SetColumn(readout, 1); g.Children.Add(readout); }
         return g;
     }
 
@@ -211,7 +207,7 @@ public sealed partial class SessionView
         var disc = new Glyph(GlyphKind.Record, 7);
         var b = new Border
         {
-            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             BorderBrush = NotaPalette.Seam, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             Child = arm ? disc : text,
         };
@@ -301,7 +297,7 @@ public sealed partial class SessionView
                 if (_engine.TryGetTrackInfo(i, out var t) && t.Id == c.GroupId) { text = TrackNames.Of(_engine, t); break; }
         var b = new Border
         {
-            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
         };
@@ -323,7 +319,7 @@ public sealed partial class SessionView
                 HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(compact ? 4 : 8, 0),
                 FontSize = compact ? 9 : 10, Height = compact ? 16 : 20, MinWidth = 0,
             };
-            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.Mono");
+            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.UI");
             tb.Click += (_, _) =>
             {
                 foreach (var b in buttons) b.IsChecked = ReferenceEquals(b, tb);

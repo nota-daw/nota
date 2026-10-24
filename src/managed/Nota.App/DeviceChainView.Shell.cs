@@ -2,8 +2,9 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the ONE shared card shell (mockup 2f header) used by every
-// built-in instrument and effect editor, so the chain reads as one family. It draws
-// the 22px chrome bar over a body host. The header has fixed slots, left to right:
+// built-in instrument and effect editor, so the chain reads as one family. The card is
+// raised (a thin outline and a light top edge, corner 9); a 32px header sits over a body
+// host that keeps 8 from the card edge (style guide, spec 038). The header has fixed slots, left to right:
 // name · preset picker · badges (type, live voice count, the card's own accessories) ·
 // power (bypass). The power slot is reserved on every card, so right edges line up down a
 // chain. A/B compare, move and delete live in the header's context menu. Card bodies (IInstrumentCard / IDeviceBody)
@@ -26,9 +27,8 @@ namespace Nota.App;
 
 public sealed partial class DeviceChainView
 {
-    private static readonly IBrush ShellBg = NotaPalette.SurfaceCard;   // card body: the panel tone
-    private static readonly IBrush ShellHdr = NotaPalette.SurfaceRaised; // header: raised, with a bevel
-    private static readonly IBrush ShellInset = NotaPalette.BgSunken;
+    private static readonly IBrush ShellBg = NotaPalette.SurfaceRaised;  // the card: raised off the panel
+    private static readonly IBrush ShellHdr = NotaPalette.DeviceHeader;  // the header strip
 
     // The three device chains the one shell serves — each has its own param / bypass /
     // reorder / preset API, branched on below.
@@ -125,17 +125,16 @@ public sealed partial class DeviceChainView
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-    private static TextBlock Mono(string t, double w) { var tb = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, Width = w, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+    private static TextBlock Mono(string t, double w) { var tb = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, Width = w, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
 
     private Border BuildCardShell(ShellSpec s, Control body)
     {
         int di = s.DeviceIndex;
         var extra = s.Utility ? new CardExtra() : Extra(s.Kind, di);
 
-        // ---- header (22), in fixed slots: name · preset · badges · power. The preset picker
-        // sits in the centre of the header, between two equal halves: the name on the left
-        // (trimmed if it runs into the picker), the badges right-aligned before the power slot
-        // on the right; the power slot is reserved (empty) on a card that can't be bypassed. A/B, move and delete live in
+        // ---- header (32), in fixed slots: name · preset · badges · power. The preset picker
+        // follows the name (trimmed if it is long); the badges sit right-aligned before the
+        // power slot on the right; the power slot is reserved (empty) on a card that can't be bypassed. A/B, move and delete live in
         // the header's context menu (with the presets again); the whole header drags the card
         // to a new slot; Delete removes the selected card.
         var name = new TextBlock
@@ -147,13 +146,13 @@ public sealed partial class DeviceChainView
 
         var badges = new StackPanel { Orientation = Orientation.Horizontal, Spacing = s.Compact ? 6 : 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
 
-        // Type badge (mono, muted, sentence case). An instrument that reports its voices shows
-        // them here, live, as the badge's value — e.g. "Synth · 3/16".
+        // Type tag (label size, ink 3, sentence case). An instrument that reports its voices
+        // shows them here, live, as the tag's value — e.g. "Synth · 3/16".
         string type = NotaText.Label(s.Subtitle ?? "");
         var badge = new TextBlock
         {
-            Text = type, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Eyebrow,
-            Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center,
+            Text = type, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Caption,
+            Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         if (s.IsInstrument && _engine.InstrumentVoiceCount(_trackId) >= 0)
         {
@@ -188,26 +187,24 @@ public sealed partial class DeviceChainView
             power.Child = bypass;
         }
 
-        // Two equal halves around the picker keep it centred whatever the name or the badges
-        // (a live voice count changes width) are doing.
         var right = new Grid { ColumnSpacing = 8 };
         right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         right.Children.Add(badges);
         Grid.SetColumn(power, 1); right.Children.Add(power);
-        var headerGrid = new Grid { ColumnSpacing = 8 };
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        var headerGrid = new Grid { ColumnSpacing = 16 };
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        name.MaxWidth = s.Compact ? 90 : 220;
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);
         var headerBar = new Border
         {
-            Height = DeviceCardKit.HeaderH, Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(NotaSpace.DeviceInsetWide, 0), Child = headerGrid,
+            Height = DeviceCardKit.HeaderH, Background = ShellHdr,
+            Padding = new Thickness(DeviceCardKit.CardPad + 2, 0, DeviceCardKit.CardPad + 2, 0), Child = headerGrid,
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
-        headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
         if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
 
         // Factory presets for this device (or the card's own list), and applying one in place.
@@ -266,7 +263,7 @@ public sealed partial class DeviceChainView
         }
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
-        // The picker has its own centre slot: the badges' live voice count changes width
+        // The picker has its own slot after the name: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
         Control? picker = null;
         if (presets.Count > 0)
@@ -360,7 +357,8 @@ public sealed partial class DeviceChainView
         };
 
         DockPanel.SetDock(headerBar, Dock.Top);
-        var bodyHost = new Border { Child = body };
+        // The body keeps 8 from the card edge; sections inside it sit 10 apart.
+        var bodyHost = new Border { Padding = new Thickness(DeviceCardKit.CardPad, 0, DeviceCardKit.CardPad, DeviceCardKit.CardPad), Child = body };
         var root = new DockPanel { LastChildFill = true, Children = { headerBar, bodyHost } };
         bool sel = !s.Utility && IsSelected(s.Kind, di);
         // Selection is drawn as a focus ring outside the card, with a small gap (not by
@@ -371,15 +369,17 @@ public sealed partial class DeviceChainView
         var selRing = new Border
         {
             BorderBrush = Brass, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
+            CornerRadius = new CornerRadius(NotaRadius.CardValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = sel,
         };
+        // The outline and top edge are a box shadow (Shadow.Card), so the shell is not
+        // clipped: the body clips itself, inside the rounded card.
         var shell = new Border
         {
-            Background = ShellBg, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
-            Child = root,
+            Background = ShellBg, CornerRadius = NotaRadius.Card,
+            Child = new Border { CornerRadius = NotaRadius.Card, ClipToBounds = true, Child = root },
         };
+        shell.BindResource(Border.BoxShadowProperty, "Shadow.Card");
         var card = new Border
         {
             Width = s.Width, Height = CardH,

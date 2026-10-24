@@ -22,7 +22,7 @@ namespace Nota.App;
         private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush GridB = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Mono;
+        private static readonly Typeface Face = NotaFonts.Sans;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _a, _d, _s, _r;
@@ -120,6 +120,6 @@ namespace Nota.App;
             for (int k = 0; k < nodes.Length; k++)
                 ctx.DrawEllipse(_drag == k ? NotaPalette.Accent : Accent, null, nodes[k], 3.2, 3.2);
             if (ShowTitle)
-                ctx.DrawText(new FormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
+                ctx.DrawText(new NotaFormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
         }
     }

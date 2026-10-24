@@ -22,7 +22,7 @@ internal sealed class OperatorSpectrumViz : Control
     private static Color Lit => NotaPalette.VizInk.Color;
     private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush NoteInk = NotaPalette.TextPrimary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private float[] _bins = Array.Empty<float>();
     private int _n;
@@ -58,7 +58,7 @@ internal sealed class OperatorSpectrumViz : Control
                 (byte)(Dim.R + (Lit.R - Dim.R) * v),
                 (byte)(Dim.G + (Lit.G - Dim.G) * v),
                 (byte)(Dim.B + (Lit.B - Dim.B) * v));
-            ctx.DrawRectangle(new SolidColorBrush(col), null, rect, NotaRadius.BarValue, NotaRadius.BarValue);
+            ctx.DrawRectangle(new SolidColorBrush(col), null, rect, NotaRadius.FineValue, NotaRadius.FineValue);
         }
 
         // Baseline + fundamental-relative axis ticks (f · 10f · 20f · 30f).
@@ -66,13 +66,13 @@ internal sealed class OperatorSpectrumViz : Control
         void Tick(int k, string lbl)
         {
             double tx = x0 + Math.Min(_n, k) * bw;
-            var ft = new FormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, Axis);
+            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, Axis);
             ctx.DrawText(ft, new Point(Math.Min(tx, x1 - ft.Width), bot + 2));
         }
         Tick(0, "f"); Tick(10, "10f"); Tick(20, "20f"); Tick(30, "30f");
 
         // Played-note badge top-right.
-        var note = new FormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, NoteInk);
+        var note = new NotaFormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 9, NoteInk);
         ctx.DrawText(note, new Point(x1 - note.Width - 1, top));
     }
 }

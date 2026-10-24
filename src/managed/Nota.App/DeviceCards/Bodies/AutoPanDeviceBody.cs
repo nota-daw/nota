@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Orbit body (auto-pan / tremolo, device kind 9), a build of
-// the "Nota Orbit" mockup (700 × 260) in the Level / EQ-8 language: an LFO column (waveform,
+// the "Nota Orbit" picture of the style guide (700 × 260), three pressed-in sections: an LFO column (waveform,
 // Hz or Sync, the rate as a big readout with its period, Rate and Shape — Glide on S&H), a
 // centre panel with both channels' gain over two cycles, a running head with the gain dots and
 // the floor the depth reaches (drag: Amount up / down, Phase left / right), the stereo position
-// on an L—R line over the swing it covers, a MOTION column (Amount, Phase, Mix, the 0° / 90° /
+// on an L—R line over the swing it covers, a Motion column (Amount, Phase, Mix, the 0° / 90° /
 // 180° phase snaps and the output meters) with the mode it makes (tremolo, auto-pan, offset
-// pan), and a status strip. The live picture comes from the engine (AutoPan.h scopeRead). Every
+// pan). The live picture comes from the engine (AutoPan.h scopeRead). Every
 // control is a device param (normalized 0..1), so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -79,59 +79,49 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         static string Ms(double ms) => NotaNum.F($"{ms:0}\u2009ms");
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null) => new()
-        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
-        // Slider row: caps label · track · mono value. `label` is returned so a row can rename itself.
+        // Slider row: label · value bar · value. `lbl` is returned so a row can rename itself.
         Grid Slider(string label, int p, Func<double, string> fmt, string tip, out TextBlock lbl, double labelW = 40, double valueW = 40,
-            bool modulation = false, Func<double, double>? snap = null)
+            Func<double, double>? snap = null)
         {
             var bar = DeviceCardKit.SliderRow("", () => P(p), v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: valueW, modulation: modulation);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: valueW);
             readouts.Add(sync);
             Learn(bar, p);
             ToolTip.SetTip(bar, tip);
-            lbl = Caps(label);
+            lbl = DeviceBodyKit.Label(label);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions($"{labelW},*"), VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(lbl);
             g.Children.Add(Col(bar, 1));
             return g;
         }
 
+        // A section: its title row on top (title · a control or word at the right), the body under it.
         RuleSection Island(Control head, Control body, double width = double.NaN)
         {
-            var headBar = new Border
-            {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
+            head.Margin = new Thickness(0, 0, 0, 8);
+            return DeviceBodyKit.Sec(new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(head, Avalonia.Controls.Dock.Top), body } },
+                new Thickness(12, 10, 12, 10), width);
         }
         static Grid HeadRow(Control left, Control right)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center, MinHeight = 24 };
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;
         }
-        // A legend sample: a drawn 8px stroke and its word (never a typed dash).
+        // A legend sample: a drawn 10px stroke and its word (never a typed dash).
         static Control LegendItem(string word, IBrush ink) => new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Width = 8, Height = 1.5, Background = ink, VerticalAlignment = VerticalAlignment.Center }, Mono(word, 7, ink) },
+            Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+            Children = { new Border { Width = 10, Height = 2, Background = ink, VerticalAlignment = VerticalAlignment.Center }, DeviceBodyKit.Label(word, TextSecondary) },
         };
 
         // ======================================================================
         // LEFT — LFO: waveform · Hz / Sync · the rate · Rate · Shape
         // ======================================================================
-        var syncSeg = Segments(new[] { "Hz", "Sync" }, () => Synced() ? 1 : 0, i => { SetP(Sync, i); RefreshAll(); }, out var syncSync, fill: true, padX: 0);
-        syncSeg.Width = 76;
+        var syncSeg = Segments(new[] { "Hz", "Sync" }, () => Synced() ? 1 : 0, i => { SetP(Sync, i); RefreshAll(); }, out var syncSync);
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, "Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays");
@@ -141,17 +131,17 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, "The LFO shape. S&H draws a random step every cycle; the right channel plays the same steps Phase later");
 
-        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
-        var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
-        var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
+        var big = new TextBlock { FontSize = 34, FontWeight = FontWeight.Bold, LineHeight = 36, Foreground = TextPrimary, FontFamily = NotaFonts.UiFamily };
+        var bigSub = DeviceBodyKit.Note("", TextSecondary);
+        var period = DeviceBodyKit.Label(""); period.Margin = new Thickness(0, 2, 0, 0);
         readouts.Add(() =>
         {
             double hz = RateHz();
             if (Synced())
             {
                 big.Text = OrbitMath.DivNames[DivI()];
-                bigSub.Text = NotaNum.F($"note · {Bpm():0.##}\u2009BPM");
-                period.Text = HzF(hz) + "\u2009Hz · " + Ms(PeriodMs());
+                bigSub.Text = NotaNum.F($"note · {Bpm():0.##} BPM");
+                period.Text = HzF(hz) + " Hz · " + Ms(PeriodMs());
             }
             else
             {
@@ -159,36 +149,36 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
                 bigSub.Text = "Hz · free";
                 period.Text = "period " + Ms(PeriodMs());
             }
-            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
+            big.Foreground = On() ? TextPrimary : TextDisabled;
         });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
+        var bigBlock = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
 
-        var rateRow = Slider("RATE", Rate, v => HzF(OrbitMath.FreeHz(v)) + "\u2009Hz", "Rate — the free LFO rate, 0.01 … 40\u2009Hz", out _, 38, 46);
-        var divRow = Slider("RATE", Division, v => OrbitMath.DivNames[OrbitMath.DivIndex(v)],
-            "Rate — the note value of one LFO cycle, 4/1 … 1/32 with dotted (D) and triplet (T) values", out _, 38, 46,
+        var rateRow = Slider("Rate", Rate, v => HzF(OrbitMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.01 … 40 Hz", out _, 46, 56);
+        var divRow = Slider("Rate", Division, v => OrbitMath.DivNames[OrbitMath.DivIndex(v)],
+            "Rate — the note value of one LFO cycle, 4/1 … 1/32 with dotted (D) and triplet (T) values", out _, 46, 56,
             snap: v => OrbitMath.DivNorm(OrbitMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
-        var shapeRow = Slider("SHAPE", Shape, v => PctF(v), "Shape — sharpens Sine, Tri and Saw toward a square; on S&H it is Glide, the slide from one step to the next", out var shapeLbl, 38, 46);
+        var shapeRow = Slider("Shape", Shape, v => PctF(v), "Shape — sharpens Sine, Tri and Saw toward a square; on S&H it is Glide, the slide from one step to the next", out var shapeLbl, 46, 56);
         readouts.Add(() => shapeLbl.Text = WaveI() == 4 ? "Glide" : "Shape");
 
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
+        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 10 };
         leftBody.Children.Add(waveSeg);
         leftBody.Children.Add(GRow(bigBlock, 1));
         leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
         leftBody.Children.Add(GRow(shapeRow, 3));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
+        var left = Island(HeadRow(DeviceBodyKit.Title("LFO"), syncSeg), leftBody, 184);
+        DockPanel.SetDock(left, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
-        // CENTRE — GAIN · 2 CYCLES, and the pan line
+        // CENTRE — gain over two cycles, and the pan line
         // ======================================================================
-        var waveWord = Mono("", 7, TextTertiary);
+        var waveWord = DeviceBodyKit.Label("", TextSecondary);
         readouts.Add(() => waveWord.Text = OrbitMath.WaveNames[WaveI()]);
         var legend = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), waveWord },
+            Orientation = Orientation.Horizontal, Spacing = 10,
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", TextTertiary), waveWord },
         };
         var graph = new OrbitGainView { Value = () => (P(Amount), P(Phase)) };
         graph.GestureBegin += () => { Begin(Amount); Begin(Phase); };
@@ -196,142 +186,86 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         graph.Changed += (a, ph) => { Raw(Amount, a); Raw(Phase, ph); RefreshAll(); };
         graph.ResetRequested += () => { Reset(Amount); Reset(Phase); RefreshAll(); };
         Learn(graph, Amount);
-        ToolTip.SetTip(graph, "Both channels' gain over two LFO cycles — L neutral, R teal, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; double-click resets both.");
+        ToolTip.SetTip(graph, "Both channels' gain over two LFO cycles — L light, R a darker grey, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; double-click resets both.");
 
         var panBar = new OrbitPanBar { VerticalAlignment = VerticalAlignment.Center };
-        var panTxt = Mono("", 8, TextPrimary); panTxt.TextAlignment = TextAlignment.Right; panTxt.Width = 28;
-        var lTag = Mono("L", 7, NotaPalette.VizInk); lTag.FontWeight = FontWeight.Medium;
-        var rTag = Mono("R", 7, NotaPalette.TealBright); rTag.FontWeight = FontWeight.Medium;
-        var panRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 6, Height = 14, Margin = new Thickness(0, 4, 0, 0) };
+        var panTxt = DeviceBodyKit.Value(); panTxt.TextAlignment = TextAlignment.Right; panTxt.Width = 30;
+        var lTag = DeviceBodyKit.Label("L");
+        var rTag = DeviceBodyKit.Label("R", TextTertiary);
+        var panRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 8, Margin = new Thickness(0, 10, 0, 0) };
         panRow.Children.Add(lTag);
         panRow.Children.Add(Col(panBar, 1));
         panRow.Children.Add(Col(rTag, 2));
         panRow.Children.Add(Col(panTxt, 3));
         ToolTip.SetTip(panRow, "Where the sound sits now between left and right, over the swing the LFO covers");
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(panRow, Dock.Bottom), graph } };
-        var centre = Island(HeadRow(Caps("GAIN · 2 CYCLES"), legend), centreBody);
-        centre.Margin = new Thickness(5, 0);
+        var centreBody = new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(panRow, Avalonia.Controls.Dock.Bottom), graph } };
+        var centre = Island(HeadRow(DeviceBodyKit.Title("Gain · 2 cycles"), legend), centreBody);
+        centre.Margin = new Thickness(SectionGap, 0);
 
         // ======================================================================
-        // RIGHT — MOTION: Amount · Phase · Mix · phase snaps · output meters
+        // RIGHT — Motion: Amount · Phase · Mix · phase snaps · output meters
         // ======================================================================
-        var modeWord = Mono("", 7, TextSecondary);
-        modeWord.Margin = new Thickness(0, 0, 5, 0);
+        var modeWord = DeviceBodyKit.Value();
         readouts.Add(() =>
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "auto-pan" ? TextPrimary : m == "tremolo" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "bypass" ? TextDisabled : TextPrimary;
         });
         ToolTip.SetTip(modeWord, "What the phase makes: tremolo near 0°, auto-pan near 180°, an offset pan between");
 
-        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), "Amount — the depth: each channel dips to 1 − Amount at the LFO's low point", out _, 44, 36, modulation: true);
-        var phaseRow = Slider("PHASE", Phase, v => NotaNum.F($"{v * 360:0}°"), "Phase — the right LFO against the left: 0° tremolo, 90° a circling pan, 180° auto-pan", out _, 44, 36, modulation: true,
+        var amountRow = Slider("Amount", Amount, v => PctF(v), "Amount — the depth: each channel dips to 1 − Amount at the LFO's low point", out _, 58, 44);
+        var phaseRow = Slider("Phase", Phase, v => NotaNum.F($"{v * 360:0}°"), "Phase — the right LFO against the left: 0° tremolo, 90° a circling pan, 180° auto-pan", out _, 58, 44,
             snap: v => Math.Round(v * 360) / 360);
-        var mixRow = Slider("MIX", Mix, v => PctF(v), "Mix — the moving signal against the dry one", out _, 44, 36);
+        var mixRow = Slider("Mix", Mix, v => PctF(v), "Mix — the moving signal against the dry one", out _, 58, 44);
 
-        Border Snap(string text, double deg)
-        {
-            var tb = Mono(text, 7, TextTertiary); tb.HorizontalAlignment = HorizontalAlignment.Center;
-            var b = new Border
-            {
-                BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 1),
-                Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
-            };
-            b.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                SetP(Phase, deg / 360); RefreshAll(); e.Handled = true;
-            };
-            readouts.Add(() =>
-            {
-                bool on = Math.Abs(Math.Round(Deg()) - deg) < 0.5;
-                b.Background = on ? NotaPalette.TrackOff : Brushes.Transparent;
-                tb.Foreground = on ? TextPrimary : TextTertiary;
-            });
-            Learn(b, Phase);
-            ToolTip.SetTip(b, deg == 0 ? "0° — tremolo: both channels together" : deg == 90 ? "90° — a quarter cycle apart: the sound circles" : "180° — auto-pan: one side up while the other is down");
-            return b;
-        }
-        var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1, Margin = new Thickness(44, 0, 0, 0) };
-        snaps.Children.Add(Snap("0°", 0));
-        snaps.Children.Add(Col(Snap("90°", 90), 1));
-        snaps.Children.Add(Col(Snap("180°", 180), 2));
+        // The 0° / 90° / 180° phase snaps: a segment strip, nothing picked between them.
+        double[] snapDeg = { 0, 90, 180 };
+        var snaps = Segments(new[] { "0°", "90°", "180°" }, () => Array.FindIndex(snapDeg, d => Math.Abs(Math.Round(Deg()) - d) < 0.5),
+            i => { SetP(Phase, snapDeg[i] / 360); RefreshAll(); }, out var snapSync, fill: true, padX: 2);
+        readouts.Add(snapSync);
+        snaps.Margin = new Thickness(58, 0, 0, 0);
+        Learn(snaps, Phase);
+        ToolTip.SetTip(snaps, "0° — tremolo: both channels together · 90° — a quarter cycle apart: the sound circles · 180° — auto-pan: one side up while the other is down");
 
-        Control MeterRow(string label, IBrush labelInk, IBrush ink, int peakSlot, int gainSlot)
+        Control MeterRow(string label, IBrush ink, int peakSlot, int gainSlot)
         {
             var m = new OrbitMeter { Ink = ink, VerticalAlignment = VerticalAlignment.Center };
-            var v = Mono("", 8, TextPrimary); v.TextAlignment = TextAlignment.Right; v.Width = 36;
+            var v = DeviceBodyKit.Value(); v.TextAlignment = TextAlignment.Right; v.Width = 44;
             readouts.Add(() =>
             {
                 double pk = Sc(peakSlot, -120);
                 m.Set(On() ? (pk + 60) / 60 : 0);
                 v.Text = On() ? OrbitMath.Db(Sc(gainSlot, 1)) : "0.0";
             });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("44,*,Auto"), ColumnSpacing = 0 };
-            g.Children.Add(Caps(label, labelInk));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("58,*,Auto"), ColumnSpacing = 0 };
+            g.Children.Add(DeviceBodyKit.Label(label, TextSecondary));
             g.Children.Add(Col(m, 1));
-            g.Children.Add(Col(new Border { Margin = new Thickness(6, 0, 0, 0), Child = v }, 2));
-            ToolTip.SetTip(g, "The channel's output peak, −60 … 0\u2009dBFS, and the gain the LFO gives it now, dB");
+            g.Children.Add(Col(new Border { Margin = new Thickness(8, 0, 0, 0), Child = v }, 2));
+            ToolTip.SetTip(g, "The channel's output peak, −60 … 0 dBFS, and the gain the LFO gives it now, dB");
             return g;
         }
-        var meters = new Border
+        var meters = new StackPanel
         {
-            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
-            Child = new StackPanel
+            Spacing = 10, Children =
             {
-                Spacing = 5, Children =
-                {
-                    MeterRow("OUT L", NotaPalette.VizInk, NotaPalette.VizInk, S_OutPeakL, S_GainL),
-                    MeterRow("OUT R", NotaPalette.TealBright, NotaPalette.TealBright, S_OutPeakR, S_GainR),
-                },
+                DeviceBodyKit.Rule(),
+                MeterRow("Out L", NotaPalette.VizInk, S_OutPeakL, S_GainL),
+                MeterRow("Out R", TextTertiary, S_OutPeakR, S_GainR),
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
+        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto") };
         rightBody.Children.Add(amountRow);
         rightBody.Children.Add(GRow(phaseRow, 2));
         rightBody.Children.Add(GRow(mixRow, 4));
         rightBody.Children.Add(GRow(snaps, 6));
         rightBody.Children.Add(GRow(meters, 8));
-        var right = Island(HeadRow(Caps("MOTION"), modeWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            string m = Mode();
-            double hz = RateHz();
-            bool warn = false;
-            string foot;
-            if (!On()) foot = "Panner bypassed: the signal passes unchanged";
-            else if (P(Amount) < 0.01f || P(Mix) < 0.01f) { foot = "Amount or Mix at zero: nothing moves"; warn = true; }
-            else if (hz > 8) { foot = "Above 8\u2009Hz the movement reads as a flutter, not as panning"; warn = true; }
-            else if (m == "tremolo") foot = "Phase 0°: L and R move together, the level dips to " + OrbitMath.Db(Floor()) + "\u2009dB";
-            else if (m == "auto-pan")
-            {
-                double mn = Sc(S_PanMin), mx = Sc(S_PanMax);
-                foot = "Swing " + (mn < -0.02 ? PanF(mn) : "C") + " → " + (mx > 0.02 ? PanF(mx) : "C") + " · period " + Ms(PeriodMs());
-            }
-            else foot = NotaNum.F($"Phase {Deg():0}°: the channels are offset, the pan moves unevenly");
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · ") : "") + NotaNum.F($"{Bpm():0.##}\u2009BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var right = Island(HeadRow(DeviceBodyKit.Title("Motion"), modeWord), rightBody, 196);
+        DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = DeviceBodyKit.Frame(new DockPanel { LastChildFill = true, Children = { left, right, centre } });
 
         void Refresh()
         {

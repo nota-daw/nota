@@ -161,7 +161,7 @@ internal static class PluginCard
         };
         var v = new TextBlock
         {
-            Text = value, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Value, Foreground = TextPrimary,
+            Text = value, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Value, Foreground = TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Grid.SetRow(l, row); Grid.SetRow(v, row); Grid.SetColumn(v, 1);
@@ -170,11 +170,11 @@ internal static class PluginCard
 
     private static Border Tag(string text) => new()
     {
-        BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+        BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
         Padding = new Thickness(4, 1), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = NotaText.Label(text), FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobLabel,
+            Text = NotaText.Label(text), FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobLabel,
             FontWeight = FontWeight.Medium, Foreground = TextSecondary,
         },
     };
@@ -214,18 +214,18 @@ internal static class PluginCard
             Text = "Parameters", FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
             Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
         };
-        var count = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        var count = new TextBlock { FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
 
         var search = new TextBox { Watermark = "Filter", Text = state.Filter, FontSize = 9, Classes = { "search" }, VerticalAlignment = VerticalAlignment.Center };
         var searchWrap = new Border
         {
             Width = 116, Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 0), Child = search,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 0), Child = search,
         };
         search.GotFocus += (_, _) => searchWrap.BorderBrush = NotaPalette.Accent;
         search.LostFocus += (_, _) => searchWrap.BorderBrush = BorderDef;
 
-        var pageText = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, MinWidth = 30, TextAlignment = TextAlignment.Center };
+        var pageText = new TextBlock { FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, MinWidth = 30, TextAlignment = TextAlignment.Center };
         var host = new ContentControl();
         int perPage = 1, gen = 0;
         var matches = new List<int>();
@@ -308,7 +308,7 @@ internal static class PluginCard
 
         float v0 = e.PluginParamGet(t, di, p);
         var value = new TextBlock { Text = Text(v0), Foreground = TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = CellW - 2 };
-        var knob = new Knob(v0, 1.0) { Accent = true, Default = e.PluginParamDefault(t, di, p), Width = Knob.SizeSecondary, Height = Knob.SizeSecondary };
+        var knob = new Knob(v0, 1.0) { Accent = true, Default = e.PluginParamDefault(t, di, p), Width = Knob.Size, Height = Knob.Size };
         knob.ValueChanged += v => { e.PluginParamSet(t, di, p, (float)v); value.Text = Text((float)v); ctx.NotifyChanged(); };
         knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, di, -1, pid);
         knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, di, -1, pid);

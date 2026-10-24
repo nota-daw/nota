@@ -22,21 +22,19 @@ namespace Nota.App;
 
 internal sealed class LengthGateViz : Control
 {
-    private static readonly IBrush Well = NotaPalette.BgSunken;
-    private static readonly IBrush WellEdge = NotaPalette.GraphBorder;
     private static readonly IBrush BeatLine = NotaPalette.GraphBorder;
     private static readonly IBrush HalfLine = NotaPalette.SurfaceCard;
     private static readonly IBrush PastBar = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xA0);   // like the piano roll past the clip end
     private static readonly IBrush Band = NotaPalette.Wash(NotaPalette.VizInk, 0x20);
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0xB0);
+    private static readonly IBrush Fill = NotaPalette.VizInk;
     private static readonly IBrush FillLit = NotaPalette.AccentBright;
     private static readonly IBrush FillOff = NotaPalette.BorderStrong;
-    private static readonly IBrush Outline = NotaPalette.TextMuted;
-    private static readonly IBrush Head = NotaPalette.Wash(NotaPalette.AccentBright, 0xB3);
-    private static readonly IBrush Label = NotaPalette.TextSecondary;
-    private static readonly IBrush VelInk = NotaPalette.TextDisabled;
-    private static readonly IBrush TagInk = NotaPalette.TextMuted;
-    private static readonly IBrush Axis = NotaPalette.TextAxis;
+    private static readonly IBrush Outline = NotaPalette.TextTertiary;
+    private static readonly IBrush Head = NotaPalette.Accent;
+    private static readonly IBrush Label = NotaPalette.TextPrimary;
+    private static readonly IBrush VelInk = NotaPalette.TextTertiary;
+    private static readonly IBrush TagInk = NotaPalette.TextSecondary;
+    private static readonly IBrush Axis = NotaPalette.TextTertiary;
 
     public const double Bar = 4.0, Window = 5.0;   // beats: one 4/4 bar, the window 1¼ bars
 
@@ -121,21 +119,21 @@ internal sealed class LengthGateViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        double labelW = Full ? 43 : 0, rulerH = Full ? 12 : 0;
+        double labelW = Full ? 44 : 0, rulerH = Full ? 18 : 0;
         var win = new Rect(labelW, 0, Math.Max(10, w - labelW), Math.Max(10, h - rulerH));
         double msPerBeat = 60000.0 / _bpm;
         int n = Math.Max(1, _notes.Length);
         double rowH = win.Height / n;
         double X(double beat) => win.X + Math.Clamp(beat / Window, 0, 1) * win.Width;
 
-        ctx.DrawRectangle(Well, new Pen(WellEdge, 1), new RoundedRect(win.Deflate(0.5), 4));
-        using (ctx.PushClip(new RoundedRect(win.Deflate(1), 3)))
+        NotaDepth.Groove(ctx, this, new RoundedRect(win, NotaRadius.ValueBarValue));
+        using (ctx.PushClip(new RoundedRect(win, NotaRadius.ValueBarValue)))
         {
             for (double b = 0.5; b < Window - 1e-6; b += 0.5)
                 ctx.FillRectangle(Math.Abs(b % 1) < 1e-6 ? BeatLine : HalfLine, new Rect(Math.Round(X(b)), win.Y, 1, win.Height));
             ctx.FillRectangle(PastBar, new Rect(X(Bar), win.Y, win.Right - X(Bar), win.Height));
 
-            double pad = Full ? 5 : Math.Min(5, rowH * 0.18), radius = Full ? 2 : 1;
+            double pad = Full ? 6 : Math.Min(5, rowH * 0.18), radius = Full ? 3 : 1;
             for (int i = 0; i < _notes.Length; i++)
             {
                 var nt = _notes[i]; var inp = Input[i];
@@ -147,15 +145,15 @@ internal sealed class LengthGateViz : Control
                 double ox = X(nt.Start), oe = X(nt.Start + nt.Out);
                 ctx.DrawRectangle(_off ? FillOff : lit ? FillLit : Fill, null, new RoundedRect(new Rect(ox, top, Math.Max(1.5, oe - ox), hh), radius));
                 double ix = X(inp.T), ie = X(inp.T + inp.Len);
-                ctx.DrawRectangle(null, new Pen(Outline, 1), new RoundedRect(new Rect(ix + 0.5, top + 0.5, Math.Max(1, ie - ix - 1), Math.Max(1, hh - 1)), radius));
+                ctx.DrawRectangle(null, new Pen(Outline, 1.5), new RoundedRect(new Rect(ix + 0.75, top + 0.75, Math.Max(1, ie - ix - 1.5), Math.Max(1, hh - 1.5)), radius));
                 if (Full)
                 {
-                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Mono, 7, lit ? FillLit : TagInk);
+                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Sans, NotaType.KnobValue, lit ? FillLit : TagInk);
                     double tx = Math.Min(Math.Max(Math.Max(oe, ie), X(nt.Start + nt.Hi)), win.X + win.Width * 0.88) + 5;
                     ctx.DrawText(tag, new Point(tx, top + hh / 2 - tag.Height / 2));
                 }
             }
-            ctx.FillRectangle(Head, new Rect(Math.Round(X(_now)), win.Y, 1, win.Height));
+            ctx.FillRectangle(Head, new Rect(Math.Round(X(_now)), win.Y, 1.5, win.Height));
         }
 
         if (!Full) return;
@@ -164,8 +162,8 @@ internal sealed class LengthGateViz : Control
         {
             var inp = Input[i];
             bool lit = !_off && _now >= _notes[i].Start && _now < _notes[i].Start + _notes[i].Out;
-            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Mono, 8, lit ? FillLit : Label);
-            var vel = Text($"vel {inp.Vel}", NotaFonts.Mono, 6, VelInk);
+            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Sans, NotaType.KnobValue, lit ? FillLit : Label);
+            var vel = Text($"vel {inp.Vel}", NotaFonts.Sans, NotaType.RowLabel, VelInk);
             double cy = win.Y + (i + 0.5) * rowH, th = name.Height + vel.Height - 2;
             ctx.DrawText(name, new Point(0, cy - th / 2));
             ctx.DrawText(vel, new Point(0, cy - th / 2 + name.Height - 2));
@@ -174,9 +172,9 @@ internal sealed class LengthGateViz : Control
         for (int b = 0; b <= (int)Window; b++)
         {
             string s = b == 0 ? "0" : b * msPerBeat >= 1000 ? $"{b * msPerBeat / 1000:0.0#} s" : $"{b * msPerBeat:0} ms";
-            var ft = Text(s, NotaFonts.Mono, 7, Axis);
+            var ft = Text(s, NotaFonts.Sans, NotaType.RowLabel, Axis);
             double x = X(b) - (b == 0 ? 0 : b == (int)Window ? ft.Width : ft.Width / 2);
-            ctx.DrawText(ft, new Point(x, win.Bottom + 2));
+            ctx.DrawText(ft, new Point(x, win.Bottom + 4));
         }
     }
 }

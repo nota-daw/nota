@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Auto Filter card views (besides the response curve):
-//  • AfFader     — the Shape column's vertical faders (Frq / Res): the set value as a filled
-//                  well with a handle (accent while dragged), plus a thin marker where modulation has it now;
-//  • AfEnvView   — the Envelope tab's window: the input envelope (teal) and the cutoff it
+// Auto Filter card views (besides the response curve; the Shape faders are upright value bars):
+//  • AfEnvView   — the Envelope tab's window: the input envelope (a darker grey) and the cutoff it
 //                  drives (neutral ink) over the last few hundred ms, with the base cutoff dashed;
 //                  drag up / down for the amount;
 //  • AfLfoView   — the LFO tab's window: the LFO's cutoff motion over two bars (or a few
-//                  cycles in free time), raw shape dashed teal, the smoothed motion in neutral ink,
+//                  cycles in free time), raw shape dashed in a darker grey, the smoothed motion in
+//                  neutral ink, the stereo offset's right channel in the darker grey,
 //                  a playhead dot at the live phase; drag up / down for the amount, sideways
 //                  for the start phase.
 
@@ -19,84 +18,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 
 namespace Nota.App;
-
-internal sealed class AfFader : Control
-{
-    private double _v, _live = double.NaN;
-    private bool _drag;
-
-    public IBrush Ink { get; init; } = NotaPalette.VizInk;
-    public double Default { get; set; } = double.NaN;
-    public bool Dragging => _drag;
-
-    public event Action<double>? Changed;
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-
-    public AfFader() { Width = 16; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
-
-    /// <summary>The set value, and where modulation has it now (NaN = no marker).</summary>
-    public void Set(double v, double live)
-    {
-        if (!_drag) _v = Math.Clamp(v, 0, 1);
-        _live = double.IsNaN(live) ? live : Math.Clamp(live, 0, 1);
-        InvalidateVisual();
-    }
-
-    private void Apply(PointerEventArgs e)
-    {
-        double h = Bounds.Height; if (h <= 2) return;
-        _v = Math.Clamp(1 - e.GetPosition(this).Y / h, 0, 1);
-        Changed?.Invoke(_v); InvalidateVisual();
-    }
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
-        {
-            GestureBegin?.Invoke(); _v = Default; Changed?.Invoke(_v); GestureEnd?.Invoke();
-            InvalidateVisual(); e.Handled = true; return;
-        }
-        _drag = true; GestureBegin?.Invoke(); e.Pointer.Capture(this); Apply(e); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (!_drag) return;
-        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 4) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, r, r);
-        double y = (1 - _v) * h;
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-        {
-            ctx.FillRectangle(NotaPalette.Wash((SolidColorBrush)Ink, 0x48), new Rect(0, y, w, h - y));
-            if (!double.IsNaN(_live) && Math.Abs(_live - _v) > 0.005)
-            {
-                double ly = Math.Clamp((1 - _live) * h, 1, h - 1);
-                ctx.DrawLine(new Pen(NotaPalette.Wash((SolidColorBrush)Ink, 0xB0), 1, new DashStyle(new double[] { 2, 1 }, 0)), new Point(2, ly), new Point(w - 2, ly));
-            }
-        }
-        ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : Ink, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
-    }
-}
 
 // Shared by the two time windows: a vertical drag gesture on the whole window.
 internal abstract class AfWindowBase : Control
@@ -200,14 +121,14 @@ internal sealed class AfEnvView : AfWindowBase
                 c.EndFigure(false);
                 return g;
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xC0), 1.1), Line(_env, v => YEnv(v)));
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), Line(_env, v => YEnv(v)));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_cut, v => YCut(v)));
         }
 
         NotaGraph.Title(ctx, frame, "Cutoff over time");
         string pk = NotaNum.Hz(_peakHz);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        NotaGraph.Legend(ctx, w - 5, 16, ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 5, 16, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _winText);
         var bt = NotaGraph.AxisText(_baseText);
@@ -286,9 +207,9 @@ internal sealed class AfLfoView : AfWindowBase
         }
         if (_on)
         {
-            var dashed = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x99), 1.1, new DashStyle(new double[] { 4, 4 }, 0));
+            var dashed = new Pen(NotaPalette.TextTertiary, 1.1, new DashStyle(new double[] { 4, 4 }, 0));
             ctx.DrawGeometry(null, dashed, Trace(0, false));
-            if (_stereo > 1e-4) ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Rose, 0x90), 1.1), Trace(_stereo, a > 0));
+            if (_stereo > 1e-4) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), Trace(_stereo, a > 0));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Trace(0, a > 0));
 
             if (!double.IsNaN(_phase))
@@ -297,7 +218,7 @@ internal sealed class AfLfoView : AfWindowBase
                 double rel = _phase - _offset; rel -= Math.Floor(rel);
                 double x = rel / _cycles * w;
                 double v = Shape(_phase, 0);
-                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x80), 1), new Point(x, 0), new Point(x, h));
+                ctx.DrawLine(new Pen(NotaPalette.Accent, 1), new Point(x, 0), new Point(x, h));
                 ctx.DrawEllipse(NotaPalette.Accent, null, new Point(x, mid - v * amp), 3, 3);
             }
         }
@@ -306,7 +227,7 @@ internal sealed class AfLfoView : AfWindowBase
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _amt, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         if (_morphText.Length > 0)
         {
-            var t = NotaGraph.AxisText(_morphText, NotaPalette.TealBright);
+            var t = NotaGraph.AxisText(_morphText, NotaPalette.TextSecondary);
             ctx.DrawText(t, new Point(Math.Min(86, w / 2), 3));
         }
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "1");

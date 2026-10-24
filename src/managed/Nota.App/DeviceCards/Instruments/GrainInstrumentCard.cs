@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Grain editor (instrument kind 10): the granular sampler
-// in the 700 × 260 card the almanac draws for it.
+// in a 700 × 260 card of two pressed-in sections (style guide, spec 038).
 //
 //   Centre      the sample as a graph — the Spray band around the dashed read Position
 //               (drag across it to move Position), each held voice's read head and the
@@ -15,13 +15,11 @@
 //               Variation — per-grain position, pitch and pan jitter.
 //               Filter    — LP / HP / BP, cutoff and resonance, after the cloud.
 //               Amp       — the envelope of the whole cloud.
-//   Rail 186    READ — Scan / Freeze / Key, then Position, Scan speed and Spray — and the
+//   Rail 200    Read — Scan / Freeze / Key, then Position, Scan speed and Spray — and the
 //               output: volume, dry/wet (the sample itself against the cloud) and the
 //               track's meter. On screen on every tab.
-//   Status 18   the tab read back in words, and the sample, voices and grains live.
 //
-// Neutral ink is the parameter itself; teal is variation and scatter (spread, spray, the three
-// jitters and the grains they make). Drop a sample from the browser to replace the
+// Drop a sample from the browser to replace the
 // procedural default. Everything is a plugin param → automation / persist / clone, and the
 // card follows automation live.
 
@@ -34,6 +32,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using static Nota.App.InstrumentCardKit;
 
 namespace Nota.App;
 
@@ -42,7 +41,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
     public bool BodyOnly => true;
     public string Subtitle => "Granular";
 
-    private const double RailW = 186, TabH = 20, StatusH = 18;
+    private const double RailW = 200;
 
     private static readonly string[] TabNames = { "Grain", "Pitch", "Variation", "Filter", "Amp" };
     private static readonly string[] ModeNames = { "Scan", "Freeze", "Key" };
@@ -98,18 +97,18 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         var readouts = new List<Action>();
         int tab = 0;
         Action showTab = () => { };
+        Func<string> Hint = () => "";
 
         // Live state: each voice's read head and the grain cloud, from the engine's scope.
         var heads = new float[8];
         int headN = 0;
         var scope = new float[2 + 8 * 12 * 3];
         var cloud = new float[8 * 12 * 3];
-        int voices = 0, grains = 0;
+        int grains = 0;
 
         // ---- the sample -------------------------------------------------------
         var wave = new GrainWaveViz { VerticalAlignment = VerticalAlignment.Stretch };
         long sampleId = -1;
-        double sampleSec = 0, sampleKHz = 0;
         int rootNote = 60;
         string sampleName = "";
         void LoadPeaks()
@@ -123,27 +122,21 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             {
                 var raw = engine.ReadSample(gi.SampleId);
                 wave.SetPeaks(Peaks(raw, si.Channels, si.Frames), si.SampleRate > 0 ? (double)si.Frames / si.SampleRate : 0);
-                sampleSec = si.SampleRate > 0 ? (double)si.Frames / si.SampleRate : 0;
-                sampleKHz = si.SampleRate / 1000.0;
             }
             else
             {
                 // The procedural default the engine plays until a sample is dropped.
                 var (peaks, sec) = DefaultSamplePeaks();
                 wave.SetPeaks(peaks, sec);
-                sampleSec = sec; sampleKHz = 0;
             }
         }
         LoadPeaks();
 
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
-            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = NotaType.RowLabel, Foreground = TextTertiary,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
 
         void Refresh()
         {
@@ -152,8 +145,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             wave.SetGrains(cloud, grains);
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         wave.ValueChanged += v => { SetP("position", (float)v); Refresh(); };
@@ -169,33 +160,16 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         if (I("position") is var wpi and >= 0) MidiLearn.Bind(wave, MidiTarget.PluginParam(track, -1, wpi), "Position");
 
         // ---- shared builders --------------------------------------------------
-        static TextBlock Cap(string t, IBrush? c = null) => new()
-        {
-            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
-            Foreground = c ?? TextTertiary,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
-        {
-            Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
-        };
-
         // Every knob is a table cell: a short label on the card while MIDI learn and the CV
         // menu keep the parameter's full name.
         Control PKnob(string id, string label, string learn, Func<float, string> fmt,
-            double size = 26, double cellW = 46, IBrush? arc = null)
+            double size = 26, double cellW = 68)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
-            var value = new TextBlock
-            {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
-                Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center, LineHeight = 10,
-            };
+            var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
+                Accent = true, Default = engine.InstrumentParamDefault(track, pi),
                 Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center,
             };
             knob.Format = v => fmt((float)v);
@@ -219,43 +193,24 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             return seg;
         }
 
-        Grid Slider(string label, string id, Func<string> text, bool bipolar = false, bool mod = false, Func<bool>? dim = null)
-        {
-            int pi = I(id);
-            var row = SliderRow(label, () => G(id), v => { SetP(id, (float)v); Refresh(); }, text, out var sync,
-                begin: pi >= 0 ? () => Begin(id) : null,
-                end: pi >= 0 ? () => End(id) : null,
-                reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
-                bipolar: bipolar, dim: dim, labelWidth: 46, valueWidth: 40, modulation: mod);
-            readouts.Add(sync);
-            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), label);
-            return row;
-        }
-
-        // The window shape: four drawn chips in a 2 × 2 block; the chosen one in an accent
-        // wash with an accent edge and curve.
+        // The window shape: four drawn cells in a 2 × 2 groove; the chosen one raised, its curve orange.
         Control ShapeChips()
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 4, RowSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("34,34"), RowDefinitions = new RowDefinitions("22,22"), ColumnSpacing = 2, RowSpacing = 2 };
             var cells = new Border[4];
             var icons = new GrainShapeIcon[4];
             for (int i = 0; i < 4; i++)
             {
                 int iv = i;
                 var ic = new GrainShapeIcon(i) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var c = new Border
-                {
-                    Width = 26, Height = 19, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
-                    Cursor = new Cursor(StandardCursorType.Hand), Child = ic,
-                };
+                var c = new Border { CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
                 ToolTip.SetTip(c, $"{char.ToUpperInvariant(ShapeWords[i][0])}{ShapeWords[i][1..]} window");
                 c.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(c).Properties.IsLeftButtonPressed) return;
                     Begin("grainshape"); SetP("grainshape", iv / 3f); End("grainshape"); Refresh(); e.Handled = true;
                 };
-                Grid.SetColumn(c, i % 2); Grid.SetRow(c, i / 2);
-                cells[i] = c; icons[i] = ic; g.Children.Add(c);
+                cells[i] = c.At(i % 2, i / 2); icons[i] = ic; g.Children.Add(c);
             }
             void Paint()
             {
@@ -263,20 +218,21 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 for (int i = 0; i < 4; i++)
                 {
                     bool on = i == cur;
-                    cells[i].Background = on ? NotaPalette.AccentSubtle : NotaPalette.BgSunken;
-                    cells[i].BorderBrush = on ? Brass : BorderDef;
-                    icons[i].Stroke = on ? AccentBright : TextTertiary;
+                    PaintCell(cells[i], on);
+                    icons[i].Stroke = on ? AccentBright : TextSecondary;
                     icons[i].InvalidateVisual();
                 }
             }
             readouts.Add(Paint); Paint();
-            if (I("grainshape") is var pi and >= 0) MidiLearn.Bind(g, MidiTarget.PluginParam(track, -1, pi), "Grain Shape");
-            return g;
+            var groove = Groove(g);
+            groove.HorizontalAlignment = HorizontalAlignment.Left;
+            if (I("grainshape") is var pi and >= 0) MidiLearn.Bind(groove, MidiTarget.PluginParam(track, -1, pi), "Grain Shape");
+            return groove;
         }
 
         static StackPanel Row(params Control[] items)
         {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             foreach (var c in items) sp.Children.Add(c);
             return sp;
         }
@@ -286,17 +242,18 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         Control RootCell()
         {
             void SetRoot(int n) { rootNote = Math.Clamp(n, 0, 127); engine.SetTrackGrainRoot(track, rootNote); Refresh(); }
-            var text = Mono(SamplerModel.NoteName(rootNote), TextPrimary, 9);
+            var text = Value(SamplerModel.NoteName(rootNote));
             text.HorizontalAlignment = HorizontalAlignment.Center;
             readouts.Add(() => text.Text = SamplerModel.NoteName(rootNote));
             Border Step(GlyphKind g, int d, string tip)
             {
                 var b = new Border
                 {
-                    Width = 16, Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
-                    BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    Width = 20, Height = NotaSize.Seg, CornerRadius = NotaRadius.Cell, Background = NotaPalette.SurfaceHover,
+                    Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new Glyph(g, 8) { Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 };
+                b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
                 ToolTip.SetTip(b, tip);
                 b.PointerPressed += (_, e) =>
                 {
@@ -305,121 +262,89 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 };
                 return b;
             }
-            var box = new Border
-            {
-                Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
-                Background = NotaPalette.BgSunken, Child = text,
-            };
+            var box = new Border { Height = NotaSize.Seg, MinWidth = 40, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent, Child = text };
             box.PointerWheelChanged += (wt, e) => { if (WheelInput.Step(e, wt) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };
             // Double-click: the note the file name names, else C4.
             box.DoubleTapped += (_, e) => { SetRoot(SamplerModel.DetectRoot(sampleName) is var d and >= 0 ? d : 60); e.Handled = true; };
             ToolTip.SetTip(box, "The root — the key that plays the sample as recorded. Scroll to step it · double-click takes it from the file name (C4 if none)");
-            var stepper = new StackPanel
+            var stepper = Groove(new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 4,
+                Orientation = Orientation.Horizontal, Spacing = 2,
                 Children = { Step(GlyphKind.Minus, -1, "Root a semitone down"), box, Step(GlyphKind.Plus, +1, "Root a semitone up") },
-            };
-            var cap = Cap("ROOT"); cap.HorizontalAlignment = HorizontalAlignment.Center;
-            return new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), Children = { cap, stepper } };
+            });
+            var cap = Cap("Root"); cap.HorizontalAlignment = HorizontalAlignment.Center;
+            return new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0), Children = { stepper, cap } };
         }
 
         // ---- the tabs ---------------------------------------------------------
         var filterChips = Chips("filtype", FilterNames, "Filter Type");
-        filterChips.Margin = new Thickness(0, 0, 8, 0);
+        filterChips.Margin = new Thickness(0, 0, 16, 0);
         var shapes = ShapeChips();
-        shapes.Margin = new Thickness(0, 0, 8, 0);
+        shapes.Margin = new Thickness(0, 0, 30, 0);
         var bodies = new Control[]
         {
             Row(shapes,
-                PKnob("grainsize", "SIZE", "Grain Size", Size),
-                PKnob("density", "DENSITY", "Density", Density),
-                PKnob("spread", "SPREAD", "Spread", Pct, arc: Teal)),
+                PKnob("grainsize", "Size", "Grain Size", Size),
+                PKnob("density", "Density", "Density", Density),
+                PKnob("spread", "Spread", "Spread", Pct)),
             Row(RootCell(),
-                PKnob("coarse", "COARSE", "Coarse", Coarse),
-                PKnob("fine", "FINE", "Fine", Fine)),
-            Row(PKnob("posrand", "POSITION", "Pos Rand", Pct, arc: Teal),
-                PKnob("pitchrand", "PITCH", "Pitch Rand", PitchJitter, arc: Teal),
-                PKnob("panrand", "PAN", "Pan Rand", Pct, arc: Teal)),
+                PKnob("coarse", "Coarse", "Coarse", Coarse),
+                PKnob("fine", "Fine", "Fine", Fine)),
+            Row(PKnob("posrand", "Position", "Pos Rand", Pct),
+                PKnob("pitchrand", "Pitch", "Pitch Rand", PitchJitter),
+                PKnob("panrand", "Pan", "Pan Rand", Pct)),
             Row(filterChips,
-                PKnob("filfreq", "FREQ", "Filter Freq", Hz),
-                PKnob("filreso", "RESO", "Filter Reso", Pct)),
-            Row(PKnob("attack", "ATTACK", "Attack", Attack),
-                PKnob("decay", "DECAY", "Decay", Decay),
-                PKnob("sustain", "SUSTAIN", "Sustain", Pct),
-                PKnob("release", "RELEASE", "Release", Release)),
+                PKnob("filfreq", "Freq", "Filter Freq", Hz),
+                PKnob("filreso", "Reso", "Filter Reso", Pct)),
+            Row(PKnob("attack", "Attack", "Attack", Attack),
+                PKnob("decay", "Decay", "Decay", Decay),
+                PKnob("sustain", "Sustain", "Sustain", Pct),
+                PKnob("release", "Release", "Release", Release)),
         };
 
-        var tabCells = new Border[TabNames.Length];
-        var tabTexts = new TextBlock[TabNames.Length];
-        var tabRow = new StackPanel { Orientation = Orientation.Horizontal };
-        for (int i = 0; i < TabNames.Length; i++)
-        {
-            int iv = i;
-            var tb = new TextBlock { Text = TabNames[i], FontSize = NotaType.DeviceSection, VerticalAlignment = VerticalAlignment.Center };
-            var cell = new Border
-            {
-                Padding = new Thickness(8, 0), BorderThickness = new Thickness(0, 0, 0, 2),
-                Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
-            };
-            cell.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
-                tab = iv; showTab(); e.Handled = true;
-            };
-            tabCells[i] = cell; tabTexts[i] = tb; tabRow.Children.Add(cell);
-        }
-        var tabStrip = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        tabStrip.Children.Add(tabRow);
-        Grid.SetColumn(hint, 1); tabStrip.Children.Add(hint);
-
+        hint.Margin = new Thickness(0);
+        var tabRow = Tabs(TabNames, () => tab, i => { tab = i; showTab(); }, out var tabSync, hint);
         showTab = () =>
         {
-            for (int i = 0; i < TabNames.Length; i++)
-            {
-                bool on = i == tab;
-                tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
-                tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
-                tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                bodies[i].IsVisible = on;
-            }
+            tabSync();
+            for (int i = 0; i < TabNames.Length; i++) bodies[i].IsVisible = i == tab;
             Refresh();
         };
 
-        var controls = new Panel { Height = NotaSize.ParamCell };
+        var controls = new Panel();
         foreach (var b in bodies) controls.Children.Add(b);
         var controlsHost = new Border
         {
-            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(0, 5, 0, 0), Child = controls,
+            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Height = 66,
+            Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = controls,
         };
-        var centreBody = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 5, Margin = new Thickness(7, 5, 7, 5) };
+        var centreBody = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Margin = new Thickness(0, 7, 0, 0) };
         centreBody.Children.Add(wave);
-        Grid.SetRow(controlsHost, 1); centreBody.Children.Add(controlsHost);
-        var tabGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        tabGrid.Children.Add(HeaderStrip(tabStrip));
-        Grid.SetRow(centreBody, 1); tabGrid.Children.Add(centreBody);
-        var tabPanel = SectionBox(tabGrid);
+        centreBody.Children.Add(controlsHost.At(0, 1));
+        var tabPanel = Pane(new DockPanel { Children = { tabRow.Docked(Dock.Top), centreBody } }, new Thickness(SectionPad, 10, SectionPad, 8));
 
-        // ---- rail · READ + output ---------------------------------------------
+        // ---- rail · Read + output ---------------------------------------------
         var modeChips = Chips("scanmode", ModeNames, "Scan Mode");
         modeChips.HorizontalAlignment = HorizontalAlignment.Right;
-        modeChips.Margin = new Thickness(0, 0, 6, 0);
         ToolTip.SetTip(modeChips, "Scan moves through the file · Freeze holds Position · Key moves it with the note");
-        var readCap = Cap("READ"); readCap.Margin = new Thickness(8, 0, 0, 0);
-        var readHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        readHead.Children.Add(readCap);
-        Grid.SetColumn(modeChips, 1); readHead.Children.Add(modeChips);
+        var readHead = new Grid { Height = TabRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        readHead.Children.Add(Title("Read"));
+        readHead.Children.Add(modeChips.At(1));
 
+        Grid Slider(string label, string id, Func<float, string> fmt, bool bipolar = false, Func<bool>? dim = null)
+        {
+            var row = ParamRow(ctx, idx, id, label, fmt, Refresh, readouts, labelWidth: 51, valueWidth: 34, bipolar: bipolar, dim: dim);
+            row.Height = 24;
+            return row;
+        }
         var readRows = new StackPanel
         {
-            Spacing = 6, Margin = new Thickness(8, 7, 8, 0),
             Children =
             {
-                Slider("POSITION", "position", () => Pct(G("position"))),
+                Slider("Position", "position", Pct),
                 // Scan speed only moves the read position in Scan mode.
-                Slider("SCAN", "scan", () => ScanSpeed(G("scan")), bipolar: true, dim: () => Mode() != 0),
-                Slider("SPRAY", "spray", () => Pct(G("spray")), mod: true),
+                Slider("Scan", "scan", ScanSpeed, bipolar: true, dim: () => Mode() != 0),
+                Slider("Spray", "spray", Pct),
             },
         };
 
@@ -432,51 +357,39 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         };
         for (int i = 0; i < 3; i++)
         {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
+            var c = Cap(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaGraph.AxisSize);
             Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
         }
         var meterBlock = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 12),
         };
         meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
+        meterBlock.Children.Add(meterScale.At(1));
 
         var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 50);
-        var mixCell = PKnob("drywet", "DRY/WET", "Dry/Wet", Pct, NotaSize.KnobRegular, 46);
+        var volCell = PKnob("volume", "Volume", "Volume", Pct, NotaSize.Knob, 56);
+        var mixCell = PKnob("drywet", "Dry/wet", "Dry/Wet", Pct, NotaSize.Knob, 56);
         ToolTip.SetTip(mixCell, "Blend the sample itself (dry) with the grain cloud (wet)");
         outRow.Children.Add(volCell);
-        Grid.SetColumn(mixCell, 1); outRow.Children.Add(mixCell);
-        Grid.SetColumn(meterBlock, 2); outRow.Children.Add(meterBlock);
+        outRow.Children.Add(mixCell.At(1));
+        outRow.Children.Add(meterBlock.At(2));
         var outFrame = new Border
         {
-            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
-            Margin = new Thickness(8, 7, 8, 5), Padding = new Thickness(0, 4, 0, 0), Child = outRow,
+            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0),
+            Margin = new Thickness(0, 4, 0, 0), Padding = new Thickness(0, 6, 0, 0), Child = outRow,
         };
 
         var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         railBody.Children.Add(readRows);
-        Grid.SetRow(outFrame, 1); railBody.Children.Add(outFrame);
-        var railGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        railGrid.Children.Add(HeaderStrip(readHead));
-        Grid.SetRow(railBody, 1); railGrid.Children.Add(railBody);
-        var rail = SectionBox(railGrid);
+        railBody.Children.Add(outFrame.At(0, 1));
+        var rail = Pane(new DockPanel { Children = { readHead.Docked(Dock.Top), railBody } }, new Thickness(SectionPad, 10, SectionPad, 8));
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string ModeWord() => ModeNames[Mode()].ToLowerInvariant();
-        string Read() => Mode() switch
-        {
-            0 => $"scan {ScanSpeed(G("scan"))} from {Pct(G("position"))}",
-            1 => $"freeze at {Pct(G("position"))}",
-            _ => $"key from {Pct(G("position"))} at C4",
-        };
-        string Mix() => G("drywet") >= 0.9995f ? "" : $" · dry/wet {Pct(G("drywet"))}";
-
-        // The line at the right of the tab strip: what this tab holds, in a few words.
-        string Hint() => tab switch
+        // The line at the right of the tab row: what this tab holds, in a few words.
+        Hint = () => tab switch
         {
             0 => $"{ModeWord()} · {ShapeWords[Sel("grainshape", 4)]} · {Size(G("grainsize"))} · {Density(G("density"))}",
             1 => $"{ModeWord()} · root {SamplerModel.NoteName(rootNote)} · {Coarse(G("coarse"))} · {Fine(G("fine"))}",
@@ -484,46 +397,15 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             3 => $"{ModeWord()} · {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))}",
             _ => $"{ModeWord()} · a · d · s · r",
         };
-        string Summary() => tab switch
-        {
-            0 => $"Window {ShapeWords[Sel("grainshape", 4)]} · size {Size(G("grainsize"))} · density {Density(G("density"))} · spread {Pct(G("spread"))} · {Read()}{Mix()}",
-            1 => Math.Abs(G("coarse") - 0.5f) < 0.001f && Math.Abs(G("fine") - 0.5f) < 0.0026f
-                ? $"Root {SamplerModel.NoteName(rootNote)} plays the sample as recorded · coarse 0 · fine 0"
-                : $"Root {SamplerModel.NoteName(rootNote)} · coarse {Coarse(G("coarse"))} · fine {Fine(G("fine"))} — every grain transposed by it",
-            2 => $"Variation: position {Pct(G("posrand"))} · pitch {PitchJitter(G("pitchrand"))} · pan {Pct(G("panrand"))} — per grain",
-            3 => $"Filter {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))} · reso {Pct(G("filreso"))} — after the grain cloud",
-            _ => $"Amp {Attack(G("attack"))} · {Decay(G("decay"))} · {Pct(G("sustain"))} · {Release(G("release"))} — the envelope shapes the cloud, not the grain",
-        };
-        string Meta()
-        {
-            string sample = sampleId == 0 ? "DEFAULT" : "SAMPLE";
-            string rate = sampleKHz > 0 ? " · " + NotaNum.Unit(sampleKHz, "0.#", "kHz") : "";
-            return $"{sample} {NotaNum.Time(sampleSec)}{rate} · {voices} VOICES · {grains} GRAINS";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly ---------------------------------------------------------
-        var body = new Grid
+        var root = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap,
-            Margin = new Thickness(NotaSpace.DeviceGap),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap,
+            Margin = new Thickness(0, CardPad, 0, 0),
         };
-        body.Children.Add(tabPanel);
-        Grid.SetColumn(rail, 1); body.Children.Add(rail);
-
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        root.Children.Add(tabPanel);
+        root.Children.Add(rail.At(1));
 
         // Live tick: the read heads and the grain cloud, then every readout.
         void Tick()
@@ -533,11 +415,10 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             int n = engine.InstrumentScope(track, scope);
             if (n >= 2)
             {
-                voices = (int)scope[0];
                 grains = Math.Clamp((int)scope[1], 0, Math.Min(cloud.Length / 3, (n - 2) / 3));
                 Array.Copy(scope, 2, cloud, 0, grains * 3);
             }
-            else { voices = 0; grains = 0; }
+            else grains = 0;
             Refresh();
         }
         ctx.SetInstLiveViz(Tick);
@@ -587,15 +468,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         }
         return (Peaks(s, 1, n), sec);
     }
-
-    // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
-
-    // A section's own header strip: a hairline under it, nothing else.
-    private static Border HeaderStrip(Control child) => new()
-    {
-        BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
-    };
 
     /// <summary>Row definitions that put a caption for each dB mark at its place on the
     /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>

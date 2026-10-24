@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A compact bipolar pan bar for the arrangement track header: a
-// rounded field with a centre tick and a brass fill that grows from the centre
-// toward the panned side, "50L … C … 50R" text over it. Drag to set; double-click centres
-// it, ⌥-click types a value. Fires GestureBegin/End so callers can bracket an
-// automation write, like MiniFader / the gauge Knob.
+// The pan control outside devices (track header, Session mixer; style guide, spec 038): a
+// small 14px knob, its arc growing from 12 o'clock toward the panned side, with the value
+// ("C", "12L", "50R", 11 / 400 ink 1) just right of it. Grey at rest, orange only while
+// under the pointer or in the hand. Drag vertically to set; double-click centres it,
+// ⌥-click types a value. Fires GestureBegin/End so callers can bracket an automation write,
+// like MiniFader / the gauge Knob.
 
 using System;
 using System.Globalization;
@@ -18,13 +19,15 @@ namespace Nota.App;
 
 public sealed class PanBar : Control
 {
-    private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IBrush Border = NotaPalette.Rule;
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x40);   // at rest: neutral
-    private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C); // live
-    private static readonly IBrush CentreTick = NotaPalette.BorderStrong;
-    private static readonly IBrush TextBrush = NotaPalette.TextSecondary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly IBrush Track = NotaPalette.KnobTrack;
+    private static readonly IBrush Arc = NotaPalette.TextTertiary;     // at rest: neutral
+    private static readonly IBrush ArcLive = NotaPalette.Accent;       // under the pointer or in the hand
+    private static readonly IBrush Pointer = NotaPalette.TextPrimary;
+    private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
+
+    public const double KnobD = 14;
+    private const double StartDeg = 135, SweepDeg = 270, Stroke = 2;
 
     private double _pan;   // -1 (full left) .. +1 (full right), 0 = centre
     private bool _drag;
@@ -45,8 +48,8 @@ public sealed class PanBar : Control
     public PanBar(double pan = 0)
     {
         _pan = Math.Clamp(pan, -1, 1);
-        Height = 13;
-        MinWidth = 34;
+        Height = 16;
+        Width = 40;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
 
@@ -113,21 +116,32 @@ public sealed class PanBar : Control
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ControlValue);
-        ctx.DrawRectangle(Bg, new Pen(Border, 1), rrect);
-        double cx = w / 2, px = cx + _pan * (w / 2);
-        var fill = _drag || _hover ? FillLive : Fill;
-        using (ctx.PushClip(rrect))
-        {
-            if (px >= cx) ctx.FillRectangle(fill, new Rect(cx, 0, px - cx, h));
-            else ctx.FillRectangle(fill, new Rect(px, 0, cx - px, h));
-            ctx.DrawLine(new Pen(CentreTick, 1), new Point(cx, 0), new Point(cx, h));
-        }
-        var text = new FormattedText(Label(_pan), CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, Mono, 8.5, TextBrush);
-        ctx.DrawText(text, new Point((w - text.Width) / 2, (h - text.Height) / 2));
+        double h = Bounds.Height;
+        if (Bounds.Width <= 0 || h <= 0) return;
+        double r = KnobD / 2 - Stroke / 2, cx = KnobD / 2, cy = h / 2;
+        ctx.DrawGeometry(null, new Pen(Track, Stroke, lineCap: PenLineCap.Round), ArcGeo(cx, cy, r, StartDeg, SweepDeg));
+        double mid = StartDeg + SweepDeg / 2, at = mid + _pan * SweepDeg / 2;
+        if (Math.Abs(_pan) > 1e-3)
+            ctx.DrawGeometry(null, new Pen(_drag || _hover ? ArcLive : Arc, Stroke, lineCap: PenLineCap.Round),
+                ArcGeo(cx, cy, r, Math.Min(mid, at), Math.Abs(at - mid)));
+        double rad = at * Math.PI / 180;
+        ctx.DrawLine(new Pen(Pointer, 1.6, lineCap: PenLineCap.Round), new Point(cx, cy),
+            new Point(cx + Math.Cos(rad) * (r - 0.5), cy + Math.Sin(rad) * (r - 0.5)));
+        var text = new NotaFormattedText(Label(_pan), CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, NumFace, NotaType.Caption, TextBrush);
+        ctx.DrawText(text, new Point(KnobD + 5, (h - text.Height) / 2));
+    }
+
+    private static StreamGeometry ArcGeo(double cx, double cy, double r, double fromDeg, double sweepDeg)
+    {
+        double a0 = fromDeg * Math.PI / 180, a1 = (fromDeg + sweepDeg) * Math.PI / 180;
+        var g = new StreamGeometry();
+        using var c = g.Open();
+        c.BeginFigure(new Point(cx + Math.Cos(a0) * r, cy + Math.Sin(a0) * r), false);
+        c.ArcTo(new Point(cx + Math.Cos(a1) * r, cy + Math.Sin(a1) * r), new Size(r, r), 0,
+            sweepDeg > 180, SweepDirection.Clockwise);
+        c.EndFigure(false);
+        return g;
     }
 
     // Bipolar readout: "C" at centre, else 1..50 with an L/R suffix.

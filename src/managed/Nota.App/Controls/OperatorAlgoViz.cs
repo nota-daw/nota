@@ -82,12 +82,12 @@ internal sealed class OperatorAlgoMini : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush Ink = NotaPalette.VizInk;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Teal = NotaPalette.TextTertiary;   // a modulator: the second grey
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush InkSubtle = NotaPalette.Wash(NotaPalette.VizInk, 0x30);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private readonly int _algo;
     private bool _active;
@@ -105,8 +105,8 @@ internal sealed class OperatorAlgoMini : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(_active ? AccentSubtle : Sunken, new Pen(_active ? Accent : BorderDef, 1), new Rect(0, 0, w, h), NotaRadius.ControlValue, NotaRadius.ControlValue);
-        var num = new FormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _active ? AccentBright : TextTertiary);
+        ctx.DrawRectangle(_active ? AccentSubtle : Sunken, new Pen(_active ? Accent : BorderDef, 1), new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
+        var num = new NotaFormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _active ? AccentBright : TextTertiary);
         ctx.DrawText(num, new Point(3, 2));
 
         var tgt = OperatorTopo.Algo[_algo];
@@ -136,13 +136,13 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush Ink = NotaPalette.VizInk;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Teal = NotaPalette.TextTertiary;   // a modulator: the second grey
     private static readonly IBrush InkSubtle = NotaPalette.Wash(NotaPalette.VizInk, 0x30);
-    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x2E);
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.TextTertiary, 0x2E);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly IBrush TextPrimary = NotaPalette.TextPrimary;
     private static readonly Typeface Semi = NotaFonts.SansSemiBold;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private int _algo;
     private double[] _x = new double[4], _y = new double[4];
@@ -227,8 +227,8 @@ internal sealed class OperatorRoutingViz : Control
         }
 
         // Header caption.
-        ctx.DrawText(new FormattedText("Routing", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 8, TextTertiary), new Point(padX, 2));
-        var hint = new FormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, TextTertiary);
+        ctx.DrawText(new NotaFormattedText("Routing", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, NotaGraph.TitleSize, TextTertiary), new Point(padX, 2));
+        var hint = new NotaFormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary);
         ctx.DrawText(hint, new Point(gx1 - hint.Width, 2));
 
         // Connection lines (under the boxes).
@@ -240,7 +240,7 @@ internal sealed class OperatorRoutingViz : Control
         }
         // Out bus.
         ctx.DrawLine(new Pen(Ink, NotaGraph.PrimaryWidth), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
-        ctx.DrawText(new FormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, TextTertiary), new Point(gx1 - 22, outY + 1));
+        ctx.DrawText(new NotaFormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary), new Point(gx1 - 22, outY + 1));
 
         // Boxes.
         for (int o = 0; o < 4; o++)
@@ -254,7 +254,7 @@ internal sealed class OperatorRoutingViz : Control
             ctx.DrawRectangle(Sunken, null, rect, 3, 3);
             bool dragged = o == _drag;
             ctx.DrawRectangle(carr ? InkSubtle : TealSubtle, new Pen(dragged ? Accent : carr ? Ink : Teal, 1.3), rect, 3, 3);
-            var ft = new FormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal);
+            var ft = new NotaFormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal);
             ctx.DrawText(ft, new Point(c.X - ft.Width / 2, c.Y - ft.Height / 2));
         }
     }

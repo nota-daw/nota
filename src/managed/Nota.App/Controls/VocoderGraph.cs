@@ -3,7 +3,7 @@
 //
 // Nota Vocoder's envelope graph (specs/028-vocoder-effect, after its design mockup): one bar
 // per band at its centre on a 20 Hz – 20 kHz log axis, its height the modulator's envelope in
-// that band (viz ink); a teal line through the carrier's level in the same bands; and the
+// that band (viz ink); a grey line through the carrier's level in the same bands; and the
 // Low / High edges of the band range as rules. An edge is a handle: under the pointer or in the
 // hand it turns accent, and dragging it moves Low or High (the same params as the knobs). The
 // bars are set the moment a reading arrives — a meter that eases lies about the sound. With a
@@ -113,9 +113,9 @@ internal sealed class VocoderGraph : Control
 
         if (_active)
         {
-            NotaGraph.Legend(ctx, w - 6, 4, ("Modulator", NotaPalette.VizInk, NotaGraph.Mark.Line), ("Carrier", NotaPalette.Teal, NotaGraph.Mark.Line));
+            NotaGraph.Legend(ctx, w - 6, 4, ("Modulator", NotaPalette.VizInk, NotaGraph.Mark.Line), ("Carrier", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
             // Bars: each band's slot runs halfway to its neighbours on the log axis.
-            var ink = _on ? NotaPalette.VizInk : NotaPalette.TextAxis;
+            var ink = _on ? NotaPalette.VizInk : NotaPalette.TextDisabled;
             for (int b = 0; b < _n; b++)
             {
                 if (_ctr[b] <= 0) continue;
@@ -123,7 +123,7 @@ internal sealed class VocoderGraph : Control
                 double xl = b > 0 ? (x + X(_ctr[b - 1])) / 2 : x - (X(_ctr[Math.Min(_n - 1, 1)]) - x) / 2;
                 double xr = b < _n - 1 ? (x + X(_ctr[b + 1])) / 2 : x + (x - X(_ctr[Math.Max(0, _n - 2)])) / 2;
                 double bw = Math.Max(1, xr - xl - 2), bh = Math.Clamp(_env[b], 0, 1) * ph * 0.92;
-                if (bh >= 0.5) ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(xl + 1, y1 - bh, bw, bh), NotaRadius.BarValue));
+                if (bh >= 0.5) ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(xl + 1, y1 - bh, bw, bh), NotaRadius.FineValue));
             }
             // The carrier's level per band, as one line.
             if (_on && _n > 1)
@@ -138,13 +138,12 @@ internal sealed class VocoderGraph : Control
                     }
                     g.EndFigure(false);
                 }
-                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.Teal), geo);
+                ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary), geo);
             }
         }
         else
         {
-            var ft = new FormattedText("Pick a carrier track · until then the sound passes through", System.Globalization.CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, NotaFonts.Sans, 10, NotaPalette.TextDisabled);
+            var ft = NotaGraph.AxisText("Pick a carrier track · until then the sound passes through", NotaPalette.TextTertiary);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, y0 + 14));
         }
 

@@ -36,7 +36,7 @@ internal sealed class QrView : Control
         var ground = dark ? NotaPalette.TextHeading : NotaPalette.SurfaceRaised;
         var ink = dark ? NotaPalette.BgApp : NotaPalette.TextHeading;
         var r = new Rect(Bounds.Size);
-        ctx.DrawRectangle(ground, null, r, NotaRadius.Panel.TopLeft, NotaRadius.Panel.TopLeft);
+        ctx.DrawRectangle(ground, null, r, NotaRadius.Group.TopLeft, NotaRadius.Group.TopLeft);
         if (_qr is null) return;
 
         const int quiet = 3;   // modules of margin; the tile's own padding adds the rest

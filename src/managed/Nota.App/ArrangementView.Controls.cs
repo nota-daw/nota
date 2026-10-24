@@ -187,8 +187,8 @@ public sealed partial class ArrangementView
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
                 if (bar % labelEvery != 0) continue;
-                var ft = new FormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
+                var ft = new NotaFormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
@@ -198,8 +198,8 @@ public sealed partial class ArrangementView
         {
             double pxPerSec = _o._pixelsPerBeat * bpm / 60.0;
             double charW = _charW > 0 ? _charW
-                : _charW = new FormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    NotaFonts.Mono, NotaType.Axis, RulerText).Width / 10;
+                : _charW = new NotaFormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.Sans, NotaType.Axis, RulerText).Width / 10;
             double stepS = RulerLabels.TimeSteps[^1];
             foreach (var st in RulerLabels.TimeSteps)
             {
@@ -214,8 +214,8 @@ public sealed partial class ArrangementView
                 if (x > w) break;
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
-                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
+                var ft = new NotaFormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
@@ -270,8 +270,8 @@ public sealed partial class ArrangementView
             // While a loop region is drawn, moved or resized: its start, end and length.
             if (_o._loopDragging && _o._loopE > _o._loopS)
             {
-                var ft = new FormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, ReadoutText);
+                var ft = new NotaFormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, ReadoutText);
                 double tx = Math.Clamp(_o.BeatToX(_o._loopE) + 6, 2, Math.Max(2, w - ft.Width - 6));
                 var box = new Rect(tx - 3, 2, ft.Width + 6, h - 4);
                 ctx.FillRectangle(ChromeBg, box);
@@ -373,7 +373,7 @@ public sealed partial class ArrangementView
                 var pts = _o._masterAuto;
                 if (pts.Count == 0)
                 {
-                    var hint = new FormattedText("click to add master volume points", CultureInfo.InvariantCulture,
+                    var hint = new NotaFormattedText("click to add master volume points", CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                     ctx.DrawText(hint, new Point(12, my + (FooterRowH - hint.Height) / 2));
                 }
@@ -399,7 +399,7 @@ public sealed partial class ArrangementView
             }
             else
             {
-                var ft = new FormattedText("master volume", CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText("master volume", CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                 ctx.DrawText(ft, new Point(12, my + (FooterRowH - ft.Height) / 2));
             }

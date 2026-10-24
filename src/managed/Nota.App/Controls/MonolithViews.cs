@@ -73,7 +73,7 @@ internal sealed class MonolithFilterCurve : Control
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush Grid = NotaGraph.Grid;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso;
     private bool _drag;
 
@@ -140,7 +140,7 @@ internal sealed class MonolithFilterCurve : Control
         // freq · Q readout (top-right)
         double hz = 16 * Math.Pow(1250, _cut), q = _reso * 10;
         string txt = (hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz") + $" · Q {q:0.0}";
-        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         // cutoff handle (filled, dark ring) at the resonance peak

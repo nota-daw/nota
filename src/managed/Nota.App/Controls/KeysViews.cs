@@ -8,7 +8,7 @@
 //                   linear reference and the handle: drag X = Symmetry, Y = Distance. L adds
 //                   the H1–H8 bars of what the curve does to a sine. For Clav it draws the
 //                   string instead, with its two pickups lit by Pickup Position.
-//   KeysTremView    the tremolo: the left (neutral ink) and right (teal) gains scrolling with the
+//   KeysTremView    the tremolo: the left (graph ink) and right (ink 3) gains scrolling with the
 //                   engine's LFO, a playhead and the pan dot it puts the sound at.
 //   KeysVoiceGrid   the voice pool: sounding notes in accent, pedal / release tails dim, free
 //                   slots dark, the cells past the voice limit darker still.
@@ -105,7 +105,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
     }
 
     private static FormattedText Mono(string t, IBrush ink, double size = 8)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public override void Render(DrawingContext ctx)
     {
@@ -154,39 +154,39 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
             g.EndFigure(false);
         }
         ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), curve);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TealBright, 0x80), 4.5, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), travel);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x38), 4.5, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), travel);
 
         // The handle: X = symmetry, Y = distance, with its crosshair.
         double hx = cx + sym * sx, hy = r.Y + dist * r.Height;
         var dash = new Pen(_drag ? NotaPalette.Wash(NotaPalette.Accent, 0xA0) : NotaPalette.Wash(NotaPalette.VizInk, 0x60), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
         ctx.DrawLine(dash, new Point(hx, frame.Y + 1), new Point(hx, frame.Bottom - 1));
         ctx.DrawLine(dash, new Point(frame.X + 1, hy), new Point(frame.Right - 1, hy));
-        NotaGraph.Node(ctx, new Point(hx, hy), _drag);
+        NotaGraph.Node(ctx, new Point(hx, hy), true, _drag ? NotaPalette.AccentBright : null);   // the handle is the value: orange
 
         // Captions.
         string read = $"sym {(sym >= 0 ? "+" : "−")}{Math.Round(Math.Abs(sym) * 100)}\u2009% · dist {Math.Round(dist * 100)}\u2009%";
-        var title = Mono($"Pickup · {KeysModel.ModelNames[model]}", NotaPalette.TextTertiary);
-        var readout = Mono(read, _drag ? NotaPalette.AccentBright : NotaPalette.TextPrimary);
+        var title = Mono($"Pickup · {KeysModel.ModelNames[model]}", NotaPalette.TextTertiary, NotaGraph.TitleSize);
+        var readout = Mono(read, _drag ? NotaPalette.AccentBright : NotaPalette.TextPrimary, NotaGraph.TitleSize);
         if (Mini)
         {
             ctx.DrawText(title, new Point(6, 4));
             ctx.DrawText(readout, new Point(frame.Right - 6 - readout.Width, 4));
             return;
         }
-        ctx.DrawText(title, new Point(6, 4));
-        ctx.DrawText(readout, new Point(6, 15));
+        ctx.DrawText(title, new Point(8, 6));
+        ctx.DrawText(readout, new Point(8, 8 + title.Height));
 
-        // H1–H8 of the curve driven by a sine (neutral ink even, teal odd, the fundamental dim).
+        // H1–H8 of the curve driven by a sine (greys: odd brighter than even, the fundamental dim).
         var mags = KeysModel.Harmonics(sym, dist, model);
-        double bw = 6, gap = 3, ih = 34, iw = 8 * bw + 7 * gap + 10;
+        double bw = 6, gap = 3, ih = 44, iw = 8 * bw + 7 * gap + 10;
         var inset = new Rect(frame.Right - iw - 8, frame.Bottom - ih - 6, iw, ih);
         ctx.DrawRectangle(NotaGraph.Ground, NotaGraph.FramePen, new RoundedRect(inset, 3));
-        ctx.DrawText(Mono("H1–H8", NotaPalette.TextAxis, 7), new Point(inset.X + 4, inset.Y + 2));
+        ctx.DrawText(NotaGraph.AxisText("H1–H8"), new Point(inset.X + 4, inset.Y + 2));
         for (int k = 0; k < 8; k++)
         {
             double db = 20 * Math.Log10(mags[k] / Math.Max(1e-9, mags[0]) + 1e-9);
-            double bh = Math.Max(1, (1 + db / 60) * (ih - 14));
-            IBrush ink = k == 0 ? NotaPalette.TextTertiary : k % 2 == 1 ? NotaPalette.TealBright : NotaPalette.VizInk;
+            double bh = Math.Max(1, (1 + db / 60) * (ih - 18));
+            IBrush ink = k == 0 ? NotaPalette.TextTertiary : k % 2 == 1 ? NotaPalette.VizInk : NotaPalette.TextSecondary;
             double x = inset.X + 5 + k * (bw + gap);
             ctx.DrawRectangle(ink, null, new Rect(x, inset.Bottom - 3 - bh, bw, bh));
         }
@@ -212,7 +212,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
             return geo;
         }
         ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), Shape(1));
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TealBright, 0xB0), 1.2, lineJoin: PenLineJoin.Round), Shape(-1));
+        ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.2, lineJoin: PenLineJoin.Round), Shape(-1));
         // Bridge / nut.
         ctx.DrawRectangle(NotaPalette.TextSecondary, null, new Rect(x0 - 3, cy - 8, 3, 16));
         ctx.DrawRectangle(NotaPalette.TextSecondary, null, new Rect(x1, cy - 8, 3, 16));
@@ -222,15 +222,16 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
         {
             var rr = new Rect(X(t) - 8, cy + amp + 6, 16, 9);
             ctx.DrawRectangle(lit ? NotaPalette.Accent : NotaPalette.BorderStrong, null, new RoundedRect(rr, 2));
-            var ft = Mono(label, lit ? NotaPalette.AccentBright : NotaPalette.TextAxis, 7);
+            var ft = NotaGraph.AxisText(label, lit ? NotaPalette.AccentBright : NotaPalette.TextAxis);
             ctx.DrawText(ft, new Point(X(t) - ft.Width / 2, rr.Bottom + 2));
         }
         Pickup(0.2, "Up", pos != 2);
         Pickup(0.34, "Lo", pos != 0);
-        ctx.DrawText(Mono("String · 2 pickups", NotaPalette.TextTertiary), new Point(6, 4));
-        var read = Mono(KeysModel.PickupPositions[pos], NotaPalette.TextPrimary);
-        if (Mini) ctx.DrawText(read, new Point(frame.Right - 6 - read.Width, 4));
-        else ctx.DrawText(read, new Point(6, 15));
+        var st = Mono("String · 2 pickups", NotaPalette.TextTertiary, NotaGraph.TitleSize);
+        ctx.DrawText(st, new Point(8, 6));
+        var read = Mono(KeysModel.PickupPositions[pos], NotaPalette.TextPrimary, NotaGraph.TitleSize);
+        if (Mini) ctx.DrawText(read, new Point(frame.Right - 8 - read.Width, 6));
+        else ctx.DrawText(read, new Point(8, 8 + st.Height));
     }
 }
 
@@ -272,7 +273,7 @@ internal sealed class KeysTremView : Control
                 return geo;
             }
             var ink = on ? NotaPalette.VizInk : NotaPalette.BorderStrong;
-            if (stereo) ctx.DrawGeometry(null, new Pen(on ? NotaPalette.Teal : NotaPalette.BorderStrong, NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round), Line(-1));
+            if (stereo) ctx.DrawGeometry(null, new Pen(on ? NotaPalette.TextTertiary : NotaPalette.BorderStrong, NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round), Line(-1));
             ctx.DrawGeometry(null, new Pen(ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), Line(1));
             ctx.DrawLine(new Pen(NotaPalette.TextAxis, 1), new Point(w * 0.33, 2), new Point(w * 0.33, h - barH - 2));
             ctx.DrawText(NotaGraph.AxisText(stereo ? "L R" : "mono"), new Point(6, 3));

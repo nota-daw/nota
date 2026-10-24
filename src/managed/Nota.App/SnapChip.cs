@@ -51,7 +51,7 @@ internal sealed class SnapChip
     {
         var value = new TextBlock
         {
-            FontFamily = NotaFonts.MonoFamily, FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = NotaFonts.UiFamily, FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center,
         };
         // A grid glyph names the control and a chevron says it opens a menu, like the other
@@ -81,7 +81,7 @@ internal sealed class SnapChip
             {
                 string label = GridStep.Of(i, t).Label;
                 if (_caption is null) label = "Auto · " + label;
-                var ft = new FormattedText(label, NotaNum.Culture,
+                var ft = new NotaFormattedText(label, NotaNum.Culture,
                     FlowDirection.LeftToRight, face, _value.FontSize, null);
                 widest = Math.Max(widest, ft.WidthIncludingTrailingWhitespace);
             }
