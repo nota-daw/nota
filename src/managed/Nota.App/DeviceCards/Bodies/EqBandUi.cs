@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The pieces EQ-8 and Dynamic EQ-8 share (style guide, spec 038): the numbered band toggle
-// (orange tint when the band is on, the same control as the band's On switch), one band's tab
-// in the row over the graph, the strip of six filter shapes that picks a band's type, the head
+// (orange tint when the band is on, the same control as the band's On switch), one band's chip
+// in the slim row over the graph, the strip of six filter shapes that picks a band's type, the head
 // of the band panel, and the arrow that folds the side panel.
 
 using System;
@@ -18,7 +18,7 @@ namespace Nota.App;
 
 internal static class EqBandUi
 {
-    internal const double TabH = 40, BadgeD = 18, FoldedW = 42;
+    internal const double ChipH = 20, BadgeD = 18, FoldedW = 42;
 
     /// <summary>A filter type drawn as its response, 22 × 12: high-pass, low shelf, bell, notch,
     /// high shelf, low-pass (DynEq.TypeNames order).</summary>
@@ -34,8 +34,14 @@ internal static class EqBandUi
         public int Type { get => _type; set { int v = Math.Clamp(value, 0, Shapes.Length - 1); if (v == _type) return; _type = v; InvalidateVisual(); } }
         public IBrush Ink { get => _ink; set { if (ReferenceEquals(value, _ink)) return; _ink = value; InvalidateVisual(); } }
 
+        // The shapes are drawn on a 22 × 12 grid; a smaller control (the band chips) scales them.
         public override void Render(DrawingContext ctx)
-            => ctx.DrawGeometry(null, new Pen(_ink, 1.4, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), Shapes[_type]);
+        {
+            double k = Math.Min(Bounds.Width / 22, Bounds.Height / 12);
+            if (k <= 0) return;
+            using var _ = ctx.PushTransform(Matrix.CreateScale(k, k));
+            ctx.DrawGeometry(null, new Pen(_ink, 1.4 / Math.Max(k, 0.75), lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), Shapes[_type]);
+        }
     }
 
     /// <summary>The numbered band toggle: a square in the soft orange tint with an orange number
@@ -69,53 +75,60 @@ internal static class EqBandUi
         return badge;
     }
 
-    /// <summary>One band's tab in the row over the graph: the numbered toggle and the band's
-    /// filter shape on top, its frequency under them (10, ink 2; ink 4 while the band is off), an
-    /// orange outline while it is the band being edited and (Dynamic EQ-8) the band's dynamics
-    /// activity as a 2px orange bar along the bottom. A click on the tab itself picks the band.</summary>
-    internal static Border Tab(Border badge, Func<int> type, Func<bool> on, Func<string> freq, Func<bool> selected, Action select,
+    /// <summary>One band's chip in the slim row over the graph (the classic EQ Eight strip): its
+    /// number, its filter shape and its frequency on one line (10; ink 2, the number ink 1).
+    /// The band being edited has an orange outline and an orange number; a band that is off
+    /// draws everything in ink 4. A click picks the band, a double-click switches it on or off;
+    /// (Dynamic EQ-8) the band's dynamics activity runs as a 2px orange bar along the bottom.</summary>
+    internal static Border Chip(int band, Func<int> type, Func<bool> on, Func<string> freq, Func<bool> selected, Action select, Action toggle,
         out Action sync, Func<double>? activity = null)
     {
-        var shape = new FilterShape { HorizontalAlignment = HorizontalAlignment.Right };
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        top.Children.Add(badge);
-        Grid.SetColumn(shape, 1);
-        top.Children.Add(shape);
+        var num = new TextBlock
+        {
+            Text = (band + 1).ToString(), FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var shape = new FilterShape { Width = 15, Height = 8, Margin = new Thickness(3, 0, 0, 0) };
         var hz = new TextBlock
         {
-            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, LineHeight = 12, Margin = new Thickness(0, 2, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.None,
+            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.None, Margin = new Thickness(3, 0, 0, 0),
         };
-        var stack = new StackPanel { Children = { top, hz } };
+        var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
+        line.Children.Add(num);
+        Grid.SetColumn(shape, 1); line.Children.Add(shape);
+        Grid.SetColumn(hz, 2); line.Children.Add(hz);
         var bar = new Border
         {
             Height = 2, CornerRadius = NotaRadius.Fine, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, -3),
+            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-2, 0, 0, -2),
         };
-        var tab = new Border
+        var chip = new Border
         {
-            Height = TabH, CornerRadius = NotaRadius.Field, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
-            Padding = new Thickness(3, 3, 3, 3), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
-            Child = activity is null ? stack : new Panel { Children = { stack, bar } },
+            Height = ChipH, CornerRadius = NotaRadius.Cell, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
+            Padding = new Thickness(4, 0, 4, 0), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
+            Child = activity is null ? line : new Panel { Children = { line, bar } },
         };
         void Paint()
         {
             bool o = on(), sel = selected();
-            tab.BorderBrush = sel ? Brass : Brushes.Transparent;
+            chip.BorderBrush = sel ? Brass : Brushes.Transparent;
+            num.Foreground = !o ? TextDisabled : sel ? AccentBright : TextPrimary;
             shape.Type = type();
             shape.Ink = o ? TextSecondary : TextDisabled;
             hz.Text = freq();
-            hz.Foreground = !o ? TextDisabled : sel ? TextPrimary : TextSecondary;
-            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, tab.Bounds.Width - 8);
+            hz.Foreground = o ? TextSecondary : TextDisabled;
+            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, chip.Bounds.Width - 4);
         }
-        tab.PointerPressed += (_, e) =>
+        chip.PointerPressed += (_, e) =>
         {
-            if (!e.GetCurrentPoint(tab).Properties.IsLeftButtonPressed) return;
+            if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+            if (e.ClickCount == 2) toggle();
             select(); e.Handled = true;
         };
         sync = Paint;
         Paint();
-        return tab;
+        return chip;
     }
 
     /// <summary>The filter type as a strip of the six shapes (DynEq.TypeNames order) in a

@@ -48,8 +48,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     mode on the Warp title row, so nothing scrolls.
   - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
     fade back, and send and volume values sit inside their bars.
-  - **EQ-8 and Dynamic EQ-8** keep their classic layout in the new style: a row of band tabs
-    (toggle, filter shape, frequency) over a large graph, and one panel at the right with the
+  - **EQ-8 and Dynamic EQ-8** keep their classic layout in the new style: a slim row of band
+    chips (number, filter shape, frequency) over a large graph, and one panel at the right with the
     picked band's type, Freq, Gain and Q side by side. In EQ-8 that panel folds away to give
     the graph more room.
   - **Devices:** cards are raised with pressed-in sections, have no status line, use value

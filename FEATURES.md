@@ -655,7 +655,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
-  analyzer switched Pre / Post / Off), a row of band tabs over the graph (toggle, filter shape,
+  analyzer switched Pre / Post / Off), a slim row of band chips over the graph (number, filter shape,
   frequency), and the selected band's settings beside the Global controls in a panel at the
   right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
@@ -750,8 +750,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
   master switch, Solo, output. A full-width response graph (live curve, static curve while
   they differ, the output spectrum, draggable numbered nodes with a whisker to each dynamic
-  band's range and its gain now, a tooltip with a 2 s gain history), a row of band tabs over
-  the graph (toggle, filter shape, frequency, each band's activity), the selected band's
+  band's range and its gain now, a tooltip with a 2 s gain history), a row of band chips over
+  the graph (number, filter shape, frequency, each band's activity), the selected band's
   settings in a panel at the right with the band's level on the threshold;
   33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
 - **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;

@@ -3,8 +3,8 @@
 //
 // Detail · Devices — built-in Nota EQ-8 body (device kind 0), laid out like the classic EQ
 // Eight and drawn in the style guide (spec 038): the response graph leads at the left (nodes
-// drag on the curve) under a row of eight band tabs — each a numbered on/off toggle, the band's
-// filter shape and its frequency — and the panel at the right edits the picked band (its head
+// drag on the curve) under a slim row of eight band chips — each the band's number, filter shape
+// and frequency on one line (click picks, double-click switches it on / off) — and the panel at the right edits the picked band (its head
 // with the On switch, the six filter shapes, Freq, Gain and Q side by side, Slope and Channel)
 // beside the device's Global controls (Analyzer, Auto gain, Scale, Output). Its arrow folds the
 // whole panel to a thin strip (the card narrows from 920 to 572); the fold is session-only view
@@ -91,22 +91,21 @@ internal sealed class EqDeviceBody : IDeviceBody
         static T Row<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
         // ======================================================================
-        // LEFT — the band tabs over the response graph
+        // LEFT — the band chips over the response graph
         // ======================================================================
         ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
             + "double-click empty space — a new bell there · right-click a node — type, slope, channel");
-        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 4 };
+        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 3 };
         for (int b = 0; b < Eq8.Bands; b++)
         {
             int bb = b, pOn = Eq8.P(b, Eq8.On);
-            var badge = EqBandUi.Badge(b, () => BandOn(bb), () => { SetP(pOn, BandOn(bb) ? 0 : 1); RefreshAll(); }, out var badgeSync);
-            var tab = EqBandUi.Tab(badge, () => TypeOf(bb), () => BandOn(bb), () => Eq8.HzShort(B(bb, Eq8.FreqF)),
-                () => bb == Sel(), () => { curve.SelectedBand = bb; RefreshAll(); }, out var tabSync);
-            Learn(badge, pOn);
-            ToolTip.SetTip(tab, NotaNum.F($"Band {b + 1} — click to edit it"));
-            readouts.Add(badgeSync); readouts.Add(tabSync);
+            var chip = EqBandUi.Chip(b, () => TypeOf(bb), () => BandOn(bb), () => Eq8.HzShort(B(bb, Eq8.FreqF)),
+                () => bb == Sel(), () => { curve.SelectedBand = bb; RefreshAll(); }, () => SetP(pOn, BandOn(bb) ? 0 : 1), out var chipSync);
+            Learn(chip, pOn);
+            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it, double-click to switch it on / off"));
+            readouts.Add(chipSync);
             tabRow.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-            tabRow.Children.Add(Col(tab, b));
+            tabRow.Children.Add(Col(chip, b));
         }
         DockPanel.SetDock(tabRow, Dock.Top);
         var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, curve } });

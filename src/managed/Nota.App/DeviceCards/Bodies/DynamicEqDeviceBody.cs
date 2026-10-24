@@ -3,8 +3,8 @@
 //
 // Detail · Devices — built-in Nota Dynamic EQ-8 body (device kind 13), laid out like the
 // classic EQ Eight and drawn in the style guide (spec 038): the response graph leads at the left
-// (nodes drag on the curve) under a row of eight band tabs — a numbered on/off toggle, the band's
-// filter shape, its frequency and its dynamics activity along the bottom — and the panel at the
+// (nodes drag on the curve) under a slim row of eight band chips — the band's number, filter
+// shape and frequency on one line, with its dynamics activity along the bottom — and the panel at the
 // right edits the picked band (its head with the On switch, the six filter shapes, Freq, Gain
 // and Q side by side) beside its dynamics (mode, Thresh with the band's level marked on it,
 // Range, Attack, Release, its key and Solo) over the device's Dynamic master switch and output.
@@ -29,7 +29,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
     // The right panel: the band column, a gap, the dynamics column, inside the section's padding
     // and its 1px edge.
-    internal const double BandW = 196, DynW = 200, PanelGap = 20;
+    internal const double BandW = 176, DynW = 200, PanelGap = 16;
     internal const double PanelW = BandW + PanelGap + DynW + 2 * SectionPad;
 
     public double Width => 940;
@@ -115,25 +115,25 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             if (!DynEq.HasGain(i) && ModeOf(b) != DynEq.Static) SetP(DynEq.P(b, DynEq.ModeF), DynEq.Static);
             RefreshAll(); curve.InvalidateVisual();
         }
-        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 4 };
+        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 2 };
         for (int b = 0; b < DynEq.Bands; b++)
         {
             int bb = b, pOn = DynEq.P(b, DynEq.On);
             bool Lit() => BandOn(bb) && (Solo() < 0 || Solo() == bb);   // outside a solo a band reads as off
-            var badge = EqBandUi.Badge(b, Lit, () => { SetP(pOn, BandOn(bb) ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var badgeSync);
             // How much of its range the band's dynamics use right now.
             double Activity()
             {
                 double r = Math.Abs(B(bb, DynEq.RangeF));
                 return IsDyn(bb) && r > 0.05 ? Math.Abs(curve.Gr(bb)) / r : 0;
             }
-            var tab = EqBandUi.Tab(badge, () => TypeOf(bb), Lit, () => DynEq.HzShort(B(bb, DynEq.FreqF)),
-                () => bb == Sel(), () => { curve.SelectedBand = bb; RefreshAll(); }, out var tabSync, Activity);
-            Learn(badge, pOn);
-            ToolTip.SetTip(tab, NotaNum.F($"Band {b + 1} — click to edit it; the bar shows how much of its range the dynamics use now"));
-            readouts.Add(badgeSync); readouts.Add(tabSync);
+            var chip = EqBandUi.Chip(b, () => TypeOf(bb), Lit, () => DynEq.HzShort(B(bb, DynEq.FreqF)),
+                () => bb == Sel(), () => { curve.SelectedBand = bb; RefreshAll(); },
+                () => { SetP(pOn, BandOn(bb) ? 0 : 1); curve.InvalidateVisual(); }, out var chipSync, Activity);
+            Learn(chip, pOn);
+            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it, double-click to switch it on / off; the bar shows how much of its range the dynamics use now"));
+            readouts.Add(chipSync);
             tabRow.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-            tabRow.Children.Add(Col(tab, b));
+            tabRow.Children.Add(Col(chip, b));
         }
         DockPanel.SetDock(tabRow, Dock.Top);
         var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, curve } });
@@ -223,7 +223,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 knob.GestureEnd += () => End(p);
                 Learn(knob, p);
                 ToolTip.SetTip(knob, tip);
-                var cell = KnobCell(label, knob, val, 64);
+                var cell = KnobCell(label, knob, val, 58);
                 TextBlock? lbl = null;
                 if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
                 bool? wasInactive = null;

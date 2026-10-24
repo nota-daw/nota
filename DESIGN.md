@@ -1181,9 +1181,9 @@ control, label and value stays.
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
 | Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 940 | The EQ Eight layout (below), graph 450 × 149. Each band tab carries a dynamics activity bar along its bottom. The panel's second column is the picked band's dynamics; the status line's Dynamic switch and draggable Out readout move to its bottom. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics rows are ink 4 while the band is Static. No fold (until asked for). |
+| Dynamic EQ-8 | 940 | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel's second column is the picked band's dynamics; the status line's Dynamic switch and draggable Out readout move to its bottom. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics rows are ink 4 while the band is Static. No fold (until asked for). |
 | EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
-| EQ-8 | 920; 572 folded | The EQ Eight layout (below), graph 480 × 149. Slope and Channel sit under the picked band's knobs; the panel's second column is Global (Analyzer, Scale and Output knobs, Auto gain). Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output row, which stays. The right column folds (below). |
+| EQ-8 | 920; 572 folded | The EQ Eight layout (below), graph 480 × 169. Slope and Channel sit under the picked band's knobs; the panel's second column is Global (Analyzer, Scale and Output knobs, Auto gain). Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output row, which stays. The right column folds (below). |
 | Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
 | Forge | 700 | Status line removed. The three stage boxes become rows split by rules: each stage dot becomes an on switch, the selected stage shows a tinted number. Amount, Wet and Out stack as value-bar rows above the transfer graph; switched-off stages are ink 4. |
 | Lens | 700 | Status line removed. The Top and Range rail faders become upright value bars; Peak hold and Mid / Side share one row. |
@@ -1200,10 +1200,11 @@ control, label and value stays.
 | Vocoder | 700 | Added after 0.56.1, so the guide has no picture of it yet. It follows the same rules: the card shell, pressed-in sections, value bars, capped knobs, no status line. |
 
 **The EQ Eight layout** (EQ-8 and Dynamic EQ-8), the classic EQ Eight arrangement drawn in
-this guide: the graph leads at the left under a row of eight band tabs, and one panel at the
-right edits the picked band. Each tab has a numbered on/off toggle (orange when on; the same
-control as the band's On switch), the band's filter shape, and its frequency under them (ink 2,
-ink 4 while the band is off); the band being edited has an orange outline. The panel's band
+this guide: the graph leads at the left under a slim row of eight band chips (20 high), and one
+panel at the right edits the picked band. Each chip reads on one line: the band's number (ink 1),
+its filter shape and its frequency (ink 2), all ink 4 while the band is off; the band being edited
+has an orange outline and an orange number. A click picks the band, a double-click switches it on
+or off. The panel's band
 column opens with the toggle, the type's name and an On switch, then the six filter shapes in a
 groove (Low cut, Low shelf, Bell, Notch, High shelf, High cut; the picked one tinted, its name
 in the tooltip), then Freq, Gain and Q side by side. A row that does not apply (Slope on a shelf band) is ink 4
@@ -1341,7 +1342,7 @@ True today, not yet fixed:
   files keep two tokens: `Panel` `#26282C` and `SurfaceCard` `#2B2D31` in Studio Dark (the
   same `#E4E5E7` in Studio Light); this file uses `SurfaceCard` for cards.
 - **The guide's EQ-8 sizes were stale** ("690", graph "592 × 156"); EQ-8 is 920 wide, 572
-  folded, graph 480 × 149. The guide is to be corrected, and it has no picture of Nota
+  folded, graph 480 × 169. The guide is to be corrected, and it has no picture of Nota
   Vocoder yet.
 - **Ember-era token names.** Several tokens hold the same value as a Studio role and stay
   only so their call sites keep working: `SurfaceAbyss`, `TrackOff`, `SurfaceActive`
