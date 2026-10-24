@@ -55,7 +55,7 @@ public sealed partial class ArrangementView
             Text = "", FontSize = 9,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
         var labels = new StackPanel
         {
@@ -301,7 +301,7 @@ public sealed partial class ArrangementView
             int n = _o._tracks.Count;
             if (n == 0)
             {
-                var hint = new FormattedText("the project appears here", CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText("the project appears here", CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, OvEmptyText);
                 ctx.DrawText(hint, new Point(10, (h - hint.Height) / 2));
             }

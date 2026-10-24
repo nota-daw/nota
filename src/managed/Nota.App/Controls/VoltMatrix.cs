@@ -30,7 +30,7 @@ internal sealed class VoltMatrix : Control
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush CellBg = NotaPalette.BgSunken;
-    private static readonly Typeface Face = NotaFonts.Mono;
+    private static readonly Typeface Face = NotaFonts.Sans;
     // How far the pointer travels for the full ±range — the knob's own feel.
     private const double Travel = 140;
 
@@ -110,7 +110,7 @@ internal sealed class VoltMatrix : Control
 
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
     {
-        var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);
         ctx.DrawText(ft, new Point(center ? x - ft.Width / 2 : x, y));
     }
 

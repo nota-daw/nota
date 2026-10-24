@@ -42,8 +42,13 @@ internal static class NotaThemes
         "ShadowBevel", "ShadowPopover", "ShadowModal",
     };
 
-    // Translucent by design; every other token must be opaque.
-    private static readonly HashSet<string> AlphaTokens = new() { "ShadowBevel", "ShadowPopover", "ShadowModal" };
+    // Translucent by design; every other token must be opaque. The wells and the device
+    // bevel are a faint white (dark themes) or black (light themes) over whatever they sit on.
+    private static readonly HashSet<string> AlphaTokens = new()
+    {
+        "ShadowBevel", "ShadowPopover", "ShadowModal",
+        "Well", "WellTrack", "KnobTrack", "DeviceSectionEdge", "Bevel",
+    };
 
     private static readonly Regex IdPattern = new("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
     private static readonly Regex HexPattern = new("^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$", RegexOptions.Compiled);

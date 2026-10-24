@@ -105,7 +105,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -157,14 +157,14 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 
         Control StageTile(int s)
         {
-            var dot = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
+            var dot = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
             var num = Mono((s + 1).ToString(), 8, TextSecondary); num.FontWeight = FontWeight.Bold;
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             var role = new TextBlock { FontSize = 7, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
             var outTxt = Mono("", 8, TextSecondary);
             var outBox = new Border
             {
-                Background = Sunken, CornerRadius = NotaRadius.Clip, Padding = new Thickness(2, 0), VerticalAlignment = VerticalAlignment.Center,
+                Background = Sunken, CornerRadius = NotaRadius.Field, Padding = new Thickness(2, 0), VerticalAlignment = VerticalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = outTxt,
             };
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 5 };
@@ -177,7 +177,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             var body = new DockPanel { Children = { Docked(head, Dock.Top), new Border { VerticalAlignment = VerticalAlignment.Bottom, Child = rows } } };
             var tile = new Border
             {
-                BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 3), Background = Sunken,
+                BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 3), Background = Sunken,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = body,
             };
 
@@ -265,7 +265,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         // RIGHT — the selected stage's shape, modulation, oversampling
         // ======================================================================
         var badgeTxt = Mono("", 8, OnAccent); badgeTxt.FontWeight = FontWeight.Bold; badgeTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
+        var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
         var stName = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var shapeHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6 };
         shapeHead.Children.Add(badge); shapeHead.Children.Add(Col(stName, 1)); shapeHead.Children.Add(Col(Caps("SHAPE"), 2));

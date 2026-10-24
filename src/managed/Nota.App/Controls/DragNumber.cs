@@ -38,7 +38,7 @@ public sealed class DragNumber : UserControl
         _value = Math.Clamp(value, min, max);
 
         _display.FontSize = fontSize;
-        _display.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _display.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _display.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
 
         _editor = new TextBox
@@ -47,7 +47,7 @@ public sealed class DragNumber : UserControl
             Background = Brushes.Transparent, BorderThickness = new Avalonia.Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
         };
-        _editor.BindResource(TextBox.FontFamilyProperty, "Font.Mono");
+        _editor.BindResource(TextBox.FontFamilyProperty, "Font.UI");
         _editor.KeyDown += (_, e) => { if (e.Key == Key.Enter) CommitEditor(); else if (e.Key == Key.Escape) CancelEditor(); };
         _editor.LostFocus += (_, _) => CommitEditor();
 

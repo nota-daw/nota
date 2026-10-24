@@ -101,7 +101,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -152,7 +152,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -175,7 +175,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -214,7 +214,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
             };
@@ -434,7 +434,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             var t = Caps(title);
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
-            var b = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+            var b = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } } };
             readouts.Add(() =>
             {
@@ -510,7 +510,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             }
             var box = new Border
             {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = {
                     Caps("OUTPUT"),
                     Line("in", () => DbF(Sc(S_InPk))),

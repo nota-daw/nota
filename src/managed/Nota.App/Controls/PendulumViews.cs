@@ -26,7 +26,7 @@ namespace Nota.App;
 internal static class PendulumInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = 7)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     /// <summary>Seconds as the lanes print them: 0.12 s, 1.3 s, or — when never.</summary>
     public static string Secs(double s) => s < 0 || s > 99 ? "—" : s < 10 ? NotaNum.Unit(s, "0.00", "s") : NotaNum.Unit(s, "0.0", "s");
@@ -176,7 +176,7 @@ internal sealed class PendulumBarView : Control
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         const double padX = 6;
-        var cap = new FormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaPalette.TextTertiary);
+        var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaPalette.TextTertiary);
         ctx.DrawText(cap, new Point(padX, 3));
         var sub = PendulumInk.Mono($"bar · quantize {_quant.ToLowerInvariant()}", NotaPalette.TextAxis);
         ctx.DrawText(sub, new Point(padX + cap.Width + 6, 3));
@@ -249,7 +249,7 @@ internal sealed class PendulumBallList : Control
             var ball = _s.BallState[b];
             double y = b * (rowH + gap);
             bool sel = b == _s.LastBall;
-            var rr = new RoundedRect(new Rect(0.5, y + 0.5, w - 1, rowH - 1), NotaRadius.BadgeValue);
+            var rr = new RoundedRect(new Rect(0.5, y + 0.5, w - 1, rowH - 1), NotaRadius.CellValue);
             ctx.DrawRectangle(sel ? NotaPalette.AccentSubtle : NotaPalette.BgSunken, new Pen(sel ? NotaPalette.BorderBrass : NotaPalette.GraphBorder, 1), rr);
             double cy = y + rowH / 2, x = 6;
             ctx.DrawEllipse(sel ? NotaPalette.Accent : NotaPalette.VizInk, null, new Point(x + 3, cy), 3, 3);

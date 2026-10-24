@@ -132,12 +132,12 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         var filtEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 6, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
+        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action applyFilter = () => { };
         Action showTab = () => { };
 
@@ -161,7 +161,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
         static TextBlock Section(string t, IBrush? c = null) => new()
         {
@@ -178,7 +178,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };
@@ -248,7 +248,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 var ic = new WaveIcon(i) { Width = 18, Height = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 var c = new Border
                 {
-                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(3, 2), Background = Brushes.Transparent,
+                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(3, 2), Background = Brushes.Transparent,
                     Cursor = new Cursor(StandardCursorType.Hand), Child = ic,
                 };
                 c.PointerPressed += (_, e) =>
@@ -274,7 +274,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             var host = new Border
             {
                 Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left,
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center, Child = row,
             };
             host.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
@@ -503,7 +503,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 var cell = new Border
                 {
                     Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 1),
+                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 1),
                     Child = new StackPanel { Children = { cap, v } },
                 };
                 if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
@@ -667,7 +667,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             var cellBorder = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(2, 2),
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(2, 2),
                 Child = new StackPanel
                 {
                     Spacing = 1, VerticalAlignment = VerticalAlignment.Center,

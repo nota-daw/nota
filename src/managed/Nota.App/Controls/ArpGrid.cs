@@ -109,7 +109,7 @@ internal sealed class ArpGrid : Control
     private static readonly IBrush ColMajor = NotaPalette.GraphBorder;
     private static readonly IBrush Head = NotaPalette.Wash(NotaPalette.Accent, 0x14);
     private static readonly IBrush Zero = NotaPalette.BorderDefault;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private const double GutterW = 20, NumsH = 13;
 
     private readonly IAudioEngine _e; private readonly int _t, _mi;
@@ -227,7 +227,7 @@ internal sealed class ArpGrid : Control
     // ---- render ---------------------------------------------------------------------
     private static void Text(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 7, bool right = false, bool centre = false)
     {
-        var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
         double px = right ? x - ft.Width : centre ? x - ft.Width / 2 : x;
         ctx.DrawText(ft, new Point(px, y - ft.Height / 2));
     }

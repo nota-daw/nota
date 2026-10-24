@@ -26,10 +26,10 @@ internal static class ChamberInk
     public static IBrush Mauve => NotaPalette.Ink("#B57286");   // a live slot, not a snapshot of its colour
     public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
     public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 

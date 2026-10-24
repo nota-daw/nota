@@ -67,7 +67,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -97,7 +97,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             var tb = new TextBlock { Text = "Kill", FontSize = 8, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var btn = new Border
             {
-                Width = 48, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
+                Width = 48, Height = 15, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             void Paint()

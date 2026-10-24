@@ -113,7 +113,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -192,7 +192,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             {
                 int di = i;
                 var tb = Mono(Divs[i], Cap, 7); tb.HorizontalAlignment = HorizontalAlignment.Center;
-                var chip = new Border { CornerRadius = NotaRadius.Clip, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var chip = new Border { CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 chip.PointerPressed += (_, ev) =>
                 {
                     if (!ev.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -273,7 +273,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             // Mode chip: click for the next mode, Shift-click for the previous.
             var modeTb = new TextBlock { FontSize = 9, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = Cap, VerticalAlignment = VerticalAlignment.Center };
-            var modeChip = new Border { Height = 14, Width = 58, CornerRadius = NotaRadius.Badge, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
+            var modeChip = new Border { Height = 14, Width = 58, CornerRadius = NotaRadius.Cell, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), Margin = new Thickness(0, 0, 6, 0),
                 Child = new DockPanel { Children = { WithDock(chev, Dock.Right), modeTb } } };
             modeChip.PointerPressed += (_, ev) =>

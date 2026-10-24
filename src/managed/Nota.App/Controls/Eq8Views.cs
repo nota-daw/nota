@@ -351,7 +351,7 @@ public sealed class Eq8Curve : Control
     // ---- render ----
     private static FormattedText Text(string s, IBrush ink, double size, bool bold = false, bool mono = true)
         => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? (bold ? NotaFonts.MonoBold : NotaFonts.Mono) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink);
+            mono ? (bold ? NotaFonts.SansBold : NotaFonts.Sans) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink);
 
     private StreamGeometry SpecLine(float[] spec, double w, double h)
     {

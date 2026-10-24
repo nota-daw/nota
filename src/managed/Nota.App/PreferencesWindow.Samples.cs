@@ -55,7 +55,7 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < PackFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
             _packCounts[i] = count;
             var b = new ToggleButton
             {
@@ -192,7 +192,7 @@ public sealed partial class PreferencesWindow
         if (_packList.Content is not Border { Tag: "pack-table" })
             _packList.Content = new Border
             {
-                Tag = "pack-table", BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+                Tag = "pack-table", BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
                 ClipToBounds = true, Child = _packItems,
             };
     }
@@ -252,10 +252,10 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = p.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
-                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary },
+                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary },
                 new TextBlock { Text = p.Description, FontSize = 12, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
             },
         };
@@ -292,7 +292,7 @@ public sealed partial class PreferencesWindow
         actions.Children.Add(new TextBlock
         {
             Text = inst is null ? $"{Megabytes(p.Asset.Size)} · {p.Asset.Files} samples" : $"{inst.Files} samples",
-            FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
+            FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         });
         if (inst is null)
             ToolTip.SetTip(actions.Children[^1], $"{Megabytes(p.Asset.Size)} download · {p.Asset.Files} samples · {Megabytes(p.Asset.UnpackedSize)} on disk · {string.Join(", ", p.Asset.Formats)}");

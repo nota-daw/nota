@@ -109,7 +109,7 @@ internal sealed class ReverbTailView : Control
     }
 
     private static FormattedText Text(string t, IBrush ink, double size = 7.5)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public override void Render(DrawingContext ctx)
     {

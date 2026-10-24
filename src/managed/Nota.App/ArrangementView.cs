@@ -2553,7 +2553,7 @@ public sealed partial class ArrangementView : UserControl
         var glyph = new Glyph(GlyphKind.Headphones, 10);
         var chip = new Border
         {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
+            Width = 18, Height = 16, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1),
             Child = glyph, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
         };
         void Paint()
@@ -2654,7 +2654,7 @@ public sealed partial class ArrangementView : UserControl
     {
         var phone = new Border
         {
-            Width = 6, Height = 9, CornerRadius = NotaRadius.Bar, BorderThickness = new Thickness(1),
+            Width = 6, Height = 9, CornerRadius = NotaRadius.Fine, BorderThickness = new Thickness(1),
             BorderBrush = Brush("Brush.TextStrong"), VerticalAlignment = VerticalAlignment.Center,
         };
         var name = new TextBlock
@@ -2664,7 +2664,7 @@ public sealed partial class ArrangementView : UserControl
         };
         var pill = new Border
         {
-            Height = 16, CornerRadius = NotaRadius.Pill, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
+            Height = 16, CornerRadius = NotaRadius.Group, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
             Background = Brush("Brush.TrackOff"), BorderBrush = Brush("Brush.BorderStrong"), BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
@@ -2681,7 +2681,7 @@ public sealed partial class ArrangementView : UserControl
     {
         bool state = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
-        var chip = new Border { Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc, Cursor = new Cursor(StandardCursorType.Hand) };
+        var chip = new Border { Width = 18, Height = 16, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = disc, Cursor = new Cursor(StandardCursorType.Hand) };
         void Paint()
         {
             chip.Background = state ? NotaPalette.Record : NotaPalette.SurfaceRaised;
@@ -2707,7 +2707,7 @@ public sealed partial class ArrangementView : UserControl
         };
         var chip = new Border
         {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control,
+            Width = 18, Height = 16, CornerRadius = NotaRadius.Field,
             BorderThickness = new Thickness(1), Child = tb,
         };
         void Paint()

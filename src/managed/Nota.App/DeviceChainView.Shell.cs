@@ -116,7 +116,7 @@ public sealed partial class DeviceChainView
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-    private static TextBlock Mono(string t, double w) { var tb = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, Width = w, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+    private static TextBlock Mono(string t, double w) { var tb = new TextBlock { Text = t, FontSize = 9, Foreground = TextSecondary, Width = w, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
 
     private Border BuildCardShell(ShellSpec s, Control body)
     {
@@ -143,7 +143,7 @@ public sealed partial class DeviceChainView
         string type = NotaText.Label(s.Subtitle ?? "");
         var badge = new TextBlock
         {
-            Text = type, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Eyebrow,
+            Text = type, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Eyebrow,
             Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center,
         };
         if (s.IsInstrument && _engine.InstrumentVoiceCount(_trackId) >= 0)
@@ -362,13 +362,13 @@ public sealed partial class DeviceChainView
         var selRing = new Border
         {
             BorderBrush = Brass, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
+            CornerRadius = new CornerRadius(NotaRadius.CardValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = sel,
         };
         var shell = new Border
         {
             Background = ShellBg, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Card, ClipToBounds = true,
             Child = root,
         };
         var card = new Border

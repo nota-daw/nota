@@ -37,7 +37,7 @@ internal sealed class ChordKeysViz : Control
     public bool Labels { get; init; } = true;
 
     /// <summary>Corner radius of the key bottoms (L 2, S square).</summary>
-    public double KeyRadius { get; init; } = NotaRadius.ClipValue;
+    public double KeyRadius { get; init; } = NotaRadius.FieldValue;
 
     public ChordKeysViz() { MinHeight = 24; ClipToBounds = true; }
 
@@ -61,7 +61,7 @@ internal sealed class ChordKeysViz : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(Well, null, frame, NotaRadius.BadgeValue, NotaRadius.BadgeValue);
+        ctx.DrawRectangle(Well, null, frame, NotaRadius.CellValue, NotaRadius.CellValue);
         var inner = frame.Deflate(1);
         double ww = inner.Width / 21.0;
         var clip = ctx.PushClip(inner);
@@ -94,12 +94,12 @@ internal sealed class ChordKeysViz : Control
         if (Labels)
             for (int o = 0; o < 3; o++)
             {
-                var ft = new FormattedText(DeviceCardKit.NoteName(_start + o * 12), System.Globalization.CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, new Typeface(NotaFonts.MonoFamily), 6, Label);
+                var ft = new NotaFormattedText(DeviceCardKit.NoteName(_start + o * 12), System.Globalization.CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, new Typeface(NotaFonts.UiFamily), 6, Label);
                 double x = inner.X + o * 7 * ww + (ww - ft.Width) / 2;
                 ctx.DrawText(ft, new Point(x, inner.Bottom - ft.Height - 1));
             }
         clip.Dispose();
-        ctx.DrawRectangle(null, new Pen(WellEdge, 1), frame.Deflate(0.5), NotaRadius.BadgeValue, NotaRadius.BadgeValue);
+        ctx.DrawRectangle(null, new Pen(WellEdge, 1), frame.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
     }
 }

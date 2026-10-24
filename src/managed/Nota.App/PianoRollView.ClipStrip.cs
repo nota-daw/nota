@@ -80,18 +80,18 @@ public sealed partial class PianoRollView
                 {
                     if (active)
                     {
-                        ctx.FillRectangle(track, r, (float)NotaRadius.ClipValue);
-                        ctx.DrawRectangle(null, new Pen(NotaPalette.Accent, 1), r.Deflate(0.5), NotaRadius.ClipValue, NotaRadius.ClipValue);
+                        ctx.FillRectangle(track, r, (float)NotaRadius.FieldValue);
+                        ctx.DrawRectangle(null, new Pen(NotaPalette.Accent, 1), r.Deflate(0.5), NotaRadius.FieldValue, NotaRadius.FieldValue);
                     }
                     else
                     {
-                        ctx.FillRectangle(NotaPalette.SurfaceRaised, r, (float)NotaRadius.ClipValue);
+                        ctx.FillRectangle(NotaPalette.SurfaceRaised, r, (float)NotaRadius.FieldValue);
                         ctx.FillRectangle(track, new Rect(r.X, r.Y, Stripe, r.Height));
                     }
                     IBrush ink = active ? NotaPalette.InkOn(track) : locked ? NotaPalette.TextTertiary : NotaPalette.TextSecondary;
                     var clip = set.Clips[k];
                     string name = _o.ClipNameOf?.Invoke(clip.TrackId, clip.ClipIndex) ?? $"Track {clip.TrackId}";
-                    var ft = new FormattedText(name, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, ink);
+                    var ft = new NotaFormattedText(name, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, ink);
                     double textX = r.X + (active ? 6 : Stripe + 5);
                     double room = r.Width - (textX - r.X) - (active ? 6 : LockW + 2);
                     if (room > 12)

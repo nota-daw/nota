@@ -1,20 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Two typefaces and one hard rule between them: Geist for names and words, Geist Mono
-// for anything that is a measurement — position, tempo, dB, Hz, ms, percentages,
-// counters, format badges. Mono is monospaced, so digits keep their width as a knob turns.
+// One typeface: Geist for every word and every number (style guide, spec 038). Geist's
+// digits are proportional by default, so the app turns on its tabular figures ("tnum")
+// everywhere: TextElement.FontFeatures on every top level for controls, and
+// NotaFormattedText for the custom-drawn layer. Digits then all have the same width and
+// a value can change without the text around it jumping. "Geist" is a Reserved Font
+// Name, so the bundled files stay unmodified and the feature is applied at shaping time.
 //
-// This is the C# side of Font.UI / Font.Mono in Theme/NotaTheme.axaml, for the
-// custom-drawn layer that builds FormattedText itself. Never construct a Typeface from a
-// family name in a view: a name the app does not bundle ("Inter", "Menlo", "monospace")
-// silently resolves to whatever the OS has, which is how half the visualisers ended up
-// in a different face from the chrome around them.
+// This is the C# side of Font.UI in Theme/NotaTheme.axaml, for the custom-drawn layer
+// that builds FormattedText itself. Never construct a Typeface from a family name in a
+// view: a name the app does not bundle ("Inter", "Menlo", "monospace") silently resolves
+// to whatever the OS has.
 //
-// Both families are bundled (assets/fonts, SIL OFL 1.1). Glyphs they lack — the thin
-// space, ■ ▾ ✓ ★ — fall back to the system font per character.
+// Geist is bundled (assets/fonts, SIL OFL 1.1). Glyphs it lacks — ■ ▾ ✓ ★ — fall back to
+// the system font per character.
 
+using System.Globalization;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 
 namespace Nota.App;
@@ -22,10 +29,8 @@ namespace Nota.App;
 public static class NotaFonts
 {
     public const string UiUri = "avares://Nota.App/Assets/Fonts#Geist";
-    public const string MonoUri = "avares://Nota.App/Assets/Fonts#Geist Mono";
 
     public static readonly FontFamily UiFamily = new(UiUri);
-    public static readonly FontFamily MonoFamily = new(MonoUri);
 
     // Geist 400 · 500 · 600 · 700
     public static readonly Typeface Sans = new(UiFamily);
@@ -33,15 +38,34 @@ public static class NotaFonts
     public static readonly Typeface SansSemiBold = new(UiFamily, FontStyle.Normal, FontWeight.SemiBold);
     public static readonly Typeface SansBold = new(UiFamily, FontStyle.Normal, FontWeight.Bold);
 
-    // Geist Mono 400 · 500 (· 700 for the rare bold readout)
-    public static readonly Typeface Mono = new(MonoFamily);
-    public static readonly Typeface MonoMedium = new(MonoFamily, FontStyle.Normal, FontWeight.Medium);
-    public static readonly Typeface MonoBold = new(MonoFamily, FontStyle.Normal, FontWeight.Bold);
+    /// <summary>Tabular figures: every digit the same width. Applied to all text.</summary>
+    public static readonly FontFeatureCollection Tabular = FontFeatureCollection.Parse("+tnum");
+
+    /// <summary>Tabular figures for every control that draws text: the default of the
+    /// inherited TextElement.FontFeatures on each type that reads it, so nothing has to
+    /// set it and a popup's own root gets it too. Call once before the XAML loads.</summary>
+    public static void InstallTabular()
+    {
+        TextElement.FontFeaturesProperty.OverrideDefaultValue<TopLevel>(Tabular);
+        TextElement.FontFeaturesProperty.OverrideDefaultValue<TemplatedControl>(Tabular);
+        TextBlock.FontFeaturesProperty.OverrideDefaultValue<TextBlock>(Tabular);
+        TextElement.FontFeaturesProperty.OverrideDefaultValue<TextPresenter>(Tabular);
+    }
 
     /// <summary>Make Geist the default family, so a control that never names a font — and
     /// <c>FontFamily.Default</c> — still lands on it rather than on the OS face.</summary>
     public static AppBuilder WithNotaFonts(this AppBuilder builder)
         => builder.With(new FontManagerOptions { DefaultFamilyName = UiUri });
+}
+
+/// <summary>FormattedText with tabular figures — what every custom-drawn view builds, so
+/// numbers drawn in Render() keep their width like the ones in controls.</summary>
+public class NotaFormattedText : FormattedText
+{
+    public NotaFormattedText(string textToFormat, CultureInfo culture, FlowDirection flowDirection,
+                             Typeface typeface, double emSize, IBrush? foreground)
+        : base(textToFormat, culture, flowDirection, typeface, emSize, foreground)
+        => SetFontFeatures(NotaFonts.Tabular);
 }
 
 /// <summary>The type scales (the shell hierarchy, and a device scale held to the 260px card), for

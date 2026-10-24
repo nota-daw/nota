@@ -119,15 +119,15 @@ internal sealed class RangeSliderTrack : Control
         if (w <= 0 || h <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         double cy = h / 2, ty = cy - TrackH / 2;
-        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.ClipValue));
+        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.FieldValue));
         double a = _lo * w, b = _hi * w;
-        if (b - a > 0.5) ctx.DrawRectangle(_drag >= 0 || _hover >= 0 ? FillLive : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+        if (b - a > 0.5) ctx.DrawRectangle(_drag >= 0 || _hover >= 0 ? FillLive : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.FieldValue));
         for (int k = 0; k < 2; k++)
         {
             double x = k == 0 ? a : b;
             double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
             bool hot = _drag == k || _hover == k;
-            ctx.DrawRectangle(hot ? Handle : HandleIdle, null, new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.ClipValue));
+            ctx.DrawRectangle(hot ? Handle : HandleIdle, null, new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.FieldValue));
         }
     }
 }

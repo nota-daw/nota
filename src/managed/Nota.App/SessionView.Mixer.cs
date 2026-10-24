@@ -188,7 +188,7 @@ public sealed partial class SessionView
     private static TextBlock ReadoutText()
     {
         var t = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
 
@@ -211,7 +211,7 @@ public sealed partial class SessionView
         var disc = new Glyph(GlyphKind.Record, 7);
         var b = new Border
         {
-            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             BorderBrush = NotaPalette.Seam, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             Child = arm ? disc : text,
         };
@@ -301,7 +301,7 @@ public sealed partial class SessionView
                 if (_engine.TryGetTrackInfo(i, out var t) && t.Id == c.GroupId) { text = TrackNames.Of(_engine, t); break; }
         var b = new Border
         {
-            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
         };
@@ -323,7 +323,7 @@ public sealed partial class SessionView
                 HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(compact ? 4 : 8, 0),
                 FontSize = compact ? 9 : 10, Height = compact ? 16 : 20, MinWidth = 0,
             };
-            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.Mono");
+            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.UI");
             tb.Click += (_, _) =>
             {
                 foreach (var b in buttons) b.IsChecked = ReferenceEquals(b, tb);

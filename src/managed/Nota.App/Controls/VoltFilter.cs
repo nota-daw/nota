@@ -21,7 +21,7 @@ namespace Nota.App;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
         private static readonly IBrush Ink = NotaPalette.VizInk;   // the curve at rest: neutral ink
         private static readonly IBrush GridB = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Mono;
+        private static readonly Typeface Face = NotaFonts.Sans;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _freq, _reso;
@@ -140,7 +140,7 @@ namespace Nota.App;
             NotaGraph.Node(ctx, new Point(cx, hy), active: _drag);
 
             // Axis labels: dB left, frequency scale along the bottom.
-            void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
+            void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
             Lbl("+12", x0 + 1, top - 1, AxisB);
             Lbl("−48\u2009dB", x0 + 1, bot - 10, AxisB);
             double HzAt(double v) => FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, v);

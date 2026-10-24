@@ -375,7 +375,7 @@ public sealed partial class ArrangementView
             var list = _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }
@@ -393,7 +393,7 @@ public sealed partial class ArrangementView
                     ctx.FillRectangle(warm ? WarmEdge : ColdEdge, new Rect(r.X, r.Y, 2, r.Height));
                     if (r.Width > 22)
                     {
-                        var ft = new FormattedText(s.Name, CultureInfo.InvariantCulture,
+                        var ft = new NotaFormattedText(s.Name, CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
                         { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
                         ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));

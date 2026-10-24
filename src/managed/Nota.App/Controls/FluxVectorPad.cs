@@ -128,7 +128,7 @@ internal sealed class FluxVectorPad : Control
 
     private static void Label(DrawingContext ctx, string text, IBrush ink, double x, double y, bool rightAlign)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, ink);
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, ink);
         ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }

@@ -116,7 +116,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Caps(string t) => new() { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock MonoText(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
@@ -174,12 +174,12 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int i = 0; i < names.Length; i++)
             {
                 int iv = i;
-                var c = new Border { CornerRadius = NotaRadius.Clip, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 8 } };
+                var c = new Border { CornerRadius = NotaRadius.Field, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = names[i], FontSize = 8 } };
                 c.PointerPressed += (_, e) => { set(iv); Hi(); e.Handled = true; };
                 arr[i] = c; row.Children.Add(c);
             }
             Hi();
-            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
+            return new Border { Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
         }
 
         // Horizontal fill slider bound to a param; `dim` greys it out.
@@ -206,8 +206,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         {
             int pi = I(id);
             IBrush grad = NotaPalette.BgSunken;
-            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Stretch };
-            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Bar };
+            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Fine };
             var lay = new Canvas { Width = 16 };
             lay.Children.Add(mark); Canvas.SetLeft(mark, 2);
             var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Children = { bar, lay } };
@@ -371,7 +371,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             {
                 int wv = w;
                 var ic = new PentadWaveIcon(icon[w]) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Width = 24, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+                var b = new Border { Width = 24, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
                 ToolTip.SetTip(b, tip[w]);
                 b.PointerPressed += (_, e) => { SetP(id, wv / 3f); Refresh(); e.Handled = true; };
                 chips[w] = b; icons[w] = ic; row.Children.Add(b);
@@ -387,7 +387,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control SyncChip(string id, string text)
         {
             var tb = MonoText(text, 8, MutedC);
-            var b = new Border { Padding = new Thickness(4, 1), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var b = new Border { Padding = new Thickness(4, 1), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             ToolTip.SetTip(b, "Hard sync");
             b.PointerPressed += (_, e) => { SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
             cur.Add(() => { bool on = On(id); tb.Foreground = on ? NotaPalette.AccentHover : DimC; b.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent; b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; });
@@ -451,7 +451,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             curve.DragStarted += () => { Begin("cutoff"); Begin("reso"); };
             curve.DragEnded += () => { End("cutoff"); End("reso"); };
             cur.Add(() => curve.Set(G("cutoff"), G("reso"), (G("spacing") - 0.5) * 6, Sel("filtmode", 3), On("basscomp")));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 2), Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 2), Child = curve };
             var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
             knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 50));
@@ -480,7 +480,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var head = new DockPanel { Height = 12, LastChildFill = false, Margin = new Thickness(0, 0, 0, 2) };
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
             head.Children.Add(Docked(times, Avalonia.Controls.Dock.Right));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
             var knobs = Row(0, K(pre + "attack", "A", Atk, amp, Knob.SizeInline, 30, true), K(pre + "decay", "D", Dec, amp, Knob.SizeInline, 30, true), K(pre + "sustain", "S", v => Pct(v), amp, Knob.SizeInline, 30, true), K(pre + "release", "R", Dec, amp, Knob.SizeInline, 30, true));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
@@ -507,7 +507,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             {
                 int sv = s;
                 var ic = new ConsortLfoIcon(s) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Width = 26, Height = 17, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+                var b = new Border { Width = 26, Height = 17, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
                 ToolTip.SetTip(b, LfoNames[s]);
                 b.PointerPressed += (_, e) => { SetP("lfowave", sv / 5f); Refresh(); e.Handled = true; };
                 chips[s] = b; icons[s] = ic; shapes.Children.Add(b);
@@ -547,7 +547,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             var head = new DockPanel { Height = 14, LastChildFill = false, Children = { Docked(Caps(""), Avalonia.Controls.Dock.Left), Docked(times, Avalonia.Controls.Dock.Right) } };
             var title = (TextBlock)head.Children[0];
             cur.Add(() => title.Text = On("dlydigital") ? "Delay · digital" : "Analog delay · BBD");
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 2, 0, 3), Child = view };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 2, 0, 3), Child = view };
             var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, Knob.SizeSecondary, 44), K("dlyspacing", "SPACING", DlySpc, false, Knob.SizeSecondary, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, Knob.SizeSecondary, 46), K("dlymix", "MIX", v => Pct(v), false, Knob.SizeSecondary, 40));
             var opts = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Chips("dlyping", new[] { "Ping", "Stereo" }, new[] { 1f, 0f }), Toggle("dlydigital", "Digital") } };
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -589,8 +589,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int b = 0; b < 4; b++)
             {
                 int bv = b;
-                var sw = new Border { Width = 9, Height = 9, CornerRadius = NotaRadius.Clip, BorderBrush = cols[b], BorderThickness = new Thickness(1), Background = b == 3 ? Inset : new SolidColorBrush(((ISolidColorBrush)cols[b]).Color, 0.35) };
-                var it = new Border { Background = Brushes.Transparent, Padding = new Thickness(3, 1), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = Row(3, sw, new TextBlock { Text = names[b], FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center }) };
+                var sw = new Border { Width = 9, Height = 9, CornerRadius = NotaRadius.Field, BorderBrush = cols[b], BorderThickness = new Thickness(1), Background = b == 3 ? Inset : new SolidColorBrush(((ISolidColorBrush)cols[b]).Color, 0.35) };
+                var it = new Border { Background = Brushes.Transparent, Padding = new Thickness(3, 1), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = Row(3, sw, new TextBlock { Text = names[b], FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center }) };
                 ToolTip.SetTip(it, $"Paint {names[b]} steps (Alt-click a step: rest)");
                 it.PointerPressed += (_, e) => { vs.Brush = bv; Refresh(); e.Handled = true; };
                 legItems[b] = it; legend.Children.Add(it);
@@ -624,7 +624,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 grid.Set(types, SeqLen(), PlayStep(), Ratchet());
                 lane.Set(StepPitches(), types, SeqLen(), PlayStep(), Sel("seqmode", 3) == 2);
             });
-            var laneBox = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = lane };
+            var laneBox = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = lane };
 
             var clkDot = new ConsortJackDot(12); var gateDot = new ConsortJackDot(12);
             ToolTip.SetTip(clkDot, "Clock out (patch bay)"); ToolTip.SetTip(gateDot, "Seq gate out (patch bay)");
@@ -724,7 +724,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 foreach (var c in cs)
                 {
                     int slot = c.Slot;
-                    var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center };
+                    var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center };
                     var x = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new Glyph(GlyphKind.Close, 8) { Foreground = MutedC } };
                     x.PointerPressed += (_, e) => { RemoveSlot(slot); e.Handled = true; };
                     var name = new TextBlock { Text = $"{ConsortJacks.ShortName(ConsortJacks.Src(c.Src).Name)} → {ConsortJacks.ShortName(ConsortJacks.Dst(c.Dst).Name)}", FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -795,7 +795,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             for (int i = 0; i < 4; i++)
             {
                 txt[i] = MonoText("—", 8, DimC); txt[i].HorizontalAlignment = HorizontalAlignment.Center;
-                cells[i] = new Border { Height = 18, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Child = txt[i] };
+                cells[i] = new Border { Height = 18, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Child = txt[i] };
                 ToolTip.SetTip(cells[i], $"Oscillator {i + 1}'s note (paraphonic) · the latest voices in true poly");
                 cellRow.Children.Add(cells[i]);
             }
@@ -917,7 +917,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var chipsHost = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
         var countTxt = MonoText("", 8, TxtC);
         var openTxt = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
-        var openBtn = new Border { Height = 13, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = openTxt };
+        var openBtn = new Border { Height = 13, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = openTxt };
         ToolTip.SetTip(openBtn, "Open the full patch bay (all 42 points) · on the Patch tab: back to the last panel");
         openBtn.PointerPressed += (_, e) =>
         {
@@ -936,7 +936,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 chipsHost.Children.Clear();
                 foreach (var c in cs)
                 {
-                    var chip = Row(3, new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center },
+                    var chip = Row(3, new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone), VerticalAlignment = VerticalAlignment.Center },
                                       MonoText(CableChip(c), 8, Txt2));
                     chip.Background = Brushes.Transparent; chip.Cursor = new Cursor(StandardCursorType.Hand);
                     ToolTip.SetTip(chip, $"{CableName(c)} · depth {c.Depth * 100:+0;−0;0}");
@@ -976,7 +976,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             overlayReadouts.Add(() => info.Text = $"{CableList().Count} cables · {ConsortJacks.Points} points");
             Border Btn(string t, Action a)
             {
-                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = t, FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center } };
+                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = t, FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center } };
                 b.PointerPressed += (_, e) => { a(); e.Handled = true; };
                 return b;
             }
@@ -1012,7 +1012,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;−0;0}"; };
                     depBox.PointerReleased += (_, e) => { if (drag) { drag = false; End(AmtId(slot)); e.Pointer.Capture(null); Refresh(); } };
                     depBox.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(AmtId(slot)); Refresh(); } };
-                    bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Control, Background = tone, VerticalAlignment = VerticalAlignment.Center },
+                    bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Field, Background = tone, VerticalAlignment = VerticalAlignment.Center },
                         new TextBlock { Text = CableName(c), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, depBox));
                 }
             });

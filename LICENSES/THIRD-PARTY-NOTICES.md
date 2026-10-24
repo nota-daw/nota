@@ -29,11 +29,10 @@ Licensed under the **MIT License**. <https://avaloniaui.net>
 Copyright © .NET Foundation and Contributors.
 Licensed under the **MIT License**. <https://dotnet.microsoft.com>
 
-## Geist and Geist Mono
+## Geist
 Copyright © 2023 Vercel, in collaboration with basement.studio.
 Licensed under the **SIL Open Font License, Version 1.1** (see
-[`OFL-1.1-Geist.txt`](OFL-1.1-Geist.txt)). Bundled unmodified as the UI and numeric
-typefaces. <https://github.com/vercel/geist-font>
+[`OFL-1.1-Geist.txt`](OFL-1.1-Geist.txt)). Bundled unmodified as the UI typeface. <https://github.com/vercel/geist-font>
 
 ## miniaudio
 Copyright © David Reid (mackron@gmail.com).

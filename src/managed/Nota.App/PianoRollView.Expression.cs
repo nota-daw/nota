@@ -149,8 +149,8 @@ public sealed partial class PianoRollView
             {
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    new Typeface(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
+                var ft = new NotaFormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
+                    new Typeface(NotaFonts.Sans.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
                 double y = Top + i * RowStep;
                 ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y));
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
@@ -302,7 +302,7 @@ public sealed partial class PianoRollView
 
             if (Dim == NoteExpressionDim.Bend)
             {
-                var ft = new FormattedText("±" + NotaNum.Unit(_range, "0", "st"), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                var ft = new NotaFormattedText("±" + NotaNum.Unit(_range, "0", "st"), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText);
                 ctx.DrawText(ft, new Point(4, 3));
             }
             _o.DrawOutsideClip(ctx, w, h);

@@ -82,7 +82,7 @@ public sealed class ClipPropsView : UserControl
         _selCard.Padding = new Thickness(0);
         _selEmpty = new Border
         {
-            Height = 104, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+            Height = 104, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
             Child = new TextBlock
             {
                 Text = "No notes selected", FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary,

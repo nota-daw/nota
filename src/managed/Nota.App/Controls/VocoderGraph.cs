@@ -123,7 +123,7 @@ internal sealed class VocoderGraph : Control
                 double xl = b > 0 ? (x + X(_ctr[b - 1])) / 2 : x - (X(_ctr[Math.Min(_n - 1, 1)]) - x) / 2;
                 double xr = b < _n - 1 ? (x + X(_ctr[b + 1])) / 2 : x + (x - X(_ctr[Math.Max(0, _n - 2)])) / 2;
                 double bw = Math.Max(1, xr - xl - 2), bh = Math.Clamp(_env[b], 0, 1) * ph * 0.92;
-                if (bh >= 0.5) ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(xl + 1, y1 - bh, bw, bh), NotaRadius.BarValue));
+                if (bh >= 0.5) ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(xl + 1, y1 - bh, bw, bh), NotaRadius.FineValue));
             }
             // The carrier's level per band, as one line.
             if (_on && _n > 1)
@@ -143,7 +143,7 @@ internal sealed class VocoderGraph : Control
         }
         else
         {
-            var ft = new FormattedText("Pick a carrier track · until then the sound passes through", System.Globalization.CultureInfo.InvariantCulture,
+            var ft = new NotaFormattedText("Pick a carrier track · until then the sound passes through", System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, NotaFonts.Sans, 10, NotaPalette.TextDisabled);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, y0 + 14));
         }

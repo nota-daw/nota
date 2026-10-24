@@ -106,7 +106,7 @@ public sealed class TagEditorWindow : NotaWindow
             bool sel = string.Equals(c, tag.Color, StringComparison.OrdinalIgnoreCase);
             var sw = new Border
             {
-                Width = 16, Height = 16, CornerRadius = NotaRadius.Body,
+                Width = 16, Height = 16, CornerRadius = NotaRadius.Card,
                 Background = NotaPalette.Ink(c),
                 BorderThickness = new Thickness(sel ? 2 : 0),
                 BorderBrush = NotaPalette.HandleSel,

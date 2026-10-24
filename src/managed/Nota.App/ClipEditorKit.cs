@@ -41,7 +41,7 @@ internal static class ClipEditorKit
         };
         var badge = new TextBlock
         {
-            Text = NotaText.Label(kind), FontFamily = NotaFonts.MonoFamily, FontSize = 10,
+            Text = NotaText.Label(kind), FontFamily = NotaFonts.UiFamily, FontSize = 10,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         cell.Children.Add(nameText);
@@ -178,7 +178,7 @@ internal static class ClipEditorKit
 
     public static TextBlock Mono(string text, double size = 11, IBrush? fg = null) => new()
     {
-        Text = text, FontFamily = NotaFonts.MonoFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
+        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -208,7 +208,7 @@ internal static class ClipEditorKit
         var b = new Border
         {
             Height = FieldH, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(padX, 0), Child = child, VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(padX, 0), Child = child, VerticalAlignment = VerticalAlignment.Center,
         };
         b.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
         return b;
@@ -325,7 +325,7 @@ internal static class ClipEditorKit
     public static Border Card(Control child) => new()
     {
         Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 0), Child = child,
+        CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 0), Child = child,
     };
 
     /// <summary>A shell slider row: label · 3px track · fixed-width mono value. Double-click the

@@ -80,7 +80,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             if (I(id) is not (var i and >= 0)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), FontSize = 8, Foreground = TxtC, Width = valW, VerticalAlignment = VerticalAlignment.Center };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = mod ? TealC : null, Default = engine.InstrumentParamDefault(track, i) };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
@@ -118,7 +118,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             void Hi() { int cur = Sel(id, 6); for (int i = 0; i < 6; i++) { bool on = i == cur; arr[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; arr[i].BorderBrush = on ? NotaPalette.Accent : Border2; ic[i].Stroke = on ? NotaPalette.TextOnAccent : MutedC; ic[i].InvalidateVisual(); } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             for (int i = 0; i < 6; i++)
-            { int iv = i; var wi = new MonolithWaveIcon(i, osc3) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; var b = new Border { Width = 22, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = wi }; b.PointerPressed += (_, _) => { SetP(id, iv / 5f); Hi(); Refresh(); }; arr[i] = b; ic[i] = wi; row.Children.Add(b); }
+            { int iv = i; var wi = new MonolithWaveIcon(i, osc3) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; var b = new Border { Width = 22, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Child = wi }; b.PointerPressed += (_, _) => { SetP(id, iv / 5f); Hi(); Refresh(); }; arr[i] = b; ic[i] = wi; row.Children.Add(b); }
             readouts.Add(Hi); Hi();
             if (I(id) is var pi and >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), id);
             return row;
@@ -142,8 +142,8 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             int pi = I(id); var lit = col ?? NotaPalette.VizInk;
             IBrush grad = NotaPalette.BgSunken;
-            var trackBar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Stretch };
-            var mark = new Border { Height = 2, Background = lit, CornerRadius = NotaRadius.Bar, Margin = new Thickness(2, 0) };
+            var trackBar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Background = lit, CornerRadius = NotaRadius.Fine, Margin = new Thickness(2, 0) };
             var lay = new Canvas { Width = 16, VerticalAlignment = VerticalAlignment.Stretch };
             var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Children = { trackBar, lay } };
             lay.Children.Add(mark); mark.Width = 12;
@@ -169,7 +169,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
             var valTxt = new TextBlock { FontSize = 7, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
-            valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             readouts.Add(() => { if (!drag) Vis(G(id)); valTxt.Text = fmt(G(id)); });
             var col2 = new DockPanel { HorizontalAlignment = HorizontalAlignment.Center };
             var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
@@ -231,7 +231,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             g.Children.Add(Cell(WaveChips($"{p}wave", n == 3), 3));
             string modTxt = n == 3 ? "free" : "kbd";
             var mt = new TextBlock { Text = modTxt, FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            mt.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            mt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             if (n == 3) readouts.Add(() => mt.Text = G("osc3kbd") > 0.5f ? "kbd" : "free");
             g.Children.Add(Cell(mt, 4));
             return new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 0, n < 3 ? 1 : 0), Height = 40, Child = g };
@@ -260,7 +260,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = filtCurve, Margin = new Thickness(0, 3, 0, 4) };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = filtCurve, Margin = new Thickness(0, 3, 0, 4) };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto"), ColumnSpacing = 2, VerticalAlignment = VerticalAlignment.Bottom };
             void C(Control c, int col) { Grid.SetColumn(c, col); knobs.Children.Add(c); }
             C(K("cutoff", "CUTOFF", HzFmt, false, Knob.SizeSecondary, 44), 0);
@@ -276,7 +276,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         Control ContourPanel(string title, string route, MonolithEnvCurve curve, string pre, IBrush col)
         {
             curve.VerticalAlignment = VerticalAlignment.Stretch;
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
             var knobs = Row(1, K($"{pre}attack", "A", v => TimeFmt(0.001, 10, v), false, Knob.SizeInline, 34, true), K($"{pre}decay", "D", v => TimeFmt(0.004, 20, v), false, Knob.SizeInline, 34, true), K($"{pre}sustain", "S", v => $"{v * 100:0}\u2009%", false, Knob.SizeInline, 34, true));
             DockPanel.SetDock((Control)knobs, Dock.Right);
             ((Control)knobs).Margin = new Thickness(6, 0, 0, 0);

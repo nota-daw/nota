@@ -150,12 +150,12 @@ internal sealed class SliderTrack : Control
         if (w <= 0 || h <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));   // whole row height hit-tests
         double cy = h / 2, ty = cy - TrackH / 2;
-        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.ClipValue));
+        ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.FieldValue));
 
         double x = _norm * w;
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
         if (b - a > 0.5)
-            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : _drag || _hover ? FillLive : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : _drag || _hover ? FillLive : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.FieldValue));
         if (Bipolar)
             ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, cy - 3, 1, 6));
 
@@ -166,6 +166,6 @@ internal sealed class SliderTrack : Control
         IBrush inkHandle = ReferenceEquals(_ink, NotaPalette.Rose) ? NotaPalette.RoseBright
             : ReferenceEquals(_ink, NotaPalette.Teal) ? ModHandle : _ink ?? (Modulation ? ModHandle : _drag || _hover ? HandleLive : Handle);
         ctx.DrawRectangle(_dim ? HandleDim : inkHandle, null,
-            new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.ClipValue));
+            new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.FieldValue));
     }
 }

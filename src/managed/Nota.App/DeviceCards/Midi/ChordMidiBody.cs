@@ -130,7 +130,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -368,7 +368,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
 
         Control Swatch(IBrush? fill, IBrush? ring, string label)
         {
-            var sw = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Clip, Background = fill, BorderBrush = ring,
+            var sw = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Field, Background = fill, BorderBrush = ring,
                 BorderThickness = new Thickness(ring is null ? 0 : 1), VerticalAlignment = VerticalAlignment.Center };
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { sw, new TextBlock { Text = label, FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
         }
@@ -377,7 +377,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         Control Flag(int p, string label, string tip)
         {
             var tb = new TextBlock { Text = label, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             b.PointerPressed += (_, ev) =>
             {
                 if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
@@ -449,7 +449,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             var vel = VelDrag(pVel, s);
             var g = new DockPanel { Children = { WithDock(dotHit, Dock.Left), WithDock(st, Dock.Left), WithDock(vel, Dock.Right), WithDock(iv, Dock.Right), ruler } };
             st.Margin = new Thickness(6, 0, 6, 0); iv.Margin = new Thickness(6, 0, 6, 0);
-            var row = new Border { Height = 24, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 7, 0),
+            var row = new Border { Height = 24, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 7, 0),
                 VerticalAlignment = VerticalAlignment.Center, Child = g };
             readouts.Add(() =>
             {

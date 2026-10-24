@@ -30,7 +30,7 @@ internal static class InstrumentControls
         int track = ctx.TrackId;
         Func<float, string> f = fmt ?? Pct;
         var value = new TextBlock { Text = f(engine.PluginParamGet(track, -1, i)), FontSize = 8, Foreground = TextPrimary };
-        value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var knob = new Knob(engine.PluginParamGet(track, -1, i), 1.0) { Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, i), Inline = inline, Width = knobSize, Height = knobSize };
         knob.Format = v => f((float)v);
         int pi = i; string pid = id;

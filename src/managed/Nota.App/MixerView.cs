@@ -223,7 +223,7 @@ public sealed class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -248,7 +248,7 @@ public sealed class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -283,7 +283,7 @@ public sealed class MixerView : UserControl
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
         // Toggled on: a solid accent key with derived ink; off: a raised key.
         void Paint() { b.Background = on ? Brass : NotaPalette.SurfaceRaised; b.BorderBrush = on ? Brass : NotaPalette.Seam; t.Foreground = on ? OnAccent : TextSecondary; }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
@@ -340,11 +340,11 @@ public sealed class MixerView : UserControl
     private static Border Tag(string text, double size, double tracking, double height, string tip)
     {
         var t = new TextBlock { Text = text, FontSize = size, LetterSpacing = tracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var b = new Border
         {
             Height = height, Padding = new Thickness(size >= 9 ? 6 : 3, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = t,
+            CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = t,
         };
         ToolTip.SetTip(b, tip);
         return b;
@@ -353,8 +353,8 @@ public sealed class MixerView : UserControl
     // Crossfader is not in the engine yet — a disabled A/B track with an M7+ badge.
     private Control Crossfader()
     {
-        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
-        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
+        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var host = new Panel { Width = 120, Children = { track, knob } };
         var row = new StackPanel
         {
@@ -460,7 +460,7 @@ public sealed class MixerView : UserControl
             }
             else
             {
-                var flat = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+                var flat = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(flat, 1); grid.Children.Add(flat);
             }
             body.Children.Add(grid);
@@ -541,7 +541,7 @@ public sealed class MixerView : UserControl
         for (int i = 0; i < 4; i++)
         {
             var t = new TextBlock { Text = marks[i], FontSize = 7, Foreground = TextDisabled, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = i == 0 ? VerticalAlignment.Top : i == 3 ? VerticalAlignment.Bottom : VerticalAlignment.Center };
-            t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             Grid.SetRow(t, i);
             scaleGrid.Children.Add(t);
         }
@@ -553,7 +553,7 @@ public sealed class MixerView : UserControl
         var letters = new Grid { ColumnDefinitions = new ColumnDefinitions($"{MeterScale.ChannelW},{MeterScale.Step},{MeterScale.ChannelW}"), Margin = new Thickness(0, 3, 0, 0) };
         foreach (var (txt, col) in new[] { ("L", 0), ("R", 2) })
         {
-            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
+            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
             Grid.SetColumn(t, col); letters.Children.Add(t);
         }
         DockPanel.SetDock(letters, Dock.Bottom);
@@ -580,7 +580,7 @@ public sealed class MixerView : UserControl
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
-        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = disc };
         void Paint()
         {
             b.Background = on ? NotaPalette.Record : MasterBg;
@@ -596,7 +596,7 @@ public sealed class MixerView : UserControl
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = t };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {
             // On: mute amber, solo blue, with derived ink.
@@ -613,7 +613,7 @@ public sealed class MixerView : UserControl
     private TextBlock Mono(string text, IBrush fg)
     {
         var t = new TextBlock { Text = text, FontSize = 8, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
 

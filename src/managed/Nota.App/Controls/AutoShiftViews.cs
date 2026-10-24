@@ -268,7 +268,7 @@ internal sealed class AsHistView : Control
             if (i == _hover) ctx.FillRectangle(NotaPalette.Wash(NotaPalette.BorderStrong, 0x30), new Rect(6 + i * gw + 1, top - 2, gw - 2, bot - top + 2));
             ctx.DrawRectangle(fill, null, new RoundedRect(r, 2, 2, 0, 0));
         }
-        var title = new FormattedText("Sung notes", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaGraph.TitleInk);
+        var title = new NotaFormattedText("Sung notes", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaGraph.TitleInk);
         ctx.DrawText(title, new Point(5, 3));
         NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TealBright, NotaGraph.Mark.Area));
     }

@@ -226,7 +226,7 @@ internal sealed partial class RackCardView
             Foreground = selected ? AccentBright : TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 4 };
-        if (filled) top.Children.Add(new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Bar, Background = PadHue(chain), VerticalAlignment = VerticalAlignment.Center });
+        if (filled) top.Children.Add(new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Fine, Background = PadHue(chain), VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(nameTb, 1); top.Children.Add(nameTb);
 
         var noteTb = DrumMono(NoteName(note), selected ? AccentBright : filled ? TextTertiary : TextDisabled, 7);
@@ -244,7 +244,7 @@ internal sealed partial class RackCardView
         var pad = new Border
         {
             Background = restBg, BorderBrush = restBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true, Child = cell,
+            CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true, Child = cell,
         };
         ToolTip.SetTip(pad, filled
             ? $"{name} · {NoteName(note)} — click to play, right-click for more"
@@ -416,7 +416,7 @@ internal sealed partial class RackCardView
             Foreground = sel ? AccentBright : TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
         var nameCell = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 4, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand) };
-        nameCell.Children.Add(new Border { Width = 3, Height = 8, CornerRadius = NotaRadius.Bar, Background = PadHue(c), VerticalAlignment = VerticalAlignment.Center });
+        nameCell.Children.Add(new Border { Width = 3, Height = 8, CornerRadius = NotaRadius.Fine, Background = PadHue(c), VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(name, 1); nameCell.Children.Add(name);
         nameCell.PointerPressed += (_, e) =>
         {
@@ -488,8 +488,8 @@ internal sealed partial class RackCardView
     private Border MixBtn(string text, Func<bool> on, SolidColorBrush accent, Action toggle, bool choke = false)
     {
         var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        if (choke) tb.FontFamily = NotaFonts.MonoFamily;
-        var b = new Border { Width = 13, Height = 11, CornerRadius = NotaRadius.Clip, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+        if (choke) tb.FontFamily = NotaFonts.UiFamily;
+        var b = new Border { Width = 13, Height = 11, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
         void Paint()
         {
             bool v = on();
@@ -527,7 +527,7 @@ internal sealed partial class RackCardView
             Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 0, 6),
             Children =
             {
-                new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Clip, Background = PadHue(sc), VerticalAlignment = VerticalAlignment.Center },
+                new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Field, Background = PadHue(sc), VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock { Text = PadName(a, sc), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
                 DrumMono(NoteName(note), TextTertiary, 7),
                 new TextBlock { Text = "instrument, then its effects · signal left → right", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
@@ -573,7 +573,7 @@ internal sealed partial class RackCardView
             e.Handled = true; _drumView = _drumView == 2 ? 0 : 2; DeferRebuild();
         };
         var head = new Grid { Height = DrumTabH, ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 5, Margin = new Thickness(8, 0) };
-        head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Clip, Background = hue, VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Field, Background = hue, VerticalAlignment = VerticalAlignment.Center });
         var nameTb = new TextBlock { Text = PadName(a, c), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 92 };
         Grid.SetColumn(nameTb, 1); head.Children.Add(nameTb);
         var noteTb = DrumMono(NoteName(note), TextTertiary, 7);
@@ -898,7 +898,7 @@ internal sealed partial class RackCardView
 
     private static TextBlock DrumMono(string t, IBrush ink, double fs) => new()
     {
-        Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center,
+        Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center,
     };
 
     // An empty state: one Ink 5 line, centred.
@@ -914,7 +914,7 @@ internal sealed partial class RackCardView
         var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.SemiBold, Foreground = on ? AccentBright : TextStrongInk, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border
         {
-            Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             Background = on ? NotaPalette.AccentSubtle : NotaPalette.SurfaceRaised, BorderBrush = on ? Brass : BorderDef,
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb,
         };
@@ -932,7 +932,7 @@ internal sealed partial class RackCardView
         var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.SemiBold, Foreground = TextStrongInk, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var b = new Border
         {
-            Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
         };
         b.PointerEntered += (_, _) => b.Background = NotaPalette.SurfaceHover;

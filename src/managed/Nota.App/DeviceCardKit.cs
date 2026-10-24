@@ -61,7 +61,7 @@ internal static class DeviceCardKit
         value.TextAlignment = TextAlignment.Center;
         value.FontSize = NotaType.KnobValue;
         value.LineHeight = 10;
-        value.FontFamily = NotaFonts.MonoFamily;
+        value.FontFamily = NotaFonts.UiFamily;
         var lbl = new TextBlock
         {
             Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
@@ -139,7 +139,7 @@ internal static class DeviceCardKit
             };
             var c = new Border
             {
-                CornerRadius = NotaRadius.Badge, Padding = new Thickness(padX, 1), MinWidth = minSegWidth,
+                CornerRadius = NotaRadius.Cell, Padding = new Thickness(padX, 1), MinWidth = minSegWidth,
                 Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = tb,
             };
             c.PointerPressed += (_, e) =>
@@ -171,7 +171,7 @@ internal static class DeviceCardKit
         var host = new Border
         {
             Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(1),
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center, Child = row,
         };
         if (!fill) host.HorizontalAlignment = HorizontalAlignment.Left;
@@ -208,7 +208,7 @@ internal static class DeviceCardKit
         if (!double.IsNaN(trackWidth)) track.Width = trackWidth;
         var val = new TextBlock
         {
-            FontFamily = NotaFonts.MonoFamily, FontSize = 9, TextAlignment = TextAlignment.Right,
+            FontFamily = NotaFonts.UiFamily, FontSize = 9, TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.None,
         };
         if (valueWidth > 0) val.Width = valueWidth;
@@ -296,7 +296,7 @@ internal static class DeviceCardKit
         var b = new Border
         {
             Background = Raised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 4), HorizontalAlignment = HorizontalAlignment.Center,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4), HorizontalAlignment = HorizontalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = TextPrimary },
         };
@@ -305,7 +305,7 @@ internal static class DeviceCardKit
 
     internal static Control BypassTag() => new Border
     {
-        BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+        BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
         Padding = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary },
     };
@@ -388,7 +388,7 @@ internal static class DeviceCardKit
         return new Border
         {
             Height = H, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = NotaRadius.Field, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
             Child = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"),
