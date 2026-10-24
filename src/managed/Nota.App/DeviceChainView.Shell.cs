@@ -38,7 +38,8 @@ public sealed partial class DeviceChainView
     // back restores them, and keyed so a MIDI effect and an audio effect at the same index
     // don't collide. Sig ties an entry to the device it was made for: when that slot now
     // holds a different device (swapped, removed behind our back, undo), the card starts fresh.
-    private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; public PluginCard.ViewState Plugin = new(); }
+    private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; public PluginCard.ViewState Plugin = new();
+        public CardExtra? Wrapped; } // a rack's: the extra of the device ⌘G put in it, back when it comes out
     private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _cardExtra = new();   // trackId → key → extra
     private static int ExtraKey(ChainKind k, int di) => k switch { ChainKind.Instrument => -1, ChainKind.Midi => -1000 - di, _ => di };
     private static ChainKind KeyKind(int key) => key >= 0 ? ChainKind.Effect : key == -1 ? ChainKind.Instrument : ChainKind.Midi;
@@ -58,7 +59,15 @@ public sealed partial class DeviceChainView
     private CardExtra ExtraFor(int t, ChainKind k, int di)
     {
         var d = TrackExtras(t); int key = ExtraKey(k, di); string sig = CardSig(t, k, di);
-        if (!d.TryGetValue(key, out var e) || e.Sig != sig) { e = new CardExtra { Sig = sig }; d[key] = e; }
+        if (!d.TryGetValue(key, out var e) || e.Sig != sig)
+        {
+            // Undo / redo of ⌘G swap the device and its rack in one slot: each keeps the other's
+            // extra, so the A/B snapshots and preset label survive any number of swaps.
+            var prev = e;
+            e = prev?.Wrapped is { } w && w.Sig == sig ? w : new CardExtra { Sig = sig };
+            if (prev != null) { prev.Wrapped = null; e.Wrapped = prev; }
+            d[key] = e;
+        }
         return e;
     }
     private CardExtra Extra(ChainKind k, int di) => ExtraFor(_trackId, k, di);

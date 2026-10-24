@@ -89,7 +89,7 @@ void RackCore::forkFrom(const RackCore& o) {
             ctl->chokeGroup.store(s.chokeGroup.load(r), r);
             ctl->tune.store(s.tune.load(r), r);
             ctl->decay.store(s.decay.load(r), r);
-            ctl->ampEnv = s.ampEnv; // a ringing pad keeps its level
+            ctl->ampEnv.store(s.ampEnv.load(r), r); // a ringing pad keeps its level
         }
         c.ctl = std::move(ctl);
     }
@@ -202,11 +202,11 @@ int32_t RackCore::addChainDevice(int32_t chain, int32_t deviceKind) {
     return addChainDeviceInstance(chain, dev);
 }
 
-int32_t RackCore::addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev) {
+int32_t RackCore::addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare) {
     if (!dev) return -1;
     auto ns = copyState();
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
-    dev->setSampleRate(sampleRate_, maxBlock_);
+    if (prepare) dev->setSampleRate(sampleRate_, maxBlock_);
     ns->chains[chain].devices.push_back(std::move(dev));
     const int32_t idx = static_cast<int32_t>(ns->chains[chain].devices.size()) - 1;
     commit(ns);

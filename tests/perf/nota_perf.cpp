@@ -143,6 +143,8 @@ std::vector<Scenario> scenarios() {
             std::snprintf(id, sizeof id, "instrument-%02d", k);
             s.push_back({id, instrumentName(k) + ", one track"});
         }
+    s.push_back({"drum-rack", "Drum Rack, 4 Synth pads with decay"});
+    s.push_back({"instrument-rack", "Instrument Rack, 2 Synth chains"});
     s.push_back({"effect-base", "Synth alone (effect baseline)"});
     s.push_back({"aurora-supersaw-2x", "Aurora Super Saw x2"});
     for (int k = 0; k < kMaxKind; ++k) {
@@ -173,6 +175,31 @@ bool build(NotaEngine* e, const std::string& id) {
         if (id != "effect-base")
             for (int i = 0; i < kEffectCopies; ++i)
                 if (nota_track_add_builtin_device(e, t, kind) < 0) return false;
+        return true;
+    }
+    // The racks render their chains themselves (pad decay VCA, key zones), so they get their own rows.
+    if (id == "drum-rack") {
+        const int t = nota_engine_add_drum_rack_track(e);
+        if (t < 0) return false;
+        static const int pads[4] = {36, 38, 42, 46};
+        for (int p : pads) {
+            const int c = nota_rack_add_chain(e, t, 0);
+            if (c < 0) return false;
+            nota_rack_set_chain_trigger_note(e, t, c, p);
+            nota_rack_set_chain_decay(e, t, c, 0.5f);
+        }
+        const int clip = nota_track_add_midi_clip(e, t, 0.0, 16.0);
+        std::vector<NotaNoteData> notes;
+        for (int s16 = 0; s16 < 64; ++s16) notes.push_back({pads[s16 % 4], s16 * 0.25, 0.2, 0.9f, 0});
+        nota_clip_set_notes(e, t, clip, notes.data(), (int)notes.size());
+        return true;
+    }
+    if (id == "instrument-rack") {
+        const int t = nota_engine_add_instrument_rack_track(e);
+        if (t < 0) return false;
+        for (int i = 0; i < 2; ++i)
+            if (nota_rack_add_chain(e, t, 0) < 0) return false;
+        fillClip(e, t, 0, 0, 16);
         return true;
     }
     if (id == "aurora-supersaw-2x") {
