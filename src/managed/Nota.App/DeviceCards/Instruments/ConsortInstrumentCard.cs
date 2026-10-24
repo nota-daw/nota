@@ -709,7 +709,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     var sl = HSlider(AmtId(slot), v => Depth(v), 24, null, true);
                     cur = saved;
                     var dep = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*") };
-                    dep.Children.Add(Caps("DEPTH")); dep.Children.Add(Col(sl, 1));
+                    dep.Children.Add(Caps("Depth")); dep.Children.Add(Col(sl, 1));
                     host.Children.Add(new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 1, 0, 3), Child = new StackPanel { Spacing = 2, Children = { hdr, dep } } });
                 }
             }
@@ -743,7 +743,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             tabReadouts[4].Add(() => field.SetCables(CableList()));
             var list = CableListView(tabReadouts[4]);
             var hint = Cap("Drag jack to jack · Alt-click to pull · right-click for a list", DimC); hint.TextWrapping = TextWrapping.Wrap; hint.TextTrimming = TextTrimming.None;
-            var side = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 0, 0, 3), Child = Caps("CABLES") }, Avalonia.Controls.Dock.Top), Docked(hint, Avalonia.Controls.Dock.Bottom), list } };
+            var side = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 0, 0, 3), Child = Caps("Cables") }, Avalonia.Controls.Dock.Top), Docked(hint, Avalonia.Controls.Dock.Bottom), list } };
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,150") };
             g.Children.Add(new Border { Padding = new Thickness(0, 2, 8, 0), Child = field });
             g.Children.Add(Col(new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(10, 3, 0, 2), Child = side }, 1));
