@@ -105,14 +105,18 @@ public sealed class DynamicEqCurve : Control
 {
     public const int HistLen = 120;   // 2 s at 60 Hz
     private const int Pts = 150;
-    private const double NodeD = 11, HitR = 9;
+    private const double NodeD = 13, HitR = 9;
 
     private static readonly IPen GridFaint = new Pen(NotaPalette.GridSubBeat, 1);
     private static readonly IPen GridMid = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.TrackOff, 1);
     private static readonly IPen SpecPen = new Pen(NotaPalette.BorderStrong, 1);
     private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
-    private static readonly IPen StaticPen = new Pen(NotaPalette.TealBright, 1.2) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen StaticPen = new Pen(NotaPalette.TextTertiary, 1.2) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen OffSelPen = new Pen(NotaPalette.Accent, 1.5);
+    // The dynamics marks (whiskers, the ring on a dynamic band, the gain history): a grey told
+    // apart from the live curve by shade, whichever way the band moves (style guide).
+    private static readonly IBrush DynInk = NotaPalette.TextSecondary;
     private static readonly IPen RingPen = new Pen(NotaPalette.BgSunken, 2);
 
     private readonly IAudioEngine _engine;
@@ -182,7 +186,9 @@ public sealed class DynamicEqCurve : Control
     // ---- geometry: the plot is the whole control ----
     private double X(double f) => DynEq.FreqToN(f) * Bounds.Width;
     private double Y(double db) => DynEq.GainToN(db) * Bounds.Height;
-    private Point NodeAt(int b) => new(X(P(b, DynEq.FreqF)), Y(DynEq.HasGain(BandType(b)) ? P(b, DynEq.GainF) : 0));
+    // A node at 20 Hz or 20 kHz stays whole inside the window.
+    private Point NodeAt(int b) => new(Math.Clamp(X(P(b, DynEq.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
+        Y(DynEq.HasGain(BandType(b)) ? P(b, DynEq.GainF) : 0));
 
     private int Hit(Point p)
     {
@@ -441,21 +447,21 @@ public sealed class DynamicEqCurve : Control
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "20k Hz");
         var k1 = NotaGraph.AxisText("1k");
         ctx.DrawText(k1, new Point(X(1000) + 3, h - 4 - k1.Height + 1));
-        var p12 = NotaGraph.AxisText("+12", null, 6); var m12 = NotaGraph.AxisText("−12", null, 6);
+        var p12 = NotaGraph.AxisText("+12"); var m12 = NotaGraph.AxisText("−12");
         ctx.DrawText(p12, new Point(w - 5 - p12.Width, Y(12) - p12.Height - 1));
         ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
 
         // title + legend
-        var title = solo >= 0 ? NotaNum.F($"Solo · B{solo + 1}") : "Response";
-        ctx.DrawText(Text(title, solo >= 0 ? NotaPalette.AccentBright : NotaGraph.TitleInk, 7, bold: true, mono: false), new Point(5, 3));
-        NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("live", NotaPalette.VizInk, NotaGraph.Mark.Line));
+        if (solo >= 0)
+            ctx.DrawText(Text(NotaNum.F($"Solo · B{solo + 1}"), NotaPalette.AccentBright, NotaGraph.TitleSize, bold: true, mono: false), new Point(8, 5));
+        NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed), ("live", NotaPalette.VizInk, NotaGraph.Mark.Line));
 
         // whiskers (dynamic bands): node → where Range can take it, a dot at the gain it has now
         for (int b = 0; b < DynEq.Bands; b++)
         {
             if (!IsDyn(b) || !on[b]) continue;
             double g = P(b, DynEq.GainF), r = P(b, DynEq.RangeF);
-            var ink = r >= 0 ? NotaPalette.Rose : NotaPalette.TealBright;
+            var ink = DynInk;
             double x = Math.Round(X(P(b, DynEq.FreqF))) + 0.5, y0 = Y(g), y1 = Y(g + r);
             ctx.DrawLine(new Pen(ink, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) }, new Point(x, y0), new Point(x, y1));
             ctx.DrawLine(new Pen(ink, 1), new Point(x - 3.5, y1), new Point(x + 3.5, y1));
@@ -468,14 +474,16 @@ public sealed class DynamicEqCurve : Control
             int b = (sel + k) % DynEq.Bands;
             bool bOn = BandOn(b), isSel = b == sel, dimmed = solo >= 0 && !isSel;
             var c = NodeAt(b);
-            IBrush fill = !bOn || dimmed ? NotaPalette.BorderStrong : isSel ? NotaPalette.AccentBright : NotaPalette.TextSecondary;
-            // The number takes ink derived from its own node (orange, grey or dim), so it reads on all of them.
-            IBrush num = bOn && !dimmed && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : NotaPalette.TextTertiary;
+            // On: light grey, the picked band orange; off (or outside a solo): dark grey, and the
+            // picked band an orange ring.
+            IBrush fill = !bOn || dimmed ? NotaPalette.BorderStrong : isSel ? NotaPalette.Accent : NotaPalette.VizInk;
+            // The number takes ink derived from its own node, so it reads on all of them.
+            IBrush num = bOn && !dimmed && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : isSel ? NotaPalette.AccentBright : NotaPalette.TextTertiary;
             double r = NodeD / 2;
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
-            if (IsDyn(b) && on[b])
-                ctx.DrawEllipse(null, new Pen(P(b, DynEq.RangeF) >= 0 ? NotaPalette.Rose : NotaPalette.TealBright, 1), c, r + 2.5, r + 2.5);
-            var t = Text(NotaNum.F($"{b + 1}"), num, 7, bold: true);
+            if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
+            else if (IsDyn(b) && on[b]) ctx.DrawEllipse(null, new Pen(DynInk, 1), c, r + 2.5, r + 2.5);
+            var t = Text(NotaNum.F($"{b + 1}"), num, 8.5, bold: true);
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
 
@@ -488,28 +496,28 @@ public sealed class DynamicEqCurve : Control
         int b = _selected, ty = BandType(b);
         bool bOn = BandOn(b), g = DynEq.HasGain(ty), dyn = IsDyn(b);
         double r = P(b, DynEq.RangeF);
-        var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.TextPrimary, 8, bold: true, mono: false);
+        var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.TextPrimary, 11, bold: true, mono: false);
         var l2 = Text(DynEq.Hz(P(b, DynEq.FreqF)) + (g ? " · " + DynEq.Db(P(b, DynEq.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, DynEq.QF):0.00}"),
-            NotaPalette.TextPrimary, 7);
-        IBrush dynInk = r >= 0 ? NotaPalette.RoseBright : NotaPalette.TealBright;
+            NotaPalette.TextSecondary, 10.5);
+        IBrush dynInk = NotaPalette.TextPrimary;
         string c = dyn ? (r >= 0 ? "↑ " : "↓ ") + DynEq.Db(_gr[b]) + " dB of " + DynEq.Db(r)
             : !g ? "no dynamics" : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
-        var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 7);
+        var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 10.5);
         double histH = dyn ? 12 : 0;
-        double tw = Math.Max(a.Width, Math.Max(l2.Width, l3.Width)) + 12, th = a.Height + l2.Height + l3.Height + 6 + histH;
+        double tw = Math.Max(a.Width, Math.Max(l2.Width, l3.Width)) + 16, th = a.Height + l2.Height + l3.Height + 10 + histH;
         var n = NodeAt(b);
-        double x = n.X > w * 0.62 ? n.X - 12 - tw : n.X + 12;
+        double x = n.X > w * 0.62 ? n.X - 14 - tw : n.X + 14;
         double y = n.Y < h * 0.34 ? n.Y + 8 : n.Y - 8 - th;
         x = Math.Clamp(x, 3, Math.Max(3, w - tw - 3)); y = Math.Clamp(y, 3, Math.Max(3, h - th - 3));
         var box = new Rect(x, y, tw, th);
-        ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderStrong, 1), new RoundedRect(box.Deflate(0.5), 3));
-        double ty0 = y + 3;
-        ctx.DrawText(a, new Point(x + 6, ty0)); ty0 += a.Height;
-        ctx.DrawText(l2, new Point(x + 6, ty0)); ty0 += l2.Height;
-        ctx.DrawText(l3, new Point(x + 6, ty0)); ty0 += l3.Height;
+        ctx.DrawRectangle(NotaPalette.SurfaceHover, null, new RoundedRect(box, NotaRadius.CellValue));
+        double ty0 = y + 5;
+        ctx.DrawText(a, new Point(x + 8, ty0)); ty0 += a.Height;
+        ctx.DrawText(l2, new Point(x + 8, ty0)); ty0 += l2.Height;
+        ctx.DrawText(l3, new Point(x + 8, ty0)); ty0 += l3.Height;
         if (!dyn) return;
         // 2-second history of the band's dynamic gain, 0 dB at the top for a cut, the bottom for a boost.
-        double hx0 = x + 6, hx1 = x + tw - 6, hy0 = ty0 + 1, hy1 = ty0 + histH - 2, span = Math.Max(1, Math.Abs(r));
+        double hx0 = x + 8, hx1 = x + tw - 8, hy0 = ty0 + 1, hy1 = ty0 + histH - 2, span = Math.Max(1, Math.Abs(r));
         ctx.DrawLine(new Pen(NotaPalette.GridBeat, 1), new Point(hx0, r >= 0 ? hy1 : hy0), new Point(hx1, r >= 0 ? hy1 : hy0));
         var sg = new StreamGeometry();
         using (var gg = sg.Open())
@@ -520,6 +528,6 @@ public sealed class DynamicEqCurve : Control
                 var pt = new Point(hx0 + (hx1 - hx0) * i / (HistLen - 1), r >= 0 ? hy1 - t * (hy1 - hy0) : hy0 + t * (hy1 - hy0));
                 if (i == 0) gg.BeginFigure(pt, false); else gg.LineTo(pt);
             }
-        ctx.DrawGeometry(null, new Pen(dynInk, 1), sg);
+        ctx.DrawGeometry(null, new Pen(DynInk, 1), sg);
     }
 }
