@@ -38,12 +38,13 @@ public sealed class DragNumber : UserControl
         _value = Math.Clamp(value, min, max);
 
         _display.FontSize = fontSize;
+        if (fontSize >= NotaType.Readout) _display.FontWeight = FontWeight.Medium;   // a toolbar value: 17 / 500
         _display.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _display.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
 
         _editor = new TextBox
         {
-            FontSize = fontSize, IsVisible = false, Padding = new Avalonia.Thickness(0), MinHeight = 0,
+            FontSize = fontSize, FontWeight = _display.FontWeight, IsVisible = false, Padding = new Avalonia.Thickness(0), MinHeight = 0,
             Background = Brushes.Transparent, BorderThickness = new Avalonia.Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
         };

@@ -60,7 +60,7 @@ internal static partial class DesignTokenCheck
             .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/"))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?:DynamicResource |"")(?<key>Shadow\.\w+)[}""]").Select(m => m.Groups["key"].Value))
             .Distinct().Where(k => !built.Contains(k)).OrderBy(k => k).ToArray();
-        yield return (built.Count == 4 && shadowRefs.Length == 0,
+        yield return (built.Count == 9 && shadowRefs.Length == 0,
             shadowRefs.Length == 0 ? $"every Shadow.* key is built from the theme ({string.Join(", ", built.OrderBy(k => k))})"
                                    : $"Shadow.* keys nothing builds: {string.Join(", ", shadowRefs)}");
     }
@@ -429,8 +429,8 @@ internal static partial class DesignTokenCheck
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
         yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
             "transport is a docked row at the top of the window");
-        yield return (Regex.IsMatch(main, "<Border Grid.Column=\"1\" Classes=\"console\">"),
-            "transport console is the recessed group inside it");
+        yield return (Regex.IsMatch(main, "<StackPanel Grid.Column=\"1\"[^>]*>\\s*<Border Classes=\"tb-sep\"/>\\s*<Border Classes=\"console\">"),
+            "transport keys sit in the console well, first in the transport-and-timing group");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
         yield return (Regex.IsMatch(browser, @"const double RowH = 2[6-8];"), "browser list rows are 26–28px");
