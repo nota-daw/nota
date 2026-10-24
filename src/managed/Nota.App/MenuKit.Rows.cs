@@ -83,8 +83,9 @@ internal static partial class MenuKit
                 grid.Children.Add(ring);
                 row.Add(ring, ci, ci == current, (cell, chosen, cursor) =>
                 {
+                    // The cursor thickens the ring, so it shows on the chosen swatch too.
                     cell.BorderBrush = chosen ? NotaPalette.TextPrimary : cursor ? NotaPalette.TextMuted : Brushes.Transparent;
-                    cell.Background = cursor ? NotaPalette.SurfaceHover : Brushes.Transparent;   // shows on the chosen swatch too
+                    cell.BorderThickness = new Thickness(cursor ? 2 : 1);
                 },
                     up: s > 0 ? row.Count - bases : -1, down: s < shades - 1 ? row.Count + bases : -1);
             }
@@ -231,6 +232,14 @@ internal static partial class MenuKit
                 if (next >= 0) { Move(next); e.Handled = true; }
             }, RoutingStrategies.Tunnel);
             mi.GotFocus += (_, _) => { if (_cursor < 0) Move(Math.Max(0, _chosen)); };
+            // Arrowing onto the row puts the cursor on the chosen cell; leaving it takes the
+            // cursor away, so only one row in the menu shows one.
+            mi.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != MenuItem.IsSelectedProperty) return;
+                if (mi.IsSelected) { if (_cursor < 0) Move(Math.Max(0, _chosen)); }
+                else Move(-1);
+            };
             mi.Click += (_, _) =>
             {
                 if (_cursor < 0 || _cursor >= _cells.Count) return;

@@ -656,8 +656,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
   analyzer switched Pre / Post / Off), a slim row of band chips over the graph (number, filter shape,
-  frequency), and the selected band's settings beside the Global controls in a panel at the
-  right that folds away; 34 factory
+  frequency) with Analyzer and Auto gain over its corner, and the selected band's settings,
+  Scale and Output in one narrow column at the right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,

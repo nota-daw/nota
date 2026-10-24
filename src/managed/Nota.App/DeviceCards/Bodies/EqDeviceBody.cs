@@ -4,11 +4,11 @@
 // Detail · Devices — built-in Nota EQ-8 body (device kind 0), laid out like the classic EQ
 // Eight and drawn in the style guide (spec 038): the response graph leads at the left (nodes
 // drag on the curve) under a slim row of eight band chips — each the band's number, filter shape
-// and frequency on one line (click picks, double-click switches it on / off) — and the panel at the right edits the picked band (its head
-// with the On switch, the six filter shapes, Freq, Gain and Q side by side, Slope and Channel)
-// beside the device's Global controls (Analyzer, Auto gain, Scale, Output). Its arrow folds the
-// whole panel to a thin strip (the card narrows from 920 to 572); the fold is session-only view
-// state. The live readings come from the engine (Eq.h scopeRead). Every control is a device
+// and frequency on one line (click picks, double-click switches it on / off) — with Analyzer and
+// Auto gain over its top-left corner. One narrow column at the right edits the picked band (its
+// head with the On switch, the six filter shapes, Freq, Gain and Q, Slope and Channel) over the
+// device's Scale and Output. Its arrow folds the column to a thin strip (the card narrows from
+// 720 to 562); the fold is session-only view state. The live readings come from the engine (Eq.h scopeRead). Every control is a device
 // param (raw units), so automation / MIDI learn / presets / A-B / persistence come for free.
 // FullBleed — the shared shell draws the header (name · preset · type · power).
 
@@ -19,6 +19,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
@@ -27,11 +28,10 @@ namespace Nota.App;
 
 internal sealed class EqDeviceBody : IDeviceBody
 {
-    // The right panel: the band column, a gap, the Global column, inside the section's padding
-    // and its 1px edge.
-    internal const double BandW = 210, GlobalW = 136, PanelGap = 20;
-    internal const double PanelW = BandW + PanelGap + GlobalW + 2 * SectionPad;
-    public const double OpenW = 920, FoldedW = OpenW - PanelW + EqBandUi.FoldedW;   // 572 folded
+    // The right panel: one column inside the section's padding and its 1px edge.
+    internal const double ColumnW = 176;
+    internal const double PanelW = ColumnW + 2 * SectionPad;
+    public const double OpenW = 720, FoldedW = OpenW - PanelW + EqBandUi.FoldedW;   // 562 folded
 
     public double Width => OpenW;
     public bool AutoWidth => true;   // the card follows the fold
@@ -95,7 +95,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         // ======================================================================
         ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
             + "double-click empty space — a new bell there · right-click a node — type, slope, channel");
-        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 3 };
+        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 2 };
         for (int b = 0; b < Eq8.Bands; b++)
         {
             int bb = b, pOn = Eq8.P(b, Eq8.On);
@@ -108,7 +108,25 @@ internal sealed class EqDeviceBody : IDeviceBody
             tabRow.Children.Add(Col(chip, b));
         }
         DockPanel.SetDock(tabRow, Dock.Top);
-        var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, curve } });
+
+        // Analyzer and Auto gain over the graph's top-left corner, as on the classic EQ Eight. The
+        // auto gain in effect rides on the switch's word.
+        var anaSeg = Segments(Eq8.AnalyzerSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2),
+            i => { SetP(Eq8.AnalyzerP, i); RefreshAll(); }, out var anaSync, padX: 5);
+        Learn(anaSeg, Eq8.AnalyzerP);
+        ToolTip.SetTip(anaSeg, "Analyzer — Pre: the input spectrum · Post: the output over a dimmer input · Off");
+        readouts.Add(anaSync);
+        var autoSw = Switch("Auto gain", AutoOn, () => { SetP(Eq8.AutoGainP, AutoOn() ? 0 : 1); RefreshAll(); }, out var autoSync,
+            liveLabel: () => AutoOn() && scN > Eq8.S_AutoGain ? "Auto gain " + Eq8.Db(Sc(Eq8.S_AutoGain)) + " dB" : "Auto gain");
+        Learn(autoSw, Eq8.AutoGainP);
+        ToolTip.SetTip(autoSw, "Auto gain — adds the opposite of the shelves' and bells' average level, so edits are judged at the same loudness");
+        readouts.Add(autoSync);
+        var overlay = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(6, 5), HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top, Children = { EqBandUi.Label("Analyzer"), anaSeg, new Border { Width = 6 }, autoSw },
+        };
+        var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, new Panel { Children = { curve, overlay } } } });
         graphSection.Padding = new Thickness(SectionPad - 1);
 
         // 0..1 mappings (frequency and Q are log)
@@ -119,10 +137,11 @@ internal sealed class EqDeviceBody : IDeviceBody
         double FromN(int p, double n) { n = Math.Clamp(n, 0, 1); return IsLog(p) ? mn[p] * Math.Pow(mx[p] / mn[p], n) : mn[p] + n * (mx[p] - mn[p]); }
 
         // A knob cell bound to param p (the band's Freq, Gain, Q; the device's Scale, Output).
-        Control K(int p, string label, Func<string> fmt, string tip, double def, double cellW, Func<string>? liveLabel = null, Func<bool>? inactive = null)
+        Control K(int p, string label, Func<string> fmt, string tip, double def, double cellW, bool inline = false,
+            Func<string>? liveLabel = null, Func<bool>? inactive = null)
         {
             var val = new TextBlock { Text = fmt(), Foreground = TextPrimary };
-            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Default = ToN(p, def) };
+            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Inline = inline, Default = ToN(p, def) };
             knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -130,7 +149,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             ToolTip.SetTip(knob, tip);
             var cell = KnobCell(label, knob, val, cellW);
             TextBlock? lbl = null;
-            if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
+            foreach (var c in cell.GetLogicalDescendants()) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
             bool? wasInactive = null;
             bandReadouts.Add(() =>
             {
@@ -149,21 +168,24 @@ internal sealed class EqDeviceBody : IDeviceBody
             for (int i = 0; i < cells.Length; i++) { g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star)); g.Children.Add(Col(cells[i], i)); }
             return g;
         }
-        Control SegRow(string label, Border seg, Func<bool>? dim = null)
+        // A segmented control with its name under it, like a knob's (ink 4 while it does nothing).
+        Control Named(Border seg, string name, Func<bool>? dim = null)
         {
-            var lbl = EqBandUi.Label(label);
+            var lbl = new TextBlock
+            {
+                Text = name, FontSize = NotaType.KnobLabel, LineHeight = 13, Foreground = TextTertiary,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0),
+            };
             if (dim is not null) bandReadouts.Add(() => lbl.Foreground = dim() ? TextDisabled : TextTertiary);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*") };
-            g.Children.Add(lbl);
-            g.Children.Add(Col(seg, 1));
-            return g;
+            seg.HorizontalAlignment = HorizontalAlignment.Stretch;
+            return new StackPanel { Children = { seg, lbl } };
         }
 
         // ======================================================================
-        // RIGHT — the picked band (rebuilt when the selection moves, so MIDI learn and
-        // automation bind to that band's own params) beside the device's Global controls
+        // RIGHT — one column: the picked band (rebuilt when the selection moves, so MIDI learn
+        // and automation bind to that band's own params) over the device's Scale and Output
         // ======================================================================
-        Control BandColumn(int b)
+        Control PanelBody(int b)
         {
             int pOn = Eq8.P(b, Eq8.On), pType = Eq8.P(b, Eq8.TypeF), pF = Eq8.P(b, Eq8.FreqF), pG = Eq8.P(b, Eq8.GainF), pQ = Eq8.P(b, Eq8.QF);
             int pSlope = Eq8.SlopeBase + b, pChan = Eq8.ChannelBase + b;
@@ -174,18 +196,22 @@ internal sealed class EqDeviceBody : IDeviceBody
             Learn(badge, pOn); Learn(onSw, pOn);
             ToolTip.SetTip(badge, "Band on — off leaves the band out of the signal (double-click its node does the same)");
             ToolTip.SetTip(onSw, "Band on — off leaves the band out of the signal (double-click its node does the same)");
-            var head = EqBandUi.Head(badge, onSw, () => Eq8.TypeNames[TypeOf(b)], () => BandOn(b), out var headSync);
+            var bandHead = EqBandUi.Head(badge, onSw, () => Eq8.TypeNames[TypeOf(b)], () => BandOn(b), out var headSync);
             bandReadouts.Add(badgeSync); bandReadouts.Add(onSync); bandReadouts.Add(headSync);
+            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
+            fold.Margin = new Thickness(8, 0, 0, 0);
+            var head = new DockPanel { Children = { Docked(fold, Dock.Right), bandHead } };
 
             var types = EqBandUi.TypeRow(Eq8.TypeNames, () => TypeOf(b), i => { SetP(pType, i); RefreshAll(); }, out var typeSync);
             Learn(types, pType);
             bandReadouts.Add(typeSync);
 
+            const double cw = ColumnW / 3;
             var knobs = Across(
-                K(pF, "Freq", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", 1000, 70),
-                K(pG, "Gain", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)", 0, 70,
+                K(pF, "Freq", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", 1000, cw),
+                K(pG, "Gain", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)", 0, cw,
                     inactive: () => !Capable(b)),
-                K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", 0.71, 70,
+                K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", 0.71, cw,
                     liveLabel: () => Cut(b) ? "Reso" : "Q"));
 
             var slopeSeg = Segments(new[] { "12", "24", "48" }, () => SlopeOf(b), i => { if (Cut(b)) { SetP(pSlope, i); RefreshAll(); } },
@@ -197,53 +223,23 @@ internal sealed class EqDeviceBody : IDeviceBody
             Learn(chanSeg, pChan);
             ToolTip.SetTip(chanSeg, "Channel — St: both channels · M: the centre · S: the edges · L / R: one channel alone");
             bandReadouts.Add(chanSync);
+            // Slope's three cells and Channel's five, each cell the same width.
+            var segs = new Grid { ColumnDefinitions = new ColumnDefinitions("3*,8,5*") };
+            segs.Children.Add(Named(slopeSeg, "Slope", () => !Cut(b)));
+            segs.Children.Add(Col(Named(chanSeg, "Channel"), 2));
 
-            // Rows line up with the Global column's: head, shapes | Analyzer, knobs | knobs, Channel | Auto gain.
-            var col = new Grid { Width = BandW, RowDefinitions = new RowDefinitions("Auto,8,Auto,14,Auto,*,Auto,6,Auto") };
+            var global = Across(
+                K(Eq8.ScaleP, "Scale", () => NotaNum.F($"{P(Eq8.ScaleP):0}\u2009%"),
+                    "Scale — multiplies every shelf and bell gain: 100\u2009% as set, 0\u2009% flat, 200\u2009% twice as much", 100, 80, inline: true),
+                K(Eq8.OutputP, "Output", () => Eq8.Db(P(Eq8.OutputP)) + " dB", "Output — the level after the EQ, ±12\u2009dB", 0, 80, inline: true));
+
+            var col = new Grid { Width = ColumnW, RowDefinitions = new RowDefinitions("Auto,6,Auto,6,Auto,4,Auto,*,Auto") };
             col.Children.Add(head);
             col.Children.Add(Row(types, 2));
             col.Children.Add(Row(knobs, 4));
-            col.Children.Add(Row(SegRow("Slope", slopeSeg, () => !Cut(b)), 6));
-            col.Children.Add(Row(SegRow("Channel", chanSeg), 8));
+            col.Children.Add(Row(segs, 6));
+            col.Children.Add(Row(global, 8));
             return col;
-        }
-
-        Control GlobalColumn()
-        {
-            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
-            var head = new DockPanel { Height = 20, Children = { Docked(fold, Dock.Right), EqBandUi.Title("Global") } };
-
-            var anaSeg = Segments(Eq8.AnalyzerSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2),
-                i => { SetP(Eq8.AnalyzerP, i); RefreshAll(); }, out var anaSync, fill: true, padX: 0);
-            Learn(anaSeg, Eq8.AnalyzerP);
-            ToolTip.SetTip(anaSeg, "Analyzer — Pre: the input spectrum · Post: the output over a dimmer input · Off");
-            bandReadouts.Add(anaSync);
-            // The auto gain in effect rides on the switch's word, where the status line used to show it.
-            var autoSw = Switch("Auto gain", AutoOn, () => { SetP(Eq8.AutoGainP, AutoOn() ? 0 : 1); RefreshAll(); }, out var autoSync,
-                liveLabel: () => AutoOn() && scN > Eq8.S_AutoGain ? "Auto gain " + Eq8.Db(Sc(Eq8.S_AutoGain)) + " dB" : "Auto gain");
-            Learn(autoSw, Eq8.AutoGainP);
-            ToolTip.SetTip(autoSw, "Auto gain — adds the opposite of the shelves' and bells' average level, so edits are judged at the same loudness");
-            bandReadouts.Add(autoSync);
-
-            var knobs = Across(
-                K(Eq8.ScaleP, "Scale", () => NotaNum.F($"{P(Eq8.ScaleP):0}\u2009%"),
-                    "Scale — multiplies every shelf and bell gain: 100\u2009% as set, 0\u2009% flat, 200\u2009% twice as much", 100, 64),
-                K(Eq8.OutputP, "Output", () => Eq8.Db(P(Eq8.OutputP)) + " dB", "Output — the level after the EQ, ±12\u2009dB", 0, 64));
-
-            var col = new Grid { Width = GlobalW, RowDefinitions = new RowDefinitions("Auto,8,Auto,14,Auto,*,Auto") };
-            col.Children.Add(head);
-            col.Children.Add(Row(SegRow("Analyzer", anaSeg), 2));
-            col.Children.Add(Row(knobs, 4));
-            col.Children.Add(Row(new Border { Height = NotaSize.Seg + 4, Child = autoSw }, 6));
-            return col;
-        }
-
-        Control PanelBody(int b)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"Auto,{PanelGap},Auto")) };
-            g.Children.Add(BandColumn(b));
-            g.Children.Add(Col(GlobalColumn(), 2));
-            return g;
         }
 
         // The folded strip: just the arrow that opens the panel again.

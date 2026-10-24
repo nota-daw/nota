@@ -88,11 +88,11 @@ internal static class EqBandUi
             Text = (band + 1).ToString(), FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, FontWeight = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var shape = new FilterShape { Width = 15, Height = 8, Margin = new Thickness(3, 0, 0, 0) };
+        var shape = new FilterShape { Width = 15, Height = 8, Margin = new Thickness(2, 0, 0, 0) };
         var hz = new TextBlock
         {
             FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.None, Margin = new Thickness(3, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.None, Margin = new Thickness(2, 0, 0, 0),
         };
         var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
         line.Children.Add(num);
@@ -100,13 +100,13 @@ internal static class EqBandUi
         Grid.SetColumn(hz, 2); line.Children.Add(hz);
         var bar = new Border
         {
-            Height = 2, CornerRadius = NotaRadius.Fine, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-2, 0, 0, -2),
+            Height = 2, CornerRadius = NotaRadius.Fine, Background = NotaPalette.Accent, HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 1), IsHitTestVisible = false,
         };
         var chip = new Border
         {
             Height = ChipH, CornerRadius = NotaRadius.Cell, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
-            Padding = new Thickness(4, 0, 4, 0), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
+            Padding = new Thickness(3, 0, 3, 0), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
             Child = activity is null ? line : new Panel { Children = { line, bar } },
         };
         void Paint()
@@ -118,7 +118,7 @@ internal static class EqBandUi
             shape.Ink = o ? TextSecondary : TextDisabled;
             hz.Text = freq();
             hz.Foreground = o ? TextSecondary : TextDisabled;
-            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, chip.Bounds.Width - 4);
+            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, line.Bounds.Width);
         }
         chip.PointerPressed += (_, e) =>
         {
