@@ -698,7 +698,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var centre = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = SectionGap };
         centre.Children.Add(voice);
         Grid.SetRow(steps, 1); centre.Children.Add(steps);
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(kit);
         Grid.SetColumn(centre, 1); root.Children.Add(centre);
         Grid.SetColumn(perform, 2); root.Children.Add(perform);

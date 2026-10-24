@@ -549,7 +549,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         var centreBox = new RuleSection { Padding = new Thickness(SectionPad), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap };
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
         root.Children.Add(wheels); root.Children.Add(Col(centreBox, 1)); root.Children.Add(Col(right, 2));
 
         ctx.SetInstLiveViz(Refresh);
