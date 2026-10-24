@@ -7,8 +7,8 @@
 //    scale; above 4 bits the level step is enlarged (so it stays visible) and says so. Drag up /
 //    down for Bits, left / right for Rate; double-click resets both.
 //  · CrSpectrumView — the Spectrum tab, from the engine's FFT (Crush.h scopeRead): the crushed
-//    output in 40 log bands, neutral ink up to the (level-matched) input, teal where the crush added
-//    content — bright above the reduced Nyquist (the images), dim below (harmonics, noise). A
+//    output in 40 log bands, neutral ink up to the (level-matched) input, a lighter grey where the crush
+//    added content — bright above the reduced Nyquist (the images), dim below (harmonics, noise). A
 //    ghost outline shows input the post filter took away. Drag the Nyquist line (Rate) or the
 //    filter line (Post Filter).
 //  · CrTransferView — the Transfer tab's curve: input → output through Drive, the mode's shape
@@ -237,8 +237,8 @@ internal sealed class CrSpectrumView : ShDragView
         {
             double bw = (x1 - x0) / _n, gap = bw > 4 ? 1.5 : 0.5;
             var ghost = new Pen(NotaPalette.TextDisabled, 1, new DashStyle(new double[] { 2, 2 }, 0));
-            var addLo = NotaPalette.Wash(NotaPalette.Teal, 0x66);
-            var addHi = NotaPalette.Wash(NotaPalette.TealBright, 0xC0);
+            var addLo = NotaPalette.Wash(NotaPalette.TextTertiary, 0x66);
+            var addHi = NotaPalette.TextTertiary;
             for (int b = 0; b < _n; b++)
             {
                 double x = x0 + b * bw, cw = Math.Max(0.6, bw - gap);
@@ -254,7 +254,7 @@ internal sealed class CrSpectrumView : ShDragView
         }
         else
         {
-            var ft = NotaGraph.AxisText("no signal", NotaPalette.TextTertiary, 8);
+            var ft = NotaGraph.AxisText("no signal", NotaPalette.TextTertiary);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (top + bot - ft.Height) / 2));
         }
 
@@ -262,14 +262,14 @@ internal sealed class CrSpectrumView : ShDragView
         double fx = X(_filt);
         ctx.DrawLine(new Pen(Active == HFilter ? NotaPalette.Accent : NotaPalette.TextSecondary, Active == HFilter ? 1.6 : 1, new DashStyle(new double[] { 2, 3 }, 0)),
             new Point(fx, top), new Point(fx, bot));
-        ctx.DrawLine(new Pen(Active == HNyquist ? NotaPalette.TealBright : NotaPalette.Teal, Active == HNyquist ? 1.6 : 1, new DashStyle(new double[] { 3, 2 }, 0)),
+        ctx.DrawLine(new Pen(Active == HNyquist ? NotaPalette.Accent : NotaPalette.TextSecondary, Active == HNyquist ? 1.6 : 1, new DashStyle(new double[] { 3, 2 }, 0)),
             new Point(nx, top), new Point(nx, bot));
-        Label(ctx, "Nyquist " + CrushMath.Hz(_nyq), nx, top + 2, NotaPalette.TealBright);
+        Label(ctx, "Nyquist " + CrushMath.Hz(_nyq), nx, top + 2, Active == HNyquist ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         Label(ctx, "filter " + CrushMath.Hz(_filt), fx, top + 12, Active == HFilter ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
 
         NotaGraph.Title(ctx, frame, "Spectrum");
         NotaGraph.Legend(ctx, w - 6, 3, ("signal", NotaPalette.VizInk, NotaGraph.Mark.Area),
-            ("added", NotaPalette.Teal, NotaGraph.Mark.Area), ("images", NotaPalette.TealBright, NotaGraph.Mark.Area));
+            ("added", NotaPalette.Wash(NotaPalette.TextTertiary, 0x66), NotaGraph.Mark.Area), ("images", NotaPalette.TextTertiary, NotaGraph.Mark.Area));
         Text(ctx, "100", X(100) + 2, h - 11);
         Text(ctx, "1\u2009k", X(1000) + 2, h - 11);
         Text(ctx, "10\u2009k", X(10000) + 2, h - 11);
@@ -386,11 +386,11 @@ internal sealed class CrWaveView : Control
             }
             s.EndFigure(false); o.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xB3), 1, new DashStyle(new double[] { 3, 3 }, 0)), src);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 3 }, 0)), src);
         ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1.6, lineJoin: PenLineJoin.Round), outG);
 
         NotaGraph.Title(ctx, frame, "Form");
-        NotaGraph.Legend(ctx, w - 6, 3, (NotaNum.F($"in {_driveDb:+0;−0;0}\u2009dB"), NotaPalette.TealBright, NotaGraph.Mark.Dashed),
+        NotaGraph.Legend(ctx, w - 6, 3, (NotaNum.F($"in {_driveDb:+0;−0;0}\u2009dB"), NotaPalette.TextTertiary, NotaGraph.Mark.Dashed),
             ("out", NotaPalette.VizInk, NotaGraph.Mark.Line));
         string lv = _levels >= 1e6 ? NotaNum.F($"{_levels / 1e6:0.0}\u2009M levels") : _levels >= 1e4 ? NotaNum.F($"{_levels / 1e3:0}\u2009k levels") : NotaNum.F($"{_levels:0} levels");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, lv);
