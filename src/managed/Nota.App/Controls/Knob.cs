@@ -4,7 +4,8 @@
 // A rotary knob for device / instrument parameters (style guide, spec 038): a 270° arc,
 // 2.4 wide with round ends, on the knob track; the value in orange inside a device (grey
 // for a knob off the audio path); a small centre cap; a thin ink-1 pointer from the centre
-// to the arc. A bipolar knob fills from 12 o'clock. A Flat knob is the one used outside
+// to the arc. A bipolar knob fills from 12 o'clock; a `Marker` puts a short ink-2 tick across
+// the track at a live reading (Dynamic EQ-8's band level on its threshold). A Flat knob is the one used outside
 // device cards (sends): no cap, the value in ink 3, orange only while live. Drag vertically to change
 // (up = increase; Ctrl/⌘/Shift = fine). Double-click resets and ⌥-click types a value
 // (ValueEntry, attached by KnobCell once `Format` is set). Same public API as
@@ -34,6 +35,7 @@ public sealed class Knob : Control
     private static readonly IBrush CapEdge = NotaPalette.Seam;   // the guide's cap edge: Sunken in dark, Seam in light — within a step
     private static readonly IBrush PointerOn = NotaPalette.TextPrimary;
     private static readonly IBrush PointerOff = NotaPalette.TextDisabled;
+    private static readonly IBrush MarkerInk = NotaPalette.TextSecondary;   // a live reading on the track
 
     private const double StartDeg = 135.0;   // down-left
     private const double SweepDeg = 270.0;   // clockwise to down-right
@@ -72,6 +74,10 @@ public sealed class Knob : Control
     /// <summary>Drawn as inactive (no brass) while still taking input — see Inactive.</summary>
     public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }
     private bool _dim;
+
+    /// <summary>A live reading marked on the track as a short tick, as a 0..max position (NaN = none).</summary>
+    public double Marker { get => _marker; set { if (_marker.Equals(value)) return; _marker = value; InvalidateVisual(); } }
+    private double _marker = double.NaN;
 
     /// <summary>Value restored on double-click (NaN = no reset).</summary>
     public double Default { get; set; } = double.NaN;
@@ -225,6 +231,14 @@ public sealed class Knob : Control
         double from = Bipolar ? 0.5 : 0;
         if (Math.Abs(frac - from) > 0.001)
             ctx.DrawGeometry(null, new Pen(arcBrush, Stroke, lineCap: PenLineCap.Round), Arc(cx, cy, r, Math.Min(from, frac), Math.Max(from, frac)));
+
+        // A live reading: a short tick across the track.
+        if (on && !double.IsNaN(_marker) && _max > 0)
+        {
+            double m = (StartDeg + Math.Clamp(_marker / _max, 0, 1) * SweepDeg) * Math.PI / 180.0;
+            ctx.DrawLine(new Pen(MarkerInk, 1.4, lineCap: PenLineCap.Round),
+                new Point(cx + Math.Cos(m) * (r - 2.5), cy + Math.Sin(m) * (r - 2.5)), new Point(cx + Math.Cos(m) * (r + 2.5), cy + Math.Sin(m) * (r + 2.5)));
+        }
 
         // The centre cap, devices only.
         if (!_flat) ctx.DrawEllipse(Cap, new Pen(CapEdge, 1), new Point(cx, cy), d / 2 - 5, d / 2 - 5);

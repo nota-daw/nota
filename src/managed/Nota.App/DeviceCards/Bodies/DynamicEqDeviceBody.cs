@@ -5,9 +5,10 @@
 // classic EQ Eight and drawn in the style guide (spec 038): the response graph leads at the left
 // (nodes drag on the curve) under a slim row of eight band chips — the band's number, filter
 // shape and frequency on one line, with its dynamics activity along the bottom — and the panel at the
-// right edits the picked band (its head with the On switch, the six filter shapes, Freq, Gain
-// and Q side by side) beside its dynamics (mode, Thresh with the band's level marked on it,
-// Range, Attack, Release, its key and Solo) over the device's Dynamic master switch and output.
+// right is drawn like EQ-8's: two columns on one set of rows, so their parts line up. The picked
+// band (its head with the On switch, the six filter shapes, Freq, Gain and Q, its key and Solo)
+// sits beside its dynamics (the mode, then Thresh — the band's level ticked on its ring — Range,
+// Attack and Release as knobs, over the device's Dynamic switch and Output).
 // The live readings come from the engine (DynamicEq.h scopeRead). Every control is a device param
 // (raw units), so automation / MIDI learn / presets / A-B / persistence come for free; the key
 // track is the device's sidechain routing. As on EQ-8, the arrow folds the panel to a thin strip
@@ -90,6 +91,12 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T Row<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
+        static Grid Across(params Control[] cells)
+        {
+            var g = new Grid();
+            for (int i = 0; i < cells.Length; i++) { g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star)); g.Children.Add(Col(cells[i], i)); }
+            return g;
+        }
 
         // Key source: the device's sidechain routing (a track), picked from a menu.
         string SrcName(int id) => TrackNames.Of(engine, id);
@@ -155,56 +162,15 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         double FromN(int p, double n) { n = Math.Clamp(n, 0, 1); return IsLog(p) ? mn[p] * Math.Pow(mx[p] / mn[p], n) : mn[p] + n * (mx[p] - mn[p]); }
         double DefOf(int p) => engine.DeviceParamDefault(track, di, p);
 
-        // The Dynamic master switch and the output, at the bottom of the right column (they were
-        // on the status line). Out is a field that drags up and down (±18 dB), double-click 0 dB.
-        var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
-        Learn(dynSw, DynEq.DynamicsP);
-        ToolTip.SetTip(dynSw, "Dynamic — off parks every band on its static gain: hear what the dynamics do");
-        readouts.Add(dynSync);
-        var outTb = new TextBlock { FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        var outBox = new Border
-        {
-            Height = NotaSize.Dropdown, MinWidth = 58, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Background = NotaPalette.Groove,
-            Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Child = outTb,
-        };
-        outBox.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
-        bool outDrag = false; double outY = 0;
-        outBox.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
-            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(DynEq.OutputP, 0); RefreshAll(); e.Handled = true; return; }
-            outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(DynEq.OutputP); e.Handled = true;
-        };
-        outBox.PointerMoved += (_, e) =>
-        {
-            if (!outDrag) return;
-            double y = e.GetPosition(outBox).Y, dy = outY - y; outY = y;
-            bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-            Raw(DynEq.OutputP, P(DynEq.OutputP) + (float)(dy * 36.0 / (fine ? 1400.0 : 140.0)));
-            RefreshAll();
-        };
-        void OutEnd() { if (!outDrag) return; outDrag = false; End(DynEq.OutputP); }
-        outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
-        outBox.PointerCaptureLost += (_, _) => OutEnd();
-        Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0\u2009dB");
-        readouts.Add(() =>
-        {
-            float o = P(DynEq.OutputP);
-            outTb.Text = DynEq.Db(o) + " dB";
-            outTb.Foreground = Math.Abs(o) > 0.05f ? TextPrimary : TextSecondary;
-        });
-        var outLbl = EqBandUi.Label("Out");
-        outLbl.Margin = new Thickness(0, 0, 8, 0);
-        var masterRow = new DockPanel { Children = { Docked(outBox, Dock.Right), Docked(outLbl, Dock.Right), dynSw } };
-
         var right = Section(new ContentControl());
 
-        // A knob cell bound to the band's Freq, Gain or Q.
-        Control K(int p, string label, Func<string> fmt, string tip, double cellW, Func<string>? liveLabel = null, Func<bool>? inactive = null)
+        // A knob cell bound to param p. `marker` marks a live reading on the track; `def` moves the
+        // double-click value with the band's mode; `inactive` draws it in ink 4 (still editable).
+        Control K(int p, string label, Func<string> fmt, string tip, double cellW, Func<string>? liveLabel = null, Func<bool>? inactive = null,
+            bool inline = false, bool bipolar = false, Func<double>? marker = null, Func<double>? def = null)
         {
             var val = new TextBlock { Text = fmt(), Foreground = TextPrimary };
-            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Default = ToN(p, DefOf(p)) };
+            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Inline = inline, Bipolar = bipolar, Default = ToN(p, def?.Invoke() ?? DefOf(p)) };
             knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -221,6 +187,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 if (lbl is not null && liveLabel is not null) lbl.Text = liveLabel();
                 bool ina = inactive?.Invoke() ?? false;
                 if (wasInactive != ina) { Inactive.Set(cell, ina); wasInactive = ina; }
+                if (marker is not null) knob.Marker = ina ? double.NaN : marker();
+                if (def is not null) knob.Default = ToN(p, def());
             });
             cell.HorizontalAlignment = HorizontalAlignment.Center;
             return cell;
@@ -240,13 +208,19 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // RIGHT — the picked band: head, filter shapes, Freq, Gain and Q (rebuilt when the
-        // selection moves, so MIDI learn and automation bind to that band's own params)
+        // RIGHT — two columns on one grid of rows, so their parts line up: the picked band (head,
+        // filter shapes, Freq / Gain / Q, its key and Solo) beside its dynamics (title and fold
+        // arrow, mode, Thresh / Range / Attack / Release, the device's Dynamic switch and Out).
+        // Rebuilt when the selection moves, so MIDI learn and automation bind to that band's params.
         // ======================================================================
-        Control BandColumn(int b)
+        Control PanelBody(int b)
         {
             int pOn = DynEq.P(b, DynEq.On), pType = DynEq.P(b, DynEq.TypeF);
+            int pMode = DynEq.P(b, DynEq.ModeF), pThr = DynEq.P(b, DynEq.ThrF), pRange = DynEq.P(b, DynEq.RangeF),
+                pAtk = DynEq.P(b, DynEq.AtkF), pRel = DynEq.P(b, DynEq.RelF), pKey = DynEq.KeyBase + b;
             void Toggle() { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }
+
+            // ---- the band
             var badge = EqBandUi.Badge(b, () => BandOn(b), Toggle, out var badgeSync);
             var onSw = Switch("On", () => BandOn(b), Toggle, out var onSync);
             Learn(badge, pOn); Learn(onSw, pOn);
@@ -259,104 +233,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             Learn(types, pType);
             bandReadouts.Add(typeSync);
 
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
-            var cells = BandKnobs(b, 58);
-            for (int i = 0; i < cells.Length; i++) knobs.Children.Add(Col(cells[i], i));
-
-            var col = new Grid { Width = BandW, RowDefinitions = new RowDefinitions("Auto,8,Auto,*,Auto,*") };
-            col.Children.Add(bandHead);
-            col.Children.Add(Row(types, 2));
-            col.Children.Add(Row(knobs, 4));
-            return col;
-        }
-
-        // ======================================================================
-        // RIGHT — the picked band's dynamics, then the Dynamic master switch and the output
-        // ======================================================================
-        Control DynamicsColumn(int b)
-        {
-            int pMode = DynEq.P(b, DynEq.ModeF), pThr = DynEq.P(b, DynEq.ThrF), pRange = DynEq.P(b, DynEq.RangeF),
-                pAtk = DynEq.P(b, DynEq.AtkF), pRel = DynEq.P(b, DynEq.RelF), pKey = DynEq.KeyBase + b;
-            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
-            fold.Margin = new Thickness(8, 0, 0, 0);
-            var title = new DockPanel { Height = 20, Children = { Docked(fold, Dock.Right), EqBandUi.Title(NotaNum.F($"Band {b + 1} dynamics")) } };
-
-            var modeSeg = Segments(DynEq.ModeNames, () => ModeOf(b), i =>
-            {
-                if (i != DynEq.Static && !Capable(b)) return;
-                DynamicEqCurve.SetMode(engine, track, di, b, i);
-                RefreshAll(); curve.InvalidateVisual();
-            }, out var modeSync, fill: true, padX: 0, dim: () => !Capable(b));
-            Learn(modeSeg, pMode);
-            ToolTip.SetTip(modeSeg, "Static — a plain EQ band · Duck — acts as the band's level rises above the threshold (a cut by default) · "
-                + "Lift — acts as it falls below it (a boost by default)");
-            bandReadouts.Add(modeSync);
-            var modeLbl = EqBandUi.Label("Mode");
-            bandReadouts.Add(() => modeLbl.Foreground = Capable(b) ? TextTertiary : TextDisabled);
-            var modeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*"), Children = { modeLbl, Col(modeSeg, 1) } };
-
-            // A value-bar row; inactive (ink 4) while the band is static.
-            bool DynOp() => IsDyn(b);
-            Control ValueRow(string label, int p, Func<string> fmt, string tip, Func<double>? getN = null, Action<double>? setN = null,
-                Func<double>? marker = null, Action? reset = null, Control? valueCtl = null)
-            {
-                getN ??= () => ToN(p, P(p));
-                setN ??= n => Raw(p, (float)FromN(p, n));
-                reset ??= () => SetP(p, (float)DefOf(p));
-                var trk = new SliderTrack { Reset = () => { reset(); RefreshAll(); } };
-                trk.Changed += v => { setN(v); RefreshAll(); curve.InvalidateVisual(); };
-                trk.GestureBegin += () => Begin(p);
-                trk.GestureEnd += () => End(p);
-                Learn(trk, p);
-                ToolTip.SetTip(trk, tip);
-                var val = new TextBlock { Text = fmt(), FontSize = NotaType.KnobValue, TextAlignment = TextAlignment.Right, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                // Range's read-out sits in its flip arrow, which a click toggles — it stays click-only.
-                if (valueCtl is null)
-                    ValueEntry.Attach(val, getN, setN, fmt, () => Begin(p), () => End(p), () => { RefreshAll(); curve.InvalidateVisual(); }, control: trk);
-                var lbl = EqBandUi.Label(label);
-                bandReadouts.Add(() =>
-                {
-                    bool op = DynOp();
-                    if (!trk.Dragging) trk.Norm = getN();
-                    trk.IsDim = !op;
-                    trk.Marker = marker is not null && op ? marker() : double.NaN;
-                    val.Text = fmt();
-                    val.Foreground = op ? TextPrimary : TextDisabled;
-                    lbl.Foreground = op ? TextTertiary : TextDisabled;
-                });
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("56,*,50"), ColumnSpacing = 6 };
-                g.Children.Add(lbl);
-                g.Children.Add(Col(trk, 1));
-                g.Children.Add(Col(valueCtl ?? val, 2));
-                if (valueCtl is Border { Child: Panel vp }) vp.Children.Add(val);
-                return g;
-            }
-            float Rng() => B(b, DynEq.RangeF);
-            // Range: the bar sets the magnitude, the arrow the direction (click it to flip).
-            var flip = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Right };
-            ToolTip.SetTip(flip, "Flip — cut ↔ boost (a Duck that boosts is upward expansion, a Lift that cuts is downward expansion)");
-            flip.Child = new Panel();
-            flip.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(flip).Properties.IsLeftButtonPressed) return;
-                float r = Rng(); if (Math.Abs(r) < 0.05f) r = ModeOf(b) == DynEq.Lift ? -6 : 6;
-                SetP(pRange, -r); RefreshAll(); curve.InvalidateVisual(); e.Handled = true;
-            };
-            var thr = ValueRow("Thresh", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0}\u2009dB"),
-                "Threshold — where the band starts to act; the grey mark is the band's level now",
-                marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b))));
-            var rng = ValueRow("Range", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
-                "Range — how far the gain can move at full engagement (6\u2009dB past the threshold); click the arrow to flip cut / boost",
-                getN: () => Math.Abs(Rng()) / 18.0,
-                setN: n =>
-                {
-                    float sgn = Rng() > 0 || (Math.Abs(Rng()) < 0.05f && ModeOf(b) == DynEq.Lift) ? 1 : -1;
-                    Raw(pRange, sgn * (float)(Math.Clamp(n, 0, 1) * 18.0));
-                },
-                reset: () => SetP(pRange, ModeOf(b) == DynEq.Lift ? 6 : -6),
-                valueCtl: flip);
-            var atk = ValueRow("Attack", pAtk, () => DynEq.Ms(B(b, DynEq.AtkF)), "Attack — how fast the band moves toward its range");
-            var rel = ValueRow("Release", pRel, () => DynEq.Ms(B(b, DynEq.RelF)), "Release — how fast it returns to its static gain");
+            var bandKnobs = Across(BandKnobs(b, BandW / 3));
 
             var keySeg = Segments(new[] { "Self", "Ext" }, () => KeyExt(b) ? 1 : 0, i =>
             {
@@ -377,7 +254,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                     if (was || Src() < 0) ShowKeyMenu(right);
                 }
                 RefreshAll();
-            }, out var keySync);
+            }, out var keySync, padX: 6);
             Learn(keySeg, pKey);
             ToolTip.SetTip(keySeg, "Key — Self: the band listens to this track · Ext: to the key track (click Ext again to pick the track)");
             bandReadouts.Add(keySync);
@@ -396,18 +273,70 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 solo.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
                 soloTb.Foreground = on ? AccentBright : TextSecondary;
             });
+            var keyLbl = EqBandUi.Label("Key");
+            keyLbl.Margin = new Thickness(0, 0, 6, 0);
             var keyRow = new DockPanel
             {
-                Children = { Docked(solo, Dock.Right), Docked(new Border { Width = 56, Child = EqBandUi.Label("Key") }, Dock.Left), keySeg },
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { Docked(solo, Dock.Right), Docked(keyLbl, Dock.Left), Docked(keySeg, Dock.Left) },
             };
 
-            var col = new Grid { Width = DynW, RowDefinitions = new RowDefinitions("Auto,6,Auto,6,Auto,4,Auto,4,Auto,4,Auto,6,Auto,*,Auto") };
-            col.Children.Add(title);
-            col.Children.Add(Row(modeRow, 2));
-            col.Children.Add(Row(thr, 4)); col.Children.Add(Row(rng, 6)); col.Children.Add(Row(atk, 8)); col.Children.Add(Row(rel, 10));
-            col.Children.Add(Row(keyRow, 12));
-            col.Children.Add(Row(masterRow, 14));
-            return col;
+            // ---- its dynamics
+            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
+            fold.Margin = new Thickness(8, 0, 0, 0);
+            var title = new DockPanel { Children = { Docked(fold, Dock.Right), EqBandUi.Title("Dynamics") } };
+            title.Children[1].VerticalAlignment = VerticalAlignment.Center;
+
+            var modeSeg = Segments(DynEq.ModeNames, () => ModeOf(b), i =>
+            {
+                if (i != DynEq.Static && !Capable(b)) return;
+                DynamicEqCurve.SetMode(engine, track, di, b, i);
+                RefreshAll(); curve.InvalidateVisual();
+            }, out var modeSync, fill: true, padX: 0, dim: () => !Capable(b));
+            Learn(modeSeg, pMode);
+            ToolTip.SetTip(modeSeg, "Static — a plain EQ band · Duck — acts as the band's level rises above the threshold (a cut by default) · "
+                + "Lift — acts as it falls below it (a boost by default)");
+            bandReadouts.Add(modeSync);
+            modeSeg.VerticalAlignment = VerticalAlignment.Center;
+
+            // Ink 4 while the band is static (or the Dynamic switch is off); still editable.
+            bool Idle() => !IsDyn(b);
+            float Rng() => B(b, DynEq.RangeF);
+            double cw = DynW / 4;
+            var dynKnobs = Across(
+                K(pThr, "Thresh", () => NotaNum.F($"{B(b, DynEq.ThrF):0}\u2009dB"),
+                    "Threshold — where the band starts to act; the tick on the ring is the band's level now", cw, inactive: Idle,
+                    marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
+                K(pRange, "Range", () => DynEq.Db(Rng()) + " dB",
+                    "Range — how far the gain can move at full engagement (6\u2009dB past the threshold): left cuts, right boosts "
+                    + "(a Duck that boosts is upward expansion, a Lift that cuts is downward expansion)", cw, inactive: Idle, bipolar: true,
+                    def: () => ModeOf(b) == DynEq.Lift ? 6 : -6),
+                K(pAtk, "Attack", () => DynEq.Ms(B(b, DynEq.AtkF)), "Attack — how fast the band moves toward its range", cw, inactive: Idle),
+                K(pRel, "Release", () => DynEq.Ms(B(b, DynEq.RelF)), "Release — how fast it returns to its static gain", cw, inactive: Idle));
+
+            // The device's Dynamic master switch and output, at the bottom right (as EQ-8's Scale and Output).
+            var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
+            Learn(dynSw, DynEq.DynamicsP);
+            ToolTip.SetTip(dynSw, "Dynamic — off parks every band on its static gain: hear what the dynamics do");
+            bandReadouts.Add(dynSync);
+            dynSw.VerticalAlignment = VerticalAlignment.Center;
+            var outK = K(DynEq.OutputP, "Output", () => DynEq.Db(P(DynEq.OutputP)) + " dB", "Output — the level after the EQ, ±18\u2009dB", 80, inline: true);
+            outK.HorizontalAlignment = HorizontalAlignment.Right;
+            var master = new DockPanel { Children = { Docked(outK, Dock.Right), dynSw } };
+
+            var g = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{BandW},{PanelGap},{DynW}")),
+                // The head sits on its shapes / mode as on EQ-8; the spare height splits evenly above
+                // and below the knob row (EQ-8 fills it with Slope and Channel).
+                RowDefinitions = new RowDefinitions("Auto,6,Auto,*,Auto,*,Auto"),
+            };
+            void At(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); g.Children.Add(c); }
+            At(bandHead, 0, 0); At(title, 0, 2);
+            At(types, 2, 0); At(modeSeg, 2, 2);
+            At(bandKnobs, 4, 0); At(dynKnobs, 4, 2);
+            At(keyRow, 6, 0); At(master, 6, 2);
+            return g;
         }
 
         // The folded strip: the arrow that opens the panel again, the picked band's knobs centred
@@ -431,18 +360,10 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         void Rebuild()
         {
             bandReadouts.Clear();
-            if (masterRow.Parent is Panel old) old.Children.Remove(masterRow);   // the shared bottom row moves into the new column
             int b = Sel();
             right.Width = folded ? StripW : PanelW;
             right.Padding = folded ? new Thickness(0, 6) : new Thickness(SectionPad - 1);
-            if (folded) ((ContentControl)right.Child!).Content = FoldedStrip(b);
-            else
-            {
-                var panel = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"Auto,{PanelGap},Auto")) };
-                panel.Children.Add(BandColumn(b));
-                panel.Children.Add(Col(DynamicsColumn(b), 2));
-                ((ContentControl)right.Child!).Content = panel;
-            }
+            ((ContentControl)right.Child!).Content = folded ? FoldedStrip(b) : PanelBody(b);
             root.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
         }

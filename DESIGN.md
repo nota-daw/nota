@@ -699,6 +699,8 @@ and grey.
 
 - **Arc** 270° (from −135°), 2.4 stroke with round ends on the knob track (`KnobTrack`);
   a bipolar knob fills from 12 o'clock.
+- **Marker** a live reading can sit on the track as a short ink-2 tick across it (Dynamic
+  EQ-8's band level on its Thresh knob); none while the knob is inactive.
 - **Cap** a small disc in the centre (`KnobCap`, a 1 px `Seam` edge); devices only. (The
   guide edges it in `BgSunken` in dark themes; `Seam` is within a step of it.)
 - **Pointer** a thin line from the centre in ink 1.
@@ -1189,7 +1191,7 @@ control, label and value stays.
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
 | Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 940; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel's second column is the picked band's dynamics; the status line's Dynamic switch and draggable Out readout move to its bottom. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics rows are ink 4 while the band is Static. The right panel folds like EQ-8's (below), its arrow at the dynamics title. |
+| Dynamic EQ-8 | 940; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
 | EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
 | EQ-8 | 720; 580 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
 | Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
