@@ -111,7 +111,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         Control Learn(Control c, int p) { MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p)); return c; }
@@ -163,7 +163,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 4),
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 1, Children = { Caps(title), a, b } },
             };
             return (box, a, b);
@@ -174,7 +174,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var b = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Tile, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Group, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Child = new TextBlock { Text = text, FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center },
             };

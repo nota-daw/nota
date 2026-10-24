@@ -58,7 +58,7 @@ public sealed partial class SessionView
             Text = MenuKit.Keys("Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there"),
             FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var dock = new DockPanel();
         DockPanel.SetDock(hint, Dock.Bottom);
         dock.Children.Add(hint);
@@ -77,7 +77,7 @@ public sealed partial class SessionView
             Orientation = Orientation.Horizontal, Spacing = 8,
             Children =
             {
-                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Clip, Background = color, VerticalAlignment = VerticalAlignment.Center },
+                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Field, Background = color, VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = InspectorW - 60 },
             },
         };
@@ -100,7 +100,7 @@ public sealed partial class SessionView
         {
             well = new Border
             {
-                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Badge,
+                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Cell,
                 Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = text,
             };
         }
@@ -193,7 +193,7 @@ public sealed partial class SessionView
                 bool on = idx == current;
                 var sw = new Border
                 {
-                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Badge, Background = ArrangementView.TrackBrush(idx),
+                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Cell, Background = ArrangementView.TrackBrush(idx),
                     BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
@@ -229,7 +229,7 @@ public sealed partial class SessionView
         _inspPreview = new InspectorPreview(this, c, scene, brush);
         s.Children.Add(new Border
         {
-            Height = 68, CornerRadius = NotaRadius.Control, Background = NotaPalette.Wash(brush, 0x1F),
+            Height = 68, CornerRadius = NotaRadius.Field, Background = NotaPalette.Wash(brush, 0x1F),
             BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), ClipToBounds = true, Child = _inspPreview,
         });
 
@@ -256,7 +256,7 @@ public sealed partial class SessionView
         OneUndoStep(vel);
         vel.ValueChanged += v => { if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.VelocityAmount = (float)(v / 100); _engine.SetSessionClipProps(id, scene, cur); } };
         ToolTip.SetTip(vel, "Velocity amount: how far the launch velocity scales the clip · drag");
-        launch.Children.Add(Row("Velocity %", new Border { CornerRadius = NotaRadius.Badge, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
+        launch.Children.Add(Row("Velocity %", new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
         // Follow actions.
@@ -371,7 +371,7 @@ public sealed partial class SessionView
                 Children =
                 {
                     new TextBlock { Text = "Tempo", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
-                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
+                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Cell, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
                 },
             };
             ToolTip.SetTip(tempo, "Tempo set when the scene launches · drag to change");

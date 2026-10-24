@@ -6,8 +6,8 @@
 // change with the variant, so these are plain constants. The smoke test fails if a value
 // here and its XAML key drift apart.
 //
-// Radius follows one small scale: 2 for inner keys, rows, clips; 3 for controls, cards and
-// popovers; 4 only for modal windows; 0 for docked panels; 1 for bars inside a plot.
+// Radius follows the style guide's scale (spec 038): 9 on the largest surfaces down to 2 on
+// the smallest parts, and 0 for docked panels, which meet their neighbours on a seam.
 
 using Avalonia;
 
@@ -15,29 +15,25 @@ namespace Nota.App;
 
 internal static class NotaRadius
 {
-    public const double DockedValue = 0, BarValue = 1, ClipValue = 2, BadgeValue = 2, ControlValue = 3,
-                        TileValue = 3, PanelValue = 3, BodyValue = 3, PillValue = 3, ModalValue = 4;
+    public const double DockedValue = 0, CardValue = 9, GroupValue = 7, FieldValue = 6, CellValue = 5,
+                        ValueBarValue = 4, SwitchValue = 3, FineValue = 2;
 
     /// <summary>0 — a docked panel; it meets its neighbours on a 1px seam.</summary>
     public static readonly CornerRadius Docked = new(DockedValue);
-    /// <summary>1 — spectrum and level bars inside a plot.</summary>
-    public static readonly CornerRadius Bar = new(BarValue);
-    /// <summary>2 — clip, row highlight, menu item, slider track.</summary>
-    public static readonly CornerRadius Clip = new(ClipValue);
-    /// <summary>2 — inner key, badge inside a device.</summary>
-    public static readonly CornerRadius Badge = new(BadgeValue);
-    /// <summary>3 — button, field, dropdown, graph window, popover.</summary>
-    public static readonly CornerRadius Control = new(ControlValue);
-    /// <summary>3 — transport key, search field, tile.</summary>
-    public static readonly CornerRadius Tile = new(TileValue);
-    /// <summary>3 — device section, segmented group.</summary>
-    public static readonly CornerRadius Panel = new(PanelValue);
-    /// <summary>3 — device card.</summary>
-    public static readonly CornerRadius Body = new(BodyValue);
-    /// <summary>3 — chip, switch. Studio has no pill shapes; the name stays for its callers.</summary>
-    public static readonly CornerRadius Pill = new(PillValue);
-    /// <summary>4 — modal window, command palette, splash.</summary>
-    public static readonly CornerRadius Modal = new(ModalValue);
+    /// <summary>9 — device card, toolbar view group, modal window.</summary>
+    public static readonly CornerRadius Card = new(CardValue);
+    /// <summary>7 — icon button, chip, segment group, device section, search, menu.</summary>
+    public static readonly CornerRadius Group = new(GroupValue);
+    /// <summary>6 — field, dropdown, clip, toggle pill, row highlight, graph window.</summary>
+    public static readonly CornerRadius Field = new(FieldValue);
+    /// <summary>5 — one segment cell, track button, EQ band cell, tooltip, inner key.</summary>
+    public static readonly CornerRadius Cell = new(CellValue);
+    /// <summary>4 — value bar, fader cap, overview strip.</summary>
+    public static readonly CornerRadius ValueBar = new(ValueBarValue);
+    /// <summary>3 — switch track.</summary>
+    public static readonly CornerRadius Switch = new(SwitchValue);
+    /// <summary>2 — switch knob, notes, bars inside a plot.</summary>
+    public static readonly CornerRadius Fine = new(FineValue);
 
     /// <summary>Rounded top only — a header strip or a stripe sitting on a body.</summary>
     public static CornerRadius Top(double r) => new(r, r, 0, 0);

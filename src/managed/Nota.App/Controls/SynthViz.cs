@@ -36,7 +36,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     private static readonly IBrush Ink = NotaPalette.VizInk;   // curves at rest: neutral ink
     private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private const double Pad = 6;
 
@@ -82,9 +82,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         => (Pad, Math.Max(Pad + 1, Bounds.Width - Pad), Pad + 11, Math.Max(Pad + 12, Bounds.Height - Pad - (Mini ? 0 : 9)));
 
     private void Text(DrawingContext ctx, string t, double x, double y, IBrush ink, double size = 8)
-        => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, ink), new Point(x, y));
+        => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink), new Point(x, y));
     private static double MeasureW(string t, double size = 8)
-        => new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, NotaPalette.TextPrimary).Width;
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, NotaPalette.TextPrimary).Width;
 
     // ---- MIDI learn --------------------------------------------------------
     // The graphs are the only place some of these params can be grabbed, so each drag

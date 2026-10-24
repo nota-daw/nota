@@ -157,7 +157,7 @@ internal sealed class Eq3Fader : Control
         double y0 = Y(0), yHalf = Y(_bottom / 2);
         void Lbl(string t, double y, IBrush ink, bool centre)
         {
-            var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, ink);
+            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, 7, ink);
             ctx.DrawText(ft, new Point(Math.Max(0, cx - 22), Math.Clamp(centre ? y - ft.Height / 2 : y, 0, h - ft.Height)));
         }
         Lbl(NotaNum.F($"+{_top:0}"), Pad - 1, NotaPalette.TextAxis, false);
@@ -224,7 +224,7 @@ internal sealed class Eq3Graph : Control
     private Rect Handle(int which, out FormattedText text)
     {
         double f = which == 0 ? _f1 : _f2;
-        text = new FormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, NotaPalette.TextSecondary);
+        text = new NotaFormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, 7, NotaPalette.TextSecondary);
         double w = text.Width + 10, x = Eq3Math.X(f) * Bounds.Width;
         x = Math.Clamp(x - w / 2, 1, Math.Max(1, Bounds.Width - w - 1));
         return new Rect(Math.Round(x), 16, Math.Round(w), 13);
@@ -414,9 +414,9 @@ internal sealed class Eq3Graph : Control
         var lw = new double[3];
         for (int b = 0; b < 3; b++)
         {
-            names[b] = new FormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, Eq3Math.Hue(b));
-            vals[b] = new FormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                NotaFonts.Mono, 7, _kill[b] ? NotaPalette.TextTertiary : NotaPalette.TextPrimary);
+            names[b] = new NotaFormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, Eq3Math.Hue(b));
+            vals[b] = new NotaFormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                NotaFonts.Sans, 7, _kill[b] ? NotaPalette.TextTertiary : NotaPalette.TextPrimary);
             lw[b] = names[b].Width + 4 + vals[b].Width;
             lx[b] = centres[b] - lw[b] / 2;
         }

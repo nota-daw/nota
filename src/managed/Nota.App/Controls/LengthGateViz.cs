@@ -150,7 +150,7 @@ internal sealed class LengthGateViz : Control
                 ctx.DrawRectangle(null, new Pen(Outline, 1), new RoundedRect(new Rect(ix + 0.5, top + 0.5, Math.Max(1, ie - ix - 1), Math.Max(1, hh - 1)), radius));
                 if (Full)
                 {
-                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Mono, 7, lit ? FillLit : TagInk);
+                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Sans, 7, lit ? FillLit : TagInk);
                     double tx = Math.Min(Math.Max(Math.Max(oe, ie), X(nt.Start + nt.Hi)), win.X + win.Width * 0.88) + 5;
                     ctx.DrawText(tag, new Point(tx, top + hh / 2 - tag.Height / 2));
                 }
@@ -164,8 +164,8 @@ internal sealed class LengthGateViz : Control
         {
             var inp = Input[i];
             bool lit = !_off && _now >= _notes[i].Start && _now < _notes[i].Start + _notes[i].Out;
-            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Mono, 8, lit ? FillLit : Label);
-            var vel = Text($"vel {inp.Vel}", NotaFonts.Mono, 6, VelInk);
+            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Sans, 8, lit ? FillLit : Label);
+            var vel = Text($"vel {inp.Vel}", NotaFonts.Sans, 6, VelInk);
             double cy = win.Y + (i + 0.5) * rowH, th = name.Height + vel.Height - 2;
             ctx.DrawText(name, new Point(0, cy - th / 2));
             ctx.DrawText(vel, new Point(0, cy - th / 2 + name.Height - 2));
@@ -174,7 +174,7 @@ internal sealed class LengthGateViz : Control
         for (int b = 0; b <= (int)Window; b++)
         {
             string s = b == 0 ? "0" : b * msPerBeat >= 1000 ? $"{b * msPerBeat / 1000:0.0#} s" : $"{b * msPerBeat:0} ms";
-            var ft = Text(s, NotaFonts.Mono, 7, Axis);
+            var ft = Text(s, NotaFonts.Sans, 7, Axis);
             double x = X(b) - (b == 0 ? 0 : b == (int)Window ? ft.Width : ft.Width / 2);
             ctx.DrawText(ft, new Point(x, win.Bottom + 2));
         }

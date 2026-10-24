@@ -58,7 +58,7 @@ public sealed partial class SessionView
         ToolTip.SetTip(fixedRow, "Fixed record length in bars — the take stops by itself");
 
         _quantLabel = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-        _quantLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _quantLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var quant = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(9, 0),
@@ -111,9 +111,9 @@ public sealed partial class SessionView
         var sectionsWell = new Border { Classes = { "segmented" }, Padding = new Thickness(2), Child = sections };
 
         _posText = new TextBlock { FontSize = 12, Foreground = NotaPalette.TextPrimary, MinWidth = 56, VerticalAlignment = VerticalAlignment.Center };
-        _posText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _posText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _tempoText = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        _tempoText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _tempoText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var readout = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8, 0), Children = { _posText, _tempoText } };
 
         _backBtn = new Button { Content = "Back to Arrangement", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };

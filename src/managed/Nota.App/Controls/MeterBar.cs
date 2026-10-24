@@ -108,7 +108,7 @@ internal static class MeterScale
     /// <summary>One channel: ground, zone-coloured level, a 2px hold mark in its zone colour.</summary>
     public static void DrawChannel(DrawingContext ctx, Rect area, double level, double hold, bool horizontal)
     {
-        double r = Math.Min(NotaRadius.ClipValue, Math.Min(area.Width, area.Height) / 2);
+        double r = Math.Min(NotaRadius.FieldValue, Math.Min(area.Width, area.Height) / 2);
         ctx.DrawRectangle(Ground, null, new RoundedRect(area, r));
         double len = horizontal ? area.Width : area.Height;
         if (len <= 0) return;

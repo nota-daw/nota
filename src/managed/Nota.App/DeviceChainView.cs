@@ -83,7 +83,7 @@ public sealed partial class DeviceChainView : UserControl
     private readonly Border _dropGlow = new()
     {
         IsVisible = false, IsHitTestVisible = false,
-        BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Body,
+        BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Card,
         BorderBrush = NotaPalette.AccentBright,
         Background = NotaPalette.Wash(NotaPalette.AccentBright, 0x14),
         Margin = new Thickness(2),
@@ -265,7 +265,7 @@ public sealed partial class DeviceChainView : UserControl
             char letter = (char)('A' + bus);
 
             var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), FontSize = 8, Foreground = TextPrimary };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
             knob.ValueChanged += v => { _engine.SetTrackSend(_trackId, b, (float)v); value.Text = Pct((float)v); };
@@ -297,14 +297,14 @@ public sealed partial class DeviceChainView : UserControl
         _addDash = new Rectangle
         {
             Stroke = BorderStrong, StrokeThickness = 1, IsVisible = false,
-            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue,
+            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue,
         };
         var plus = new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary };
         var host = new Grid { Children = { _addDash, plus } };
         var card = new Border
         {
             Width = 28, Height = CardH, Background = Brushes.Transparent, Child = host,
-            CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
         };
         // A real button (#97): a click opens the browser on Audio effects, typing into its search.
         card.PointerEntered += (_, _) => { card.BindResource(Border.BackgroundProperty, "Brush.SurfaceHover"); plus.BindResource(Glyph.ForegroundProperty, "Brush.TextSecondary"); };

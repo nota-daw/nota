@@ -66,7 +66,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
 
     private static string RateLabel(IAudioEngine e, int t, int mi)
         => e.MidiEffectGetParam(t, mi, GSync) > 0.5f ? RateNames[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, mi, GRate)), 0, 7)]
@@ -210,7 +210,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 int li = i;
                 laneGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
                 var tb = new TextBlock { Text = Lanes[i].Label, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { CornerRadius = NotaRadius.Clip, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; ui.Lane = grid.LaneIndex = li; Refresh(); ev.Handled = true; };
                 Grid.SetColumn(b, i); laneGrid.Children.Add(b); laneChips[i] = (b, tb);
             }
@@ -224,7 +224,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 int ri = i;
                 rateGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
                 var tb = Mono(RateNames[i], Cap); tb.HorizontalAlignment = HorizontalAlignment.Center;
-                var b = new Border { CornerRadius = NotaRadius.Clip, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; S(GRate, ri); Refresh(); ev.Handled = true; };
                 Learn(b, GRate, "Rate");
                 Grid.SetColumn(b, i); rateGrid.Children.Add(b); rateChips[i] = (b, tb);
@@ -438,7 +438,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 };
                 return b;
             }
-            var box = new Border { Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+            var box = new Border { Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { WithDock(Btn("−", -1), Dock.Left), WithDock(Btn("+", +1), Dock.Right), val } } };
             box.PointerPressed += (_, ev) => { if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { S(p, Def(p)); Refresh(); } };
             Learn(box, p, label);
@@ -458,7 +458,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             Border Btn(string text, Action click, out TextBlock tb)
             {
                 var t = new TextBlock { Text = text, FontSize = 8, Foreground = Txt, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+                var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
                 b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); ev.Handled = true; };
                 tb = t; return b;
             }

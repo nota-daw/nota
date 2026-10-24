@@ -18,7 +18,7 @@ namespace Nota.App;
         private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush Grid = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Mono;
+        private static readonly Typeface Face = NotaFonts.Sans;
         private float _thr = -18f, _ratio = 3f, _makeup;
         public CompViz() { MinWidth = 120; MinHeight = 70; }
         public void Set(float thr, float ratio, float makeup)
@@ -59,6 +59,6 @@ namespace Nota.App;
             }
             ctx.DrawGeometry(null, pen, g);
             ctx.DrawLine(new Pen(TextTertiary, 1) { DashStyle = DashStyle.Dash }, new Point(X(_thr), top), new Point(X(_thr), bot)); // threshold
-            ctx.DrawText(new FormattedText("Comp", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
+            ctx.DrawText(new NotaFormattedText("Comp", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
         }
     }

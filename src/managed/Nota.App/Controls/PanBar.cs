@@ -24,7 +24,7 @@ public sealed class PanBar : Control
     private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C); // live
     private static readonly IBrush CentreTick = NotaPalette.BorderStrong;
     private static readonly IBrush TextBrush = NotaPalette.TextSecondary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private double _pan;   // -1 (full left) .. +1 (full right), 0 = centre
     private bool _drag;
@@ -115,7 +115,7 @@ public sealed class PanBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ControlValue);
+        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.FieldValue);
         ctx.DrawRectangle(Bg, new Pen(Border, 1), rrect);
         double cx = w / 2, px = cx + _pan * (w / 2);
         var fill = _drag || _hover ? FillLive : Fill;
@@ -125,8 +125,8 @@ public sealed class PanBar : Control
             else ctx.FillRectangle(fill, new Rect(px, 0, cx - px, h));
             ctx.DrawLine(new Pen(CentreTick, 1), new Point(cx, 0), new Point(cx, h));
         }
-        var text = new FormattedText(Label(_pan), CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, Mono, 8.5, TextBrush);
+        var text = new NotaFormattedText(Label(_pan), CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, NumFace, 8.5, TextBrush);
         ctx.DrawText(text, new Point((w - text.Width) / 2, (h - text.Height) / 2));
     }
 

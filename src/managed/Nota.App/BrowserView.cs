@@ -292,7 +292,7 @@ public sealed class BrowserView : UserControl
         _searchWrap = new Border
         {
             Height = 26,
-            CornerRadius = NotaRadius.Tile,
+            CornerRadius = NotaRadius.Group,
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8, 0),
             Child = searchGrid,
@@ -321,7 +321,7 @@ public sealed class BrowserView : UserControl
         _overflowText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _overflowChip = new Border
         {
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0),
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = _overflowText,
@@ -1010,7 +1010,7 @@ public sealed class BrowserView : UserControl
         {
             Width = 26, Height = 26,
             Margin = new Thickness(6, 0, 0, 0),
-            CornerRadius = NotaRadius.Tile,
+            CornerRadius = NotaRadius.Group,
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = icon,
@@ -1382,7 +1382,7 @@ public sealed class BrowserView : UserControl
         var chip = new ChipBorder
         {
             Label = text, ColorHex = colorHex, Active = active, OnClick = onClick,
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0),
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), Child = content,
         };

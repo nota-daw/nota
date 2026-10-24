@@ -22,7 +22,7 @@ namespace Nota.App;
 
 internal static class NotaGraph
 {
-    public const double Radius = NotaRadius.ControlValue;   // 3
+    public const double Radius = NotaRadius.FieldValue;   // 3
     public const double PrimaryWidth = 1.8, SecondaryWidth = 1.4;
     public const double NodeD = 7, NodeRing = 2;
     public const double AxisSize = 7.5, TitleSize = 8;
@@ -59,7 +59,7 @@ internal static class NotaGraph
 
     /// <summary>An axis label in mono 7.5, faint ink.</summary>
     public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize)
-        => new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink ?? AxisInk);
+        => new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk);
 
     public enum Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 
@@ -76,7 +76,7 @@ internal static class NotaGraph
     /// <summary>The graph title: sentence case 8, top-left, inside the window.</summary>
     public static void Title(DrawingContext ctx, Rect r, string title)
     {
-        var ft = new FormattedText(NotaText.Label(title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        var ft = new NotaFormattedText(NotaText.Label(title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, TitleSize, TitleInk) { };
         ctx.DrawText(ft, new Point(r.X + 6, r.Y + 4));
     }
@@ -99,7 +99,7 @@ internal static class NotaGraph
         for (int i = items.Length - 1; i >= 0; i--)
         {
             var (label, ink, mark) = items[i];
-            var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 8, ink);
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, 8, ink);
             x -= ft.Width;
             ctx.DrawText(ft, new Point(x, y));
             double cy = y + ft.Height / 2;
@@ -118,7 +118,7 @@ internal static class NotaGraph
     public static double LegendRow(DrawingContext ctx, Point at, IBrush swatch, string name, string value)
     {
         ctx.DrawRectangle(swatch, null, new RoundedRect(new Rect(at.X, at.Y + 3, 8, 2), 1));
-        var n = new FormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 7.5, TitleInk);
+        var n = new NotaFormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 7.5, TitleInk);
         var v = AxisText(value, NotaPalette.TextPrimary, 8);
         ctx.DrawText(n, new Point(at.X + 12, at.Y));
         ctx.DrawText(v, new Point(at.X + 12 + n.Width + 5, at.Y - 0.5));

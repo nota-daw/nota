@@ -89,7 +89,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -225,7 +225,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
             i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
-        foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(stageSync);
         Learn(stageSeg, Stages);
         ToolTip.SetTip(stageSeg, "All-pass stages: every two cut one notch — 2 is a gentle swirl, 12 a deep, dense sweep");

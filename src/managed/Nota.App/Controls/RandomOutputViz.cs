@@ -170,7 +170,7 @@ internal sealed class RandomOutputViz : Control
     }
 
     private static FormattedText Text(string s, double size, IBrush ink)
-        => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public override void Render(DrawingContext ctx)
     {

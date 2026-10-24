@@ -226,7 +226,7 @@ public sealed class WhatsNewWindow : NotaWindow
             {
                 Flush();
                 var code = new Run(text[(i + 1)..end]) { Foreground = Brush("Brush.TextPrimary") };
-                if (this.TryFindResource("Font.Mono", out var mono) && mono is FontFamily ff)
+                if (this.TryFindResource("Font.UI", out var mono) && mono is FontFamily ff)
                     code.FontFamily = ff;
                 inlines.Add(code);
                 pos += end - i - 1;

@@ -180,7 +180,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
-            Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         // ---- shared builders ------------------------------------------------------------------
@@ -250,7 +250,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             var tb = new TextBlock { Text = text, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
-                Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
+                Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
                 Child = tb, VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTip.SetTip(b, tip);
@@ -280,7 +280,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             tb.HorizontalAlignment = HorizontalAlignment.Center;
             var b = new Border
             {
-                Height = 17, MinWidth = width, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+                Height = 17, MinWidth = width, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Child = tb, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Padding = new Thickness(4, 0),
             };
             double y0 = 0, acc = 0; bool drag = false;
@@ -382,7 +382,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         // ======================= Zones tab =======================================================
         var zoneChip = new Border
         {
-            CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderBrass,
+            CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderBrass,
             Background = NotaPalette.AccentSubtle, Padding = new Thickness(7, 2), VerticalAlignment = VerticalAlignment.Center,
             Child = Mono("", AccentBright, 9),
         };
@@ -402,8 +402,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var zoneRow = Row(12, (zoneChip, "Auto"), (zKeys, "Auto"), (zVel, "Auto"), (zXf, "Auto"), (zFine, "Auto"), (zGain, "Auto"), (zPan, "Auto"), (new Panel(), "*"), (openSample, "Auto"));
 
         // Loading: over the map, and the row says what still works.
-        var loadBar = new Border { Height = 3, CornerRadius = NotaRadius.Badge, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left };
-        var loadTrack = new Border { Height = 3, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BorderDefault, Child = loadBar };
+        var loadBar = new Border { Height = 3, CornerRadius = NotaRadius.Cell, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left };
+        var loadTrack = new Border { Height = 3, CornerRadius = NotaRadius.Cell, Background = NotaPalette.BorderDefault, Child = loadBar };
         var loadPct = Mono("", AccentBright, 9);
         var loadLine = Mono("", TextSecondary, 8);
         var loadHead = new DockPanel { Children = { loadPct } };
@@ -411,7 +411,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         loadHead.Children.Add(new TextBlock { Text = "Loading samples", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary });
         var loadBox = new Border
         {
-            Width = 250, Padding = new Thickness(10, 8), CornerRadius = NotaRadius.Tile, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Width = 250, Padding = new Thickness(10, 8), CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.SurfaceCard, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Spacing = 5, Children = { loadHead, loadTrack, loadLine, new TextBlock { Text = "Notes are silent until loading finishes", FontSize = 7.5, Foreground = TextTertiary } } },
         };
@@ -431,7 +431,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         reportLink.PointerPressed += (_, e) => { ui.ReportOpen = !ui.ReportOpen; rebuildRail(); e.Handled = true; };
         var banner = new Border
         {
-            Height = 18, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.SuccessDim,
+            Height = 18, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.SuccessDim,
             Background = NotaPalette.Wash(NotaPalette.Success, 0x14), Padding = new Thickness(6, 0), Margin = new Thickness(0, 0, 0, 3),
         };
         var bannerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 6 };
@@ -458,7 +458,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             buttons.Children.Add(Button("Locate folder…", () => _ = LocateAsync(), "Pick the folder that holds the samples — Mosaic finds each file in it by its path or its name"));
             return new Border
             {
-                Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.ControlValue),
+                Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.FieldValue),
                 Child = new StackPanel
                 {
                     Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 380,
@@ -630,7 +630,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 var row = GroupRowGrid();
                 var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
                 name.Children.Add(new TextBlock { Text = gr.Name.Length > 0 ? gr.Name : $"Group {g + 1}", FontSize = 8.5, FontWeight = sel ? FontWeight.SemiBold : FontWeight.Normal, Foreground = sel ? AccentBright : TextPrimary, VerticalAlignment = VerticalAlignment.Center });
-                if (IsReleaseGroup(g)) name.Children.Add(new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(3, 0), Child = Mono("trig rel", TextTertiary, 7) });
+                if (IsReleaseGroup(g)) name.Children.Add(new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(3, 0), Child = Mono("trig rel", TextTertiary, 7) });
                 Grid.SetColumn(name, 0); row.Children.Add(name);
                 Cell(row, 1, ZonesIn(g).ToString(NotaNum.Culture));
                 Cell(row, 2, DbS(gr.GainDb));
@@ -646,7 +646,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Cell(row, 6, ExclOf(g), TextTertiary);
                 var host = new Border
                 {
-                    Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                    Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Background = sel ? NotaPalette.AccentSubtle : g % 2 == 0 ? NotaPalette.Wash(NotaPalette.SurfaceRaised, 0x80) : Brushes.Transparent,
                     BorderBrush = sel ? NotaPalette.BorderBrass : Brushes.Transparent, Child = row,
                 };
@@ -853,7 +853,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Paint();
             var box = new Border
             {
-                Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+                Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { artLabel, sub, new Glyph(GlyphKind.ChevronDown, 6) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center } } },
             };
@@ -934,7 +934,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                     chevron = chev;
                     content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Children = { tb, chev } };
                 }
-                var c = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = content };
+                var c = new Border { CornerRadius = NotaRadius.Cell, Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand), Child = content };
                 c.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(c).Properties.IsLeftButtonPressed) return;
@@ -961,7 +961,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             ToolTip.SetTip(row, "Poly: chords (click again for the voice settings) · Mono: one at a time, legato with Glide · Choke: a new note cuts the ringing ones");
             var host = new Border
             {
-                Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+                Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
                 Padding = new Thickness(1), Child = row, VerticalAlignment = VerticalAlignment.Center,
             };
             return host;
@@ -972,8 +972,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             var polySeg = Segments(MosaicModel.PolyCounts.Select(n => n.ToString(NotaNum.Culture)).ToArray(), () => Sel("polyphony", 4),
                 iv => { Write("polyphony", iv / 3.0); Refresh(); }, out var ps, fill: true, padX: 4, fontSize: 9);
-            var busyBar = new Border { Height = 3, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Badge };
-            var busyTrack = new Border { Height = 3, Background = NotaPalette.BorderDefault, CornerRadius = NotaRadius.Badge, Child = busyBar };
+            var busyBar = new Border { Height = 3, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Cell };
+            var busyTrack = new Border { Height = 3, Background = NotaPalette.BorderDefault, CornerRadius = NotaRadius.Cell, Child = busyBar };
             var busyText = Mono("", TextSecondary, 8);
             void PaintBusy()
             {
@@ -1022,7 +1022,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             var pedalTxt = Mono("CC64", TextTertiary, 8);
             var pedalPill = new Border
             {
-                CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(5, 1), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = Brushes.Transparent, Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { pedalDot, pedalTxt } },
             };
             pedalPill.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(pedalPill).Properties.IsLeftButtonPressed) return; Write("pedal", G("pedal") >= 0.5f ? 0 : 1); Refresh(); e.Handled = true; };
@@ -1146,7 +1146,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Children =
                 {
                     Caps("Source"),
-                    new TextBlock { Text = where, FontSize = 8, Foreground = TextPrimary, FontFamily = NotaFonts.MonoFamily, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = where, FontSize = 8, Foreground = TextPrimary, FontFamily = NotaFonts.UiFamily, TextWrapping = TextWrapping.Wrap },
                     new TextBlock { Text = "Samples are not copied into the project; the program keeps where they are.", FontSize = 7.5, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap },
                 },
             };
@@ -1290,7 +1290,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             var dash = new Rectangle
             {
                 Stroke = AccentBright, StrokeThickness = 1.2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 },
-                RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue, Fill = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xE6),
+                RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue, Fill = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xE6),
             };
             var box = new Panel
             {
@@ -1364,8 +1364,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             var zonesTxt = Mono("", TextSecondary, 8);
             var ramTxt = Mono("", TextSecondary, 8);
-            var miniBar = new Border { Height = 3, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Badge };
-            var miniTrack = new Border { Height = 3, Background = NotaPalette.BorderDefault, CornerRadius = NotaRadius.Badge, Child = miniBar, Margin = new Thickness(0, 4, 0, 0) };
+            var miniBar = new Border { Height = 3, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Cell };
+            var miniTrack = new Border { Height = 3, Background = NotaPalette.BorderDefault, CornerRadius = NotaRadius.Cell, Child = miniBar, Margin = new Thickness(0, 4, 0, 0) };
             var inner = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto"), RowSpacing = 4, Margin = new Thickness(6, 6, 6, 4) };
             inner.Children.Add(map);
             Grid.SetRow(miniTrack, 1); inner.Children.Add(miniTrack);

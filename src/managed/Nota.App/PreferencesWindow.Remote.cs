@@ -37,10 +37,10 @@ public sealed partial class PreferencesWindow
         var portBox = new TextBox
         {
             Text = settings.Current.RemotePort.ToString(), Width = 90, Classes = { "field" },
-            FontSize = 12, FontFamily = NotaFonts.MonoFamily, HorizontalAlignment = HorizontalAlignment.Left,
+            FontSize = 12, FontFamily = NotaFonts.UiFamily, HorizontalAlignment = HorizontalAlignment.Left,
         };
         var statusDot = Dot(BorderStrong);
-        var status = new TextBlock { FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var status = new TextBlock { FontSize = 11, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         // Phones may: play notes only, or play and control the project.
         var access = new StackPanel { Spacing = 6 };
@@ -95,7 +95,7 @@ public sealed partial class PreferencesWindow
             {
                 bool live = connected.Contains(d.Id) && remote.Running;
                 var name = new TextBlock { Text = d.Name, FontSize = 12, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                var seen = new TextBlock { Text = live ? "now" : Ago(d.LastSeen), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var seen = new TextBlock { Text = live ? "now" : Ago(d.LastSeen), FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 var forget = Btn("Forget");
                 forget.Height = 24; forget.FontSize = 11; forget.Padding = new Thickness(10, 0);
                 ToolTip.SetTip(forget, "Disconnect it and make it scan a new code to come back");
@@ -153,7 +153,7 @@ public sealed partial class PreferencesWindow
                 : "Phones reach Nota on the port above: if a firewall is on, allow it.";
         var warn = new Border
         {
-            Padding = new Thickness(14, 12), CornerRadius = NotaRadius.Panel, Background = RowBg, BorderBrush = Divider, BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 12), CornerRadius = NotaRadius.Group, Background = RowBg, BorderBrush = Divider, BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 10,

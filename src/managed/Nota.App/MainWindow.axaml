@@ -357,7 +357,7 @@
           <Button x:Name="RemoteBtn" Classes="chip" Click="OnRemoteClick"
                   ToolTip.Tip="Play and control Nota from a phone">
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Clip}" BorderThickness="1.5"
+              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Field}" BorderThickness="1.5"
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
               <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
@@ -375,8 +375,8 @@
         <!-- DSP load (audio-callback time ÷ buffer); the tooltip adds process CPU (MainWindow.SetUpCpuTip) -->
         <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center" Background="Transparent">
           <Border Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
-                  CornerRadius="{StaticResource Radius.Clip}" ClipToBounds="True">
-            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Clip}"
+                  CornerRadius="{StaticResource Radius.Field}" ClipToBounds="True">
+            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Field}"
                     Background="{DynamicResource Brush.Success}"/>
           </Border>
           <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="DSP 0%" FontWeight="Normal"/>

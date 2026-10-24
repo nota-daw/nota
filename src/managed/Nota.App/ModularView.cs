@@ -75,7 +75,7 @@ public sealed class ModularView : UserControl
     public int TrackId => _trackId;
     private readonly Border _dropGlow = new()
     {
-        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Control,
+        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Field,
         Background = NotaPalette.AccentSubtle, IsVisible = false, IsHitTestVisible = false,
     };
 
@@ -131,11 +131,11 @@ public sealed class ModularView : UserControl
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _viewport.Children.Add(hint);
         _viewport.Children.Add(_mini);
         _edgeTip.Child = _edgeTipText;
-        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _viewport.Children.Add(_edgeTip);
         _viewport.Children.Add(_dropGlow);
 
@@ -190,8 +190,8 @@ public sealed class ModularView : UserControl
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
 
-        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
 
         _viewport.PointerPressed += OnViewportPressed;
         _viewport.PointerMoved += OnViewportMoved;
@@ -616,7 +616,7 @@ public sealed class ModularView : UserControl
         n.IslandHeight = h;
 
         var col = new Grid { RowDefinitions = new RowDefinitions(hasMods ? "2,30,54,34" : "2,30,54") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.BodyValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.CardValue) }, 0));
 
         // header
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 0) };
@@ -628,7 +628,7 @@ public sealed class ModularView : UserControl
         if (cv > 0)
         {
             var cvLabel = new TextBlock { Text = $"{cv} CV", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center };
-            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             DockPanel.SetDock(cvLabel, Dock.Right);
             head.Children.Add(cvLabel);
         }
@@ -676,7 +676,7 @@ public sealed class ModularView : UserControl
         var frame = new Border
         {
             Width = IslandW, Height = h, Background = Rail,
-            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body,
+            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Card,
             Child = col,
         };
         if (n.Bypassed) frame.AttachedToVisualTree += (_, _) => Inactive.Set(col, true, interactive: true);
@@ -695,7 +695,7 @@ public sealed class ModularView : UserControl
         var b = new Border
         {
             Height = 30, Background = Card, BorderBrush = topColor, BorderThickness = new Thickness(1, 2, 1, 1),
-            CornerRadius = NotaRadius.Tile, Padding = new Thickness(9, 0),
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -708,7 +708,7 @@ public sealed class ModularView : UserControl
         var b = new Border
         {
             Height = 22, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
         };
@@ -950,7 +950,7 @@ public sealed class ModularView : UserControl
         // A top "select" row (waveform for LFO, MIDI source for MIDI→CV) then a knob grid.
         bool hasTopRow = kind == 0 || kind == 2;
         var col = new Grid { RowDefinitions = hasTopRow ? new RowDefinitions("3,32,34,Auto,Auto") : new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.GroupValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
@@ -1001,7 +1001,7 @@ public sealed class ModularView : UserControl
     private void BuildMathView(GNode n, int modId)
     {
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.GroupValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
@@ -1029,7 +1029,7 @@ public sealed class ModularView : UserControl
     private void BuildScopeView(GNode n, int modId)
     {
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.GroupValue) }, 0));
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
 
@@ -1137,7 +1137,7 @@ public sealed class ModularView : UserControl
     {
         var b = new Border
         {
-            Height = 13, CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0),
+            Height = 13, CornerRadius = NotaRadius.Cell, Padding = new Thickness(5, 0),
             Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = synced ? "Sync" : "Free", FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
@@ -1150,7 +1150,7 @@ public sealed class ModularView : UserControl
     {
         var b = new Border
         {
-            Height = 20, MinWidth = 30, CornerRadius = NotaRadius.Badge,
+            Height = 20, MinWidth = 30, CornerRadius = NotaRadius.Cell,
             BorderBrush = active ? NotaPalette.Accent : NotaPalette.Seam, BorderThickness = new Thickness(1),
             Background = active ? NotaPalette.Accent : NotaPalette.SurfaceRaised,
             Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
@@ -1407,7 +1407,7 @@ public sealed class ModularView : UserControl
     private static TextBlock MonoValue(string s)
     {
         var t = new TextBlock { Text = s, FontSize = 9, Foreground = Text1, HorizontalAlignment = HorizontalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
 
@@ -1431,7 +1431,7 @@ public sealed class ModularView : UserControl
         var title = new TextBlock { Text = n.Title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center };
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(9, 0) };
         var stripeDot = n.Slot == Slot.Modulator ? (IBrush)Brass : (n.Bypassed ? BorderStrong : Success);
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = stripeDot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = stripeDot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         DockPanel.SetDock(dot, Dock.Left);
         head.Children.Add(dot);
         // Right cluster: chain devices get bypass / expand / delete; modulators get a
@@ -1487,7 +1487,7 @@ public sealed class ModularView : UserControl
         {
             Width = NodeW, Background = Card,
             BorderBrush = n.Bypassed ? BorderStrong : BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
             Child = col,
         };
         n.View = frame;
@@ -1504,7 +1504,7 @@ public sealed class ModularView : UserControl
         var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto,Auto") };
 
         // type stripe
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.GroupValue) }, 0));
 
         var headBorder = NodeHeader(n);
         col.Children.Add(Row(headBorder, 1));
@@ -1652,7 +1652,7 @@ public sealed class ModularView : UserControl
     private Point _nodeOrigin;
     private readonly Border _dropBar = new()
     {
-        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Clip, IsHitTestVisible = false,
+        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Field, IsHitTestVisible = false,
     };
 
     private void BeginNodeDrag(GNode n, Control captureTarget, PointerPressedEventArgs e)
@@ -1883,7 +1883,7 @@ public sealed class ModularView : UserControl
     private readonly Border _edgeTip = new()
     {
         Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
+        CornerRadius = NotaRadius.Group, Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
     };
     private readonly TextBlock _edgeTipText = new() { FontSize = 9, Foreground = NotaPalette.TextPrimary };
@@ -1925,7 +1925,7 @@ public sealed class ModularView : UserControl
         var tb = new Glyph(glyph, 9) { Foreground = color };
         var b = new Border
         {
-            Width = 16, Height = 16, CornerRadius = NotaRadius.Badge, Background = Brushes.Transparent,
+            Width = 16, Height = 16, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand), Child = tb, VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTip.SetTip(b, tip);
@@ -2151,7 +2151,7 @@ public sealed class ModularView : UserControl
         _globalBtn.Click += (_, _) => SetGlobal(true);
         var seg = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { _trackBtn, _globalBtn } },
         };
         // All the modulator sources collapse into one "+ Add" dropdown (a normal chip
@@ -2174,7 +2174,7 @@ public sealed class ModularView : UserControl
         var zoomIn = ZoomBtn("+"); zoomIn.Click += (_, _) => ZoomAround(Center(), 1.15);
         var zoomSeg = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { zoomOut, zoomIn } },
         };
         var fit = Chip("Fit"); fit.Click += (_, _) => FitNow();

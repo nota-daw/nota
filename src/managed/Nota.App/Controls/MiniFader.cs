@@ -130,10 +130,10 @@ public sealed class MiniFader : Control
         double fx = frac * w;
 
         // Almanac slider: 3px well track, fill, 6×7 handle (SliderTrack draws the same).
-        ctx.DrawRectangle(Track, null, new Rect(0, cy - SliderTrack.TrackH / 2, w, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        ctx.DrawRectangle(Track, null, new Rect(0, cy - SliderTrack.TrackH / 2, w, SliderTrack.TrackH), NotaRadius.FieldValue, NotaRadius.FieldValue);
         bool live = _drag || _hover;
-        if (fx > 0) ctx.DrawRectangle(live ? FillLive : Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        if (fx > 0) ctx.DrawRectangle(live ? FillLive : Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.FieldValue, NotaRadius.FieldValue);
         double hw = SliderTrack.HandleW, hh = SliderTrack.HandleH;
-        ctx.DrawRectangle(live ? CapLive : Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        ctx.DrawRectangle(live ? CapLive : Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.FieldValue, NotaRadius.FieldValue);
     }
 }

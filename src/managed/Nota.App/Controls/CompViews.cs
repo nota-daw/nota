@@ -21,7 +21,7 @@ namespace Nota.App;
 internal static class CompDraw
 {
     public static FormattedText Text(string t, IBrush ink, double size = 7)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void Polyline(DrawingContext ctx, IPen pen, IReadOnlyList<Point> pts)
     {

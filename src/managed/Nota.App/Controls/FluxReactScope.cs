@@ -92,24 +92,24 @@ internal sealed class FluxReactScope : Control
             }
         }
 
-        var lbl = new FormattedText("Sidechain", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
+        var lbl = new NotaFormattedText("Sidechain", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
             NotaType.KnobLabel, _live ? NotaPalette.TextTertiary : NotaPalette.TextDisabled);
         ctx.DrawText(lbl, new Point(6, 4));
         NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TealBright : NotaPalette.TextAxis);
         if (!_live)
         {
-            var none = new FormattedText("no source assigned", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans,
+            var none = new NotaFormattedText("no source assigned", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans,
                 NotaType.KnobLabel, NotaPalette.TextDisabled);
             ctx.DrawText(none, new Point((plot.Width - none.Width) / 2, h - 8 - none.Height));
         }
 
         // the reaction, in its own narrow well.
         var bar = new Rect(w - BarW, 0, BarW, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar.Deflate(0.5), NotaRadius.ClipValue));
+        ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar.Deflate(0.5), NotaRadius.FieldValue));
         if (_live && _react > 0.005f)
         {
             double fill = (h - 4) * _react;
-            ctx.FillRectangle(NotaPalette.Teal, new Rect(bar.X + 2, h - 2 - fill, BarW - 4, fill), (float)NotaRadius.ClipValue);
+            ctx.FillRectangle(NotaPalette.Teal, new Rect(bar.X + 2, h - 2 - fill, BarW - 4, fill), (float)NotaRadius.FieldValue);
         }
     }
 

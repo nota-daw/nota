@@ -46,7 +46,7 @@ internal sealed class SwitchTrack : Control
     public override void Render(DrawingContext ctx)
     {
         var track = _on ? (_dim || !IsEffectivelyEnabled ? TrackDim : TrackOn) : TrackOff;
-        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, _w, _h), NotaRadius.ClipValue));
+        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, _w, _h), NotaRadius.FieldValue));
         double x = _on ? _w - _inset - _knob : _inset;
         ctx.DrawRectangle(_on ? KnobOn : KnobOff, null,
             new RoundedRect(new Rect(x, (_h - _knob) / 2, _knob, _knob), Math.Min(1.5, _knob / 4)));

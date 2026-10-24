@@ -149,7 +149,7 @@ public sealed partial class ArrangementView
         private const double PillH = 16;
         private static double PillWidth(string label)
         {
-            var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 Typeface.Default, 9, NotaPalette.TextPrimary);
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
@@ -1367,7 +1367,7 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText("Rec", CultureInfo.InvariantCulture,
+                            var ft = new NotaFormattedText("Rec", CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
@@ -1420,7 +1420,7 @@ public sealed partial class ArrangementView
                     Drag.TrimL => _dragClip?.StartBeat ?? 0,
                     _          => _pendingClip?.StartBeat ?? 0,
                 };
-                var ft = new FormattedText(_o.FormatBarBeat(tb), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(_o.FormatBarBeat(tb), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
@@ -1431,7 +1431,7 @@ public sealed partial class ArrangementView
             // ADSR drag readout: the stage being edited, in time and dB.
             if (_adsrDrag is not (AdsrHandle.None or AdsrHandle.AttackOrSustain) && _adsrClip is { } adc)
             {
-                var ft = new FormattedText(ClipAdsrKit.Readout(_adsrDrag, adc.Adsr, _o._engine?.Bpm ?? 120), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(ClipAdsrKit.Readout(_adsrDrag, adc.Adsr, _o._engine?.Bpm ?? 120), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
@@ -1446,7 +1446,7 @@ public sealed partial class ArrangementView
             // Empty-state hint.
             if (_o._tracks.Count == 0)
             {
-                var ft = new FormattedText("Add an instrument from the browser",
+                var ft = new NotaFormattedText("Add an instrument from the browser",
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(12, (w - ft.Width) / 2), h / 2 - 10));
             }
@@ -1509,7 +1509,7 @@ public sealed partial class ArrangementView
                 var (_, _, _, body) = ClipColors(colorIndex);
                 using (ctx.PushClip(new Rect(0, y + 2, w, Math.Max(0, rowH - 4))))
                 using (ctx.PushOpacity(0.45))
-                    ctx.DrawRectangle(body, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), NotaRadius.ClipValue, NotaRadius.ClipValue);
+                    ctx.DrawRectangle(body, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), NotaRadius.FieldValue, NotaRadius.FieldValue);
             }
             // Under the take's title band, as the stored notes are (the band covers them there).
             double top = y + 2 + (rowH - 4 > TitleBandH * 2.5 ? TitleBandH : BandH);
@@ -1639,7 +1639,7 @@ public sealed partial class ArrangementView
             // waveform in a deeper shade of it; selection adds a 1px accent edge.
             var content = ClipInk(colorIndex);
             var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
-            ctx.DrawRectangle(body, selected ? ClipSelBorder : null, rect, NotaRadius.ClipValue, NotaRadius.ClipValue);
+            ctx.DrawRectangle(body, selected ? ClipSelBorder : null, rect, NotaRadius.FieldValue, NotaRadius.FieldValue);
 
             // Resize-edge affordance: a bright bar on the edge a drag would trim.
             if (edgeHi != Drag.None)
@@ -1663,7 +1663,7 @@ public sealed partial class ArrangementView
             var band = selected ? NotaPalette.Accent : ClipBand(colorIndex);
             if (rect.Width > 3)
             {
-                using var bc = ctx.PushClip(new RoundedRect(rect, NotaRadius.ClipValue));
+                using var bc = ctx.PushClip(new RoundedRect(rect, NotaRadius.FieldValue));
                 ctx.FillRectangle(band, new Rect(rect.X, rect.Y, rect.Width, tall ? TitleBandH : BandH + 1));
             }
 
@@ -1671,7 +1671,7 @@ public sealed partial class ArrangementView
             {
                 // The clip's own name (set via its menu) wins; otherwise the track name.
                 string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
-                var ft = new FormattedText(text, CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, NotaPalette.InkOn(band))
                 { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
                 using var _ = ctx.PushClip(rect);
@@ -1683,7 +1683,7 @@ public sealed partial class ArrangementView
             // Deactivated clip (key 0): grey it out with a dark scrim so it reads as "off"
             // while still showing its content/geometry. Inset so the (selection) border stays.
             if (!c.Active)
-                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), NotaRadius.ClipValue, NotaRadius.ClipValue);
+                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), NotaRadius.FieldValue, NotaRadius.FieldValue);
         }
 
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
@@ -1922,8 +1922,8 @@ public sealed partial class ArrangementView
                 // Target-selector pill (top-left) — width fits the label, text centred.
                 double pillW = PillWidth(t.AutoLabel);
                 var pill = PillRect(i, pillW);
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.ControlValue, NotaRadius.ControlValue);
-                var ft = new FormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.FieldValue, NotaRadius.FieldValue);
+                var ft = new NotaFormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
                 using (ctx.PushClip(pill))
                     ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));

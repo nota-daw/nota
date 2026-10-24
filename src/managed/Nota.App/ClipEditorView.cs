@@ -214,7 +214,7 @@ public sealed class ClipEditorView : UserControl
             var chip = new Border
             {
                 Height = 22, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 0), Margin = new Thickness(10, 8, 0, 0),
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0), Margin = new Thickness(10, 8, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel
@@ -446,7 +446,7 @@ public sealed class ClipEditorView : UserControl
             if (Background is not null) ctx.FillRectangle(Background, new Rect(0, 0, w, h));
             if (_pts.Count == 0)   // empty state: one Ink 5 line
             {
-                var ft = new FormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
+                var ft = new NotaFormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
                 ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
                 return;
             }

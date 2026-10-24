@@ -27,7 +27,7 @@ namespace Nota.App;
 internal static class RhythmInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = 7)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void TopRight(DrawingContext ctx, double w, string t, IBrush ink)
     {

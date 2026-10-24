@@ -31,7 +31,7 @@ internal sealed class GenericMidiBody : IMidiDeviceBody
             float v = engine.MidiEffectGetParam(track, index, i);
             bool integral = max - min >= 2 && (max <= 24.5f);   // small integer ranges show as whole numbers
             var value = new TextBlock { Text = FmtParam(v, integral), FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Right };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
             top.Children.Add(new TextBlock { Text = NotaText.Label(engine.MidiEffectParamName(track, index, i)), FontSize = 9, Foreground = TextTertiary });
             Grid.SetColumn(value, 1); top.Children.Add(value);

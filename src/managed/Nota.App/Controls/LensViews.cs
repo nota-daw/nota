@@ -125,7 +125,7 @@ internal static class LensInk
     /// keeps its case ("Scope · 2.00 ms/div").</summary>
     public static void Title(DrawingContext ctx, string caps, string value, double x = 6, double y = 4)
     {
-        var head = new FormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        var head = new NotaFormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansSemiBold, NotaGraph.TitleSize, Label);
         ctx.DrawText(head, new Point(x, y));
         if (value.Length > 0) Text(ctx, value, x + head.Width + 5, y, Axis, 8);
@@ -144,12 +144,12 @@ internal static class LensInk
     }
 
     public static void Text(DrawingContext ctx, string s, double x, double y, IBrush ink, double size = 7, bool mono = true)
-        => ctx.DrawText(new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Mono : NotaFonts.SansMedium, size, ink), new Point(x, y));
+        => ctx.DrawText(new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, ink), new Point(x, y));
 
     public static double TextW(string s, double size = 7, bool mono = true)
-        => new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Mono : NotaFonts.SansMedium, size, NotaPalette.TextPrimary).Width;
+        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, NotaPalette.TextPrimary).Width;
 }
 
 // ===========================================================================

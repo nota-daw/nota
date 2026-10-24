@@ -102,7 +102,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var flt = new SynthViz(SynthViz.K.Filter, engine, track, idx) { Mini = mini };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        meta.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
 
         void Refresh()
         {
@@ -216,7 +216,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             FontSize = NotaType.Axis, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var tabStrip = new Grid
         {
             Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*"),
@@ -494,7 +494,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
     private static TextBlock Axis(string text)
     {
         var tb = new TextBlock { Text = text, FontSize = NotaType.Axis, Foreground = NotaPalette.TextAxis };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return tb;
     }
 

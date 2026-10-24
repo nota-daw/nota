@@ -95,7 +95,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
             Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, double fs, IBrush c) => new()
-        { Text = t, FontSize = fs, Foreground = c, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+        { Text = t, FontSize = fs, Foreground = c, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T Row<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
@@ -189,7 +189,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
             return list;
         }
 
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center };
+        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center };
         var srcName = new TextBlock { FontSize = 9, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var chev = new Glyph { Kind = GlyphKind.ChevronDown, Width = 8, Height = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var pickRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5 };
@@ -198,7 +198,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         pickRow.Children.Add(Col(chev, 2));
         var picker = new Border
         {
-            Height = 18, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Control, Background = Sunken,
+            Height = 18, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Field, Background = Sunken,
             BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = pickRow,
         };
         readouts.Add(() =>

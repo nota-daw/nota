@@ -93,7 +93,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         var pickup = new KeysPickupView(engine, track, idx) { Mini = mini };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        meta.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         int tab = OpenTab.TryGetValue(track, out var ot) ? ot : 0;
 
         void Refresh()
@@ -252,7 +252,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         // PICKUP: the graph, with the bark readout (or, for Clav, the pickup chips) on its header.
         var bark = new TextBlock { FontSize = 8, Foreground = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
-        bark.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        bark.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var puChips = Chips("pupos", KeysModel.PickupPositions, padX: 4);
         var puAcc = new Panel { Children = { bark, puChips } };
         readouts.Add(() =>
@@ -274,10 +274,10 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         // DAMPER + the pedal.
         var pedalDot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
         var pedalTxt = new TextBlock { Text = "CC64", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
-        pedalTxt.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        pedalTxt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var pedalPill = new Border
         {
-            CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(5, 1),
+            CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(5, 1),
             Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { pedalDot, pedalTxt } },
         };
@@ -368,7 +368,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         {
             int cv = c;
             var tb = new TextBlock { Text = KeysModel.CabNames[c], FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var cell = new Border { Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var cell = new Border { Height = 15, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             cell.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
@@ -410,7 +410,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         var voicesChips = Chips("voices", KeysModel.VoiceNames, padX: 3);
         var grid = new KeysVoiceGrid { Margin = new Thickness(0, 2, 0, 0) };
         var voicesLine = new TextBlock { FontSize = 8, Foreground = TextPrimary };
-        voicesLine.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        voicesLine.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var pedalLine = new TextBlock { FontSize = 7, Foreground = NotaPalette.TextAxis };
         ctx.AddDeviceRefresher(() =>
         {
@@ -459,7 +459,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         var tabRow = new StackPanel { Orientation = Orientation.Horizontal };
         var modelChips = ModelChips(false);
         var chain = new TextBlock { FontSize = NotaType.Axis, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        chain.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        chain.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(() =>
             chain.Text = $"{(On("preon") ? "preamp" : "—")} → {(On("tremon") ? "trem" : "—")} → {(On("phaseron") ? "phaser" : "—")} → "
                        + $"{(On("choruson") ? "chorus" : "—")} → {KeysModel.CabNames[Sel("cab", 4)]}");

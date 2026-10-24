@@ -252,7 +252,7 @@ internal sealed class DeviceWindow : NotaWindow
         _bodyHost = page.Body;
         var tag = new Border
         {
-            Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Rule,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8),
             IsHitTestVisible = false, IsVisible = false,
@@ -319,7 +319,7 @@ internal sealed class DeviceWindow : NotaWindow
     private static TextBlock MonoText(double size, IBrush ink)
     {
         var tb = new TextBlock { FontSize = size, Foreground = ink, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return tb;
     }
 

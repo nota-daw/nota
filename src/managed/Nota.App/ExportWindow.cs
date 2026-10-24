@@ -199,7 +199,7 @@ public sealed class ExportWindow : NotaWindow
         var export = _export = new Border
         {
             Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(18, 0), Height = 28,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(18, 0), Height = 28,
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = (_exportLabel = new TextBlock { Text = "Export WAV", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
         };
@@ -313,7 +313,7 @@ public sealed class ExportWindow : NotaWindow
     {
         var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11, PlaceholderText = "bar.beat" };
         ToolTip.SetTip(box, "Bar.beat.sixteenth, counted from 1 — e.g. 5.1 or 5.3.2");
-        box.BindResource(TextBox.FontFamilyProperty, "Font.Mono");
+        box.BindResource(TextBox.FontFamilyProperty, "Font.UI");
         return box;
     }
 
@@ -359,7 +359,7 @@ public sealed class ExportWindow : NotaWindow
     private TextBlock Mono(string text, IBrush fg)
     {
         var t = new TextBlock { Text = text, FontSize = 10, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
 
@@ -369,8 +369,8 @@ public sealed class ExportWindow : NotaWindow
     private Control WorkingToggle(string label, Func<bool> get, Action<bool> set,
                                   Func<bool>? enabled = null, string? hint = null)
     {
-        var knob = new Border { Width = 26, Height = 15, CornerRadius = NotaRadius.Body, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1) };
-        var dot = new Border { Width = 11, Height = 11, CornerRadius = NotaRadius.Panel, Background = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var knob = new Border { Width = 26, Height = 15, CornerRadius = NotaRadius.Card, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1) };
+        var dot = new Border { Width = 11, Height = 11, CornerRadius = NotaRadius.Group, Background = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         knob.Child = dot;
         var text = new TextBlock { Text = label, FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { knob, text } };
@@ -411,8 +411,8 @@ public sealed class ExportWindow : NotaWindow
     {
         // A working pill toggle: one file per track (in the export format) into a
         // chosen folder (M6-5).
-        var knob = new Border { Width = 26, Height = 15, CornerRadius = NotaRadius.Body, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1) };
-        var dot = new Border { Width = 11, Height = 11, CornerRadius = NotaRadius.Panel, Background = TextTertiary, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) };
+        var knob = new Border { Width = 26, Height = 15, CornerRadius = NotaRadius.Card, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1) };
+        var dot = new Border { Width = 11, Height = 11, CornerRadius = NotaRadius.Group, Background = TextTertiary, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) };
         knob.Child = dot;
         void Paint()
         {
@@ -436,7 +436,7 @@ public sealed class ExportWindow : NotaWindow
         var headerBar = new Border { Height = 28, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = header };
         headerBar.PointerPressed += (_, _) => { _stems = !_stems; Paint(); };
         var box = new StackPanel { Children = { headerBar } };
-        return new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = box };
+        return new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = box };
     }
 
     private Control Segmented((string label, bool enabled)[] items, int active, Action<int> onSelect)
@@ -447,7 +447,7 @@ public sealed class ExportWindow : NotaWindow
         {
             int idx = i;
             var t = new TextBlock { Text = items[i].label, FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
-            var cell = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(10, 2), Child = t };
+            var cell = new Border { CornerRadius = NotaRadius.Cell, Padding = new Thickness(10, 2), Child = t };
             if (items[i].enabled) { cell.Cursor = new Cursor(StandardCursorType.Hand); cell.PointerPressed += (_, _) => { onSelect(idx); Paint(idx); }; }
             else t.Foreground = NotaPalette.TextDisabled;
             cells[i] = cell;
@@ -464,6 +464,6 @@ public sealed class ExportWindow : NotaWindow
             }
         }
         Paint(active);
-        return new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(2), Child = inner, VerticalAlignment = VerticalAlignment.Center };
+        return new Border { Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, Padding = new Thickness(2), Child = inner, VerticalAlignment = VerticalAlignment.Center };
     }
 }

@@ -41,7 +41,7 @@ namespace Nota.App;
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 0 || h <= 0) return;
-            ctx.DrawRectangle(Ground, null, new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ClipValue));
+            ctx.DrawRectangle(Ground, null, new RoundedRect(new Rect(0, 0, w, h), NotaRadius.FieldValue));
             double frac = System.Math.Clamp(_gr / MaxDb, 0, 1);
             if (frac > 0.001)
                 ctx.FillRectangle(Bar, new Rect(0, 0, w, frac * h));

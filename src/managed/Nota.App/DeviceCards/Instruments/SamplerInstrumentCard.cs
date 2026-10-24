@@ -94,7 +94,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         // ---- shared builders ----------------------------------------------------------
@@ -154,7 +154,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             var tb = new TextBlock { Text = text, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
-                Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
+                Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb, VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTip.SetTip(b, tip);
@@ -277,7 +277,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Width = 16, Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Width = 16, Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -291,7 +291,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         }
         var rootBox = new Border
         {
-            Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Child = rootText,
         };
         rootBox.PointerWheelChanged += (_, e) =>

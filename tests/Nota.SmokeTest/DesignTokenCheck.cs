@@ -84,7 +84,7 @@ internal static partial class DesignTokenCheck
         var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
         var geo = File.ReadAllText(Path.Combine(app, "Theme/NotaGeometry.cs"));
 
-        // XAML side: <CornerRadius x:Key="Radius.Clip">2</CornerRadius>, <sys:Double x:Key="Space.Tile">8</sys:Double>
+        // XAML side: <CornerRadius x:Key="Radius.Field">2</CornerRadius>, <sys:Double x:Key="Space.Tile">8</sys:Double>
         var xaml = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(theme, """x:Key="(?<key>(?:Radius|Control|Space)\.\w+)">(?<v>[0-9.]+)<"""))
             xaml[m.Groups["key"].Value] = double.Parse(m.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
@@ -135,8 +135,8 @@ internal static partial class DesignTokenCheck
         yield return (gradients.Length == 0,
             gradients.Length == 0 ? "no gradients in views" : $"gradients in: {string.Join(", ", gradients)}");
 
-        // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the 0/1/2/3/4
-        // scale (spec 012 R9: the add-device targets drew at 7 and 6). Ratchet in
+        // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the style guide's
+        // 0/2/3/4/5/6/7/9 scale (spec 038; spec 012 R9 started this check). Ratchet in
         // RadiusAllowList.txt (path + "RadiusX = n") with today's offenders.
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         var offScale = new List<Hit>();
@@ -148,13 +148,13 @@ internal static partial class DesignTokenCheck
                 n++;
                 var code = f.EndsWith(".cs") ? CodeOf(line) : Regex.Replace(line, "<!--.*?-->", "");
                 foreach (Match m in Regex.Matches(code, @"\bRadius(?<axis>[XY])\s*=\s*""?(?<v>[0-9]+(?:\.[0-9]+)?)\b"))
-                    if (!new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+                    if (!new[] { 0d, 2, 3, 4, 5, 6, 7, 9 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
                         offScale.Add(new Hit(RelManaged(root, f), n, $"Radius{m.Groups["axis"].Value} = {m.Groups["v"].Value}"));
             }
         }
         var list = ReadRatchet(Path.Combine(root, RatchetDir, "RadiusAllowList.txt"));
         var radiusUsed = new HashSet<(string, string)>();
-        yield return RatchetVerdict("Rectangle radius off the 0/1/2/3/4 scale", offScale, list.ToHashSet(), radiusUsed);
+        yield return RatchetVerdict("Rectangle radius off the 0/2/3/4/5/6/7/9 scale", offScale, list.ToHashSet(), radiusUsed);
         yield return RatchetStale("radius allow-list", list, radiusUsed);
         yield return (true, $"radius allow-list: {list.Distinct().Count()} entries (ratchet: may only shrink)");
     }
@@ -171,15 +171,24 @@ internal static partial class DesignTokenCheck
 
         string XamlFont(string key) => Regex.Match(theme, $"""<FontFamily x:Key="{key}">(?<v>[^<]+)</FontFamily>""").Groups["v"].Value;
         string CsFont(string name) => Regex.Match(fonts, $@"const string {name}\s*=\s*""(?<v>[^""]+)""").Groups["v"].Value;
-        var ui = XamlFont("Font.UI"); var mono = XamlFont("Font.Mono");
-        yield return (ui.Length > 0 && ui == CsFont("UiUri") && mono.Length > 0 && mono == CsFont("MonoUri"),
-            $"Font.UI / Font.Mono match NotaFonts ({ui} · {mono})");
+        var ui = XamlFont("Font.UI");
+        yield return (ui.Length > 0 && ui == CsFont("UiUri"), $"Font.UI matches NotaFonts ({ui})");
 
-        var files = new[] { "Regular", "Medium", "SemiBold", "Bold" }
-            .SelectMany(w => new[] { $"Geist-{w}.ttf", $"GeistMono-{w}.ttf" })
+        // One typeface (spec 038): Geist with tabular figures; no monospace family anywhere.
+        var families = Regex.Matches(theme, """<FontFamily x:Key="(?<k>[^"]+)">""").Select(m => m.Groups["k"].Value).ToArray();
+        yield return (families.SequenceEqual(new[] { "Font.UI" }) && !Regex.IsMatch(fonts, @"const string \w+Uri\s*=\s*""[^""]*Mono"),
+            $"one typeface: Font.UI is the only family ({string.Join(", ", families)})");
+        yield return (fonts.Contains("\"+tnum\""), "tabular figures are on (NotaFonts.Tabular)");
+
+        var weights = new[] { "Regular", "Medium", "SemiBold", "Bold" };
+        var files = weights.Select(w => $"Geist-{w}.ttf")
             .Where(f => !File.Exists(Path.Combine(root, "assets/fonts", f))).ToArray();
         yield return (files.Length == 0,
-            files.Length == 0 ? "all eight Geist weights are bundled" : $"missing font files: {string.Join(", ", files)}");
+            files.Length == 0 ? "all four Geist weights are bundled" : $"missing font files: {string.Join(", ", files)}");
+        var stray = Directory.GetFiles(Path.Combine(root, "assets/fonts"), "*.ttf")
+            .Select(Path.GetFileName).Where(f => !f!.StartsWith("Geist-")).ToArray();
+        yield return (stray.Length == 0,
+            stray.Length == 0 ? "no other typeface is bundled" : $"other font files bundled: {string.Join(", ", stray)}");
         yield return (File.Exists(Path.Combine(root, "LICENSES/OFL-1.1-Geist.txt")), "the Geist OFL licence ships with the fonts");
 
         var views = Files(app, "*.*", SearchOption.AllDirectories)
@@ -428,7 +437,7 @@ internal static partial class DesignTokenCheck
     }
 
     /// <summary>The Studio rules (DESIGN.md) that the older checks do not hold:
-    /// the 0/1/2/3/4 radius scale, blurred shadows only on floating layers, sentence-case
+    /// the style guide's radius scale, blurred shadows only on floating layers, sentence-case
     /// labels without tracking, values neutral at rest in the shared controls, the docked
     /// shell's sizes, and no value left from the earlier Ember palette.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunStudio()
@@ -439,12 +448,13 @@ internal static partial class DesignTokenCheck
         var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
-        // Radius: 0 docked · 1 plot bars · 2 inner keys, rows, clips · 3 controls, cards · 4 modals.
+        // Radius (spec 038): 0 docked · 2 fine parts · 3 switch · 4 value bar · 5 cell · 6 field ·
+        // 7 group, section · 9 card.
         var radii = Regex.Matches(theme, """<CornerRadius x:Key="(?<k>Radius\.\w+)">(?<v>[0-9.]+)</CornerRadius>""")
-            .Where(m => !new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+            .Where(m => !new[] { 0d, 2, 3, 4, 5, 6, 7, 9 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
             .Select(m => $"{m.Groups["k"].Value} {m.Groups["v"].Value}").ToArray();
         yield return (radii.Length == 0,
-            radii.Length == 0 ? "every Radius.* is on the 0/1/2/3/4 scale" : $"radii off the scale: {string.Join(", ", radii)}");
+            radii.Length == 0 ? "every Radius.* is on the 0/2/3/4/5/6/7/9 scale" : $"radii off the scale: {string.Join(", ", radii)}");
 
         // A blurred shadow means the element floats. Only Shadow.Popover / Shadow.Modal may
         // carry a blur; every other shadow is a bevel or an edge. They are built from the

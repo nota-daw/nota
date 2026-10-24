@@ -29,7 +29,7 @@ internal static partial class MenuKit
         if (colour is not null)
             grid.Children.Add(new Border
             {
-                Width = 8, Height = 8, CornerRadius = NotaRadius.Badge, Background = colour,
+                Width = 8, Height = 8, CornerRadius = NotaRadius.Cell, Background = colour,
                 Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center,
             });
         var title = new TextBlock
@@ -44,7 +44,7 @@ internal static partial class MenuKit
         {
             var tag = new TextBlock
             {
-                Text = badge, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Value,
+                Text = badge, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Value,
                 Foreground = NotaPalette.TextTertiary, Margin = new Thickness(12, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -73,10 +73,10 @@ internal static partial class MenuKit
             for (int b = 0; b < bases; b++)
             {
                 int ci = b * shades + s;
-                var swatch = new Border { Width = 12, Height = 12, CornerRadius = NotaRadius.Badge, Background = ArrangementView.TrackBrush(ci) };
+                var swatch = new Border { Width = 12, Height = 12, CornerRadius = NotaRadius.Cell, Background = ArrangementView.TrackBrush(ci) };
                 var ring = new Border
                 {
-                    Width = 16, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
+                    Width = 16, Height = 16, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1),
                     Child = swatch, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
                 };
                 Grid.SetColumn(ring, b); Grid.SetRow(ring, s);
@@ -88,7 +88,7 @@ internal static partial class MenuKit
 
         var auto = new Border
         {
-            Height = 52, MinWidth = 40, Margin = new Thickness(6, 0, 0, 0), CornerRadius = NotaRadius.Control,
+            Height = 52, MinWidth = 40, Margin = new Thickness(6, 0, 0, 0), CornerRadius = NotaRadius.Field,
             BorderThickness = new Thickness(1), Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Top,
             Child = new TextBlock { Text = "Auto", FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
         };
@@ -113,7 +113,7 @@ internal static partial class MenuKit
         var group = new Border
         {
             Child = keys, Background = NotaPalette.Seam, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Right,
+            CornerRadius = NotaRadius.Field, ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Right,
         };
         for (int i = 0; i < options.Count; i++)
         {
@@ -140,7 +140,7 @@ internal static partial class MenuKit
     /// <summary>A small colour chip for a menu's value column — a user colour that is data (a
     /// tag's colour), shown beside the label rather than as its icon so a tick can sit left.</summary>
     public static Control Swatch(IBrush colour)
-        => new Border { Width = 8, Height = 8, CornerRadius = NotaRadius.Badge, Background = colour, VerticalAlignment = VerticalAlignment.Center };
+        => new Border { Width = 8, Height = 8, CornerRadius = NotaRadius.Cell, Background = colour, VerticalAlignment = VerticalAlignment.Center };
 
     /// <summary>Appends a "Recent" caption and its items to a submenu (nothing when empty).</summary>
     public static void AddRecent(MenuItem submenu, IReadOnlyList<MenuItem>? recent)
