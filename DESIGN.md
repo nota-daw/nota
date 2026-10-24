@@ -229,9 +229,9 @@ See-through values are `#AARRGGBB`.
 | Use | Brush | Studio Dark | Studio Light | Ember Graphite | Ember Paper |
 |---|---|---|---|---|---|
 | Line between panels | `Brush.Seam` | `#141517` | `#9DA0A6` | `#0C0B09` | `#E0DAC9` |
-| Behind the arrangement; window, title bar, detail-panel body | `Brush.BgApp` | `#1E1F22` | `#C9CBCF` | `#0B0A09` | `#DCD6C5` |
-| Toolbar, left rail, pinned Return / Master rows | `SurfaceDeep` (slot only) | `#1B1C1F` | `#CFD1D4` | `#131210` | `#E7E2D4` |
-| Browser, track headers, panel toolbars, mixer strips | `Brush.Panel` | `#26282C` | `#E4E5E7` | `#141310` | `#EAE5D7` |
+| Behind the arrangement; window, title bar | `Brush.BgApp` | `#1E1F22` | `#C9CBCF` | `#0B0A09` | `#DCD6C5` |
+| Toolbar, left rail, pinned Return / Master rows, device panel (its toolbar and body), status line | `SurfaceDeep` (slot only) | `#1B1C1F` | `#CFD1D4` | `#131210` | `#E7E2D4` |
+| Browser, track headers, mixer strips | `Brush.Panel` | `#26282C` | `#E4E5E7` | `#141310` | `#EAE5D7` |
 | Cards in the shell; a bypassed Modular node's header | `Brush.SurfaceCard` | `#2B2D31` | `#E4E5E7` | `#171613` | `#EFEADE` |
 | A raised control inside a device (picked segment, preset menu, number buttons); tooltip | `Brush.SurfaceHover` | `#393C41` | `#F7F8F9` | `#252219` | `#E7E1D0` |
 | Behind graphs | `Brush.SurfaceInset` | `#232427` | `#DCDEE0` | `#1A1815` | `#E9E4D6` |
@@ -906,7 +906,7 @@ colour comes from the tracks.
 │l │ panel toolbar 32 · Devices · Pattern · Clip · track · Freeze · ⧉ ×   │
 │  │ detail body · device cards                                          │
 ├──┴─────────────────────────────────────────────────────────────────────┤
-└ status 22 · caption text on BgApp ─────────────────────────────────────┘
+└ status 22 · caption text on SurfaceDeep ────────────────────────────────┘
 ```
 
 Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
@@ -924,10 +924,11 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
   per tab and narrows the list; `Other` comes last and appears only when an unrecognised
   plug-in lands there; "Category chips" in ⋮ hides the row. The splitter is a transparent
   6 px grab strip centred on the seam.
-- **Detail panel**, docked under the canvas on a seam; its body is `BgApp`. It opens with
-  a 32 px panel toolbar on `Panel`: the mode tabs, the track (colour square, name, routing
-  summary), Freeze / Live freeze, a rule, then pop-out and close as icon buttons.
-- **Status 22**: one line of caption text (Label 11, ink 2) on `BgApp`, a seam above it,
+- **Detail panel**, docked under the canvas on a seam; its body is `SurfaceDeep`, like the
+  toolbar, and so is the popped-out window. It opens with a 32 px panel toolbar, also on
+  `SurfaceDeep`: the mode tabs, the track (colour square, name, routing summary),
+  Freeze / Live freeze, a rule, then pop-out and close as icon buttons.
+- **Status 22**: one line of caption text (Label 11, ink 2) on `SurfaceDeep`, a seam above it,
   16 px in. This is the window's status line; device cards have none.
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
   colour (grey for master); sliders and knobs are the flat shell kind, sends with their
@@ -1119,6 +1120,9 @@ control, label and value stays.
   instruments, MIDI effects, racks (the Instrument Rack's "Rack · N chains" is its type
   tag), the generic instrument card, hosted plug-ins, and the Sends card (a `Utility` card
   with no device menu, selection or presets). Never build a header of your own.
+- **The Sends card** sizes to its returns: one pressed-in section holding a 60 px column per
+  return track (its colour square and letter, the knob, the amount, the return's name), so
+  it is narrow with one return and grows a column for each return added.
 - **Header 32** (`DeviceCardKit.HeaderH`), in fixed slots, left to right: name · preset
   menu · type tag and the card's accessories (MIDI learn, the S / L size toggle) · power.
   The name trims before it reaches the preset menu; a compact card drops the "Nota "

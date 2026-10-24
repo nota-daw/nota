@@ -723,9 +723,9 @@ def colour_table(rows):
 
 
 GROUPS = [
-    ('Backgrounds', [('Seam', 'Line between panels'), ('BgApp', 'Behind the arrangement; window, title bar, detail-panel body'),
-                     ('slot:SurfaceDeep', 'Toolbar, left rail, pinned Return / Master rows'),
-                     ('Panel', 'Browser, track headers, panel toolbars, mixer strips'),
+    ('Backgrounds', [('Seam', 'Line between panels'), ('BgApp', 'Behind the arrangement; window, title bar'),
+                     ('slot:SurfaceDeep', 'Toolbar, left rail, pinned Return / Master rows, device panel (its toolbar and body), status line'),
+                     ('Panel', 'Browser, track headers, mixer strips'),
                      ('SurfaceCard', 'Cards in the shell; a bypassed Modular node’s header'),
                      ('SurfaceHover', 'A raised control inside a device; tooltip'),
                      ('SurfaceInset', 'Behind graphs'), ('LaneB', 'Track lane behind clips'),
@@ -1572,14 +1572,14 @@ summary{cursor:pointer;color:var(--text-tertiary);font-size:12px}
 .playhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);z-index:2}
 .playhead:before{content:"";position:absolute;left:-3px;top:0;width:7px;height:5px;background:var(--accent);clip-path:polygon(0 0,100% 0,50% 100%)}
 .detail{border-top:1px solid var(--seam)}
-.ptool{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;background:var(--panel);border-bottom:1px solid var(--seam)}
+.ptool{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;background:var(--slot-surface-deep);border-bottom:1px solid var(--seam)}
 .ptool .tabs{border:0;height:32px}
 .ptool .tabs span{line-height:30px}
 .ptool .sq{width:10px;height:10px;border-radius:2px}
 .ptool .tn{font-size:12px;font-weight:580}
-.dbody{display:flex;gap:6px;padding:6px;background:var(--bg-app)}
+.dbody{display:flex;gap:6px;padding:6px;background:var(--slot-surface-deep)}
 .adddev{width:28px;height:260px;border-radius:var(--r-group);background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary)}
-.status{height:22px;line-height:22px;padding:0 16px;font-size:11px;color:var(--text-secondary);background:var(--bg-app)}
+.status{height:22px;line-height:22px;padding:0 16px;font-size:11px;color:var(--text-secondary);background:var(--slot-surface-deep)}
 
 /* devices */
 .dws{display:flex;flex-direction:column;gap:3px;width:100%}

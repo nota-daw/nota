@@ -579,12 +579,12 @@
     <Setter Property="BorderThickness" Value="0"/>
   </Style>
 
-  <!-- The transport row: a flat, docked 44px strip on the panel tone with a seam under
-       it (the transport row of the top chrome). -->
+  <!-- The transport row: a flat, docked 44px strip on the deep tone with a seam under
+       it (the transport row of the top chrome; the style guide puts it on SurfaceDeep). -->
   <Style Selector="Border.transport">
     <Setter Property="Height" Value="{StaticResource Control.TransportBar}"/>
     <Setter Property="Padding" Value="8,0"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.Panel}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceDeep}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="BorderThickness" Value="0,0,0,1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Docked}"/>

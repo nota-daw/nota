@@ -39,6 +39,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
     value inside the bar, the pan knob and the input picker). New tracks take colours in an
     order that keeps neighbours apart. Group members show the group's bar beside their own.
+  - **Toolbar and device panel:** the toolbar, the device panel (its toolbar and the area
+    behind the cards) and the status line sit on the darker shell tone, a step below the
+    arrangement, as the style guide draws them. The **Sends** card at the end of a chain is
+    one column per return (its colour, letter, knob, amount and name), so it is narrow with
+    one return and widens as returns are added, instead of a fixed wide card.
   - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
     show the page you are on with an orange tick and the soft tint.
   - **Piano roll:** the clip settings move from the left column into one strip above the

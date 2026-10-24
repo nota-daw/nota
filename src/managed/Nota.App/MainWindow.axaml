@@ -392,8 +392,8 @@
       </Grid>
     </Border>
 
-    <!-- Status line (22): caption text on the ground, a seam above it. -->
-    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
+    <!-- Status line (22): caption text on the deep tone, a seam above it. -->
+    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.SurfaceDeep}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
@@ -465,12 +465,12 @@
       <!-- Detail panel: Devices chain / Clip (piano roll) / Mixer for the selected track.
            Docked under the canvas on a seam, like the browser beside it. -->
       <Border x:Name="DetailPanel" Grid.Row="2" Margin="0,1,0,0" IsVisible="False" ClipToBounds="True"
-              Background="{DynamicResource Brush.BgApp}" BorderThickness="0"
+              Background="{DynamicResource Brush.SurfaceDeep}" BorderThickness="0"
               CornerRadius="{StaticResource Radius.Docked}">
         <DockPanel>
           <!-- Panel toolbar (32, seam under it): mode tabs · track chip (routing/PDC) ·
                Freeze · | · pop out · close -->
-          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
+          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.SurfaceDeep}"
                   BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
           <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">

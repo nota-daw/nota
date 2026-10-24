@@ -253,9 +253,14 @@ public sealed partial class DeviceChainView : UserControl
 
     // ---- instrument / sends / add ----------------------------------------
 
+    // The Sends card: one column per return track (its colour and letter, the knob, the
+    // amount, the return's name), in one pressed-in section. The card sizes to its columns,
+    // so it is narrow with one return and grows by a column for each return added.
+    internal const double SendColumnW = 60, SendColumnGap = 4;
+
     private Control SendsCard()
     {
-        var knobs = new WrapPanel();
+        var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = SendColumnGap, VerticalAlignment = VerticalAlignment.Center };
         int shown = 0;
         for (int i = 0; i < _engine.TrackCount; i++)
         {
@@ -263,9 +268,9 @@ public sealed partial class DeviceChainView : UserControl
             int bus = _engine.TrackReturnIndex(ti.Id);
             if (bus < 0) continue;
             char letter = (char)('A' + bus);
+            string returnName = TrackNames.Of(_engine, ti);
 
-            var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), FontSize = 8, Foreground = TextPrimary };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), Foreground = TextPrimary };
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
             knob.ValueChanged += v => { _engine.SetTrackSend(_trackId, b, (float)v); value.Text = Pct((float)v); };
@@ -276,15 +281,34 @@ public sealed partial class DeviceChainView : UserControl
                 float v = _engine.GetTrackSend(_trackId, b);
                 if (Math.Abs(v - knob.Value) > 1e-3) { knob.Value = v; value.Text = Pct(v); }
             });
-            knobs.Children.Add(KnobCell($"Send {letter}", knob, value));
+
+            // The return's colour and letter over the knob, so the column reads as that bus.
+            var tag = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
+                Children =
+                {
+                    new Border
+                    {
+                        Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
+                        Background = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id)),
+                    },
+                    new TextBlock { Text = letter.ToString(), FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                },
+            };
+            var column = new StackPanel { Width = SendColumnW, Children = { tag, KnobCell(returnName, knob, value, SendColumnW) } };
+            ToolTip.SetTip(column, $"Send {letter} to {returnName}");
+            columns.Children.Add(column);
             shown++;
         }
-        Control body = shown > 0 ? knobs : new TextBlock { Text = "No return tracks", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        Control body = shown > 0
+            ? Section(new Border { Padding = new Thickness(SectionPad - 1, 0), Child = columns })
+            : new TextBlock { Text = "No return tracks", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var spec = new ShellSpec(
             Name: "Sends", Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
-            CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: shown > 2 ? 200 : 140,
+            CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: double.NaN,
             Kind: ChainKind.Effect, Compact: true, Utility: true);
-        return BuildCardShell(spec, new Border { Padding = new Thickness(10), Child = body });
+        return BuildCardShell(spec, body);   // the shell already insets the body by CardPad
     }
 
     // The end of the chain: a slim "+" key. Its dashed outline shows only while a browser
