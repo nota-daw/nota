@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The Drum Rack's pad oscillogram: a pad's one-shot as mirrored peak bars in the pad's
-// own hue, inside the almanac graph window (well, hairline, radius 4), with the live
+// own hue, in a pressed-in well, with the live
 // playback position as an accent line while the pad sounds. Read-only — trimming a
 // sample is the Sampler's job.
 
@@ -41,7 +41,7 @@ internal sealed class PadWave : Control
     public override void Render(DrawingContext ctx)
     {
         var r = new Rect(Bounds.Size);
-        NotaGraph.Window(ctx, r);
+        NotaDepth.Groove(ctx, this, new RoundedRect(r, NotaRadius.ValueBarValue));
         double mid = Math.Round(TopInset + (r.Height - TopInset) / 2) + 0.5;
         ctx.DrawLine(MidLine, new Point(1, mid), new Point(r.Width - 1, mid));
 

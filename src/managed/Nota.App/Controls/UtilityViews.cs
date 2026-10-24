@@ -4,13 +4,13 @@
 // Nota Utility card windows (the centre panel's three tabs), all read from the engine
 // (Utility.h scopeRead), so the picture is what the device measures and runs:
 //  • UtFieldView — Field: the stereo field by frequency — lows at the bottom, highs at the
-//                  top; where each band's energy sits (neutral trace), how wide it is (teal
+//                  top; where each band's energy sits (neutral trace), how wide it is (grey
 //                  dots either side) and, dashed, how wide the width setting makes an
 //                  uncorrelated signal. Drag sideways for the balance, up / down for the width;
 //  • UtWidthView — Mono: the configured width over frequency (neutral ink) — the mono region
-//                  shaded — against the output's measured width (teal, dashed). Drag
+//                  shaded — against the output's measured width (grey, dashed). Drag
 //                  sideways for the mono cutoff, up / down for the width;
-//  • UtLevelView — Levels: input (teal) and output (neutral ink) over the last 8 s in the
+//  • UtLevelView — Levels: input (grey) and output (bright ink) over the last 8 s in the
 //                  meter's unit, the target dashed. Drag up / down for the target.
 // UtCorrBar is the −1 … +1 correlation bar of the Routing panel.
 
@@ -79,12 +79,12 @@ internal sealed class UtFieldView : VtWindowBase
                 for (int b = 0; b < _n; b++) loudest = Math.Max(loudest, _lvl[b]);
                 const double gate = 42;   // bands this far under the loudest are left out
                 bool Quiet(int b) => _lvl[b] < loudest - gate || _lvl[b] < -100;
-                // Teal dots: each band's spread either side of where it sits.
+                // Grey dots: each band's spread either side of where it sits.
                 for (int b = 0; b < _n; b++)
                 {
                     if (Quiet(b)) continue;
                     double a = Math.Clamp((_lvl[b] - (loudest - gate)) / gate, 0.15, 1);
-                    var dot = NotaPalette.Wash(NotaPalette.Teal, (byte)(40 + a * 190));
+                    var dot = NotaPalette.Wash(NotaPalette.TextTertiary, (byte)(40 + a * 190));
                     double x0 = cx + _pan[b] * half, y = Yb(b), s = Math.Clamp(_wid[b], 0, 1) * half;
                     ctx.DrawEllipse(dot, null, new Point(Math.Clamp(x0 - s, 2, w - 2), y), 1.7, 1.7);
                     ctx.DrawEllipse(dot, null, new Point(Math.Clamp(x0 + s, 2, w - 2), y), 1.7, 1.7);
@@ -137,7 +137,7 @@ internal sealed class UtFieldView : VtWindowBase
         }
         else
         {
-            var hint = NotaGraph.AxisText("lows at the bottom · highs at the top", NotaPalette.TealBright);
+            var hint = NotaGraph.AxisText("lows at the bottom · highs at the top", NotaPalette.TextSecondary);
             ctx.DrawText(hint, new Point(w - hint.Width - 5, h - hint.Height - 14));
         }
     }
@@ -193,13 +193,13 @@ internal sealed class UtWidthView : VtWindowBase
         if (!double.IsNaN(_monoHz))
         {
             double mx = X(_monoHz);
-            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Teal, 0x1A), new Rect(0, 0, Math.Max(0, mx), h));
-            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xB0), 1, new DashStyle(new double[] { 3, 4 }, 0)), new Point(mx, 0), new Point(mx, h));
-            var mono = NotaGraph.AxisText("mono", NotaPalette.TealBright);
+            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.TextTertiary, 0x1A), new Rect(0, 0, Math.Max(0, mx), h));
+            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0xB0), 1, new DashStyle(new double[] { 3, 4 }, 0)), new Point(mx, 0), new Point(mx, h));
+            var mono = NotaGraph.AxisText("mono", NotaPalette.TextSecondary);
             if (mx > mono.Width + 10) ctx.DrawText(mono, new Point(6, bot - mono.Height - 2));
         }
 
-        // Measured: the output's side / mid ratio per band (dashed teal; gaps where it is quiet).
+        // Measured: the output's side / mid ratio per band (dashed grey; gaps where it is quiet).
         if (_valid && _nb > 1)
         {
             double loudest = -120;
@@ -218,7 +218,7 @@ internal sealed class UtWidthView : VtWindowBase
                 }
                 if (open) c.EndFigure(false);
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1.1, new DashStyle(new double[] { 4, 4 }, 0)), g);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x90), 1.1, new DashStyle(new double[] { 4, 4 }, 0)), g);
         }
         // Configured.
         if (_nr > 1)
@@ -305,11 +305,11 @@ internal sealed class UtLevelView : VtWindowBase
         }
         if (_n > 1)
         {
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1.1), Line(_in));
+            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0xA0), 1.1), Line(_in));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_out));
             if (_in[_n - 1] > -100)
             {
-                var lab = NotaGraph.AxisText("in", NotaPalette.TealBright);
+                var lab = NotaGraph.AxisText("in", NotaPalette.TextSecondary);
                 ctx.DrawText(lab, new Point(w - lab.Width - 5, Math.Clamp(Y(_in[_n - 1]) + 2, top, bot - lab.Height)));
             }
         }
@@ -328,21 +328,22 @@ internal sealed class UtLevelView : VtWindowBase
     }
 }
 
-/// <summary>Correlation −1 … +1: the negative half tinted red, a needle at the value.</summary>
+/// <summary>Correlation −1 … +1: a thin track with a tick at 0, a needle at the value (green in
+/// phase, amber wide, red out of phase).</summary>
 internal sealed class UtCorrBar : Control
 {
     private double _c = 1;
-    public UtCorrBar() { Height = 6; }
+    public UtCorrBar() { Height = 10; }
     public void Set(double c) { _c = Math.Clamp(c, -1, 1); InvalidateVisual(); }
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 1) return;
-        var rr = new RoundedRect(new Rect(0.5, 0.5, w - 1, h - 1), 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.GraphBorder, 1), rr);
-        using (ctx.PushClip(rr)) ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Danger, 0x55), new Rect(0, 0, w / 2, h));
+        double cy = h / 2;
+        ctx.DrawRectangle(NotaPalette.Rule, null, new Rect(0, cy - 1.5, w, 3), 1.5, 1.5);
+        ctx.FillRectangle(NotaPalette.TextTertiary, new Rect(Math.Round(w / 2) - 0.5, cy - 4, 1, 8));
         double x = (_c + 1) / 2 * w;
         var ink = _c < 0 ? NotaPalette.Danger : _c < 0.3 ? NotaPalette.Warning : NotaPalette.Success;
-        ctx.FillRectangle(ink, new Rect(Math.Clamp(x - 1.5, 0, w - 3), -1, 3, h + 2));
+        ctx.DrawRectangle(ink, null, new Rect(Math.Clamp(x - 1.5, 0, w - 3), 0, 3, h), 1, 1);
     }
 }

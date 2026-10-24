@@ -10,8 +10,8 @@
 //   PrismEnvTrace  — the band's input peaks and its detector envelope against the threshold.
 //   PrismGrMeter   — a gain-reduction bar that grows down from the top (boost grows up), with
 //                    an optional peak-hold line.
-// Band colours follow the mockup: Low = mauve, Mid = neutral ink, High = teal (accent is kept
-// for live or chosen state — a dragged handle, solo).
+// The bands are greys told apart by shade (Low mid grey, Mid the curve ink, High darker); the
+// accent is kept for live or chosen state — a dragged handle, solo.
 
 using System;
 using System.Diagnostics;
@@ -27,10 +27,11 @@ namespace Nota.App;
 internal static class PrismInk
 {
     // Read per use: the colours follow the theme, so they must not be captured in a static array.
-    public static Color[] BandColor => new[] { NotaPalette.TrackColors[7], NotaPalette.VizInk.Color, NotaPalette.TrackColors[4] };
-    public static readonly IBrush[] Band = { NotaPalette.TrackBrushes[7], NotaPalette.VizInk, NotaPalette.Teal };
+    // The bands are greys told apart by shade (Low mid grey, Mid the curve ink, High darker).
+    public static Color[] BandColor => new[] { NotaPalette.TextSecondary.Color, NotaPalette.VizInk.Color, NotaPalette.TextTertiary.Color };
+    public static readonly IBrush[] Band = { NotaPalette.TextSecondary, NotaPalette.VizInk, NotaPalette.TextTertiary };
     // Text / handle tint for the selected band.
-    public static readonly IBrush[] BandLit = { Band[0], NotaPalette.TextPrimary, Band[2] };
+    public static readonly IBrush[] BandLit = { NotaPalette.TextPrimary, NotaPalette.TextPrimary, NotaPalette.TextPrimary };
     public static readonly string[] Names = { "Low", "Mid", "High" };
     public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
@@ -458,7 +459,7 @@ internal sealed class PrismGrMeter : Control
     public int Band { get; init; }
     public bool Soloed { get; set; }
 
-    public PrismGrMeter() { Width = 18; }
+    public PrismGrMeter() { Width = 14; }
 
     public void Set(double grDb, double boostDb, bool peakHold)
     {
@@ -474,7 +475,7 @@ internal sealed class PrismGrMeter : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 4 || h < 4) return;
         var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(Soloed ? NotaPalette.Accent : PrismInk.InnerBorder, 1), rect, 2, 2);
+        ctx.DrawRectangle(NotaPalette.Groove, Soloed ? new Pen(NotaPalette.Accent, 1) : null, rect, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         double ih = h - 3;
         var col = PrismInk.BandColor[Band];
         if (_gr > 0.01) ctx.DrawRectangle(PrismInk.Band[Band], null, new Rect(1.5, 1.5, w - 3, ih * Math.Min(1, _gr / Scale)), 2, 2);

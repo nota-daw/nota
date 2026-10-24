@@ -8,7 +8,7 @@
 //     its key) | SHIFTS: six rows — switch dot, semitones, a bipolar ±12 ruler, the interval
 //     name and a draggable velocity offset | RESULT: the chord's note names, a three-octave
 //     keyboard (played bright accent, added deeper accent, an unplayed root outlined), Strum and
-//     Spread — over a status line.
+//     Spread, in pressed-in sections.
 //   • S 260 × 260 — note names + the keyboard over six vertical bipolar shift bars (the
 //     number under each toggles it), Strum / Spread knobs and the two flags. The header keeps
 //     the same preset picker as L; presets set everything, S just edits less.
@@ -46,14 +46,9 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
     private static readonly bool[] MajorPc = { true, false, true, false, true, true, false, true, false, true, false, true };
     private static readonly bool[] MinorPc = { true, false, true, true, false, true, false, true, true, false, true, false };
 
-    private static readonly IBrush Ground = NotaPalette.SurfaceCard;   // the card surface: sections sit on it, divided by rules (spec 012)
-    private static readonly IBrush Bd = NotaPalette.BorderDefault;
-    private static readonly IBrush Rule = NotaPalette.GraphBorder;
-    private static readonly IBrush Well = NotaPalette.BgSunken;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly IBrush Cap = NotaPalette.TextTertiary;
-    private static readonly IBrush Axis = NotaPalette.TextAxis;
 
     // Per-card editor state that survives rebuilds — UI only, not persisted.
     private sealed class Ui { public bool CustomPinned; public long EditTicks; }
@@ -127,10 +122,11 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
     }
 
     // ---- small builders -------------------------------------------------------------------------
-    private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
-    { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
-    private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => DeviceBodyKit.Label(t, c);
+    // The old small sizes land on the device scale: 6–7 → 10.5 (a label / axis), 8–9 → 11 (a value).
+    private static double Fs(double fs) => fs < 8 ? NotaType.RowLabel : fs < 10 ? NotaType.KnobValue : fs;
+    private static TextBlock Mono(string t, IBrush c, double fs = NotaType.KnobValue) => new()
+    { Text = t, FontSize = Fs(fs), FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -201,7 +197,6 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         int KeyStart() { int lo = notes.Count > 0 ? Math.Min(root, notes[0].Pitch) : root; return (int)Math.Floor(lo / 12.0) * 12; }
         string NoteList() => notes.Count == 0 ? "—" : string.Join(" ", notes.Select(n => DeviceCardKit.NoteName(n.Pitch)));
         int RingPitch() => G(KeepRoot) >= 0.5f ? -1 : root;
-        string StatusRight() => engine.MidiEffectBypassed(track, mi) ? "bypassed" : "MIDI · latency 0 smp";
 
         Poll();
         Control rootView = mini ? BuildMini() : BuildLarge();
@@ -213,23 +208,22 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         Control BuildLarge()
         {
             // ---- TYPE ----
-            var list = new StackPanel { Margin = new Thickness(0, 3) };
+            var list = new StackPanel();
             for (int i = 0; i < Types.Length; i++)
             {
                 int ti = i;
-                var bar = new Border { Width = 2, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left };
-                var name = new TextBlock { Text = Types[i].Name, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
-                var hint = Mono(Types[i].Shifts is { } iv ? string.Join(" ", iv.Select(Sgn)) : "", Axis, 7);
+                var name = new TextBlock { Text = Types[i].Name, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center };
+                var hint = Mono(Types[i].Shifts is { } iv ? string.Join(" ", iv.Select(Sgn)) : "", Cap, 7);
                 hint.HorizontalAlignment = HorizontalAlignment.Right;
-                var rowB = new Border { Height = 18, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new Panel { Children = { bar, new DockPanel { Margin = new Thickness(8, 0), Children = { WithDock(hint, Dock.Right), name } } } } };
+                var rowB = new Border { Height = 19, CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new DockPanel { Margin = new Thickness(8, 0), Children = { WithDock(hint, Dock.Right), name } } };
                 bool hover = false;
                 void Paint()
                 {
                     bool on = TypeIndex() == ti;
-                    rowB.Background = on ? NotaPalette.AccentSubtle : hover ? NotaPalette.GridBeat : Brushes.Transparent;
-                    bar.Background = on ? NotaPalette.Accent : Brushes.Transparent;
-                    name.Foreground = on ? Txt : Sub; name.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    rowB.Background = on ? NotaPalette.AccentSoft : hover ? NotaPalette.GridBeat : Brushes.Transparent;
+                    name.Foreground = on ? NotaPalette.AccentBright : Sub; name.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    hint.Foreground = on ? NotaPalette.AccentBright : Cap; hint.FontWeight = name.FontWeight;
                 }
                 rowB.PointerEntered += (_, _) => { hover = true; Paint(); };
                 rowB.PointerExited += (_, _) => { hover = false; Paint(); };
@@ -238,39 +232,39 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 readouts.Add(Paint);
                 list.Children.Add(rowB);
             }
-            var flags = new StackPanel { Spacing = 4, Children = { Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
+            var flags = new StackPanel { Spacing = 4, Children = { DeviceBodyKit.Rule(), Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
                                                                    Flag(Fold, "Fold in scale", "Drop added notes outside the scale a semitone into it") } };
             flags.Children.Add(ScaleLabel());
-            var typeFoot = new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 6), Child = flags };
-            var typeIsland = IslandBox(IslandHead(Caps("TYPE"), null), new DockPanel { Children = { WithDock(typeFoot, Dock.Bottom), list } }, 100);
+            var typeIsland = IslandBox(IslandHead(Caps("Type"), null), new DockPanel { Children = { WithDock(flags, Dock.Bottom), list } }, 122);
+            typeIsland.Padding = new Thickness(12, 12, 12, 8);
 
             // ---- SHIFTS ----
-            var rows = new Grid { Margin = new Thickness(6, 5) };
+            var rows = new Grid();
             for (int s = 0; s < Slots; s++)
             {
                 rows.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
                 var r = ShiftRow(s); Grid.SetRow(r, s); rows.Children.Add(r);
             }
-            var shiftsIsland = IslandBox(IslandHead(Caps("SHIFTS"), Mono("semitones · interval · velocity", Cap, 7)), rows, 292);
+            var shiftsIsland = IslandBox(IslandHead(Caps("Shifts"), Mono("semitones · interval · velocity", Cap, 7)), rows, 250);
 
             // ---- RESULT ----
-            var noteText = Mono("", Txt); noteText.FontWeight = FontWeight.Medium;
-            var range = Mono("", Axis, 7); range.HorizontalAlignment = HorizontalAlignment.Right;
+            var noteText = Mono("", Txt); noteText.FontWeight = FontWeight.SemiBold;
+            var range = Mono("", Cap, 7); range.HorizontalAlignment = HorizontalAlignment.Right;
             var legend = new DockPanel { Children = { WithDock(range, Dock.Right), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children =
             {
-                Swatch(NotaPalette.AccentBright, null, "played"), Swatch(ChordKeysViz.Added, null, "added"), Swatch(null, NotaPalette.Accent, "root off"),
+                Swatch(NotaPalette.Accent, null, "played"), Swatch(ChordKeysViz.Added, null, "added"), Swatch(null, NotaPalette.Accent, "root off"),
             } } } };
             var keys = new ChordKeysViz { Labels = true };
-            var sliders = new StackPanel { Spacing = 6, Children =
+            var sliders = new StackPanel { Spacing = 8, Children =
             {
-                SliderLine("STRUM", Strum, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} ms"),
-                SliderLine("SPREAD", Spread, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} %"),
+                SliderLine("Strum", Strum, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} ms"),
+                SliderLine("Spread", Spread, v => v / 100, n => Math.Round(n * 100), v => $"{v:0} %"),
             } };
-            var resBody = new DockPanel { Margin = new Thickness(8, 6), Children =
+            var resBody = new DockPanel { Children =
             {
-                WithDock(legend, Dock.Top), WithDock(sliders, Dock.Bottom), new Border { Margin = new Thickness(0, 6), Child = keys },
+                WithDock(legend, Dock.Top), WithDock(sliders, Dock.Bottom), new Border { Margin = new Thickness(0, 8), Child = keys },
             } };
-            var resultIsland = IslandBox(IslandHead(Caps("RESULT"), noteText), resBody, double.NaN);
+            var resultIsland = IslandBox(IslandHead(Caps("Result"), noteText), resBody, double.NaN);
             readouts.Add(() =>
             {
                 noteText.Text = NoteList();
@@ -279,26 +273,18 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 keys.Set(start, lit, RingPitch());
             });
 
-            typeIsland.Margin = new Thickness(0, 0, 5, 0); shiftsIsland.Margin = new Thickness(0, 0, 5, 0);
+            typeIsland.Margin = new Thickness(0, 0, DeviceCardKit.SectionGap, 0); shiftsIsland.Margin = new Thickness(0, 0, DeviceCardKit.SectionGap, 0);
             var islands = new DockPanel { Children = { WithDock(typeIsland, Dock.Left), WithDock(shiftsIsland, Dock.Left), resultIsland } };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices · strum {StrumMs()}\u2009ms · spread {SpreadText()}"
-                             + (G(Fold) >= 0.5f ? $" · fold {ScaleName(G, true)}" : "");
-                statusR.Text = StatusRight();
-            });
-            return Framed(islands, statusL, statusR);
+            return DeviceBodyKit.Frame(islands);
         }
 
         // =========================================================================================
         Control BuildMini()
         {
-            var noteText = Mono("", Txt); noteText.FontWeight = FontWeight.Medium;
+            var noteText = Mono("", Txt); noteText.FontWeight = FontWeight.SemiBold;
             var voicesText = Mono("", Cap, 7);
-            var head = new DockPanel { Height = 12, Children = { WithDock(voicesText, Dock.Right), noteText } };
+            var head = new DockPanel { Height = 16, Children = { WithDock(voicesText, Dock.Right), noteText } };
             var keys = new ChordKeysViz { Labels = false, KeyRadius = 0, Height = 40 };
 
             var bars = new Grid { ColumnSpacing = 3 };
@@ -308,10 +294,10 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 var c = ShiftColumn(s); Grid.SetColumn(c, s); bars.Children.Add(c);
             }
 
-            var knobs = new Grid { Height = 53, ColumnDefinitions = new ColumnDefinitions("*,*,78") };
-            var strum = KnobCell("STRUM", Strum, () => G(Strum) / 100, n => S(Strum, Math.Round(n * 100)), () => $"{StrumMs()} ms");
-            var spread = KnobCell("SPREAD", Spread, () => G(Spread) / 100, n => S(Spread, Math.Round(n * 100)), SpreadText);
-            var flags = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
+            var knobs = new Grid { Margin = new Thickness(0, 8, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,*,92") };
+            var strum = KnobCell("Strum", Strum, () => G(Strum) / 100, n => S(Strum, Math.Round(n * 100)), () => $"{StrumMs()} ms");
+            var spread = KnobCell("Spread", Spread, () => G(Spread) / 100, n => S(Spread, Math.Round(n * 100)), SpreadText);
+            var flags = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children =
             {
                 Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
                 Flag(Fold, "Fold in scale", $"Drop added notes outside {ScaleName(G, false)} a semitone into it"),
@@ -321,63 +307,49 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
 
             var inner = new DockPanel { Children =
             {
-                WithDock(head, Dock.Top), WithDock(new Border { Margin = new Thickness(0, 4), Child = keys }, Dock.Top),
+                WithDock(head, Dock.Top), WithDock(new Border { Margin = new Thickness(0, 6, 0, 8), Child = keys }, Dock.Top),
                 WithDock(knobs, Dock.Bottom), bars,
             } };
-            var island = new RuleSection { Padding = new Thickness(6, 5, 6, 0), Child = inner };
+            var island = DeviceBodyKit.Sec(inner, new Thickness(10, 10, 10, 8));
             readouts.Add(() =>
             {
                 noteText.Text = NoteList();
-                voicesText.Text = $"{voices} of {Slots + 1}";
+                voicesText.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : $"{voices} of {Slots + 1}";
                 keys.Set(KeyStart(), lit, RingPitch());
             });
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices";
-                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : $"strum {StrumMs()}\u2009ms";
-            });
-            return Framed(island, statusL, statusR);
+            return DeviceBodyKit.Frame(island);
         }
 
         // ---- shared pieces -----------------------------------------------------------------------
-        Control Framed(Control main, TextBlock left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
 
         Control IslandHead(Control left, Control? right)
         {
-            var d = new DockPanel { Margin = new Thickness(8, 0) };
+            if (left is TextBlock t) { t.FontSize = NotaType.Caption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
+            var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
             if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
             d.Children.Add(left);
-            return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
+            return d;
         }
 
         Decorator IslandBox(Control head, Control content, double width)
         {
-            var b = DeviceCardKit.Section(new DockPanel { Children = { WithDock(head, Dock.Top), content } });
-            if (!double.IsNaN(width)) b.Width = width;
-            return b;
+            return DeviceBodyKit.Sec(new DockPanel { Children = { WithDock(head, Dock.Top), content } }, DeviceCardKit.SectionPad, width);
         }
 
         Control Swatch(IBrush? fill, IBrush? ring, string label)
         {
-            var sw = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Field, Background = fill, BorderBrush = ring,
+            var sw = new Border { Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, Background = fill, BorderBrush = ring,
                 BorderThickness = new Thickness(ring is null ? 0 : 1), VerticalAlignment = VerticalAlignment.Center };
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { sw, new TextBlock { Text = label, FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
+            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { sw, new TextBlock { Text = label, FontSize = NotaType.Caption, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
         }
 
-        // A switch flag (Keep root / Fold in scale), accent-washed when on.
+        // A raised toggle (Keep root / Fold in scale), soft orange when on.
         Control Flag(int p, string label, string tip)
         {
-            var tb = new TextBlock { Text = label, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var tb = new TextBlock { Text = label, FontSize = NotaType.Caption, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Height = 18, CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             b.PointerPressed += (_, ev) =>
             {
                 if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
@@ -388,9 +360,8 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 bool on = G(p) >= 0.5f;
-                b.Background = on ? NotaPalette.AccentSubtle : NotaPalette.TrackOff;
-                b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.TrackOff;
-                tb.Foreground = on ? NotaPalette.AccentHover : Txt;
+                b.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                tb.Foreground = on ? NotaPalette.AccentBright : Txt;
                 tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             });
             return b;
@@ -399,7 +370,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         // "scale C major": click the key for the next one (Shift = previous, wheel scrolls), the mode to flip it.
         Control ScaleLabel()
         {
-            var keyTb = Mono("", Axis, 7); var modeTb = Mono("", Axis, 7);
+            var keyTb = Mono("", Cap, 7); var modeTb = Mono("", Cap, 7);
             keyTb.Cursor = modeTb.Cursor = new Cursor(StandardCursorType.Hand);
             void StepKey(int d) { S(FoldKey, ((GI(FoldKey) + d) % 12 + 12) % 12); Edited(); }
             keyTb.PointerPressed += (_, ev) =>
@@ -418,20 +389,20 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             Learn(keyTb, FoldKey, "Fold Key"); Learn(modeTb, FoldMode, "Fold Mode");
             readouts.Add(() =>
             {
-                var ink = G(Fold) >= 0.5f ? Sub : Axis;
+                var ink = G(Fold) >= 0.5f ? Sub : Cap;
                 keyTb.Text = KeyNames[((GI(FoldKey)) % 12 + 12) % 12]; modeTb.Text = G(FoldMode) >= 0.5f ? "minor" : "major";
                 keyTb.Foreground = modeTb.Foreground = ink;
             });
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center,
-                Children = { Mono("scale", Axis, 7), keyTb, modeTb } };
+                Children = { Mono("scale", Cap, 7), keyTb, modeTb } };
         }
 
-        // One SHIFTS row: switch dot · semitones · ±12 ruler · interval · velocity offset.
+        // One shift row: switch · semitones · ±12 value bar · interval · velocity offset.
         Control ShiftRow(int s)
         {
             int pSt = Voice1 + s, pOn = On1 + s, pVel = Vel1 + s;
-            var dot = new Ellipse { Width = 6, Height = 6 };
-            var dotHit = new Border { Width = 14, Height = 14, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = dot };
+            var dot = new SwitchTrack { VerticalAlignment = VerticalAlignment.Center };
+            var dotHit = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = dot };
             dotHit.PointerPressed += (_, ev) =>
             {
                 if (!ev.GetCurrentPoint(dotHit).Properties.IsLeftButtonPressed) return;
@@ -439,26 +410,24 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             };
             ToolTip.SetTip(dotHit, $"Shift {s + 1} on / off");
             Learn(dotHit, pOn, $"Shift {s + 1} on");
-            var st = Mono("", Txt, 9); st.FontWeight = FontWeight.SemiBold; st.Width = 24;
-            var ruler = new ChordShiftTrack { Height = 14, Margin = new Thickness(0, 0, 2, 0) };
+            var st = Mono("", Txt, 9); st.FontWeight = FontWeight.SemiBold; st.Width = 28;
+            var ruler = new ChordShiftTrack { Height = 16 };
             ruler.Changed += v => SetShift(s, v);
             ruler.GestureBegin += () => { Begin(pSt); Begin(pOn); }; ruler.GestureEnd += () => { End(pSt); End(pOn); };
             Learn(ruler, pSt, $"Shift {s + 1}");
-            var iv = Mono("", Sub); iv.Width = 22; iv.TextAlignment = TextAlignment.Center;
+            var iv = Mono("", Sub); iv.Width = 24; iv.TextAlignment = TextAlignment.Center;
             ValueEntry.Attach(ruler, ruler.EntryField($"Shift {s + 1}"));
             var vel = VelDrag(pVel, s);
             var g = new DockPanel { Children = { WithDock(dotHit, Dock.Left), WithDock(st, Dock.Left), WithDock(vel, Dock.Right), WithDock(iv, Dock.Right), ruler } };
-            st.Margin = new Thickness(6, 0, 6, 0); iv.Margin = new Thickness(6, 0, 6, 0);
-            var row = new Border { Height = 24, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 7, 0),
-                VerticalAlignment = VerticalAlignment.Center, Child = g };
+            st.Margin = new Thickness(8, 0, 4, 0); iv.Margin = new Thickness(8, 0, 4, 0);
+            var row = new Border { Height = 26, VerticalAlignment = VerticalAlignment.Center, Child = g };
             readouts.Add(() =>
             {
                 bool on = G(pOn) >= 0.5f; int v = GI(pSt);
-                row.Background = on ? Ground : NotaPalette.GridRow;
-                row.BorderBrush = on ? Bd : NotaPalette.GridBeat;
-                dot.Fill = on ? NotaPalette.Accent : NotaPalette.BorderStrong;
+                dot.IsOn = on;
                 st.Text = on ? Sgn(v) : "off"; st.Foreground = on ? Txt : NotaPalette.TextDisabled;
-                iv.Text = on ? IntervalName(v) : "·"; iv.Foreground = on ? Sub : NotaPalette.BorderStrong;
+                st.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                iv.Text = on ? IntervalName(v) : "·"; iv.Foreground = on ? Sub : NotaPalette.TextDisabled;
                 if (!ruler.Dragging) ruler.Value = v;
                 ruler.On = on;
             });
@@ -468,7 +437,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         // Velocity offset: drag sideways (2px per step), double-click resets.
         Control VelDrag(int p, int s)
         {
-            var tb = Mono("", Cap); tb.Width = 28; tb.TextAlignment = TextAlignment.Right;
+            var tb = Mono("", Cap); tb.Width = 24; tb.TextAlignment = TextAlignment.Right;
             var hit = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = tb, VerticalAlignment = VerticalAlignment.Stretch };
             bool drag = false; double x0 = 0; int v0 = 0;
             hit.PointerPressed += (_, ev) =>
@@ -504,7 +473,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones) · ⌥-click to type · double-click resets");
             ValueEntry.Attach(bar, bar.EntryField($"Shift {s + 1}"));
             var lbl = Mono("", Txt); lbl.HorizontalAlignment = HorizontalAlignment.Center;
-            var lblHit = new Border { Height = 11, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };
+            var lblHit = new Border { Height = 15, Margin = new Thickness(0, 4, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };
             bool hover = false;
             lblHit.PointerEntered += (_, _) => { hover = true; Refresh(); };
             lblHit.PointerExited += (_, _) => { hover = false; Refresh(); };
@@ -525,43 +494,30 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             return new DockPanel { Children = { WithDock(lblHit, Dock.Bottom), bar } };
         }
 
-        // A RESULT slider: the label brightens to primary text once moved off its default.
+        // A result slider: label · value bar · value.
         Control SliderLine(string label, int p, Func<double, double> toNorm, Func<double, double> fromNorm, Func<double, string> fmt)
         {
-            var l = Caps(label); l.Width = 40;
-            var val = Mono("", Txt); val.Width = 34; val.TextAlignment = TextAlignment.Right;
-            var track = new SliderTrack { Height = 11, Reset = () => { S(p, Def(p)); Edited(); } };
-            track.Changed += n => { S(p, fromNorm(n)); Refresh(); };
-            track.GestureBegin += () => Begin(p);
-            track.GestureEnd += () => { End(p); Edited(); };
-            Learn(track, p, label);
-            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Edited, control: track);
-            readouts.Add(() =>
-            {
-                double v = G(p);
-                if (!track.Dragging) track.Norm = toNorm(v);
-                bool mod = Math.Abs(v - Def(p)) > 0.5;
-                l.Foreground = mod ? Txt : Cap;
-                val.Foreground = Txt;
-                val.Text = fmt(v);
-            });
-            track.Margin = new Thickness(6, 0, 6, 0);
-            return new DockPanel { Children = { WithDock(l, Dock.Left), WithDock(val, Dock.Right), track } };
+            var row = DeviceCardKit.SliderRow(label, () => toNorm(G(p)), n => { S(p, fromNorm(n)); Refresh(); }, () => fmt(G(p)), out var sync,
+                () => Begin(p), () => { End(p); Edited(); }, () => { Begin(p); S(p, Def(p)); End(p); Edited(); },
+                labelWidth: 48, valueWidth: 44);
+            Learn(row.Children.OfType<SliderTrack>().First(), p, label);
+            readouts.Add(sync);
+            return row;
         }
 
-        // A mini-view knob: 34px gauge, caps label, mono value.
+        // A mini-view knob: the device knob, value (11, ink 1) over label (10.5, ink 3).
         Control KnobCell(string label, int p, Func<double> norm, Action<double> set, Func<string> text)
         {
-            var knob = new Knob(norm(), 1.0) { Accent = true, Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center };
+            var knob = new Knob(norm(), 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center };
             knob.ValueChanged += n => { set(n); Refresh(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => { End(p); Edited(); };
             Learn(knob, p, label);
-            var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
+            var val = Mono("", Txt); val.HorizontalAlignment = HorizontalAlignment.Center; val.Margin = new Thickness(0, 4, 0, 0);
             ValueEntry.Attach(knob, label, val, text);
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
-                Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };
+                Children = { knob, val, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 13 } } };
         }
     }
 }
