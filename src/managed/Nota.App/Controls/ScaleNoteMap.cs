@@ -93,13 +93,13 @@ internal sealed class ScaleNoteMap : Control
     }
 
     // ---- geometry --------------------------------------------------------------------------------
-    private double Gap => Mini ? 2 : 3;
+    private double Gap => Mini ? 2 : 4;
     private Rect CellRect(int pc)
     {
         double w = Bounds.Width, h = Bounds.Height, gap = Gap;
         double cw = (w - gap * 11) / 12.0;
         double x = pc * (cw + gap);
-        double ch = h * (Black[pc] ? 0.78 : 0.92);
+        double ch = h * (Black[pc] ? 0.78 : 0.85);
         double y = Black[pc] ? 0 : h - ch;
         return new Rect(x, y, Math.Max(1, cw), ch);
     }
@@ -144,14 +144,12 @@ internal sealed class ScaleNoteMap : Control
     public override void Render(DrawingContext ctx)
     {
         if (Bounds.Width <= 0 || Bounds.Height <= 0) return;
-        var card = NotaPalette.SurfaceCard.Color;
-        var brass = NotaPalette.Accent.Color;
         var lit = NotaPalette.AccentBright.Color;
-        var deep = Over(brass, 0x1A, card);          // accent wash: a chosen scale note
-        var deepLive = Over(brass, 0x44, card);      // …while it sounds (#4A3A1C)
-        Color offWhite = NotaPalette.GridRow.Color, offBlack = NotaPalette.BgSunken.Color, offLive = NotaPalette.TrackOff.Color;
-        double r = Mini ? 2 : 3;
-        double nameFs = Mini ? 7 : 9, subFs = 7, padB = Mini ? 4 : 6, gapT = Mini ? 2 : 3;
+        var deep = NotaPalette.AccentSoft.Color;     // soft orange: a chosen scale note
+        var deepLive = Over(lit, 0x50, deep);        // …while it sounds
+        Color offWhite = NotaPalette.Groove.Color, offBlack = offWhite, offLive = NotaPalette.TrackOff.Color;
+        double r = Mini ? 3 : 5;
+        double nameFs = Mini ? 10 : NotaType.KnobValue, subFs = Mini ? 10 : NotaType.RowLabel, padB = Mini ? 4 : 6, gapT = Mini ? 1 : 2;
         var sans = NotaFonts.SansSemiBold;
         var mono = NotaFonts.Sans;
 
@@ -162,8 +160,9 @@ internal sealed class ScaleNoteMap : Control
             double a = _in[pc], o = _out[pc];
             var baseFill = inS ? deep : Black[pc] ? offBlack : offWhite;
             var fill = Mix(baseFill, inS ? deepLive : offLive, Math.Max(a, o * 0.55));
-            IBrush edge = isRoot ? NotaPalette.AccentBright : inS ? NotaPalette.AccentDim : pc == _hover ? NotaPalette.BorderStrong : NotaPalette.BorderDefault;
-            ctx.DrawRectangle(new SolidColorBrush(fill), new Pen(edge, 1), rc.Deflate(0.5), r, r);
+            ctx.DrawRectangle(new SolidColorBrush(fill), null, rc, r, r);
+            if (isRoot) ctx.DrawRectangle(null, new Pen(NotaPalette.Accent, 2), rc.Deflate(1), r - 1, r - 1);
+            else if (pc == _hover && !inS) ctx.DrawRectangle(null, new Pen(NotaPalette.BorderStrong, 1), rc.Deflate(0.5), r, r);
             if (pc == _hover && inS) ctx.DrawRectangle(null, new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x60), 1), rc.Deflate(1.5), r - 1, r - 1);
 
             // The live ring: 1px outside the edge (the mockup's box-shadow), full for the key
@@ -174,10 +173,10 @@ internal sealed class ScaleNoteMap : Control
                     rc.Inflate(0.5), r + 1, r + 1);
 
             // Name + what happens to it, standing on the cell's bottom.
-            var nameInk = inS ? NotaPalette.TextPrimary : NotaPalette.TextTertiary;
+            var nameInk = inS ? NotaPalette.AccentBright : NotaPalette.TextSecondary;
             string sub = isRoot ? (Mini ? "R" : "root") : inS ? "·" : Mini ? Names[Target(pc)] : "→ " + Names[Target(pc)];
-            IBrush subInk = isRoot ? NotaPalette.AccentBright : inS ? NotaPalette.Accent : NotaPalette.TextSecondary;
-            if (Mask == 0) { sub = Mini ? "" : "thru"; subInk = NotaPalette.TextAxis; }
+            IBrush subInk = inS ? NotaPalette.AccentBright : NotaPalette.TextSecondary;
+            if (Mask == 0) { sub = Mini ? "" : "thru"; subInk = NotaPalette.TextTertiary; }
             var subFt = new NotaFormattedText(sub, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, subFs, subInk);
             var nameFt = new NotaFormattedText(Names[pc], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, sans, nameFs, nameInk);
             double yb = rc.Bottom - padB;

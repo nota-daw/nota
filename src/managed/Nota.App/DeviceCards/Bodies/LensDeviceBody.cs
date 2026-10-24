@@ -2,9 +2,9 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Lens body (device kind 22, analyzer), a build of the
-// "Nota Lens" mockup (700 × 260) on the Prism/Chamber frame: a permanent SCALE rail on the
-// left, one large graph in the middle behind Spectrum / Scope / Waterfall tabs, an
-// Analyze / Display panel on the right and a status strip. The scope behaves like a bench
+// "Nota Lens" picture of the style guide (700 × 260): a permanent Scale rail of two upright
+// value bars on the left, one large graph in the middle behind Spectrum / Scope / Waterfall
+// tabs and an Analyze / Display panel on the right, each a pressed-in section. The scope behaves like a bench
 // instrument — the trace is pinned to the trigger point and stands still while older passes
 // fade out. Every control is a device param, so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header.
@@ -49,16 +49,6 @@ internal sealed class LensDeviceBody : IDeviceBody
     private static readonly double[] WfSpans = { 4, 12, 60 };
     private static readonly double[] Overlaps = { 0, 50, 75, 87.5 };
 
-    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush PanelBg = NotaPalette.SurfaceCard;
-    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
-    private static readonly IBrush Inset = NotaPalette.BgSunken;
-    private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
-    private static readonly IBrush TealC = NotaPalette.Teal;
-    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
-    private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
-    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
 
     /// <summary>The right panel's tab survives a card rebuild (keyed by track + device slot).</summary>
     private static readonly Dictionary<(int, int), int> RightTab = new();
@@ -107,26 +97,20 @@ internal sealed class LensDeviceBody : IDeviceBody
         static string Db(double db) => Inv($"{db:0.0} dB");
         static string Pc(double v) => Inv($"{v * 100:0} %");
 
-        // ---- small builders (same kit as Prism / Chamber) -----------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
-        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
-        static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
-        static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
+        // ---- small builders --------------------------------------------------------------
         Control Learn(Control c, int p) { MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p)); return c; }
 
-        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 52, IBrush? arc = null)
+        Control K(int p, string name, Func<double, string> fmt)
         {
-            var val = Mono(fmt(P(p)), 7, TxtC);
-            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
+            var val = DeviceBodyKit.Value(fmt(P(p)));
+            var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p) };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
             Learn(knob, p);
             readouts.Add(() => { if (knob.Dragging || !knob.IsEffectivelyVisible) return; float c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; val.Text = fmt(c); });
-            return KnobCell(name, knob, val, cellW);
+            return KnobCell(name, knob, val, 52);
         }
 
         Control Toggle(int p, string label)
@@ -136,48 +120,57 @@ internal sealed class LensDeviceBody : IDeviceBody
             return Learn(wrap, p);
         }
 
-        Control Seg(int p, string[] names, Action? changed = null)
+        // Two switches sharing a row.
+        Control TogglePair(Control a, Control b)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(a); g.Children.Add(DeviceBodyKit.At(b, 1));
+            return g;
+        }
+
+        Control Seg(int p, string[] names, Action? changed = null, bool fill = false)
         {
             int n = names.Length;
-            var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync);
+            var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync, fill: fill);
             readouts.Add(sync);
             return Learn(seg, p);
         }
 
-        Control Row(string label, int p, Func<double, string> fmt, double labW = 48, double valW = 34)
+        // A labelled choice row in the right panel: label · segments.
+        Control SegRow(string label, int p, string[] names)
         {
-            var bar = DeviceCardKit.SliderRow("", () => Math.Clamp(P(p), 0, 1), v => Raw(p, (float)v), () => fmt(Math.Clamp(P(p), 0, 1)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => SetP(p, Def(p)), valueWidth: valW);
-            readouts.Add(() => { if (bar.IsEffectivelyVisible) sync(); });
-            Learn(bar, p);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(Inv($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(Caps(label)); g.Children.Add(Col(bar, 1));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("50,*"), VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(DeviceBodyKit.Label(label));
+            g.Children.Add(DeviceBodyKit.At(Seg(p, names, fill: true), 1));
             return g;
         }
 
-        // A sunken readout box: a caps eyebrow over one or two mono lines.
+        Control Row(string label, int p, Func<double, string> fmt)
+        {
+            var bar = DeviceCardKit.SliderRow(label, () => Math.Clamp(P(p), 0, 1), v => Raw(p, (float)v), () => fmt(Math.Clamp(P(p), 0, 1)), out var sync,
+                begin: () => Begin(p), end: () => End(p), reset: () => SetP(p, Def(p)), labelWidth: 42, valueWidth: 48);
+            readouts.Add(() => { if (bar.IsEffectivelyVisible) sync(); });
+            return Learn(bar, p);
+        }
+
+        // A readout well: its name over one or two lines.
         (Border Box, TextBlock A, TextBlock B) ReadBox(string title, string hintA = "—", string hintB = "")
         {
-            var a = Mono(hintA, 9, NotaPalette.TextPrimary);
-            var b = Mono(hintB, 8, Txt2);
-            var box = new Border
+            var a = DeviceBodyKit.Value(hintA);
+            var b = DeviceBodyKit.Note(hintB);
+            var box = DeviceBodyKit.Well(new StackPanel
             {
-                Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 1, Children = { Caps(title), a, b } },
-            };
+                Spacing = 0, VerticalAlignment = VerticalAlignment.Center,
+                Children = { DeviceBodyKit.Label(title), a, b },
+            }, new Thickness(8, 2));
             return (box, a, b);
         }
 
         Control Button(string text, string tip, Action click)
         {
-            var b = new Border
-            {
-                Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Group, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Child = new TextBlock { Text = text, FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center },
-            };
+            var b = TextButton(text);
+            b.HorizontalAlignment = HorizontalAlignment.Stretch;
+            ((TextBlock)b.Child!).HorizontalAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(b, tip);
             b.PointerPressed += (_, e) => { if (e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) { e.Handled = true; click(); } };
             return b;
@@ -196,210 +189,199 @@ internal sealed class LensDeviceBody : IDeviceBody
         var wfRow = new float[LensData.WfBins];
         var wfPend = new float[LensData.WfBins];   // the row being accumulated (see Overlap)
 
-        Control GraphHost(Control topRow, Control graph, Control knobRow) => new DockPanel
+        // A tab's body: its choice row, the graph (its summary in the top-right corner) and
+        // the knob row with a two-line note beside it.
+        Control GraphHost(Control topRow, Control graph, TextBlock info, Control knobRow)
         {
-            LastChildFill = true,
-            Margin = new Thickness(6, 5),
-            Children = { Docked(topRow, Dock.Top), Docked(knobRow, Dock.Bottom), graph },
-        };
-
-        Control KnobRow(params Control[] cells)
-        {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Height = 52, Margin = new Thickness(0, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            foreach (var c in cells) sp.Children.Add(c);
-            return sp;
+            info.HorizontalAlignment = HorizontalAlignment.Right;
+            info.VerticalAlignment = VerticalAlignment.Top;
+            info.Margin = new Thickness(0, 4, 8, 0);
+            info.IsHitTestVisible = false;
+            topRow.Margin = new Thickness(0, 5, 0, 4);
+            knobRow.Margin = new Thickness(0, 7, 0, 0);
+            return new DockPanel
+            {
+                LastChildFill = true,
+                Children = { DeviceBodyKit.Dock(topRow, Avalonia.Controls.Dock.Top), DeviceBodyKit.Dock(knobRow, Avalonia.Controls.Dock.Bottom), new Panel { Children = { graph, info } } },
+            };
         }
 
-        // A two-line mono summary that sits to the right of a knob row.
+        // A two-line summary that sits to the right of a knob row.
         (Control Ctl, TextBlock A, TextBlock B) SideNote()
         {
-            var a = Mono("", 7, MutedC);
-            var b = Mono("", 7, MutedC);
-            return (new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = { a, b } }, a, b);
+            var a = DeviceBodyKit.Note(); a.FontSize = NotaType.RowLabel;
+            var b = DeviceBodyKit.Note(); b.FontSize = NotaType.RowLabel;
+            return (new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 6), Children = { a, b } }, a, b);
+        }
+
+        Control KnobRow((Control Ctl, TextBlock A, TextBlock B) note, params Control[] cells)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            foreach (var c in cells) sp.Children.Add(c);
+            var d = new DockPanel { LastChildFill = true };
+            d.Children.Add(DeviceBodyKit.Dock(sp, Avalonia.Controls.Dock.Left));
+            note.Ctl.HorizontalAlignment = HorizontalAlignment.Right;
+            d.Children.Add(note.Ctl);
+            return d;
         }
 
         var specNote = SideNote();
         var scopeNote = SideNote();
         var wfNote = SideNote();
-        var specInfo = Mono("", 7, MutedC);
-        var scopeInfo = Mono("", 7, MutedC);
-        var wfInfo = Mono("", 7, MutedC);
+        TextBlock InfoText() { var t = DeviceBodyKit.Note("", TextSecondary); t.FontSize = NotaType.RowLabel; return t; }
+        var specInfo = InfoText();
+        var scopeInfo = InfoText();
+        var wfInfo = InfoText();
 
-        Control TopRow(string label, Control chips, TextBlock info)
+        Control TopRow(string label, Control chips) => new StackPanel
         {
-            var d = new DockPanel { Height = 18, LastChildFill = false, Margin = new Thickness(0, 0, 0, 4) };
-            d.Children.Add(Docked(Caps(label), Dock.Left));
-            var holder = new Border { Margin = new Thickness(6, 0, 0, 0), Child = chips };
-            d.Children.Add(Docked(holder, Dock.Left));
-            info.TextAlignment = TextAlignment.Right;
-            d.Children.Add(Docked(info, Dock.Right));
-            return d;
-        }
+            Orientation = Orientation.Horizontal, Spacing = 10, Height = NotaSize.Seg + 4,
+            Children = { DeviceBodyKit.Label(label), chips },
+        };
 
         Control SpectrumTab() => GraphHost(
-            TopRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16384" }), specInfo),
-            spectrum,
-            KnobRow(K(SmoothP, "Smooth", v => Pc(v), 34, 48, TealC),
-                    K(DecayP, "Decay", v => Sec(Exp(v, 0.05, 8)), 34, 48),
-                    K(TiltP, "Tilt", v => Inv($"{v * 9:0.0} dB"), 34, 48, TealC),
-                    K(FloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB"), 34, 48),
-                    specNote.Ctl));
+            TopRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16384" })),
+            spectrum, specInfo,
+            KnobRow(specNote,
+                    K(SmoothP, "Smooth", v => Pc(v)),
+                    K(DecayP, "Decay", v => Sec(Exp(v, 0.05, 8))),
+                    K(TiltP, "Tilt", v => Inv($"{v * 9:0.0}\u2009dB")),
+                    K(FloorP, "Floor", v => Inv($"{-120 + v * 80:0}\u2009dB"))));
 
         Control ScopeTab()
         {
             var trig = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+                Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
                 Children = { Seg(TrigModeP, new[] { "Auto", "Normal", "Single" }), Seg(TrigEdgeP, new[] { "↑", "↓" }) },
             };
             return GraphHost(
-                TopRow("TRIG", trig, scopeInfo),
-                scopeView,
-                KnobRow(K(TimeDivP, "Time/Div", v => Ms(Exp(v, 0.00002, 0.02)), 34, 48),
-                        K(VoltDivP, "Volt/Div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}"), 34, 48),
-                        K(TrigLevelP, "Trig Lvl", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"), 34, 48, TealC),
-                        K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"), 34, 48, TealC),
-                        scopeNote.Ctl));
+                TopRow("Trig", trig),
+                scopeView, scopeInfo,
+                KnobRow(scopeNote,
+                        K(TimeDivP, "Time/div", v => Ms(Exp(v, 0.00002, 0.02))),
+                        K(VoltDivP, "Volt/div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}")),
+                        K(TrigLevelP, "Trig level", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}")),
+                        K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0}\u2009ms"))));
         }
 
         Control WaterfallTab() => GraphHost(
-            TopRow("SPEED", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall()), wfInfo),
-            waterfall,
-            KnobRow(K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0} dB"), 34, 48),
-                    K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB"), 34, 48),
-                    K(WfContrastP, "Contrast", v => Pc(v), 34, 48, TealC),
-                    K(WfOverlapP, "Overlap", v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %"), 34, 48, TealC),
-                    wfNote.Ctl));
+            TopRow("Speed", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall())),
+            waterfall, wfInfo,
+            KnobRow(wfNote,
+                    K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0}\u2009dB")),
+                    K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0}\u2009dB")),
+                    K(WfContrastP, "Contrast", v => Pc(v)),
+                    K(WfOverlapP, "Overlap", v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#}\u2009%"))));
 
         // ---- right panel --------------------------------------------------------------
-        var cursorBox = ReadBox("CURSOR", "—", "move over the graph");
-        var captureBox = ReadBox("CAPTURE");
+        var cursorBox = ReadBox("Cursor", "—", "move over the graph");
+        var captureBox = ReadBox("Capture");
         var measureBox = ReadBox("A → B");
-        var wfCursorBox = ReadBox("CURSOR", "—", "move over the graph");
+        var wfCursorBox = ReadBox("Cursor", "—", "move over the graph");
 
         spectrum.CursorMoved += () =>
         {
             double hz = spectrum.CursorHz;
             if (hz <= 0) { cursorBox.A.Text = "—"; cursorBox.B.Text = "move over the graph"; return; }
             cursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            cursorBox.B.Text = Inv($"{spectrum.CursorDb:0.0} dB · bin {(Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0):0}");
+            cursorBox.B.Text = Inv($"{spectrum.CursorDb:0.0}\u2009dB · bin {(Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0):0}");
         };
         waterfall.CursorMoved += () =>
         {
             double hz = waterfall.CursorHz;
             if (hz <= 0) { wfCursorBox.A.Text = "—"; wfCursorBox.B.Text = "move over the graph"; return; }
             wfCursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            wfCursorBox.B.Text = Inv($"−{waterfall.CursorAgeSec:0.0} s");
+            wfCursorBox.B.Text = Inv($"−{waterfall.CursorAgeSec:0.0} s");
         };
 
-        Control Stack(params Control[] cs)
+        // The right panel: rows from the top, a switch row at the bottom, the readout well
+        // (when there is one) filling between.
+        Control Stack(Control? fill, Control bottom, params Control[] top)
         {
-            var sp = new StackPanel { Spacing = 5, Margin = new Thickness(7, 6) };
-            foreach (var c in cs) sp.Children.Add(c);
-            return sp;
+            var d = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 5, 0, 0) };
+            var sp = new StackPanel { Spacing = 4 };
+            foreach (var c in top) sp.Children.Add(c);
+            d.Children.Add(DeviceBodyKit.Dock(sp, Avalonia.Controls.Dock.Top));
+            bottom.Margin = new Thickness(0, 4, 0, 0);
+            d.Children.Add(DeviceBodyKit.Dock(bottom, Avalonia.Controls.Dock.Bottom));
+            if (fill is not null) { fill.Margin = new Thickness(0, 4, 0, 0); d.Children.Add(fill); }
+            else d.Children.Add(new Panel());
+            return d;
         }
 
-        Control SpectrumAnalyze() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("WINDOW"), Col(Seg(WindowP, new[] { "Hann", "B-H", "Flat" }), 1) } },
-            Row("AVG", AverageP, v => Inv($"{1 + v * 15:0}")),
-            Row("PEAK", PeakTimeP, v => Sec(Exp(v, 0.5, 30))),
-            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
-            cursorBox.Box,
-            Toggle(PeakHoldP, "Peak hold"),
-            Toggle(MidSideP, "Mid / Side"));
+        Control SpectrumAnalyze() => Stack(cursorBox.Box,
+            TogglePair(Toggle(PeakHoldP, "Peak hold"), Toggle(MidSideP, "Mid / Side")),
+            SegRow("Window", WindowP, new[] { "Hann", "B-H", "Flat" }),
+            Row("Avg", AverageP, v => Inv($"{1 + v * 15:0}")),
+            Row("Peak", PeakTimeP, v => Sec(Exp(v, 0.5, 30))),
+            Row("Rate", RateP, v => Inv($"{10 + v * 50:0} fps")));
 
-        Control ScopeAnalyze() => Stack(
-            Row("PERSIST", PersistTimeP, v => Sec(Exp(v, 0.05, 2.0))),
-            Row("TRACES", TracesP, v => Inv($"{1 + v * 7:0}")),
-            Row("BRIGHT", BrightP, v => Pc(v)),
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
-            captureBox.Box,
-            Toggle(PersistP, "Afterglow"),
-            Toggle(CursorsP, "Cursors"));
+        Control ScopeAnalyze() => Stack(captureBox.Box,
+            TogglePair(Toggle(PersistP, "Afterglow"), Toggle(CursorsP, "Cursors")),
+            SegRow("Source", SourceP, new[] { "L+R", "L", "R" }),
+            Row("Persist", PersistTimeP, v => Sec(Exp(v, 0.05, 2.0))),
+            Row("Traces", TracesP, v => Inv($"{1 + v * 7:0}")),
+            Row("Bright", BrightP, v => Pc(v)));
 
-        Control CursorAnalyze() => Stack(
-            measureBox.Box,
-            Row("A POS", CursorAP, v => Ms(v * TimeDiv() * 8)),
-            Row("B POS", CursorBP, v => Ms(v * TimeDiv() * 8)),
+        Control CursorAnalyze() => Stack(measureBox.Box,
+            TogglePair(Toggle(CursorSnapP, "Snap to peaks"), Toggle(CursorsP, "Cursors")),
+            Row("A pos", CursorAP, v => Ms(v * TimeDiv() * 8)),
+            Row("B pos", CursorBP, v => Ms(v * TimeDiv() * 8)),
+            new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6,
+                Children =
+                {
+                    Button("Re-arm", "Arm the next Single capture", () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }),
+                    DeviceBodyKit.At(Button("Export WAV", "Write the captured scope window to a WAV file", ExportWav), 1),
+                },
+            });
+
+        Control WaterfallAnalyze() => Stack(wfCursorBox.Box,
+            TogglePair(Toggle(LogFreqP, "Log freq"), Toggle(NoteGridP, "Note grid")),
+            SegRow("Window", WindowP, new[] { "Hann", "B-H", "Flat" }),
+            Row("FFT", FftSizeP, v => Inv($"{FftSizes[Math.Clamp((int)Math.Round(v * 3), 0, 3)]}")),
+            Row("Overlap", WfOverlapP, v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#}\u2009%")),
+            Row("Avg", AverageP, v => Inv($"{1 + v * 15:0}")));
+
+        Control DisplayTab() => Stack(null,
             new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 5,
+                Spacing = 6,
                 Children =
                 {
-                    new Border { Width = 82, Child = Button("Re-arm", "Arm the next Single capture", () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }) },
-                    new Border { Width = 82, Child = Button("Export WAV", "Write the captured scope window to a WAV file", ExportWav) },
+                    TogglePair(Toggle(MidSideP, "Mid / Side"), Toggle(LogFreqP, "Log freq")),
+                    TogglePair(Toggle(NoteGridP, "Note grid"), Toggle(PeakHoldP, "Peak hold")),
                 },
             },
-            Toggle(CursorSnapP, "Snap to peaks"),
-            Toggle(CursorsP, "Cursors"));
-
-        Control WaterfallAnalyze() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("WINDOW"), Col(Seg(WindowP, new[] { "Hann", "B-H", "Flat" }), 1) } },
-            Row("FFT", FftSizeP, v => Inv($"{FftSizes[Math.Clamp((int)Math.Round(v * 3), 0, 3)]}")),
-            Row("OVERLAP", WfOverlapP, v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %")),
-            Row("AVG", AverageP, v => Inv($"{1 + v * 15:0}")),
-            wfCursorBox.Box,
-            Toggle(LogFreqP, "Log frequency"),
-            Toggle(NoteGridP, "Note grid"));
-
-        Control DisplayTab() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
-            Row("TOP", ScaleTopP, v => Inv($"{24 - v * 60:0} dB")),
-            Row("RANGE", ScaleRangeP, v => Inv($"{30 + v * 90:0} dB")),
-            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
-            Toggle(MidSideP, "Mid / Side"),
-            Toggle(LogFreqP, "Log frequency"),
-            Toggle(NoteGridP, "Note grid"),
-            Toggle(PeakHoldP, "Peak hold"));
+            SegRow("Source", SourceP, new[] { "L+R", "L", "R" }),
+            Row("Top", ScaleTopP, v => Inv($"{24 - v * 60:0}\u2009dB")),
+            Row("Range", ScaleRangeP, v => Inv($"{30 + v * 90:0}\u2009dB")),
+            Row("Rate", RateP, v => Inv($"{10 + v * 50:0} fps")));
 
         // ---- Scale rail ---------------------------------------------------------------
-        var railTopVal = Mono("", 7, TxtC);
-        var railRngVal = Mono("", 7, TxtC);
-
-        // The slider stretches to the rail's height, its caption keeps its own line, and both
-        // retarget when the centre tab changes (dB scale for Spectrum / Waterfall, V and T for Scope).
-        Control RailSlider(Func<int> param, SolidColorBrush ink, Func<string> caption)
-        {
-            var s = new LensVSlider(P(param()), ink) { Default = Def(param()), VerticalAlignment = VerticalAlignment.Stretch };
-            var lbl = Caps(caption(), MutedC);
-            lbl.HorizontalAlignment = HorizontalAlignment.Center;
-            s.GestureBegin += () => Begin(param());
-            s.GestureEnd += () => End(param());
-            s.ValueChanged += v => Raw(param(), (float)v);
-            readouts.Add(() =>
-            {
-                lbl.Text = NotaText.Label(caption());
-                s.Default = Def(param());
-                if (!s.Dragging) { float c = P(param()); if (Math.Abs(c - s.Value) > 1e-4) s.Value = c; }
-            });
-            var g = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 3, Width = 16 };
-            g.Children.Add(s);
-            Grid.SetRow(lbl, 1); g.Children.Add(lbl);
-            return g;
-        }
-
+        // Two upright value bars that retarget when the centre tab changes (dB scale for
+        // Spectrum / Waterfall, V and T for Scope); each label sits over its value.
         int centreTab = Sel(ViewP, 3);
-        var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
-        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, NotaPalette.Teal, () => centreTab == 1 ? "T/D" : "RNG");
-        var rail = new RuleSection
+        var railLabels = new List<(TextBlock Lbl, Func<string> Text)>();
+        DeviceBodyKit.RailFader RailBar(Func<int> param, Func<string> caption, Func<string> text)
         {
-            Width = 56, Padding = new Thickness(0, 5),
-            Child = new DockPanel
-            {
-                LastChildFill = true,
-                Children =
-                {
-                    Docked(new TextBlock { Text = "Scale", FontSize = NotaType.KnobLabel, FontWeight = FontWeight.SemiBold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) }, Dock.Top),
-                    Docked(new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), Children = { railTopVal, railRngVal } }, Dock.Bottom),
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal, Spacing = 9, HorizontalAlignment = HorizontalAlignment.Center,
-                        Children = { railA, railB },
-                    },
-                },
-            },
-        };
-        DockPanel.SetDock(rail, Dock.Left);
+            int p0 = param();
+            var bar = DeviceBodyKit.Upright(caption(), () => P(param()), v => Raw(param(), (float)v), text, out var val, out var sync,
+                begin: () => Begin(param()), end: () => End(param()), reset: () => SetP(param(), Def(param())));
+            Learn(bar, p0);
+            readouts.Add(sync);
+            return new DeviceBodyKit.RailFader(caption(), bar, val);
+        }
+        var railA = RailBar(() => centreTab == 1 ? VoltDivP : ScaleTopP, () => centreTab == 1 ? "V/div" : "Top",
+            () => centreTab == 1 ? Inv($"{VoltDiv():0.00}") : Inv($"{TopDb():0}\u2009dB"));
+        var railB = RailBar(() => centreTab == 1 ? TimeDivP : ScaleRangeP, () => centreTab == 1 ? "T/div" : "Rng",
+            () => centreTab == 1 ? Ms(TimeDiv()) : Inv($"{RangeDb():0}\u2009dB"));
+        var railBody = DeviceBodyKit.FaderRail("Scale", false, out var railLbls, railA, railB);
+        var rail = DeviceBodyKit.Sec(railBody, new Thickness(8, 16, 8, 10), 91);
+        DeviceBodyKit.Dock(rail, Avalonia.Controls.Dock.Left);
+        TextBlock railLblA = railLbls[0], railLblB = railLbls[1];
 
         // ---- assembly -----------------------------------------------------------------
         var centreHost = new ContentControl();
@@ -428,85 +410,35 @@ internal sealed class LensDeviceBody : IDeviceBody
         Learn(freezeToggle, FreezeP);
         ToolTip.SetTip(freezeToggle, "Freeze — stop capturing and hold what is on screen");
 
-        var headNote = Mono("", 7, MutedC);
-        var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { freezeToggle, headNote } };
+        var headNote = DeviceBodyKit.Label("");
+        var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, Children = { freezeToggle, headNote } };
 
-        Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = Math.Clamp(initial, 0, tabs.Length - 1);
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? PanelBg : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : MutedC;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent,
-                    Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, e) =>
-                {
-                    if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                    e.Handled = true; sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv);
-                };
-                btns[i] = b; bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi(); host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
-
-        var centre = TabFrame(new[] { "Spectrum", "Scope", "Waterfall" }, centreTab, centreHost, CentreBody, false, t =>
+        var centreTabs = DeviceBodyKit.Tabs(new[] { "Spectrum", "Scope", "Waterfall" }, () => centreTab, t =>
         {
             centreTab = t;
             SetP(ViewP, t / 2f);
+            centreHost.Content = CentreBody(t);
             rightHost.Content = RightBody(rightTab == 1 ? 3 : t);   // Display is shared; Analyze follows the view
             foreach (var a in readouts) a();
-        }, extras);
+        }, out _, extras);
+        centreHost.Content = CentreBody(centreTab);
+        var centre = new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(centreTabs, Avalonia.Controls.Dock.Top), centreHost } };
 
-        var rightFrame = TabFrame(new[] { "Analyze", "Display" }, rightTab, rightHost, t =>
+        var rightTabs = DeviceBodyKit.Tabs(new[] { "Analyze", "Display" }, () => rightTab, t =>
         {
             rightTab = t; RightTab[(track, di)] = t;
-            return RightBody(t == 1 ? 3 : centreTab);
-        }, true, null, null);
+            rightHost.Content = RightBody(t == 1 ? 3 : centreTab);
+        }, out _);
+        rightHost.Content = RightBody(rightTab == 1 ? 3 : centreTab);
+        var rightFrame = new DockPanel { LastChildFill = true, Children = { DeviceBodyKit.Dock(rightTabs, Avalonia.Controls.Dock.Top), rightHost } };
 
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
+        var right = DeviceBodyKit.Sec(rightFrame, SectionPad, 196);
+        DeviceBodyKit.Dock(right, Avalonia.Controls.Dock.Right);
 
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+        var centreBox = DeviceBodyKit.Sec(centre);
+        centreBox.Margin = new Thickness(SectionGap, 0);
 
-        // ---- status strip ---------------------------------------------------------------
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, Txt2);
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border
-        {
-            Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(8, 0), Child = statusGrid,
-        };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { rail, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = DeviceBodyKit.Frame(new DockPanel { LastChildFill = true, Children = { rail, right, centreBox } });
 
         // ---- WAV export of the captured scope window --------------------------------------
         async void ExportWav()
@@ -595,12 +527,11 @@ internal sealed class LensDeviceBody : IDeviceBody
 
             foreach (var a in readouts) a();
 
-            // Rail readouts + captions follow the active view.
-            railTopVal.Text = centreTab == 1 ? Inv($"{VoltDiv():0.00} /d") : Inv($"{TopDb():0} dB");
-            railRngVal.Text = centreTab == 1 ? Ms(TimeDiv()) : Inv($"{RangeDb():0} dB");
+            // The rail labels follow the active view.
+            railLblA.Text = centreTab == 1 ? "V/div" : "Top";
+            railLblB.Text = centreTab == 1 ? "T/div" : "Rng";
 
             int fftN = (int)Sc(M_FftN);
-            string winName = new[] { "Hann", "B-H", "Flat" }[Sel(WindowP, 3)];
             headNote.Text = centreTab == 1
                 ? (data.Held ? "Held" : data.TrigOk ? "Trig’d" : "Free")
                 : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
@@ -622,15 +553,6 @@ internal sealed class LensDeviceBody : IDeviceBody
             double dtSec = Math.Abs(P(CursorBP) - P(CursorAP)) * TimeDiv() * 8;
             measureBox.A.Text = Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz");
             measureBox.B.Text = Inv($"ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000} · {LensInk.Note(dtSec > 1e-9 ? 1 / dtSec : 0)}");
-
-            statusLeft.Text = centreTab switch
-            {
-                1 => Inv($"Scope · {Ms(TimeDiv())}/div · {VoltDiv():0.00}/div · trig {(On(TrigEdgeP) ? "↓" : "↑")} {(P(TrigLevelP) - 0.5) * 2:0.00} {new[] { "auto", "normal", "single" }[Sel(TrigModeP, 3)]}{(On(PersistP) ? Inv($" · persist {Sec(PersistS())}") : "")}"),
-                2 => Inv($"Waterfall · {LensData.WfBins} bins · {winName} · overlap {Overlaps[Sel(WfOverlapP, 4)]:0.#} % · window {WfSpan():0} s · floor {-120 + P(WfFloorP) * 80:0} dB"),
-                _ => Inv($"Spectrum · FFT {fftN} · {winName} · avg {Avg()} · slope {P(TiltP) * 9:0.0} dB/oct{(On(MidSideP) ? " · Mid/Side" : "")}"),
-            };
-            statusLeft.Foreground = On(FreezeP) ? AmberLit : Txt2;
-            statusRight.Text = Inv($"{data.SampleRate / 1000:0.#} kHz · latency 0 smp · {(On(FreezeP) ? "frozen" : Inv($"{10 + P(RateP) * 50:0} fps"))} · corr {Sc(M_Corr):+0.00;−0.00;0.00}");
 
             // The right Analyze panel follows the centre tab (and the Cursors switch).
             if (rightTab == 0)
