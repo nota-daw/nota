@@ -118,6 +118,8 @@ public sealed class PanBar : Control
     {
         double h = Bounds.Height;
         if (Bounds.Width <= 0 || h <= 0) return;
+        // A clear fill over the whole bounds, so the gaps around the arc still take presses.
+        ctx.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
         double r = KnobD / 2 - Stroke / 2, cx = KnobD / 2, cy = h / 2;
         ctx.DrawGeometry(null, new Pen(Track, Stroke, lineCap: PenLineCap.Round), ArcGeo(cx, cy, r, StartDeg, SweepDeg));
         double mid = StartDeg + SweepDeg / 2, at = mid + _pan * SweepDeg / 2;

@@ -204,6 +204,15 @@ internal static partial class DesignTokenCheck
             named.Length == 0 ? "no view names a font family (NotaFonts / Font.* only)"
                               : $"font families named in views: {string.Join(", ", named)}");
 
+        // Drawn text goes through NotaFormattedText, which turns on tabular figures; a plain
+        // FormattedText (also a target-typed `FormattedText X(...) => new(...)`) loses them, so
+        // live readouts jitter in width as their digits change.
+        var plain = views.Where(v => Regex.IsMatch(v.Text, @"new\s+FormattedText\s*\(|FormattedText\s+\w+\s*\([^)]*\)\s*=>\s*new\s*\(|FormattedText\s+\w+\s*=\s*new\s*\("))
+            .Select(v => v.Path).OrderBy(p => p).ToArray();
+        yield return (plain.Length == 0,
+            plain.Length == 0 ? "drawn text uses NotaFormattedText (tabular figures)"
+                              : $"plain FormattedText in: {string.Join(", ", plain)}");
+
         // 7px is the floor. Catches FontSize literals and a FormattedText size literal.
         var small = new List<string>();
         foreach (var v in views)

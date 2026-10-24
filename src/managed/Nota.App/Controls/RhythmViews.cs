@@ -27,7 +27,7 @@ namespace Nota.App;
 internal static class RhythmInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void TopRight(DrawingContext ctx, double w, string t, IBrush ink)
     {
@@ -413,7 +413,7 @@ internal sealed class RhythmStepStrip : Control
             else ctx.DrawRectangle(acc ? NotaPalette.AccentBright : NotaPalette.Accent, null, r, 4, 4);
             if (on)
             {
-                var ft = new FormattedText((s + 1).ToString(NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
+                var ft = new NotaFormattedText((s + 1).ToString(NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
                     NotaType.KnobValue, quiet ? NotaPalette.AccentBright : NotaPalette.TextOnAccent);
                 ctx.DrawText(ft, new Point(x + (cw - ft.Width) / 2, (cellH - ft.Height) / 2));
             }

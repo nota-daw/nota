@@ -39,8 +39,8 @@ internal static class PrismInk
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static double Db(double lin) => lin > 1e-6 ? 20 * Math.Log10(lin) : -120;
     public static string HzShort(double hz) => hz >= 1000 ? (hz >= 10000 ? NotaNum.F($"{hz / 1000:0}k") : NotaNum.F($"{hz / 1000:0.0}k")) : NotaNum.F($"{hz:0}");
 }

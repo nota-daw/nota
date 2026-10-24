@@ -130,10 +130,17 @@ internal static class ClipEditorKit
             groups[i].VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(groups[i]);
         }
+        // A narrow editor scrolls the strip sideways, so the trailing groups stay reachable.
         return new Border
         {
             Height = StripH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault,
-            BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 0, 12, 0), ClipToBounds = true, Child = row,
+            BorderThickness = new Thickness(0, 0, 0, 1), ClipToBounds = true,
+            Child = new ScrollViewer
+            {
+                Content = new Border { Padding = new Thickness(14, 0, 12, 0), Child = row },
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
         };
     }
 

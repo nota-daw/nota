@@ -2053,7 +2053,7 @@ public sealed partial class ArrangementView : UserControl
         // A phone playing the track (Nota Remote) takes the type tag's place: during a jam
         // "who plays what" matters more than MIDI / Audio.
         Control typeTag = t.Player is { } player ? PlayerTag(player) : TypeTag(t.IsGroup ? "Group" : t.IsInstrument ? "MIDI" : "Audio");
-        var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), Height = MiniFader.BarH + 2 };
+        var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = MiniFader.BarH + 2 };
         if (t.IsGroup)
         {
             // Collapse triangle — hides/shows the group's child rows.
@@ -2075,10 +2075,10 @@ public sealed partial class ArrangementView : UserControl
                 : new Glyph(GlyphKind.Freeze, 10) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 5, 0) };
             nameRow.Children.Add(badge);
         }
-        Grid.SetColumn(name, 1);
-        Grid.SetColumn(typeTag, 2);
-        nameRow.Children.Add(name);
-        nameRow.Children.Add(typeTag);
+        // The name trims before it can push M / S / ● out of the card; the tag stays beside it.
+        var nameAndTag = new NameTagPanel { Children = { name, typeTag } };
+        Grid.SetColumn(nameAndTag, 1);
+        nameRow.Children.Add(nameAndTag);
 
         // M / S / ● (record-arm), 18 × 18 on the well. Each toggle also writes the TrackVM:
         // resizing a row rebuilds its card from the VM without re-reading the engine, and a
@@ -2094,7 +2094,7 @@ public sealed partial class ArrangementView : UserControl
         bool isAudioTrack = !t.IsInstrument && !t.IsReturn && !t.IsGroup;
         var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
         if (monitor is not null) btnRow.Children.Add(monitor.Chip);
-        Grid.SetColumn(btnRow, 4);
+        Grid.SetColumn(btnRow, 2);
         nameRow.Children.Add(btnRow);
 
         // The input picker ("In None ⌄"): record input on audio tracks, MIDI source on
@@ -2579,6 +2579,30 @@ public sealed partial class ArrangementView : UserControl
 
     // The kind tag (MIDI / Audio / Group): quiet text beside the name, 11 ink 3, not a chip.
     // It names the row's kind, which is reference information.
+    /// <summary>A track name and its type tag on one line. The tag keeps its width and sits right
+    /// after the name; the name gets what is left and trims, so a long name never shoves the
+    /// buttons beside it out of the header (a Grid's Auto column would let it grow).</summary>
+    private sealed class NameTagPanel : Panel
+    {
+        protected override Size MeasureOverride(Size available)
+        {
+            var (name, tag) = (Children[0], Children[1]);
+            tag.Measure(Size.Infinity);
+            name.Measure(new Size(Math.Max(0, available.Width - tag.DesiredSize.Width), available.Height));
+            return new Size(name.DesiredSize.Width + tag.DesiredSize.Width, Math.Max(name.DesiredSize.Height, tag.DesiredSize.Height));
+        }
+
+        protected override Size ArrangeOverride(Size final)
+        {
+            var (name, tag) = (Children[0], Children[1]);
+            double tagW = Math.Min(tag.DesiredSize.Width, final.Width);
+            double nameW = Math.Min(name.DesiredSize.Width, final.Width - tagW);
+            name.Arrange(new Rect(0, 0, nameW, final.Height));
+            tag.Arrange(new Rect(nameW, 0, tagW, final.Height));
+            return final;
+        }
+    }
+
     private Control TypeTag(string text) => new TextBlock
     {
         Text = text, FontSize = NotaType.Caption, Foreground = Brush("Brush.TextTertiary"),

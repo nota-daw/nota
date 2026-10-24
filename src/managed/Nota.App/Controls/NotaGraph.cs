@@ -59,7 +59,7 @@ internal static class NotaGraph
 
     /// <summary>An axis label at the column-head size, faint ink.</summary>
     public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize)
-        => new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk);
+        => new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk);
 
     public enum Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 

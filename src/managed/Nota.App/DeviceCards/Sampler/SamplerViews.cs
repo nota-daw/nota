@@ -32,7 +32,7 @@ namespace Nota.App;
 internal static class SamplerInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void Corner(DrawingContext ctx, Rect r, NotaGraph.Corner c, string text, IBrush ink)
     {

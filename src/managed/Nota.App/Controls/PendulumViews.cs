@@ -26,7 +26,7 @@ namespace Nota.App;
 internal static class PendulumInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     /// <summary>Seconds as the lanes print them: 0.12 s, 1.3 s, or — when never.</summary>
     public static string Secs(double s) => s < 0 || s > 99 ? "—" : s < 10 ? NotaNum.Unit(s, "0.00", "s") : NotaNum.Unit(s, "0.0", "s");

@@ -25,8 +25,8 @@ internal static class ChamberInk
     private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 
     // A time axis that stays put while the content moves inside it (so turning a knob visibly
