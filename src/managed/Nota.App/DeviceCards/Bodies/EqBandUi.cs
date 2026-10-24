@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The pieces EQ-8 and Dynamic EQ-8 share in their EQ Eight layout (style guide, spec 038):
-// the numbered band toggle (orange tint when the band is on, the same control as the band's
-// On switch), the filter-shape chooser (a drawn shape and a chevron that opens the six types),
-// one band's cell in the row under the graph, and the arrow that folds a side column.
+// The pieces EQ-8 and Dynamic EQ-8 share (style guide, spec 038): the numbered band toggle
+// (orange tint when the band is on, the same control as the band's On switch), one band's tab
+// in the row over the graph, the strip of six filter shapes that picks a band's type, the head
+// of the band panel, and the arrow that folds the side panel.
 
 using System;
 using Avalonia;
@@ -18,7 +18,7 @@ namespace Nota.App;
 
 internal static class EqBandUi
 {
-    internal const double CellH = 26, BadgeD = 18, ColumnW = 186, FoldedW = 42;
+    internal const double TabH = 40, BadgeD = 18, FoldedW = 42;
 
     /// <summary>A filter type drawn as its response, 22 × 12: high-pass, low shelf, bell, notch,
     /// high shelf, low-pass (DynEq.TypeNames order).</summary>
@@ -69,84 +69,119 @@ internal static class EqBandUi
         return badge;
     }
 
-    /// <summary>The filter-shape chooser: the band's shape and a chevron; a click opens the six
-    /// types (each with its shape) and picks one.</summary>
-    internal static Border ShapePicker(string[] typeNames, Func<int> type, Func<bool> on, Action<int> setType, Action? onOpen, out Action sync)
+    /// <summary>One band's tab in the row over the graph: the numbered toggle and the band's
+    /// filter shape on top, its frequency under them (10, ink 2; ink 4 while the band is off), an
+    /// orange outline while it is the band being edited and (Dynamic EQ-8) the band's dynamics
+    /// activity as a 2px orange bar along the bottom. A click on the tab itself picks the band.</summary>
+    internal static Border Tab(Border badge, Func<int> type, Func<bool> on, Func<string> freq, Func<bool> selected, Action select,
+        out Action sync, Func<double>? activity = null)
     {
-        var shape = new FilterShape();
-        var chevron = new Glyph(GlyphKind.ChevronDown, 7) { VerticalAlignment = VerticalAlignment.Center };
-        var host = new Border
+        var shape = new FilterShape { HorizontalAlignment = HorizontalAlignment.Right };
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        top.Children.Add(badge);
+        Grid.SetColumn(shape, 1);
+        top.Children.Add(shape);
+        var hz = new TextBlock
         {
-            Background = Brushes.Transparent, CornerRadius = NotaRadius.Cell, Padding = new Thickness(4, 0), Height = BadgeD,
-            Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { shape, chevron } },
+            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Axis, LineHeight = 12, Margin = new Thickness(0, 2, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.None,
+        };
+        var stack = new StackPanel { Children = { top, hz } };
+        var bar = new Border
+        {
+            Height = 2, CornerRadius = NotaRadius.Fine, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, -3),
+        };
+        var tab = new Border
+        {
+            Height = TabH, CornerRadius = NotaRadius.Field, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
+            Padding = new Thickness(3, 3, 3, 3), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
+            Child = activity is null ? stack : new Panel { Children = { stack, bar } },
         };
         void Paint()
         {
-            bool o = on();
+            bool o = on(), sel = selected();
+            tab.BorderBrush = sel ? Brass : Brushes.Transparent;
             shape.Type = type();
             shape.Ink = o ? TextSecondary : TextDisabled;
-            chevron.Foreground = o ? TextTertiary : TextDisabled;
+            hz.Text = freq();
+            hz.Foreground = !o ? TextDisabled : sel ? TextPrimary : TextSecondary;
+            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, tab.Bounds.Width - 8);
         }
-        host.PointerEntered += (_, _) => host.Background = NotaPalette.Well;
-        host.PointerExited += (_, _) => host.Background = Brushes.Transparent;
-        host.PointerPressed += (_, e) =>
+        tab.PointerPressed += (_, e) =>
         {
-            if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
-            e.Handled = true;
-            onOpen?.Invoke();
-            var fly = new MenuFlyout();
-            for (int i = 0; i < typeNames.Length; i++)
-            {
-                int iv = i;
-                var mi = new MenuItem
-                {
-                    Header = typeNames[i], ToggleType = MenuItemToggleType.Radio, IsChecked = type() == i,
-                    Icon = new FilterShape { Type = i, Ink = TextSecondary },
-                };
-                mi.Click += (_, _) => { setType(iv); Paint(); };
-                fly.Items.Add(mi);
-            }
-            fly.ShowAt(host);
-        };
-        ToolTip.SetTip(host, "Filter type");
-        sync = Paint;
-        Paint();
-        return host;
-    }
-
-    /// <summary>One band's cell in the row under the graph: the toggle at the left, the shape
-    /// chooser at the right, an orange outline while it is the band being edited, and (Dynamic
-    /// EQ-8) the band's dynamics activity as a 2px orange bar along the bottom. A click on the
-    /// cell itself picks the band.</summary>
-    internal static Border Cell(Border badge, Border picker, Func<bool> selected, Action select, out Action sync, Func<double>? activity = null)
-    {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(badge);
-        picker.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetColumn(picker, 1);
-        grid.Children.Add(picker);
-        var bar = new Border { Height = 2, CornerRadius = NotaRadius.Fine, Background = Brass, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(4, 0, 4, 1) };
-        var cell = new Border
-        {
-            Height = CellH, CornerRadius = NotaRadius.Field, Background = NotaPalette.Well, BorderThickness = new Thickness(1),
-            Padding = new Thickness(3, 0, 2, 0), Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true,
-            Child = activity is null ? grid : new Panel { Children = { grid, bar } },
-        };
-        if (activity is not null) bar.Margin = new Thickness(1, 0, 1, 1);
-        void Paint()
-        {
-            cell.BorderBrush = selected() ? Brass : Brushes.Transparent;
-            if (activity is not null) bar.Width = Math.Clamp(activity(), 0, 1) * Math.Max(0, cell.Bounds.Width - 8);
-        }
-        cell.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
+            if (!e.GetCurrentPoint(tab).Properties.IsLeftButtonPressed) return;
             select(); e.Handled = true;
         };
         sync = Paint;
         Paint();
-        return cell;
+        return tab;
+    }
+
+    /// <summary>The filter type as a strip of the six shapes (DynEq.TypeNames order) in a
+    /// groove: the picked shape rises out of it in the soft tint, drawn in orange; the others are
+    /// ink 3. Each shape's name is its tooltip. Left button picks.</summary>
+    internal static Border TypeRow(string[] typeNames, Func<int> type, Action<int> pick, out Action sync)
+    {
+        int n = typeNames.Length;
+        var cells = new Border[n];
+        var shapes = new FilterShape[n];
+        var row = new Grid();
+        for (int i = 0; i < n; i++)
+        {
+            int iv = i;
+            var sh = new FilterShape { Type = i, HorizontalAlignment = HorizontalAlignment.Center };
+            var c = new Border
+            {
+                Height = NotaSize.Seg, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.Hand), Child = sh,
+            };
+            ToolTip.SetTip(c, typeNames[i]);
+            c.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(c).Properties.IsLeftButtonPressed) return;
+                pick(iv); Paint(); e.Handled = true;
+            };
+            row.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+            Grid.SetColumn(c, i);
+            row.Children.Add(c);
+            cells[i] = c; shapes[i] = sh;
+        }
+        void Paint()
+        {
+            int cur = type();
+            for (int i = 0; i < n; i++)
+            {
+                bool picked = i == cur;
+                cells[i].Background = picked ? NotaPalette.AccentSoft : Brushes.Transparent;
+                if (picked) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+                else cells[i].BoxShadow = default;
+                shapes[i].Ink = picked ? AccentBright : TextTertiary;
+            }
+        }
+        sync = Paint;
+        Paint();
+        var host = new Border
+        {
+            Background = NotaPalette.Groove, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center, Child = row,
+        };
+        host.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+        return host;
+    }
+
+    /// <summary>The head of the band panel: the numbered toggle, the type's name (13 / 600, ink 1;
+    /// ink 3 while the band is off) and the band's On switch at the right.</summary>
+    internal static DockPanel Head(Border badge, Border onSwitch, Func<string> name, Func<bool> on, out Action sync)
+    {
+        var title = Title("");
+        title.FontSize = NotaType.Value;
+        title.Margin = new Thickness(6, 0, 6, 0);
+        DockPanel.SetDock(badge, Dock.Left);
+        DockPanel.SetDock(onSwitch, Dock.Right);
+        sync = () => { title.Text = name(); title.Foreground = on() ? TextPrimary : TextTertiary; };
+        sync();
+        return new DockPanel { Height = 20, Children = { badge, onSwitch, title } };
     }
 
     /// <summary>The arrow that folds a side column to a thin strip and back: a 20px raised

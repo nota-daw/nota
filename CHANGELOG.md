@@ -48,9 +48,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     mode on the Warp title row, so nothing scrolls.
   - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
     fade back, and send and volume values sit inside their bars.
-  - **EQ-8 and Dynamic EQ-8** follow Ableton's EQ Eight layout: a large graph, one row of band
-    toggles and filter shapes under it, and the band settings at the right. In EQ-8 that
-    column folds away to give the graph more room.
+  - **EQ-8 and Dynamic EQ-8** keep their classic layout in the new style: a row of band tabs
+    (toggle, filter shape, frequency) over a large graph, and one panel at the right with the
+    picked band's type, Freq, Gain and Q side by side. In EQ-8 that panel folds away to give
+    the graph more room.
   - **Devices:** cards are raised with pressed-in sections, have no status line, use value
     bars instead of thin sliders, and draw inactive controls in a quieter grey instead of
     fading them.
