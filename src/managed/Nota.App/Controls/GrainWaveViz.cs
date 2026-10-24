@@ -4,8 +4,8 @@
 // Nota Grain sample view — a graph window (NotaGraph) with the sample drawn as neutral bars
 // (scaled so its loudest peak fills the height) around a centre line and a time grid
 // labelled along the bottom. The Spray region is a neutral wash band around the read
-// Position (a dashed line); each held voice's read head is an accent line with a
-// notch on top, and the live grain cloud — every grain the engine is playing — is a teal
+// Position (an orange dashed line); each held voice's read head is an accent line with a
+// notch on top, and the live grain cloud — every grain the engine is playing — is a grey
 // dot at its read position, high for left and low for right, larger the louder its window
 // is. Grains/sec sits in the top-left corner.
 //
@@ -24,14 +24,15 @@ namespace Nota.App;
 internal sealed class GrainWaveViz : Control
 {
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen PosPen = new Pen(NotaPalette.TextSecondary, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
-    private static readonly IPen PosPenHot = new Pen(NotaPalette.Accent, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    // The read position is a value: orange, brighter while dragged.
+    private static readonly IPen PosPen = new Pen(NotaPalette.Accent, 1.4) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen PosPenHot = new Pen(NotaPalette.AccentBright, 1.4) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen HeadPen = new Pen(NotaPalette.AccentBright, 1.2);
     private static readonly IBrush SprayFill = NotaPalette.Wash(NotaPalette.VizInk, 0x20);
     private static readonly IBrush[] GrainInk =
     {
-        NotaPalette.Wash(NotaPalette.TealBright, 0x55), NotaPalette.Wash(NotaPalette.TealBright, 0x99),
-        NotaPalette.Wash(NotaPalette.TealBright, 0xDD),
+        NotaPalette.Wash(NotaPalette.TextSecondary, 0x55), NotaPalette.Wash(NotaPalette.TextSecondary, 0x99),
+        NotaPalette.Wash(NotaPalette.TextSecondary, 0xDD),
     };
 
     private float[] _peaks = Array.Empty<float>();   // min/max pairs across the file
