@@ -29,6 +29,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
 
+### Changed
+- **A new look** (spec 038, the Studio style guide): every control and setting stays where it
+  was; how it is drawn changes. The shell is flat and grey so the track colours carry the
+  content, and depth is kept for device cards. Orange now has three jobs: solid for what is
+  live, a soft tint for what you picked, orange lines for values inside a device.
+  - **Arrangement:** clips are a 20 % tint of the track colour with the name, notes and wave
+    in the full colour, and a selected clip gets an outline in the text colour instead of
+    orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
+    value inside the bar, the pan knob and the input picker). New tracks take colours in an
+    order that keeps neighbours apart. Group members show the group's bar beside their own.
+  - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
+    show the page you are on with an orange tick and the soft tint.
+  - **Piano roll:** the clip settings move from the left column into one strip above the
+    notes, so the notes get the full width. Quantize strength is a flat bar with its value
+    inside.
+  - **Audio editor:** one column with Start and Length side by side and the Warp switch and
+    mode on the Warp title row, so nothing scrolls.
+  - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
+    fade back, and send and volume values sit inside their bars.
+  - **EQ-8 and Dynamic EQ-8** follow Ableton's EQ Eight layout: a large graph, one row of band
+    toggles and filter shapes under it, and the band settings at the right. In EQ-8 that
+    column folds away to give the graph more room.
+  - **Devices:** cards are raised with pressed-in sections, have no status line, use value
+    bars instead of thin sliders, and draw inactive controls in a quieter grey instead of
+    fading them.
+
 ### Fixed
 - **Copy, paste and duplicate keep every setting** (nota-daw/nota#238): a pasted device came
   back with only part of its settings (a pasted Compressor at its default threshold and ratio).
