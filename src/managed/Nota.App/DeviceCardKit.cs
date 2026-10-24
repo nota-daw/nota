@@ -339,7 +339,8 @@ internal static class DeviceCardKit
     internal static Control ChipRow(string[] options, Func<int> get, Action<int> set)
         => Segments(options, () => Math.Clamp(get(), 0, options.Length - 1), set, out _);
 
-    // Preset picker "‹ Name ▾ ›" — raised in a device header (22 high, corner 6, 11.5): the
+    // Preset picker "‹ Name ▾ ›" — the name a raised dropdown (22 high, corner 6, 11.5) between
+    // two bare arrows, in a device header: the
     // name opens the factory presets for this kind with the current one checked — under an
     // "Init" entry when the caller can reset to defaults (init); ‹ › step to the previous /
     // next preset (from Init, › is the first and ‹ the last). Clicks are handled so they
@@ -358,10 +359,12 @@ internal static class DeviceCardKit
         DockPanel.SetDock(chevron, Dock.Right);
         var name = new Border
         {
-            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0),   // NaN = stretch to the picker's width
-            Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),   // the whole field is clickable, not just the text
+            Width = nameWidth, Height = H, Padding = new Thickness(8, 0, 7, 0),   // NaN = stretch to the picker's width
+            Background = NotaPalette.SurfaceHover, CornerRadius = NotaRadius.Field,
+            Cursor = new Cursor(StandardCursorType.Hand),   // the whole field is clickable, not just the text
             Child = new DockPanel { Children = { chevron, label } },
         };
+        name.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(name, "Choose a preset");
         name.PointerPressed += (_, e) =>
         {
@@ -389,7 +392,7 @@ internal static class DeviceCardKit
         {
             var g = new Glyph(dir < 0 ? GlyphKind.ChevronLeft : GlyphKind.ChevronRight, 8)
                 { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Width = H, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
+            var b = new Border { Width = 18, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
             ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
             b.PointerEntered += (_, _) => g.Foreground = TextPrimary;
             b.PointerExited += (_, _) => g.Foreground = TextTertiary;
@@ -403,15 +406,13 @@ internal static class DeviceCardKit
         }
         var picker = new Border
         {
-            Height = H, Background = NotaPalette.SurfaceHover,
-            CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center,
+            Height = H, VerticalAlignment = VerticalAlignment.Center,
             Child = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 2,
                 Children = { Step(-1), At(name, 1), At(Step(+1), 2) },
             },
         };
-        picker.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         return picker;
         static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
     }

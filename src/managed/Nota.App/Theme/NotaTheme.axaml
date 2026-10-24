@@ -982,8 +982,8 @@
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.Axis">           <!-- tick label inside a graph: 9, ink 4 -->
-    <Setter Property="FontSize" Value="9"/>
+  <Style Selector="TextBlock.Axis">           <!-- tick label inside a graph: 10, ink 4 -->
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextAxis}"/>
   </Style>
 
