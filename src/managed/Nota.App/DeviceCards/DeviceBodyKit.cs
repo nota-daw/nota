@@ -254,3 +254,45 @@ internal static class DeviceBodyKit
         return dock;
     }
 }
+
+/// <summary>An upright level meter in a device (a State or Level column): a 16-wide well in the
+/// groove grey with a grey fill from the bottom (or from the top, for a reduction) and a 2px
+/// line at its edge, plus an optional dashed threshold tick. Display only.</summary>
+internal sealed class UprightMeter : Control
+{
+    private double _v, _tick = double.NaN;
+    public bool FromTop { get; init; }
+    public IBrush Ink { get; init; } = NotaPalette.VizInk;
+
+    public UprightMeter() { Width = 16; IsHitTestVisible = false; }
+
+    /// <summary>The fill 0..1 and the threshold tick 0..1 (NaN = none).</summary>
+    public void Set(double v, double tick = double.NaN)
+    {
+        v = Math.Clamp(v, 0, 1);
+        if (Math.Abs(v - _v) < 1e-3 && (tick.Equals(_tick) || Math.Abs(tick - _tick) < 1e-3)) return;
+        _v = v; _tick = tick; InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext ctx)
+    {
+        double w = Bounds.Width, h = Bounds.Height;
+        if (w < 4 || h < 8) return;
+        var rect = new Rect(0, 0, w, h);
+        double r = NotaRadius.ValueBarValue;
+        var rr = new RoundedRect(rect, r);
+        NotaDepth.Groove(ctx, this, rr);
+        using (ctx.PushClip(rr))
+        {
+            double y = FromTop ? _v * h : (1 - _v) * h;
+            var fill = FromTop ? new Rect(0, 0, w, y) : new Rect(0, y, w, h - y);
+            if (Ink is SolidColorBrush sb) ctx.FillRectangle(NotaPalette.Wash(sb, 0x40), fill);
+            if (_v > 0.004) ctx.FillRectangle(Ink, new Rect(0, Math.Clamp(FromTop ? y - 2 : y, 0, h - 2), w, 2));
+            if (!double.IsNaN(_tick))
+            {
+                double ty = (1 - Math.Clamp(_tick, 0, 1)) * h;
+                ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(2, ty), new Point(w - 2, ty));
+            }
+        }
+    }
+}
