@@ -70,6 +70,49 @@ void RackCore::setRates(double sr, int32_t maxBlock) {
     }
 }
 
+void RackCore::forkFrom(const RackCore& o) {
+    auto ns = o.copyState();
+    for (auto& c : ns->chains) {
+        auto ctl = std::make_shared<ChainControls>();
+        if (c.ctl) {
+            const auto& s = *c.ctl;
+            constexpr auto r = std::memory_order_relaxed;
+            ctl->gain.store(s.gain.load(r), r);
+            ctl->pan.store(s.pan.load(r), r);
+            ctl->mute.store(s.mute.load(r), r);
+            ctl->solo.store(s.solo.load(r), r);
+            ctl->triggerNote.store(s.triggerNote.load(r), r);
+            ctl->keyLo.store(s.keyLo.load(r), r);
+            ctl->keyHi.store(s.keyHi.load(r), r);
+            ctl->velLo.store(s.velLo.load(r), r);
+            ctl->velHi.store(s.velHi.load(r), r);
+            ctl->chokeGroup.store(s.chokeGroup.load(r), r);
+            ctl->tune.store(s.tune.load(r), r);
+            ctl->decay.store(s.decay.load(r), r);
+            ctl->ampEnv = s.ampEnv; // a ringing pad keeps its level
+        }
+        c.ctl = std::move(ctl);
+    }
+    commit(ns);
+    constexpr auto r = std::memory_order_relaxed;
+    for (int32_t i = 0; i < kNumMacros; ++i) {
+        macros_[i].store(o.macros_[i].load(r), r);
+        macroNames_[i] = o.macroNames_[i];
+    }
+    rackVolume_.store(o.rackVolume_.load(r), r);
+    glide_.store(o.glide_.load(r), r);
+    swing_.store(o.swing_.load(r), r);
+    humanize_.store(o.humanize_.load(r), r);
+    mode_.store(o.mode_.load(r), r);
+    dryWet_.store(o.dryWet_.load(r), r);
+    pdc_.store(o.pdc_.load(r), r);
+    chainSelect_.store(o.chainSelect_.load(r), r);
+    selFollow_.store(o.selFollow_.load(r), r);
+    liveSel_.store(o.liveSel_.load(r), r);
+    sampleRate_ = o.sampleRate_;
+    maxBlock_ = o.maxBlock_;
+}
+
 bool RackCore::setChainName(int32_t c, const std::string& name) {
     auto ns = copyState();
     if (c < 0 || c >= static_cast<int32_t>(ns->chains.size())) return false;

@@ -508,6 +508,19 @@ public interface IAudioEngine : IDisposable
     int AddBuiltinDevice(int trackId, int kind);
     void MoveDevice(int trackId, int fromIndex, int toIndex);
     void RemoveDevice(int trackId, int deviceIndex);
+    // Device clipboard (#238): a full clone held by the engine; paste is one undo step.
+    bool CopyDevice(int trackId, int deviceIndex);
+    bool CopyMidiEffect(int trackId, int index);
+    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect
+    int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
+    int PasteMidiEffect(int trackId, int atIndex);
+    // A full clone right after the device / MIDI effect, one undo step; clipboard untouched.
+    int DuplicateDevice(int trackId, int deviceIndex);
+    int DuplicateMidiEffect(int trackId, int index);
+    // ⌘G / ⌘⇧G on a device (#257): wrap an audio effect in an Audio Effect Rack (its index or
+    // -1: keyed / automated / CV-linked devices stay out), unwrap a one-chain rack (count or -1).
+    int WrapDeviceInRack(int trackId, int deviceIndex);
+    int UnwrapRack(int trackId, int deviceIndex);
     string DeviceName(int trackId, int deviceIndex);
     int DeviceParamCount(int trackId, int deviceIndex);
     string DeviceParamName(int trackId, int deviceIndex, int paramIndex);

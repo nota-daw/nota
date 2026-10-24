@@ -126,7 +126,7 @@ public sealed class ModularView : UserControl
         // hint + minimap overlays (screen-space, not transformed)
         var hint = new TextBlock
         {
-            Text = MenuKit.Keys("Space + drag — pan · ⌘ + wheel — zoom · F — fit"),
+            Text = MenuKit.Keys("Drag from a CV out onto a node to modulate it · Space + drag — pan · ⌘ + wheel — zoom · F — fit · Esc — show fewer"),
             FontSize = 9, Foreground = Text4,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),
@@ -1041,7 +1041,20 @@ public sealed class ModularView : UserControl
             int m = e.ModulatorScope(t, modId, buf);
             viz.Set(buf, m);
         });
-        var vizBox = new Border { Height = 76, Margin = new Thickness(9, 6), Child = viz };
+        // Unwired, the scope says what it can watch: a modulator's CV, patched into its input. It
+        // doesn't tap audio — a first-time user tried to hang it off a filter's output (#261).
+        Control body = viz;
+        if ((int)Math.Round(e.ModulatorGet(t, modId, 10)) < 0)
+        {
+            var hint = new TextBlock
+            {
+                Text = "Watches CV. Drag a modulator's CV out onto this node. For audio, put Lens on the chain.",
+                FontSize = 9, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
+            };
+            body = new Panel { Children = { viz, hint } };
+        }
+        var vizBox = new Border { Height = 76, Margin = new Thickness(9, 6), Child = body };
         col.Children.Add(Row(vizBox, 2));
         col.Children.Add(Row(PortsBlock(n), 3));
         WrapFrame(n, col, headBorder);
@@ -1428,17 +1441,18 @@ public sealed class ModularView : UserControl
             actions.Children.Add(HeaderGlyph(GlyphKind.Bypass, n.Bypassed ? BrassBright : Text3, "Bypass (B)", () => ToggleBypass(n)));
             // Only offer expand when there are more params than the headline row shows,
             // otherwise the button reveals nothing (e.g. a plugin exposing few params).
-            if (CanExpand(n))
-                actions.Children.Add(HeaderGlyph(_expanded.Contains(n.Id) ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
-            actions.Children.Add(HeaderGlyph(GlyphKind.Close, Text3, "Delete", () => DeleteNode(n)));
+            if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
+            // A bin, not ×: an × reads as "close", and closing the opened knobs deleted the device (#261).
+            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => DeleteNode(n)));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
-        else if (n.Slot == Slot.Instrument && CanExpand(n))
+        else if (n.Slot == Slot.Instrument)
         {
-            // The instrument can't be bypassed/removed, but its params are expandable too.
+            // The instrument can't be bypassed/removed (the lock says so), but its params are expandable too.
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-            actions.Children.Add(HeaderGlyph(_expanded.Contains(n.Id) ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, _expanded.Contains(n.Id) ? BrassBright : Text3, "Expand", () => ToggleExpand(n)));
+            if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
+            actions.Children.Add(LockGlyph(n));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
@@ -1446,15 +1460,18 @@ public sealed class ModularView : UserControl
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             actions.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(n.Badge) ? "LFO" : NotaText.Label(n.Badge), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
-            actions.Children.Add(HeaderGlyph(GlyphKind.Close, Text3, "Delete", () => RemoveModulatorNode(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => RemoveModulatorNode(n)));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
-        else if (!string.IsNullOrEmpty(n.Badge))
+        else if (!string.IsNullOrEmpty(n.Badge) || FixedReason(n) is not null)
         {
-            var badge = new TextBlock { Text = NotaText.Label(n.Badge), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-            DockPanel.SetDock(badge, Dock.Right);
-            head.Children.Add(badge);
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            if (!string.IsNullOrEmpty(n.Badge))
+                actions.Children.Add(new TextBlock { Text = NotaText.Label(n.Badge), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
+            if (FixedReason(n) is not null) actions.Children.Add(LockGlyph(n));
+            DockPanel.SetDock(actions, Dock.Right);
+            head.Children.Add(actions);
         }
         head.Children.Add(title);
         // Transparent (not null) background so the whole header strip is hit-testable —
@@ -1483,7 +1500,7 @@ public sealed class ModularView : UserControl
 
     private void BuildNodeView(GNode n)
     {
-        var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
+        var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto,Auto") };
 
         // type stripe
         col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
@@ -1518,7 +1535,27 @@ public sealed class ModularView : UserControl
         // ports block
         col.Children.Add(Row(PortsBlock(n), 3));
 
+        // An opened node says how to close it: a strip under it, as well as the header chevron and Esc (#261).
+        if (_expanded.Contains(n.Id)) col.Children.Add(Row(CollapseStrip(n), 4));
+
         WrapFrame(n, col, headBorder);
+    }
+
+    private Control CollapseStrip(GNode n)
+    {
+        var text = new TextBlock { Text = "Show fewer", FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { new Glyph(GlyphKind.ChevronUp, 8) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, text } };
+        var strip = new Border
+        {
+            Height = 22, Background = Brushes.Transparent, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0),
+            Cursor = new Cursor(StandardCursorType.Hand), Child = row,
+        };
+        ToolTip.SetTip(strip, "Hide the parameters that aren't modulated (Esc)");
+        strip.PointerEntered += (_, _) => text.Foreground = Text1;
+        strip.PointerExited += (_, _) => text.Foreground = Text3;
+        strip.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(strip).Properties.IsLeftButtonPressed) return; ToggleExpand(n); e.Handled = true; };
+        return strip;
     }
 
     private Control PortsBlock(GNode n)
@@ -1897,6 +1934,31 @@ public sealed class ModularView : UserControl
         return b;
     }
 
+    // Nodes that belong to the track itself rather than its chain: they can't be deleted, and a
+    // lock in the header says why (#261). Null for a node that can be deleted.
+    private static string? FixedReason(GNode n) => n.Slot switch
+    {
+        Slot.Input => "Fixed — the track's clips and input enter the chain here, so it can't be deleted.",
+        Slot.Output => "Fixed — the chain leaves the track for the mixer here, so it can't be deleted.",
+        Slot.Instrument => "Fixed — the track's instrument takes its MIDI in. It can't be deleted; drop another instrument on the track to swap it.",
+        _ => null,
+    };
+
+    private static Control LockGlyph(GNode n)
+    {
+        var g = new Glyph(GlyphKind.Lock, 9) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Width = 16, Height = 16, Background = Brushes.Transparent, Child = g, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(b, FixedReason(n));
+        return b;
+    }
+
+    private Control ExpandGlyph(GNode n)
+    {
+        bool open = _expanded.Contains(n.Id);
+        return HeaderGlyph(open ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, open ? BrassBright : Text3,
+            open ? "Show fewer parameters (Esc)" : "Show all parameters", () => ToggleExpand(n));
+    }
+
     private GNode? Selected() { foreach (var n in _nodes) if (n.Selected) return n; return null; }
 
     private void ToggleBypass(GNode n)
@@ -1923,34 +1985,13 @@ public sealed class ModularView : UserControl
         Rebuild(); Changed?.Invoke();
     }
 
+    // A full clone (every param, state, bypass, sidechain) right after the node, as the device
+    // chain's copy / paste makes — copying the state blob alone lost the params (#238).
     private void DuplicateNode(GNode n)
     {
-        if (n.Slot == Slot.Device)
-        {
-            int kind = _engine.TrackDeviceBuiltinKind(_trackId, n.SlotIndex);
-            if (kind < 0) return;   // hosted plugins: not duplicated from the graph (Phase 2)
-            var state = _engine.DeviceGetState(_trackId, n.SlotIndex);
-            bool byp = _engine.DeviceBypassed(_trackId, n.SlotIndex);
-            int ni = _engine.AddBuiltinDevice(_trackId, kind);
-            if (ni < 0) return;
-            if (state != null) _engine.DeviceSetState(_trackId, ni, state);
-            if (byp) _engine.SetDeviceBypassed(_trackId, ni, true);
-            if (ni > n.SlotIndex) _engine.MoveDevice(_trackId, ni, n.SlotIndex + 1);
-        }
-        else if (n.Slot == Slot.MidiFx)
-        {
-            int kind = _engine.MidiEffectKind(_trackId, n.SlotIndex);
-            int pc = _engine.MidiEffectParamCount(_trackId, n.SlotIndex);
-            var p = new float[pc];
-            for (int i = 0; i < pc; i++) p[i] = _engine.MidiEffectGetParam(_trackId, n.SlotIndex, i);
-            bool byp = _engine.MidiEffectBypassed(_trackId, n.SlotIndex);
-            int ni = _engine.AddMidiEffect(_trackId, kind);
-            if (ni < 0) return;
-            for (int i = 0; i < Math.Min(pc, _engine.MidiEffectParamCount(_trackId, ni)); i++) _engine.MidiEffectSetParam(_trackId, ni, i, p[i]);
-            if (byp) _engine.SetMidiEffectBypassed(_trackId, ni, true);
-            if (ni > n.SlotIndex) _engine.MoveMidiEffect(_trackId, ni, n.SlotIndex + 1);
-        }
-        else return;
+        int ni = n.Slot == Slot.Device ? _engine.DuplicateDevice(_trackId, n.SlotIndex)
+               : n.Slot == Slot.MidiFx ? _engine.DuplicateMidiEffect(_trackId, n.SlotIndex) : -1;
+        if (ni < 0) return;
         _savedPos.Clear();
         Rebuild(); Changed?.Invoke();
     }
@@ -2090,6 +2131,9 @@ public sealed class ModularView : UserControl
             RemoveModInputEdge(me); e.Handled = true;
         }
         else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
+        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
+        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
+        else if (e.Key == Key.Escape && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)

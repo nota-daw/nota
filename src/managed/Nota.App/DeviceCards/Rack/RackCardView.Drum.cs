@@ -292,8 +292,11 @@ internal sealed partial class RackCardView
             pad.BorderBrush = restBorder;
             var items = BrowserView.DroppedItems(e);
             if (items.Count == 0) return;
-            // Several samples fill this pad and the ones after it, up to the bank's last.
-            for (int i = 0; i < items.Count && note + i < BankBase + 16; i++) DropOnPad(a, note + i, items[i]);
+            // Several samples fill this pad and the ones after it, up to the bank's last; the
+            // whole drop is one undo step (#236).
+            E.BeginUndoGroup();
+            try { for (int i = 0; i < items.Count && note + i < BankBase + 16; i++) DropOnPad(a, note + i, items[i]); }
+            finally { E.EndUndoGroup(); }
             e.Handled = true;
         });
         return pad;
@@ -753,6 +756,14 @@ internal sealed partial class RackCardView
     // → that instrument on this note. Either replaces what the pad held.
     private void DropOnPad(IRackAccess a, int note, Nota.Presentation.BrowserItem item)
     {
+        // Remove + add + note + name is one gesture: one undo step (#236).
+        E.BeginUndoGroup();
+        try { DropOnPadSteps(a, note, item); }
+        finally { E.EndUndoGroup(); }
+    }
+
+    private void DropOnPadSteps(IRackAccess a, int note, Nota.Presentation.BrowserItem item)
+    {
         int existing = ChainForNote(a, note);
         int added;
         switch (item.Kind)
@@ -813,8 +824,10 @@ internal sealed partial class RackCardView
             var mi = new MenuItem { Header = header };
             mi.Click += (_, _) =>
             {
+                E.BeginUndoGroup();   // the chain and its note: one undo step
                 int c = a.AddChain(kind);
                 if (c >= 0) { a.SetChainTriggerNote(c, note); Sel = c; }
+                E.EndUndoGroup();
                 _ctx.NotifyChanged();
                 DeferRebuild();
             };

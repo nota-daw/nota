@@ -41,15 +41,13 @@ public sealed partial class DeviceChainView
         => HasDeviceSelection && _selChainKind == kind && _selDeviceIndex == index;
 
     // ---- clipboard --------------------------------------------------------
+    // The device itself is copied by the engine (#238): a full clone with every parameter,
+    // its state blob, bypass and sidechain key (a rack or plug-in copies itself), so a paste
+    // has the source's settings even after the source was cut or changed. Only what the UI
+    // owns rides here: the domain and the card's preset label.
     private sealed class DeviceClip
     {
         public ChainKind Kind;
-        public int BuiltinKind;      // effect: >=0 built-in, <0 hosted plugin
-        public string PluginId = ""; // hosted-plugin identity (recreated via the catalog)
-        public byte[]? State;        // built-in device state / plugin state blob
-        public int MidiKind;         // MIDI effect kind
-        public float[]? MidiParams;  // MIDI effect param snapshot
-        public bool Bypassed;
         public string Preset = "", PresetId = "";   // the source card's preset label follows the paste
     }
     private DeviceClip? _clip;
@@ -58,22 +56,15 @@ public sealed partial class DeviceChainView
     {
         if (!HasDeviceSelection) return;
         int di = _selDeviceIndex;
-        if (_selChainKind == ChainKind.Effect)
+        bool ok = _selChainKind switch
         {
-            int kind = _engine.TrackDeviceBuiltinKind(_trackId, di);
-            var c = new DeviceClip { Kind = ChainKind.Effect, BuiltinKind = kind, Bypassed = _engine.DeviceBypassed(_trackId, di) };
-            if (kind >= 0) c.State = _engine.DeviceGetState(_trackId, di);
-            else { c.PluginId = _engine.TrackDevicePluginId(_trackId, di); c.State = _engine.GetPluginState(_trackId, di); }
-            _clip = c;
-        }
-        else if (_selChainKind == ChainKind.Midi)
-        {
-            int n = _engine.MidiEffectParamCount(_trackId, di);
-            var p = new float[n];
-            for (int i = 0; i < n; i++) p[i] = _engine.MidiEffectGetParam(_trackId, di, i);
-            _clip = new DeviceClip { Kind = ChainKind.Midi, MidiKind = _engine.MidiEffectKind(_trackId, di), MidiParams = p, Bypassed = _engine.MidiEffectBypassed(_trackId, di) };
-        }
-        if (_clip != null) { var ex = Extra(_selChainKind, di); _clip.Preset = ex.Preset; _clip.PresetId = ex.PresetId; }
+            ChainKind.Effect => _engine.CopyDevice(_trackId, di),
+            ChainKind.Midi => _engine.CopyMidiEffect(_trackId, di),
+            _ => false,
+        };
+        if (!ok) return;
+        var ex = Extra(_selChainKind, di);
+        _clip = new DeviceClip { Kind = _selChainKind, Preset = ex.Preset, PresetId = ex.PresetId };
     }
 
     private void DeleteSelectedDevice()
@@ -94,55 +85,75 @@ public sealed partial class DeviceChainView
     {
         if (_clip is null || _trackId <= 0) return;
         var c = _clip;
-        int newIdx = -1;
-        if (c.Kind == ChainKind.Effect)
-        {
-            if (c.BuiltinKind >= 0)
-            {
-                newIdx = _engine.AddBuiltinDevice(_trackId, c.BuiltinKind);
-                if (newIdx >= 0 && c.State != null) _engine.DeviceSetState(_trackId, newIdx, c.State);
-            }
-            else if (_catalog != null && c.PluginId.Length > 0)
-            {
-                int cat = _catalog.IndexOfId(c.PluginId);
-                if (cat >= 0)
-                {
-                    newIdx = _engine.AddTrackEffectPlugin(_trackId, cat);
-                    if (newIdx >= 0 && c.State != null) _engine.SetPluginState(_trackId, newIdx, c.State);
-                }
-            }
-            if (newIdx < 0) return;
-            if (c.Bypassed) _engine.SetDeviceBypassed(_trackId, newIdx, true);
-            TrackExtras().Remove(ExtraKey(ChainKind.Effect, newIdx));   // a fresh slot: drop any stale entry
-            // Drop it right after the selected effect, else leave it appended.
-            if (_selChainKind == ChainKind.Effect && _selDeviceIndex >= 0 && _selDeviceIndex < newIdx)
-            { int to = _selDeviceIndex + 1; _engine.MoveDevice(_trackId, newIdx, to); ExtrasMoved(ChainKind.Effect, newIdx, to); newIdx = to; }
-            _selChainKind = ChainKind.Effect;
-        }
-        else if (c.Kind == ChainKind.Midi)
-        {
-            newIdx = _engine.AddMidiEffect(_trackId, c.MidiKind);
-            if (newIdx < 0) return;
-            if (c.MidiParams != null)
-            {
-                int n = Math.Min(c.MidiParams.Length, _engine.MidiEffectParamCount(_trackId, newIdx));
-                for (int i = 0; i < n; i++) _engine.MidiEffectSetParam(_trackId, newIdx, i, c.MidiParams[i]);
-            }
-            if (c.Bypassed) _engine.SetMidiEffectBypassed(_trackId, newIdx, true);
-            TrackExtras().Remove(ExtraKey(ChainKind.Midi, newIdx));
-            if (_selChainKind == ChainKind.Midi && _selDeviceIndex >= 0 && _selDeviceIndex < newIdx)
-            { int to = _selDeviceIndex + 1; _engine.MoveMidiEffect(_trackId, newIdx, to); ExtrasMoved(ChainKind.Midi, newIdx, to); newIdx = to; }
-            _selChainKind = ChainKind.Midi;
-        }
-        else return;
+        if (c.Kind != ChainKind.Effect && c.Kind != ChainKind.Midi) return;
+        // Drop it right after the selected device of the same domain, else at the end.
+        int at = _selChainKind == c.Kind && _selDeviceIndex >= 0 ? _selDeviceIndex + 1 : -1;
+        int end = c.Kind == ChainKind.Midi ? _engine.TrackMidiEffectCount(_trackId) : _engine.TrackDeviceCount(_trackId);
+        if (at > end) at = -1;
+        int newIdx = c.Kind == ChainKind.Midi ? _engine.PasteMidiEffect(_trackId, at) : _engine.PasteDevice(_trackId, at);
+        if (newIdx < 0) return;
+        // A fresh slot: drop any stale entry, and let the extras after it shift up with their devices.
+        if (newIdx < end) ExtrasMoved(c.Kind, end, newIdx);
+        TrackExtras().Remove(ExtraKey(c.Kind, newIdx));
         var pasted = Extra(c.Kind, newIdx); pasted.Preset = c.Preset; pasted.PresetId = c.PresetId;
+        _selChainKind = c.Kind;
         _selDeviceIndex = newIdx;
+        Rebuild(); Changed?.Invoke();
+    }
+
+    // ---- ⌘G / ⌘⇧G: wrap the selected device in a rack / unwrap it (#257) ----
+    // With the Devices panel focused these act on the device, never on the tracks: grouping
+    // tracks stays ⌘G in the arrangement and the track headers.
+    private bool SelectedIsRack => _selChainKind == ChainKind.Effect && _selDeviceIndex >= 0
+        && _engine.TrackDeviceBuiltinKind(_trackId, _selDeviceIndex) == 5;
+
+    private void GroupSelectedDevice()
+    {
+        if (!HasDeviceSelection) { StatusMessage?.Invoke("Select an audio effect to put it in a rack"); return; }
+        if (_selChainKind == ChainKind.Midi) { StatusMessage?.Invoke("MIDI effects can't go in a rack"); return; }
+        int di = _selDeviceIndex;
+        string name = _engine.DeviceName(_trackId, di);
+        if (_engine.WrapDeviceInRack(_trackId, di) < 0)
+        {
+            StatusMessage?.Invoke($"{name} can't go in a rack: it has a sidechain key, automation or a modulation link");
+            return;
+        }
+        TrackExtras().Remove(ExtraKey(ChainKind.Effect, di));   // its preset label stays with the device, now in the chain
+        StatusMessage?.Invoke($"Put {name} in an Audio Effect Rack");
+        Rebuild(); Changed?.Invoke();
+    }
+
+    private void UngroupSelectedDevice()
+    {
+        if (!SelectedIsRack) { StatusMessage?.Invoke("Select an Audio Effect Rack to take its devices out"); return; }
+        int di = _selDeviceIndex;
+        int end = _engine.TrackDeviceCount(_trackId);
+        int n = _engine.UnwrapRack(_trackId, di);
+        if (n < 0)
+        {
+            StatusMessage?.Invoke("Only a rack with one chain can be ungrouped, and not while it is automated or modulated");
+            return;
+        }
+        // The rack's slot becomes its n devices; the cards after it shift with them.
+        if (n == 0) ExtrasRemoved(ChainKind.Effect, di);
+        else
+        {
+            TrackExtras().Remove(ExtraKey(ChainKind.Effect, di));
+            for (int i = 1; i < n; i++) ExtrasMoved(ChainKind.Effect, end - 1 + i, di + i);
+        }
+        _selDeviceIndex = n > 0 ? di : -1;
+        StatusMessage?.Invoke(n == 1 ? "Took the device out of the rack" : $"Took {n} devices out of the rack");
         Rebuild(); Changed?.Invoke();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
         bool mod = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
+        if (mod && e.Key == Key.G && (e.KeyModifiers & KeyModifiers.Alt) == 0)
+        {
+            if ((e.KeyModifiers & KeyModifiers.Shift) != 0) UngroupSelectedDevice(); else GroupSelectedDevice();
+            e.Handled = true; return;
+        }
         if (mod && e.Key == Key.C && HasDeviceSelection) { CopySelectedDevice(); e.Handled = true; return; }
         if (mod && e.Key == Key.X && HasDeviceSelection) { CutSelectedDevice(); e.Handled = true; return; }
         if (mod && e.Key == Key.V && _clip != null) { PasteDevice(); e.Handled = true; return; }
@@ -181,6 +192,14 @@ public sealed partial class DeviceChainView
                 MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey, selectable),
                 MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, _clip != null),
             },
+            kind == ChainKind.Effect
+                ? new Control[]
+                {
+                    _engine.TrackDeviceBuiltinKind(_trackId, di) == 5
+                        ? MenuKit.Item("Ungroup rack", GlyphKind.Ungroup, UngroupSelectedDevice, MenuKit.UngroupKey, _engine.RackDevChainCount(_trackId, di) == 1)
+                        : MenuKit.Item("Group into rack", GlyphKind.Folder, GroupSelectedDevice, MenuKit.GroupKey),
+                }
+                : Array.Empty<Control>(),
             new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey, selectable) });
         flyout.ShowAt(anchor, showAtPointer: true);
     }

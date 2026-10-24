@@ -310,7 +310,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Child = text,
             };
-            box.PointerWheelChanged += (_, e) => { SetRoot(rootNote + (e.Delta.Y > 0 ? 1 : -1)); e.Handled = true; };
+            box.PointerWheelChanged += (_, e) => { if (WheelInput.Step(e) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };
             // Double-click: the note the file name names, else C4.
             box.DoubleTapped += (_, e) => { SetRoot(SamplerModel.DetectRoot(sampleName) is var d and >= 0 ? d : 60); e.Handled = true; };
             ToolTip.SetTip(box, "The root — the key that plays the sample as recorded. Scroll to step it · double-click takes it from the file name (C4 if none)");

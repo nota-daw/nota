@@ -42,22 +42,22 @@ void Engine::installRackPluginFactory() {
 }
 
 int32_t Engine::rackAddPluginInstrumentChain(int32_t t, int32_t di, int32_t catalogIndex) {
-    auto* r = rackCoreAt(t, di);
-    if (!r) return -1;
+    if (!rackCoreAt(t, di)) return -1;
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     auto inst = createPluginInstrument(catalogIndex, sr, kMaxBlock);
     if (!inst) return -1;
+    auto* r = rackForEdit(t, di);
     const int32_t idx = r->addChainInstrument(inst);
     recomputePdc();
     return idx;
 }
 
 int32_t Engine::rackAddPluginChainDevice(int32_t t, int32_t di, int32_t chain, int32_t catalogIndex) {
-    auto* r = rackCoreAt(t, di);
-    if (!r) return -1;
+    if (!rackCoreAt(t, di)) return -1;
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     auto dev = createPluginEffect(catalogIndex, sr, kMaxBlock);
     if (!dev) return -1;
+    auto* r = rackForEdit(t, di);
     const int32_t idx = r->addChainDeviceInstance(chain, dev);
     recomputePdc();
     return idx;
@@ -93,7 +93,9 @@ int32_t Engine::rackChainTriggerNote(int32_t t, int32_t di, int32_t c) const {
     return r ? r->chainTriggerNote(c) : -1;
 }
 void Engine::rackSetChainTriggerNote(int32_t t, int32_t di, int32_t c, int32_t note) {
-    if (auto* r = rackCoreAt(t, di)) r->setChainTriggerNote(c, note);
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount() || r->chainTriggerNote(c) == note) return;
+    rackForEdit(t, di)->setChainTriggerNote(c, note);
 }
 
 std::string Engine::rackChainName(int32_t t, int32_t di, int32_t c) const {
@@ -101,26 +103,27 @@ std::string Engine::rackChainName(int32_t t, int32_t di, int32_t c) const {
     return r ? r->chainName(c) : std::string{};
 }
 void Engine::rackSetChainName(int32_t t, int32_t di, int32_t c, const std::string& name) {
-    if (auto* r = rackCoreAt(t, di)) r->setChainName(c, name);
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount() || r->chainName(c) == name) return;
+    rackForEdit(t, di)->setChainName(c, name);
 }
 
 int32_t Engine::rackAddSamplerChain(int32_t t, int32_t di, const std::string& path, int32_t rootNote, bool loop) {
-    auto* r = rackCoreAt(t, di);
-    if (!r) return -1;
+    if (!rackCoreAt(t, di)) return -1;
     auto buf = decodeAudioFile(path);
     if (!buf || buf->empty()) return -1;
     auto sm = std::make_shared<Sampler>();
     sm->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
     sm->setSample(buf, rootNote, loop);
-    return r->addChainInstrument(sm);
+    return rackForEdit(t, di)->addChainInstrument(sm);
 }
 bool Engine::rackSetChainSamplerSample(
     int32_t t, int32_t di, int32_t chain, const std::string& path, int32_t rootNote) {
     auto* r = rackCoreAt(t, di);
-    if (!r) return false;
+    if (!r || chain < 0 || chain >= r->chainCount()) return false;
     auto buf = decodeAudioFile(path);
     if (!buf || buf->empty()) return false;
-    return r->setChainInstrumentSample(chain, buf, rootNote, false);
+    return rackForEdit(t, di)->setChainInstrumentSample(chain, buf, rootNote, false);
 }
 
 RackCore* Engine::rackCoreAt(int32_t trackId, int32_t deviceIndex) const {
@@ -132,22 +135,128 @@ RackCore* Engine::rackCoreAt(int32_t trackId, int32_t deviceIndex) const {
     return nullptr;
 }
 
+// Rack edits used to change the rack in place, and the rack object is shared by every
+// graph snapshot, so undo had nothing to go back to (#236). An edit the user can undo
+// forks the rack into a new object (chain children shared, so nothing restarts) and
+// republishes the track with it; the snapshot on the undo stack keeps the old rack as it was.
+RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || !rackCoreAt(trackId, deviceIndex)) return nullptr;
+    auto nt = cloneTrack(*old);
+    RackCore* fresh = nullptr;
+    if (deviceIndex < 0) {
+        auto* src = dynamic_cast<RackInstrument*>(old->instrument.get());
+        if (!src) return nullptr;
+        std::shared_ptr<RackInstrument> r;
+        if (dynamic_cast<DrumRack*>(src)) r = std::make_shared<DrumRack>();
+        else r = std::make_shared<RackInstrument>();
+        r->forkFrom(*src);
+        r->setBypassed(src->bypassed());
+        r->folded = src->folded;
+        r->offSettled = src->offSettled;
+        r->pedalDown = src->pedalDown;
+        r->pedalHeld[0] = src->pedalHeld[0];
+        r->pedalHeld[1] = src->pedalHeld[1];
+        for (int i = 0; i < kCtlCount; ++i)
+            r->deliveredCtl[i].store(src->deliveredCtl[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        fresh = r.get();
+        nt->instrument = std::move(r);
+    } else {
+        auto* src = dynamic_cast<RackDevice*>(old->devices[deviceIndex].get());
+        if (!src) return nullptr;
+        auto r = std::make_shared<RackDevice>();
+        r->forkFrom(*src);
+        r->setBypassed(src->bypassed());
+        r->setFolded(src->folded());
+        r->setSidechainSourceTrackId(src->sidechainSourceTrackId());
+        r->setSidechainTapPre(src->sidechainTapPre());
+        r->setSidechainGainDb(src->sidechainGainDb());
+        r->setSidechainMix(src->sidechainMix());
+        fresh = r.get();
+        nt->devices[deviceIndex] = std::move(r);
+    }
+    republishWithTrack(trackId, nt);
+    return fresh;
+}
+
+// ---- wrap a device in a rack / unwrap it (#257) ----------------------------
+// Whether anything outside the device points at it by its chain index: automation lanes
+// or CV links. Wrapping moves the device into a rack chain, where those can't follow it.
+bool Engine::deviceIsReferenced(const Track& t, int32_t deviceIndex) const {
+    for (auto& l : t.automation)
+        if ((l.target == AutomationTarget::DeviceParam || l.target == AutomationTarget::PluginParam) && l.deviceIndex == deviceIndex)
+            return true;
+    for (auto& l : t.cvLinks)
+        if (l.sourceKind == static_cast<int32_t>(CvSourceKind::Param) && l.sourceDevice == deviceIndex) return true;
+    for (auto& ot : authoring_->tracks)
+        for (auto& l : ot->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
+            if (tgt == t.id() && l.targetKind == static_cast<int32_t>(CvTargetKind::Device) && l.targetDevice == deviceIndex)
+                return true;
+        }
+    return false;
+}
+
+int32_t Engine::wrapDeviceInRack(int32_t trackId, int32_t deviceIndex) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(old->devices.size())) return -1;
+    auto dev = old->devices[deviceIndex];
+    if (!dev || dev->sidechainSourceTrackId() > 0 || deviceIsReferenced(*old, deviceIndex)) return -1;
+    const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
+    auto rack = std::make_shared<RackDevice>();
+    rack->setSampleRate(sr, kMaxBlock);
+    const int32_t chain = rack->addChain(-1);
+    if (rack->addChainDeviceInstance(chain, dev) < 0) return -1; // the device itself: its state moves in
+    auto nt = cloneTrack(*old);
+    nt->devices[deviceIndex] = rack;
+    republishWithTrack(trackId, nt);
+    recomputePdc();
+    return deviceIndex;
+}
+
+int32_t Engine::unwrapRack(int32_t trackId, int32_t deviceIndex) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(old->devices.size())) return -1;
+    auto* rack = dynamic_cast<RackDevice*>(old->devices[deviceIndex].get());
+    RackCore::RackState* st = rack ? rack->live() : nullptr;
+    if (!st || st->chains.size() != 1 || deviceIsReferenced(*old, deviceIndex)) return -1;
+    auto devs = st->chains[0].devices;
+    auto nt = cloneTrack(*old);
+    nt->devices.erase(nt->devices.begin() + deviceIndex);
+    nt->devices.insert(nt->devices.begin() + deviceIndex, devs.begin(), devs.end());
+    // The devices after the rack shift by (n - 1): their lanes and CV links follow.
+    const int32_t n = static_cast<int32_t>(devs.size());
+    if (n == 0) remapAutomationAfterDeviceChange(*nt, false, deviceIndex, -1, -1);
+    for (int32_t i = 1; i < n; ++i)
+        remapAutomationAfterDeviceChange(*nt, false, -1, static_cast<int32_t>(nt->devices.size()) - n + i, deviceIndex + i);
+    republishWithTrack(trackId, nt);
+    if (n == 0) remapCvLinksAfterDeviceChange(trackId, deviceIndex, -1, -1);
+    for (int32_t i = 1; i < n; ++i)
+        remapCvLinksAfterDeviceChange(trackId, -1, static_cast<int32_t>(nt->devices.size()) - n + i, deviceIndex + i);
+    recomputePdc();
+    return n;
+}
+
 // ---- chains --------------------------------------------------------------
 int32_t Engine::rackChainCount(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
     return r ? r->chainCount() : 0;
 }
 int32_t Engine::rackAddChain(int32_t t, int32_t di, int32_t k) {
-    auto* r = rackCoreAt(t, di);
+    auto* r = rackForEdit(t, di);
     return r ? r->addChain(k) : -1;
 }
 bool Engine::rackRemoveChain(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
-    return r && r->removeChain(c);
+    if (!r || c < 0 || c >= r->chainCount()) return false;
+    const bool ok = rackForEdit(t, di)->removeChain(c);
+    recomputePdc(); // the chain may have held the rack's longest latency
+    return ok;
 }
 bool Engine::rackSetChainInstrument(int32_t t, int32_t di, int32_t c, int32_t k) {
     auto* r = rackCoreAt(t, di);
-    return r && r->setChainInstrument(c, k);
+    if (!r || c < 0 || c >= r->chainCount() || !RackCore::makeInstrument(k)) return false;
+    return rackForEdit(t, di)->setChainInstrument(c, k);
 }
 int32_t Engine::rackChainInstrumentKind(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
@@ -272,15 +381,19 @@ int32_t Engine::rackChainDeviceCount(int32_t t, int32_t di, int32_t c) const {
 }
 int32_t Engine::rackAddChainDevice(int32_t t, int32_t di, int32_t c, int32_t k) {
     auto* r = rackCoreAt(t, di);
-    return r ? r->addChainDevice(c, k) : -1;
+    if (!r || c < 0 || c >= r->chainCount() || !makeChainDevice(k)) return -1;
+    return rackForEdit(t, di)->addChainDevice(c, k);
 }
 bool Engine::rackRemoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t d) {
     auto* r = rackCoreAt(t, di);
-    return r && r->removeChainDevice(c, d);
+    if (!r || d < 0 || d >= r->chainDeviceCount(c)) return false;
+    return rackForEdit(t, di)->removeChainDevice(c, d);
 }
 bool Engine::rackMoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t from, int32_t to) {
     auto* r = rackCoreAt(t, di);
-    return r && r->moveChainDevice(c, from, to);
+    if (!r || from < 0 || from >= r->chainDeviceCount(c)) return false;
+    if (std::clamp(to, 0, r->chainDeviceCount(c) - 1) == from) return true;
+    return rackForEdit(t, di)->moveChainDevice(c, from, to);
 }
 const char* Engine::rackChainDeviceName(int32_t t, int32_t di, int32_t c, int32_t d) const {
     auto* r = rackCoreAt(t, di);
@@ -478,7 +591,8 @@ void Engine::rackMacroSet(int32_t t, int32_t di, int32_t m, float v) {
 int32_t Engine::rackAddMacroMapping(int32_t t, int32_t di, int32_t macro, int32_t chain, int32_t targetDevice,
     int32_t paramIndex, float rangeMin, float rangeMax) {
     auto* r = rackCoreAt(t, di);
-    return r ? r->addMacroMapping(macro, chain, targetDevice, paramIndex, rangeMin, rangeMax) : -1;
+    if (!r || macro < 0 || macro >= RackCore::kNumMacros || chain < 0 || chain >= r->chainCount()) return -1;
+    return rackForEdit(t, di)->addMacroMapping(macro, chain, targetDevice, paramIndex, rangeMin, rangeMax);
 }
 int32_t Engine::rackMappingCount(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
@@ -499,7 +613,8 @@ bool Engine::rackMappingInfo(int32_t t, int32_t di, int32_t index, int32_t& macr
 }
 bool Engine::rackRemoveMapping(int32_t t, int32_t di, int32_t index) {
     auto* r = rackCoreAt(t, di);
-    return r && r->removeMapping(index);
+    if (!r || index < 0 || index >= r->mappingCount()) return false;
+    return rackForEdit(t, di)->removeMapping(index);
 }
 
 // ---- Instrument-Rack extras (zones / meter / names / rack out / macro-map) ----
@@ -516,7 +631,13 @@ void Engine::rackChainZone(
 }
 void Engine::rackSetChainZone(
     int32_t t, int32_t di, int32_t c, int32_t keyLo, int32_t keyHi, int32_t velLo, int32_t velHi) {
-    if (auto* r = rackCoreAt(t, di)) r->setChainZone(c, keyLo, keyHi, velLo, velHi);
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount()) return;
+    int32_t kl, kh, vl, vh;
+    r->chainZone(c, kl, kh, vl, vh);
+    auto cl = [](int32_t v) { return std::clamp(v, 0, 127); };
+    if (kl == cl(keyLo) && kh == cl(keyHi) && vl == cl(velLo) && vh == cl(velHi)) return;
+    rackForEdit(t, di)->setChainZone(c, keyLo, keyHi, velLo, velHi);
 }
 float Engine::rackChainMeter(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);

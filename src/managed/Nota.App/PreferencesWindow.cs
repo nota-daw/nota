@@ -1165,7 +1165,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧M", "Toggle the Mixer view"),
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
-            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
+            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks · on a selected device: wrap it in a rack / take it out"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last"),
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
@@ -1192,6 +1192,21 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
             ("⌘D", "Duplicate the selected tracks"),
             ("Delete", "Delete the selected tracks · a group goes with its tracks"),
+        }),
+        ("Devices (after a click on a device)", new[]
+        {
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track"),
+            ("⌘G", "Wrap the selected audio effect in an Audio Effect Rack"),
+            ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
+            ("Delete", "Delete the selected device"),
+        }),
+        ("Modular (after a click on the canvas)", new[]
+        {
+            ("F", "Fit every node on screen"),
+            ("B", "Bypass the selected device"),
+            ("⌘D", "Duplicate the selected device with all its settings"),
+            ("Delete", "Delete the selected device, modulator or cable · the track's input, instrument and output are fixed"),
+            ("Esc", "Show fewer parameters on every opened node"),
         }),
         ("Session (after a click in the grid)", new[]
         {
@@ -1296,6 +1311,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag an audio clip onto an instrument track", "Load its audio into the Sampler, Grain, Drum Rack (next free pad) or Instrument Rack · rest there to open its devices"),
             ("Drag an audio clip out of the Arrangement", "Take it as a sample: drop on a pad, a Grain, a Rhythm voice, a Session slot — the clip stays put"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
+            ("Wheel over the device chain", "Scroll it sideways · over an EQ band's handle the wheel sets its Q, over a value box it steps the value"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Drag slider", "Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps"),
             ("⌥-click a knob, fader or slider", "Type a value (units like k, ms, dB, L / R work) · double-click its value does the same"),

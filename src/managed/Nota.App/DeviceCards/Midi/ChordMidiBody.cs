@@ -407,7 +407,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 if (!ev.GetCurrentPoint(keyTb).Properties.IsLeftButtonPressed) return;
                 StepKey(ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1); ev.Handled = true;
             };
-            keyTb.PointerWheelChanged += (_, ev) => { StepKey(ev.Delta.Y > 0 ? 1 : -1); ev.Handled = true; };
+            keyTb.PointerWheelChanged += (_, ev) => { if (WheelInput.Step(ev) is not { } s) return; ev.Handled = true; if (s != 0) StepKey(s); };
             modeTb.PointerPressed += (_, ev) =>
             {
                 if (!ev.GetCurrentPoint(modeTb).Properties.IsLeftButtonPressed) return;

@@ -59,6 +59,33 @@ NotaResult nota_track_remove_device(NotaEngine* e, int32_t track_id, int32_t dev
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->removeDevice(track_id, device_index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_track_copy_device(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyDevice(track_id, device_index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_copy_midi_effect(NotaEngine* e, int32_t track_id, int32_t index) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyMidiEffect(track_id, index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_device_clipboard_kind(const NotaEngine* e) { return e ? CENG(e)->deviceClipboardKind() : 0; }
+int32_t nota_track_paste_device(NotaEngine* e, int32_t track_id, int32_t at_index) {
+    return e ? ENG(e)->pasteDevice(track_id, at_index) : -1;
+}
+int32_t nota_track_paste_midi_effect(NotaEngine* e, int32_t track_id, int32_t at_index) {
+    return e ? ENG(e)->pasteMidiEffect(track_id, at_index) : -1;
+}
+int32_t nota_track_duplicate_device(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->duplicateDevice(track_id, device_index) : -1;
+}
+int32_t nota_track_duplicate_midi_effect(NotaEngine* e, int32_t track_id, int32_t index) {
+    return e ? ENG(e)->duplicateMidiEffect(track_id, index) : -1;
+}
+int32_t nota_track_wrap_device_in_rack(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->wrapDeviceInRack(track_id, device_index) : -1;
+}
+int32_t nota_track_unwrap_rack(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->unwrapRack(track_id, device_index) : -1;
+}
 const char* nota_device_name(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceName(track_id, device_index) : "";
 }

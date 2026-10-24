@@ -268,12 +268,14 @@ public sealed class DynamicEqCurve : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        // Only over a band's handle, and only a vertical wheel: anywhere else the wheel scrolls the
+        // device chain. It used to take every event over the graph for the selected band, and a
+        // trackpad's stream of pixel-sized events sent its Q to the end in one swipe (#262).
         int b = Hit(e.GetPosition(this));
-        if (b < 0) b = _selected;
+        if (b < 0 || !WheelInput.IsVertical(e)) return;
         SelectedBand = b;
         bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        double step = fine ? 1.03 : 1.15;
-        double q = Math.Clamp(P(b, DynEq.QF) * (e.Delta.Y > 0 ? step : 1 / step), 0.1, 18);
+        double q = Math.Clamp(P(b, DynEq.QF) * WheelInput.ZoomFactor(e.Delta.Y, fine ? 1.03 : 1.15), 0.1, 18);
         Gesture(DynEq.P(b, DynEq.QF), () => SetP(b, DynEq.QF, q));
         Edited?.Invoke(); InvalidateVisual();
         e.Handled = true;

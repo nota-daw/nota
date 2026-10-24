@@ -279,7 +279,7 @@ internal static class PluginCard
 
         // The page holds as many knobs as the section fits; wheel over it turns the page.
         var body = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 4, 0, 0), Child = host };
-        body.PointerWheelChanged += (_, ev) => { Step(ev.Delta.Y < 0 ? +1 : -1); ev.Handled = true; };
+        body.PointerWheelChanged += (_, ev) => { if (WheelInput.Step(ev) is not { } s) return; ev.Handled = true; if (s != 0) Step(-s); };
         body.SizeChanged += (_, ev) =>
         {
             int cols = Math.Max(1, (int)(ev.NewSize.Width / CellW));

@@ -311,6 +311,14 @@ class RackCore {
         return (st && i >= 0 && i < static_cast<int32_t>(st->mappings.size())) ? st->mappings[i].curve : 0;
     }
 
+    // ---- undoable edits ---------------------------------------------------
+    // Take over another rack's content (#236). The engine edits a copy of the rack instead
+    // of the rack itself, so the graph snapshot on the undo stack keeps the old rack intact:
+    // the same chain children (shared, so DSP and voice state survive the edit), fresh chain
+    // controls holding the same values, the same mappings, macros and rack settings.
+    // Message thread, on a fresh rack that nothing renders yet.
+    void forkFrom(const RackCore& o);
+
     // ---- persistence blob (shared format; instKind -1 = no instrument) ----
     std::vector<uint8_t> serialize() const;
     void deserialize(const uint8_t* data, int32_t size);

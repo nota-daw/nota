@@ -616,6 +616,17 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
 
 void Engine::pushUndo() {
     if (!authoring_) return;
+    // Inside an undo group only the first snapshot counts (endUndoGroup keeps the pre-group
+    // graph), so later ones aren't stacked: a gesture of many edits (a kit filling a Drum
+    // Rack's pads) would otherwise push the older history off the depth limit.
+    if (undoGroupDepth_ > 0) {
+        for (size_t i = undoGroupBase_; i < undoStack_.size(); ++i)
+            if (undoStack_[i].graph) {
+                ++undoPushCount_;
+                redoStack_.clear();
+                return;
+            }
+    }
     undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {

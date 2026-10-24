@@ -10,6 +10,7 @@
 // feel proportional and can't teleport.
 
 using System;
+using Avalonia.Input;
 
 namespace Nota.App;
 
@@ -42,4 +43,29 @@ internal static class WheelInput
     /// mouse notch gives exactly <paramref name="perNotch"/> and a trackpad scales smoothly.</summary>
     public static double ZoomFactor(double delta, double perNotch)
         => Math.Pow(perNotch, Notches(delta));
+
+    /// <summary>The wheel is mostly vertical — a control may take it as an adjustment. A sideways
+    /// (or mostly sideways) swipe is someone scrolling the view the control sits in: leave it
+    /// unhandled so it reaches that view's scroller (#262).</summary>
+    public static bool IsVertical(PointerWheelEventArgs e) => Math.Abs(e.Delta.Y) > Math.Abs(e.Delta.X);
+
+    private static double _stepAcc;
+    private static ulong _stepAt;
+
+    /// <summary>One step of a stepper under the wheel: +1 up, −1 down, 0 for a trackpad event
+    /// that hasn't travelled a full notch yet; null when the wheel is mostly sideways (leave the
+    /// event unhandled). A mouse notch is one step; a trackpad steps once per notch of travel
+    /// instead of once per event, which ran a box to its end on a single swipe.</summary>
+    public static int? Step(PointerWheelEventArgs e)
+    {
+        if (!IsVertical(e)) return null;
+        double n = Notches(e.Delta.Y);
+        if (e.Timestamp - _stepAt > 300 || Math.Sign(n) != Math.Sign(_stepAcc)) _stepAcc = 0;
+        _stepAt = e.Timestamp;
+        _stepAcc += n;
+        if (Math.Abs(_stepAcc) < 0.999) return 0;
+        int s = Math.Sign(_stepAcc);
+        _stepAcc -= s;
+        return s;
+    }
 }

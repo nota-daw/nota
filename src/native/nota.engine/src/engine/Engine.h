@@ -726,6 +726,18 @@ class Engine {
     int32_t addTrackBuiltinDevice(int32_t trackId, int32_t kind); // 0=EQ, 1=Compressor
     bool moveDevice(int32_t trackId, int32_t fromIndex, int32_t toIndex);
     bool removeDevice(int32_t trackId, int32_t deviceIndex);
+    // Device clipboard (#238): copy a full clone of an audio / MIDI effect (every param, its
+    // state blob, bypass, sidechain key; a rack or plug-in copies itself), paste a clone of it
+    // into a chain at atIndex (-1 = the end) as one undo step. Paste returns the new index or
+    // -1. deviceClipboardKind: 0 empty, 1 audio effect, 2 MIDI effect.
+    bool copyDevice(int32_t trackId, int32_t deviceIndex);
+    bool copyMidiEffect(int32_t trackId, int32_t index);
+    int32_t deviceClipboardKind() const;
+    int32_t pasteDevice(int32_t trackId, int32_t atIndex);
+    int32_t pasteMidiEffect(int32_t trackId, int32_t atIndex);
+    // A clone of the device right after it (one undo step), clipboard untouched. Returns its index or -1.
+    int32_t duplicateDevice(int32_t trackId, int32_t deviceIndex);
+    int32_t duplicateMidiEffect(int32_t trackId, int32_t index);
     const char* deviceName(int32_t trackId, int32_t deviceIndex) const;
     int32_t deviceScope(int32_t trackId, int32_t deviceIndex, float* out, int32_t maxSamples) const;
     // Interactive-device command channel + per-layer waveform (the looper).
@@ -839,6 +851,17 @@ class Engine {
     int32_t rackAddPluginInstrumentChain(int32_t trackId, int32_t deviceIndex, int32_t catalogIndex);
     int32_t rackAddPluginChainDevice(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t catalogIndex);
     RackCore* rackCoreAt(int32_t trackId, int32_t deviceIndex) const; // null if not a rack
+    // The rack to apply an undoable edit to (#236): a fork of the rack at (trackId,
+    // deviceIndex), republished in its track as one undo step. Null if not a rack.
+    RackCore* rackForEdit(int32_t trackId, int32_t deviceIndex);
+    // ⌘G on a device (#257): put the audio effect at deviceIndex into a new Audio Effect Rack
+    // (one chain holding the device itself, so nothing restarts) in its place, one undo step;
+    // returns the rack's index, or -1 (not an effect, or keyed / automated / CV-linked, which
+    // can't follow it into a chain). ⌘⇧G: replace a one-chain rack with that chain's devices;
+    // returns how many came out, or -1.
+    int32_t wrapDeviceInRack(int32_t trackId, int32_t deviceIndex);
+    int32_t unwrapRack(int32_t trackId, int32_t deviceIndex);
+    bool deviceIsReferenced(const Track& t, int32_t deviceIndex) const;
     // Drum Rack pad note per chain (-1 = all notes; instrument/effect racks ignore it).
     int32_t rackChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t note);
@@ -1203,6 +1226,10 @@ class Engine {
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Device> cloneDevice(const Device& src) const;
     std::shared_ptr<MidiDevice> cloneMidiDevice(const MidiDevice& src) const;
+    std::shared_ptr<Device> clipDevice_;   // device clipboard (#238): a clone of the copied audio effect
+    std::shared_ptr<MidiDevice> clipMidi_;
+    int32_t insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex);
+    int32_t insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex); // ... or of the copied MIDI effect (one of the two at a time)
     void recomputePdc(); // message thread: realign all tracks
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;

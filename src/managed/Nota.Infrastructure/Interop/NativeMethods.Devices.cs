@@ -37,6 +37,33 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_remove_device")]
     internal static partial NotaResult RemoveDevice(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_device")]
+    internal static partial NotaResult CopyDevice(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_midi_effect")]
+    internal static partial NotaResult CopyMidiEffect(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_kind")]
+    internal static partial int DeviceClipboardKind(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_device")]
+    internal static partial int PasteDevice(IntPtr engine, int trackId, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_midi_effect")]
+    internal static partial int PasteMidiEffect(IntPtr engine, int trackId, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_duplicate_device")]
+    internal static partial int DuplicateDevice(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_duplicate_midi_effect")]
+    internal static partial int DuplicateMidiEffect(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_wrap_device_in_rack")]
+    internal static partial int WrapDeviceInRack(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_unwrap_rack")]
+    internal static partial int UnwrapRack(IntPtr engine, int trackId, int deviceIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_device_name")]
     internal static partial IntPtr DeviceName(IntPtr engine, int trackId, int deviceIndex);
 

@@ -294,7 +294,12 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Child = rootText,
         };
-        rootBox.PointerWheelChanged += (_, e) => { rootv = Math.Clamp(rootv + (e.Delta.Y > 0 ? 1 : -1), 0, 127); acc.SetRoot(rootv); Refresh(); e.Handled = true; };
+        rootBox.PointerWheelChanged += (_, e) =>
+        {
+            if (WheelInput.Step(e) is not { } s) return;
+            e.Handled = true; if (s == 0) return;
+            rootv = Math.Clamp(rootv + s, 0, 127); acc.SetRoot(rootv); Refresh();
+        };
         ToolTip.SetTip(rootBox, "The root note — scroll to step it");
         var rootStepper = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { StepBtn(GlyphKind.Minus, -1, "Root a semitone down"), rootBox, StepBtn(GlyphKind.Plus, +1, "Root a semitone up") } };
         int detected = SamplerModel.DetectRoot(sampleName);

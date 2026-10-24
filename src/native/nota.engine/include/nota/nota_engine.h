@@ -1437,6 +1437,25 @@ NOTA_API int32_t     nota_track_add_builtin_device(NotaEngine* engine, int32_t t
 /* Reorder / remove a device in the track chain (M4.1-D). */
 NOTA_API NotaResult  nota_track_move_device(NotaEngine* engine, int32_t track_id, int32_t from_index, int32_t to_index);
 NOTA_API NotaResult  nota_track_remove_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Device clipboard (#238). Copy keeps a full clone of an audio effect (every param, its
+ * state blob, bypass, sidechain key; a rack or plug-in copies itself) or a MIDI effect;
+ * paste inserts a clone of it at at_index (-1 = the end) as one undo step and returns the
+ * new index, or <0. clipboard_kind: 0 empty, 1 audio effect, 2 MIDI effect. */
+NOTA_API NotaResult  nota_track_copy_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
+NOTA_API NotaResult  nota_track_copy_midi_effect(NotaEngine* engine, int32_t track_id, int32_t index);
+NOTA_API int32_t     nota_device_clipboard_kind(const NotaEngine* engine);
+NOTA_API int32_t     nota_track_paste_device(NotaEngine* engine, int32_t track_id, int32_t at_index);
+NOTA_API int32_t     nota_track_paste_midi_effect(NotaEngine* engine, int32_t track_id, int32_t at_index);
+/* A full clone of the device / MIDI effect right after it, one undo step; the clipboard is left
+ * alone. Returns the clone's index or -1. */
+NOTA_API int32_t     nota_track_duplicate_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
+NOTA_API int32_t     nota_track_duplicate_midi_effect(NotaEngine* engine, int32_t track_id, int32_t index);
+/* ⌘G on a device (#257): wrap the audio effect at device_index in a new Audio Effect Rack
+ * in its place (one undo step). Returns the rack's index, or <0 when the device can't move
+ * into a rack chain (not an effect; a sidechain key, automation or a CV link on it).
+ * Unwrap replaces a one-chain rack with its chain's devices; returns their count, or <0. */
+NOTA_API int32_t     nota_track_wrap_device_in_rack(NotaEngine* engine, int32_t track_id, int32_t device_index);
+NOTA_API int32_t     nota_track_unwrap_rack(NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Device display name (built-ins: "EQ"/"Compressor"; plugins: plugin name). */
 NOTA_API const char* nota_device_name(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Generic float params (built-ins expose these; hosted plugins report 0). */

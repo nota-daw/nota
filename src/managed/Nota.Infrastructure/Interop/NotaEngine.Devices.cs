@@ -70,6 +70,37 @@ public sealed partial class NotaEngine
     public void RemoveDevice(int trackId, int deviceIndex)
     { ThrowIfDisposed(); Check(NativeMethods.RemoveDevice(_handle, trackId, deviceIndex)); }
 
+    /// <summary>Copies a full clone of an audio effect to the engine's device clipboard (#238).</summary>
+    public bool CopyDevice(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.CopyDevice(_handle, trackId, deviceIndex) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Copies a full clone of a MIDI effect to the engine's device clipboard.</summary>
+    public bool CopyMidiEffect(int trackId, int index)
+    { ThrowIfDisposed(); return NativeMethods.CopyMidiEffect(_handle, trackId, index) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>0 = empty, 1 = an audio effect, 2 = a MIDI effect.</summary>
+    public int DeviceClipboardKind() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardKind(_handle); }
+
+    /// <summary>Inserts a clone of the copied audio effect at atIndex (-1 = end), one undo step. New index or -1.</summary>
+    public int PasteDevice(int trackId, int atIndex)
+    { ThrowIfDisposed(); return NativeMethods.PasteDevice(_handle, trackId, atIndex); }
+
+    /// <summary>Inserts a clone of the copied MIDI effect at atIndex (-1 = end), one undo step. New index or -1.</summary>
+    public int PasteMidiEffect(int trackId, int atIndex)
+    { ThrowIfDisposed(); return NativeMethods.PasteMidiEffect(_handle, trackId, atIndex); }
+    public int DuplicateDevice(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.DuplicateDevice(_handle, trackId, deviceIndex); }
+    public int DuplicateMidiEffect(int trackId, int index)
+    { ThrowIfDisposed(); return NativeMethods.DuplicateMidiEffect(_handle, trackId, index); }
+
+    /// <summary>Wraps an audio effect in a new Audio Effect Rack in its place (#257). The rack's index, or -1.</summary>
+    public int WrapDeviceInRack(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.WrapDeviceInRack(_handle, trackId, deviceIndex); }
+
+    /// <summary>Replaces a one-chain Audio Effect Rack with its chain's devices. Their count, or -1.</summary>
+    public int UnwrapRack(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.UnwrapRack(_handle, trackId, deviceIndex); }
+
     public string DeviceName(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DeviceName(_handle, trackId, deviceIndex)) ?? ""; }
 

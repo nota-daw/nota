@@ -364,7 +364,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             E.RackChainZone(T, c, out int kLo, out int kHi, out int vLo, out int vHi);
             if (_splitAxis == 0) E.RackSetChainZone(T, c, lo, hi, vLo, vHi);
             else E.RackSetChainZone(T, c, kLo, kHi, lo, hi);
-            _ctx.RequestRebuild();
+            DeferRebuild();   // not from inside the map's own pointer handler (#202)
         };
         return new Border { Height = 38, Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(4), Margin = new Thickness(0, 5, 0, 0), Child = map };
     }
@@ -915,7 +915,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var los = new int[n]; var his = new int[n]; var cols = new IBrush[n];
         for (int c = 0; c < n; c++) { E.RackDevChainZone(T, di, c, out int lo, out int hi); los[c] = lo; his[c] = hi; cols[c] = ChainHue(c); }
         var map = new RackZoneMap(los, his, cols, Sel, keyMode: false);
-        map.RangeEdited += (c, lo, hi) => { E.RackDevSetChainZone(T, di, c, lo, hi); _ctx.RequestRebuild(); };
+        map.RangeEdited += (c, lo, hi) => { E.RackDevSetChainZone(T, di, c, lo, hi); DeferRebuild(); };
         bool follow = E.RackDevSelFollow(T, di);
         var marker = new Border { Width = 1.5, Background = IrAmberLit, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
         var mapHost = new Panel { Children = { map, marker } };
@@ -1667,12 +1667,26 @@ internal sealed class RackZoneMap : Control
         e.Pointer.Capture(this); Apply(x); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e) { if (_drag >= 0) Apply(e.GetPosition(this).X); }
+    // The drag ends before the edit is reported: the handler rebuilds the device chain, which
+    // takes this map out of the tree, and a drag still open then would report again from the
+    // capture loss, inside that rebuild — leaving a second copy of the rack card (#202).
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { if (_drag >= 0) { RangeEdited?.Invoke(_drag, _lo[_drag], _hi[_drag]); _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); } }
+    {
+        if (_drag < 0) return;
+        int c = _drag; _drag = -1;
+        e.Pointer.Capture(null); InvalidateVisual();
+        RangeEdited?.Invoke(c, _lo[c], _hi[c]);
+    }
 
     // Capture taken away mid-drag (the window deactivates): commit the range as it stands and drop the accent.
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag >= 0) { RangeEdited?.Invoke(_drag, _lo[_drag], _hi[_drag]); _drag = -1; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+    {
+        base.OnPointerCaptureLost(e);
+        if (_drag < 0) return;
+        int c = _drag; _drag = -1;
+        InvalidateVisual();
+        RangeEdited?.Invoke(c, _lo[c], _hi[c]);
+    }
 
     private void Apply(double x)
     {

@@ -103,6 +103,17 @@ public sealed partial class DeviceChainView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        // The chain only scrolls sideways, and the scroller ignores a plain (vertical) mouse wheel,
+        // so a wheel no card control took moves the chain instead of doing nothing (#262).
+        scroller.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Handled || !WheelInput.IsVertical(e)) return;
+            double max = Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            double x = Math.Clamp(scroller.Offset.X - WheelInput.Pixels(e.Delta.Y), 0, max);
+            if (Math.Abs(x - scroller.Offset.X) < 0.01) return;
+            scroller.Offset = scroller.Offset.WithX(x);
+            e.Handled = true;
+        };
         Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
         HookBrowserDrop();
     }
@@ -149,7 +160,23 @@ public sealed partial class DeviceChainView : UserControl
         return false;
     }
 
+    // Clearing the row takes cards out of the tree, and a card losing pointer capture can
+    // ask for a rebuild from inside this one; the nested call then filled the row and this
+    // one appended a second set of cards after it (#202). Run it once more afterwards instead.
+    private bool _rebuilding, _rebuildAgain;
+
     private void Rebuild()
+    {
+        if (_rebuilding) { _rebuildAgain = true; return; }
+        _rebuilding = true;
+        try
+        {
+            do { _rebuildAgain = false; RebuildRow(); } while (_rebuildAgain);
+        }
+        finally { _rebuilding = false; }
+    }
+
+    private void RebuildRow()
     {
         _row.Children.Clear();
         _instrumentCard = null;

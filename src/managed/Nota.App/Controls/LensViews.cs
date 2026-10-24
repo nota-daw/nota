@@ -620,7 +620,8 @@ internal sealed class LensVSlider : Control
     }
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        Value = _value + e.Delta.Y * 0.02;
+        if (!WheelInput.IsVertical(e)) return;
+        Value = _value + WheelInput.Notches(e.Delta.Y) * 0.02;
         ValueChanged?.Invoke(_value);
         e.Handled = true;
     }

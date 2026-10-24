@@ -663,45 +663,22 @@ std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
 
 std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
-    std::shared_ptr<Device> d;
-    switch (src.builtinKind()) { // built-ins
-    case 0: d = std::make_shared<Eq>(); break;
-    case 1: d = std::make_shared<Compressor>(); break;
-    case 2: d = std::make_shared<Reverb>(); break;
-    case 3: d = std::make_shared<Delay>(); break;
-    case 4: d = std::make_shared<Utility>(); break;
-    case 6: d = std::make_shared<Amp>(); break;
-    case 7: d = std::make_shared<AutoFilter>(); break;
-    case 8: d = std::make_shared<Vintage>(); break;
-    case 9: d = std::make_shared<AutoPan>(); break;
-    case 10: d = std::make_shared<AutoShift>(); break;
-    case 11: d = std::make_shared<BeatRepeat>(); break;
-    case 12: d = std::make_shared<Crush>(); break;
-    case 13: d = std::make_shared<DynamicEq>(); break;
-    case 14: d = std::make_shared<Ceiling>(); break;
-    case 15: d = std::make_shared<Strata>(); break;
-    case 16: d = std::make_shared<Eq3>(); break;
-    case 17: d = std::make_shared<Forge>(); break;
-    case 18: d = std::make_shared<AutoGain>(); break;
-    case 19: d = std::make_shared<Shutter>(); break;
-    case 20: d = std::make_shared<Chamber>(); break;
-    case 21: d = std::make_shared<Prism>(); break;
-    case 22: d = std::make_shared<Lens>(); break;
-    case 23: d = std::make_shared<Flanger>(); break;
-    case 24: d = std::make_shared<Phaser>(); break;
-    case 25: d = std::make_shared<Chorus>(); break;
-    case 26: d = std::make_shared<Vocoder>(); break;
-    default: d = src.clone(); break; // hosted plugin
-    }
+    // A built-in starts fresh and takes the source's values below; a rack or hosted plugin
+    // copies itself (its whole state). The factory is the same one AddBuiltinDevice's
+    // defaults come from, so a new built-in kind can't be missed here (#238).
+    std::shared_ptr<Device> d = makeBuiltinDevice(src.builtinKind());
+    const bool builtin = d != nullptr;
+    if (!d) d = src.clone();
     if (!d) return nullptr;
     d->setSampleRate(sr, kMaxBlock);
-    if (src.builtinKind() >= 0) { // copy generic params
+    if (builtin) { // copy generic params
         const int32_t pc = src.paramCount();
         for (int32_t p = 0; p < pc; ++p) d->setParam(p, src.getParam(p));
         auto st = src.getState(); // + any state blob (looper PCM)
         if (!st.empty()) d->setState(st.data(), (int32_t)st.size());
     }
     d->setBypassed(src.bypassed());
+    d->setFolded(src.folded());
     d->setSidechainSourceTrackId(src.sidechainSourceTrackId()); // a keyed device keeps its key
     d->setSidechainTapPre(src.sidechainTapPre());
     d->setSidechainGainDb(src.sidechainGainDb());
@@ -773,9 +750,83 @@ std::shared_ptr<MidiDevice> Engine::cloneMidiDevice(const MidiDevice& src) const
     if (src.midiKind() >= 0) {
         const int32_t pc = src.paramCount();
         for (int32_t p = 0; p < pc; ++p) d->setParam(p, src.getParam(p));
+        auto st = src.getState();
+        if (!st.empty()) d->setState(st.data(), (int32_t)st.size());
     }
+    d->setCcDest(src.ccDestDevice(), src.ccDestParam()); // the Arp's CC modulation (#238)
+    d->setCcDepth(src.ccDepth());
     d->setBypassed(src.bypassed());
+    d->setFolded(src.folded());
     return d; // live state starts fresh
+}
+
+// ---- device clipboard (#238) ---------------------------------------------
+// Copy holds a clone, not the device itself: a cut device can still be pasted, and later
+// edits to the source don't reach the copy. Paste inserts another clone, so the clipboard
+// can be pasted again; each paste is one undo step.
+bool Engine::copyDevice(int32_t trackId, int32_t deviceIndex) {
+    Device* src = deviceAt(trackId, deviceIndex);
+    auto c = src ? cloneDevice(*src) : nullptr;
+    if (!c) return false;
+    clipDevice_ = std::move(c);
+    clipMidi_.reset();
+    return true;
+}
+
+bool Engine::copyMidiEffect(int32_t trackId, int32_t index) {
+    MidiDevice* src = midiDeviceAt(trackId, index);
+    auto c = src ? cloneMidiDevice(*src) : nullptr;
+    if (!c) return false;
+    clipMidi_ = std::move(c);
+    clipDevice_.reset();
+    return true;
+}
+
+int32_t Engine::deviceClipboardKind() const { return clipDevice_ ? 1 : clipMidi_ ? 2 : 0; }
+
+int32_t Engine::pasteDevice(int32_t trackId, int32_t atIndex) {
+    return clipDevice_ ? insertDeviceClone(trackId, cloneDevice(*clipDevice_), atIndex) : -1;
+}
+
+int32_t Engine::duplicateDevice(int32_t trackId, int32_t deviceIndex) {
+    Device* src = deviceAt(trackId, deviceIndex);
+    return src ? insertDeviceClone(trackId, cloneDevice(*src), deviceIndex + 1) : -1;
+}
+
+int32_t Engine::insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || !dev) return -1;
+    auto nt = cloneTrack(*old);
+    const int32_t end = static_cast<int32_t>(nt->devices.size());
+    const int32_t at = (atIndex < 0 || atIndex > end) ? end : atIndex;
+    nt->devices.insert(nt->devices.begin() + at, dev);
+    // An insert is a move from just past the end: the lanes and CV links after it shift up.
+    if (at != end) remapAutomationAfterDeviceChange(*nt, false, -1, end, at);
+    republishWithTrack(trackId, nt);
+    if (at != end) remapCvLinksAfterDeviceChange(trackId, -1, end, at);
+    recomputePdc();
+    return at;
+}
+
+int32_t Engine::pasteMidiEffect(int32_t trackId, int32_t atIndex) {
+    return clipMidi_ ? insertMidiEffectClone(trackId, cloneMidiDevice(*clipMidi_), atIndex) : -1;
+}
+
+int32_t Engine::duplicateMidiEffect(int32_t trackId, int32_t index) {
+    MidiDevice* src = midiDeviceAt(trackId, index);
+    return src ? insertMidiEffectClone(trackId, cloneMidiDevice(*src), index + 1) : -1;
+}
+
+int32_t Engine::insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || !md || old->type() != TrackType::Instrument) return -1;
+    auto nt = cloneTrack(*old);
+    const int32_t end = static_cast<int32_t>(nt->midiEffects.size());
+    const int32_t at = (atIndex < 0 || atIndex > end) ? end : atIndex;
+    nt->midiEffects.insert(nt->midiEffects.begin() + at, md);
+    if (at != end) remapAutomationAfterDeviceChange(*nt, true, -1, end, at);
+    republishWithTrack(trackId, nt);
+    return at;
 }
 
 int32_t Engine::addTrackMidiEffect(int32_t trackId, int32_t kind) {

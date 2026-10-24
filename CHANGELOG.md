@@ -22,6 +22,41 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Wrap a device in a rack with ⌘G** (nota-daw/nota#257): with a device selected in the chain,
+  ⌘G puts it in an Audio Effect Rack in its place, settings and all, and ⌘⇧G takes the devices
+  of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
+  **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
+  and the status line says why. ⌘G on tracks still groups tracks.
+
+### Fixed
+- **Copy, paste and duplicate keep every setting** (nota-daw/nota#238): a pasted device came
+  back with only part of its settings (a pasted Compressor at its default threshold and ratio).
+  Copy now takes the whole device — every parameter, its state, bypass and sidechain — and
+  paste lands right after the selected device, on any track, as one undo step. Duplicating a
+  MIDI effect keeps the Arp's CC modulation, Modular's ⌘D keeps everything too, and a
+  duplicated track keeps its devices folded as they were.
+- **Undo in Drum Rack and Instrument Rack** (nota-daw/nota#236): a sample dropped on a pad,
+  a pad's note or name, an added or removed chain or chain device, a chain's instrument and a
+  key or velocity zone are now each undoable, and a drop of several samples is one step.
+- **Dragging a key range no longer duplicates the Instrument Rack** (nota-daw/nota#202):
+  letting go of a key or velocity zone drag in the chain list left a second copy of the rack's
+  card in the device chain.
+- **Auto Filter's resonance follows the curve drag** (nota-daw/nota#260): dragging the
+  response handle set the resonance from the pointer's height, so grabbing the handle at 10 %
+  jumped it to about 80 % and dragging down didn't bring it back. The drag now moves the cutoff
+  and resonance from where you grabbed them, and a click changes nothing.
+- **Scrolling the device chain** (nota-daw/nota#262): the mouse wheel now scrolls the chain
+  sideways anywhere over it. EQ-8 and Dynamic EQ-8 take the wheel only over a band's handle
+  (to set its Q), and a trackpad swipe over a value box or an EQ steps once per notch of travel
+  instead of running the value to its end.
+- **Modular is easier to find your way around** (nota-daw/nota#261): the track's input,
+  instrument and output nodes show a lock that says why they can't be deleted (Delete on them
+  says so too); delete is a bin, not an ×, which read as "close"; an opened node has a
+  **Show fewer** strip and Esc closes every opened node; Delete removes a selected modulator;
+  an unwired Scope says it watches CV and how to patch it; and the hint names how to draw a
+  cable.
+
 ## [0.57.1] — 2026-10-22
 
 ### Added
