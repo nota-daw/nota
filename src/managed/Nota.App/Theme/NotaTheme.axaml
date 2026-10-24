@@ -799,7 +799,7 @@
   </Style>
   <Style Selector="CheckBox:checked /template/ Border#Track">
     <Setter Property="Background" Value="{DynamicResource Brush.TextSecondary}"/>
-    <Setter Property="BoxShadow" Value="{x:Null}"/>
+    <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
   </Style>
   <Style Selector="CheckBox:checked /template/ Rectangle#Knob">
     <Setter Property="HorizontalAlignment" Value="Right"/>
