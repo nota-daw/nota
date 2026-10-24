@@ -26,8 +26,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Wrap a device in a rack with ⌘G** (nota-daw/nota#257): with a device selected in the chain,
   ⌘G puts it in an Audio Effect Rack in its place, settings and all, and ⌘⇧G takes the devices
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
-  **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
-  and the status line says why. ⌘G on tracks still groups tracks.
+  **Ungroup rack**). A sounding device moves in without a break (a reverb tail rings on), and
+  its A/B comparison is there again when it comes back out. A device with a sidechain key,
+  automation, CV links or an Arp's CC lane on it stays where it is and the status line says
+  why. ⌘G on tracks still groups tracks.
 
 ### Fixed
 - **Copy, paste and duplicate keep every setting** (nota-daw/nota#238): a pasted device came

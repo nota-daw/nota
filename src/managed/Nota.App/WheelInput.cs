@@ -51,17 +51,21 @@ internal static class WheelInput
 
     private static double _stepAcc;
     private static ulong _stepAt;
+    private static object? _stepTarget;
 
     /// <summary>One step of a stepper under the wheel: +1 up, −1 down, 0 for a trackpad event
     /// that hasn't travelled a full notch yet; null when the wheel is mostly sideways (leave the
     /// event unhandled). A mouse notch is one step; a trackpad steps once per notch of travel
-    /// instead of once per event, which ran a box to its end on a single swipe.</summary>
-    public static int? Step(PointerWheelEventArgs e)
+    /// instead of once per event, which ran a box to its end on a single swipe.
+    /// <paramref name="target"/> names the value being stepped: travel left over on one control
+    /// never carries into the next one the pointer moves to.</summary>
+    public static int? Step(PointerWheelEventArgs e, object target)
     {
         if (!IsVertical(e)) return null;
         double n = Notches(e.Delta.Y);
-        if (e.Timestamp - _stepAt > 300 || Math.Sign(n) != Math.Sign(_stepAcc)) _stepAcc = 0;
+        if (e.Timestamp - _stepAt > 300 || Math.Sign(n) != Math.Sign(_stepAcc) || !Equals(target, _stepTarget)) _stepAcc = 0;
         _stepAt = e.Timestamp;
+        _stepTarget = target;
         _stepAcc += n;
         if (Math.Abs(_stepAcc) < 0.999) return 0;
         int s = Math.Sign(_stepAcc);

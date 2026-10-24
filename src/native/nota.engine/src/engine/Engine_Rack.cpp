@@ -153,10 +153,11 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->forkFrom(*src);
         r->setBypassed(src->bypassed());
         r->folded = src->folded;
-        r->offSettled = src->offSettled;
-        r->pedalDown = src->pedalDown;
-        r->pedalHeld[0] = src->pedalHeld[0];
-        r->pedalHeld[1] = src->pedalHeld[1];
+        constexpr auto rl = std::memory_order_relaxed;
+        r->offSettled.store(src->offSettled.load(rl), rl);
+        r->pedalDown.store(src->pedalDown.load(rl), rl);
+        r->pedalHeld[0].store(src->pedalHeld[0].load(rl), rl);
+        r->pedalHeld[1].store(src->pedalHeld[1].load(rl), rl);
         for (int i = 0; i < kCtlCount; ++i)
             r->deliveredCtl[i].store(src->deliveredCtl[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
         fresh = r.get();
@@ -180,9 +181,12 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
 }
 
 // ---- wrap a device in a rack / unwrap it (#257) ----------------------------
-// Whether anything outside the device points at it by its chain index: automation lanes
-// or CV links. Wrapping moves the device into a rack chain, where those can't follow it.
+// Whether anything outside the device points at it by its chain index: automation lanes,
+// CV links or a MIDI effect's CC lane (the Arp). Wrapping moves the device into a rack
+// chain, where those can't follow it.
 bool Engine::deviceIsReferenced(const Track& t, int32_t deviceIndex) const {
+    for (auto& md : t.midiEffects)
+        if (md && md->ccDestDevice() == deviceIndex) return true;
     for (auto& l : t.automation)
         if ((l.target == AutomationTarget::DeviceParam || l.target == AutomationTarget::PluginParam) && l.deviceIndex == deviceIndex)
             return true;
@@ -206,7 +210,9 @@ int32_t Engine::wrapDeviceInRack(int32_t trackId, int32_t deviceIndex) {
     auto rack = std::make_shared<RackDevice>();
     rack->setSampleRate(sr, kMaxBlock);
     const int32_t chain = rack->addChain(-1);
-    if (rack->addChainDeviceInstance(chain, dev) < 0) return -1; // the device itself: its state moves in
+    // The device itself, already prepared at this rate and possibly still sounding: its state
+    // (a reverb tail, a delay line) moves in untouched.
+    if (rack->addChainDeviceInstance(chain, dev, false) < 0) return -1;
     auto nt = cloneTrack(*old);
     nt->devices[deviceIndex] = rack;
     republishWithTrack(trackId, nt);
@@ -221,6 +227,12 @@ int32_t Engine::unwrapRack(int32_t trackId, int32_t deviceIndex) {
     RackCore::RackState* st = rack ? rack->live() : nullptr;
     if (!st || st->chains.size() != 1 || deviceIsReferenced(*old, deviceIndex)) return -1;
     auto devs = st->chains[0].devices;
+    // The devices after the rack shift by (n - 1). Lanes and CV links are remapped below; a
+    // MIDI effect's CC target lives on the shared MIDI device, outside the undo snapshot, so
+    // rather than move it, don't unwrap under one.
+    if (devs.size() != 1)
+        for (auto& md : old->midiEffects)
+            if (md && md->ccDestDevice() > deviceIndex) return -1;
     auto nt = cloneTrack(*old);
     nt->devices.erase(nt->devices.begin() + deviceIndex);
     nt->devices.insert(nt->devices.begin() + deviceIndex, devs.begin(), devs.end());

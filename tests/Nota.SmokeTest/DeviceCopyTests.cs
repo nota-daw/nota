@@ -31,6 +31,7 @@ internal static class DeviceCopyTests
         foreach (var r in DrumRackUndo()) yield return r;
         foreach (var r in InstrumentRackUndo()) yield return r;
         foreach (var r in WrapInRack()) yield return r;
+        foreach (var r in WrapInRackLive()) yield return r;
     }
 
     private static string Chain(NotaEngine e, int t)
@@ -68,6 +69,42 @@ internal static class DeviceCopyTests
         // A rack with two chains isn't unwrapped (which chain would win?).
         e.RackDevAddChain(t, r, -1);
         yield return (e.UnwrapRack(t, r) < 0 && Chain(e, t) == "0,5,2,1", $"wrap in rack: a rack with two chains isn't unwrapped ({Chain(e, t)})");
+    }
+
+    // ⌘G on a device that is sounding, and on one an Arp's CC lane drives.
+    private static IEnumerable<(bool, string)> WrapInRackLive()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 0);
+        int rev = e.AddBuiltinDevice(t, 2);   // Reverb
+        e.SetBpm(120); e.SetMetronome(false);
+        int clip = e.AddMidiClip(t, 0.0, 4.0);
+        e.SetClipNotes(t, clip, new[] { new NotaNote(60, 0.0, 0.25, 1.0f) });
+        var buf = new float[512 * 2];
+        float Peak() { e.RenderOffline(buf, 512, 44100); float p = 0f; foreach (var s in buf) p = Math.Max(p, Math.Abs(s)); return p; }
+        e.Seek(0); e.Play();
+        for (int i = 0; i < 30; i++) Peak();   // the note is over; the reverb tail rings on
+        float before = Peak();
+        int r = e.WrapDeviceInRack(t, rev);
+        float after = Peak();
+        e.StopTransport();
+        // Preparing the Reverb again would have cleared its buffers: the tail would stop dead.
+        yield return (r == rev && before > 1e-3f && after > 0.3f * before,
+            $"wrap in rack: a ringing Reverb keeps its tail ({before:F4} → {after:F4})");
+
+        // An Arp whose CC lane drives a device: that device stays where the Arp can reach it.
+        int comp = e.AddBuiltinDevice(t, 1);
+        int arp = e.AddMidiEffect(t, Arp);
+        e.SetMidiEffectCcDest(t, arp, comp, 0);
+        yield return (e.WrapDeviceInRack(t, comp) < 0 && e.TrackDeviceBuiltinKind(t, comp) == 1,
+            "wrap in rack: a device an Arp's CC lane drives isn't wrapped");
+        e.SetMidiEffectCcDest(t, arp, rev, 0);   // now aimed at the rack (its slot)
+        yield return (e.UnwrapRack(t, rev) < 0 && e.TrackDeviceBuiltinKind(t, rev) == AudioEffectRack,
+            "wrap in rack: a rack an Arp's CC lane drives isn't unwrapped");
+        e.SetMidiEffectCcDest(t, arp, -1, -1);
+        yield return (e.UnwrapRack(t, rev) == 1 && e.TrackDeviceBuiltinKind(t, rev) == 2,
+            "wrap in rack: with the Arp unhooked it comes out");
     }
 
     // A value well inside the param's range and away from its default.

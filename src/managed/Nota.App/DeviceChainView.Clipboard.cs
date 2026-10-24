@@ -118,7 +118,7 @@ public sealed partial class DeviceChainView
             StatusMessage?.Invoke($"{name} can't go in a rack: it has a sidechain key, automation or a modulation link");
             return;
         }
-        TrackExtras().Remove(ExtraKey(ChainKind.Effect, di));   // its preset label stays with the device, now in the chain
+        StashWrappedExtra(_trackId, ChainKind.Effect, di);   // its A/B and preset label wait for it to come back out
         StatusMessage?.Invoke($"Put {name} in an Audio Effect Rack");
         Rebuild(); Changed?.Invoke();
     }

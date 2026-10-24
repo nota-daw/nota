@@ -251,7 +251,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             };
             box.PointerWheelChanged += (_, e) =>
             {
-                if (WheelInput.Step(e) is not { } s) return;
+                if (WheelInput.Step(e, box) is not { } s) return;
                 e.Handled = true; if (s == 0) return;
                 int m = Math.Clamp(Idx(p) - s, 0, names.Length - 1);
                 SetP(p, m); RefreshAll();

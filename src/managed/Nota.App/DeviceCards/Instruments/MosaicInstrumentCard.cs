@@ -302,7 +302,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             b.PointerCaptureLost += (_, _) => { if (!drag) return; drag = false; done?.Invoke(); };
             b.PointerWheelChanged += (_, e) =>
             {
-                if (WheelInput.Step(e) is not { } s) return;
+                if (WheelInput.Step(e, b) is not { } s) return;
                 e.Handled = true; if (s == 0) return;
                 step(s); tb.Text = text(); done?.Invoke(); Refresh();
             };

@@ -239,7 +239,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             };
             box.PointerWheelChanged += (_, e) =>
             {
-                if (WheelInput.Step(e) is not { } s) return;
+                if (WheelInput.Step(e, box) is not { } s) return;
                 e.Handled = true; if (s == 0) return;
                 int m = Math.Clamp(Sel(Mode, 6) - s, 0, 5);
                 SetP(Mode, m / 5f); RefreshAll();

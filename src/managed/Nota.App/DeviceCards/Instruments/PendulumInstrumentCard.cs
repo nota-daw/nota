@@ -476,7 +476,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         };
         scaleBox.PointerWheelChanged += (_, e) =>
         {
-            if (WheelInput.Step(e) is not { } s) return;
+            if (WheelInput.Step(e, scaleBox) is not { } s) return;
             e.Handled = true; if (s == 0) return;
             int n = PendulumModel.ModeNames.Length;
             int m = Math.Clamp(Sel("scalemode", n) - s, 0, n - 1);

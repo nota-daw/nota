@@ -296,7 +296,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         };
         rootBox.PointerWheelChanged += (_, e) =>
         {
-            if (WheelInput.Step(e) is not { } s) return;
+            if (WheelInput.Step(e, rootBox) is not { } s) return;
             e.Handled = true; if (s == 0) return;
             rootv = Math.Clamp(rootv + s, 0, 127); acc.SetRoot(rootv); Refresh();
         };

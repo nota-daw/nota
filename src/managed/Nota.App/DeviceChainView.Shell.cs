@@ -55,10 +55,25 @@ public sealed partial class DeviceChainView
         return d;
     }
     private System.Collections.Generic.Dictionary<int, CardExtra> TrackExtras() => TrackExtras(_trackId);
+    // The extra of a device that ⌘G put in a rack (#257), kept under the rack's slot: when the
+    // device comes back out there (⌘⇧G, or undo) its card gets its A/B and preset label back.
+    private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _wrappedExtra = new();   // trackId → key → extra
+    private void StashWrappedExtra(int t, ChainKind k, int di)
+    {
+        int key = ExtraKey(k, di);
+        if (!TrackExtras(t).Remove(key, out var e)) return;
+        if (!_wrappedExtra.TryGetValue(t, out var w)) { w = new(); _wrappedExtra[t] = w; }
+        w[key] = e;
+    }
     private CardExtra ExtraFor(int t, ChainKind k, int di)
     {
         var d = TrackExtras(t); int key = ExtraKey(k, di); string sig = CardSig(t, k, di);
-        if (!d.TryGetValue(key, out var e) || e.Sig != sig) { e = new CardExtra { Sig = sig }; d[key] = e; }
+        if (!d.TryGetValue(key, out var e) || e.Sig != sig)
+        {
+            if (_wrappedExtra.TryGetValue(t, out var w) && w.TryGetValue(key, out var back) && back.Sig == sig) { w.Remove(key); e = back; }
+            else e = new CardExtra { Sig = sig };
+            d[key] = e;
+        }
         return e;
     }
     private CardExtra Extra(ChainKind k, int di) => ExtraFor(_trackId, k, di);
@@ -69,9 +84,15 @@ public sealed partial class DeviceChainView
     {
         if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
-        var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
-        foreach (var kv in domain) d.Remove(kv.Key);
-        foreach (var kv in domain) { int ni = map(KeyIndex(kv.Key)); if (ni >= 0) d[ExtraKey(k, ni)] = kv.Value; }
+        Remap(d);
+        if (_wrappedExtra.TryGetValue(_trackId, out var w)) Remap(w);   // a rack moves with its stashed device
+
+        void Remap(System.Collections.Generic.Dictionary<int, CardExtra> m)
+        {
+            var domain = m.Where(kv => KeyKind(kv.Key) == k).ToList();
+            foreach (var kv in domain) m.Remove(kv.Key);
+            foreach (var kv in domain) { int ni = map(KeyIndex(kv.Key)); if (ni >= 0) m[ExtraKey(k, ni)] = kv.Value; }
+        }
     }
     private void ExtrasMoved(ChainKind k, int from, int to) => RemapExtras(k, i =>
         i == from ? to : from < to && i > from && i <= to ? i - 1 : to < from && i >= to && i < from ? i + 1 : i);
