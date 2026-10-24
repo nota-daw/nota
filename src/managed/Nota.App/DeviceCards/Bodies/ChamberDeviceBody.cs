@@ -460,12 +460,17 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             eq.DragEnded += h => { if (h == 0) { End(EqLowCut); End(EqLowGain); } else { End(EqHighCut); End(EqHighShelf); } };
             ToolTip.SetTip(eq, "Left handle: low cut (X) + low shelf (Y) · right handle: high cut (X) + high shelf (Y)");
             readouts.Add(() => eq.Set(P(EqLowCut), P(EqLowGain), P(EqHighShelf), P(EqHighCut)));
-            var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Height = 50 };
+            var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
             eqKnobs.Children.Add(K(EqLowCut, "LOW-CUT", LowCutF, 30, 48));
             eqKnobs.Children.Add(Col(K(EqLowGain, "LOW", GainF, 30, 48), 1));
             eqKnobs.Children.Add(Col(K(EqHighShelf, "HIGH", GainF, 30, 48), 2));
             eqKnobs.Children.Add(Col(K(EqHighCut, "HIGH-CUT", HighCutF, 30, 48), 3));
-            var eqCap = Caps("Tail EQ"); eqCap.Margin = new Thickness(0, 0, 0, 3);
+            // EQ position sits beside the caption: where the tail EQ runs, read with the curve.
+            var posSeg = Seg(EqPosition, new[] { "Input", "Tail", "Output" });
+            ToolTip.SetTip(posSeg, "EQ position: on the engine input, on the tail (wet only), or on dry + wet");
+            var eqCap = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 0, 0, 4) };
+            var eqWord = Caps("Tail EQ"); eqWord.VerticalAlignment = VerticalAlignment.Center;
+            eqCap.Children.Add(eqWord); eqCap.Children.Add(Col(posSeg, 2));
             var left = new Border { Width = 214, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(0, 6, 10, 0),
                 Child = new DockPanel { Children = { Docked(eqCap, Dock.Top), Docked(eqKnobs, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 2), Child = InsetBox(eq) } } } };
 
@@ -482,21 +487,15 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             bool ShimDim() => Sel(AlgoMode, 4) != 3;
             var shimCap = Caps("Shimmer · pitch shift");
             readouts.Add(() => { shimCap.Text = ShimDim() ? "Shimmer · shimmer mode only" : "Shimmer · pitch shift"; shimCap.Foreground = ShimDim() ? DimC : MutedC; });
-            var interval = Row(5, Caps("Interval"), Seg(ShimmerPitch, new[] { "−12", "+7", "+12" }));
+            var interval = Seg(ShimmerPitch, new[] { "−12", "+7", "+12" });   // the caption names it: pitch shift
+            ToolTip.SetTip(interval, "Shimmer interval in semitones");
             var shimGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
             shimGrid.Children.Add(K(ShimmerAmount, "AMOUNT", v => Pct(v), 28, 44));
-            shimGrid.Children.Add(Col(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { interval, Toggle(ShimmerFeedback, "Feed shimmer back", ShimDim) } }, 1));
+            shimGrid.Children.Add(Col(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { interval, Toggle(ShimmerFeedback, "Feed back", ShimDim) } }, 1));
             var shim = Divider(new StackPanel { Spacing = 2, Children = { shimCap, shimGrid } }, 4);
             shim.Margin = new Thickness(0, 3, 0, 0);
 
-            // EQ position
-            var posHint = Mono("", 7, MutedC); posHint.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => posHint.Text = Sel(EqPosition, 3) switch { 0 => "engine input", 2 => "dry + wet", _ => "wet only" });
-            var posRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
-            posRow.Children.Add(Caps("EQ position")); posRow.Children.Add(Col(Seg(EqPosition, new[] { "Input", "Tail", "Output" }), 1)); posRow.Children.Add(Col(posHint, 2));
-            var pos = Divider(posRow, 4); pos.Margin = new Thickness(0, 3, 0, 0);
-
-            var right = new DockPanel { LastChildFill = false, Margin = new Thickness(10, 6, 0, 0), Children = { Docked(mod, Dock.Top), Docked(shim, Dock.Top), Docked(pos, Dock.Bottom) } };
+            var right = new DockPanel { LastChildFill = false, Margin = new Thickness(10, 6, 0, 0), Children = { Docked(mod, Dock.Top), Docked(shim, Dock.Top) } };
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;

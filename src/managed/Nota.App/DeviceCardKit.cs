@@ -39,7 +39,6 @@ internal static class DeviceCardKit
     internal static readonly IBrush TextDisabled = NotaPalette.TextDisabled;
     internal static readonly IBrush AccentBright = NotaPalette.AccentBright;
     internal static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
-    internal static readonly IBrush Teal = NotaPalette.Teal;                                     // modulation accent
     internal static readonly IBrush AccentSubtleB = NotaPalette.AccentSubtle;
 
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}\u2009%";
@@ -211,7 +210,7 @@ internal static class DeviceCardKit
     // Works in normalised 0..1: `norm` reads, `setNorm` writes (the caller maps to the
     // parameter and does its own follow-up); `text` formats the value for display.
     // `trackWidth` fixes the track, otherwise it stretches. An empty label drops the
-    // label column. `modulation` draws a modulation depth in teal. `sync` repaints from
+    // label column. `modulation` marks a modulation depth (drawn like any value bar). `sync` repaints from
     // `norm` and skips while the hand is on the slider. ⌥-clicking the slider or double-clicking
     // its value types one in, a double-click on the slider runs `reset`. `textAt` (the read-out at a position, pure)
     // lets typing search without writing the parameter; without it the row probes `setNorm`.

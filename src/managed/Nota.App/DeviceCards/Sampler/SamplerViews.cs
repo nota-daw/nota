@@ -246,8 +246,9 @@ internal sealed class SamplerKeysView : Control
             bool black = pc is 1 or 3 or 6 or 8 or 10;
             double kh = black ? keyH * 0.62 : keyH;
             var rect = new Rect(pad + i * kw + 1, bot - kh, Math.Max(1, kw - 2), kh);   // resting on the bottom edge
-            IBrush fill = note == _root ? NotaPalette.Accent
-                : note == playing ? NotaPalette.TextTertiary
+            // The root is picked (soft tint); the sounding note is live (solid orange).
+            IBrush fill = note == playing ? NotaPalette.Accent
+                : note == _root ? NotaPalette.AccentSoft
                 : black ? NotaPalette.SurfaceAbyss : NotaPalette.SurfaceRaised;
             ctx.DrawRectangle(fill, note == _root ? null : hair, new RoundedRect(rect, 0, 0, 2, 2));
             if (note == _natural && note != _root)
@@ -259,7 +260,7 @@ internal sealed class SamplerKeysView : Control
             }
             if (note == _root)
             {
-                var t = SamplerInk.Mono(SamplerModel.NoteName(note), NotaPalette.TextOnAccent);
+                var t = SamplerInk.Mono(SamplerModel.NoteName(note), note == playing ? NotaPalette.TextOnAccent : NotaPalette.AccentBright);
                 ctx.DrawText(t, new Point(rect.X + (rect.Width - t.Width) / 2, rect.Bottom - t.Height - 2));
             }
         }

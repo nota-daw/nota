@@ -206,7 +206,7 @@ internal sealed class PentadVoiceStrip : Control
             ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, 3, 3);
             if (cw >= 12)
             {
-                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
+                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
                 ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
             }
         }

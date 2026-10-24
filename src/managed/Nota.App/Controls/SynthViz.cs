@@ -32,7 +32,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     public enum K { Osc, Adsr, Filter }
 
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush ModInk = NotaPalette.TextTertiary;   // the modulated curve: the second grey
     private static readonly IBrush Ink = NotaPalette.VizInk;   // curves at rest: neutral ink
     private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
@@ -307,7 +307,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         if (Math.Abs(env) > 0.01)
         {
             double modCut = Math.Clamp(cut + env * 4.0 / Math.Log2(18000.0 / 20.0), 0, 1);
-            DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(Teal, NotaGraph.SecondaryWidth));
+            DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(ModInk, NotaGraph.SecondaryWidth));
         }
         if (Mini) DrawCurve(ctx, x0, x1, top, bot, cut, res, type, null, Wash);
         DrawCurve(ctx, x0, x1, top, bot, cut, res, type, new Pen(Ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
@@ -329,7 +329,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         if (Math.Abs(env) > 0.01)
         {
             string e = $"env {Signed(env * 100)} %";
-            Text(ctx, e, x1 - 1 - MeasureW(e), Pad - 3, Teal);
+            Text(ctx, e, x1 - 1 - MeasureW(e), Pad - 3, ModInk);
         }
         HzAxis(ctx, x0, x1, bot);
     }
