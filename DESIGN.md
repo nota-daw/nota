@@ -1159,7 +1159,7 @@ control, label and value stays.
 | Mosaic | 754 | Status line removed. MIDI learn stays in the header; Volume, Pan and Glide become value bars; the teal Vel → Vol arc turns orange like the rest. Wider so the zone row and the Voices menu fit. |
 | Operator | 724 | Status line removed. Level and Global sliders become value bars; the Volume knob sits beside the meter. Wider so the operator table fits; the teal modulator marks become grey (carrier D stays in ink 1). |
 | Pendulum | 806 | Status line removed. The Rate slider becomes a value bar on its own row under Free / Sync, division and Motion. The teal leads and times become grey; the ball striking a wall stays orange. |
-| Pentad | 724 | Status line removed; the Voice menu moves up beside the Mixer and Output tabs. Mixer sliders become value bars; the flat wheels become the round wheels. |
+| Pentad | 748 | Status line removed; the Voice menu moves up beside the Mixer and Output tabs. Mixer sliders become value bars; the flat wheels become the round wheels. Wider so the bottom row keeps all five voice keys. |
 | Physical | 700 | Status line removed. Tune, Fine and Note off become value bars; the teal "env → freq off" readout becomes grey. |
 | Rhythm | 776 | Status line removed. The Step strip sits under the Voice panel so the eight kit voices keep full-height rows. Swing, Human and Accent become value bars; the teal trigger line, playing bank and velocity lane become grey or a picked segment. |
 | Sampler | 700 | Status line removed. Volume, Pan and Glide become value bars; Crossfade is ink 4 while the loop is off. |
