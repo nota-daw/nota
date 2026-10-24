@@ -392,7 +392,7 @@ internal sealed class RhythmStepStrip : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         int s = StepAt(e.GetPosition(this).X);
-        if (!On[s] || WheelInput.Step(e) is not { } dir) return;
+        if (!On[s] || WheelInput.Step(e, this, s) is not { } dir) return;
         e.Handled = true;
         if (dir != 0) Put(s, true, (float)Math.Clamp(Vel[s] + dir * 0.05, 0.05, 1.0), Acc[s]);
     }

@@ -77,10 +77,10 @@ void DrumRack::render(float* out, int32_t frames) {
         const float dec = c.ctl->decay.load(std::memory_order_relaxed);
         const bool shaped = dec < 0.999f;
         if (c.ctl->retrig) {
-            c.ctl->ampEnv = 1.0f;
+            c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
             c.ctl->retrig = false;
         }
-        float env = c.ctl->ampEnv;
+        float env = c.ctl->ampEnv.load(std::memory_order_relaxed);
         float coef = 1.0f;
         if (shaped) {
             const double tauMs = 20.0 * std::pow(100.0, (double)dec); // 20 ms .. 2000 ms
@@ -100,7 +100,7 @@ void DrumRack::render(float* out, int32_t frames) {
             const float a = std::max(std::fabs(l), std::fabs(r));
             if (a > peak) peak = a;
         }
-        if (shaped) c.ctl->ampEnv = env;
+        if (shaped) c.ctl->ampEnv.store(env, std::memory_order_relaxed);
         c.ctl->meter.store(peak * g, std::memory_order_relaxed);
     }
 }

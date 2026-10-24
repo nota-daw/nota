@@ -51,17 +51,24 @@ internal static class WheelInput
 
     private static double _stepAcc;
     private static ulong _stepAt;
+    private static readonly WeakReference<object?> _stepTarget = new(null); // weak: a removed card isn't kept alive
+    private static int _stepPart;
 
     /// <summary>One step of a stepper under the wheel: +1 up, −1 down, 0 for a trackpad event
     /// that hasn't travelled a full notch yet; null when the wheel is mostly sideways (leave the
     /// event unhandled). A mouse notch is one step; a trackpad steps once per notch of travel
-    /// instead of once per event, which ran a box to its end on a single swipe.</summary>
-    public static int? Step(PointerWheelEventArgs e)
+    /// instead of once per event, which ran a box to its end on a single swipe. <paramref name="target"/>
+    /// (with <paramref name="part"/>, for a control holding several) names the value being stepped:
+    /// travel left over on one value never carries into the next.</summary>
+    public static int? Step(PointerWheelEventArgs e, object target, int part = 0)
     {
         if (!IsVertical(e)) return null;
         double n = Notches(e.Delta.Y);
-        if (e.Timestamp - _stepAt > 300 || Math.Sign(n) != Math.Sign(_stepAcc)) _stepAcc = 0;
+        bool same = _stepTarget.TryGetTarget(out var last) && ReferenceEquals(last, target) && part == _stepPart;
+        if (e.Timestamp - _stepAt > 300 || Math.Sign(n) != Math.Sign(_stepAcc) || !same) _stepAcc = 0;
         _stepAt = e.Timestamp;
+        _stepTarget.SetTarget(target);
+        _stepPart = part;
         _stepAcc += n;
         if (Math.Abs(_stepAcc) < 0.999) return 0;
         int s = Math.Sign(_stepAcc);

@@ -96,29 +96,33 @@ inline bool midiEvLess(const MidiEv& a, const MidiEv& b) {
 // pedal is down a released key's note-off waits in inst.pedalHeld; the pedal coming up sends
 // them all, and striking a held key again releases it right before the new note-on.
 inline bool pedalHolds(const Instrument& inst, int32_t pitch) {
-    return pitch >= 0 && pitch < 128 && ((inst.pedalHeld[pitch >> 6] >> (pitch & 63)) & 1u);
+    return pitch >= 0 && pitch < 128 && ((inst.pedalHeld[pitch >> 6].load(std::memory_order_relaxed) >> (pitch & 63)) & 1u);
 }
 inline void sendNoteOn(Instrument& inst, int32_t pitch, float vel) {
     if (pedalHolds(inst, pitch)) {
-        inst.pedalHeld[pitch >> 6] &= ~(uint64_t{1} << (pitch & 63));
+        auto& h = inst.pedalHeld[pitch >> 6];
+        h.store(h.load(std::memory_order_relaxed) & ~(uint64_t{1} << (pitch & 63)), std::memory_order_relaxed);
         inst.noteOff(pitch);
     }
     inst.noteOn(pitch, vel);
 }
 inline void sendNoteOff(Instrument& inst, int32_t pitch) {
-    if (inst.pedalDown && pitch >= 0 && pitch < 128 && !inst.handlesSustain()) {
-        inst.pedalHeld[pitch >> 6] |= uint64_t{1} << (pitch & 63);
+    if (inst.pedalDown.load(std::memory_order_relaxed) && pitch >= 0 && pitch < 128 && !inst.handlesSustain()) {
+        auto& h = inst.pedalHeld[pitch >> 6];
+        h.store(h.load(std::memory_order_relaxed) | (uint64_t{1} << (pitch & 63)), std::memory_order_relaxed);
         return;
     }
     inst.noteOff(pitch);
 }
 inline void sendController(Instrument& inst, int32_t ctl, float value) {
     if (ctl == kCtlSustain && !inst.handlesSustain()) {
-        inst.pedalDown = value >= 0.5f;
-        if (!inst.pedalDown) {
+        const bool down = value >= 0.5f;
+        inst.pedalDown.store(down, std::memory_order_relaxed);
+        if (!down) {
             for (int32_t p = 0; p < 128; ++p)
                 if (pedalHolds(inst, p)) inst.noteOff(p);
-            inst.pedalHeld[0] = inst.pedalHeld[1] = 0;
+            inst.pedalHeld[0].store(0, std::memory_order_relaxed);
+            inst.pedalHeld[1].store(0, std::memory_order_relaxed);
         }
     }
     inst.controller(ctl, value);
@@ -161,8 +165,8 @@ template <class Live>
 void playEvents(
     Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn, Live&& live) {
     const bool off = inst.bypassed();
-    if (!off) inst.offSettled = false;
-    else if (inst.offSettled)
+    if (!off) inst.offSettled.store(false, std::memory_order_relaxed);
+    else if (inst.offSettled.load(std::memory_order_relaxed))
         return;
     if (off) n = xn = 0; // nothing new starts on the way out
     int32_t cursor = 0;
@@ -206,7 +210,7 @@ void playEvents(
         }
         inst.allNotesOff();
         releaseHeldControllers(inst);
-        inst.offSettled = true;
+        inst.offSettled.store(true, std::memory_order_relaxed);
     }
 }
 } // namespace

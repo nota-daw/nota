@@ -66,9 +66,10 @@ class Instrument {
     // playEvents / deliverExpr). An instrument that models the pedal itself (Keys, Mosaic, a
     // hosted plug-in) or ignores it on purpose (drums) returns true and is left alone.
     virtual bool handlesSustain() const { return false; }
-    // The engine's damper state for this instrument. Audio thread only.
-    bool pedalDown = false;
-    uint64_t pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
+    // The engine's damper state for this instrument. Written on the audio thread only; relaxed
+    // atomics because a rack edit forks the rack on the message thread and carries them over.
+    std::atomic<bool> pedalDown{false};
+    std::atomic<uint64_t> pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
@@ -80,7 +81,7 @@ class Instrument {
     // fade-out has run.
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
-    bool offSettled = false;
+    std::atomic<bool> offSettled{false}; // relaxed, like pedalDown
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,

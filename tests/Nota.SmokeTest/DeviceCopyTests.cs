@@ -68,6 +68,55 @@ internal static class DeviceCopyTests
         // A rack with two chains isn't unwrapped (which chain would win?).
         e.RackDevAddChain(t, r, -1);
         yield return (e.UnwrapRack(t, r) < 0 && Chain(e, t) == "0,5,2,1", $"wrap in rack: a rack with two chains isn't unwrapped ({Chain(e, t)})");
+
+        // A device an Arp's CC lane drives stays out: the Arp addresses it by chain index.
+        int it = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(it, 0);
+        int arp = e.AddMidiEffect(it, Arp);
+        e.AddBuiltinDevice(it, 0);
+        int target = e.AddBuiltinDevice(it, 1);
+        e.SetMidiEffectCcDest(it, arp, target, 0);
+        yield return (e.WrapDeviceInRack(it, target) < 0 && Chain(e, it) == "0,1", $"wrap in rack: a device an Arp's CC targets isn't wrapped ({Chain(e, it)})");
+        e.SetMidiEffectCcDest(it, arp, -1, -1);
+        yield return (e.WrapDeviceInRack(it, target) == target, "wrap in rack: it wraps once the Arp lets go");
+        // Unwrapping a rack the Arp drives, or one whose devices would shift the Arp's target, is refused.
+        e.SetMidiEffectCcDest(it, arp, target, 0);
+        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5", "wrap in rack: a rack an Arp's CC lane drives isn't unwrapped");
+        int after = e.AddBuiltinDevice(it, 3);
+        e.RackDevAddChainDevice(it, target, 0, 3);
+        e.SetMidiEffectCcDest(it, arp, after, 0);
+        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5,3", "wrap in rack: an unwrap that would shift the Arp's target is refused");
+        e.SetMidiEffectCcDest(it, arp, -1, -1);
+        yield return (e.UnwrapRack(it, target) == 2 && Chain(e, it) == "0,1,3,3", $"wrap in rack: with the Arp unhooked it comes out ({Chain(e, it)})");
+
+        foreach (var x in WrapKeepsTail()) yield return x;
+    }
+
+    // Wrapping moves the device in as it is: it isn't prepared again, which reset a Reverb's tail
+    // (and reallocated its delay lines under a playing graph).
+    private static IEnumerable<(bool, string)> WrapKeepsTail()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 0);
+        int rv = e.AddBuiltinDevice(t, 2);
+        e.DeviceSetParam(t, rv, 12, 1f);   // Dry/Wet
+        e.DeviceSetParam(t, rv, 19, 1f);   // Wet Only
+        e.SetBpm(120); e.SetMetronome(false);
+        int clip = e.AddMidiClip(t, 0.0, 4.0);
+        e.SetClipNotes(t, clip, new[] { new NotaNote(60, 0.0, 0.25, 1.0f) });
+        var buf = new float[512 * 2];
+        static float Rms(float[] b) { double a = 0; foreach (var v in b) a += v * v; return (float)Math.Sqrt(a / b.Length); }
+        e.Seek(0); e.Play();
+        for (int i = 0; i < 30; i++) e.RenderOffline(buf, 512, 44100);
+        e.DeviceSetParam(t, rv, 11, 1f);   // Freeze: the tail holds while the synth has released
+        for (int i = 0; i < 30; i++) e.RenderOffline(buf, 512, 44100);
+        float before = Rms(buf);
+        e.WrapDeviceInRack(t, rv);
+        e.RenderOffline(buf, 512, 44100);
+        float after = Rms(buf);
+        e.StopTransport();
+        yield return (before > 1e-4f && after > before * 0.5f, $"wrap in rack: a ringing Reverb keeps its tail (rms {before:F4} → {after:F4})");
     }
 
     // A value well inside the param's range and away from its default.
