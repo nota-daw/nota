@@ -61,8 +61,11 @@ public sealed partial class DeviceChainView
         var d = TrackExtras(t); int key = ExtraKey(k, di); string sig = CardSig(t, k, di);
         if (!d.TryGetValue(key, out var e) || e.Sig != sig)
         {
-            // Undoing ⌘G puts the device back in the rack's slot: it gets its own extra back.
-            e = e?.Wrapped is { } w && w.Sig == sig ? w : new CardExtra { Sig = sig };
+            // Undo / redo of ⌘G swap the device and its rack in one slot: each keeps the other's
+            // extra, so the A/B snapshots and preset label survive any number of swaps.
+            var prev = e;
+            e = prev?.Wrapped is { } w && w.Sig == sig ? w : new CardExtra { Sig = sig };
+            if (prev != null) { prev.Wrapped = null; e.Wrapped = prev; }
             d[key] = e;
         }
         return e;
